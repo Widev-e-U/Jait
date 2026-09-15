@@ -25,6 +25,7 @@ pub struct TermSession {
     pub master: Mutex<Box<dyn portable_pty::MasterPty + Send>>,
     pub writer: Mutex<Option<Box<dyn Write + Send>>>,
     pub alive: Mutex<bool>,
+    killer: Mutex<Box<dyn portable_pty::ChildKiller + Send + Sync>>,
 }
 
 impl std::fmt::Debug for TermSession {
@@ -56,13 +57,49 @@ impl SessionRegistry {
         on_output: impl Fn(String) + Send + 'static,
         on_exit: impl Fn(Option<i32>, Option<String>) + Send + 'static,
     ) -> Result<TerminalStart, String> {
+        self.start_with_id(
+            &uuid::Uuid::new_v4().to_string(),
+            cwd,
+            cols,
+            rows,
+            on_output,
+            on_exit,
+        )
+        .await
+    }
+
+    /// Keep the gateway's ID for every input, output, resize and stop operation.
+    pub async fn start_with_id(
+        &self,
+        terminal_id: &str,
+        cwd: &str,
+        cols: u16,
+        rows: u16,
+        on_output: impl Fn(String) + Send + 'static,
+        on_exit: impl Fn(Option<i32>, Option<String>) + Send + 'static,
+    ) -> Result<TerminalStart, String> {
+        if let Some(session) = self.map.lock().get(terminal_id) {
+            if *session.alive.lock() {
+                return Ok(TerminalStart {
+                    terminal_id: terminal_id.into(),
+                    cwd: session.cwd.clone(),
+                    shell: session.shell.clone(),
+                    pid: session.pid,
+                });
+            }
+        }
         let shell = detect_shell();
         let cwd_path = if cwd.is_empty() {
             home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
         } else {
             std::path::PathBuf::from(cwd)
         };
-        std::fs::create_dir_all(&cwd_path).ok();
+        if !cwd_path.is_dir() {
+            return Err(format!(
+                "Project path does not exist on this node: {}",
+                cwd_path.display()
+            ));
+        }
 
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -96,7 +133,7 @@ impl SessionRegistry {
             .take_writer()
             .map_err(|e| format!("failed to take pty writer: {e}"))?;
 
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = terminal_id.to_string();
         let session = Arc::new(TermSession {
             cwd: cwd_path.to_string_lossy().into_owned(),
             shell: shell.clone(),
@@ -104,6 +141,7 @@ impl SessionRegistry {
             master: Mutex::new(pair.master),
             writer: Mutex::new(Some(writer)),
             alive: Mutex::new(true),
+            killer: Mutex::new(child.clone_killer()),
         });
         self.map.lock().insert(id.clone(), session.clone());
 
@@ -211,6 +249,11 @@ impl SessionRegistry {
         let Some(session) = session else {
             return Ok(TerminalAck { ok: true });
         };
+        session
+            .killer
+            .lock()
+            .kill()
+            .map_err(|e| format!("failed to stop shell: {e}"))?;
         *session.alive.lock() = false;
         *session.writer.lock() = None;
         Ok(TerminalAck { ok: true })
@@ -241,6 +284,7 @@ impl SessionRegistry {
     pub fn stop_all(&self) {
         let sessions: Vec<(String, Arc<TermSession>)> = self.map.lock().drain().collect();
         for (_, session) in sessions {
+            let _ = session.killer.lock().kill();
             *session.alive.lock() = false;
             *session.writer.lock() = None;
         }
@@ -256,7 +300,11 @@ fn child_wait(child: &mut Box<dyn portable_pty::Child + Send + Sync>) -> Option<
 }
 
 pub fn detect_shell() -> String {
-    // Mirrors remote-terminal.ts getShell: SHELL env → bash → sh fallback.
+    // Windows can inherit an MSYS SHELL path that native ConPTY cannot launch.
+    if cfg!(target_os = "windows") {
+        return "powershell.exe".into();
+    }
+    // Unix: SHELL env → bash → sh fallback.
     if let Ok(shell) = std::env::var("SHELL") {
         if !shell.is_empty() {
             return shell;
@@ -265,11 +313,7 @@ pub fn detect_shell() -> String {
     if std::path::Path::new("/bin/bash").exists() {
         return "/bin/bash".into();
     }
-    if cfg!(target_os = "windows") {
-        "powershell.exe".into()
-    } else {
-        "/bin/sh".into()
-    }
+    "/bin/sh".into()
 }
 
 use crate::info::home_dir;

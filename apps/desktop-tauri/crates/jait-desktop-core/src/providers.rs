@@ -85,31 +85,48 @@ impl ProviderSessionRegistry {
 /// Mirrors remote-provider-runtime getProviderRuntime: PATH first, then the
 /// bundled fallback layout under ~/.jait/bin (userData/bin in Electron).
 pub fn detect_runtime(provider: &str) -> ProviderRuntime {
-    let names = match provider {
-        "codex" => vec!["codex"],
-        "claude-code" | "claude" => vec!["claude"],
-        other => vec![other],
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    detect_runtime_in(
+        provider,
+        std::env::split_paths(&path),
+        dirs::home_dir().as_deref(),
+        cfg!(windows),
+    )
+}
+
+fn detect_runtime_in(
+    provider: &str,
+    paths: impl IntoIterator<Item = std::path::PathBuf>,
+    home: Option<&std::path::Path>,
+    windows: bool,
+) -> ProviderRuntime {
+    let name = match provider {
+        "claude-code" | "claude" => "claude",
+        other => other,
     };
-    if let Ok(path_env) = std::env::var("PATH") {
-        for dir in path_env.split(':') {
-            for name in &names {
-                let p = std::path::Path::new(dir).join(name);
-                if p.exists() {
-                    return ProviderRuntime {
-                        mode: "cli".into(),
-                        command: p.to_string_lossy().into_owned(),
-                    };
-                }
-            }
-        }
-    }
-    if let Some(home) = dirs::home_dir() {
+    // npm installs both a Unix shell script and a .cmd shim on Windows.
+    // Prefer native executables, and never choose the extensionless shell script there.
+    let names = if windows && std::path::Path::new(name).extension().is_none() {
+        vec![
+            format!("{name}.exe"),
+            format!("{name}.com"),
+            format!("{name}.cmd"),
+            format!("{name}.bat"),
+        ]
+    } else {
+        vec![name.to_string()]
+    };
+    let directories = paths
+        .into_iter()
+        .map(|dir| (dir, "cli"))
+        .chain(home.map(|dir| (dir.join(".jait").join("bin"), "bundled")));
+    for (dir, mode) in directories {
         for name in &names {
-            let p = home.join(".jait").join("bin").join(name);
-            if p.exists() {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
                 return ProviderRuntime {
-                    mode: "bundled".into(),
-                    command: p.to_string_lossy().into_owned(),
+                    mode: mode.into(),
+                    command: candidate.to_string_lossy().into_owned(),
                 };
             }
         }
@@ -170,6 +187,57 @@ pub fn to_runner_spec(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detects_windows_cli_and_npm_shims() {
+        let root = std::env::temp_dir().join(format!("jait-provider-{}", uuid::Uuid::new_v4()));
+        let bin = root.join("Program Files").join("nodejs");
+        std::fs::create_dir_all(&bin).unwrap();
+        // The extensionless npm file is a shell script, not a Windows executable.
+        std::fs::write(bin.join("codex"), "#!/bin/sh").unwrap();
+        assert_eq!(
+            detect_runtime_in("codex", [bin.clone()], None, true).mode,
+            "missing"
+        );
+        std::fs::write(bin.join("codex.cmd"), "@echo off").unwrap();
+        let runtime = detect_runtime_in("codex", [bin.clone()], None, true);
+        assert_eq!(runtime.mode, "cli");
+        assert_eq!(runtime.command, bin.join("codex.cmd").to_string_lossy());
+        std::fs::write(bin.join("codex.exe"), "native").unwrap();
+        assert_eq!(
+            detect_runtime_in("codex", [bin.clone()], None, true).command,
+            bin.join("codex.exe").to_string_lossy()
+        );
+        std::fs::create_dir(bin.join("claude.exe")).unwrap();
+        assert_eq!(
+            detect_runtime_in("claude-code", [bin.clone()], None, true).mode,
+            "missing"
+        );
+        let bundled = root.join(".jait").join("bin");
+        std::fs::create_dir_all(&bundled).unwrap();
+        std::fs::write(bundled.join("claude.exe"), "native").unwrap();
+        let runtime = detect_runtime_in("claude-code", [bin], Some(&root), true);
+        assert_eq!(runtime.mode, "bundled");
+        assert_eq!(
+            runtime.command,
+            bundled.join("claude.exe").to_string_lossy()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn detects_cli_in_later_native_path_entry() {
+        let root = std::env::temp_dir().join(format!("jait-provider-{}", uuid::Uuid::new_v4()));
+        let bin = root.join("CLI Tools");
+        std::fs::create_dir_all(&bin).unwrap();
+        let filename = if cfg!(windows) { "codex.cmd" } else { "codex" };
+        std::fs::write(bin.join(filename), "test").unwrap();
+        let path = std::env::join_paths([root.join("missing"), bin.clone()]).unwrap();
+        let runtime = detect_runtime_in("codex", std::env::split_paths(&path), None, cfg!(windows));
+        assert_eq!(runtime.mode, "cli");
+        assert_eq!(runtime.command, bin.join(filename).to_string_lossy());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn registry_evicts_oldest_beyond_cap() {

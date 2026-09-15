@@ -81,36 +81,14 @@ pub struct PathCommandResolver;
 
 impl CommandResolver for PathCommandResolver {
     fn resolve(&self, provider: &str) -> Option<ResolvedCommand> {
-        let names: &[&str] = match provider {
-            "claude-code" | "claude" => &["claude"],
-            "codex" => &["codex"],
-            other => &[other],
-        };
-        if let Ok(path_env) = std::env::var("PATH") {
-            for dir in path_env.split(':') {
-                for name in names {
-                    let p = std::path::Path::new(dir).join(name);
-                    if p.exists() {
-                        return Some(ResolvedCommand {
-                            program: p.to_string_lossy().into_owned(),
-                            args: Vec::new(),
-                        });
-                    }
-                }
-            }
+        let runtime = crate::providers::detect_runtime(provider);
+        if runtime.command.is_empty() {
+            return None;
         }
-        if let Some(home) = dirs::home_dir() {
-            for name in names {
-                let p = home.join(".jait").join("bin").join(name);
-                if p.exists() {
-                    return Some(ResolvedCommand {
-                        program: p.to_string_lossy().into_owned(),
-                        args: Vec::new(),
-                    });
-                }
-            }
-        }
-        None
+        Some(ResolvedCommand {
+            program: runtime.command,
+            args: Vec::new(),
+        })
     }
 }
 

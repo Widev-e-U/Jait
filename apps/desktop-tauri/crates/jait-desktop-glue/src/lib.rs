@@ -1025,41 +1025,46 @@ impl HostState {
                 match op.as_str() {
                     "start" | "spawn" => {
                         let cwd = params
-                            .get("cwd")
+                            .get("projectRoot")
+                            .or_else(|| params.get("cwd"))
                             .and_then(Value::as_str)
                             .unwrap_or_default();
+                        let id = params
+                            .get("terminalId")
+                            .and_then(Value::as_str)
+                            .filter(|id| !id.is_empty())
+                            .map(str::to_string)
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                         let cols = params.get("cols").and_then(Value::as_u64).unwrap_or(80) as u16;
                         let rows = params.get("rows").and_then(Value::as_u64).unwrap_or(24) as u16;
-                        // The terminal id is minted inside start(); share it with the
-                        // PTY reader callbacks via this cell after start() returns.
-                        let terminal_cell: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
                         let sinks: Vec<HostSink> = self.sinks.lock().clone();
-                        let out_cell = terminal_cell.clone();
+                        // Capture the ID before spawning so even the first prompt is routed.
+                        let out_id = id.clone();
                         let out_sinks = sinks.clone();
                         let on_output = move |data: String| {
-                            let id = out_cell.lock().clone().unwrap_or_default();
                             for sink in &out_sinks {
                                 sink(
                                     "terminal:output",
-                                    &json!({ "terminalId": id, "data": data }),
+                                    &json!({ "terminalId": out_id, "data": data }),
                                 );
                             }
                         };
-                        let exit_cell = terminal_cell.clone();
-                        let exit_sinks = sinks;
+                        let exit_id = id.clone();
                         let on_exit = move |code: Option<i32>, error: Option<String>| {
-                            let id = exit_cell.lock().clone().unwrap_or_default();
-                            for sink in &exit_sinks {
+                            for sink in &sinks {
                                 sink(
                                     "terminal:exit",
-                                    &json!({ "terminalId": id, "exitCode": code, "error": error }),
+                                    &json!({ "terminalId": exit_id, "exitCode": code, "error": error }),
                                 );
                             }
                         };
-                        let start =
-                            block_pty(self.terms.start(cwd, cols, rows, on_output, on_exit))?;
-                        *terminal_cell.lock() = Some(start.terminal_id.clone());
-                        Ok(to_json(start)?)
+                        let start = block_pty(
+                            self.terms
+                                .start_with_id(&id, cwd, cols, rows, on_output, on_exit),
+                        )?;
+                        let mut result = to_json(start)?;
+                        result["ok"] = json!(true);
+                        Ok(result)
                     }
                     "input" | "write" => {
                         let terminal_id = params
@@ -1070,7 +1075,7 @@ impl HostState {
                             .get("data")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
-                        Ok(to_json(self.terms.input(terminal_id, data))?)
+                        Ok(to_json(self.terms.input(terminal_id, data)?)?)
                     }
                     "resize" => {
                         let terminal_id = params
@@ -1079,14 +1084,14 @@ impl HostState {
                             .unwrap_or_default();
                         let cols = params.get("cols").and_then(Value::as_u64).unwrap_or(80) as u16;
                         let rows = params.get("rows").and_then(Value::as_u64).unwrap_or(24) as u16;
-                        Ok(to_json(self.terms.resize(terminal_id, cols, rows))?)
+                        Ok(to_json(self.terms.resize(terminal_id, cols, rows)?)?)
                     }
                     "stop" | "kill" => {
                         let terminal_id = params
                             .get("terminalId")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
-                        Ok(to_json(self.terms.stop(terminal_id))?)
+                        Ok(to_json(self.terms.stop(terminal_id)?)?)
                     }
                     "is-alive" | "alive" => {
                         let terminal_id = params
@@ -2341,7 +2346,6 @@ done
     // ── terminal bridge over a real PTY ─────────────────────────────────────
 
     #[test]
-    #[cfg(unix)]
     fn terminal_lifecycle_echoes_input_and_stops() {
         let st = state();
         let dir = temp_dir();
@@ -2356,7 +2360,7 @@ done
                 "desktop:terminal-op",
                 &[
                     json!("start"),
-                    json!({"cwd": dir.to_string_lossy(), "cols": 100}),
+                    json!({"terminalId": "gateway-terminal-test", "projectRoot": dir.to_string_lossy(), "cols": 100}),
                 ],
             )
             .expect("terminal start ok");
@@ -2365,13 +2369,23 @@ done
             .expect("terminal_id str")
             .to_string();
 
+        assert_eq!(term_id, "gateway-terminal-test");
+        assert_eq!(started["ok"], true);
+        assert_eq!(started["cwd"], dir.to_string_lossy().as_ref());
+
+        let command = if cfg!(windows) {
+            "Write-Output ('glue-' + 'pty-ok')\r"
+        } else {
+            "printf '%s%s\\n' glue- pty-ok\r"
+        };
         st.dispatch(
             "desktop:terminal-op",
             &[
                 json!("input"),
-                json!({"terminalId": term_id, "data": "echo glue-pty-ok\r\n"}),
+                json!({"terminalId": term_id, "data": command}),
             ],
         )
+        .map(|result| assert_eq!(result["ok"], true))
         .expect("terminal input ok");
 
         let snapshot = wait_for(
@@ -2380,8 +2394,30 @@ done
             Duration::from_secs(10),
         );
         assert!(
-            snapshot.iter().any(|(ch, _p)| ch == "terminal:output"),
+            snapshot.iter().any(|(ch, p)| ch == "terminal:output"
+                && p["data"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("glue-pty-ok")),
             "terminal output events fanned out: {snapshot:?}"
+        );
+
+        assert!(snapshot
+            .iter()
+            .filter(|(ch, _)| ch == "terminal:output")
+            .all(|(_, p)| p["terminalId"] == term_id));
+        let repeated = st
+            .dispatch(
+                "desktop:terminal-op",
+                &[
+                    json!("start"),
+                    json!({"terminalId": term_id, "projectRoot": dir.to_string_lossy()}),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            repeated["pid"], started["pid"],
+            "repeat start reuses the shell"
         );
 
         let alive = st
@@ -2420,6 +2456,22 @@ done
             }
             std::thread::sleep(Duration::from_millis(50));
         }
+        let snapshot = wait_for(
+            &events,
+            |(ch, p)| ch == "terminal:exit" && p["terminalId"] == term_id,
+            Duration::from_secs(10),
+        );
+        assert!(snapshot
+            .iter()
+            .any(|(ch, p)| ch == "terminal:exit" && p["terminalId"] == term_id));
+        assert!(
+            st.dispatch(
+                "desktop:terminal-op",
+                &[json!("input"), json!({"terminalId": term_id, "data": "x"})]
+            )
+            .is_err(),
+            "missing terminal errors propagate"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
