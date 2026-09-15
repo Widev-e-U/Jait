@@ -59,10 +59,14 @@ export function signOllamaRequest(key: KeyObject, method: string, path: string, 
   return `${sshPublicKey(publicKey).toString("base64")}:${signature.toString("base64")}`;
 }
 
-async function readDeviceKey(): Promise<KeyObject> {
+export function ollamaDeviceKeyPaths(): string[] {
   // Operator configuration only: never accept a key path from an HTTP request.
   const configured = process.env.JAIT_OLLAMA_DEVICE_KEY_PATH?.trim();
-  const paths = configured ? [configured] : [join(homedir(), ".ollama", "id_ed25519"), ...(process.platform === "linux" ? ["/usr/share/ollama/.ollama/id_ed25519"] : [])];
+  return configured ? [configured] : [join(homedir(), ".ollama", "id_ed25519"), ...(process.platform === "linux" ? ["/usr/share/ollama/.ollama/id_ed25519"] : [])];
+}
+
+async function readDeviceKey(): Promise<KeyObject> {
+  const paths = ollamaDeviceKeyPaths();
   for (const path of paths) {
     let pem: string;
     try { pem = await readFile(path, "utf8"); } catch { continue; }

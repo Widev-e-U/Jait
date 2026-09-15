@@ -9,3 +9,5 @@ export * from "./code-graph.js";
 export * from "./jait-backends.js";
 
 export type { DesktopGatewayConfig, DesktopGatewayStatus } from "./desktop-gateway.js";
+
+export type { OllamaUsageSetup } from "./ollama-usage.js";

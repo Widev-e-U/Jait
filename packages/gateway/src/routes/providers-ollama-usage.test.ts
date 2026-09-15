@@ -7,7 +7,7 @@ import { fetchSignedInOllamaUsage } from "../services/ollama-device-auth.js";
 import { OllamaUsageError } from "../services/provider-quota-fetchers.js";
 import { registerProviderRoutes } from "./providers.js";
 
-vi.mock("../services/ollama-device-auth.js", () => ({ fetchSignedInOllamaUsage: vi.fn() }));
+vi.mock("../services/ollama-device-auth.js", async (original) => ({ ...await original<typeof import("../services/ollama-device-auth.js")>(), fetchSignedInOllamaUsage: vi.fn() }));
 const account = { email: "me@example.com", name: "Me", plan: "pro" };
 const usage = { limits: { weekly: { usage: 0.09, models: [] } } };
 beforeEach(() => { vi.mocked(fetchSignedInOllamaUsage).mockReset().mockResolvedValue(usage); });
@@ -64,3 +64,49 @@ describe("Ollama quota route", () => {
     } finally { await app.close(); }
   });
 });
+
+ describe("Ollama API key setup", () => {
+   async function keySetup() {
+     const config = loadConfig();
+     const token = await signAuthToken({ id: "user-1", username: "test" }, config.jwtSecret);
+     const updateSettings = vi.fn();
+     const app = Fastify({ logger: false });
+     registerProviderRoutes(app, config, {
+       providerRegistry: new ProviderRegistry(),
+       userService: { getSettings: () => ({ apiKeys: { OTHER_KEY: "keep", OLLAMA_API_KEY: "old" } }), updateSettings } as never,
+     });
+     const request = (apiKey: unknown, authenticated = true) => app.inject({ method: "POST", url: "/api/provider-usage/ollama/api-key", headers: authenticated ? { authorization: `Bearer ${token}` } : {}, payload: { apiKey } });
+     return { app, request, updateSettings };
+   }
+   it("verifies and trims the key before saving while preserving other credentials", async () => {
+     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(usage)));
+     const { app, request, updateSettings } = await keySetup();
+     try {
+       const response = await request("  new-key  ");
+       expect(response.statusCode).toBe(200);
+       expect(updateSettings).toHaveBeenCalledWith("user-1", { apiKeys: { OTHER_KEY: "keep", OLLAMA_API_KEY: "new-key" } });
+       expect(response.body).not.toContain("new-key");
+     } finally { await app.close(); }
+   });
+   it("preserves settings and hides provider error details for a rejected key", async () => {
+     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("secret-provider-detail", { status: 401 })));
+     const { app, request, updateSettings } = await keySetup();
+     try {
+       const response = await request("bad-key");
+       expect(response.statusCode).toBe(400);
+       expect(response.body).not.toContain("secret-provider-detail");
+       expect(updateSettings).not.toHaveBeenCalled();
+     } finally { await app.close(); }
+   });
+   it("rejects invalid input and unauthenticated requests without contacting Ollama", async () => {
+     const fetchMock = vi.fn();
+     vi.stubGlobal("fetch", fetchMock);
+     const { app, request, updateSettings } = await keySetup();
+     try {
+       for (const key of [null, 42, "", "  ", "x".repeat(4097)]) expect((await request(key)).statusCode).toBe(400);
+       expect((await request("valid", false)).statusCode).toBe(401);
+       expect(fetchMock).not.toHaveBeenCalled();
+       expect(updateSettings).not.toHaveBeenCalled();
+     } finally { await app.close(); }
+   });
+ });

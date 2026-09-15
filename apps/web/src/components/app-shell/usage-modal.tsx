@@ -1,6 +1,8 @@
 /**
  * Live provider subscription usage, grouped by configured provider profile.
  */
+import type { OllamaUsageSetup } from '@jait/shared'
+import { OllamaUsageSetupPanel } from './ollama-usage-setup'
 import { useCallback, useEffect, useState } from 'react'
 import { Brain, Loader2, RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -40,6 +42,7 @@ interface UsageProfile {
   accountLabel?: string | null
   /** Subscription plan reported by the provider (e.g. Codex "plus"). */
   planType?: string | null
+  ollamaSetup?: OllamaUsageSetup
   quotas: UsageQuotaSnapshot[]
   error: string | null
 }
@@ -130,7 +133,7 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
   )
 }
 
-function ProfileUsage({ profile }: { profile: UsageProfile }) {
+function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retry: () => Promise<void>; loading: boolean }) {
   const plan = profile.planType ?? profile.quotas.find((quota) => quota.planType)?.planType
   const credits = profile.quotas.find((quota) => quota.credits)?.credits
 
@@ -172,6 +175,13 @@ function ProfileUsage({ profile }: { profile: UsageProfile }) {
               : 'This provider did not return subscription usage.'
           )}
         </div>
+      )}
+
+      {profile.providerType === 'ollama' && (profile.error || profile.quotas.length === 0) && (
+        <OllamaUsageSetupPanel setup={profile.ollamaSetup} connected={Boolean(profile.accountLabel)} retry={retry} loading={loading} />
+      )}
+      {profile.providerType === 'ollama' && !profile.error && profile.quotas.length > 0 && (
+        <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">Connected — cloud usage is up to date.</p>
       )}
 
       {profile.error && profile.quotas.length > 0 && (
@@ -292,7 +302,7 @@ export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange
               })}
             </div>
 
-            {selected && <ProfileUsage profile={selected} />}
+            {selected && <ProfileUsage key={selected.id} profile={selected} retry={load} loading={loading} />}
 
             <p className="text-[11px] text-muted-foreground">
               Refreshed {formatDateTime(summary?.generatedAt ?? null)}

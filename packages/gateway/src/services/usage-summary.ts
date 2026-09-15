@@ -1,5 +1,6 @@
 /** Provider-account subscription usage shown by the avatar Usage modal. */
 
+import type { OllamaUsageSetup } from "@jait/shared";
 import type { ProviderUsageSnapshot } from "./provider-usage.js";
 
 export interface UsageProfile {
@@ -12,6 +13,7 @@ export interface UsageProfile {
   accountLabel?: string | null;
   /** Subscription plan reported by the provider, when known. */
   planType?: string | null;
+  ollamaSetup?: OllamaUsageSetup;
   quotas: ProviderUsageSnapshot[];
   error: string | null;
 }

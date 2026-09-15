@@ -28,6 +28,7 @@ import {
   OllamaUsageError,
   type OllamaCloudAccount,
 } from "../services/provider-quota-fetchers.js";
+import { getOllamaUsageSetup } from "../services/ollama-usage-setup.js";
 import { fetchSignedInOllamaUsage } from "../services/ollama-device-auth.js";
 import { summarizeProviderUsage } from "../services/usage-summary.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
@@ -206,7 +207,7 @@ export function registerProviderRoutes(
       ...ollamaQuotaAccountIds,
     ];
     const quotas = deps.providerUsageService?.listForUser(quotaAccountIds) ?? [];
-    return summarizeProviderUsage(accounts, quotas, {
+    const summary = summarizeProviderUsage(accounts, quotas, {
       quotaErrors,
       jaitBackendProfiles: ollamaBackends.map((backend) => {
         const quotaAccountIdValue = `jait-backend:${backend.id}`;
@@ -222,6 +223,33 @@ export function registerProviderRoutes(
         };
       }),
     });
+    await Promise.all(summary.profiles.map(async (profile) => {
+      const backend = ollamaBackends.find((item) => profile.id === `jait-backend:${item.id}`);
+      if (backend && (profile.error || profile.quotas.length === 0)) {
+        profile.ollamaSetup = await getOllamaUsageSetup(backend.baseUrl);
+      }
+    }));
+    return summary;
+  });
+
+  // Validate before saving; merge on the server so unrelated settings survive.
+  app.post("/api/provider-usage/ollama/api-key", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.userService) return reply.status(503).send({ error: "Settings are unavailable" });
+    const body = (request.body ?? {}) as { apiKey?: unknown };
+    if (typeof body.apiKey !== "string" || !body.apiKey.trim() || body.apiKey.length > 4096) {
+      return reply.status(400).send({ error: "Enter an Ollama Cloud API key." });
+    }
+    const apiKey = body.apiKey.trim();
+    try {
+      await fetchOllamaUsage(apiKey);
+    } catch {
+      return reply.status(400).send({ error: "Could not retrieve usage with this key. Check the key and connection, then try again. Your saved key has not changed." });
+    }
+    const settings = deps.userService.getSettings(authUser.id);
+    deps.userService.updateSettings(authUser.id, { apiKeys: { ...settings.apiKeys, OLLAMA_API_KEY: apiKey } });
+    return { ok: true };
   });
 
   app.post("/api/provider-accounts", async (request, reply) => {
