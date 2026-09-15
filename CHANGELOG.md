@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.853](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.853) — 2026-09-15
+- fix(desktop-tauri): run terminal and provider CLIs on Windows — 1dcdb1c7
+
 ## [v0.1.852](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.852) — 2026-09-15
 - test(e2e): prove chat assignment survives navigating between projects — 561e9e39
 - feat(chat): flag chats whose last reply failed — b5a239bd
