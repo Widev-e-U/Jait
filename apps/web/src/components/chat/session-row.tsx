@@ -1,4 +1,4 @@
-import { Loader2, MessageSquare } from 'lucide-react'
+import { Loader2, MessageSquare, MessageSquareX } from 'lucide-react'
 import type {
   HTMLAttributes,
   MouseEventHandler,
@@ -6,6 +6,7 @@ import type {
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 import { formatAgo } from '@/lib/relative-time'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { parseSessionChatError } from '@/lib/session-chat-selection'
 
 /** Minimal shape both ProjectSession and the switcher's session objects satisfy. */
 export interface SessionRowSession {
@@ -62,6 +63,7 @@ export function SessionRow({
   dragProps,
   longPressProps,
 }: SessionRowProps) {
+  const chatError = parseSessionChatError(session.metadata)
   return (
     <div
       className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-sm transition-colors ${
@@ -74,6 +76,13 @@ export function SessionRow({
     >
       {isStreaming ? (
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+      ) : chatError ? (
+        <TooltipHint content={`Last reply failed: ${chatError.message}`}>
+          <MessageSquareX
+            className="h-3.5 w-3.5 shrink-0 text-destructive"
+            aria-label="Last reply failed"
+          />
+        </TooltipHint>
       ) : (
         <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
       )}

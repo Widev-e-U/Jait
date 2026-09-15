@@ -59,6 +59,35 @@ export function formatSessionChatSelectionLabel(selection: SessionChatSelection)
   ].filter(Boolean).join(' · ')
 }
 
+/**
+ * The error state a chat was left in by its most recent turn. Written onto the
+ * session row (`metadata.chat.lastError` / `lastErrorAt`) by the gateway when a
+ * turn fails, cleared when a later turn succeeds.
+ */
+export interface SessionChatError {
+  message: string
+  at: string | null
+}
+
+/**
+ * Read the last-turn error marker from a session's metadata, or `null` when the
+ * session's last turn finished cleanly (or nothing recorded an error yet).
+ */
+export function parseSessionChatError(metadata: string | null | undefined): SessionChatError | null {
+  if (!metadata) return null
+  try {
+    const parsed = JSON.parse(metadata) as { chat?: Record<string, unknown> }
+    const chat = parsed.chat
+    if (!chat || typeof chat !== 'object') return null
+    const message = typeof chat.lastError === 'string' && chat.lastError.trim() ? chat.lastError : null
+    if (!message) return null
+    const at = typeof chat.lastErrorAt === 'string' && chat.lastErrorAt.trim() ? chat.lastErrorAt : null
+    return { message, at }
+  } catch {
+    return null
+  }
+}
+
 export function parseSessionChatSelection(metadata: string | null | undefined): SessionChatSelection | null {
   if (!metadata) return null
   try {

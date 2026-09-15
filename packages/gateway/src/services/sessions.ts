@@ -391,4 +391,36 @@ export class SessionService {
     metadata["chat"] = chat;
     this.update(id, { metadata }, userId);
   }
+
+  /**
+   * Record whether the chat's most recent turn ended on an error, merged into
+   * the session's `metadata.chat` field.
+   *
+   * The chat and project lists render a red error icon for a session whose last
+   * turn failed, so the user can spot a broken chat without opening it. Passing
+   * `null` clears the marker (a later successful reply, or a manual retry that
+   * succeeded, makes the chat healthy again).
+   */
+  updateChatError(id: string, error: string | null, userId?: string) {
+    const existing = this.getById(id, userId);
+    if (!existing) return;
+    let metadata: Record<string, unknown> = {};
+    if (existing.metadata) {
+      try {
+        metadata = JSON.parse(existing.metadata) as Record<string, unknown>;
+      } catch {
+        metadata = {};
+      }
+    }
+    const chat = { ...(metadata["chat"] as Record<string, unknown> | undefined) };
+    if (error) {
+      chat["lastError"] = error.slice(0, 500);
+      chat["lastErrorAt"] = new Date().toISOString();
+    } else {
+      delete chat["lastError"];
+      delete chat["lastErrorAt"];
+    }
+    metadata["chat"] = chat;
+    this.update(id, { metadata }, userId);
+  }
 }

@@ -85,4 +85,39 @@ describe("SessionService", () => {
 
     expect(sessions.getById(session.id)?.projectId).toBeNull();
   });
+
+  it("records a failed last reply without dropping chat selection metadata", () => {
+    const session = sessions.create({
+      userId,
+      metadata: { chat: { provider: "anthropic", model: "claude-sonnet-4-5" } },
+    });
+
+    sessions.updateChatError(session.id, "Provider request failed with status 429", userId);
+
+    const chat = JSON.parse(sessions.getById(session.id, userId)?.metadata ?? "{}").chat;
+    expect(chat.provider).toBe("anthropic");
+    expect(chat.model).toBe("claude-sonnet-4-5");
+    expect(chat.lastError).toBe("Provider request failed with status 429");
+    expect(typeof chat.lastErrorAt).toBe("string");
+  });
+
+  it("clears the failed-reply marker once a turn succeeds", () => {
+    const session = sessions.create({ userId });
+    sessions.updateChatError(session.id, "boom", userId);
+
+    sessions.updateChatError(session.id, null, userId);
+
+    const chat = JSON.parse(sessions.getById(session.id, userId)?.metadata ?? "{}").chat;
+    expect(chat.lastError).toBeUndefined();
+    expect(chat.lastErrorAt).toBeUndefined();
+  });
+
+  it("does not flag a session owned by a different user", () => {
+    const session = sessions.create({ userId });
+
+    sessions.updateChatError(session.id, "boom", "someone-else");
+
+    const metadata = sessions.getById(session.id, userId)?.metadata ?? "";
+    expect(metadata.includes("lastError")).toBe(false);
+  });
 });

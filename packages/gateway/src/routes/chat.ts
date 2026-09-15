@@ -2659,6 +2659,14 @@ export function registerChatRoutes(
       } catch {
         // Deterministic id makes restart recovery idempotent.
       }
+      // The interruption is the session's last message part, so flag it for the
+      // chat/project list icon. An automatic continuation that succeeds clears
+      // the marker on its own finalization.
+      try {
+        sessionService.updateChatError(sessionId, interruptionMessage);
+      } catch {
+        // Best effort: the list icon is cosmetic.
+      }
 
       if (exhausted) {
         sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
@@ -3728,6 +3736,15 @@ export function registerChatRoutes(
     // cancel). Success turns leave this false so the mobile "Chat finished"
     // push only fires for genuinely completed responses.
     let turnCancelledOrErrored = false;
+    // The failure that ended this turn, if any. Persisted onto the session row
+    // (`metadata.chat.lastError`) so the chat/project lists can flag a chat
+    // whose most recent turn errored; a later successful turn clears it. A user
+    // cancel is deliberately *not* an error — the last message part is an
+    // interruption, not a failure.
+    let turnErrorMessage: string | undefined;
+    const markTurnErrored = (message: string) => {
+      turnErrorMessage = message;
+    };
     let cliEventUnsubscribe: (() => void) | null = null;
     let cliTurnDoneUnsubscribe: (() => void) | null = null;
     const cleanupCliListeners = () => {
@@ -4276,6 +4293,7 @@ export function registerChatRoutes(
               break;
             case "session.error":
               sessionError = normalizeProviderSessionError(event.error);
+              markTurnErrored(sessionError);
               safeWrite(`data: ${JSON.stringify({ type: "error", message: sessionError })}\n\n`);
               emitToSubscribers(sessionId, { type: "error", message: sessionError });
               break;
@@ -4505,6 +4523,7 @@ export function registerChatRoutes(
                       ? (event as any).message
                       : "Session error",
                 );
+                markTurnErrored(sessionError);
                 activeCliSessions.delete(sessionId);
               }
               unsubSteerDone();
@@ -4657,6 +4676,7 @@ export function registerChatRoutes(
           // post-loop fallback below is what persists the turn.
           else if (event.type === "error") {
             loopErrorMessage = event.message;
+            markTurnErrored(event.message);
             accumulateError(sessionId, event.message);
           }
 
@@ -4842,7 +4862,10 @@ export function registerChatRoutes(
       // or for Ollama stream errors (including abort).
       const wasCancelled = isAbortError(err);
       turnCancelledOrErrored = true;
-      if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
+      if (!wasCancelled) {
+        app.log.error(err, `${providerLabel} streaming error`);
+        markTurnErrored(err instanceof Error ? err.message : `Failed to reach ${providerLabel}`);
+      }
 
       // Save the live accumulator for real (non-cancel) errors. The loop result
       // is unavailable when parsing throws, but token/tool events have already
@@ -4961,6 +4984,20 @@ export function registerChatRoutes(
       sessionStateService?.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
     } catch (error) {
       app.log.error({ error, sessionId }, "Failed to clear durable active-turn marker");
+    }
+
+    // Record whether this turn ended on an error so the chat/project lists can
+    // show a failed-chat icon (a red chat bubble with an ×) on the session row.
+    // A successful turn clears any stale marker from an earlier failure. Do it
+    // before the broadcast below so visible lists repaint immediately.
+    try {
+      sessionService?.updateChatError(
+        sessionId,
+        turnErrorMessage ?? null,
+        authUser.id,
+      );
+    } catch (error) {
+      app.log.error({ error, sessionId }, "Failed to record chat error state");
     }
 
     // A reply finishing after the user leaves is new activity, even when the

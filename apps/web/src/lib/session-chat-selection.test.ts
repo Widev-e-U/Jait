@@ -7,6 +7,7 @@ import {
   formatSessionChatSelectionLabel,
   getSessionSelectionSyncKey,
   normalizeSessionReasoningEffort,
+  parseSessionChatError,
   parseSessionChatSelection,
 } from './session-chat-selection'
 
@@ -36,5 +37,40 @@ describe('session chat selection', () => {
     const markup = renderToStaticMarkup(createElement(SessionChatIcon, { metadata }))
     expect(markup).not.toContain('title="Codex · GPT 5.4 · High effort"')
     expect(markup).toContain('aria-label="Codex · GPT 5.4 · High effort"')
+  })
+})
+
+describe('session chat error', () => {
+  it('reads a recorded failure with its timestamp', () => {
+    const metadata = JSON.stringify({
+      chat: {
+        provider: 'codex',
+        lastError: 'Provider request failed with status 429',
+        lastErrorAt: '2026-08-01T10:00:00.000Z',
+      },
+    })
+
+    expect(parseSessionChatError(metadata)).toEqual({
+      message: 'Provider request failed with status 429',
+      at: '2026-08-01T10:00:00.000Z',
+    })
+  })
+
+  it('treats a cleared or missing marker as healthy', () => {
+    expect(parseSessionChatError(JSON.stringify({ chat: { lastError: '' } }))).toBeNull()
+    expect(parseSessionChatError(JSON.stringify({ chat: { lastError: '   ' } }))).toBeNull()
+    expect(parseSessionChatError(JSON.stringify({ chat: { provider: 'codex' } }))).toBeNull()
+    expect(parseSessionChatError('{}')).toBeNull()
+    expect(parseSessionChatError(null)).toBeNull()
+    expect(parseSessionChatError('not json')).toBeNull()
+  })
+
+  it('still reports a failure when the timestamp is absent', () => {
+    const metadata = JSON.stringify({ chat: { lastError: 'Aborted by provider' } })
+
+    expect(parseSessionChatError(metadata)).toEqual({
+      message: 'Aborted by provider',
+      at: null,
+    })
   })
 })

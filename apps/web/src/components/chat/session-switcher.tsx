@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Archive, Check, History, MessageSquarePlus } from 'lucide-react'
+import { Archive, Check, History, MessageSquarePlus, MessageSquareX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProjectSession } from '@/hooks/useProjects'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
+import { parseSessionChatError } from '@/lib/session-chat-selection'
 import { formatAgo } from '@/lib/relative-time'
 
 interface SessionSwitcherProps {
@@ -102,6 +103,7 @@ export function SessionSwitcher({
               <div className="space-y-0.5">
                 {sessions.map((session) => {
                   const isActive = session.id === activeSessionId
+                  const chatError = parseSessionChatError(session.metadata)
                   return (
                     <button
                       key={session.id}
@@ -125,6 +127,16 @@ export function SessionSwitcher({
                             {session.name || 'Untitled'}
                           </span>
                           <SessionChatIcon metadata={session.metadata} />
+                          {chatError && (
+                            <span
+                              role="img"
+                              aria-label="Last reply failed"
+                              className="inline-flex h-3 w-3 shrink-0 items-center justify-center"
+                              title={`Last reply failed: ${chatError.message}`}
+                            >
+                              <MessageSquareX className="h-3 w-3 text-destructive" />
+                            </span>
+                          )}
                           {session.status === 'archived' && (
                             <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-2xs text-muted-foreground">
                               <Archive className="h-2.5 w-2.5" />

@@ -57,6 +57,28 @@ describe('SessionRow', () => {
     expect(renderRow({ session: { id: 'chat-2', name: null } }).includes('Untitled session')).toBe(true)
   })
 
+  it('shows a destructive chat-with-x icon when the last reply failed', () => {
+    const metadata = JSON.stringify({ chat: { lastError: 'Provider request failed with status 429' } })
+
+    const html = renderRow({
+      session: { id: 'chat-3', name: 'Deploy fix', lastActiveAt: '2026-08-01T00:00:00.000Z', metadata },
+    })
+
+    expect(html).toContain('lucide-message-square-x')
+    expect(html).toContain('text-destructive')
+  })
+
+  it('keeps the plain chat icon when the last reply succeeded', () => {
+    const metadata = JSON.stringify({ chat: { provider: 'codex', model: 'gpt-5.4' } })
+
+    const html = renderRow({
+      session: { id: 'chat-4', name: 'Deploy fix', lastActiveAt: '2026-08-01T00:00:00.000Z', metadata },
+    })
+
+    expect(html).not.toContain('lucide-message-square-x')
+    expect(html).toContain('lucide-message-square')
+  })
+
   it('marks the active row and hides its unread dot', () => {
     const html = renderRow({
       isActive: true,
