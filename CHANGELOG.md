@@ -4,6 +4,17 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.852](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.852) — 2026-09-15
+- test(e2e): prove chat assignment survives navigating between projects — 561e9e39
+- feat(chat): flag chats whose last reply failed — b5a239bd
+- feat(usage): explain why local Ollama usage is empty and how to fix it — d375efaa
+- fix(copilot): log in through the CLI instead of ambient GitHub tokens — b47a4c35
+- test(e2e): mount shared web fixtures from the web workspace — 02f299f4
+- fix(chat): keep personal sessions out of projects — 8931501b
+- fix(web): isolate image controls from message editing — b23c9c35
+- fix(prompts): make Q&A links and Wear answers reliable — 1f320fb8
+- ci(release): keep npm verification alive through staged publishes — ad413830
+
 ## [v0.1.851](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.851) — 2026-09-14
 - ci(release): verify the npm publish through npm's own registry — 99896c25
 
