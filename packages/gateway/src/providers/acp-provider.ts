@@ -51,7 +51,9 @@ import {
   NO_PROVIDER_AUTH,
   killChildTree as killAuthChildTree,
   runAuthCommand,
+  SHADOWED_GITHUB_COPILOT_TOKEN_ENV_VARS,
   startDeviceLoginCommand,
+  stripEnvVars,
   unsupportedLogin,
   unsupportedLogout,
 } from "./provider-auth.js";
@@ -169,6 +171,12 @@ export interface AcpProviderConfig {
   availabilityCommand?: string;
   args?: string[];
   env?: Record<string, string>;
+  /**
+   * Environment variable names to remove from the inherited gateway process
+   * environment before launching this agent. Values in `env` still win, so a
+   * deliberately configured credential is never dropped.
+   */
+  stripEnv?: string[];
   modes?: RuntimeMode[];
   auth?: AcpProviderAuthKind | false;
   registry?: AcpProviderRegistryMetadata;
@@ -181,6 +189,56 @@ export interface AcpProviderRegistryMetadata {
   icon?: string;
   website?: string;
   repository?: string;
+}
+
+/**
+ * Copilot agents (the standalone CLI, and any wrapper registered against it)
+ * manage their own credentials, but resolve `COPILOT_GITHUB_TOKEN` / `GH_TOKEN`
+ * / `GITHUB_TOKEN` before their stored token. Jait's gateway commonly exports
+ * one of those for GitHub forge access, which then shadows the Copilot login
+ * and can fail outright for classic (ghp_) tokens. Copilot providers therefore
+ * drop those inherited variables so the CLI falls back to its own login.
+ */
+export function isCopilotAcpProvider(config: AcpChildEnvConfig): boolean {
+  return [config.providerType, config.id, config.registry?.id].some(
+    (candidate) =>
+      typeof candidate === "string" && candidate.toLowerCase().includes("copilot"),
+  );
+}
+
+/** Structural subset of {@link AcpProviderConfig} needed to resolve child env. */
+export type AcpChildEnvConfig = Pick<
+  AcpProviderConfig,
+  "providerType" | "id" | "env" | "stripEnv" | "registry"
+>;
+
+/** Environment variable names a provider must not inherit from the gateway. */
+export function acpInheritedEnvToStrip(config: AcpChildEnvConfig): string[] {
+  const names = new Set(config.stripEnv ?? []);
+  if (isCopilotAcpProvider(config)) {
+    for (const name of SHADOWED_GITHUB_COPILOT_TOKEN_ENV_VARS) names.add(name);
+  }
+  return [...names];
+}
+
+/**
+ * Build an ACP agent's child environment: gateway process env, then this
+ * provider's configured `env`, then any per-call overrides — with inherited
+ * variables that would shadow the agent's own credentials removed first, so an
+ * explicitly configured value always wins.
+ *
+ * `config.env` is merged here (not by callers) so every spawn — including the
+ * availability and auth probes — sees the provider's configured credentials.
+ */
+export function buildAcpChildEnv(
+  config: AcpChildEnvConfig,
+  base: NodeJS.ProcessEnv = process.env,
+  ...overrides: Array<NodeJS.ProcessEnv | undefined>
+): NodeJS.ProcessEnv {
+  const env = stripEnvVars({ ...base }, acpInheritedEnvToStrip(config));
+  Object.assign(env, config.env);
+  for (const override of overrides) Object.assign(env, override);
+  return env;
 }
 
 interface PendingApproval {
@@ -293,7 +351,7 @@ export class AcpProvider implements CliProviderAdapter {
   readonly executionNodeId?: string;
   readonly info: ProviderInfo;
 
-  private readonly config: Required<Omit<AcpProviderConfig, "env" | "providerType" | "ownerUserId" | "executionNodeId" | "registry" | "availabilityCommand">> & { env?: Record<string, string>; registry?: AcpProviderRegistryMetadata; availabilityCommand?: string };
+  private readonly config: Required<Omit<AcpProviderConfig, "env" | "stripEnv" | "providerType" | "ownerUserId" | "executionNodeId" | "registry" | "availabilityCommand">> & { env?: Record<string, string>; stripEnv?: string[]; registry?: AcpProviderRegistryMetadata; availabilityCommand?: string };
   private readonly authKind: AcpProviderAuthKind | null;
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
@@ -344,6 +402,21 @@ export class AcpProvider implements CliProviderAdapter {
     };
   }
 
+  /** Environment variable names this provider must not inherit. */
+  private inheritedEnvToStrip(): string[] {
+    return acpInheritedEnvToStrip(this.config);
+  }
+
+  /**
+   * Build the child environment from the gateway process env, then this
+   * provider's `env`, then any per-call overrides. Inherited variables that
+   * would shadow the agent's own credentials are removed first, so an explicit
+   * provider-configured value always wins.
+   */
+  private childEnv(...overrides: Array<NodeJS.ProcessEnv | undefined>): NodeJS.ProcessEnv {
+    return buildAcpChildEnv(this.config, process.env, ...overrides);
+  }
+
   async checkAvailability(): Promise<boolean> {
     if (this.executionNodeId && this.executionNodeId !== "gateway") {
       this.info.available = false;
@@ -359,7 +432,7 @@ export class AcpProvider implements CliProviderAdapter {
     try {
       await execFileAsync(command, ["--version"], {
         timeout: AVAILABILITY_PROBE_TIMEOUT_MS,
-        env: { ...process.env, ...this.config.env },
+        env: this.childEnv(),
       });
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
@@ -550,14 +623,18 @@ export class AcpProvider implements CliProviderAdapter {
       return unsupportedLogin(this.id, "ACP agent did not advertise a login method.");
     }
 
-    if (isTerminalAuthMethod(method)) {
+    const terminalSpec = resolveTerminalAuthSpec(method);
+    if (terminalSpec) {
       probe.child.kill();
       const { result, child } = await startDeviceLoginCommand({
         providerId: this.id,
-        label: method.name,
-        commandLine: this.config.command,
-        args: [...this.config.args, ...(method.args ?? [])],
-        env: { ...this.config.env, ...method.env },
+        label: terminalSpec.label,
+        commandLine: terminalSpec.command ?? this.config.command,
+        args: terminalSpec.command
+          ? terminalSpec.args
+          : [...this.config.args, ...terminalSpec.args],
+        env: { ...this.config.env, ...terminalSpec.env },
+        unsetEnv: this.inheritedEnvToStrip(),
       });
       if (child) {
         this.authLoginProcess = child;
@@ -607,6 +684,7 @@ export class AcpProvider implements CliProviderAdapter {
       commandLine: this.config.env?.JAIT_CODEX_LOGIN_COMMAND ?? process.env.JAIT_CODEX_LOGIN_COMMAND ?? "codex",
       args: ["login", "--device-auth"],
       env: this.config.env,
+      unsetEnv: this.inheritedEnvToStrip(),
     });
     if (child) {
       this.authLoginProcess = child;
@@ -630,7 +708,7 @@ export class AcpProvider implements CliProviderAdapter {
       return cliAuthenticated === true || checkCodexAuthFile(this.config.env);
     }
     if (this.providerType === "claude-code") {
-      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env).catch(() => null);
+      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env, this.inheritedEnvToStrip()).catch(() => null);
       return this.hasEnvironmentCredential("ANTHROPIC_API_KEY") || Boolean(status?.ok);
     }
     return null;
@@ -638,11 +716,11 @@ export class AcpProvider implements CliProviderAdapter {
 
   private async getProviderCliAuthenticated(): Promise<boolean | null> {
     if (this.providerType === "codex") {
-      const status = await runAuthCommand(this.id, "codex", ["login", "status"], 10_000, this.config.env).catch(() => null);
+      const status = await runAuthCommand(this.id, "codex", ["login", "status"], 10_000, this.config.env, this.inheritedEnvToStrip()).catch(() => null);
       return status ? status.ok : null;
     }
     if (this.providerType === "claude-code") {
-      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env).catch(() => null);
+      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000, this.config.env, this.inheritedEnvToStrip()).catch(() => null);
       return status ? status.ok : null;
     }
     return null;
@@ -698,7 +776,7 @@ export class AcpProvider implements CliProviderAdapter {
       // source of truth that checkProviderAuthenticated() reads, regardless of whether
       // the ACP logout RPC succeeded or even ran.
       if (this.providerType === "codex") {
-        await runAuthCommand(this.id, "codex", ["logout"], 20_000, this.config.env).catch(() => null);
+        await runAuthCommand(this.id, "codex", ["logout"], 20_000, this.config.env, this.inheritedEnvToStrip()).catch(() => null);
         removeCodexAuthFiles(this.config.env);
         this.cachedAuthStatus = null; // invalidate cache
         return {
@@ -710,7 +788,7 @@ export class AcpProvider implements CliProviderAdapter {
       }
       if (!probe) {
         if (this.providerType === "claude-code") {
-          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000, this.config.env);
+          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000, this.config.env, this.inheritedEnvToStrip());
           this.cachedAuthStatus = null;
           return result.ok
             ? {
@@ -726,7 +804,7 @@ export class AcpProvider implements CliProviderAdapter {
       }
       if (!probe.initialized.agentCapabilities?.auth?.logout) {
         if (this.providerType === "claude-code") {
-          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000, this.config.env);
+          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000, this.config.env, this.inheritedEnvToStrip());
           this.cachedAuthStatus = null;
           return result.ok
             ? {
@@ -768,7 +846,7 @@ export class AcpProvider implements CliProviderAdapter {
       startedAt: new Date().toISOString(),
     };
 
-    const env = { ...process.env, ...this.config.env, ...options.env };
+    const env = this.childEnv(options.env);
     let piProvisionCleanup: (() => void) | undefined;
     // pi-acp stores the ACP mcpServers but never wires them through to pi, and
     // pi needs the pi-mcp-adapter extension to expose MCP tools. Inject a
@@ -1188,7 +1266,7 @@ export class AcpProvider implements CliProviderAdapter {
     const child = spawn(this.config.command, this.config.args, {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, ...this.config.env },
+      env: this.childEnv(),
       shell: needsShell(this.config.command),
     });
 
@@ -1241,9 +1319,78 @@ function needsShell(command: string): boolean {
   return process.platform === "win32" && !isAbsolute(command) && !command.includes("/") && !command.includes("\\");
 }
 
+/**
+ * A launch spec for an interactive terminal login, resolved from either the
+ * native ACP `terminal` auth method or the `_meta["terminal-auth"]` extension
+ * that agents such as the GitHub Copilot CLI advertise instead.
+ */
+interface TerminalAuthSpec {
+  label: string;
+  args: string[];
+  env?: Record<string, string>;
+  /**
+   * Full command to run instead of the configured agent command. Needed for
+   * agents (e.g. Copilot) whose login entrypoint differs from the ACP
+   * invocation — the configured command may carry `--acp`-style flags that
+   * must not be reused for `login`.
+   */
+  command?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function toStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!isRecord(value)) return undefined;
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/**
+ * Read the `_meta["terminal-auth"]` extension used by agents that advertise an
+ * interactive login command but not a first-class ACP `terminal` method.
+ */
+function readTerminalAuthMeta(method: AuthMethod): TerminalAuthSpec | null {
+  const meta = method._meta;
+  if (!isRecord(meta)) return null;
+  const raw = meta["terminal-auth"];
+  if (!isRecord(raw)) return null;
+
+  const command = typeof raw["command"] === "string" && raw["command"].trim()
+    ? raw["command"].trim()
+    : undefined;
+  const args = toStringArray(raw["args"]);
+  const env = toStringRecord(raw["env"]);
+  const label = typeof raw["label"] === "string" && raw["label"].trim()
+    ? raw["label"].trim()
+    : method.name;
+
+  if (!command && args.length === 0 && !env) return null;
+  return { label, command, args, env };
+}
+
+/**
+ * Resolve the interactive terminal login spec for a method, supporting both the
+ * native `terminal` method and the `_meta["terminal-auth"]` extension. Returns
+ * `null` when the method has no terminal login path (use `authenticate` instead).
+ */
+function resolveTerminalAuthSpec(method: AuthMethod): TerminalAuthSpec | null {
+  if (isTerminalAuthMethod(method)) {
+    return { label: method.name, args: method.args ?? [], env: method.env ?? undefined };
+  }
+  return readTerminalAuthMeta(method);
+}
+
 function chooseAcpAuthMethod(methods: AuthMethod[]): AuthMethod | null {
   return (
-    methods.find(isTerminalAuthMethod) ??
+    methods.find((method) => resolveTerminalAuthSpec(method) !== null) ??
     methods.find((method) => method.id === "chat-gpt") ??
     methods[0] ??
     null

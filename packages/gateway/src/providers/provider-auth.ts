@@ -103,8 +103,38 @@ export function stripAnsi(value: string): string {
   return value.replace(ANSI_ESCAPE_PATTERN, "");
 }
 
-export function buildProviderAuthEnv(overrides?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...overrides };
+/**
+ * GitHub Copilot CLI resolves credentials in this order:
+ *   COPILOT_GITHUB_TOKEN -> GH_TOKEN -> GITHUB_TOKEN -> `copilot login` stored token.
+ * A classic (ghp_) PAT in any of those variables makes the CLI abort instead of
+ * falling back to the stored token. Jait's gateway process commonly has one of
+ * them set for GitHub forge integration, so Copilot child processes must not
+ * inherit them.
+ */
+export const SHADOWED_GITHUB_COPILOT_TOKEN_ENV_VARS = [
+  "COPILOT_GITHUB_TOKEN",
+  "GH_TOKEN",
+  "GITHUB_TOKEN",
+] as const;
+
+/** Delete environment variables by name, in place. */
+export function stripEnvVars(
+  env: NodeJS.ProcessEnv,
+  names?: Iterable<string>,
+): NodeJS.ProcessEnv {
+  if (!names) return env;
+  for (const name of names) delete env[name];
+  return env;
+}
+
+export function buildProviderAuthEnv(
+  overrides?: NodeJS.ProcessEnv,
+  unset?: Iterable<string>,
+): NodeJS.ProcessEnv {
+  // Strip inherited variables before applying overrides, so a deliberate
+  // provider-configured value (for example a fine-grained PAT) still wins.
+  const env: NodeJS.ProcessEnv = stripEnvVars({ ...process.env }, unset);
+  Object.assign(env, overrides);
   const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
   const currentPath = env[pathKey] ?? "";
   const npmPrefix = env.NPM_CONFIG_PREFIX ?? env.npm_config_prefix;
@@ -129,6 +159,7 @@ export function runAuthCommand(
   args: string[],
   timeoutMs = 20_000,
   env?: NodeJS.ProcessEnv,
+  unsetEnv?: Iterable<string>,
 ): Promise<ProviderLogoutResult> {
   return new Promise((resolve) => {
     const spawnSpec = parseCommandLine(commandLine);
@@ -141,7 +172,7 @@ export function runAuthCommand(
       stdio: "pipe",
       windowsHide: true,
       shell: needsShell(spawnSpec.command),
-      env: buildProviderAuthEnv(env),
+      env: buildProviderAuthEnv(env, unsetEnv),
     });
     let output = "";
     const append = (chunk: Buffer) => {
@@ -191,6 +222,7 @@ export function startDeviceLoginCommand(options: {
   commandLine: string;
   args: string[];
   env?: NodeJS.ProcessEnv;
+  unsetEnv?: Iterable<string>;
   timeoutMs?: number;
 }): Promise<{ result: ProviderLoginResult; child?: ChildProcess }> {
   return new Promise((resolve) => {
@@ -211,7 +243,7 @@ export function startDeviceLoginCommand(options: {
       stdio: "pipe",
       windowsHide: true,
       shell: needsShell(spawnSpec.command),
-      env: buildProviderAuthEnv(options.env),
+      env: buildProviderAuthEnv(options.env, options.unsetEnv),
     });
 
     let output = "";

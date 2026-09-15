@@ -58,6 +58,54 @@ interface ApiFieldGroup {
   fields: readonly string[]
 }
 
+/**
+ * Device/browser login flows are interactive and can be abandoned. Give the
+ * user a generous window (GitHub device codes expire after ~15 minutes) before
+ * stopping the completion poll so the login card can never spin forever.
+ */
+const PROVIDER_LOGIN_POLL_TIMEOUT_MS = 10 * 60 * 1000
+
+/**
+ * A login popup is opened synchronously (browsers only allow that inside the
+ * click) but the device-code request needs a gateway round-trip, which may take
+ * seconds while the provider CLI starts. Leaving the window at `about:blank`
+ * looks like a broken page, so paint a placeholder immediately and replace it
+ * with the real verification URL once the request resolves.
+ */
+function renderLoginWindowPlaceholder(loginWindow: Window, label: string): void {
+  try {
+    const doc = loginWindow.document
+    doc.title = `Sign in to ${label}`
+    const style = doc.createElement('style')
+    style.textContent = [
+      ':root { color-scheme: light dark; }',
+      'body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;',
+      '  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;',
+      '  background: #f8fafc; color: #0f172a; }',
+      '@media (prefers-color-scheme: dark) { body { background: #0b1220; color: #e2e8f0; } }',
+      'main { max-width: 26rem; padding: 2rem; text-align: center; }',
+      'h1 { font-size: 1.125rem; font-weight: 600; margin: 0 0 0.5rem; }',
+      'p { margin: 0; font-size: 0.875rem; line-height: 1.5; opacity: 0.75; }',
+      '.spinner { width: 1.5rem; height: 1.5rem; margin: 0 auto 1rem; border-radius: 9999px;',
+      '  border: 2px solid currentColor; border-top-color: transparent; animation: spin 0.8s linear infinite; opacity: 0.6; }',
+      '@keyframes spin { to { transform: rotate(360deg); } }',
+    ].join('\n')
+    const main = doc.createElement('main')
+    const spinner = doc.createElement('div')
+    spinner.className = 'spinner'
+    spinner.setAttribute('role', 'presentation')
+    const heading = doc.createElement('h1')
+    heading.textContent = `Sign in to ${label}`
+    const message = doc.createElement('p')
+    message.textContent = 'Preparing the device authorization request…'
+    main.append(spinner, heading, message)
+    doc.head.append(style)
+    doc.body.append(main)
+  } catch {
+    // Cross-origin or already-navigated window: the placeholder is cosmetic only.
+  }
+}
+
 // Chat providers (Perplexity, xAI/Grok, Google Gemini, Moonshot/Kimi, …) are
 // configured as Jait backend instances above — no standalone API-key group here.
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
@@ -752,6 +800,8 @@ export function SettingsPage({
     } catch {
       loginWindow = null
     }
+    // Never leave the popup blank while we wait for the device-code request.
+    if (loginWindow && !loginWindow.closed) renderLoginWindowPlaceholder(loginWindow, label)
     setProviderLoginBusy(providerId)
     setError(null)
     setStatus(null)
@@ -824,12 +874,30 @@ export function SettingsPage({
       void checkAuthStatus()
     }, 2000)
 
+    // Safety net so an abandoned device/browser flow cannot leave the card
+    // spinning forever: after the window elapses, stop polling and invite a retry.
+    const timeout = window.setTimeout(() => {
+      if (stopped) return
+      stopped = true
+      window.clearInterval(interval)
+      setProviderLoginInstructions((previous) => (
+        previous && previous.providerId === pendingLoginProviderId
+          ? {
+              ...previous,
+              waitingForCompletion: false,
+              message: `Finishing ${pendingLoginProviderLabel} login timed out. Complete the browser step, then choose Log in to try again.`,
+            }
+          : previous
+      ))
+    }, PROVIDER_LOGIN_POLL_TIMEOUT_MS)
+
     async function checkAuthStatus() {
       try {
         const authStatus = await agentsApi.getProviderAuthStatus(pendingLoginProviderId!)
         if (stopped || authStatus.authenticated !== true) return
         stopped = true
         window.clearInterval(interval)
+        window.clearTimeout(timeout)
         setProviderLoginInstructions(null)
         setStatus(`${pendingLoginProviderLabel} is logged in.`)
         await loadProviderAccounts()
@@ -840,6 +908,7 @@ export function SettingsPage({
     return () => {
       stopped = true
       window.clearInterval(interval)
+      window.clearTimeout(timeout)
     }
   }, [loadProviderAccounts, pendingLoginProviderId, pendingLoginProviderLabel])
 

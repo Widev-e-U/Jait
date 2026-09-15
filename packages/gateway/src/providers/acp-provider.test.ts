@@ -2,7 +2,14 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AcpProvider, loadAcpProviderConfigs, omnirouteAcpEnv } from "./acp-provider.js";
+import {
+  AcpProvider,
+  acpInheritedEnvToStrip,
+  buildAcpChildEnv,
+  isCopilotAcpProvider,
+  loadAcpProviderConfigs,
+  omnirouteAcpEnv,
+} from "./acp-provider.js";
 import type { ProviderAuthStatus, ProviderEvent } from "./contracts.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -293,6 +300,60 @@ if (process.argv.includes("--login")) {
         }) + "\\n");
       } else if (request.method === "logout") {
         process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+      }
+    }
+  });
+}
+`;
+
+const fakeCopilotTerminalAuthScript = `
+if (process.argv.includes("--copilot-login")) {
+  const probe = [
+    "gh_token=" + (process.env.GH_TOKEN ?? "unset"),
+    "github_token=" + (process.env.GITHUB_TOKEN ?? "unset"),
+    "copilot_github_token=" + (process.env.COPILOT_GITHUB_TOKEN ?? "unset"),
+  ].join(" ");
+  // Mirrors the real \`copilot login\` output observed from the standalone CLI.
+  process.stdout.write([
+    probe,
+    "To authenticate, visit https://github.com/login/device and enter code 362A-4FC3",
+    "Waiting for authorization...",
+    "Failed to copy to clipboard. Please visit https://github.com/login/device and enter the code 362A-4FC3 manually.",
+    ""
+  ].join("\\n"));
+  setInterval(() => {}, 1000);
+} else {
+  process.stdin.setEncoding("utf8");
+  let buffer = "";
+  process.stdin.on("data", (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf("\\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      const request = JSON.parse(line);
+      if (request.method === "initialize") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            protocolVersion: 1,
+            agentCapabilities: {},
+            authMethods: [{
+              id: "copilot-login",
+              name: "Log in with Copilot CLI",
+              description: "Run \`copilot login\` to authenticate",
+              _meta: {
+                "terminal-auth": {
+                  label: "Copilot Login",
+                  command: process.execPath,
+                  args: [process.argv[1], "--copilot-login"]
+                }
+              }
+            }]
+          }
+        }) + "\\n");
       }
     }
   });
@@ -1263,6 +1324,56 @@ describe("AcpProvider auth", () => {
     }
   });
 
+  it("returns device auth details from the Copilot _meta terminal-auth extension", async () => {
+    const agentDir = mkdtempSync(join(tmpdir(), "jait-acp-agent-"));
+    const agentPath = join(agentDir, "fake-copilot-terminal-auth.mjs");
+    writeFileSync(agentPath, fakeCopilotTerminalAuthScript);
+
+    const provider = new AcpProvider({
+      id: "copilot",
+      name: "GitHub Copilot",
+      description: "Copilot CLI via ACP",
+      command: process.execPath,
+      args: [agentPath],
+    });
+
+    // Seed the gateway process with the tokens that would otherwise be inherited
+    // and shadow the CLI's own stored Copilot credential.
+    const savedEnv = {
+      GH_TOKEN: process.env.GH_TOKEN,
+      GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+      COPILOT_GITHUB_TOKEN: process.env.COPILOT_GITHUB_TOKEN,
+    };
+    process.env.GH_TOKEN = "ghp_inherited_gateway_token";
+    process.env.GITHUB_TOKEN = "ghp_inherited_gateway_token";
+    process.env.COPILOT_GITHUB_TOKEN = "ghp_inherited_gateway_token";
+
+    try {
+      const result = await provider.startLogin();
+      expect(result).toMatchObject({
+        ok: true,
+        status: "started",
+        verificationUri: "https://github.com/login/device",
+        userCode: "362A-4FC3",
+      });
+      // The login child must not inherit the gateway's GitHub tokens, which
+      // would shadow the CLI's own stored Copilot credential.
+      expect(result.rawOutput).toContain("gh_token=unset");
+      expect(result.rawOutput).toContain("github_token=unset");
+      expect(result.rawOutput).toContain("copilot_github_token=unset");
+      // Sanity: the variables really were set on the parent, so "unset" above
+      // proves the strip rather than a token-free environment.
+      expect(process.env.GH_TOKEN).toBe("ghp_inherited_gateway_token");
+    } finally {
+      for (const [key, value] of Object.entries(savedEnv)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      await provider.dispose();
+      rmSync(agentDir, { recursive: true, force: true });
+    }
+  });
+
   it("uses Codex CLI device auth without probing ACP for Codex login", async () => {
     const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
     const agentDir = mkdtempSync(join(tmpdir(), "jait-acp-agent-"));
@@ -1672,5 +1783,89 @@ describe("AcpProvider session mode/model failures", () => {
       unsubscribe();
       await provider.dispose();
     }
+  });
+});
+
+describe("ACP child environment", () => {
+  const base = {
+    PATH: "/usr/bin",
+    HOME: "/home/tester",
+    GITHUB_TOKEN: "ghp_inherited",
+    GH_TOKEN: "ghp_inherited",
+    COPILOT_GITHUB_TOKEN: "ghp_inherited",
+  };
+
+  it("detects Copilot providers from id or registry metadata", () => {
+    expect(isCopilotAcpProvider({ providerType: "acp", id: "github-copilot" })).toBe(true);
+    expect(isCopilotAcpProvider({ providerType: "copilot" })).toBe(true);
+    expect(
+      isCopilotAcpProvider({ providerType: "acp", id: "claude", registry: { id: "Copilot CLI" } }),
+    ).toBe(true);
+    expect(isCopilotAcpProvider({ providerType: "acp", id: "claude" })).toBe(false);
+  });
+
+  it("strips tokens that would shadow a Copilot login", () => {
+    const env = buildAcpChildEnv({ providerType: "copilot", id: "copilot-cli" }, base);
+
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(env.COPILOT_GITHUB_TOKEN).toBeUndefined();
+    // Unrelated inherited values survive.
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.HOME).toBe("/home/tester");
+  });
+
+  it("leaves non-Copilot providers untouched", () => {
+    const env = buildAcpChildEnv({ providerType: "acp", id: "codex" }, base);
+
+    expect(env.GITHUB_TOKEN).toBe("ghp_inherited");
+    expect(env.GH_TOKEN).toBe("ghp_inherited");
+  });
+
+  it("lets an explicitly configured token win over the strip list", () => {
+    const env = buildAcpChildEnv(
+      { providerType: "copilot", id: "copilot-cli", env: { GH_TOKEN: "github_pat_explicit" } },
+      base,
+    );
+
+    expect(env.GH_TOKEN).toBe("github_pat_explicit");
+    expect(env.GITHUB_TOKEN).toBeUndefined();
+  });
+
+  it("applies the configured env with no per-call override (probe path)", () => {
+    // Regression: the availability and auth probes spawn with `childEnv()`,
+    // so a provider-configured token must be applied by the helper itself.
+    const env = buildAcpChildEnv(
+      { providerType: "copilot", id: "copilot-cli", env: { GITHUB_TOKEN: "github_pat_explicit" } },
+      base,
+    );
+
+    expect(env.GITHUB_TOKEN).toBe("github_pat_explicit");
+    expect(env.GH_TOKEN).toBeUndefined();
+  });
+
+  it("honours custom stripEnv names without over-stripping", () => {
+    const env = buildAcpChildEnv({ providerType: "acp", id: "pi", stripEnv: ["GH_TOKEN"] }, base);
+
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBe("ghp_inherited");
+  });
+
+  it("applies per-call overrides after the configured env", () => {
+    const env = buildAcpChildEnv(
+      { providerType: "acp", id: "pi", env: { FOO: "config" } },
+      base,
+      { FOO: "override", BAR: "baz" },
+    );
+
+    expect(env.FOO).toBe("override");
+    expect(env.BAR).toBe("baz");
+  });
+
+  it("reports the inherited strip list per provider", () => {
+    expect(acpInheritedEnvToStrip({ providerType: "acp", id: "github-copilot" })).toEqual(
+      expect.arrayContaining(["GH_TOKEN", "GITHUB_TOKEN", "COPILOT_GITHUB_TOKEN"]),
+    );
+    expect(acpInheritedEnvToStrip({ providerType: "acp", id: "claude" })).toEqual([]);
   });
 });

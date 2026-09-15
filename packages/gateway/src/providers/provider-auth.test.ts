@@ -1,6 +1,13 @@
 import { delimiter } from "node:path";
 import { describe, expect, it } from "vitest";
-import { extractDeviceAuthDetails, buildProviderAuthEnv, parseCommandLine, stripAnsi } from "./provider-auth.js";
+import {
+  SHADOWED_GITHUB_COPILOT_TOKEN_ENV_VARS,
+  extractDeviceAuthDetails,
+  buildProviderAuthEnv,
+  parseCommandLine,
+  stripAnsi,
+  stripEnvVars,
+} from "./provider-auth.js";
 
 describe("provider auth helpers", () => {
   it("parses quoted command paths and quoted default arguments", () => {
@@ -184,5 +191,31 @@ describe("provider auth helpers", () => {
     });
 
     expect(env.PATH?.split(delimiter)).toContain("/tmp/jait-npm-global/bin");
+  });
+
+  it("removes named variables without touching the rest", () => {
+    expect(stripEnvVars({ KEEP: "1", DROP: "2" }, ["DROP"])).toEqual({ KEEP: "1" });
+    expect(stripEnvVars({ KEEP: "1" })).toEqual({ KEEP: "1" });
+  });
+
+  it("drops inherited shadowing tokens from the auth environment", () => {
+    const previous = process.env.GH_TOKEN;
+    process.env.GH_TOKEN = "ghp_inherited";
+    try {
+      const env = buildProviderAuthEnv({ PATH: "/usr/bin" }, ["GH_TOKEN"]);
+      expect(env.GH_TOKEN).toBeUndefined();
+      expect(env.PATH).toContain("/usr/bin");
+    } finally {
+      if (previous === undefined) delete process.env.GH_TOKEN;
+      else process.env.GH_TOKEN = previous;
+    }
+  });
+
+  it("keeps an explicitly configured value for a stripped variable", () => {
+    const env = buildProviderAuthEnv(
+      { GH_TOKEN: "github_pat_explicit" },
+      SHADOWED_GITHUB_COPILOT_TOKEN_ENV_VARS,
+    );
+    expect(env.GH_TOKEN).toBe("github_pat_explicit");
   });
 });

@@ -48,6 +48,22 @@ describe("extractDeviceAuthDetails", () => {
     expect(details.userCode).toBe("9F3K-2Q7X")
   })
 
+  it("parses the real `copilot login` device-flow output", () => {
+    // Verbatim output captured from the standalone GitHub Copilot CLI.
+    const details = extractDeviceAuthDetails(
+      [
+        "To authenticate, visit https://github.com/login/device and enter code 9087-5B95",
+        "Waiting for authorization...",
+        "Failed to copy to clipboard. Please visit https://github.com/login/device and enter the code 9087-5B95 manually.",
+      ].join("\n"),
+    )
+    expect(details).toMatchObject({
+      verificationUri: "https://github.com/login/device",
+      userCode: "9087-5B95",
+    })
+    expect(hasCompleteDeviceAuthDetails(details)).toBe(true)
+  })
+
   it("extracts a code from a 'code is:' line", () => {
     const details = extractDeviceAuthDetails("Your user code is: 1234-5678-9012")
     expect(details.userCode).toBe("1234-5678-9012")
