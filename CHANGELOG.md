@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.855](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.855) — 2026-09-15
+- fix(chat): validate completed history without reloading the chat — 0394616b
+
 ## [v0.1.854](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.854) — 2026-09-15
 - fix(terminal): ship shell integration and preserve remote execution results — e6db128a
 - fix(desktop-tauri): authenticate the selected provider — fe7d8bf2
