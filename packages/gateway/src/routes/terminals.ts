@@ -65,6 +65,30 @@ function inferFallbackExitCode(rawOutput: string): number {
   return 0;
 }
 
+/**
+ * OSC 633;D;{exitCode} — the shell integration's "command finished" marker.
+ * Terminated by BEL (\x07) or ST (\x1b\\).
+ *
+ * This is the authoritative exit-code source. The inline `__JAIT_EXIT__`
+ * sentinel below is only a legacy fallback: the route never actually echoes
+ * it, so without reading this sequence every failing command (e.g. `false`)
+ * was reported as exit code 0 by the text-only heuristic.
+ */
+const OSC_DONE_RE = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/;
+
+/** OSC 633;B — prompt end / command-line ready (emitted right after D). */
+const OSC_PROMPT_END_RE = /\x1b\]633;B(?:\x07|\x1b\\)/;
+
+/** Parse the *last* OSC 633;D;{exit} marker from a raw PTY buffer. */
+function parseShellIntegrationExitCode(raw: string): number | null {
+  const re = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/g;
+  let match: RegExpExecArray | null;
+  let last: RegExpExecArray | null = null;
+  while ((match = re.exec(raw)) !== null) last = match;
+  if (!last) return null;
+  return last[1] ? parseInt(last[1], 10) : 0;
+}
+
 export function registerTerminalRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
@@ -263,6 +287,7 @@ export function registerTerminalRoutes(
         let raw = "";
         let settled = false;
         let settleTimer: ReturnType<typeof setTimeout> | null = null;
+        let dMatch: { exitCode: number; end: number } | null = null;
 
         const listener = (data: string) => {
           raw += data;
@@ -274,13 +299,29 @@ export function registerTerminalRoutes(
             return;
           }
 
+          // Preferred path: OSC 633;D carries the real exit code, and the
+          // following 633;B confirms the shell is back at the prompt.  Wait for
+          // B before settling — the shell can flush command output after D.
+          if (!dMatch) {
+            const m = raw.match(OSC_DONE_RE);
+            if (m) {
+              dMatch = { exitCode: m[1] ? parseInt(m[1], 10) : 0, end: m.index! + m[0].length };
+            }
+          }
+          if (dMatch && OSC_PROMPT_END_RE.test(raw.slice(dMatch.end))) {
+            const code = dMatch.exitCode;
+            settleTimer = setTimeout(() => finish(false, code), 50);
+            return;
+          }
+
           markerRe.lastIndex = 0;
           if (markerRe.test(raw)) {
             settleTimer = setTimeout(() => finish(false), 50);
             return;
           }
 
-          if (hasShellPrompt(raw, shell)) {
+          // No shell integration markers: fall back to prompt detection.
+          if (!dMatch && hasShellPrompt(raw, shell)) {
             settleTimer = setTimeout(() => finish(false, inferFallbackExitCode(raw)), 100);
           }
         };
@@ -295,6 +336,15 @@ export function registerTerminalRoutes(
           // Clean up temp script file
           if (tmpFile) {
             try { unlinkSync(tmpFile); } catch { /* already gone */ }
+          }
+
+          // Fallbacks for the exit code, in order of authority: the settled
+          // OSC 633;D marker, then any 633;D still present in the buffer, then
+          // the inline sentinel / text heuristic applied below.
+          if (exitCode == null && dMatch) exitCode = dMatch.exitCode;
+          if (exitCode == null) {
+            const integrated = parseShellIntegrationExitCode(raw);
+            if (integrated != null) exitCode = integrated;
           }
 
           // Strip all OSC 633 sequences — they are invisible control codes,

@@ -3,8 +3,8 @@
 # Emits OSC 633 sequences so the host can detect prompt boundaries,
 # command start / finish, exit codes, and the current working directory.
 
-# Guard against double-sourcing
-[[ "$JAIT_SHELL_INTEGRATION" == "1" ]] && return 2>/dev/null
+# Guard against double-sourcing in this shell, not an inherited environment flag.
+[[ "$JAIT_SHELL_INTEGRATION" == "1" ]] && (( $+functions[__jait_precmd] )) && return 2>/dev/null
 export JAIT_SHELL_INTEGRATION=1
 
 __jait_osc() {

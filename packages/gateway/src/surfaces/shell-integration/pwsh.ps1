@@ -11,7 +11,8 @@
 #   ESC]633;P;Cwd={cwd} BEL — Current working directory
 
 # Guard against double-sourcing
-if ($env:JAIT_SHELL_INTEGRATION -eq '1') { return }
+if ($Global:__JaitShellIntegrationLoaded) { return }
+$Global:__JaitShellIntegrationLoaded = $true
 $env:JAIT_SHELL_INTEGRATION = '1'
 
 # ESC and BEL characters — compatible with PowerShell 5.1+

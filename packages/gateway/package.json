@@ -18,7 +18,9 @@
   "scripts": {
     "prebuild": "bun run --filter @jait/web build && bun run bundle-web",
     "bundle-web": "node scripts/bundle-web.mjs",
-    "build": "tsc",
+    "build": "node scripts/embed-shell-integration.mjs && tsc && node scripts/copy-shell-integration.mjs",
+    "copy-assets": "node scripts/copy-shell-integration.mjs",
+    "embed-shell-integration": "node scripts/embed-shell-integration.mjs",
     "dev": "bun run --filter @jait/web build && bun --watch src/index.ts",
     "start": "node dist/index.js",
     "postinstall": "node ./bin/install-runtime.mjs",

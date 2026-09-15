@@ -5,6 +5,7 @@ import {
   AGENT_TERMINAL_ENV_PWSH,
   AGENT_TERMINAL_ENV_POSIX,
   buildAgentCommand,
+  buildRemoteTerminalInput,
   buildTerminalExitMarkerCommand,
   buildSingleLineTerminalInput,
   detectPagerPrompt,
@@ -238,5 +239,18 @@ describe("buildSingleLineTerminalInput", () => {
     expect(
       buildSingleLineTerminalInput(true, "powershell.exe", multiLine),
     ).toBe(multiLine);
+  });
+});
+
+describe("remote PowerShell input", () => {
+  it("delivers multiline scripts and completion markers as one executable line", () => {
+    const script = "Write-Output 'héllo'\n" + buildTerminalExitMarkerCommand("powershell.exe", "done");
+    const input = buildRemoteTerminalInput(script, "powershell.exe");
+    expect(input).not.toContain("\x1b[200~");
+    expect(input).not.toContain("\n");
+    expect(input.endsWith("\r")).toBe(true);
+    const encoded = input.match(/FromBase64String\('([^']+)'\)/)![1];
+    expect(Buffer.from(encoded, "base64").toString("utf8")).toBe(script);
+    expect(input.startsWith(". ([scriptblock]::Create(")).toBe(true);
   });
 });

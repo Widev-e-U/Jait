@@ -11,10 +11,11 @@
  * boundaries, exit codes, and CWD changes without wrapping commands.
  */
 
-import { platform } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { SHELL_INTEGRATION_ASSETS } from "./shell-integration-assets.js";
 import type {
   Surface,
   SurfaceStartInput,
@@ -89,8 +90,80 @@ function spawnPty(shell: string, shellArgs: string[], opts: SpawnPtyOptions): PT
   return nodePty.spawn(shell, shellArgs, opts);
 }
 
-/** Directory containing shell integration scripts */
-const SHELL_INTEGRATION_DIR = join(__dirname, "shell-integration");
+/**
+ * Candidate directories containing the OSC 633 shell integration scripts.
+ *
+ * `tsc` only emits JavaScript, so a packaged/installed gateway
+ * (`dist/`) has no `shell-integration/` directory unless the build copied it
+ * (see `scripts/copy-shell-integration.mjs`). Older installs — including the
+ * desktop/Tauri bundle — therefore silently ran every terminal with shell
+ * integration disabled: no prompt/command markers, no exit codes, no CWD
+ * tracking, and no background-command completion detection.
+ *
+ * We now look in the packaged directory first, then the source tree
+ * (monorepo/dev installs), and finally materialise the embedded copies from
+ * `shell-integration-assets.ts`. The fallback still requires a writable temporary directory.
+ */
+const SHELL_INTEGRATION_DIRS = [
+  // Packaged/installed layout: <pkg>/dist/surfaces/shell-integration
+  join(__dirname, "shell-integration"),
+  // Monorepo/dev layout: <pkg>/src/surfaces/shell-integration
+  join(__dirname, "..", "..", "src", "surfaces", "shell-integration"),
+];
+
+/**
+ * Directories to search for integration scripts. `JAIT_SHELL_INTEGRATION_DIR`
+ * replaces the built-in list so packagers/tests can point at an explicit
+ * location (and, when it is empty, exercise the embedded fallback).
+ */
+function shellIntegrationDirs(): string[] {
+  const override = process.env["JAIT_SHELL_INTEGRATION_DIR"]?.trim();
+  if (override) return [override];
+  return SHELL_INTEGRATION_DIRS;
+}
+
+/** Cache dir for embedded integration scripts when no packaged copy exists. */
+let embeddedIntegrationCacheDir: string | undefined;
+
+let warnedAboutEmbeddedIntegration = false;
+
+function shellIntegrationCacheDir(): string {
+  const override = process.env["JAIT_SHELL_INTEGRATION_CACHE"]?.trim();
+  if (override) return override;
+  // Private, unpredictable directory: other local users must not replace scripts
+  // that this process will source in its terminals.
+  return embeddedIntegrationCacheDir ??= mkdtempSync(join(tmpdir(), "jait-shell-integration-"));
+}
+
+/**
+ * Write an embedded integration script to the cache dir and return its path.
+ * Returns null only if no embedded copy exists or the filesystem is read-only.
+ */
+function writeEmbeddedIntegrationScript(filename: string): string | null {
+  const content = SHELL_INTEGRATION_ASSETS[filename];
+  if (typeof content !== "string" || content.length === 0) return null;
+  try {
+    const dir = shellIntegrationCacheDir();
+    const path = join(dir, filename);
+    mkdirSync(dir, { recursive: true });
+    // Rewrite when missing or stale so upgrades pick up script changes.
+    if (!existsSync(path) || readFileSync(path, "utf8") !== content) {
+      writeFileSync(path, content, { mode: 0o600 });
+    }
+    if (!warnedAboutEmbeddedIntegration) {
+      warnedAboutEmbeddedIntegration = true;
+      console.warn(
+        `shell integration scripts not found in dist; using embedded copies at ${dir} ` +
+          `(run "npm run build" in packages/gateway to ship the real files)`,
+      );
+    }
+    return path;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`failed to materialize embedded shell integration script ${filename}: ${message}`);
+    return null;
+  }
+}
 
 /**
  * Resolve a bare executable name to its absolute path on Windows using `where`.
@@ -200,11 +273,17 @@ export function availableShells(): { shell: string; label: string }[] {
 }
 
 /** Detect which integration script to source based on the shell binary */
-function shellIntegrationScript(shell: string): { path: string; type: "pwsh" | "bash" | "zsh" } | null {
+export function shellIntegrationScript(
+  shell: string,
+): { path: string; type: "pwsh" | "bash" | "zsh"; embedded: boolean } | null {
   const name = shell.toLowerCase().replace(/\.exe$/, "");
   const resolveScript = (filename: string, type: "pwsh" | "bash" | "zsh") => {
-    const path = join(SHELL_INTEGRATION_DIR, filename);
-    return existsSync(path) ? { path, type } : null;
+    for (const dir of shellIntegrationDirs()) {
+      const path = join(dir, filename);
+      if (existsSync(path)) return { path, type, embedded: false };
+    }
+    const embedded = writeEmbeddedIntegrationScript(filename);
+    return embedded ? { path: embedded, type, embedded: true } : null;
   };
   if (name.includes("pwsh") || name.includes("powershell")) {
     return resolveScript("pwsh.ps1", "pwsh");
@@ -216,6 +295,13 @@ function shellIntegrationScript(shell: string): { path: string; type: "pwsh" | "
     return resolveScript("bash.sh", "bash");
   }
   return null;
+}
+
+/** Test/ops helper: whether an embedded copy exists for every integration script. */
+export function hasEmbeddedIntegrationScripts(): boolean {
+  return (["bash.sh", "zsh.sh", "pwsh.ps1"] as const).every(
+    (name) => typeof SHELL_INTEGRATION_ASSETS[name] === "string" && SHELL_INTEGRATION_ASSETS[name]!.length > 0,
+  );
 }
 
 export interface TerminalSurfaceOptions {

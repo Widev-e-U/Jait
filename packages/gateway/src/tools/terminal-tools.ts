@@ -458,6 +458,17 @@ export function hasStrongPagerPrompt(raw: string): boolean {
   return false;
 }
 
+/** Send remote PowerShell scripts as one input line, including on PSReadLine
+ * versions that do not support bracketed paste. Dot-sourcing preserves cwd
+ * and variables in the persistent terminal without a gateway-local file. */
+export function buildRemoteTerminalInput(command: string, shell: string): string {
+  if (isPowerShellShell(shell)) {
+    const encoded = Buffer.from(command, "utf8").toString("base64");
+    return `. ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))))\r`;
+  }
+  return `\x1b[200~${command}\x1b[201~\r`;
+}
+
 export function buildTerminalExitMarkerCommand(shell: string, token: string): string {
   return isPowerShellShell(shell)
     ? `$jaitExitCode = if ($?) { 0 } elseif ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 1 }; Write-Output "${token}:$jaitExitCode"`
@@ -971,7 +982,7 @@ function executeInTerminal(
         command,
         buildTerminalExitMarkerCommand(shell, remoteCompletionToken),
       ].join("\n");
-      surface.write(`\x1b[200~${terminalInput}\x1b[201~\r`);
+      surface.write(buildRemoteTerminalInput(terminalInput, shell));
     } else if (command.includes("\n")) {
       tmpFile = writeCommandScript(command);
       surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
@@ -1176,7 +1187,7 @@ export function createTerminalRunTool(
             ? [commandLine, buildTerminalExitMarkerCommand(shell, completionToken)].join("\n")
             : commandLine;
           if (surface instanceof RemoteTerminalSurface) {
-            surface.write(`\x1b[200~${terminalInput}\x1b[201~\r`);
+            surface.write(buildRemoteTerminalInput(terminalInput, shell));
           } else if (terminalInput.includes("\n")) {
             surface.write(`${terminalInput}\r`);
           } else {
