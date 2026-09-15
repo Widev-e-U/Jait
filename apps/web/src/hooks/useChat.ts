@@ -157,10 +157,6 @@ export function shouldFlushStreamTextImmediately(eventType: unknown): boolean {
 
 const STREAMING_FLUSH_DEADLINE_MS = 300
 
-export function shouldForceMessageLifecycleRefresh(event: 'started' | 'complete'): boolean {
-  return event === 'started' || event === 'complete'
-}
-
 /**
  * The gateway emits a synthetic `request` event as the first event of every
  * turn — local send, queued drain, or a hidden background-command notification.
@@ -629,6 +625,9 @@ export function useChat(
   projectSurfaceId?: string | null,
   sessionLastActiveAt?: string | null,
 ) {
+  const sessionLastActiveAtRef = useRef(sessionLastActiveAt)
+  sessionLastActiveAtRef.current = sessionLastActiveAt
+  const validateHistoryRef = useRef<(() => void) | null>(null)
   const cacheScope = getChatCacheScope(authToken, API_URL)
   const [state, setState] = useState<ChatState>({
     messages: [],
@@ -799,7 +798,7 @@ export function useChat(
 
     const startupCache = selectImmediateChatHistory(
       readCachedStartupChat(cacheScope, sessionId),
-      sessionLastActiveAt,
+      sessionLastActiveAtRef.current,
     )
 
     // Show a skeleton (never cached messages) until the fresh server snapshot
@@ -827,6 +826,7 @@ export function useChat(
     let assistantId: string | null = null
     let pendingContextFlow: LlmContextFlow | undefined
     let pendingUpdates: Partial<ChatMessage> | null = null
+    let turnRevision = 0
 
     const flushUpdates = () => {
       if (!isCurrent() || !pendingUpdates || !assistantId) return
@@ -897,6 +897,7 @@ export function useChat(
 
     /** Turn boundary: drop the previous turn's accumulator and start clean. */
     const beginTurn = () => {
+      turnRevision += 1
       // Drain into the *outgoing* stream/message before swapping them out.
       scheduler.flushNow()
       stream = createMessageStream()
@@ -1095,6 +1096,7 @@ export function useChat(
                   ),
           }
         })
+        validateHistory()
       } else if (data.type === 'error') {
         const errorMsg = data.message as string
         scheduler.flushNow()
@@ -1197,6 +1199,52 @@ export function useChat(
       })
     }
 
+    // Completion needs persisted IDs/metadata, but must not close the live stream,
+    // clear history, reset panels, or toggle the loading skeleton. Compare only
+    // the bounded snapshot tail and retain references for unchanged messages.
+    let validationTimer: ReturnType<typeof setTimeout> | null = null
+    let validating = false
+    let validateAgain = false
+    const validateHistory = () => {
+      if (!isCurrent() || !snapshotApplied) return
+      if (validating) { validateAgain = true; return }
+      if (validationTimer !== null) return
+      validationTimer = setTimeout(async () => {
+        validationTimer = null
+        validating = true
+        const revision = turnRevision
+        try {
+          const res = await fetch(
+            `${API_URL}/api/sessions/${sessionId}/messages?limit=${STREAM_SNAPSHOT_LIMIT}`,
+            { headers: authHeaders(authToken), credentials: 'include' },
+          )
+          if (!res.ok || !isCurrent()) return
+          const data = await res.json() as SnapshotResponse
+          // Never overwrite a newer/queued turn with an older HTTP response.
+          if (!isCurrent() || revision !== turnRevision || assistantId || data.streaming
+            || pendingAssistantPlaceholderRef.current?.sessionId === sessionId) return
+          const msgs = mapSnapshotMessages(data.messages ?? [], false)
+          setState(prev => {
+            if (prev.isLoading || !isCurrent() || revision !== turnRevision) return prev
+            const totalMessages = typeof data.total === 'number' ? data.total : msgs.length
+            const messages = reuseUnchangedMessages(
+              mergeSnapshotMessagesWithOptimisticUsers(
+                reconcileChatHistory(prev.messages, msgs, totalMessages), prev.messages,
+              ), prev.messages,
+            )
+            const hasMore = messages.length < totalMessages
+            if (messages === prev.messages && totalMessages === prev.totalMessages && hasMore === prev.hasMore) return prev
+            return { ...prev, messages, totalMessages, hasMore }
+          })
+        } catch { /* Best effort; the durable live subscription still recovers gaps. */ }
+        finally {
+          validating = false
+          if (validateAgain) { validateAgain = false; validateHistory() }
+        }
+      }, 0)
+    }
+    validateHistoryRef.current = validateHistory
+
     // Offline/snapshot-failure fallback: only surfaces cached history when the
     // server snapshot could not be fetched, so it never preempts fresh data and
     // never causes the cached-then-updated flash.
@@ -1204,7 +1252,7 @@ export function useChat(
       if (!isCurrent() || snapshotApplied) return
       const stored = await readCachedChatHistory(cacheScope, sessionId)
       if (!isCurrent() || snapshotApplied) return
-      const cached = selectImmediateChatHistory(stored, sessionLastActiveAt)
+      const cached = selectImmediateChatHistory(stored, sessionLastActiveAtRef.current)
       if (!cached || cached.messages.length === 0) return
       setState(prev => ({
         ...prev,
@@ -1305,6 +1353,8 @@ export function useChat(
 
     return () => {
       cancelled = true
+      if (validationTimer !== null) clearTimeout(validationTimer)
+      if (validateHistoryRef.current === validateHistory) validateHistoryRef.current = null
       subscriptionRef.current?.close()
       subscriptionRef.current = null
       scheduler.cancel()
@@ -1312,15 +1362,18 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, sessionLastActiveAt, refreshTrigger])
+  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger])
 
-  /** Force-reload messages from the server (used by cross-client WS refresh). */
-  const refreshMessages = useCallback((options?: { force?: boolean }) => {
-    // Skip if no active session or already loading / streaming, unless a
-    // remote turn has started and the caller needs a hard re-read of history.
-    if (!sessionId || (state.isLoading && !options?.force)) return
-    resumeSessionStream()
-  }, [resumeSessionStream, sessionId, state.isLoading])
+  /** WS lifecycle signals validate persisted state without rebuilding a healthy stream. */
+  const refreshMessages = useCallback((options?: { lifecycle?: 'started' | 'complete' }) => {
+    if (!sessionId || state.isLoadingHistory) return
+    const health = subscriptionRef.current?.getHealth()
+    if (!health || health.state === 'closed' || Date.now() - health.lastActivityAt > WAKE_TRANSPORT_STALE_MS) {
+      resumeSessionStream()
+    } else if (options?.lifecycle !== 'started') {
+      validateHistoryRef.current?.()
+    }
+  }, [resumeSessionStream, sessionId, state.isLoadingHistory])
 
   const loadingOlderRef = useRef(false)
 

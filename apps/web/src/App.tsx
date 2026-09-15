@@ -52,7 +52,7 @@ import { useTerminalInteractionHandlers } from '@/hooks/useTerminalInteractionHa
 import { FloatingScreenShareWindow } from '@/components/screen-share/floating-screen-share-window'
 import { MobileBottomNav } from '@/components/mobile/mobile-bottom-nav'
 import { MobileNavDrawer } from '@/components/mobile/mobile-nav-drawer'
-import { shouldForceMessageLifecycleRefresh, useChat, type ChatMode } from '@/hooks/useChat'
+import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useSkills } from '@/hooks/useSkills'
 import { useProjects, type ProjectSession } from '@/hooks/useProjects'
 import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
@@ -1001,11 +1001,11 @@ function App() {
   }, [activeSessionId])
 
   const handleMessageStarted = useCallback(() => {
-    refreshMessages({ force: shouldForceMessageLifecycleRefresh('started') })
+    refreshMessages({ lifecycle: 'started' })
   }, [refreshMessages])
 
   const handleMessageComplete = useCallback(() => {
-    refreshMessages({ force: shouldForceMessageLifecycleRefresh('complete') })
+    refreshMessages({ lifecycle: 'complete' })
     setRemoteMessageCompleteCount((prev) => prev + 1)
   }, [refreshMessages])
 

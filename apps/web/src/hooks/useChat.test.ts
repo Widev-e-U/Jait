@@ -12,7 +12,6 @@ import {
   reconcileQueuedMessagesAtTurnStart,
   shouldFlushStreamTextImmediately,
   segmentsWithError,
-  shouldForceMessageLifecycleRefresh,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
 } from '@/hooks/useChat'
@@ -197,13 +196,6 @@ describe('shouldFlushStreamTextImmediately', () => {
 
   it('still flushes mode notices immediately', () => {
     expect(shouldFlushStreamTextImmediately('mode_notice')).toBe(true)
-  })
-})
-
-describe('shouldForceMessageLifecycleRefresh', () => {
-  it('forces reconciliation for both stream start and completion signals', () => {
-    expect(shouldForceMessageLifecycleRefresh('started')).toBe(true)
-    expect(shouldForceMessageLifecycleRefresh('complete')).toBe(true)
   })
 })
 
