@@ -14,6 +14,7 @@ import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
+import { describeUpdateFailure } from "./update-failure.js";
 
 const require = createRequire(import.meta.url);
 const { version: CURRENT_VERSION } = require("../../package.json") as { version: string };
@@ -306,9 +307,17 @@ export function registerUpdateRoutes(
         message: `Updated to ${newVersion}. Restarting...`,
       };
     } catch (err) {
+      const failure = describeUpdateFailure(err);
+      // Log the full npm output here; only the actionable part goes to the client.
+      request.log.error(
+        { code: failure.code, package: pkg, detail: failure.detail },
+        "Self-update install failed",
+      );
       return reply.status(500).send({
-        error: "Update failed",
-        detail: err instanceof Error ? err.message : String(err),
+        error: failure.hint ?? "Update failed",
+        code: failure.code,
+        hint: failure.hint,
+        detail: failure.detail,
       });
     }
   });

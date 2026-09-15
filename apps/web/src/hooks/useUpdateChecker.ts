@@ -166,8 +166,18 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
         setUpdateAwaitingRestart(true)
         toast.success(`Updated to v${updateInfo.latestVersion}. Gateway is restarting...`)
       } else {
-        const data = await res.json().catch(() => ({}))
-        toast.error(getNonEmptyMessage((data as any).error, 'Update failed'))
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string
+          hint?: string | null
+          detail?: string
+          code?: string
+        }
+        // `error` now carries the actionable hint from the gateway; `detail` holds
+        // npm's raw output. Log that for support and show the useful part.
+        if (data.detail) {
+          console.error(`[update] apply failed (${data.code ?? 'UNKNOWN'}):`, data.detail)
+        }
+        toast.error(getNonEmptyMessage(data.hint || data.error, 'Update failed'))
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Update request failed')

@@ -19,6 +19,7 @@
  */
 
 import { execSync, spawn } from "node:child_process";
+import { describeUpdateFailure } from "../routes/update-failure.js";
 import type { ToolDefinition, ToolResult, ToolContext } from "./contracts.js";
 
 interface RedeployInput {
@@ -125,8 +126,13 @@ async function npmRedeploy(
       windowsHide: true,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, message: `npm install failed: ${msg}` };
+    const failure = describeUpdateFailure(err);
+    const explanation = failure.hint ?? failure.detail;
+    log(`✗ npm install failed [${failure.code}]: ${failure.detail}\n`);
+    return {
+      ok: false,
+      message: `npm install failed [${failure.code}]: ${explanation}`,
+    };
   }
 
   // ── 3. Read new version ───────────────────────────────────────────

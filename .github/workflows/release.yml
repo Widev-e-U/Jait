@@ -843,8 +843,16 @@ jobs:
       - run: bun run build
 
       # 1. Publish @jait/shared (no workspace deps)
+      #
+      # Deliberately NOT gated on `shared_changed`: that gate is what broke
+      # v0.1.852–v0.1.857. A run that failed before reaching this step (setup-bun
+      # 502 on v0.1.852) left shared@0.1.83 unpublished, while every later run saw
+      # `shared_changed=false`, skipped the publish, and still shipped a gateway
+      # declaring `"@jait/shared": "^0.1.83"`. The published gateway was therefore
+      # not installable (`npm install -g` → ETARGET) and every operator's "Update"
+      # button failed. Publishing unconditionally costs a few seconds: an
+      # already-published version exits 409 and is skipped below.
       - name: Publish @jait/shared
-        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.shared_changed == 'true'
         working-directory: packages/shared
         run: |
           # A 409 here means the version was already published (e.g. the tag
@@ -863,14 +871,15 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # 2. Publish @jait/screen-share (depends on shared)
+      # Same reasoning as @jait/shared above: never gate a package on its own
+      # version bump, otherwise a later gateway release can point at a
+      # screen-share/shared version that no run ever published.
       - name: Resolve workspace deps (screen-share)
-        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
         working-directory: packages/screen-share
         run: |
           VERSION=$(jq -r '.version' ../shared/package.json)
           jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/screen-share
-        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
         working-directory: packages/screen-share
         run: |
           # A 409 here means the version was already published (e.g. the tag
@@ -906,6 +915,37 @@ jobs:
           jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" \
             '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | del(.dependencies["@jait/web"])' \
             package.json > tmp.json && mv tmp.json package.json
+
+      # 4b. Fail BEFORE publishing if any workspace range does not resolve on the
+      # registry. A published version cannot be un-published, and
+      # gateway@0.1.857 shipped with an unsatisfiable `^0.1.83` shared range that
+      # no amount of retrying could install. Checking here turns "every operator's
+      # update fails forever" into a red CI run on the offending commit.
+      - name: Verify gateway dependency ranges resolve on the registry
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
+        working-directory: packages/gateway
+        run: |
+          set -euo pipefail
+          missing=0
+          # Run npm from /tmp, never from a workspace member: npm aborts with
+          # ENOWORKSPACES ("This command does not support workspaces") inside a
+          # workspace, which previously killed this style of step instantly.
+          while IFS= read -r dep; do
+            [ -n "$dep" ] || continue
+            range=$(jq -r --arg d "$dep" '.dependencies[$d]' package.json)
+            live=$(cd /tmp && npm view "$dep@$range" version 2>/dev/null | tr -d '[:space:]' | tail -n1 || true)
+            if [ -z "$live" ]; then
+              echo "::error::$dep@$range is not resolvable on the registry — gateway would be uninstallable"
+              missing=1
+            else
+              echo "✅ $dep@$range → $live"
+            fi
+          done < <(jq -r '.dependencies | keys[] | select(startswith("@jait/"))' package.json)
+          if [ "$missing" -ne 0 ]; then
+            echo "Refusing to publish an uninstallable gateway. Publish the missing workspace package(s) first."
+            exit 1
+          fi
+
       - name: Publish @jait/gateway
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         working-directory: packages/gateway
@@ -985,8 +1025,35 @@ jobs:
           echo "   npm accepted the upload but never committed the version."
           echo "   Not cutting a release for a version nobody can install."
           echo "--- last publish output ---"
-          tail -20 "$LOG" 2>/dev/null
-          exit 1
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 6. Prove the operator's exact command works. `npm view` only confirms the
+      # version exists; it says nothing about whether its dependency ranges
+      # resolve, which is how gateway@0.1.857 passed step 5 while being
+      # impossible to install. This mirrors `npm install -g @jait/gateway@X`
+      # (the update route) in a throwaway prefix with --ignore-scripts, so we
+      # check dependency resolution without running install hooks.
+      - name: Smoke-test `npm install -g @jait/gateway@$VERSION`
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
+        working-directory: packages/gateway
+        run: |
+          set +e
+          VERSION=$(jq -r '.version' package.json)
+          PREFIX="$(mktemp -d)/prefix"
+          mkdir -p "$PREFIX"
+          echo "Installing @jait/gateway@$VERSION into $PREFIX (dependency resolution only)"
+          cd /tmp
+          npm install --global --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund \
+            "@jait/gateway@$VERSION" 2>&1 | tee "/tmp/npm-install-${{ github.run_id }}.log"
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            echo "::error::@jait/gateway@$VERSION is published but NOT installable — operator updates will fail."
+            echo "This usually means a workspace dependency range (e.g. @jait/shared) was never published."
+            grep -i 'ETARGET\|404\|not in this registry' "/tmp/npm-install-${{ github.run_id }}.log" || true
+            exit $status
+          fi
+          echo "✅ @jait/gateway@$VERSION installs cleanly"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

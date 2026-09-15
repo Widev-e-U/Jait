@@ -1,0 +1,135 @@
+name: Publish missing workspace deps
+
+# Manual recovery tool.
+#
+# Use this when a published @jait/gateway references a workspace dependency
+# version that was never published to npm. That is exactly what happened with
+# v0.1.852–v0.1.857: the shared/screen-share publish steps were gated on their
+# own "changed" flags, a run died before publishing shared@0.1.83, later runs
+# skipped the publish, and the shipped gateway declared `"@jait/shared":
+# "^0.1.83"`. Nothing in the registry satisfied that range, so
+# `npm install -g @jait/gateway@0.1.857` failed with ETARGET and every
+# operator's "Update" button broke.
+#
+# This workflow publishes @jait/shared and @jait/screen-share at the versions in
+# their package.json (tolerating versions that are already live), then proves
+# that the latest @jait/gateway actually installs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: >-
+          Space-separated workspace packages to publish, in dependency order.
+        required: false
+        default: shared screen-share
+      gateway_to_verify:
+        description: >-
+          @jait/gateway version to smoke-test afterwards ("latest" or an exact
+          version like 0.1.857).
+        required: false
+        default: latest
+
+concurrency:
+  group: publish-missing-deps
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish missing deps
+    runs-on: [self-hosted, linux]
+    environment: npm
+    permissions:
+      contents: read
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+
+      # ── @jait/shared (no workspace deps) ──────────────────────────────
+      - name: Publish @jait/shared
+        if: contains(inputs.packages, 'shared')
+        working-directory: packages/shared
+        run: |
+          # A 409 means this version is already live — that is a success here,
+          # since the goal is only "the version exists on the registry".
+          npm publish --access public 2>&1 | tee /tmp/shared-publish.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' /tmp/shared-publish.log; then
+              echo "⏭ @jait/shared already published — skipping"
+            else
+              cat /tmp/shared-publish.log; exit $status
+            fi
+          fi
+
+      # ── @jait/screen-share (depends on shared) ────────────────────────
+      - name: Resolve workspace deps (screen-share)
+        if: contains(inputs.packages, 'screen-share')
+        working-directory: packages/screen-share
+        run: |
+          VERSION=$(jq -r '.version' ../shared/package.json)
+          jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
+      - name: Publish @jait/screen-share
+        if: contains(inputs.packages, 'screen-share')
+        working-directory: packages/screen-share
+        run: |
+          npm publish --access public 2>&1 | tee /tmp/screen-share-publish.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -qi 'EPUBLISHCONFLICT\|cannot publish over' /tmp/screen-share-publish.log; then
+              echo "⏭ @jait/screen-share already published — skipping"
+            else
+              cat /tmp/screen-share-publish.log; exit $status
+            fi
+          fi
+
+      # ── Prove the dependency ranges now resolve ───────────────────────
+      - name: Verify @jait/gateway dependency ranges resolve
+        run: |
+          set -euo pipefail
+          GATEWAY_VERSION="${{ inputs.gateway_to_verify }}"
+          # Read the published manifest itself, so we verify what operators get,
+          # not the local (already rewritten) package.json.
+          cd /tmp
+          manifest=$(npm view "@jait/gateway@$GATEWAY_VERSION" --json 2>/dev/null)
+          missing=0
+          while IFS=$'\t' read -r dep range; do
+            [ -n "$dep" ] || continue
+            live=$(npm view "$dep@$range" version 2>/dev/null | tr -d '[:space:]' | tail -n1 || true)
+            if [ -z "$live" ]; then
+              echo "::error::$dep@$range (required by @jait/gateway@$GATEWAY_VERSION) is not resolvable"
+              missing=1
+            else
+              echo "✅ $dep@$range → $live"
+            fi
+          done < <(echo "$manifest" | jq -r '.dependencies | to_entries[] | select(.key | startswith("@jait/")) | "\(.key)\t\(.value)"')
+          if [ "$missing" -ne 0 ]; then
+            echo "❌ Published gateway is still uninstallable."
+            exit 1
+          fi
+
+      # ── Prove the operator's install command works ────────────────────
+      - name: Smoke-test `npm install -g @jait/gateway`
+        run: |
+          set +e
+          GATEWAY_VERSION="${{ inputs.gateway_to_verify }}"
+          PREFIX="$(mktemp -d)/prefix"
+          mkdir -p "$PREFIX"
+          cd /tmp
+          npm install --global --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund \
+            "@jait/gateway@$GATEWAY_VERSION" 2>&1 | tee /tmp/gateway-install.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            echo "::error::@jait/gateway@$GATEWAY_VERSION still does not install."
+            grep -i 'ETARGET\|404\|not in this registry' /tmp/gateway-install.log || true
+            exit $status
+          fi
+          echo "✅ @jait/gateway@$GATEWAY_VERSION installs cleanly"
