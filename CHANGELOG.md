@@ -4,12 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
-## [v0.1.855](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.855) — 2026-09-15
+## [v0.1.856](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.856) — 2026-09-15
 - fix(chat): validate completed history without reloading the chat — 0394616b
-
-## [v0.1.854](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.854) — 2026-09-15
 - fix(terminal): ship shell integration and preserve remote execution results — e6db128a
 - fix(desktop-tauri): authenticate the selected provider — fe7d8bf2
+
+_Note: v0.1.854 and v0.1.855 never reached the npm registry (their uploads
+stayed staged and were never committed), so their changes ship in v0.1.856._
 
 ## [v0.1.853](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.853) — 2026-09-15
 - fix(desktop-tauri): run terminal and provider CLIs on Windows — 1dcdb1c7
