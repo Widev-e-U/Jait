@@ -15,6 +15,7 @@
 
 use crate::types::*;
 use parking_lot::Mutex;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,6 +24,114 @@ use std::sync::Arc;
 // Tauri glue uses for `provider-op:*`, and re-exports the runner API.
 pub use crate::runner::{ProviderEvent, RunnerHandle, RunnerRegistry, RunnerSpec};
 pub use crate::types::ProviderSessionRequest;
+
+#[derive(Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceAuthDetails {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verification_uri: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requires_code_input: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_prompt: Option<String>,
+}
+
+impl DeviceAuthDetails {
+    pub fn is_complete(&self) -> bool {
+        (self.verification_uri.is_some() && self.user_code.is_some())
+            || self.requires_code_input == Some(true)
+    }
+}
+
+/// Parse the browser URL and device code printed by provider login commands.
+pub fn extract_device_auth_details(output: &str) -> DeviceAuthDetails {
+    let clean = strip_ansi(output);
+    let lines: Vec<&str> = clean
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    let verification_uri = clean
+        .split_whitespace()
+        .find(|word| word.starts_with("https://") || word.starts_with("http://"))
+        .map(|word| {
+            word.trim_end_matches(&['.', ',', ';', ':', ')', '\'', '"'][..])
+                .to_string()
+        });
+
+    let mut user_code = None;
+    for (index, line) in lines.iter().enumerate() {
+        let lower = line.to_ascii_lowercase();
+        if lower.contains("one-time code")
+            || lower.contains("user code")
+            || lower.contains("enter the code")
+        {
+            for candidate in lines.iter().skip(index + 1).take(2) {
+                if let Some(code) = normalize_device_code(candidate) {
+                    user_code = Some(code);
+                    break;
+                }
+            }
+        }
+        if user_code.is_some() {
+            break;
+        }
+    }
+
+    let input_prompt = if user_code.is_none() {
+        lines.iter().find_map(|line| {
+            let lower = line.to_ascii_lowercase();
+            (lower.contains("authorization code") || lower.contains("code from your browser"))
+                .then(|| line.trim_end_matches(&[':', ' '][..]).to_string())
+        })
+    } else {
+        None
+    };
+
+    DeviceAuthDetails {
+        verification_uri,
+        user_code,
+        requires_code_input: input_prompt.as_ref().map(|_| true),
+        input_prompt,
+    }
+}
+
+fn normalize_device_code(line: &str) -> Option<String> {
+    let candidate = line
+        .split_whitespace()
+        .find(|word| {
+            let trimmed = word.trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-');
+            trimmed.contains('-')
+                && trimmed.len() >= 8
+                && trimmed
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        })?
+        .trim_matches(|c: char| !c.is_ascii_alphanumeric() && c != '-')
+        .to_ascii_uppercase();
+    Some(candidate)
+}
+
+fn strip_ansi(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\u{1b}' {
+            result.push(ch);
+            continue;
+        }
+        if chars.next_if_eq(&'[').is_some() {
+            for next in chars.by_ref() {
+                if ('@'..='~').contains(&next) {
+                    break;
+                }
+            }
+        }
+    }
+    result
+}
 
 #[derive(Debug)]
 pub struct ProviderSession {
@@ -277,6 +386,23 @@ mod tests {
         assert!(argv.contains(&"--output-format=stream-json".to_string()));
         assert!(argv.contains(&"42".to_string()));
         assert!(argv.contains(&"sonnet".to_string()));
+    }
+
+    #[test]
+    fn extracts_codex_device_login_details() {
+        let details = extract_device_auth_details(
+            "Welcome to Codex\nOpen https://auth.openai.com/codex/device\nEnter this one-time code:\nAB12-CD34E\n",
+        );
+        assert_eq!(
+            details,
+            DeviceAuthDetails {
+                verification_uri: Some("https://auth.openai.com/codex/device".into()),
+                user_code: Some("AB12-CD34E".into()),
+                requires_code_input: None,
+                input_prompt: None,
+            }
+        );
+        assert!(details.is_complete());
     }
 
     #[test]

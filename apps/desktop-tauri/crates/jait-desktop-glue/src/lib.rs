@@ -9,8 +9,11 @@
 //! webview; the `apps/desktop-tauri/tauri` shell binds sinks to `AppHandle::emit`.
 
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use jait_desktop_core as core;
 use parking_lot::Mutex;
@@ -109,6 +112,7 @@ fn run_git_like(
 }
 
 pub struct HostState {
+    data_dir: PathBuf,
     settings: core::settings::SettingsStore,
     terms: core::term::SessionRegistry,
     backgrounds: Arc<core::tools::BackgroundRegistry>,
@@ -117,6 +121,7 @@ pub struct HostState {
     /// `runner::start`; the registry only tracks bookkeeping state).
     handles: Mutex<HashMap<String, core::runner::RunnerHandle>>,
     resolver: Mutex<Box<dyn core::runner::CommandResolver>>,
+    provider_login_processes: Mutex<HashMap<String, Child>>,
     sinks: Mutex<Vec<HostSink>>,
     /// Overrides default keyring-backed credentials for tests / hosts without
     /// an OS credential store.
@@ -148,12 +153,14 @@ impl HostState {
     pub fn new_with_dir(data_dir: PathBuf) -> Self {
         std::fs::create_dir_all(&data_dir).ok();
         Self {
+            data_dir: data_dir.clone(),
             settings: core::settings::SettingsStore::new(data_dir.join("settings.json")),
             terms: core::term::SessionRegistry::new(),
             backgrounds: Arc::new(core::tools::BackgroundRegistry::new()),
             runners: core::runner::RunnerRegistry::new(),
             handles: Mutex::new(HashMap::new()),
             resolver: Mutex::new(Box::new(core::runner::PathCommandResolver)),
+            provider_login_processes: Mutex::new(HashMap::new()),
             sinks: Mutex::new(Vec::new()),
             credential_backend: Mutex::new(CredentialBackend::Keyring),
         }
@@ -686,36 +693,10 @@ impl HostState {
                 let op = arg(0).as_str().unwrap_or_default().to_string();
                 let params = arg(1);
                 match op.as_str() {
-                    "auth-status" => {
-                        let provider = params
-                            .get("provider")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default();
-                        let account = self
-                            .credentials_read(&format!("provider:{provider}:account"))
-                            .unwrap_or_default();
-                        Ok(to_json(core::types::AuthStatus {
-                            auth_status: if account.is_empty() {
-                                "signed-out"
-                            } else {
-                                "signed-in"
-                            }
-                            .into(),
-                            account_user: if account.is_empty() {
-                                None
-                            } else {
-                                Some(account)
-                            },
-                        })?)
-                    }
-                    "start-login" => {
-                        let url = params
-                            .get("url")
-                            .and_then(Value::as_str)
-                            .unwrap_or("https://claude.ai/oauth/authorize");
-                        let res = core::tools::open_url(url);
-                        Ok(json!({ "url": url, "ok": res.ok }))
-                    }
+                    "auth-status" => self.provider_auth_status(&params),
+                    "start-login" => self.provider_start_login(&params),
+                    "login-input" => self.provider_login_input(&params),
+                    "logout" => self.provider_logout(&params),
                     "start" | "start-session" => self.provider_start(&params),
                     "send" | "send-turn" => {
                         let session_id = params
@@ -1176,6 +1157,262 @@ impl HostState {
             .ok_or_else(|| format!("no such provider session: {session_id}"))
     }
 
+    fn provider_identity(params: &Value) -> Result<(String, String), String> {
+        let provider_id = params
+            .get("providerId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "providerId is required".to_string())?
+            .to_string();
+        let provider_type = params
+            .get("providerType")
+            .or_else(|| params.get("provider"))
+            .and_then(Value::as_str)
+            .filter(|value| matches!(*value, "codex" | "claude-code" | "claude"))
+            .ok_or_else(|| "providerType must be codex or claude-code".to_string())?
+            .to_string();
+        Ok((provider_id, provider_type))
+    }
+
+    fn provider_account_env(
+        &self,
+        provider_id: &str,
+        provider_type: &str,
+    ) -> Result<HashMap<String, String>, String> {
+        let account_home = self.data_dir.join("provider-accounts").join(provider_id);
+        std::fs::create_dir_all(&account_home).map_err(|error| error.to_string())?;
+        let home = account_home.to_string_lossy().into_owned();
+        let mut env: HashMap<String, String> = std::env::vars().collect();
+        env.insert("HOME".into(), home.clone());
+        env.insert("USERPROFILE".into(), home.clone());
+        env.insert(
+            "XDG_CONFIG_HOME".into(),
+            account_home.join(".config").to_string_lossy().into_owned(),
+        );
+        env.insert(
+            "XDG_DATA_HOME".into(),
+            account_home
+                .join(".local/share")
+                .to_string_lossy()
+                .into_owned(),
+        );
+        env.insert(
+            "XDG_CACHE_HOME".into(),
+            account_home.join(".cache").to_string_lossy().into_owned(),
+        );
+        if provider_type == "codex" {
+            env.insert("CODEX_HOME".into(), home);
+            env.insert("OPENAI_API_KEY".into(), String::new());
+        } else {
+            env.insert(
+                "CLAUDE_CONFIG_DIR".into(),
+                account_home.join(".claude").to_string_lossy().into_owned(),
+            );
+            env.insert("ANTHROPIC_API_KEY".into(), String::new());
+        }
+        Ok(env)
+    }
+
+    fn provider_command(
+        &self,
+        provider_type: &str,
+        args: &[&str],
+        env: &HashMap<String, String>,
+    ) -> Result<Command, String> {
+        let resolved = self
+            .resolver
+            .lock()
+            .resolve(provider_type)
+            .ok_or_else(|| format!("{provider_type} CLI not found on this device"))?;
+        let mut command = Command::new(&resolved.program);
+        command.args(&resolved.args).args(args).envs(env);
+        core::StdCommandConsoleHide::hide_console(&mut command);
+        Ok(command)
+    }
+
+    fn provider_auth_status(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        {
+            let mut processes = self.provider_login_processes.lock();
+            let finished = processes
+                .get_mut(&provider_id)
+                .and_then(|child| child.try_wait().ok())
+                .flatten()
+                .is_some();
+            if finished {
+                processes.remove(&provider_id);
+            }
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let args: &[&str] = if provider_type == "codex" {
+            &["login", "status"]
+        } else {
+            &["auth", "status"]
+        };
+        let authenticated = self
+            .provider_command(&provider_type, args, &env)?
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false);
+        Ok(json!({
+            "login": true,
+            "logout": authenticated,
+            "deviceCode": provider_type == "codex",
+            "authenticated": authenticated,
+            "detail": if authenticated {
+                "Authenticated for this Jait account on this device"
+            } else {
+                "Login required for this Jait account on this device"
+            },
+        }))
+    }
+
+    fn provider_start_login(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        if let Some(mut previous) = self.provider_login_processes.lock().remove(&provider_id) {
+            let _ = previous.kill();
+            let _ = previous.wait();
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let args: &[&str] = if provider_type == "codex" {
+            &["login", "--device-auth"]
+        } else {
+            &["auth", "login"]
+        };
+        let mut command = self.provider_command(&provider_type, args, &env)?;
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command
+            .spawn()
+            .map_err(|error| format!("failed to start {provider_type} login: {error}"))?;
+        let output = Arc::new(Mutex::new(String::new()));
+        let streams: Vec<Box<dyn Read + Send>> = [
+            child
+                .stdout
+                .take()
+                .map(|stream| Box::new(stream) as Box<dyn Read + Send>),
+            child
+                .stderr
+                .take()
+                .map(|stream| Box::new(stream) as Box<dyn Read + Send>),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        for mut stream in streams {
+            let captured = output.clone();
+            std::thread::spawn(move || {
+                let mut buffer = [0_u8; 1024];
+                while let Ok(count) = stream.read(&mut buffer) {
+                    if count == 0 {
+                        break;
+                    }
+                    captured
+                        .lock()
+                        .push_str(&String::from_utf8_lossy(&buffer[..count]));
+                }
+            });
+        }
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut exit_status = None;
+        loop {
+            let details = core::providers::extract_device_auth_details(&output.lock());
+            if details.is_complete() || Instant::now() >= deadline {
+                break;
+            }
+            if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+                exit_status = Some(status);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let raw_output = output.lock().clone();
+        let details = core::providers::extract_device_auth_details(&raw_output);
+        let completed = exit_status.is_some();
+        if let Some(status) = exit_status {
+            if !status.success() && !details.is_complete() {
+                return Err(if raw_output.trim().is_empty() {
+                    format!(
+                        "{provider_type} login exited with {}",
+                        status.code().unwrap_or(-1)
+                    )
+                } else {
+                    raw_output.trim().to_string()
+                });
+            }
+        } else {
+            self.provider_login_processes
+                .lock()
+                .insert(provider_id.clone(), child);
+        }
+
+        let mut result = json!({
+            "ok": true,
+            "status": if completed { "completed" } else { "started" },
+            "providerId": provider_id,
+            "message": format!("Complete {provider_type} login on this device."),
+            "rawOutput": raw_output,
+        });
+        let details = to_json(details)?;
+        if let (Some(target), Some(source)) = (result.as_object_mut(), details.as_object()) {
+            target.extend(source.clone());
+        }
+        Ok(result)
+    }
+
+    fn provider_login_input(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, _) = Self::provider_identity(params)?;
+        let input = params
+            .get("input")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let mut processes = self.provider_login_processes.lock();
+        let child = processes
+            .get_mut(&provider_id)
+            .ok_or_else(|| "No login is waiting for input".to_string())?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| "Login process has no input stream".to_string())?;
+        writeln!(stdin, "{input}").map_err(|error| error.to_string())?;
+        Ok(json!({ "ok": true }))
+    }
+
+    fn provider_logout(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        if let Some(mut login) = self.provider_login_processes.lock().remove(&provider_id) {
+            let _ = login.kill();
+            let _ = login.wait();
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let args: &[&str] = if provider_type == "codex" {
+            &["logout"]
+        } else {
+            &["auth", "logout"]
+        };
+        let output = self
+            .provider_command(&provider_type, args, &env)?
+            .output()
+            .map_err(|error| error.to_string())?;
+        if !output.status.success() {
+            let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if message.is_empty() {
+                format!("{provider_type} logout failed")
+            } else {
+                message
+            });
+        }
+        Ok(json!({
+            "ok": true,
+            "status": "completed",
+            "providerId": provider_id,
+            "message": format!("{provider_type} logged out on this device."),
+        }))
+    }
+
     fn provider_start(&self, params: &Value) -> Result<Value, String> {
         let provider = params
             .get("providerType")
@@ -1248,6 +1485,15 @@ impl HostState {
             "providerThreadId": handle.session_id,
             "provider": provider,
         }))
+    }
+}
+
+impl Drop for HostState {
+    fn drop(&mut self) {
+        for child in self.provider_login_processes.get_mut().values_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 }
 
@@ -1649,6 +1895,29 @@ done
                 args: vec![script.to_string_lossy().into_owned()],
             }),
         }
+    }
+
+    fn write_fake_provider_login(dir: &std::path::Path) -> std::path::PathBuf {
+        let script = dir.join("fake-provider-login.sh");
+        std::fs::write(
+            &script,
+            r#"#!/usr/bin/env bash
+if [ "$1" = "login" ] && [ "$2" = "--device-auth" ]; then
+  printf 'Welcome to Codex\nOpen https://auth.openai.com/codex/device\nEnter this one-time code:\nAB12-CD34E\n'
+  read -r _
+  exit 0
+fi
+if [ "$1" = "login" ] && [ "$2" = "status" ]; then
+  exit 1
+fi
+if [ "$1" = "logout" ]; then
+  exit 0
+fi
+exit 2
+"#,
+        )
+        .unwrap();
+        script
     }
 
     // ── dispatch plumbing ───────────────────────────────────────────────────
@@ -2279,6 +2548,59 @@ done
             !ids.iter().any(|v| v == "sess-glue-1"),
             "session gone after stop: {alive}"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn codex_login_uses_cli_device_flow_instead_of_claude_url() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_provider_login(&dir);
+        let st = HostState::new_with_dir(dir.clone());
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+
+        let started = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("start-login"),
+                    json!({"providerId": "codex-work", "providerType": "codex"}),
+                ],
+            )
+            .expect("Codex device login starts");
+        assert_eq!(started["ok"], true);
+        assert_eq!(started["providerId"], "codex-work");
+        assert_eq!(
+            started["verificationUri"],
+            "https://auth.openai.com/codex/device"
+        );
+        assert_eq!(started["userCode"], "AB12-CD34E");
+        assert!(started.get("url").is_none());
+        assert!(!started.to_string().contains("claude.ai"));
+
+        let status = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("auth-status"),
+                    json!({"providerId": "codex-work", "providerType": "codex"}),
+                ],
+            )
+            .expect("auth status uses the Codex CLI");
+        assert_eq!(status["authenticated"], false);
+        assert_eq!(status["login"], true);
+        assert_eq!(status["deviceCode"], true);
+
+        st.dispatch(
+            "desktop:provider-op",
+            &[
+                json!("logout"),
+                json!({"providerId": "codex-work", "providerType": "codex"}),
+            ],
+        )
+        .expect("logout stops the login process");
         std::fs::remove_dir_all(&dir).ok();
     }
 
