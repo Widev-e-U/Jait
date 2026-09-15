@@ -27,7 +27,25 @@ function Global:__JaitOSC([string]$Payload) {
 $Global:__JaitOrigPrompt = $function:prompt
 
 function Global:prompt {
-    $exitCode = $global:LASTEXITCODE
+    # Read the completion state first — anything else in this function (or the
+    # prompt it invokes) would overwrite it.
+    #
+    # $LASTEXITCODE only tracks native (external) programs, so a cmdlet such as
+    # `echo` never clears it. Reporting it unconditionally made every command
+    # after `cmd /c exit 7` look like it failed with 7. $? on the other hand
+    # reflects cmdlets and scripts but carries no exit code, so combine both.
+    $succeeded = $global:?
+    $nativeExitCode = $global:LASTEXITCODE
+
+    if ($succeeded) {
+        $exitCode = 0
+    } elseif ($nativeExitCode -is [int] -and $nativeExitCode -ne 0) {
+        # Native command failure: its own exit code is the real result.
+        $exitCode = $nativeExitCode
+    } else {
+        # Cmdlet/script failure without a native exit code.
+        $exitCode = 1
+    }
 
     # D — previous command finished with exit code
     $out = (__JaitOSC "D;$exitCode")
