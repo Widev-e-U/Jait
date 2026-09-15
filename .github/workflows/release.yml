@@ -926,25 +926,41 @@ jobs:
         working-directory: packages/gateway
         run: |
           set -euo pipefail
-          missing=0
           # Run npm from /tmp, never from a workspace member: npm aborts with
           # ENOWORKSPACES ("This command does not support workspaces") inside a
           # workspace, which previously killed this style of step instantly.
-          while IFS= read -r dep; do
-            [ -n "$dep" ] || continue
-            range=$(jq -r --arg d "$dep" '.dependencies[$d]' package.json)
-            live=$(cd /tmp && npm view "$dep@$range" version 2>/dev/null | tr -d '[:space:]' | tail -n1 || true)
-            if [ -z "$live" ]; then
-              echo "::error::$dep@$range is not resolvable on the registry — gateway would be uninstallable"
-              missing=1
-            else
-              echo "✅ $dep@$range → $live"
+          DEPS=$(jq -r '.dependencies | keys[] | select(startswith("@jait/"))' package.json)
+          # This step runs seconds after `Publish @jait/shared`, but npm returns
+          # 200 from the publish PUT before the new version is visible through
+          # every packument cache — a range published moments ago can still
+          # resolve to nothing here. That race is exactly what failed the
+          # v0.1.857 verify job while `@jait/shared` was in fact on its way.
+          # Retry with backoff; a genuinely missing dependency still fails loud.
+          missing=""
+          for attempt in $(seq 1 20); do
+            missing=""
+            while IFS= read -r dep; do
+              [ -n "$dep" ] || continue
+              range=$(jq -r --arg d "$dep" '.dependencies[$d]' package.json)
+              live=$(cd /tmp && npm view "$dep@$range" version 2>/dev/null | tr -d '[:space:]' | tail -n1 || true)
+              if [ -z "$live" ]; then
+                missing="$missing $dep@$range"
+              else
+                echo "✅ $dep@$range → $live"
+              fi
+            done <<< "$DEPS"
+            if [ -z "$missing" ]; then
+              echo "✅ Every @jait/* dependency range resolves on the registry."
+              exit 0
             fi
-          done < <(jq -r '.dependencies | keys[] | select(startswith("@jait/"))' package.json)
-          if [ "$missing" -ne 0 ]; then
-            echo "Refusing to publish an uninstallable gateway. Publish the missing workspace package(s) first."
-            exit 1
-          fi
+            echo "⏳ attempt $attempt/20 — not resolvable yet:${missing} (waiting for registry propagation)"
+            sleep 30
+          done
+          for d in $missing; do
+            echo "::error::$d is not resolvable on the registry — gateway would be uninstallable"
+          done
+          echo "Refusing to publish an uninstallable gateway. Publish the missing workspace package(s) first."
+          exit 1
 
       - name: Publish @jait/gateway
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
@@ -1042,15 +1058,29 @@ jobs:
           VERSION=$(jq -r '.version' package.json)
           PREFIX="$(mktemp -d)/prefix"
           mkdir -p "$PREFIX"
+          LOG="/tmp/npm-install-${{ github.run_id }}.log"
           echo "Installing @jait/gateway@$VERSION into $PREFIX (dependency resolution only)"
           cd /tmp
-          npm install --global --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund \
-            "@jait/gateway@$VERSION" 2>&1 | tee "/tmp/npm-install-${{ github.run_id }}.log"
-          status=${PIPESTATUS[0]}
+          # A freshly published dependency range can 404 (ETARGET) for a few
+          # minutes while the packument propagates, so retry before declaring
+          # the package uninstallable.
+          for attempt in $(seq 1 12); do
+            npm install --global --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund \
+              "@jait/gateway@$VERSION" 2>&1 | tee "$LOG"
+            status=${PIPESTATUS[0]}
+            [ $status -eq 0 ] && break
+            if grep -qi 'ETARGET\|404\|not in this registry\|may take a few minutes' "$LOG"; then
+              echo "⏳ attempt $attempt/12 — dependencies not propagated yet, retrying in 30s"
+              rm -rf "$PREFIX"; mkdir -p "$PREFIX"
+              sleep 30
+            else
+              break
+            fi
+          done
           if [ $status -ne 0 ]; then
             echo "::error::@jait/gateway@$VERSION is published but NOT installable — operator updates will fail."
             echo "This usually means a workspace dependency range (e.g. @jait/shared) was never published."
-            grep -i 'ETARGET\|404\|not in this registry' "/tmp/npm-install-${{ github.run_id }}.log" || true
+            grep -i 'ETARGET\|404\|not in this registry' "$LOG" || true
             exit $status
           fi
           echo "✅ @jait/gateway@$VERSION installs cleanly"

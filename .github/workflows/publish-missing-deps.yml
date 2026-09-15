@@ -97,24 +97,37 @@ jobs:
           set -euo pipefail
           GATEWAY_VERSION="${{ inputs.gateway_to_verify }}"
           # Read the published manifest itself, so we verify what operators get,
-          # not the local (already rewritten) package.json.
+          # not a local (possibly rewritten) package.json.
           cd /tmp
-          manifest=$(npm view "@jait/gateway@$GATEWAY_VERSION" --json 2>/dev/null)
-          missing=0
-          while IFS=$'\t' read -r dep range; do
-            [ -n "$dep" ] || continue
-            live=$(npm view "$dep@$range" version 2>/dev/null | tr -d '[:space:]' | tail -n1 || true)
-            if [ -z "$live" ]; then
-              echo "::error::$dep@$range (required by @jait/gateway@$GATEWAY_VERSION) is not resolvable"
-              missing=1
-            else
-              echo "✅ $dep@$range → $live"
+          MANIFEST=/tmp/gateway-manifest.json
+          npm view "@jait/gateway@$GATEWAY_VERSION" --json > "$MANIFEST" 2>/dev/null
+          # A dependency published seconds ago can still 404 through a stale
+          # packument cache, so retry with backoff before failing the release.
+          missing=""
+          for attempt in $(seq 1 20); do
+            missing=""
+            while IFS= read -r dep; do
+              [ -n "$dep" ] || continue
+              range=$(jq -r --arg d "$dep" '.dependencies[$d]' "$MANIFEST")
+              live=$(npm view "$dep@$range" version 2>/dev/null | tr -d '[:space:]' | tail -n1 || true)
+              if [ -z "$live" ]; then
+                missing="$missing $dep@$range"
+              else
+                echo "✅ $dep@$range → $live"
+              fi
+            done < <(jq -r '.dependencies | keys[] | select(startswith("@jait/"))' "$MANIFEST")
+            if [ -z "$missing" ]; then
+              echo "✅ Every @jait/* range resolvable."
+              exit 0
             fi
-          done < <(echo "$manifest" | jq -r '.dependencies | to_entries[] | select(.key | startswith("@jait/")) | "\(.key)\t\(.value)"')
-          if [ "$missing" -ne 0 ]; then
-            echo "❌ Published gateway is still uninstallable."
-            exit 1
-          fi
+            echo "⏳ attempt $attempt/20 — not resolvable yet:${missing} (waiting for registry propagation)"
+            sleep 30
+          done
+          for d in $missing; do
+            echo "::error::$d (required by @jait/gateway@$GATEWAY_VERSION) is not resolvable"
+          done
+          echo "❌ Published gateway is still uninstallable."
+          exit 1
 
       # ── Prove the operator's install command works ────────────────────
       - name: Smoke-test `npm install -g @jait/gateway`
@@ -123,13 +136,28 @@ jobs:
           GATEWAY_VERSION="${{ inputs.gateway_to_verify }}"
           PREFIX="$(mktemp -d)/prefix"
           mkdir -p "$PREFIX"
+          LOG=/tmp/gateway-install.log
           cd /tmp
-          npm install --global --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund \
-            "@jait/gateway@$GATEWAY_VERSION" 2>&1 | tee /tmp/gateway-install.log
-          status=${PIPESTATUS[0]}
+          # A freshly published dependency range can 404 (ETARGET) for a few
+          # minutes while the packument propagates, so retry before declaring
+          # the package uninstallable.
+          status=1
+          for attempt in $(seq 1 12); do
+            npm install --global --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund \
+              "@jait/gateway@$GATEWAY_VERSION" 2>&1 | tee "$LOG"
+            status=${PIPESTATUS[0]}
+            [ $status -eq 0 ] && break
+            if grep -qi 'ETARGET\|404\|not in this registry\|may take a few minutes' "$LOG"; then
+              echo "⏳ attempt $attempt/12 — dependencies not propagated yet, retrying in 30s"
+              rm -rf "$PREFIX"; mkdir -p "$PREFIX"
+              sleep 30
+            else
+              break
+            fi
+          done
           if [ $status -ne 0 ]; then
             echo "::error::@jait/gateway@$GATEWAY_VERSION still does not install."
-            grep -i 'ETARGET\|404\|not in this registry' /tmp/gateway-install.log || true
+            grep -i 'ETARGET\|404\|not in this registry' "$LOG" || true
             exit $status
           fi
           echo "✅ @jait/gateway@$GATEWAY_VERSION installs cleanly"
