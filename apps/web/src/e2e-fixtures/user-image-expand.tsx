@@ -1,9 +1,9 @@
 import { createRoot } from 'react-dom/client'
-import { Message } from '../../../apps/web/src/components/chat/message'
-import { ConfirmDialogProvider } from '../../../apps/web/src/components/ui/confirm-dialog'
-import { TooltipProvider } from '../../../apps/web/src/components/ui/tooltip'
 
-// 1x1 transparent PNG.
+import { Message } from '@/components/chat/message'
+import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
+import { TooltipProvider } from '@/components/ui/tooltip'
+
 const TINY_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
@@ -24,4 +24,6 @@ function Harness() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<Harness />)
+const mount = document.createElement('div')
+document.body.replaceChildren(mount)
+createRoot(mount).render(<Harness />)
