@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.859](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.859) — 2026-09-16
+- fix(web): reconcile model selection once the active provider scope loads — 731b4ecf
+- fix(web): show provider/model tooltip above the trigger — 448f9dc9
+
 ## [v0.1.858](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.858) — 2026-09-16
 - feat(web): collapse long pastes into reviewable text attachments — 380e0c24
 - fix(release): retry registry checks so propagation lag can't fail a release — b12f746f
