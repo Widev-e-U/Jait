@@ -697,10 +697,14 @@ export function registerProviderRoutes(
       if (!node) return reply.status(404).send({ error: `The device hosting ${account.label} is not connected` });
 
       const remoteProvider = new RemoteCliProvider(ws, node.id, account.id, account.providerType);
-      if (!await remoteProvider.checkAvailability()) {
-        return reply.status(409).send({ error: remoteProvider.info.unavailableReason ?? `Provider ${id} is unavailable on ${node.name}` });
+      try {
+        if (!await remoteProvider.checkAvailability()) {
+          return reply.status(409).send({ error: remoteProvider.info.unavailableReason ?? `Provider ${id} is unavailable on ${node.name}` });
+        }
+        return { models: await remoteProvider.listModels() };
+      } catch (err) {
+        return reply.status(500).send({ error: err instanceof Error ? err.message : "Failed to list models" });
       }
-      return { models: await remoteProvider.listModels() };
     }
 
     const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);

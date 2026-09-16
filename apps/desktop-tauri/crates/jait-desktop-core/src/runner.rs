@@ -390,6 +390,80 @@ fn send_rpc(
     }
 }
 
+/// Discover the models exposed by a Codex account without creating a chat
+/// session. This mirrors the Electron desktop's temporary app-server flow.
+pub fn list_codex_models(
+    resolver: &dyn CommandResolver,
+    env: HashMap<String, String>,
+) -> Result<Value, String> {
+    let resolved = resolver
+        .resolve("codex")
+        .ok_or("provider CLI not found for codex (checked PATH and ~/.jait/bin)")?;
+    let working_directory = std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .to_string_lossy()
+        .into_owned();
+    let spec = RunnerSpec {
+        session_id: "codex-model-discovery".into(),
+        provider: "codex".into(),
+        working_directory,
+        mode: "default".into(),
+        model: None,
+        reasoning_effort: None,
+        env,
+    };
+    let mut child = spawn_cli(&resolved, &codex_app_server_argv(), &spec)?;
+    let stderr = child.stderr.take().ok_or("codex stderr unavailable")?;
+    let stdout = child.stdout.take().ok_or("codex stdout unavailable")?;
+    let stderr_tail: StderrTail = Arc::new(Mutex::new(String::new()));
+    let codex = Arc::new(Mutex::new(CodexTurnState {
+        thread_id: None,
+        next_rpc_id: 1,
+        pending: HashMap::new(),
+        turn_notify: None,
+    }));
+    let (event_tx, _event_rx) = mpsc::channel();
+    let (exit_tx, _exit_rx) = mpsc::channel();
+    pump_codex(
+        stdout,
+        stderr,
+        spec.session_id.clone(),
+        event_tx,
+        exit_tx,
+        codex.clone(),
+        stderr_tail.clone(),
+    );
+
+    let result = (|| {
+        let stdin = child.stdin.as_mut().ok_or("codex stdin unavailable")?;
+        send_rpc(
+            stdin,
+            &codex,
+            "initialize",
+            codex_handshake_body(),
+            RPC_TIMEOUT,
+        )?;
+        let initialized = json!({ "method": "initialized", "params": {} });
+        stdin
+            .write_all(initialized.to_string().as_bytes())
+            .and_then(|_| stdin.write_all(b"\n"))
+            .and_then(|_| stdin.flush())
+            .map_err(|e| format!("rpc initialized write failed: {e}"))?;
+        send_rpc(stdin, &codex, "model/list", json!({}), RPC_TIMEOUT)
+    })();
+
+    let _ = child.kill();
+    let _ = child.wait();
+    result.map_err(|error| {
+        let tail = stderr_tail.lock().trim().to_string();
+        if tail.is_empty() {
+            error
+        } else {
+            format!("{error} - provider stderr: {tail}")
+        }
+    })
+}
+
 /// Read-loop for the codex app-server: resolves pending rpcs by id, forwards
 /// notifications as events, settles the active turn on `turn/completed` /
 /// error notifications, and reports EOF via `exit_tx`.

@@ -697,6 +697,7 @@ impl HostState {
                     "start-login" => self.provider_start_login(&params),
                     "login-input" => self.provider_login_input(&params),
                     "logout" => self.provider_logout(&params),
+                    "list-models" => self.provider_list_models(&params),
                     "start" | "start-session" => self.provider_start(&params),
                     "send" | "send-turn" => {
                         let session_id = params
@@ -1413,6 +1414,18 @@ impl HostState {
         }))
     }
 
+    fn provider_list_models(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        if provider_type != "codex" {
+            return Err(format!(
+                "model discovery is not implemented for {provider_type} on Tauri"
+            ));
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let resolver = self.resolver.lock();
+        core::runner::list_codex_models(&**resolver, env)
+    }
+
     fn provider_start(&self, params: &Value) -> Result<Value, String> {
         let provider = params
             .get("providerType")
@@ -1861,6 +1874,8 @@ while IFS= read -r line; do
       printf '{"id":%s,"result":{"userAgent":{"name":"fake-codex","version":"0.0.0"}}}\n' "$id" ;;
     thread/start)
       printf '{"id":%s,"result":{"thread":{"id":"thr-glue-1"}}}\n' "$id" ;;
+    model/list)
+      printf '{"id":%s,"result":{"data":[{"id":"gpt-5-codex","displayName":"GPT-5 Codex"}]}}\n' "$id" ;;
     turn/start)
       printf '{"id":%s,"result":{"turnStatus":"inProgress"}}\n' "$id"
       printf '{"method":"turn/started","params":{"threadId":"thr-glue-1"}}\n'
@@ -2548,6 +2563,36 @@ exit 2
             !ids.iter().any(|v| v == "sess-glue-1"),
             "session gone after stop: {alive}"
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn provider_list_models_uses_the_selected_codex_account() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_codex(&dir);
+        let st = HostState::new_with_dir(dir.clone());
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+
+        let models = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("list-models"),
+                    json!({"providerId": "codex-work", "providerType": "codex"}),
+                ],
+            )
+            .expect("Codex models load through the Tauri provider bridge");
+
+        assert_eq!(
+            models,
+            json!({
+                "data": [{"id": "gpt-5-codex", "displayName": "GPT-5 Codex"}]
+            })
+        );
+        assert!(dir.join("provider-accounts/codex-work").is_dir());
         std::fs::remove_dir_all(&dir).ok();
     }
 

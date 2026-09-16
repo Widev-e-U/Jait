@@ -202,4 +202,27 @@ describe('provider model routing', () => {
 
     await app.close()
   })
+
+  it('returns the remote model discovery error instead of Fastify\'s generic 500 label', async () => {
+    const proxyProviderOp = vi.fn(async (_nodeId: string, op: string) => {
+      if (op === 'auth-status') {
+        return { authenticated: true, login: true, logout: true, deviceCode: true }
+      }
+      throw new Error('Codex model discovery exited (code 1) - provider stderr: invalid config')
+    })
+    const { app, headers } = await buildApp(proxyProviderOp as never)
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/providers/codex-windows/models',
+      headers,
+    })
+
+    expect(response.statusCode).toBe(500)
+    expect(response.json()).toEqual({
+      error: 'Codex model discovery exited (code 1) - provider stderr: invalid config',
+    })
+
+    await app.close()
+  })
 })
