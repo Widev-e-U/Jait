@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.860](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.860) — 2026-09-16
+- fix(desktop-tauri): load remote Codex models — 3c6f0758
+
 ## [v0.1.859](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.859) — 2026-09-16
 - fix(web): reconcile model selection once the active provider scope loads — 731b4ecf
 - fix(web): show provider/model tooltip above the trigger — 448f9dc9
