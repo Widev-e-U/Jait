@@ -1,9 +1,10 @@
+import { createPastedTextAttachment, isLongPaste } from '@/lib/pasted-text-attachment'
 import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
 import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X, Copy, Check, GitFork } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
 import { StyleSelector } from '@/components/chat/style-selector'
@@ -1673,6 +1674,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
     if (!el) return
     const structured = parseUserMessageClipboardPayload(e.clipboardData.getData(JAIT_REF_MIME))
+    const pastedText = e.clipboardData.getData('text/plain')
+    if (structured.length === 0 && isLongPaste(pastedText)) {
+      e.preventDefault()
+      setAttachments(previous => [...previous, createPastedTextAttachment(pastedText, previous)])
+      return
+    }
     const markdownSegments = structured.length > 0 ? structured : parseUserMessageMarkdown(e.clipboardData.getData('text/plain'))
     if (markdownSegments.length > 0) {
       e.preventDefault()
@@ -1878,10 +1885,24 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               ) : (
                 <FileIcon filename={att.name} className="h-4 w-4 shrink-0" />
               )}
-              <span className="max-w-[120px] truncate">{att.name}</span>
+              {att.pastedText ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button type="button" className="flex items-center gap-1.5 hover:underline" aria-label={`Review ${att.name}`}>
+                      <span className="max-w-[160px] truncate">{att.name.replace(/\.txt$/, '')}</span>
+                      <span className="text-muted-foreground">{att.pastedText.lineCount} lines</span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[min(600px,90vw)]" align="start">
+                    <p className="mb-2 text-sm font-medium">{att.name}</p>
+                    <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{att.pastedText.text}</pre>
+                  </PopoverContent>
+                </Popover>
+              ) : <span className="max-w-[120px] truncate">{att.name}</span>}
               <button
                 type="button"
                 className="ml-0.5 rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                aria-label={`Remove ${att.name}`}
                 onClick={() => removeAttachment(att.name)}
               >
                 <X className="h-3 w-3" />

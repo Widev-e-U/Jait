@@ -529,6 +529,7 @@ export interface PlanData {
 }
 
 export interface ChatAttachment {
+  pastedText?: { text: string; lineCount: number }
   name: string
   mimeType: string
   data: string
