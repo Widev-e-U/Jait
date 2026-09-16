@@ -1,4 +1,4 @@
-import { createContext, createElement, useState, useEffect, useCallback, useContext, type ReactNode } from 'react'
+import { createContext, createElement, useMemo, useState, useEffect, useCallback, useContext, type ReactNode } from 'react'
 import { clearAuthToken, getAuthToken, setAuthToken, initAuthToken, clearAuthCookie } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { JaitBackend } from '@jait/shared'
@@ -252,7 +252,14 @@ function useAuthState() {
     }
   }, [state.token])
 
-  return {
+  // `AuthProvider` sits above the chat panels, so every consumer of this hook
+  // re-renders whenever the provider renders — and App re-renders for each
+  // streamed token of the main chat. Returning a fresh object literal here made
+  // the context value change on every one of those renders, which re-rendered
+  // the (memoized) parallel panels through their composers and defeated the
+  // `ParallelChatPanel` memoization. Keep the value stable unless real auth
+  // state changes.
+  return useMemo(() => ({
     user: state.user,
     token: state.token,
     settings: state.settings ?? EMPTY_SETTINGS,
@@ -265,7 +272,19 @@ function useAuthState() {
     refreshSettings,
     updateSettings,
     clearSessionArchive,
-  }
+  }), [
+    state.user,
+    state.token,
+    state.settings,
+    state.isLoading,
+    login,
+    register,
+    logout,
+    bindSession,
+    refreshSettings,
+    updateSettings,
+    clearSessionArchive,
+  ])
 }
 
 type AuthContextValue = ReturnType<typeof useAuthState>

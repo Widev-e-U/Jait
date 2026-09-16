@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ResponseStyle } from '@jait/shared'
 
 import { ChatComposerSurface, Conversation, Message, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
@@ -20,7 +20,7 @@ export interface ParallelChatPrompt {
   attachments?: ChatAttachment[]
 }
 
-interface ParallelChatPanelProps {
+export interface ParallelChatPanelProps {
   onSessionViewed?: (sessionId: string, lastActiveAt: string) => void
   session: ProjectSession
   token: string | null
@@ -48,7 +48,55 @@ interface ParallelChatPanelProps {
   composerControlRow?: ReactNode
 }
 
-export function ParallelChatPanel({
+/**
+ * Each parallel panel owns its own `useChat` subscription and transcript, so a
+ * render of the panel is only worth doing when something it actually reads
+ * changed. Without this comparison every streamed token of the *main* chat
+ * re-rendered all panels (App re-renders on each token and hands them fresh
+ * props), which is what made multi-panel layouts feel laggy.
+ *
+ * Props are compared by identity — cheap and stable — except for the few
+ * derived values that App rebuilds on every render:
+ *  - `session`: App re-creates session objects whenever the session lists
+ *    refresh, so compare the fields this panel actually reads.
+ *  - `showDivider`: a default of `true` is applied internally, so treat
+ *    `undefined` and `true` as equal.
+ * Callers must therefore pass stable references for collections and callbacks
+ * (`availableFiles`, `availableSkills`, `onSearchFiles`, `onClose`, …); App does
+ * this via `useCallback`/state and the perf harness mirrors the same contract.
+ */
+export function areParallelChatPanelPropsEqual(prev: ParallelChatPanelProps, next: ParallelChatPanelProps): boolean {
+  const sameSession = prev.session === next.session || (
+    prev.session.id === next.session.id &&
+    prev.session.projectId === next.session.projectId &&
+    prev.session.lastActiveAt === next.session.lastActiveAt
+  )
+
+  return (
+    sameSession &&
+    prev.token === next.token &&
+    prev.initialPrompt === next.initialPrompt &&
+    prev.provider === next.provider &&
+    prev.runtimeMode === next.runtimeMode &&
+    prev.responseStyle === next.responseStyle &&
+    prev.model === next.model &&
+    prev.reasoningEffort === next.reasoningEffort &&
+    prev.availableFiles === next.availableFiles &&
+    prev.availableSkills === next.availableSkills &&
+    prev.projectName === next.projectName &&
+    prev.projectPath === next.projectPath &&
+    prev.projectNodeId === next.projectNodeId &&
+    prev.isMobile === next.isMobile &&
+    prev.onSearchFiles === next.onSearchFiles &&
+    prev.showHideButton === next.showHideButton &&
+    prev.onClose === next.onClose &&
+    prev.onSessionViewed === next.onSessionViewed &&
+    prev.composerControlRow === next.composerControlRow &&
+    (prev.showDivider ?? true) === (next.showDivider ?? true)
+  )
+}
+
+function ParallelChatPanelImpl({
   session,
   onSessionViewed,
   token,
@@ -303,3 +351,5 @@ export function ParallelChatPanel({
     </>
   )
 }
+
+export const ParallelChatPanel = memo(ParallelChatPanelImpl, areParallelChatPanelPropsEqual)

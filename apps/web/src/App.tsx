@@ -2830,6 +2830,23 @@ function App() {
     })
   }, [activeSessionId, chatProvider, chatProviderRuntimeMode, chatReasoningEffort, chatResponseStyle, cliModel, loadSession, openSecondaryChatPanel, personalSessions, projects])
 
+  // The parallel panels are memoized, so handing each one a fresh `onClose`
+  // closure on every App render (App re-renders for every streamed token of the
+  // main chat) would defeat that memoization and re-render every panel. Cache a
+  // stable handler per panel session id for the lifetime of the panel instead.
+  const parallelPanelCloseRef = useRef<Map<string, () => void> | null>(null)
+  const getParallelPanelCloseHandler = useCallback((sessionId: string) => {
+    const cache = (parallelPanelCloseRef.current ??= new Map())
+    const cached = cache.get(sessionId)
+    if (cached) return cached
+    const handler = () => {
+      cache.delete(sessionId)
+      setParallelChats((current) => closeSecondaryChatPanel(current, sessionId))
+    }
+    cache.set(sessionId, handler)
+    return handler
+  }, [])
+
   const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
     setPrimaryChatPanelHidden(false)
     if (isMobile) handleMobileChatClick()
@@ -4771,36 +4788,67 @@ function App() {
       </div>
     ) : null
 
-  const developerComposerControlRow =
-    viewMode === 'developer' ? (
-      <DeveloperComposerControlRow
-        activeProjectId={activeProjectId}
-        activeProjectSessions={activeProjectSessions}
-        activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
-        activeSessionId={activeSessionId}
-        approveAllInSession={approveAllInSession}
-        compact={compactDeveloperComposer}
-        disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
-        remainingPrompts={remainingPrompts}
-        repositories={automation.repositories}
-        selectedThreadRepo={threadTargetRepo}
-        sendTarget={sendTarget}
-        threadRepoPickerDisabled={automation.creating}
-        getRuntimeInfo={automation.getRuntimeInfoForRepository}
-        onAddRepository={handleFolderPickerOpen}
-        onClearApproveAll={handleClearApproveAll}
-        onCreateSession={() => {
-          void createSession()
-        }}
-        onSendTargetChange={setSendTarget}
-        onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
-        onStartNewChat={handleStartNewChat}
-        onStartNewChatInTab={handleStartNewChatInTab}
-        onStartNewChatInWindow={handleStartNewChatInWindow}
-        onSelectRepo={automation.setSelectedRepoId}
-        onSelectSession={switchSession}
-      />
-    ) : null
+  // Rebuilt only when one of the values it reads actually changes: the parallel
+  // panels are memoized and compare `composerControlRow` by identity, so a fresh
+  // element on every App render (one per streamed token) would re-render every
+  // panel. Keep the element stable across those token renders.
+  const developerComposerControlRow = useMemo(
+    () =>
+      viewMode === 'developer' ? (
+        <DeveloperComposerControlRow
+          activeProjectId={activeProjectId}
+          activeProjectSessions={activeProjectSessions}
+          activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
+          activeSessionId={activeSessionId}
+          approveAllInSession={approveAllInSession}
+          compact={compactDeveloperComposer}
+          disableSendTargetSelector={developerChatUiState.disableSendTargetSelector}
+          remainingPrompts={remainingPrompts}
+          repositories={automation.repositories}
+          selectedThreadRepo={threadTargetRepo}
+          sendTarget={sendTarget}
+          threadRepoPickerDisabled={automation.creating}
+          getRuntimeInfo={automation.getRuntimeInfoForRepository}
+          onAddRepository={handleFolderPickerOpen}
+          onClearApproveAll={handleClearApproveAll}
+          onCreateSession={() => {
+            void createSession()
+          }}
+          onSendTargetChange={setSendTarget}
+          onSessionSwitcherOpenChange={handleSessionSwitcherOpen}
+          onStartNewChat={handleStartNewChat}
+          onStartNewChatInTab={handleStartNewChatInTab}
+          onStartNewChatInWindow={handleStartNewChatInWindow}
+          onSelectRepo={automation.setSelectedRepoId}
+          onSelectSession={switchSession}
+        />
+      ) : null,
+    [
+      viewMode,
+      activeProjectId,
+      activeProjectSessions,
+      activeProjectRecord?.title,
+      activeSessionId,
+      approveAllInSession,
+      compactDeveloperComposer,
+      developerChatUiState.disableSendTargetSelector,
+      remainingPrompts,
+      automation.repositories,
+      automation.creating,
+      automation.getRuntimeInfoForRepository,
+      automation.setSelectedRepoId,
+      threadTargetRepo,
+      sendTarget,
+      handleFolderPickerOpen,
+      handleClearApproveAll,
+      createSession,
+      handleSessionSwitcherOpen,
+      handleStartNewChat,
+      handleStartNewChatInTab,
+      handleStartNewChatInWindow,
+      switchSession,
+    ],
+  )
   const editComposerBag = useMemo(
     () => ({
       onVoiceInput: handleVoiceInput,
@@ -5411,7 +5459,7 @@ function App() {
                             isMobile={isMobile}
                             onSearchFiles={handleSearchFiles}
                             showHideButton={showChatPanelHideButtons}
-                            onClose={() => setParallelChats((current) => closeSecondaryChatPanel(current, parallelChat.session.id))}
+                            onClose={getParallelPanelCloseHandler(parallelChat.session.id)}
                           />
                         )
                       })}
