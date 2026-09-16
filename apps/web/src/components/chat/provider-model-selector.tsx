@@ -733,7 +733,7 @@ export function ProviderModelSelector({
   }, [isMobile])
 
   const triggerButton = (
-    <TooltipHint side="left" content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
+    <TooltipHint side="top" content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
     <button
       type="button"
       disabled={disabled}
