@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.858](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.858) — 2026-09-16
+- feat(web): collapse long pastes into reviewable text attachments — 380e0c24
+- fix(release): retry registry checks so propagation lag can't fail a release — b12f746f
+- fix(release): stop shipping gateways whose deps are unpublished — 99fe6a94
+
+## [v0.1.857](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.857) — 2026-09-15
+- fix(terminal): report real pwsh exit codes instead of stale $LASTEXITCODE — 6d918457
+
 ## [v0.1.856](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.856) — 2026-09-15
 - fix(chat): validate completed history without reloading the chat — 0394616b
 - fix(terminal): ship shell integration and preserve remote execution results — e6db128a
