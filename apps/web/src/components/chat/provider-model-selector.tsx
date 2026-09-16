@@ -88,6 +88,20 @@ interface ProviderDef {
   description: string
 }
 
+export function resolveProviderModelReconciliation(input: {
+  provider: string
+  activeScopeKey: string
+  loadedScopeKey: string | null
+  loading: boolean
+  currentModel: string | null
+  models: Array<{ id: string; isDefault?: boolean }>
+}): string | null | undefined {
+  if (input.provider === 'jait') return undefined
+  if (input.loadedScopeKey !== input.activeScopeKey || input.loading || input.models.length === 0) return undefined
+  if (input.currentModel && input.models.some((entry) => entry.id === input.currentModel)) return undefined
+  return (input.models.find((entry) => entry.isDefault) ?? input.models[0])?.id ?? null
+}
+
 interface ProviderModelSelectorProps {
   provider: ProviderId
   model: string | null
@@ -239,6 +253,7 @@ export function ProviderModelSelector({
   const [providerActionBusy, setProviderActionBusy] = useState<ProviderId | null>(null)
   const providerActionRef = useRef(false)
   const [models, setModels] = useState<ModelDef[]>([])
+  const [loadedModelScopeKey, setLoadedModelScopeKey] = useState<string | null>(null)
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
@@ -447,10 +462,12 @@ export function ProviderModelSelector({
   // would re-trigger it, leaving the panel stuck on "not logged in".
   const activeProviderAuthenticated = activeEntry?.auth?.authenticated === true
   const providerScopeResolved = providersLoaded || Boolean(providersError)
+  const activeModelScopeKey = `${provider}:${activeProviderNodeId ?? ''}`
 
   useEffect(() => {
     if (!providerScopeResolved) return
     setModels([])
+    setLoadedModelScopeKey(null)
     setModelError(null)
     setBackendFilter(null)
     setRecentIds(loadRecentModels())
@@ -462,6 +479,7 @@ export function ProviderModelSelector({
         if (cancelled) return
         setModelError(null)
         setModels(result.models)
+        setLoadedModelScopeKey(activeModelScopeKey)
         if (result.recentModels?.length) {
           setRecentIds(result.recentModels)
         }
@@ -481,17 +499,19 @@ export function ProviderModelSelector({
     return () => {
       cancelled = true
     }
-  }, [provider, activeProviderNodeId, activeProviderAuthenticated, providerScopeResolved, modelReloadVersion])
+  }, [activeModelScopeKey, provider, activeProviderNodeId, activeProviderAuthenticated, providerScopeResolved, modelReloadVersion])
 
   useEffect(() => {
-    if (provider === 'jait') return
-    if (loadingModels || models.length === 0) return
-    if (model && models.some((entry) => entry.id === model)) return
-
-    const defaultModel = models.find((entry) => entry.isDefault) ?? models[0] ?? null
-    const nextModel = defaultModel?.id ?? null
-    if (nextModel !== model) onModelChange(nextModel)
-  }, [provider, loadingModels, model, models, onModelChange])
+    const nextModel = resolveProviderModelReconciliation({
+      provider,
+      activeScopeKey: activeModelScopeKey,
+      loadedScopeKey: loadedModelScopeKey,
+      loading: loadingModels,
+      currentModel: model,
+      models,
+    })
+    if (nextModel !== undefined && nextModel !== model) onModelChange(nextModel)
+  }, [activeModelScopeKey, loadedModelScopeKey, provider, loadingModels, model, models, onModelChange])
 
   // Drop a selection the current scope cannot run — e.g. the project moved to a
   // device that does not host the selected provider. Only done once the
