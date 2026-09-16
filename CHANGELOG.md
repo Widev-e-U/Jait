@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.861](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.861) — 2026-09-16
+- test(e2e): meter parallel chat panel re-renders under load — 3c45931c
+- perf(web): stop re-rendering parallel chat panels on every streamed token — eae6e69a
+- fix(gateway): normalize Tauri runner events into canonical provider events — a3f9eb30
+- fix(desktop-tauri): wrap remote provider events in the Electron child envelope — 36b1964d
+
 ## [v0.1.860](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.860) — 2026-09-16
 - fix(desktop-tauri): load remote Codex models — 3c6f0758
 
