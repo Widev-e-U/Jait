@@ -164,6 +164,38 @@ describe("RemoteCliProvider", () => {
     unsubscribe();
   });
 
+  it("normalizes Tauri runner events into canonical provider events", async () => {
+    const { ws, fireRemoteEvent } = createMockWs();
+    const provider = new RemoteCliProvider(ws, "node-1", "windows-codex", "codex");
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => { events.push(event); });
+    const session = await provider.startSession({
+      threadId: "thread-1",
+      workingDirectory: "\\\\?\\E:\\",
+      mode: "full-access",
+    });
+
+    fireRemoteEvent(session.id, {
+      type: "provider.line",
+      sessionId: session.id,
+      line: JSON.stringify({
+        method: "item/agentMessage/delta",
+        params: { delta: "Hello from Codex" },
+      }),
+    });
+    fireRemoteEvent(session.id, {
+      type: "provider.turn-completed",
+      sessionId: session.id,
+    });
+
+    expect(events).toEqual([
+      { type: "session.started", sessionId: session.id },
+      { type: "token", sessionId: session.id, content: "Hello from Codex" },
+      { type: "turn.completed", sessionId: session.id },
+    ]);
+    unsubscribe();
+  });
+
   it("waits for remote turn completion before resolving sendTurn", async () => {
     const { ws, fireRemoteEvent } = createMockWs();
     const provider = new RemoteCliProvider(ws, "node-1", "claude-code");

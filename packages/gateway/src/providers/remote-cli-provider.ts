@@ -369,6 +369,41 @@ export class RemoteCliProvider implements CliProviderAdapter {
   private handleRemoteEvent(sessionId: string, event: unknown): void {
     if (!this.sessions.has(sessionId)) return;
 
+    const runnerEvent = asRecord(event);
+    const runnerEventType = asNonEmptyString(runnerEvent?.type);
+    if (runnerEventType === "provider.line") {
+      const line = asNonEmptyString(runnerEvent?.line);
+      if (!line) return;
+      try {
+        this.handleRemoteEvent(sessionId, JSON.parse(line) as unknown);
+      } catch {
+        // Match the Electron runner: only JSON app-server notifications are provider events.
+      }
+      return;
+    }
+
+    const normalizedRunnerEvent: ProviderEvent | null = runnerEventType === "provider.turn-started"
+      ? { type: "turn.started", sessionId }
+      : runnerEventType === "provider.turn-completed"
+        ? { type: "turn.completed", sessionId }
+        : runnerEventType === "provider.error"
+          ? {
+            type: "session.error",
+            sessionId,
+            error: asNonEmptyString(runnerEvent?.message) ?? "Remote provider turn failed",
+          }
+          : runnerEventType === "provider.stopped"
+            ? { type: "session.completed", sessionId }
+            : null;
+    if (normalizedRunnerEvent) {
+      this.emit(normalizedRunnerEvent);
+      if (normalizedRunnerEvent.type === "session.completed" || normalizedRunnerEvent.type === "session.error") {
+        this.sessions.delete(sessionId);
+        this.detachRemoteEventSubscriptionIfIdle();
+      }
+      return;
+    }
+
     const directEvent = this.parseDirectProviderEvent(event, sessionId);
     if (directEvent) {
       this.emit(directEvent);
