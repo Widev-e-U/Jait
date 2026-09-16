@@ -43,15 +43,33 @@ use serde_json::{json, Value};
 /// the shell layer instead).
 ///
 /// Contracts mirrored from `apps/desktop/src/electron-main.ts`:
-/// - provider events pass through as-is (glue already camelCases `sessionId`)
+/// - provider events → `{ type: "provider.event-from-child", sessionId, notification }`
 /// - terminal output → `{ type: "terminal.output-from-child", terminalId, data }`
 /// - terminal exit  → `{ type: "terminal.exit-from-child", terminalId, exitCode, signal }`
 /// - background complete → `{ type: "tool.background-complete-from-child", backgroundId, exitCode, output }`
 ///   where `output` is stdout+stderr concatenated (Electron sent one combined string).
 pub fn translate_glue_event(channel: &str, payload: &Value) -> Option<(String, Value)> {
     match channel {
-        // Provider events already arrive in Electron wire shape.
-        "gateway:event" => Some((channel.to_string(), payload.clone())),
+        "gateway:event" => {
+            if payload.get("type").and_then(Value::as_str) == Some("provider.event-from-child") {
+                return Some((channel.to_string(), payload.clone()));
+            }
+            let provider_type = payload.get("type").and_then(Value::as_str);
+            let session_id = payload.get("sessionId").and_then(Value::as_str);
+            if provider_type.is_some_and(|kind| kind.starts_with("provider."))
+                && session_id.is_some()
+            {
+                return Some((
+                    channel.to_string(),
+                    json!({
+                        "type": "provider.event-from-child",
+                        "sessionId": session_id,
+                        "notification": payload,
+                    }),
+                ));
+            }
+            Some((channel.to_string(), payload.clone()))
+        }
 
         "terminal:output" => {
             let mut out = payload.clone();
@@ -265,16 +283,33 @@ mod tests {
     }
 
     #[test]
-    fn provider_events_pass_through() {
+    fn provider_events_get_the_electron_child_envelope() {
         let payload = json!({
-            "type": "provider.event-from-child",
+            "type": "provider.line",
             "sessionId": "s1",
-            "notification": { "kind": "output" },
+            "line": "{\"method\":\"item/agentMessage/delta\",\"params\":{\"delta\":\"hello\"}}",
         });
         let (name, out) =
             translate_glue_event("gateway:event", &payload).expect("provider event forwarded");
         assert_eq!(name, "gateway:event");
-        assert_eq!(out, payload);
+        assert_eq!(out["type"], "provider.event-from-child");
+        assert_eq!(out["sessionId"], "s1");
+        assert_eq!(out["notification"]["type"], "provider.line");
+        assert_eq!(out["notification"]["line"], payload["line"]);
+    }
+
+    #[test]
+    fn provider_turn_completion_gets_the_electron_child_envelope() {
+        let payload = json!({
+            "type": "provider.turn-completed",
+            "sessionId": "s1",
+        });
+        let (_, out) = translate_glue_event("gateway:event", &payload)
+            .expect("provider completion forwarded");
+        assert_eq!(out["type"], "provider.event-from-child");
+        assert_eq!(out["sessionId"], "s1");
+        assert_eq!(out["notification"]["type"], "provider.turn-completed");
+        assert_eq!(out["notification"]["sessionId"], "s1");
     }
 
     #[test]
