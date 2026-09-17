@@ -49,7 +49,7 @@ describe('auth-token', () => {
   })
 
   it('stores token in localStorage on native app', () => {
-    // Simulate Electron
+    // Simulate Desktop
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: {

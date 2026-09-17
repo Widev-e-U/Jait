@@ -3,7 +3,7 @@
  *
  * Sends a WS "notification" event that each client handles according to
  * its platform:
- *   - Electron desktop → native toast via desktop:notify IPC
+ *   - Desktop desktop → native toast via desktop:notify IPC
  *   - Web browser → Notification API (with permission)
  *   - Android/Capacitor → local notification plugin
  *

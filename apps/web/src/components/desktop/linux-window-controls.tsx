@@ -6,12 +6,10 @@ export interface LinuxWindowControlsProps {
 }
 
 /**
- * Custom minimize/maximize/close caption buttons for Electron Linux (no
- * native controls there). Other frameless cases have dedicated components:
- * Tauri Windows → WinCaptionButtons (native titleBarOverlay metrics), and
- * Electron Windows/macOS use the native chrome (`titleBarOverlay` /
- * `hiddenInset`). Marked `no-drag` so the draggable titlebar can never
- * swallow the clicks.
+ * Compact caption buttons for frameless desktop platforms. Linux uses native
+ * window-manager decorations; Tauri Windows uses WinCaptionButtons with
+ * native titleBarOverlay metrics. Marked `no-drag` for shells that honor the
+ * Electron-compatible CSS property.
  */
 export function LinuxWindowControls({ isMaximized }: LinuxWindowControlsProps) {
   return (

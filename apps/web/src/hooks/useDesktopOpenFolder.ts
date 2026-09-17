@@ -5,7 +5,7 @@ import type { ProjectRecord } from './useProjects'
 /**
  * Turns the desktop's "Open with Jait" folder handoff into a selected project.
  *
- * The Electron side has always delivered the folder — synchronously on the
+ * The Desktop side has always delivered the folder — synchronously on the
  * bridge when the click launched the app, and over `onOpenFolder` when a
  * second instance handed it to an already-running window — but nothing in the
  * renderer consumed either, so clicking the context-menu entry just opened the

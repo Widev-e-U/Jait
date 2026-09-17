@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 interface AuthOverlaysProps {
   requiresAuthGate: boolean
-  isElectron: boolean
+  isDesktop: boolean
   showLoginDialog: boolean
   onShowLoginDialogChange: (open: boolean) => void
   authFormProps: Omit<AuthFormProps, 'variant'>
@@ -13,14 +13,14 @@ interface AuthOverlaysProps {
 
 export function AuthOverlays({
   requiresAuthGate,
-  isElectron,
+  isDesktop,
   showLoginDialog,
   onShowLoginDialogChange,
   authFormProps,
 }: AuthOverlaysProps) {
   return (
     <>
-      {requiresAuthGate && isElectron && (
+      {requiresAuthGate && isDesktop && (
         <div
           className="fixed top-0 left-0 right-0 h-10 z-[60]"
           style={{ WebkitAppRegion: 'drag' } as CSSProperties}

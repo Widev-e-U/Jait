@@ -7,7 +7,7 @@
  *
  *   - Android  → NotificationManager notification id (key.hashCode())
  *   - Wear     → DataClient item path
- *   - Electron → key in the live Notification map, so `.close()` can find it
+ *   - Desktop → key in the live Notification map, so `.close()` can find it
  *   - Web      → `tag` on ServiceWorkerRegistration.showNotification
  *
  * Because the identity is shared, resolving the request on *any* device emits a
@@ -87,7 +87,7 @@ export interface AttentionRaisedPayload extends AttentionItem {
 }
 
 /**
- * Electron owns its machine. It has real OS notifications with inline actions
+ * Desktop owns its machine. It has real OS notifications with inline actions
  * and it keeps running when the window is closed to the tray, so whenever a
  * desktop client is connected the browser tab stays silent — otherwise the same
  * PC pops two toasts for one request. Every other surface is a physically

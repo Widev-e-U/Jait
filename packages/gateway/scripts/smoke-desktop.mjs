@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const bundle = join(root, 'apps/desktop-tauri/src-tauri/gateway');
+const bundle = join(root, 'apps/desktop/src-tauri/gateway');
 const runtime = join(bundle, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node');
 const entry = join(bundle, 'node_modules/@jait/gateway/bin/desktop-host.mjs');
 const temporary = mkdtempSync(join(tmpdir(), 'jait-desktop-smoke-'));

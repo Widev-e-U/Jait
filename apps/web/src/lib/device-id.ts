@@ -1,13 +1,13 @@
 /**
  * Device identification utilities.
  *
- * Generates a persistent device ID per platform (web, capacitor, electron).
- * On Electron the ID is stored in desktop-settings.json (survives reinstalls).
+ * Generates a persistent device ID per platform (web, capacitor, desktop).
+ * In the desktop app the ID is stored in desktop-settings.json (survives reinstalls).
  * On other platforms it falls back to localStorage.
  */
 
-export function detectPlatform(): 'electron' | 'capacitor' | 'web' {
-  if (typeof window !== 'undefined' && (window as any).jaitDesktop) return 'electron'
+export function detectPlatform(): 'desktop' | 'capacitor' | 'web' {
+  if (typeof window !== 'undefined' && (window as any).jaitDesktop) return 'desktop'
   if (typeof window !== 'undefined' && 'Capacitor' in window) return 'capacitor'
   return 'web'
 }
@@ -38,7 +38,7 @@ function persistDeviceId(storageKey: string, deviceId: string): void {
 /**
  * Initialise the device ID asynchronously.
  *
- * On Electron this reads from persistent desktop-settings.json (via IPC),
+ * In the desktop app this reads from persistent desktop-settings.json (via IPC),
  * migrating any existing localStorage value on first run.
  * Must be called once at app startup before relying on `generateDeviceId()`.
  */
@@ -49,7 +49,7 @@ export async function initDeviceId(): Promise<string> {
   const storageKey = `jait-device-id-${platform}`
   const settingsKey = 'deviceId'
 
-  if (platform === 'electron' && (window as any).jaitDesktop?.getSetting) {
+  if (platform === 'desktop' && (window as any).jaitDesktop?.getSetting) {
     const desktop = (window as any).jaitDesktop
     // The main process resolves the persistent ID synchronously and exposes it
     // via the preload bridge. Prefer it so init never disagrees with the sync
@@ -62,7 +62,7 @@ export async function initDeviceId(): Promise<string> {
       try { await desktop.setSetting(settingsKey, bridgeId) } catch { /* ignore */ }
       return bridgeId
     }
-    // Try persistent Electron settings first
+    // Try persistent desktop settings first
     const persisted = await desktop.getSetting(settingsKey, null) as string | null
     if (persisted) {
       _cachedDeviceId = persisted
@@ -85,7 +85,7 @@ export async function initDeviceId(): Promise<string> {
     return id
   }
 
-  // Non-Electron: localStorage only
+  // Non-desktop: localStorage only
   const stored = readStoredDeviceId(storageKey)
   if (stored) {
     _cachedDeviceId = stored
@@ -102,7 +102,7 @@ export async function initDeviceId(): Promise<string> {
  *
  * If `initDeviceId()` has been called, returns the cached value.
  * Otherwise falls back to localStorage (always works for web/capacitor,
- * works for Electron after first run since we sync to localStorage).
+ * works for the desktop app after first run since we sync to localStorage).
  */
 export function generateDeviceId(): string {
   if (_cachedDeviceId) return _cachedDeviceId
@@ -110,12 +110,12 @@ export function generateDeviceId(): string {
   const platform = detectPlatform()
   const storageKey = `jait-device-id-${platform}`
 
-  // Electron: the main process resolves the persistent device ID from
+  // Desktop: the native process resolves the persistent device ID from
   // desktop-settings.json at startup and exposes it synchronously via the
   // preload bridge. Use it first so that code running before initDeviceId()
   // completes (e.g. project creation on first render) stamps the *real*
   // nodeId onto projects instead of a throwaway random one.
-  if (platform === 'electron') {
+  if (platform === 'desktop') {
     const bridgeId = typeof window !== 'undefined' ? (window as any).jaitDesktop?.deviceId as string | undefined : undefined
     if (bridgeId) {
       _cachedDeviceId = bridgeId

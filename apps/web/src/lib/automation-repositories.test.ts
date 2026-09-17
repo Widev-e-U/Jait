@@ -309,12 +309,12 @@ describe('getRepositoryRuntimeInfo gateway repos', () => {
 describe('getRepositoryRuntimeInfo device repos', () => {
   it('labels "This device" when repo deviceId matches local client', () => {
     const runtime = getRepositoryRuntimeInfo(
-      { deviceId: 'electron-abc-123' },
+      { deviceId: 'desktop-abc-123' },
       {
-        localDeviceId: 'electron-abc-123',
+        localDeviceId: 'desktop-abc-123',
         localProviders: [],
         remoteProviders: [
-          { nodeId: 'electron-abc-123', nodeName: 'Desktop (Win32)', platform: 'windows', providers: ['codex'] },
+          { nodeId: 'desktop-abc-123', nodeName: 'Desktop (Win32)', platform: 'windows', providers: ['codex'] },
         ],
         providersLoaded: true,
       },
@@ -398,7 +398,7 @@ describe('repo deviceId assignment semantics', () => {
     const runtime = getRepositoryRuntimeInfo(
       { deviceId: undefined },
       {
-        localDeviceId: 'electron-client',
+        localDeviceId: 'desktop-client',
         localProviders: [{ id: 'jait', name: 'Jait', available: true } as any],
         remoteProviders: [],
         providersLoaded: true,
@@ -409,15 +409,15 @@ describe('repo deviceId assignment semantics', () => {
   })
 
   it('a repo browsed from a desktop node should have that node ID as deviceId', () => {
-    // When the folder picker selects a path on a desktop node "electron-abc-123",
+    // When the folder picker selects a path on a desktop node "desktop-abc-123",
     // handleFolderSelected receives that nodeId and sets it as deviceId.
     const runtime = getRepositoryRuntimeInfo(
-      { deviceId: 'electron-abc-123' },
+      { deviceId: 'desktop-abc-123' },
       {
         localDeviceId: 'browser-viewer',
         localProviders: [],
         remoteProviders: [
-          { nodeId: 'electron-abc-123', nodeName: 'Desktop (Win32)', platform: 'windows', providers: ['codex', 'claude-code'] },
+          { nodeId: 'desktop-abc-123', nodeName: 'Desktop (Win32)', platform: 'windows', providers: ['codex', 'claude-code'] },
         ],
         providersLoaded: true,
       },
@@ -429,7 +429,7 @@ describe('repo deviceId assignment semantics', () => {
 
   it('a device-hosted repo shows offline when node disconnects', () => {
     const runtime = getRepositoryRuntimeInfo(
-      { deviceId: 'electron-abc-123' },
+      { deviceId: 'desktop-abc-123' },
       {
         localDeviceId: 'browser-viewer',
         localProviders: [],

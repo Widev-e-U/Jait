@@ -8,7 +8,7 @@ import { getStateDirectory } from "../state-directory.js";
  * answers the primary's `fs.browse-request` / `fs.roots-request` /
  * `fs.op-request` messages from its own local disk. This makes the node appear
  * (and be openable/editable) in the primary's Open Project modal — mirroring
- * exactly what the Electron desktop client does, so the primary needs zero
+ * exactly what the Desktop desktop client does, so the primary needs zero
  * changes (it reuses its existing proxyFsBrowse/proxyFsRoots/proxyFsOp paths).
  *
  * The link is purely additive and off by default: with no primary configured,
@@ -64,7 +64,7 @@ export interface PrimaryLinkOptions {
 // Every tool this headless node can execute remotely. MUST stay in sync with
 // REMOTE_EXECUTABLE_TOOLS in packages/gateway/src/tools/remote-executor.ts —
 // the gateway only proxies tools in that allow-list, and every entry there
-// must be implemented here (and in the desktop app's electron-main.ts).
+// must be implemented here (and in the desktop app's desktop-main.ts).
 const NODE_TOOLS = [
   "terminal.run",
   "jait.terminal",

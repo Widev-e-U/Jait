@@ -71,7 +71,7 @@ describe("AttentionService", () => {
     expect(raised.map((entry) => entry.userId)).toEqual([null]);
   });
 
-  it("silences the browser tab when the Electron app is also connected", () => {
+  it("silences the browser tab when the Desktop app is also connected", () => {
     const { ws, raised } = makeWs(["desktop", "web", "mobile"]);
     new AttentionService(ws).raise(baseItem);
     expect(raised.map((entry) => entry.payload.native)).toEqual([true, false, true]);

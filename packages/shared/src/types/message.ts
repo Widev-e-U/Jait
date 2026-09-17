@@ -26,7 +26,7 @@ export type AttentionKind = "consent" | "question";
 /**
  * The shared notification identity for one open request. Every platform reuses
  * this string as its *native* notification key — Android notification id,
- * Electron notification map key, web `tag`, Wear data path — so a single
+ * Desktop notification map key, web `tag`, Wear data path — so a single
  * `attention.cleared` event can revoke the same card on every device.
  *
  * Both the gateway (raising) and the clients (revoking) must derive the key the

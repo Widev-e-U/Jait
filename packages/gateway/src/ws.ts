@@ -50,7 +50,7 @@ const EMPTY_CAPABILITIES: NodeCapabilities = {
 /**
  * Which shell a client is running in. Reported by the client at connect time
  * (`?surface=`) and used to decide who raises an *OS-level* notification: a
- * browser tab and the Electron app on the same machine are two clients but one
+ * browser tab and the Desktop app on the same machine are two clients but one
  * human, so only one of them should light up the system tray.
  */
 export type ClientSurface = "desktop" | "web" | "mobile" | "unknown";
@@ -848,7 +848,7 @@ export class WsControlPlane {
           this.fsNodes.set(node.id, node);
           // `node.hello` arrives immediately before `fs.register-node` from the
           // same client and already assigned the authoritative role ("desktop"
-          // in Electron, "mobile" on phones). Keep it — hard-coding "remote"
+          // in Desktop, "mobile" on phones). Keep it — hard-coding "remote"
           // here downgraded desktop nodes and hid them from computer-control
           // targeting (computer_tools only selects role === "desktop").
           const existingNode = this.nodeStates.getNode(node.id);
@@ -1139,7 +1139,7 @@ export class WsControlPlane {
 
   /**
    * Fan an event out per-client, letting the caller tailor the payload to the
-   * receiving client's surface. Attention uses this so the Electron app and a
+   * receiving client's surface. Attention uses this so the Desktop app and a
    * browser tab on the same machine agree on which one shows the OS toast.
    */
   broadcastBySurface(userId: string | null, build: (surface: ClientSurface) => WsEvent) {

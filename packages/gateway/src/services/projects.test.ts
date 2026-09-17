@@ -29,7 +29,7 @@ describe("ProjectService", () => {
     const remote = projects.create({
       userId,
       rootPath: "E:\\TizenAnilabStream",
-      nodeId: "electron-windows"
+      nodeId: "desktop-windows"
     });
 
     const resolved = projects.getOrCreateForRoot({
@@ -40,7 +40,7 @@ describe("ProjectService", () => {
 
     expect(resolved.id).toBe(remote.id);
     expect(projects.list("active", userId)).toHaveLength(1);
-    expect(resolved.nodeId).toBe("electron-windows");
+    expect(resolved.nodeId).toBe("desktop-windows");
   });
 
   it("keeps the same path separate on two explicit remote nodes", () => {

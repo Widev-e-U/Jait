@@ -2,18 +2,18 @@ import type React from 'react'
 
 /**
  * Windows caption buttons for the Tauri shell at native titleBarOverlay
- * metrics. Electron Windows draws real native buttons (`titleBarOverlay`,
- * height 39 in electron-main.ts — 47×39 px each, flush against the top-right
- * corner); the Tauri shell is frameless on every platform, so it renders this
- * strip inside the titlebar instead. Sized and positioned to match the native
+ * metrics. Desktop Windows draws real native buttons (`titleBarOverlay`,
+ * height 39 in desktop-main.ts — 47×39 px each, flush against the top-right
+ * corner); the Tauri Windows shell is frameless, so it renders this strip
+ * inside the titlebar instead. Sized and positioned to match the native
  * chrome exactly (right-edge padding of 140 is reserved in app-header.tsx).
  *
  * Glyphs are 10×10 crisp 1px-stroke drawings matching the Windows 10/11
  * caption geometry (Segoe MDL2 equivalents). The close hover uses the Windows
  * 11 accent red (#c42b1c).
  *
- * Marked no-drag via button elements — `data-tauri-drag-region` on the header
- * only captures mousedown on the header element itself, so clicks land here.
+ * The containing header is a Tauri drag region on frameless platforms. The
+ * button elements remain distinct event targets so clicks land here.
  */
 export function WinCaptionButtons({ isMaximized }: { isMaximized: boolean }) {
   return (

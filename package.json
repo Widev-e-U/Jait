@@ -46,7 +46,9 @@
     "vitest": "^3.2.7"
   },
   "trustedDependencies": [
-    "koffi",
     "node-pty"
-  ]
+  ],
+  "overrides": {
+    "@types/node": "^26.4.1"
+  }
 }

@@ -147,7 +147,7 @@ export function registerProjectRoutes(
   });
 
   // POST /api/project/open — create a filesystem surface for the given path
-  // This is called when a client picks a directory (e.g. Electron native dialog)
+  // This is called when a client picks a directory (e.g. Desktop native dialog)
   // so that ALL clients on the session can browse files via the gateway REST API.
   app.post("/api/project/open", async (req, reply) => {
     const body = req.body as { path?: string; sessionId?: string; nodeId?: string; openPanel?: boolean } | null;
@@ -653,7 +653,7 @@ export function registerProjectRoutes(
 
   // POST /api/project/reveal — reveal a file/folder in the OS file explorer.
   // For local (gateway) surfaces this opens the platform file manager directly.
-  // For remote surfaces the request is proxied to the owning node (Electron app)
+  // For remote surfaces the request is proxied to the owning node (Desktop app)
   // which calls shell.showItemInFolder / shell.openPath.
   app.post("/api/project/reveal", async (req, reply) => {
     const body = req.body as { path?: string; surfaceId?: string } | null;

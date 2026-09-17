@@ -8,8 +8,8 @@ export type { UpdateInfo, ReleaseNote }
 
 export interface UseUpdateCheckerOptions {
   token: string | null
-  isElectron: boolean
-  appPlatform: 'web' | 'electron' | 'capacitor'
+  isDesktop: boolean
+  appPlatform: 'web' | 'desktop' | 'capacitor'
   apiUrl: string
 }
 
@@ -22,7 +22,7 @@ const CHANGELOG_LIMIT = 15
  * detection is exposed as `handleConnectionRestart` so `App`'s shared
  * connection handler can delegate to it.
  */
-export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: UseUpdateCheckerOptions) {
+export function useUpdateChecker({ token, isDesktop, appPlatform, apiUrl }: UseUpdateCheckerOptions) {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateApplying, setUpdateApplying] = useState(false)
@@ -61,7 +61,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
     if (!token) return
     setUpdateChecking(true)
     try {
-      if (isElectron) {
+      if (isDesktop) {
         const desktop = (window as any).jaitDesktop
         const [info, result, healthRes] = await Promise.all([
           desktop.getInfo?.() as Promise<{ appVersion: string }>,
@@ -76,9 +76,9 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
         }
         // The desktop binary and the gateway are released together but update
         // independently: the gateway self-updates via npm, while the desktop
-        // binary only updates through electron-updater (download + install).
+        // binary only updates through the native updater (download + install).
         // Whether the *desktop binary* needs an update is decided solely by
-        // electron-updater, which compares app.getVersion() (the binary's
+        // that updater, which compares the running app version (the binary's
         // stamped release version) against the published latest.yml. Do NOT
         // suppress the update based on the gateway version — once the gateway
         // self-updates via npm it jumps ahead of the binary, and comparing
@@ -122,7 +122,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
       }
     } catch { /* ignore */ }
     setUpdateChecking(false)
-  }, [token, isElectron, appPlatform, apiUrl, loadChangelog])
+  }, [token, isDesktop, appPlatform, apiUrl, loadChangelog])
 
   const handleApplyUpdate = useCallback(async () => {
     if (!token || !updateInfo?.hasUpdate) return
@@ -237,12 +237,12 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
   }, [token, handleCheckUpdate])
 
   // Main process pushes 'available'/'downloaded' events whenever its background
-  // poll (on launch + every 4h, see electron-main.ts initAutoUpdater) finds a
+  // poll (on launch + every 4h) finds a
   // new version — without this, the UI only ever reflected the one-shot mount
   // check above and stayed stale until the user restarted the app.
   const lastNotifiedVersionRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!isElectron) return
+    if (!isDesktop) return
     const desktop = (window as any).jaitDesktop
     if (!desktop?.onUpdateEvent) return
 
@@ -269,7 +269,7 @@ export function useUpdateChecker({ token, isElectron, appPlatform, apiUrl }: Use
       offAvailable?.()
       offDownloaded?.()
     }
-  }, [isElectron])
+  }, [isDesktop])
 
   return {
     updateInfo,

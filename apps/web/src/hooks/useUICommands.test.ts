@@ -15,7 +15,7 @@ describe('shouldApplySessionScopedWsEvent', () => {
 
 describe('desktop filesystem node platform', () => {
   it('uses Tauri native win32 identity when WebView reports an empty platform', () => {
-    expect(resolveFsNodePlatform('electron', 'win32', '')).toBe('windows')
+    expect(resolveFsNodePlatform('desktop', 'win32', '')).toBe('windows')
   })
 })
 

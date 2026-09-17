@@ -13,7 +13,7 @@ describe('AppHeader manager model control', () => {
     expect(source).not.toContain('ProviderModelSelector')
   })
 
-  it('keeps the empty navigation area draggable in Tauri', () => {
+  it('uses custom drag regions only on frameless non-Linux Tauri windows', () => {
     const headerSource = readFileSync(
       fileURLToPath(new URL('./app-header.tsx', import.meta.url)),
       'utf8',
@@ -23,7 +23,9 @@ describe('AppHeader manager model control', () => {
       'utf8',
     )
 
-    expect(headerSource).toContain("tauriDragRegion={desktopRuntime === 'tauri'}")
+    expect(headerSource).toContain("desktopPlatform !== 'linux'")
+    expect(headerSource).toContain('tauriDragRegion={hasCustomTitleBar}')
+    expect(headerSource).toContain('data-tauri-drag-region={hasCustomTitleBar || undefined}')
     expect(navSource).toContain('data-tauri-drag-region={tauriDragRegion || undefined}')
   })
 

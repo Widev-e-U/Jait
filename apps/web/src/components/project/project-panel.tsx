@@ -473,7 +473,7 @@ async function remoteStatFile(filePath: string, surfaceId?: string | null): Prom
 /**
  * Reveal a file or folder in the host OS file explorer.
  *
- * On Electron the renderer calls the native `fsOp("reveal-in-explorer")` IPC
+ * On Desktop the renderer calls the native `fsOp("reveal-in-explorer")` IPC
  * directly so the OS file manager opens on the user's machine. When the project
  * lives on a remote surface (gateway-backed), the request is sent to the
  * gateway which proxies it to the owning node.
@@ -481,8 +481,8 @@ async function remoteStatFile(filePath: string, surfaceId?: string | null): Prom
  * Returns true on success, false if the platform doesn't support it.
  */
 async function revealInExplorer(nodePath: string, surfaceId?: string | null): Promise<boolean> {
-  const isElectron = typeof window !== 'undefined' && !!(window as any).jaitDesktop?.fsOp
-  if (isElectron) {
+  const isDesktop = typeof window !== 'undefined' && !!(window as any).jaitDesktop?.fsOp
+  if (isDesktop) {
     try {
       await (window as any).jaitDesktop.fsOp('reveal-in-explorer', { path: nodePath })
       return true
@@ -3624,7 +3624,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     void navigator.clipboard.writeText(rel)
   }, [remoteRoot])
 
-  /** True when the renderer itself can open the OS file manager (Electron desktop shell). */
+  /** True when the renderer itself can open the OS file manager (Desktop desktop shell). */
   const isDesktopShell = useMemo(
     () => typeof window !== 'undefined' && !!(window as any).jaitDesktop?.fsOp,
     [],
@@ -3632,7 +3632,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
   /** Whether "Reveal in File Explorer" is supported for the current surface. */
   const canRevealInExplorer = useMemo(() => {
-    // Supported whenever we have a real path to reveal: on Electron (native IPC)
+    // Supported whenever we have a real path to reveal: on Desktop (native IPC)
     // or when a gateway/remote surface is backing the project.
     return isDesktopShell || !!remoteRoot
   }, [isDesktopShell, remoteRoot])
@@ -5680,7 +5680,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                 Copy Relative Path
               </button>
               {/* Web builds never reveal folders: the explorer would open on the
-                  gateway/node host, invisible to the browser user. Desktop (Electron)
+                  gateway/node host, invisible to the browser user. Desktop (Desktop)
                   keeps reveal for both files and folders. */}
               {canRevealInExplorer && (fileContextMenu.node.kind !== 'dir' || isDesktopShell) && (
                 <button

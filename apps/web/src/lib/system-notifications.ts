@@ -24,7 +24,7 @@ function hashCode(s: string): number {
 /**
  * Whether this client owns the OS-level notification for its machine. The
  * gateway sets it from live client presence (`attention.raised.native`): when
- * the Electron app is connected, browser tabs on the same PC drop to in-app
+ * the Desktop app is connected, browser tabs on the same PC drop to in-app
  * toasts only so one request never produces two system notifications.
  *
  * Defaults to true — a client that has not heard otherwise must still notify.

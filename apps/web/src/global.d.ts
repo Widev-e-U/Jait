@@ -43,7 +43,7 @@ interface JaitDesktop {
   onGatewayEvent: (callback: (event: unknown, data: unknown) => void) => void
   removeGatewayEventListener: () => void
   getPathForFile: (file: File) => string
-  platform: 'electron'
+  platform: 'desktop'
   /** Native process.platform value exposed synchronously by desktop shells. */
   nativePlatform?: 'win32' | 'darwin' | 'linux'
   windowMinimize: () => Promise<void>

@@ -46,7 +46,7 @@ describe("buildCliProviderSystemPrompt", () => {
 
 describe("canUseGatewayProviderForProject", () => {
   it("does not allow gateway CLI profiles in a remote project", () => {
-    expect(canUseGatewayProviderForProject("electron-windows-node")).toBe(false);
+    expect(canUseGatewayProviderForProject("desktop-windows-node")).toBe(false);
     expect(canUseGatewayProviderForProject("gateway")).toBe(true);
     expect(canUseGatewayProviderForProject(null)).toBe(true);
   });

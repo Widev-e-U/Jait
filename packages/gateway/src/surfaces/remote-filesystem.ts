@@ -2,7 +2,7 @@
  * Remote File System Surface
  *
  * Proxies all filesystem operations (read, write, list, stat, etc.)
- * to a remote node (e.g. Electron desktop app) via the WS control plane.
+ * to a remote node (e.g. Desktop desktop app) via the WS control plane.
  * This allows the gateway to work with files on any connected device,
  * not just its own local filesystem.
  */

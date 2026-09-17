@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 /**
  * Continuous wake-word listener using the Web Speech API (SpeechRecognition).
  *
- * Works in Chromium-based browsers (Chrome, Edge, Electron) which provide
+ * Works in Chromium-based browsers (Chrome, Edge, Desktop) which provide
  * `webkitSpeechRecognition`. The recogniser runs continuously in the background
  * with almost no CPU cost because the browser's built-in speech engine handles
  * all audio processing natively.

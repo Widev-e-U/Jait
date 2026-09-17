@@ -3,7 +3,7 @@
  *
  * Priority (highest → lowest):
  *   1. User override stored in localStorage (`jait-gateway-url`)
- *   2. Electron bridge value (`window.jaitDesktop?.getInfo()?.gatewayUrl`)
+ *   2. Desktop bridge value (`window.jaitDesktop?.getInfo()?.gatewayUrl`)
  *   3. Build-time env var (`VITE_API_URL`)
  *   4. Fallback: `window.location.origin` (same-origin) or `http://localhost:8000`
  *
@@ -133,7 +133,7 @@ export function getApiUrl(): string {
   const stored = getStoredGatewayUrl()
   if (stored) return stripTrailingSlash(stored)
 
-  // Electron desktop bridge — synchronous property set by preload
+  // Desktop desktop bridge — synchronous property set by preload
   const desktop = typeof window !== 'undefined' ? (window as any).jaitDesktop?.gatewayUrl as string | undefined : undefined
   if (desktop) return stripTrailingSlash(desktop)
 
@@ -156,7 +156,7 @@ function routeViaWsProxy(wsUrl: string, pageUrl: string): string {
     const page = new URL(pageUrl)
     // Only route through the /ws proxy when the WS URL points at the same
     // server serving the page (same host:port). A configured gateway URL on a
-    // different host (e.g. the Electron desktop bridge) connects directly and
+    // different host (e.g. the Desktop desktop bridge) connects directly and
     // must not get the /ws path appended.
     if (ws.host && page.host && ws.host === page.host) {
       return `${stripTrailingSlash(wsUrl)}/ws`
@@ -171,7 +171,7 @@ function routeViaWsProxy(wsUrl: string, pageUrl: string): string {
  * WebSocket gateway URL.
  * In dev the WebSocket goes through the Vite `/ws` proxy so it reaches the
  * gateway on the same origin (no cross-origin cookie issues). Outside dev
- * (Electron / production served by the gateway) it connects to the gateway
+ * (Desktop / production served by the gateway) it connects to the gateway
  * root path directly.
  */
 export function getWsUrl(): string {
@@ -204,7 +204,7 @@ export function getWsUrl(): string {
 
 /**
  * Returns true when the gateway URL has been explicitly configured
- * (via localStorage, Electron bridge, or build-time env).
+ * (via localStorage, Desktop bridge, or build-time env).
  * When false, the URL is just a fallback guess (e.g. window.location.origin)
  * and API calls should be deferred until the user sets a URL.
  */

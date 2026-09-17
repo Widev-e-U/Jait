@@ -5,7 +5,7 @@
  *   automatically by the browser — no extra headers needed.
  * - **Web (cross-origin dev, Vite :3000 → gateway :8000)**: Adds
  *   `credentials: "include"` so the cookie travels across origins.
- * - **Electron / Capacitor**: Sends `Authorization: Bearer <token>` header
+ * - **Desktop / Capacitor**: Sends `Authorization: Bearer <token>` header
  *   because cross-origin WebViews cannot rely on cookies.
  */
 
@@ -27,7 +27,7 @@ function isCrossOriginDev(): boolean {
 /**
  * Drop-in replacement for `fetch()` that adds the right auth credentials.
  *
- * On native apps (Electron/Capacitor) it injects the Bearer token header.
+ * On native apps (Desktop/Capacitor) it injects the Bearer token header.
  * On the web it relies on cookies and adds `credentials: "include"` when
  * running in cross-origin dev mode.
  */

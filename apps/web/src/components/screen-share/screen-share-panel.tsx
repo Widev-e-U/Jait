@@ -2,7 +2,7 @@
  * ScreenSharePanel — Remote desktop viewing panel
  *
  * Designed for the primary use case: connecting to a remote device
- * (Electron desktop or mobile) and viewing its screen in real-time.
+ * (Desktop desktop or mobile) and viewing its screen in real-time.
  *
  * Layout:
  * - When not connected: device list with "Connect" buttons
@@ -50,7 +50,7 @@ interface ScreenSharePanelProps {
 
 function DeviceIcon({ platform, className }: { platform: string; className?: string }) {
   switch (platform) {
-    case 'electron':
+    case 'desktop':
       return <Monitor className={className ?? 'h-4 w-4'} />
     case 'react-native':
       return <Smartphone className={className ?? 'h-4 w-4'} />

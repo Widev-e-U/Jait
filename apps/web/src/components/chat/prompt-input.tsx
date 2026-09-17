@@ -1789,7 +1789,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
 
     // Handle native file/folder drops (e.g. from OS file explorer)
-    // In Electron 32+, File.path is no longer available with contextIsolation.
+    // In Desktop 32+, File.path is no longer available with contextIsolation.
     // Use webUtils.getPathForFile() exposed via preload instead.
     const getPath = window.jaitDesktop?.getPathForFile
     if (e.dataTransfer.files?.length && getPath) {

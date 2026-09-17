@@ -2,11 +2,11 @@
  * Tests for device identification utilities.
  *
  * Covers:
- * - Platform detection (electron, capacitor, web)
+ * - Platform detection (desktop, capacitor, web)
  * - Device ID generation format
  * - localStorage persistence (web/capacitor)
- * - Electron desktop-settings.json persistence via IPC
- * - Migration from localStorage to Electron settings
+ * - Desktop desktop-settings.json persistence via IPC
+ * - Migration from localStorage to Desktop settings
  * - Module-level cache behaviour
  * - Sync fallback when initDeviceId hasn't been called
  */
@@ -46,10 +46,10 @@ async function loadModule() {
 }
 
 describe('detectPlatform', () => {
-  it('returns "electron" when jaitDesktop is present', async () => {
+  it('returns "desktop" when jaitDesktop is present', async () => {
     windowMock.jaitDesktop = {}
     const { detectPlatform } = await loadModule()
-    expect(detectPlatform()).toBe('electron')
+    expect(detectPlatform()).toBe('desktop')
   })
 
   it('returns "capacitor" when Capacitor is present', async () => {
@@ -63,11 +63,11 @@ describe('detectPlatform', () => {
     expect(detectPlatform()).toBe('web')
   })
 
-  it('prefers electron over capacitor when both are present', async () => {
+  it('prefers desktop over capacitor when both are present', async () => {
     windowMock.jaitDesktop = {}
     windowMock.Capacitor = {}
     const { detectPlatform } = await loadModule()
-    expect(detectPlatform()).toBe('electron')
+    expect(detectPlatform()).toBe('desktop')
   })
 })
 
@@ -101,11 +101,11 @@ describe('generateDeviceId (sync)', () => {
     expect(id).toBe('web-existing-abc123')
   })
 
-  it('uses electron prefix on Electron platform', async () => {
+  it('uses desktop prefix on Desktop platform', async () => {
     windowMock.jaitDesktop = {}
     const { generateDeviceId } = await loadModule()
     const id = generateDeviceId()
-    expect(id).toMatch(/^electron-/)
+    expect(id).toMatch(/^desktop-/)
   })
 
   it('uses capacitor prefix on Capacitor platform', async () => {
@@ -177,7 +177,7 @@ describe('initDeviceId (async)', () => {
     })
   })
 
-  describe('electron platform', () => {
+  describe('desktop platform', () => {
     let mockGetSetting: ReturnType<typeof vi.fn>
     let mockSetSetting: ReturnType<typeof vi.fn>
 
@@ -190,30 +190,30 @@ describe('initDeviceId (async)', () => {
       }
     })
 
-    it('reads from Electron persistent settings first', async () => {
-      mockGetSetting.mockResolvedValue('electron-persisted-abc123')
+    it('reads from Desktop persistent settings first', async () => {
+      mockGetSetting.mockResolvedValue('desktop-persisted-abc123')
       const { initDeviceId } = await loadModule()
       const id = await initDeviceId()
 
-      expect(id).toBe('electron-persisted-abc123')
+      expect(id).toBe('desktop-persisted-abc123')
       expect(mockGetSetting).toHaveBeenCalledWith('deviceId', null)
       // Should sync to localStorage too
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'jait-device-id-electron',
-        'electron-persisted-abc123',
+        'jait-device-id-desktop',
+        'desktop-persisted-abc123',
       )
     })
 
-    it('migrates localStorage value to Electron settings on upgrade', async () => {
+    it('migrates localStorage value to Desktop settings on upgrade', async () => {
       mockGetSetting.mockResolvedValue(null) // nothing in settings yet
-      localStorageMap.set('jait-device-id-electron', 'electron-old-localStorage')
+      localStorageMap.set('jait-device-id-desktop', 'desktop-old-localStorage')
 
       const { initDeviceId } = await loadModule()
       const id = await initDeviceId()
 
-      expect(id).toBe('electron-old-localStorage')
+      expect(id).toBe('desktop-old-localStorage')
       // Should have persisted the migrated value
-      expect(mockSetSetting).toHaveBeenCalledWith('deviceId', 'electron-old-localStorage')
+      expect(mockSetSetting).toHaveBeenCalledWith('deviceId', 'desktop-old-localStorage')
     })
 
     it('generates new ID when neither settings nor localStorage exist', async () => {
@@ -221,31 +221,31 @@ describe('initDeviceId (async)', () => {
       const { initDeviceId } = await loadModule()
       const id = await initDeviceId()
 
-      expect(id).toMatch(/^electron-/)
+      expect(id).toMatch(/^desktop-/)
       expect(mockSetSetting).toHaveBeenCalledWith('deviceId', id)
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('jait-device-id-electron', id)
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('jait-device-id-desktop', id)
     })
 
     it('does not call setSetting when ID already exists in settings', async () => {
-      mockGetSetting.mockResolvedValue('electron-existing-id')
+      mockGetSetting.mockResolvedValue('desktop-existing-id')
       const { initDeviceId } = await loadModule()
       await initDeviceId()
       expect(mockSetSetting).not.toHaveBeenCalled()
     })
 
     it('persisted ID survives after init even if localStorage is cleared', async () => {
-      mockGetSetting.mockResolvedValue('electron-persistent-id')
+      mockGetSetting.mockResolvedValue('desktop-persistent-id')
       const { initDeviceId, generateDeviceId } = await loadModule()
       await initDeviceId()
 
       // Simulate localStorage being cleared (e.g., origin change)
       localStorageMap.clear()
       const syncId = generateDeviceId()
-      expect(syncId).toBe('electron-persistent-id')
+      expect(syncId).toBe('desktop-persistent-id')
     })
 
-    it('returns the persisted Electron ID even when localStorage sync throws', async () => {
-      mockGetSetting.mockResolvedValue('electron-persisted-abc123')
+    it('returns the persisted Desktop ID even when localStorage sync throws', async () => {
+      mockGetSetting.mockResolvedValue('desktop-persisted-abc123')
       localStorageMock.setItem.mockImplementationOnce(() => {
         throw new Error('storage blocked')
       })
@@ -253,7 +253,7 @@ describe('initDeviceId (async)', () => {
       const { initDeviceId } = await loadModule()
       const id = await initDeviceId()
 
-      expect(id).toBe('electron-persisted-abc123')
+      expect(id).toBe('desktop-persisted-abc123')
       expect(mockSetSetting).not.toHaveBeenCalled()
     })
   })
@@ -284,10 +284,10 @@ describe('device ID format', () => {
 
     vi.resetModules()
     windowMock.jaitDesktop = {}
-    const electronMod = await loadModule()
-    electronMod.generateDeviceId()
+    const desktopMod = await loadModule()
+    desktopMod.generateDeviceId()
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'jait-device-id-electron',
+      'jait-device-id-desktop',
       expect.any(String),
     )
   })

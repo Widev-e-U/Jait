@@ -357,14 +357,14 @@ function App() {
   const threadReasoningEffort = viewMode === 'manager' ? managerReasoningEffort : chatReasoningEffort
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
-  const isElectron = !!(window as any).jaitDesktop
+  const isDesktop = !!(window as any).jaitDesktop
   // @capacitor/core attaches `window.Capacitor` as a module-load side effect even in
   // plain browsers (it's statically bundled via the device-calendar feature), so a
   // truthy check on the global misclassifies every web session as the native app.
   // isNativePlatform() checks the actual native bridge instead.
   const isCapacitor = Capacitor.isNativePlatform()
-  const isStandaloneApp = isElectron || isCapacitor
-  const appPlatform: 'web' | 'electron' | 'capacitor' = isElectron ? 'electron' : isCapacitor ? 'capacitor' : 'web'
+  const isStandaloneApp = isDesktop || isCapacitor
+  const appPlatform: 'web' | 'desktop' | 'capacitor' = isDesktop ? 'desktop' : isCapacitor ? 'capacitor' : 'web'
   const gateway = useGatewayConnection({ isStandaloneApp })
   const {
     gatewayStep,
@@ -517,7 +517,7 @@ function App() {
     handleCheckChangelog,
     handleApplyUpdate,
     handleConnectionRestart
-  } = useUpdateChecker({ token, isElectron, appPlatform, apiUrl: API_URL })
+  } = useUpdateChecker({ token, isDesktop, appPlatform, apiUrl: API_URL })
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
     setWsConnected(connected)
@@ -856,7 +856,7 @@ function App() {
     }
   }, [showTerminal, activeTerminalId])
 
-  // ── Screen share (always active so Electron auto-registers) ───────
+  // ── Screen share (always active so Desktop auto-registers) ───────
   const screenShare = useScreenShare({ token })
 
   // ── Automation / Manager mode state ───────────────────────────────
@@ -3393,7 +3393,7 @@ function App() {
   }, [activeProjectId, authLoading])
 
   useEffect(() => {
-    if (!(isElectron && desktopPlatform === 'win32')) return
+    if (!(isDesktop && desktopPlatform === 'win32')) return
     const styles = getComputedStyle(document.documentElement)
     const background = styles.getPropertyValue('--background').trim()
     const foreground = styles.getPropertyValue('--foreground').trim()
@@ -3402,7 +3402,7 @@ function App() {
       symbolColor: foreground ? `hsl(${foreground})` :appliedThemeMode === 'dark' ? '#f2f2f2' : '#0a0a0a',
       height: 39,
     })
-  }, [appliedThemeMode, desktopPlatform, isElectron])
+  }, [appliedThemeMode, desktopPlatform, isDesktop])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -4643,7 +4643,7 @@ function App() {
     wakeWordEnabled,
     toggleWakeWord,
     voiceAssistant,
-    isElectron,
+    isDesktop,
     activeProjectTitle: activeProjectRecord?.title ?? null,
   }
 
@@ -4931,7 +4931,7 @@ function App() {
               handleThemeModeChange={handleThemeModeChange}
               isAuthLoading={authLoading}
               isAuthenticated={isAuthenticated}
-              isElectron={isElectron}
+              isDesktop={isDesktop}
               isMaximized={isMaximized}
               isMobile={isMobile}
               onOpenMobileNav={() => setShowMobileToolbar(true)}
@@ -5591,7 +5591,7 @@ function App() {
           onSave={handleSaveProjectContext}
         />
 
-        <AuthOverlays requiresAuthGate={requiresAuthGate} isElectron={isElectron} showLoginDialog={showLoginDialog} onShowLoginDialogChange={setShowLoginDialog} authFormProps={authFormProps} />
+        <AuthOverlays requiresAuthGate={requiresAuthGate} isDesktop={isDesktop} showLoginDialog={showLoginDialog} onShowLoginDialogChange={setShowLoginDialog} authFormProps={authFormProps} />
 
         <AppFolderPickers
           projectOpen={folderPickerOpen}

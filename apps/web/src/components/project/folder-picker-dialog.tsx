@@ -145,7 +145,7 @@ export function FolderPickerDialog({
         defaultNodeId = preferredNodeId
       }
 
-      if (defaultNodeId === 'gateway' && (platform === 'electron' || platform === 'capacitor')) {
+      if (defaultNodeId === 'gateway' && (platform === 'desktop' || platform === 'capacitor')) {
         const deviceId = generateDeviceId()
         const myNode = data.nodes.find(n => n.id === deviceId)
         if (myNode) defaultNodeId = myNode.id

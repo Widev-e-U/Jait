@@ -34,7 +34,7 @@ Each gateway owns its own chats, accounts, settings, and node connections. Selec
 `packages/gateway/scripts/package-desktop.mjs` stages the installed production dependency graph after a frozen-lockfile install. It preserves native dependencies for the packaging OS, copies the executing Node binary, and produces a directory without runtime symlink dependencies:
 
 ```
-apps/desktop-tauri/src-tauri/gateway/
+apps/desktop/src-tauri/gateway/
   runtime/node.exe                # node on Unix
   node_modules/@jait/gateway/
   node_modules/...

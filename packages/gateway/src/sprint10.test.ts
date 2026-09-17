@@ -15,7 +15,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
 
     await tools.execute("os_tool", {
       action: "register-device",
-      device: { id: "host-1", name: "Primary Desktop", platform: "electron", capabilities: ["capture", "input"] },
+      device: { id: "host-1", name: "Primary Desktop", platform: "desktop", capabilities: ["capture", "input"] },
     }, {
       actionId: "a1",
       sessionId: "s1",
@@ -70,7 +70,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
 
   it("keeps P2P under 100ms and falls back to TURN when degraded", async () => {
     const screenShare = new ScreenShareService();
-    screenShare.registerDevice({ id: "host", name: "Desktop", platform: "electron", authorized: true, capabilities: ["capture"] });
+    screenShare.registerDevice({ id: "host", name: "Desktop", platform: "desktop", authorized: true, capabilities: ["capture"] });
     screenShare.registerDevice({ id: "viewer", name: "Tablet", platform: "react-native", authorized: true, capabilities: ["view", "control"] });
 
     screenShare.startShare({ hostDeviceId: "host", viewerDeviceIds: ["viewer"] });
@@ -88,7 +88,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
 
   it("transfers control between authorized devices without restarting stream", () => {
     const screenShare = new ScreenShareService();
-    screenShare.registerDevice({ id: "host", name: "Desktop", platform: "electron", authorized: true, capabilities: ["capture"] });
+    screenShare.registerDevice({ id: "host", name: "Desktop", platform: "desktop", authorized: true, capabilities: ["capture"] });
     screenShare.registerDevice({ id: "phone", name: "Phone", platform: "react-native", authorized: true, capabilities: ["view", "control"] });
     screenShare.registerDevice({ id: "viewer-web", name: "Browser", platform: "web", authorized: true, capabilities: ["view"] });
 

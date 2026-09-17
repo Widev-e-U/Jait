@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { desktopOperationError } from './desktop-operation-error'
 
 describe('desktopOperationError', () => {
-  it('preserves the message of errors crossing the Electron context bridge', () => {
+  it('preserves the message of errors crossing the Desktop context bridge', () => {
     const error: unknown = runInNewContext('new Error("Could not register shortcut")')
     expect(error).not.toBeInstanceOf(Error)
     expect(desktopOperationError(error, 'Tool execution failed')).toBe('Could not register shortcut')

@@ -2,14 +2,14 @@
  * useScreenShare — React hook for remote screen viewing via WebRTC
  *
  * Primary use case: User tells the agent to connect to a remote device's
- * screen (Electron desktop app or mobile app). The remote device captures
+ * screen (Desktop desktop app or mobile app). The remote device captures
  * its screen and streams it back to the viewer via WebRTC.
  *
  * Flow:
  * 1. Both devices register with the gateway on mount
  * 2. User (or agent) calls requestRemoteShare(deviceId) → gateway relays
  *    a "screen-share:start-request" WS message to the remote device
- * 3. Remote device auto-captures its screen (Electron desktopCapturer)
+ * 3. Remote device auto-captures its screen (Desktop desktopCapturer)
  *    and creates a WebRTC offer
  * 4. Viewer receives the offer, creates an answer, ICE candidates exchanged
  * 5. Remote screen appears in the viewer's video element
@@ -94,7 +94,7 @@ interface UseScreenShareOptions {
 function getDeviceName(): string {
   const platform = detectPlatform()
   const ua = navigator.userAgent
-  if (platform === 'electron') return `Jait Desktop (${navigator.platform})`
+  if (platform === 'desktop') return `Jait Desktop (${navigator.platform})`
   if (platform === 'capacitor') return 'Jait Mobile'
   if (ua.includes('Chrome')) return `Chrome (${navigator.platform})`
   if (ua.includes('Firefox')) return `Firefox (${navigator.platform})`
@@ -146,7 +146,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     const name = getDeviceName()
 
     const capabilities = ['screen-view']
-    if (platform === 'electron') capabilities.push('screen-share', 'remote-input')
+    if (platform === 'desktop') capabilities.push('screen-share', 'remote-input')
     if (platform === 'web') capabilities.push('screen-share')
 
     try {
@@ -269,14 +269,14 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     try {
       let stream: MediaStream
 
-      // Both Electron and web browsers use getDisplayMedia.
-      // In Electron, the main process handles source selection via
+      // Both Desktop and web browsers use getDisplayMedia.
+      // In Desktop, the main process handles source selection via
       // setDisplayMediaRequestHandler (auto-selects primary screen).
       // In web browsers, the browser shows its native picker.
       // On mobile (Capacitor WebView / mobile browsers), getDisplayMedia
       // is not available — guard against it.
       if (!navigator.mediaDevices?.getDisplayMedia) {
-        throw new Error('Screen sharing is not supported on this device. Use a desktop browser or the Electron app.')
+        throw new Error('Screen sharing is not supported on this device. Use a desktop browser or the Desktop app.')
       }
       console.log('[screen-share] Requesting screen capture via getDisplayMedia...')
       stream = await navigator.mediaDevices.getDisplayMedia({
@@ -406,7 +406,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     setState(prev => ({ ...prev, pendingShareRequest: null }))
   }, [])
 
-  // ── Get Electron desktop sources ──────────────────────────────────
+  // ── Get Desktop desktop sources ──────────────────────────────────
   const getDesktopSources = useCallback(async (): Promise<DesktopSource[]> => {
     if (!window.jaitDesktop) return []
     try { return await window.jaitDesktop.getDesktopSources() } catch { return [] }
@@ -416,10 +416,10 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
   useEffect(() => {
     // Don't open a WebSocket until the user is authenticated.
     // Without this guard the hook reconnects every 2 s during the auth gate,
-    // causing state churn and drag-lag on Windows/Electron.
+    // causing state churn and drag-lag on Windows/Desktop.
     if (!token) return
 
-    // On the web (non-Electron) the screen-share WS is only useful when
+    // On the web (non-Desktop) the screen-share WS is only useful when
     // the user actively requests a share.  Skip the always-on connection
     // to avoid noisy reconnect loops in the gateway logs.
     if (!window.jaitDesktop) return
@@ -495,7 +495,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
                 const platform = detectPlatform()
 
-                if (platform === 'electron') {
+                if (platform === 'desktop') {
                   window.jaitDesktop?.notify({
                     title: 'Screen Share Request',
                     body: 'A remote device wants to view your screen.',
@@ -647,14 +647,14 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
   }, [token])
 
   // Register on mount, fetch initial state once (no polling — WS pushes updates)
-  // Only on Electron — web browser doesn't participate in screen sharing.
+  // Only on Desktop — web browser doesn't participate in screen sharing.
   useEffect(() => {
     if (!token || !window.jaitDesktop) return
     registerDevice()
     refreshState()
   }, [token, registerDevice, refreshState])
 
-  // Listen for Electron tray commands
+  // Listen for Desktop tray commands
   useEffect(() => {
     if (window.jaitDesktop) {
       window.jaitDesktop.onScreenShareStart(() => startHosting())

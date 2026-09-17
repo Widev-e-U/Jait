@@ -14,7 +14,7 @@ interface OsToolInput {
   device?: {
     id: string;
     name: string;
-    platform: "electron" | "react-native" | "web";
+    platform: "desktop" | "react-native" | "web";
     authorized?: boolean;
     capabilities?: string[];
   };
@@ -32,7 +32,7 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
     description:
       "Connect to a remote device and view its screen, or manage remote screen viewing sessions. " +
       "Use 'list-devices' to discover connected devices. The response distinguishes the user's local device " +
-      "(the browser they are chatting from — platform 'web') from remote devices (Electron desktop, mobile, etc.). " +
+      "(the browser they are chatting from — platform 'web') from remote devices (Desktop desktop, mobile, etc.). " +
       "Only remote devices are valid targets for 'connect'. " +
       "Use 'connect' with a targetDeviceId to view that device's screen remotely. " +
       "Use 'disconnect' to end the current viewing session.",

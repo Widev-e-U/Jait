@@ -39,13 +39,13 @@ function isNativeApp(): boolean {
 /**
  * Initialise the in-memory token on app startup.
  *
- * - **Electron**: loads from the OS credential store (safeStorage).
+ * - **Desktop**: loads from the OS credential store (safeStorage).
  * - **Web**: calls `POST /auth/refresh` — the HTTP-only cookie authenticates
  *   the request and the server returns a fresh access token.
  * - **Capacitor**: loads from localStorage.
  */
 export async function initAuthToken(): Promise<void> {
-  // 1️⃣ Electron — OS credential store
+  // 1️⃣ Desktop — OS credential store
   const desktop = getDesktopBridge()
   if (desktop?.credentialGet) {
     try {

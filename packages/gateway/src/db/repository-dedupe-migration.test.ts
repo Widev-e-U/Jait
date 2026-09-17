@@ -25,7 +25,7 @@ describe("migration 62 — duplicate repositories", () => {
     sqlite
       .prepare(
         `INSERT INTO automation_repositories (id, user_id, device_id, name, default_branch, local_path, created_at, updated_at)
-         VALUES (?, ?, 'electron-1', 'Zinsrechner', 'main', ?, ?, ?)`,
+         VALUES (?, ?, 'desktop-1', 'Zinsrechner', 'main', ?, ?, ?)`,
       )
       .run(id, userId, localPath, createdAt, createdAt);
   }

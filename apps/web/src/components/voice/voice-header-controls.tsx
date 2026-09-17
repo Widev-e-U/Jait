@@ -15,11 +15,11 @@ export interface VoiceHeaderControlsBaseProps {
   wakeWordEnabled: boolean
   toggleWakeWord: () => void
   voiceAssistant: VoiceAssistant
-  isElectron: boolean
+  isDesktop: boolean
 }
 
-const noDragStyle = (isElectron: boolean) =>
-  isElectron ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined
+const noDragStyle = (isDesktop: boolean) =>
+  isDesktop ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined
 
 /** Compact mic toggle shown in the mobile header (left cluster). */
 export function VoiceMicButtonMobile({
@@ -61,13 +61,13 @@ export function VoiceActiveControls({
   setVoiceOverlayOpen,
   voiceAssistant,
   isMobile,
-  isElectron,
+  isDesktop,
   activeProjectTitle,
-}: Pick<VoiceHeaderControlsBaseProps, 'setVoiceOverlayOpen' | 'voiceAssistant' | 'isElectron'> & { isMobile: boolean; activeProjectTitle?: string | null }) {
+}: Pick<VoiceHeaderControlsBaseProps, 'setVoiceOverlayOpen' | 'voiceAssistant' | 'isDesktop'> & { isMobile: boolean; activeProjectTitle?: string | null }) {
   return (
     <div
       className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 backdrop-blur-sm px-1.5 py-1 ${isMobile ? 'pointer-events-auto' : ''}`}
-      style={noDragStyle(isElectron)}
+      style={noDragStyle(isDesktop)}
     >
       {activeProjectTitle ? (
         <TooltipHint content={activeProjectTitle}>

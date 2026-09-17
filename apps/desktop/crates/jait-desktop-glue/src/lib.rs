@@ -1,0 +1,3070 @@
+//! `jait-desktop-glue` — channel-level host for the Tauri shell.
+//!
+//! Mirrors the legacy desktop shell host (`legacy desktop host` + preload shim):
+//! every IPC channel becomes a `dispatch(channel, args)` call, and async host
+//! events (provider output, terminal output/exit, background completion) are
+//! fanned out to registered sinks exactly like `webContents.send` did.
+//!
+//! The crate is shell-agnostic so tests can drive every channel without a
+//! webview; the `apps/desktop/tauri` shell binds sinks to `AppHandle::emit`.
+
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use jait_desktop_core as core;
+use parking_lot::Mutex;
+use serde_json::{json, Value};
+
+/// Sink receives `(channel, payload)` pairs, mirroring `webContents.send`.
+pub type HostSink = Arc<dyn Fn(&str, &Value) + Send + Sync>;
+
+/// `serde_json::to_value` with the error mapped to `String` (dispatch error type).
+fn to_json<T: serde::Serialize>(value: T) -> Result<Value, String> {
+    serde_json::to_value(value).map_err(|e| e.to_string())
+}
+
+/// Run a git/gh command string like the legacy desktop shell host's promisified `exec`:
+/// through the shell (so `&&` and quotes behave the same), with a 60s
+/// poll-timeout because dispatch is synchronous. When `clean_gh_env` is set,
+/// `GH_TOKEN`/`GITHUB_TOKEN` are removed so `gh` falls back to keyring-based
+/// credentials from `gh auth login`.
+fn run_git_like(
+    program: &str,
+    command: &str,
+    cwd: &str,
+    clean_gh_env: bool,
+) -> Result<core::types::CommandOut, String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    if command.trim().is_empty() {
+        return Err("missing command".into());
+    }
+    let (shell, flag) = if cfg!(windows) {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    };
+    let mut cmd = Command::new(shell);
+    cmd.arg(flag)
+        .arg(command)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if clean_gh_env {
+        cmd.env_remove("GH_TOKEN").env_remove("GITHUB_TOKEN");
+    }
+    if !cwd.is_empty() {
+        cmd.current_dir(cwd);
+    }
+    // Windowed host: no console flash for headless git/gh shell runs.
+    core::StdCommandConsoleHide::hide_console(&mut cmd);
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("{program} spawn failed: {e}"))?;
+    let stdout_t = child.stdout.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let stderr_t = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+            Err(e) => return Err(format!("{program} wait failed: {e}")),
+        }
+    };
+    let stdout = stdout_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stderr = stderr_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    match status {
+        Some(status) if status.success() => Ok(core::types::CommandOut {
+            stdout,
+            stderr,
+            exit_code: 0,
+        }),
+        Some(status) => Err(format!(
+            "{program} exited with {}: {}",
+            status.code().unwrap_or(-1),
+            stderr.trim()
+        )),
+        None => Err(format!("{program} timed out after 60s")),
+    }
+}
+
+pub struct HostState {
+    data_dir: PathBuf,
+    settings: core::settings::SettingsStore,
+    terms: core::term::SessionRegistry,
+    backgrounds: Arc<core::tools::BackgroundRegistry>,
+    runners: core::runner::RunnerRegistry,
+    /// Live runner handles keyed by session id (handles come out of
+    /// `runner::start`; the registry only tracks bookkeeping state).
+    handles: Mutex<HashMap<String, core::runner::RunnerHandle>>,
+    resolver: Mutex<Box<dyn core::runner::CommandResolver>>,
+    provider_login_processes: Mutex<HashMap<String, Child>>,
+    sinks: Mutex<Vec<HostSink>>,
+    /// Overrides default keyring-backed credentials for tests / hosts without
+    /// an OS credential store.
+    credential_backend: Mutex<CredentialBackend>,
+}
+
+#[derive(Clone)]
+enum CredentialBackend {
+    Keyring,
+    /// In-memory map (test host).
+    Memory(Arc<Mutex<HashMap<String, String>>>),
+}
+
+/// One-shot PTY runtime — `SessionRegistry::start` is async and does its own
+/// OS-thread spawning, so a throwaway current-thread runtime keeps dispatch sync.
+fn block_pty<T>(fut: impl std::future::Future<Output = T>) -> T {
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .expect("pty runtime")
+        .block_on(fut)
+}
+
+impl HostState {
+    pub fn new() -> Self {
+        let dir = default_data_dir();
+        Self::new_with_dir(dir)
+    }
+
+    pub fn new_with_dir(data_dir: PathBuf) -> Self {
+        std::fs::create_dir_all(&data_dir).ok();
+        Self {
+            data_dir: data_dir.clone(),
+            settings: core::settings::SettingsStore::new(data_dir.join("settings.json")),
+            terms: core::term::SessionRegistry::new(),
+            backgrounds: Arc::new(core::tools::BackgroundRegistry::new()),
+            runners: core::runner::RunnerRegistry::new(),
+            handles: Mutex::new(HashMap::new()),
+            resolver: Mutex::new(Box::new(core::runner::PathCommandResolver)),
+            provider_login_processes: Mutex::new(HashMap::new()),
+            sinks: Mutex::new(Vec::new()),
+            credential_backend: Mutex::new(CredentialBackend::Keyring),
+        }
+    }
+
+    /// Test/alt-host hook: use an in-memory credential store.
+    pub fn use_memory_credentials(&self) {
+        *self.credential_backend.lock() =
+            CredentialBackend::Memory(Arc::new(Mutex::new(HashMap::new())));
+    }
+
+    pub fn set_resolver(&self, resolver: Box<dyn core::runner::CommandResolver>) {
+        *self.resolver.lock() = resolver;
+    }
+
+    pub fn add_sink(&self, sink: HostSink) {
+        self.sinks.lock().push(sink);
+    }
+
+    fn emit(&self, channel: &str, payload: Value) {
+        for sink in self.sinks.lock().iter() {
+            sink(channel, &payload);
+        }
+    }
+
+    fn credentials_write(&self, key: &str, value: &str) -> Result<(), String> {
+        match &*self.credential_backend.lock() {
+            CredentialBackend::Keyring => core::credentials::store(key, value),
+            CredentialBackend::Memory(map) => {
+                map.lock().insert(key.to_string(), value.to_string());
+                Ok(())
+            }
+        }
+    }
+
+    fn credentials_read(&self, key: &str) -> Option<String> {
+        match &*self.credential_backend.lock() {
+            CredentialBackend::Keyring => core::credentials::get(key),
+            CredentialBackend::Memory(map) => map.lock().get(key).cloned(),
+        }
+    }
+
+    fn credentials_delete(&self, key: &str) -> Result<(), String> {
+        match &*self.credential_backend.lock() {
+            CredentialBackend::Keyring => core::credentials::clear(key),
+            CredentialBackend::Memory(map) => {
+                map.lock().remove(key);
+                Ok(())
+            }
+        }
+    }
+
+    /// Single entry point mirroring the legacy desktop shell's ipcMain switch.
+    pub fn dispatch(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
+        match channel {
+            // ── Host info ───────────────────────────────────────────────────
+            "app-info" => Ok(json!({
+                "platform": core::info::platform_name(),
+                "version": core::info::host_version(),
+                "deviceID": self.settings.device_id(),
+            })),
+            "desktop:host-info" => {
+                let op = arg(0).as_str().unwrap_or_default().to_string();
+                match op.as_str() {
+                    "version" => Ok(json!(core::info::host_version())),
+                    "platform" => Ok(json!(core::info::platform_name())),
+                    "device-id" => Ok(json!(self.settings.device_id())),
+                    "os-info" => Ok(core::info::os_query()),
+                    "home-dir" => Ok(json!(
+                        core::info::home_dir().map(|p| p.to_string_lossy().into_owned())
+                    )),
+                    other => Err(format!("unsupported host-info op: {other}")),
+                }
+            }
+
+            // ── File system ops ─────────────────────────────────────────────
+            // Two call shapes, both mirroring the legacy desktop shell fs-op handler:
+            //   1. gateway/renderer contract: (op, params-object, requestId)
+            //      — used by the ws `proxyFsOp` bridge (node capability).
+            //   2. positional: (op, path, content) — direct renderer calls.
+            "desktop:fs-op" => {
+                let op = arg(0).as_str().unwrap_or_default().to_string();
+                let params: Value = match arg(1) {
+                    Value::Object(map) => Value::Object(map),
+                    _ => json!({ "path": arg(1), "content": arg(2) }),
+                };
+                let str_param = |key: &str| -> String {
+                    params
+                        .get(key)
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_string()
+                };
+                let path = str_param("path");
+                let p = resolve_fs_path(&path);
+                let normalized = op.replace(['-', '_'], "").to_lowercase();
+                match normalized.as_str() {
+                    // Gateway contract: read → { content, size }.
+                    "read" => {
+                        let text = core::fsops::read(&p)?;
+                        Ok(json!({
+                            "content": text,
+                            "size": text.len(),
+                        }))
+                    }
+                    // Gateway contract: readBinary → { content } (base64).
+                    "readbinary" | "readfilebinary" | "readfile" => {
+                        let out = core::fsops::read_binary(&p)?;
+                        Ok(json!({
+                            "content": out.base64,
+                            "size": out.bytes,
+                        }))
+                    }
+                    "write" => {
+                        let content = str_param("content");
+                        Ok(to_json(core::fsops::write(&p, &content))?)
+                    }
+                    // Gateway contract: stat → { size, isDirectory, modified }.
+                    "stat" => {
+                        let out = core::fsops::stat(&p)?;
+                        Ok(json!({
+                            "size": out.size,
+                            "isDirectory": out.is_directory,
+                            "isFile": out.is_file,
+                            "modified": out.modified,
+                        }))
+                    }
+                    // Gateway contract: list → ["name", "dir/", …] (dirs suffixed).
+                    "list" | "listdir" => {
+                        let out = core::fsops::read_dir(&p)?;
+                        let names: Vec<String> = out
+                            .into_iter()
+                            .map(|e| {
+                                if e.is_directory {
+                                    format!("{}/", e.name)
+                                } else {
+                                    e.name
+                                }
+                            })
+                            .collect();
+                        Ok(json!(names))
+                    }
+                    // Gateway contract: readdir → [{ name, path, type }].
+                    "readdir" => {
+                        let out = core::fsops::read_dir(&p)?;
+                        let entries: Vec<Value> = out
+                            .into_iter()
+                            .map(|e| {
+                                json!({
+                                    "name": e.name,
+                                    "path": p.join(&e.name).to_string_lossy(),
+                                    "type": if e.is_directory { "dir" } else { "file" },
+                                })
+                            })
+                            .collect();
+                        Ok(json!(entries))
+                    }
+                    // Legacy shell `patch`: search/replace write for file.edit.
+                    "patch" => {
+                        let old = str_param("oldString");
+                        let new = str_param("newString");
+                        let out = core::fsops::patch(&p, &old, &new)?;
+                        Ok(json!({ "ok": out.ok, "matched": out.matched }))
+                    }
+                    "mkdir" => Ok(to_json(core::fsops::mkdir(&p))?),
+                    "exists" => Ok(json!(core::fsops::exists(&p))),
+                    "reveal" | "revealinfilemanager" | "revealpath" | "revealinexplorer" => {
+                        core::fsops::reveal_in_explorer(&p)?;
+                        Ok(json!(true))
+                    }
+                    // Git identity route: gateway proxies `{ args }` through
+                    // the node so commits/branches run on the remote machine.
+                    "git" | "gh" => {
+                        let cwd = if std::path::PathBuf::from(&path).is_absolute() {
+                            path.clone()
+                        } else {
+                            let home = str_param("cwd");
+                            if home.is_empty() {
+                                core::info::home_dir()
+                                    .map(|h| h.join(&path).to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| path.clone())
+                            } else {
+                                PathBuf::from(&home)
+                                    .join(&path)
+                                    .to_string_lossy()
+                                    .into_owned()
+                            }
+                        };
+                        let out = run_git_like(
+                            &normalized,
+                            &git_like_args(&params),
+                            &cwd,
+                            normalized == "gh", // keyring-based auth like the legacy shell
+                        )?;
+                        Ok(to_json(out)?)
+                    }
+                    // Legacy shell parity: `gh-check` reports gh install/auth state
+                    // (auth check strips GH_TOKEN/GITHUB_TOKEN like ghCleanEnv).
+                    "ghcheck" => {
+                        if run_git_like("gh", "gh --version", &path, false).is_err() {
+                            return Ok(
+                                json!({ "installed": false, "authenticated": false, "username": null }),
+                            );
+                        }
+                        let mut authenticated = false;
+                        let mut username: Option<String> = None;
+                        if let Ok(out) = run_git_like("gh", "gh auth status", &path, true) {
+                            let all = format!("{}{}", out.stdout, out.stderr);
+                            if all.contains("Logged in") {
+                                authenticated = true;
+                                if let Some(rest) = all.split("Logged in to ").nth(1) {
+                                    if let Some(tail) = rest.split("account ").nth(1) {
+                                        let name = tail
+                                            .split_whitespace()
+                                            .next()
+                                            .unwrap_or("")
+                                            .trim_end_matches(['.', ',']);
+                                        if !name.is_empty() {
+                                            username = Some(name.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(
+                            json!({ "installed": true, "authenticated": authenticated, "username": username }),
+                        )
+                    }
+                    // Legacy shell parity: per-file diff rows for branch/PR views.
+                    // `{ cwd, baseBranch?, branch? } -> [{ path, original, modified, status }]
+                    "gitfilediffs" => {
+                        let cwd = if std::path::PathBuf::from(&path).is_absolute() {
+                            path.clone()
+                        } else {
+                            let c = str_param("cwd");
+                            if c.is_empty() {
+                                ".".to_string()
+                            } else {
+                                c
+                            }
+                        };
+                        // Legacy shell quotes paths with JSON.stringify — mirror that.
+                        let quoted = |s: &str| -> String {
+                            format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                        };
+                        // run_git_like shells the full command — `program` is
+                        // only used in error messages — so prefix the binary.
+                        let git = |command: &str| -> Result<core::types::CommandOut, String> {
+                            run_git_like("git", &format!("git {command}"), &cwd, false)
+                        };
+                        let read_capped = |rel: &str| -> String {
+                            if rel.is_empty() {
+                                return String::new();
+                            }
+                            let full = std::path::Path::new(&cwd).join(rel);
+                            match core::fsops::stat(&full) {
+                                Ok(s) if s.size <= 2_000_000 => {
+                                    core::fsops::read(&full).unwrap_or_default()
+                                }
+                                _ => String::new(),
+                            }
+                        };
+                        let base_branch = str_param("baseBranch");
+                        let branch = str_param("branch");
+                        let mut entries: Vec<Value> = Vec::new();
+                        let mut seen: std::collections::HashSet<String> =
+                            std::collections::HashSet::new();
+                        let push = |entries: &mut Vec<Value>,
+                                    seen: &mut std::collections::HashSet<String>,
+                                    file_path: &str,
+                                    status: &str,
+                                    original: String,
+                                    modified: String| {
+                            if file_path.is_empty() || !seen.insert(file_path.to_string()) {
+                                return;
+                            }
+                            entries.push(json!({
+                                "path": file_path,
+                                "original": original,
+                                "modified": modified,
+                                "status": status,
+                            }));
+                        };
+                        if !base_branch.is_empty() && !branch.is_empty() {
+                            // PR-style: merge-base against the branch tip.
+                            let diff_base = git(&format!(
+                                "merge-base {} {}",
+                                quoted(&base_branch),
+                                quoted(&branch)
+                            ))
+                            .map(|o| o.stdout.trim().to_string())
+                            .unwrap_or_else(|_| base_branch.clone());
+                            let name_status = git(&format!(
+                                "diff --name-status {} {}",
+                                quoted(&diff_base),
+                                quoted(&branch)
+                            ))
+                            .map(|o| o.stdout)
+                            .unwrap_or_default();
+                            for line in name_status.lines().filter(|l| !l.is_empty()) {
+                                let parts: Vec<&str> = line.split('\t').collect();
+                                let code = parts.first().copied().unwrap_or("M").trim();
+                                let mut file_path =
+                                    parts.last().copied().unwrap_or("").trim().to_string();
+                                let status = if code.starts_with('A') {
+                                    "A"
+                                } else if code.starts_with('D') {
+                                    "D"
+                                } else if code.starts_with('R') {
+                                    if parts.len() >= 3 {
+                                        file_path = parts[2].trim().to_string();
+                                    }
+                                    "R"
+                                } else {
+                                    "M"
+                                };
+                                let original = if status != "A" {
+                                    git(&format!(
+                                        "show {}:{}",
+                                        quoted(&diff_base),
+                                        quoted(&file_path)
+                                    ))
+                                    .map(|o| o.stdout)
+                                    .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                let modified = if status != "D" {
+                                    git(&format!("show {}:{}", quoted(&branch), quoted(&file_path)))
+                                        .map(|o| o.stdout)
+                                        .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                push(
+                                    &mut entries,
+                                    &mut seen,
+                                    &file_path,
+                                    status,
+                                    original,
+                                    modified,
+                                );
+                            }
+                        } else if !base_branch.is_empty() {
+                            // Working tree vs base branch (committed + uncommitted).
+                            let name_status =
+                                git(&format!("diff --name-status {}", quoted(&base_branch)))
+                                    .map(|o| o.stdout)
+                                    .unwrap_or_default();
+                            for line in name_status.lines().filter(|l| !l.is_empty()) {
+                                let parts: Vec<&str> = line.split('\t').collect();
+                                let code = parts.first().copied().unwrap_or("M").trim();
+                                let mut file_path =
+                                    parts.last().copied().unwrap_or("").trim().to_string();
+                                let status = if code.starts_with('A') {
+                                    "A"
+                                } else if code.starts_with('D') {
+                                    "D"
+                                } else if code.starts_with('R') {
+                                    if parts.len() >= 3 {
+                                        file_path = parts[2].trim().to_string();
+                                    }
+                                    "R"
+                                } else {
+                                    "M"
+                                };
+                                let original = if status != "A" {
+                                    git(&format!(
+                                        "show {}:{}",
+                                        quoted(&base_branch),
+                                        quoted(&file_path)
+                                    ))
+                                    .map(|o| o.stdout)
+                                    .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                let modified = if status != "D" {
+                                    read_capped(&file_path)
+                                } else {
+                                    String::new()
+                                };
+                                push(
+                                    &mut entries,
+                                    &mut seen,
+                                    &file_path,
+                                    status,
+                                    original,
+                                    modified,
+                                );
+                            }
+                        } else {
+                            // Working tree vs HEAD (uncommitted only).
+                            let porcelain = git("status --porcelain")
+                                .map(|o| o.stdout)
+                                .unwrap_or_default();
+                            for line in porcelain.lines().filter(|l| !l.is_empty()) {
+                                let xy = &line[..line.len().min(2)];
+                                let mut file_path = line[3..].trim().to_string();
+                                if let Some(rest) = file_path.split(" -> ").last() {
+                                    if line.contains(" -> ") {
+                                        file_path = rest.trim().to_string();
+                                    }
+                                }
+                                let status = if xy.contains('?') {
+                                    "?"
+                                } else if xy.contains('A') {
+                                    "A"
+                                } else if xy.contains('D') {
+                                    "D"
+                                } else if xy.contains('R') {
+                                    "R"
+                                } else {
+                                    "M"
+                                };
+                                let original = if status != "A" && status != "?" {
+                                    git(&format!("show HEAD:{}", quoted(&file_path)))
+                                        .map(|o| o.stdout)
+                                        .unwrap_or_default()
+                                } else {
+                                    String::new()
+                                };
+                                let modified = if status != "D" {
+                                    read_capped(&file_path)
+                                } else {
+                                    String::new()
+                                };
+                                push(
+                                    &mut entries,
+                                    &mut seen,
+                                    &file_path,
+                                    status,
+                                    original,
+                                    modified,
+                                );
+                            }
+                        }
+                        Ok(json!(entries))
+                    }
+                    // Capped text read for git file views (size on bytes).
+                    "gitfileread" => {
+                        let bytes = core::fsops::read_binary(&p)?.bytes;
+                        if bytes > 2_000_000 {
+                            return Err("file too large to display".into());
+                        }
+                        let text = core::fsops::read(&p)?;
+                        Ok(json!({ "content": text, "size": bytes }))
+                    }
+                    // Project search routed through the same fs-op switch
+                    // (root resolved relative to cwd like the legacy desktop shell's handler).
+                    "searchproject" | "search" => {
+                        let cwd = str_param("cwd");
+                        let root =
+                            PathBuf::from(if cwd.is_empty() { "." } else { &cwd }).join(&path);
+                        let req = parse_search_request(&params)?;
+                        let hits = core::search::search(&root, &req);
+                        Ok(to_json(hits)?)
+                    }
+                    other => Err(format!("unsupported fs-op: {other}")),
+                }
+            }
+            "desktop:browse-path" => Ok(to_json(core::fsops::browse_path(
+                arg(0).as_str().unwrap_or_default(),
+            )?)?),
+            "desktop:get-roots" => Ok(to_json(core::fsops::get_roots())?),
+            "desktop:pick-directory" => Err("pick-directory requires a native dialog shell".into()),
+
+            // ── External URLs ───────────────────────────────────────────────
+            // Mirrors the legacy shell shell.openExternal; core::tools guards schemes.
+            "desktop:open-external" => {
+                let url = arg(0).as_str().unwrap_or_default().to_string();
+                let res = core::tools::open_url(&url);
+                if res.ok {
+                    Ok(json!({ "ok": true }))
+                } else {
+                    Err(res.message)
+                }
+            }
+
+            // ── OS terminal ─────────────────────────────────────────────────
+            // Mirrors the shim's openTerminalApp contract.
+            "desktop:open-terminal-app" => {
+                let cwd = arg(0).as_str().unwrap_or_default().to_string();
+                let res = core::tools::open_terminal_app(&cwd);
+                if res.ok {
+                    Ok(json!({ "ok": true }))
+                } else {
+                    Err(res.message)
+                }
+            }
+
+            // ── Search ──────────────────────────────────────────────────────
+            "desktop:search-op" => {
+                let op = arg(0).as_str().unwrap_or_default().to_string();
+                if op != "run" {
+                    return Err(format!("unsupported search-op: {op}"));
+                }
+                let params = arg(1);
+                let root = params
+                    .get("root")
+                    .or_else(|| params.get("rootPath"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let req = parse_search_request(&params)?;
+                Ok(to_json(core::search::search(
+                    std::path::Path::new(&root),
+                    &req,
+                ))?)
+            }
+
+            // ── Providers ───────────────────────────────────────────────────
+            "desktop:detect-providers" => {
+                let list: Vec<Value> = ["codex", "claude-code"]
+                    .iter()
+                    .map(|p| {
+                        let rt = core::providers::detect_runtime(p);
+                        json!({
+                            "id": p,
+                            "installed": !rt.command.is_empty(),
+                            "detail": rt.command,
+                            "authenticated": Option::<String>::None,
+                        })
+                    })
+                    .collect();
+                Ok(Value::Array(list))
+            }
+            "desktop:provider-op" => {
+                let op = arg(0).as_str().unwrap_or_default().to_string();
+                let params = arg(1);
+                match op.as_str() {
+                    "auth-status" => self.provider_auth_status(&params),
+                    "start-login" => self.provider_start_login(&params),
+                    "login-input" => self.provider_login_input(&params),
+                    "logout" => self.provider_logout(&params),
+                    "list-models" => self.provider_list_models(&params),
+                    "start" | "start-session" => self.provider_start(&params),
+                    "send" | "send-turn" => {
+                        let session_id = params
+                            .get("providerThreadId")
+                            .or_else(|| params.get("sessionId"))
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        let message = params
+                            .get("message")
+                            .or_else(|| params.get("prompt"))
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        let handle = self.runner_handle(&session_id)?;
+                        let resolver = self.resolver.lock();
+                        handle.send_turn(&**resolver, &message)?;
+                        Ok(json!({ "ok": true }))
+                    }
+                    "stop" => {
+                        let session_id = params
+                            .get("providerThreadId")
+                            .or_else(|| params.get("sessionId"))
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        if let Some(handle) = self.handles.lock().get(session_id).cloned() {
+                            handle.stop();
+                        }
+                        self.runners.mark_dead(session_id);
+                        Ok(json!({ "ok": true }))
+                    }
+                    "alive-sessions" | "list" => Ok(json!(self.runners.alive_ids())),
+                    other => Err(format!("unsupported provider-op: {other}")),
+                }
+            }
+
+            // ── Tool ops ────────────────────────────────────────────────────
+            "desktop:tool-op" => {
+                let op = arg(0).as_str().unwrap_or_default().to_string();
+                let params = arg(1);
+                let meta = arg(2);
+                match op.as_str() {
+                    // ── Shell ────────────────────────────────────────────
+                    // Legacy shell parity (the shell's `desktop:tool-op execute` handler):
+                    // the foreground envelope is `{ ok, message }` where message
+                    // carries the combined output — no data payload. Non-zero
+                    // exit / spawn errors are ok:false with the output (or the
+                    // spawn error) as the message, like execAsync's rejection.
+                    "execute" => {
+                        let command = params
+                            .get("command")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        if command.trim().is_empty() {
+                            return Ok(tool_err("No command provided".into()));
+                        }
+                        let cwd = params
+                            .get("cwd")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        let timeout_ms = params.get("timeout").and_then(Value::as_u64);
+                        let out = run_shell_command_inner(&command, &cwd, timeout_ms);
+                        let mut output = out.stdout.clone();
+                        if !out.stderr.is_empty() {
+                            output.push('\n');
+                            output.push_str(&out.stderr);
+                        }
+                        let output = output.trim().to_string();
+                        if out.exit_code == 0 && !out.timed_out {
+                            let message = if output.is_empty() {
+                                "Command completed with no output".to_string()
+                            } else {
+                                output
+                            };
+                            Ok(json!({ "ok": true, "message": message }))
+                        } else {
+                            // Non-zero exit → output as message; spawn errors put
+                            // their message in stderr (matches the legacy desktop shell's
+                            // `output || e.message || "Command failed"` chain).
+                            let message = if !output.is_empty() {
+                                output
+                            } else if !out.stderr.trim().is_empty() {
+                                out.stderr.trim().to_string()
+                            } else {
+                                "Command failed".to_string()
+                            };
+                            Ok(json!({ "ok": false, "message": message }))
+                        }
+                    }
+                    "background" | "execute-background" => {
+                        let command = params
+                            .get("command")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        let cwd = params
+                            .get("cwd")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        let background_id = params
+                            .get("backgroundId")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                        self.backgrounds.register(
+                            background_id.clone(),
+                            command.clone(),
+                            cwd.clone(),
+                        )?;
+                        spawn_background(
+                            self.backgrounds.clone(),
+                            self.sinks.lock().clone(),
+                            background_id.clone(),
+                            command,
+                            cwd,
+                        );
+                        Ok(json!({ "ok": true, "backgroundId": background_id }))
+                    }
+                    "background-complete" => {
+                        let background_id = params
+                            .get("backgroundId")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        self.backgrounds.unregister(background_id);
+                        Ok(json!({ "ok": true }))
+                    }
+                    // ── Files ────────────────────────────────────────────
+                    "file.read" | "read_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        match core::fsops::read(&p) {
+                            Ok(txt) => Ok(tool_ok(&txt, json!({ "bytes": txt.len() }))),
+                            Err(e) => Ok(tool_err(format!(
+                                "Failed to read file: {}: {e}",
+                                p.display()
+                            ))),
+                        }
+                    }
+                    "file.write" | "write_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        let content = params.get("content").and_then(Value::as_str).unwrap_or("");
+                        match write_file_with_parent(&p, content) {
+                            Ok(()) => Ok(tool_ok(
+                                &format!("File saved successfully to {}", p.display()),
+                                json!({ "bytes": content.len(), "path": p.display().to_string() }),
+                            )),
+                            Err(e) => Ok(tool_err(format!("Failed to write file: {e}"))),
+                        }
+                    }
+                    "file.append" | "append_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        let content = params.get("content").and_then(Value::as_str).unwrap_or("");
+                        match std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&p)
+                        {
+                            Ok(mut f) => {
+                                match std::io::Write::write_all(&mut f, content.as_bytes()) {
+                                    Ok(()) => Ok(tool_ok(
+                                        &format!("Appended to {}", p.display()),
+                                        json!({ "bytes": content.len() }),
+                                    )),
+                                    Err(e) => Ok(tool_err(format!("Failed to append: {e}"))),
+                                }
+                            }
+                            Err(e) => Ok(tool_err(format!("Failed to open for append: {e}"))),
+                        }
+                    }
+                    "file.edit" | "edit_file" => {
+                        let p = tool_file_path(&params, &meta);
+                        let search = params.get("search").and_then(Value::as_str).unwrap_or("");
+                        let replace = params.get("replace").and_then(Value::as_str).unwrap_or("");
+                        match core::fsops::patch(&p, search, replace) {
+                            Ok(_) => Ok(tool_ok(
+                                &format!("File edited successfully at {}", p.display()),
+                                json!({ "path": p.display().to_string() }),
+                            )),
+                            Err(e) => Ok(tool_err(format!("Edit failed: {e}"))),
+                        }
+                    }
+                    "file.list" | "list_dir" => {
+                        let p = tool_file_path(&params, &meta);
+                        match std::fs::read_dir(&p) {
+                            Ok(entries) => {
+                                let mut names: Vec<String> = entries
+                                    .filter_map(|e| e.ok())
+                                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                                    .collect();
+                                names.sort();
+                                let message = names.join("\n");
+                                Ok(tool_ok(&message, json!({ "names": names })))
+                            }
+                            Err(e) => Ok(tool_err(format!(
+                                "Failed to list directory: {}: {e}",
+                                p.display()
+                            ))),
+                        }
+                    }
+                    "file.stat" | "stat_path" => {
+                        let p = tool_file_path(&params, &meta);
+                        match core::fsops::stat(&p) {
+                            Ok(s) => Ok(tool_ok(
+                                "",
+                                json!({
+                                    "size": s.size,
+                                    "isDirectory": s.is_directory,
+                                    "isFile": s.is_file,
+                                    "modified": s.modified,
+                                }),
+                            )),
+                            Err(e) => Ok(tool_err(format!("Failed to stat: {}: {e}", p.display()))),
+                        }
+                    }
+                    // ── Search ───────────────────────────────────────────
+                    "search" | "file.search" => {
+                        let query = params
+                            .get("query")
+                            .or_else(|| params.get("pattern"))
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                        if query.trim().is_empty() {
+                            return Ok(tool_err("No search string provided".into()));
+                        }
+                        let mode = params
+                            .get("mode")
+                            .and_then(Value::as_str)
+                            .unwrap_or("content")
+                            .to_string();
+                        if mode != "files" && mode != "content" {
+                            return Ok(tool_err(
+                                "Search mode must be \"files\" or \"content\".".into(),
+                            ));
+                        }
+                        let root = tool_file_path(&params, &meta);
+                        let req = core::types::SearchRequest {
+                            query,
+                            mode,
+                            limit: params.get("limit").and_then(Value::as_u64),
+                            include: params
+                                .get("include")
+                                .and_then(Value::as_str)
+                                .map(str::to_string),
+                            is_regexp: params.get("isRegexp").and_then(Value::as_bool),
+                            include_ignored_files: params
+                                .get("includeIgnoredFiles")
+                                .and_then(Value::as_bool),
+                        };
+                        let hits = core::search::search(&root, &req);
+                        Ok(tool_ok("", to_json(hits)?))
+                    }
+                    // ── OS / image ───────────────────────────────────────
+                    "os.query" => Ok(tool_ok("", core::info::os_query())),
+                    "image.view" => {
+                        let p = tool_file_path(&params, &meta);
+                        match core::fsops::read_binary(&p) {
+                            Ok(img) => Ok(tool_ok(
+                                &format!("data:{};base64,{}", image_mime(&p), img.base64),
+                                json!({ "bytes": img.bytes }),
+                            )),
+                            Err(e) => Ok(tool_err(format!(
+                                "Failed to read image: {}: {e}",
+                                p.display()
+                            ))),
+                        }
+                    }
+                    // Legacy raw-shape op kept for older web shim paths.
+                    "exec" => {
+                        let command = params
+                            .get("command")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let cwd = params
+                            .get("cwd")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        run_shell_command(command, cwd, None)
+                    }
+                    "open-url" | "openExternal" => {
+                        let url = params
+                            .get("url")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let res = core::tools::open_url(url);
+                        Ok(to_json(res)?)
+                    }
+                    other => Err(format!("unsupported tool-op: {other}")),
+                }
+            }
+
+            // ── Terminal ops ────────────────────────────────────────────────
+            "desktop:terminal-op" => {
+                let op = arg(0).as_str().unwrap_or_default().to_string();
+                let params = arg(1);
+                match op.as_str() {
+                    "start" | "spawn" => {
+                        let cwd = params
+                            .get("projectRoot")
+                            .or_else(|| params.get("cwd"))
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let id = params
+                            .get("terminalId")
+                            .and_then(Value::as_str)
+                            .filter(|id| !id.is_empty())
+                            .map(str::to_string)
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                        let cols = params.get("cols").and_then(Value::as_u64).unwrap_or(80) as u16;
+                        let rows = params.get("rows").and_then(Value::as_u64).unwrap_or(24) as u16;
+                        let sinks: Vec<HostSink> = self.sinks.lock().clone();
+                        // Capture the ID before spawning so even the first prompt is routed.
+                        let out_id = id.clone();
+                        let out_sinks = sinks.clone();
+                        let on_output = move |data: String| {
+                            for sink in &out_sinks {
+                                sink(
+                                    "terminal:output",
+                                    &json!({ "terminalId": out_id, "data": data }),
+                                );
+                            }
+                        };
+                        let exit_id = id.clone();
+                        let on_exit = move |code: Option<i32>, error: Option<String>| {
+                            for sink in &sinks {
+                                sink(
+                                    "terminal:exit",
+                                    &json!({ "terminalId": exit_id, "exitCode": code, "error": error }),
+                                );
+                            }
+                        };
+                        let start = block_pty(
+                            self.terms
+                                .start_with_id(&id, cwd, cols, rows, on_output, on_exit),
+                        )?;
+                        let mut result = to_json(start)?;
+                        result["ok"] = json!(true);
+                        Ok(result)
+                    }
+                    "input" | "write" => {
+                        let terminal_id = params
+                            .get("terminalId")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let data = params
+                            .get("data")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        Ok(to_json(self.terms.input(terminal_id, data)?)?)
+                    }
+                    "resize" => {
+                        let terminal_id = params
+                            .get("terminalId")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let cols = params.get("cols").and_then(Value::as_u64).unwrap_or(80) as u16;
+                        let rows = params.get("rows").and_then(Value::as_u64).unwrap_or(24) as u16;
+                        Ok(to_json(self.terms.resize(terminal_id, cols, rows)?)?)
+                    }
+                    "stop" | "kill" => {
+                        let terminal_id = params
+                            .get("terminalId")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        Ok(to_json(self.terms.stop(terminal_id)?)?)
+                    }
+                    "is-alive" | "alive" => {
+                        let terminal_id = params
+                            .get("terminalId")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        Ok(json!(self.terms.is_alive(terminal_id)))
+                    }
+                    other => Err(format!("unsupported terminal-op: {other}")),
+                }
+            }
+
+            // ── Settings ────────────────────────────────────────────────────
+            "desktop:get-setting" => {
+                let arg0 = arg(0);
+
+                let key = arg0.as_str().unwrap_or_default();
+                Ok(self.settings.get(key))
+            }
+            "desktop:set-setting" => {
+                let key = arg(0).as_str().unwrap_or_default().to_string();
+                self.settings.set(&key, arg(1))?;
+                Ok(json!({ "ok": true }))
+            }
+            "desktop:delete-setting" => {
+                let key = arg(0).as_str().unwrap_or_default().to_string();
+                if key.is_empty() {
+                    return Err("delete-setting: key is required".into());
+                }
+                self.settings.delete(&key)?;
+                Ok(json!({ "ok": true }))
+            }
+
+            // ── Credentials ─────────────────────────────────────────────────
+            "credential:store" => {
+                let arg0 = arg(0);
+
+                let key = arg0.as_str().unwrap_or_default();
+                let arg1 = arg(1);
+
+                let value = arg1.as_str().unwrap_or_default();
+                self.credentials_write(key, value)?;
+                Ok(json!({ "ok": true }))
+            }
+            "credential:get" => {
+                let arg0 = arg(0);
+
+                let key = arg0.as_str().unwrap_or_default();
+                Ok(json!({ "value": self.credentials_read(key) }))
+            }
+            "credential:clear" => {
+                let arg0 = arg(0);
+
+                let key = arg0.as_str().unwrap_or_default();
+                self.credentials_delete(key)?;
+                Ok(json!({ "ok": true }))
+            }
+
+            // ── Misc desktop channels ───────────────────────────────────────
+            // Legacy shell parity: (title, body, urgency). `urgency` is optional
+            // and defaults to "normal"; other NotificationOptions (id, icon,
+            // silent, …) are not modelled by the glue surface yet.
+            "desktop:notify" => {
+                let payload = json!({
+                    "title": arg(0).as_str().unwrap_or_default(),
+                    "body": arg(1).as_str().unwrap_or_default(),
+                    "urgency": arg(2).as_str().unwrap_or("normal"),
+                });
+                self.emit("desktop:notify", payload);
+                Ok(json!({ "ok": true }))
+            }
+            "clipboard:read-text" => read_clipboard_text(),
+            other => Err(format!("unsupported desktop channel: {other}")),
+        }
+    }
+
+    fn runner_handle(&self, session_id: &str) -> Result<core::runner::RunnerHandle, String> {
+        self.handles
+            .lock()
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| format!("no such provider session: {session_id}"))
+    }
+
+    fn provider_identity(params: &Value) -> Result<(String, String), String> {
+        let provider_id = params
+            .get("providerId")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| "providerId is required".to_string())?
+            .to_string();
+        let provider_type = params
+            .get("providerType")
+            .or_else(|| params.get("provider"))
+            .and_then(Value::as_str)
+            .filter(|value| matches!(*value, "codex" | "claude-code" | "claude"))
+            .ok_or_else(|| "providerType must be codex or claude-code".to_string())?
+            .to_string();
+        Ok((provider_id, provider_type))
+    }
+
+    fn provider_account_env(
+        &self,
+        provider_id: &str,
+        provider_type: &str,
+    ) -> Result<HashMap<String, String>, String> {
+        let account_home = self.data_dir.join("provider-accounts").join(provider_id);
+        std::fs::create_dir_all(&account_home).map_err(|error| error.to_string())?;
+        let home = account_home.to_string_lossy().into_owned();
+        let mut env: HashMap<String, String> = std::env::vars().collect();
+        env.insert("HOME".into(), home.clone());
+        env.insert("USERPROFILE".into(), home.clone());
+        env.insert(
+            "XDG_CONFIG_HOME".into(),
+            account_home.join(".config").to_string_lossy().into_owned(),
+        );
+        env.insert(
+            "XDG_DATA_HOME".into(),
+            account_home
+                .join(".local/share")
+                .to_string_lossy()
+                .into_owned(),
+        );
+        env.insert(
+            "XDG_CACHE_HOME".into(),
+            account_home.join(".cache").to_string_lossy().into_owned(),
+        );
+        if provider_type == "codex" {
+            env.insert("CODEX_HOME".into(), home);
+            env.insert("OPENAI_API_KEY".into(), String::new());
+        } else {
+            env.insert(
+                "CLAUDE_CONFIG_DIR".into(),
+                account_home.join(".claude").to_string_lossy().into_owned(),
+            );
+            env.insert("ANTHROPIC_API_KEY".into(), String::new());
+        }
+        Ok(env)
+    }
+
+    fn provider_command(
+        &self,
+        provider_type: &str,
+        args: &[&str],
+        env: &HashMap<String, String>,
+    ) -> Result<Command, String> {
+        let resolved = self
+            .resolver
+            .lock()
+            .resolve(provider_type)
+            .ok_or_else(|| format!("{provider_type} CLI not found on this device"))?;
+        let mut command = Command::new(&resolved.program);
+        command.args(&resolved.args).args(args).envs(env);
+        core::StdCommandConsoleHide::hide_console(&mut command);
+        Ok(command)
+    }
+
+    fn provider_auth_status(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        {
+            let mut processes = self.provider_login_processes.lock();
+            let finished = processes
+                .get_mut(&provider_id)
+                .and_then(|child| child.try_wait().ok())
+                .flatten()
+                .is_some();
+            if finished {
+                processes.remove(&provider_id);
+            }
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let args: &[&str] = if provider_type == "codex" {
+            &["login", "status"]
+        } else {
+            &["auth", "status"]
+        };
+        let authenticated = self
+            .provider_command(&provider_type, args, &env)?
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false);
+        Ok(json!({
+            "login": true,
+            "logout": authenticated,
+            "deviceCode": provider_type == "codex",
+            "authenticated": authenticated,
+            "detail": if authenticated {
+                "Authenticated for this Jait account on this device"
+            } else {
+                "Login required for this Jait account on this device"
+            },
+        }))
+    }
+
+    fn provider_start_login(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        if let Some(mut previous) = self.provider_login_processes.lock().remove(&provider_id) {
+            let _ = previous.kill();
+            let _ = previous.wait();
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let args: &[&str] = if provider_type == "codex" {
+            &["login", "--device-auth"]
+        } else {
+            &["auth", "login"]
+        };
+        let mut command = self.provider_command(&provider_type, args, &env)?;
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let mut child = command
+            .spawn()
+            .map_err(|error| format!("failed to start {provider_type} login: {error}"))?;
+        let output = Arc::new(Mutex::new(String::new()));
+        let streams: Vec<Box<dyn Read + Send>> = [
+            child
+                .stdout
+                .take()
+                .map(|stream| Box::new(stream) as Box<dyn Read + Send>),
+            child
+                .stderr
+                .take()
+                .map(|stream| Box::new(stream) as Box<dyn Read + Send>),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        for mut stream in streams {
+            let captured = output.clone();
+            std::thread::spawn(move || {
+                let mut buffer = [0_u8; 1024];
+                while let Ok(count) = stream.read(&mut buffer) {
+                    if count == 0 {
+                        break;
+                    }
+                    captured
+                        .lock()
+                        .push_str(&String::from_utf8_lossy(&buffer[..count]));
+                }
+            });
+        }
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut exit_status = None;
+        loop {
+            let details = core::providers::extract_device_auth_details(&output.lock());
+            if details.is_complete() || Instant::now() >= deadline {
+                break;
+            }
+            if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+                exit_status = Some(status);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let raw_output = output.lock().clone();
+        let details = core::providers::extract_device_auth_details(&raw_output);
+        let completed = exit_status.is_some();
+        if let Some(status) = exit_status {
+            if !status.success() && !details.is_complete() {
+                return Err(if raw_output.trim().is_empty() {
+                    format!(
+                        "{provider_type} login exited with {}",
+                        status.code().unwrap_or(-1)
+                    )
+                } else {
+                    raw_output.trim().to_string()
+                });
+            }
+        } else {
+            self.provider_login_processes
+                .lock()
+                .insert(provider_id.clone(), child);
+        }
+
+        let mut result = json!({
+            "ok": true,
+            "status": if completed { "completed" } else { "started" },
+            "providerId": provider_id,
+            "message": format!("Complete {provider_type} login on this device."),
+            "rawOutput": raw_output,
+        });
+        let details = to_json(details)?;
+        if let (Some(target), Some(source)) = (result.as_object_mut(), details.as_object()) {
+            target.extend(source.clone());
+        }
+        Ok(result)
+    }
+
+    fn provider_login_input(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, _) = Self::provider_identity(params)?;
+        let input = params
+            .get("input")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let mut processes = self.provider_login_processes.lock();
+        let child = processes
+            .get_mut(&provider_id)
+            .ok_or_else(|| "No login is waiting for input".to_string())?;
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| "Login process has no input stream".to_string())?;
+        writeln!(stdin, "{input}").map_err(|error| error.to_string())?;
+        Ok(json!({ "ok": true }))
+    }
+
+    fn provider_logout(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        if let Some(mut login) = self.provider_login_processes.lock().remove(&provider_id) {
+            let _ = login.kill();
+            let _ = login.wait();
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let args: &[&str] = if provider_type == "codex" {
+            &["logout"]
+        } else {
+            &["auth", "logout"]
+        };
+        let output = self
+            .provider_command(&provider_type, args, &env)?
+            .output()
+            .map_err(|error| error.to_string())?;
+        if !output.status.success() {
+            let message = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if message.is_empty() {
+                format!("{provider_type} logout failed")
+            } else {
+                message
+            });
+        }
+        Ok(json!({
+            "ok": true,
+            "status": "completed",
+            "providerId": provider_id,
+            "message": format!("{provider_type} logged out on this device."),
+        }))
+    }
+
+    fn provider_list_models(&self, params: &Value) -> Result<Value, String> {
+        let (provider_id, provider_type) = Self::provider_identity(params)?;
+        if provider_type != "codex" {
+            return Err(format!(
+                "model discovery is not implemented for {provider_type} on Tauri"
+            ));
+        }
+        let env = self.provider_account_env(&provider_id, &provider_type)?;
+        let resolver = self.resolver.lock();
+        core::runner::list_codex_models(&**resolver, env)
+    }
+
+    fn provider_start(&self, params: &Value) -> Result<Value, String> {
+        let provider = params
+            .get("providerType")
+            .or_else(|| params.get("provider"))
+            .and_then(Value::as_str)
+            .unwrap_or("codex")
+            .to_string();
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let cwd = params
+            .get("cwd")
+            .or_else(|| params.get("workingDirectory"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let mode = params
+            .get("mode")
+            .and_then(Value::as_str)
+            .unwrap_or("default")
+            .to_string();
+        let req = core::types::ProviderSessionRequest {
+            provider: provider.clone(),
+            model: params
+                .get("model")
+                .and_then(Value::as_str)
+                .map(str::to_string),
+            max_turns: params
+                .get("maxTurns")
+                .and_then(Value::as_u64)
+                .map(|v| v as u32),
+        };
+        let env: std::collections::HashMap<String, String> = params
+            .get("env")
+            .and_then(Value::as_object)
+            .map(|m| {
+                m.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let spec = core::providers::to_runner_spec(&session_id, &req, &cwd, &mode, env);
+        let id_sink: HostSink = {
+            let sinks = self.sinks.lock().clone();
+            Arc::new(move |_channel, payload| {
+                for sink in sinks.iter() {
+                    sink("gateway:event", payload);
+                }
+            })
+        };
+        let resolver = self.resolver.lock();
+        let handle = core::runner::start(&self.runners, &**resolver, spec, move |event| {
+            let mut v = serde_json::to_value(&event).unwrap_or(Value::Null);
+            // Legacy shell parity: the renderer consumes flat
+            // Keep compatibility with any older core build that emitted
+            // `session_id`; current ProviderEvent serialization is camelCase.
+            if let Some(obj) = v.as_object_mut() {
+                if let Some(sid) = obj.remove("session_id") {
+                    obj.insert("sessionId".into(), sid);
+                }
+            }
+            id_sink("gateway:event", &v);
+        })?;
+        self.handles
+            .lock()
+            .insert(handle.session_id.clone(), handle.clone());
+        Ok(json!({
+            "providerThreadId": handle.session_id,
+            "provider": provider,
+        }))
+    }
+}
+
+impl Drop for HostState {
+    fn drop(&mut self) {
+        for child in self.provider_login_processes.get_mut().values_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Default for HostState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+fn default_data_dir() -> PathBuf {
+    dirs::data_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("jait-desktop")
+}
+
+/// Resolves an fs-op path Node-style: empty → cwd, `~` → home, relative →
+/// cwd-joined, absolute kept. Windows backslashes are normalized so a path
+/// copied from Windows works on either platform's join logic.
+pub fn resolve_fs_path(path: &str) -> std::path::PathBuf {
+    use std::path::PathBuf;
+    let path = path.replace('\\', "/");
+    let p = PathBuf::from(path.trim());
+    if p.as_os_str().is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    } else if p.starts_with("~") {
+        match core::info::home_dir() {
+            Some(home) => home.join(p.strip_prefix("~").unwrap_or(&p)),
+            None => p,
+        }
+    } else if p.is_absolute() {
+        p
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(p)
+    }
+}
+
+/// Gateway tool-op failure envelope, mirroring the legacy desktop shell host's
+/// `{ ok: false, message }` shape so error handling code branches the same.
+fn tool_err(message: String) -> Value {
+    json!({ "ok": false, "message": message })
+}
+
+/// Gateway tool-op success envelope: `{ ok: true, message, data }`.
+fn tool_ok(message: &str, data: Value) -> Value {
+    json!({ "ok": true, "message": message, "data": data })
+}
+
+/// Resolve a tool-op file path like the legacy desktop shell host: `params.path`, with
+/// empty paths falling back to the `meta.projectRoot` sent by the gateway.
+fn tool_file_path(params: &Value, meta: &Value) -> std::path::PathBuf {
+    let raw = params.get("path").and_then(Value::as_str).unwrap_or("");
+    let project_root = meta
+        .get("projectRoot")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if raw.trim().is_empty() {
+        // Empty path → operate on the project root itself.
+        resolve_fs_path(project_root)
+    } else {
+        let raw = raw.trim();
+        if project_root.trim().is_empty() {
+            return resolve_fs_path(raw);
+        }
+        let p = std::path::Path::new(raw);
+        if p.is_absolute() || raw.starts_with('~') {
+            resolve_fs_path(raw)
+        } else {
+            // Gateway semantics: project-relative paths resolve against
+            // meta.projectRoot, not the host's working directory.
+            resolve_fs_path(project_root).join(p)
+        }
+    }
+}
+
+/// Write `content` to `path`, creating parent directories like the legacy desktop shell
+/// host does for content-style writes.
+fn write_file_with_parent(path: &std::path::Path, content: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir failed: {e}"))?;
+        }
+    }
+    std::fs::write(path, content).map_err(|e| format!("write failed: {e}"))
+}
+
+/// Best-effort MIME type for `image.view` data URIs.
+fn image_mime(path: &std::path::Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "avif" => "image/avif",
+        "ico" => "image/x-icon",
+        _ => "application/octet-stream",
+    }
+}
+
+/// Legacy shell parity: git-like ops accept either `{ command: "status -s" }`
+/// or `{ args: ["status", "-s"] }`; both map onto one argv list.
+fn git_like_args(params: &Value) -> String {
+    if let Some(args) = params.get("args").and_then(Value::as_array) {
+        return args
+            .iter()
+            .map(|v| match v {
+                Value::String(s) => s.clone(),
+                other => other.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+    }
+    // Gateway also sends `args` as a plain string (`args: "remote"`).
+    if let Some(args) = params.get("args").and_then(Value::as_str) {
+        return args.to_string();
+    }
+    params
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn parse_search_request(params: &Value) -> Result<core::types::SearchRequest, String> {
+    let req: core::types::SearchRequest = serde_json::from_value(params.clone())
+        .map_err(|e| format!("invalid search request: {e}"))?;
+    // Legacy shell rejects anything but these two modes outright.
+    if req.mode != "files" && req.mode != "content" {
+        return Err("Search mode must be \"files\" or \"content\".".into());
+    }
+    Ok(req)
+}
+
+struct ShellOut {
+    stdout: String,
+    stderr: String,
+    exit_code: i32,
+    /// True when the run was killed at its timeout deadline.
+    timed_out: bool,
+}
+
+fn shell_program(command: &str) -> std::process::Command {
+    if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", command]);
+        // Windowed host: CREATE_NO_WINDOW so tool runs never flash a console.
+        core::StdCommandConsoleHide::hide_console(&mut c);
+        c
+    } else {
+        let mut c = std::process::Command::new("sh");
+        c.args(["-c", command]);
+        c
+    }
+}
+
+/// Run a command to completion. With a timeout, the child is killed at the
+/// deadline (mirrors the legacy desktop shell's execAsync timeout default of 30s); background
+/// runs pass `None` for no timeout.
+fn run_shell_command_inner(command: &str, cwd: &str, timeout_ms: Option<u64>) -> ShellOut {
+    use std::io::Read;
+    use std::time::{Duration, Instant};
+
+    let mut c = shell_program(command);
+    if !cwd.is_empty() {
+        c.current_dir(cwd);
+    }
+    let mut child = match c
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(e) => {
+            return ShellOut {
+                stdout: String::new(),
+                stderr: e.to_string(),
+                exit_code: -1,
+                timed_out: false,
+            }
+        }
+    };
+    // Drain pipes on worker threads so large output can't deadlock `wait`.
+    let stdout_t = child.stdout.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let stderr_t = child.stderr.take().map(|mut s| {
+        std::thread::spawn(move || {
+            let mut buf = String::new();
+            let _ = s.read_to_string(&mut buf);
+            buf
+        })
+    });
+    let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms.max(1)));
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Ok(status),
+            Ok(None) => match deadline {
+                Some(d) if Instant::now() >= d => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break Err(());
+                }
+                _ => std::thread::sleep(Duration::from_millis(20)),
+            },
+            Err(e) => {
+                // try_wait can fail after kill; treat as terminated.
+                let _ = child.wait();
+                let _ = e;
+                break Err(());
+            }
+        }
+    };
+    let stdout = stdout_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stderr = stderr_t.and_then(|h| h.join().ok()).unwrap_or_default();
+    match status {
+        Ok(status) => ShellOut {
+            stdout,
+            stderr,
+            exit_code: status.code().unwrap_or(-1),
+            timed_out: false,
+        },
+        Err(()) => ShellOut {
+            stdout,
+            stderr,
+            exit_code: -1,
+            timed_out: true,
+        },
+    }
+}
+
+/// Runs the shell command on a worker thread: streams nothing, but fans the
+/// final result to every attached host sink as `background:complete` and
+/// unregisters it from the shared registry.
+pub fn spawn_background(
+    registry: Arc<core::tools::BackgroundRegistry>,
+    sinks: Vec<HostSink>,
+    background_id: String,
+    command: String,
+    cwd: String,
+) {
+    std::thread::spawn(move || {
+        // the legacy desktop shell's background exec has no timeout.
+        let out = run_shell_command_inner(&command, &cwd, None);
+        registry.unregister(&background_id);
+        let payload = json!({
+            "backgroundId": background_id,
+            "exitCode": out.exit_code,
+            "stdout": out.stdout,
+            "stderr": out.stderr,
+        });
+        for sink in &sinks {
+            sink("background:complete", &payload);
+        }
+    });
+}
+
+fn run_shell_command(command: &str, cwd: &str, timeout_ms: Option<u64>) -> Result<Value, String> {
+    if command.is_empty() {
+        return Err("tool-op execute: command is required".into());
+    }
+    let out = run_shell_command_inner(command, cwd, timeout_ms);
+    Ok(json!({
+        "stdout": out.stdout,
+        "stderr": out.stderr,
+        "exitCode": out.exit_code,
+        "timedOut": out.timed_out,
+    }))
+}
+
+#[cfg(feature = "clipboard")]
+fn read_clipboard_text() -> Result<Value, String> {
+    use arboard::Clipboard;
+    let text = Clipboard::new()
+        .and_then(|mut c| c.get_text())
+        .map_err(|e| format!("clipboard read failed: {e}"))?;
+    Ok(json!(text))
+}
+
+#[cfg(not(feature = "clipboard"))]
+fn read_clipboard_text() -> Result<Value, String> {
+    Err("clipboard support not compiled into this host".into())
+}
+// ── Tests ───────────────────────────────────────────────────────────────────
+//
+// Deterministic tests of the dispatch surface using **fake host sinks** — no
+// windowing system required. The provider path spawns real child processes
+// against fake provider CLIs (same stdio contracts as `runner::tests`) and the
+// terminal path drives a real PTY, so args normalization → core call → sink
+// fan-out is exercised end to end.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    type SinkEvents = Arc<Mutex<Vec<(String, Value)>>>;
+
+    fn temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("jait-glue-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    fn bash_available() -> bool {
+        !cfg!(target_os = "windows") && std::path::Path::new("/bin/bash").exists()
+    }
+
+    /// Sink that records every (channel, payload) pair it receives.
+    fn recording_sink() -> (HostSink, SinkEvents) {
+        let events: SinkEvents = Arc::new(Mutex::new(Vec::new()));
+        let clone = events.clone();
+        let sink: HostSink = Arc::new(move |channel, payload| {
+            clone.lock().push((channel.to_string(), payload.clone()));
+        });
+        (sink, events)
+    }
+
+    fn wait_for(
+        events: &SinkEvents,
+        pred: impl Fn(&(String, Value)) -> bool,
+        timeout: Duration,
+    ) -> Vec<(String, Value)> {
+        let deadline = Instant::now() + timeout;
+        loop {
+            let snapshot = events.lock().clone();
+            if snapshot.iter().any(&pred) {
+                return snapshot;
+            }
+            if Instant::now() > deadline {
+                return snapshot;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    fn state() -> HostState {
+        HostState::new_with_dir(temp_dir())
+    }
+
+    /// Fake provider CLI: same shape as `runner::tests::write_fake_codex`.
+    fn write_fake_codex(dir: &std::path::Path) -> std::path::PathBuf {
+        let script = dir.join("fake-codex.sh");
+        std::fs::write(
+            &script,
+            r#"#!/usr/bin/env bash
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  id=$(printf '%s' "$line" | sed -n 's/^{"id":\([0-9]*\).*/\1/p')
+  method=$(printf '%s' "$line" | sed -n 's/.*"method":"\([^"]*\)".*/\1/p')
+  case "$method" in
+    initialize)
+      printf '{"id":%s,"result":{"userAgent":{"name":"fake-codex","version":"0.0.0"}}}\n' "$id" ;;
+    thread/start)
+      printf '{"id":%s,"result":{"thread":{"id":"thr-glue-1"}}}\n' "$id" ;;
+    model/list)
+      printf '{"id":%s,"result":{"data":[{"id":"gpt-5-codex","displayName":"GPT-5 Codex"}]}}\n' "$id" ;;
+    turn/start)
+      printf '{"id":%s,"result":{"turnStatus":"inProgress"}}\n' "$id"
+      printf '{"method":"turn/started","params":{"threadId":"thr-glue-1"}}\n'
+      echo "FAKE-CODEX-NOTICE"
+      printf '{"method":"turn/completed","params":{"threadId":"thr-glue-1"}}\n' ;;
+    *)
+      printf '{"id":%s,"error":{"message":"rpc unknown method"}}\n' "$id" ;;
+  esac
+done
+"#,
+        )
+        .unwrap();
+        script
+    }
+
+    /// Resolves every provider to the given fixed argv.
+    #[derive(Clone)]
+    struct StaticResolver {
+        command: Option<core::runner::ResolvedCommand>,
+    }
+
+    impl core::runner::CommandResolver for StaticResolver {
+        fn resolve(&self, _provider: &str) -> Option<core::runner::ResolvedCommand> {
+            self.command.clone()
+        }
+    }
+
+    fn fake_codex_resolver(script: &std::path::Path) -> StaticResolver {
+        StaticResolver {
+            command: Some(core::runner::ResolvedCommand {
+                program: "/bin/bash".into(),
+                args: vec![script.to_string_lossy().into_owned()],
+            }),
+        }
+    }
+
+    fn write_fake_provider_login(dir: &std::path::Path) -> std::path::PathBuf {
+        let script = dir.join("fake-provider-login.sh");
+        std::fs::write(
+            &script,
+            r#"#!/usr/bin/env bash
+if [ "$1" = "login" ] && [ "$2" = "--device-auth" ]; then
+  printf 'Welcome to Codex\nOpen https://auth.openai.com/codex/device\nEnter this one-time code:\nAB12-CD34E\n'
+  read -r _
+  exit 0
+fi
+if [ "$1" = "login" ] && [ "$2" = "status" ]; then
+  exit 1
+fi
+if [ "$1" = "logout" ]; then
+  exit 0
+fi
+exit 2
+"#,
+        )
+        .unwrap();
+        script
+    }
+
+    // ── dispatch plumbing ───────────────────────────────────────────────────
+
+    #[test]
+    fn app_info_reports_platform_version_and_device_id() {
+        let st = state();
+        let info = st.dispatch("app-info", &[]).expect("app-info ok");
+        assert_eq!(info["platform"], std::env::consts::OS);
+        assert!(!info["version"].as_str().unwrap_or_default().is_empty());
+        assert!(!info["deviceID"].as_str().unwrap_or_default().is_empty());
+    }
+
+    #[test]
+    fn host_info_maps_ops_and_errors_on_unknown() {
+        let st = state();
+        // The version op surfaces the composite hostApp string, e.g. "jait-desktop 0.1.782".
+        assert!(st
+            .dispatch("desktop:host-info", &[json!("version")])
+            .unwrap()
+            .as_str()
+            .unwrap_or_default()
+            .contains(env!("CARGO_PKG_VERSION")));
+        assert_eq!(
+            st.dispatch("desktop:host-info", &[json!("platform")])
+                .unwrap(),
+            json!(std::env::consts::OS)
+        );
+        let dev = st
+            .dispatch("desktop:host-info", &[json!("device-id")])
+            .unwrap();
+        assert!(!dev.as_str().unwrap_or_default().is_empty());
+        assert!(st.dispatch("desktop:host-info", &[json!("bogus")]).is_err());
+        assert!(
+            st.dispatch("desktop:host-info", &[]).is_err(),
+            "missing op errors"
+        );
+    }
+
+    #[test]
+    fn settings_roundtrip_through_dispatch() {
+        let st = state();
+        st.dispatch("desktop:set-setting", &[json!("glue.theme"), json!("dark")])
+            .expect("set ok");
+        assert_eq!(
+            st.dispatch("desktop:get-setting", &[json!("glue.theme")])
+                .unwrap(),
+            json!("dark")
+        );
+        assert_eq!(
+            st.dispatch("desktop:get-setting", &[json!("glue.missing")])
+                .unwrap(),
+            Value::Null,
+            "unknown setting is null"
+        );
+    }
+
+    #[test]
+    fn memory_credentials_store_get_clear() {
+        let st = state();
+        st.use_memory_credentials();
+        st.dispatch("credential:store", &[json!("tok"), json!("s3cret")])
+            .expect("store");
+        assert_eq!(
+            st.dispatch("credential:get", &[json!("tok")]).unwrap()["value"],
+            json!("s3cret")
+        );
+        st.dispatch("credential:clear", &[json!("tok")])
+            .expect("clear");
+        assert_eq!(
+            st.dispatch("credential:get", &[json!("tok")]).unwrap()["value"],
+            Value::Null
+        );
+    }
+
+    #[test]
+    fn fs_and_search_ops_cover_supported_ops() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::write(dir.join("hello.txt"), "hi glue").unwrap();
+        // read → FileText
+        let text = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("read"), json!(dir.join("hello.txt"))],
+            )
+            .expect("fs read ok");
+        assert!(
+            text.to_string().contains("hi glue"),
+            "file content returned: {text}"
+        );
+        // exists → bool
+        assert_eq!(
+            st.dispatch(
+                "desktop:fs-op",
+                &[json!("exists"), json!(dir.join("hello.txt"))]
+            )
+            .unwrap(),
+            json!(true)
+        );
+        assert_eq!(
+            st.dispatch(
+                "desktop:fs-op",
+                &[json!("exists"), json!(dir.join("nope.txt"))]
+            )
+            .unwrap(),
+            json!(false)
+        );
+        // stat → object
+        let stat = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("stat"), json!(dir.join("hello.txt"))],
+            )
+            .expect("stat ok");
+        assert!(stat.is_object(), "stat returns a JSON object: {stat}");
+        // search op — modes are strictly "files" | "content" (the legacy shell parity)
+        let hits = st
+            .dispatch(
+                "desktop:search-op",
+                &[
+                    json!("run"),
+                    json!({"root": dir, "query": "hi glue", "mode": "content", "limit": 10}),
+                ],
+            )
+            .expect("search ok");
+        assert!(hits.is_object(), "search returns a JSON object: {hits}");
+        // unknown mode is rejected like the legacy desktop shell handler does
+        assert!(st
+            .dispatch(
+                "desktop:search-op",
+                &[
+                    json!("run"),
+                    json!({"root": dir, "query": "hi glue", "mode": "text", "limit": 10}),
+                ],
+            )
+            .is_err());
+        // unsupported op errors
+        assert!(st
+            .dispatch("desktop:fs-op", &[json!("frobnicate")])
+            .is_err());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn browse_path_dispatch_returns_the_browse_payload_and_propagates_errors() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::create_dir_all(dir.join("project")).unwrap();
+
+        let browsed = st
+            .dispatch("desktop:browse-path", &[json!(dir)])
+            .expect("browse succeeds");
+        assert_eq!(browsed["path"], json!(dir.to_string_lossy()));
+        assert_eq!(browsed["entries"][0]["name"], json!("project"));
+        assert_eq!(browsed["entries"][0]["type"], json!("dir"));
+        assert!(
+            browsed.get("Ok").is_none(),
+            "the web bridge expects the payload directly, got {browsed}"
+        );
+
+        assert!(
+            st.dispatch("desktop:browse-path", &[json!(dir.join("does-not-exist"))],)
+                .is_err(),
+            "filesystem errors must reject the web bridge request"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The ws `proxyFsOp` bridge (node capability) sends `(op, params-object)`
+    /// and expects legacy-shaped results: read/readBinary → `{ content }`,
+    /// list → bare names (dirs suffixed "/"), stat → `{ size, isDirectory, modified }`.
+    #[test]
+    fn fs_op_params_object_matches_gateway_contract() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("hello.txt"), "hi glue").unwrap();
+
+        // read → { content, size }
+        let read = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("read"), json!({ "path": dir.join("hello.txt") })],
+            )
+            .expect("params read ok");
+        assert_eq!(read["content"], json!("hi glue"));
+        assert_eq!(read["size"], json!(7));
+
+        // readBinary → { content } base64
+        let bin = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("readBinary"),
+                    json!({ "path": dir.join("hello.txt") }),
+                ],
+            )
+            .expect("params readBinary ok");
+        assert_eq!(
+            String::from_utf8(base64_decode(bin["content"].as_str().expect("base64 str"))).unwrap(),
+            "hi glue"
+        );
+
+        // write via params object
+        st.dispatch(
+            "desktop:fs-op",
+            &[
+                json!("write"),
+                json!({ "path": dir.join("hello.txt"), "content": "bye glue" }),
+            ],
+        )
+        .expect("params write ok");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("hello.txt")).unwrap(),
+            "bye glue"
+        );
+
+        // list → bare names, dirs suffixed "/" (the legacy shell `list` shape)
+        let list = st
+            .dispatch("desktop:fs-op", &[json!("list"), json!({ "path": dir })])
+            .expect("params list ok");
+        let names: Vec<String> = serde_json::from_value(list).expect("list is string[]");
+        assert!(names.iter().any(|n| n == "hello.txt"));
+        assert!(names.iter().any(|n| n == "sub/"));
+
+        // stat → { size, isDirectory, modified }
+        let stat = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("stat"), json!({ "path": dir.join("sub") })],
+            )
+            .expect("params stat ok");
+        assert_eq!(stat["isDirectory"], json!(true));
+        assert!(stat["size"].is_u64());
+        assert!(stat["modified"].is_string());
+
+        // exists via params object
+        let exists = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("exists"), json!({ "path": dir.join("hello.txt") })],
+            )
+            .expect("params exists ok");
+        assert_eq!(exists, json!(true));
+
+        // git → { stdout, stderr, exitCode }
+        let git = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("git"),
+                    json!({ "command": "echo git-ok", "cwd": dir }),
+                ],
+            )
+            .expect("params git ok");
+        assert_eq!(git["stdout"], json!("git-ok\n"));
+        assert_eq!(git["exitCode"], json!(0));
+
+        // errors propagate (unknown path → dispatch error, like the legacy shell rejects)
+        assert!(st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("read"), json!({ "path": dir.join("nope.txt") })],
+            )
+            .is_err());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Minimal standard-base64 decoder for the readBinary contract test.
+    fn base64_decode(input: &str) -> Vec<u8> {
+        const TABLE: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = Vec::new();
+        let mut buf = 0u32;
+        let mut bits = 0u32;
+        for c in input.bytes() {
+            if c == b'=' {
+                break;
+            }
+            let v = TABLE.iter().position(|&t| t == c).expect("valid base64") as u32;
+            buf = (buf << 6) | v;
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                out.push((buf >> bits) as u8);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn tool_op_execute_runs_command_and_collects_output() {
+        let st = state();
+        let out = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("execute"), json!({"command": "echo glue-exec-ok"})],
+            )
+            .expect("execute ok");
+        assert_eq!(out["ok"], json!(true));
+        assert_eq!(out["message"], json!("glue-exec-ok"));
+        assert!(out.get("data").is_none());
+        let failed = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("execute"), json!({"command": "exit 3"})],
+            )
+            .expect("execute returns envelope even on failure");
+        assert_eq!(failed["ok"], json!(false));
+        assert_eq!(failed["message"], json!("Command failed"));
+        assert!(failed.get("data").is_none());
+        assert!(
+            st.dispatch(
+                "desktop:tool-op",
+                &[json!("execute"), json!({"command": ""})]
+            )
+            .expect("empty command is a tool error envelope")["ok"]
+                == json!(false)
+        );
+        assert!(
+            st.dispatch("desktop:tool-op", &[json!("warp")]).is_err(),
+            "unsupported op"
+        );
+    }
+
+    #[test]
+    fn tool_op_file_ops_use_meta_project_root() {
+        let st = state();
+        let dir = std::env::temp_dir().join(format!("jait-tool-op-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let meta = json!({ "projectRoot": dir.to_string_lossy() });
+
+        let write = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.write"),
+                    json!({ "path": "notes/hello.txt", "content": "alpha-beta" }),
+                    meta.clone(),
+                ],
+            )
+            .expect("write ok");
+        assert_eq!(write["ok"], json!(true));
+        let read = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.read"),
+                    json!({ "path": "notes/hello.txt" }),
+                    meta.clone(),
+                ],
+            )
+            .expect("read ok");
+        assert_eq!(read["message"], json!("alpha-beta"));
+
+        let edited = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.edit"),
+                    json!({ "path": "notes/hello.txt", "search": "alpha", "replace": "omega" }),
+                    meta.clone(),
+                ],
+            )
+            .expect("edit ok");
+        assert_eq!(edited["ok"], json!(true));
+        assert_eq!(
+            st.dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.read"),
+                    json!({ "path": "notes/hello.txt" }),
+                    meta
+                ]
+            )
+            .expect("read ok 2")["message"],
+            json!("omega-beta")
+        );
+
+        let listed = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.list"),
+                    json!({ "path": "notes" }),
+                    json!({ "projectRoot": dir.to_string_lossy() }),
+                ],
+            )
+            .expect("list ok");
+        assert_eq!(listed["data"]["names"], json!(["hello.txt"]));
+
+        let missing = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("file.read"),
+                    json!({ "path": "nope.txt" }),
+                    json!({ "projectRoot": dir.to_string_lossy() }),
+                ],
+            )
+            .expect("missing file is envelope");
+        assert_eq!(missing["ok"], json!(false));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn tool_op_execute_background_fans_envelope_via_meta() {
+        let st = state();
+        let (sink, events) = recording_sink();
+        st.add_sink(sink);
+        let out = st
+            .dispatch(
+                "desktop:tool-op",
+                &[
+                    json!("execute"),
+                    json!({ "command": "echo meta-bg-ok" }),
+                    json!({ "backgroundId": "bg-meta-1" }),
+                ],
+            )
+            .expect("execute ok");
+        assert_eq!(out["ok"], json!(true));
+        assert_eq!(out["message"], json!("meta-bg-ok"));
+        assert!(out.get("data").is_none());
+        wait_for(
+            &events,
+            |(ch, p)| {
+                ch == "background:complete"
+                    && p["backgroundId"] == json!("bg-meta-1")
+                    && p["stdout"] == json!("meta-bg-ok\n")
+            },
+            Duration::from_secs(10),
+        );
+    }
+
+    #[test]
+    fn tool_op_background_emits_background_complete() {
+        let st = state();
+        let (sink, events) = recording_sink();
+        st.add_sink(sink);
+        let started = st
+            .dispatch(
+                "desktop:tool-op",
+                &[json!("background"), json!({"command": "echo glue-bg-ok"})],
+            )
+            .expect("spawn ok");
+        let bg_id = started["backgroundId"]
+            .as_str()
+            .expect("backgroundId")
+            .to_string();
+        wait_for(
+            &events,
+            |(ch, p)| ch == "background:complete" && p["backgroundId"] == bg_id,
+            Duration::from_secs(10),
+        );
+        let done = events
+            .lock()
+            .iter()
+            .find(|(ch, p)| ch == "background:complete" && p["backgroundId"] == bg_id)
+            .expect("background:complete arrived")
+            .1
+            .clone();
+        assert_eq!(done["exitCode"], json!(0));
+        assert_eq!(done["stdout"], json!("glue-bg-ok\n"));
+        assert_eq!(done["backgroundId"], bg_id);
+    }
+
+    #[test]
+    fn notify_fans_out_to_sinks() {
+        let st = state();
+        let (sink_a, events_a) = recording_sink();
+        let (sink_b, events_b) = recording_sink();
+        st.add_sink(sink_a);
+        st.add_sink(sink_b);
+        let out = st
+            .dispatch("desktop:notify", &[json!("Hello"), json!("Body text")])
+            .expect("notify ok");
+        assert_eq!(out, json!({"ok": true}));
+        for events in [&events_a, &events_b] {
+            let hit = wait_for(
+                events,
+                |(ch, _p)| ch == "desktop:notify",
+                Duration::from_secs(2),
+            );
+            let (_, payload) = hit
+                .iter()
+                .find(|(ch, _)| ch == "desktop:notify")
+                .expect("notify event");
+            assert_eq!(payload["title"], json!("Hello"));
+            assert_eq!(payload["body"], json!("Body text"));
+            assert_eq!(payload["urgency"], json!("normal"));
+        }
+        // Urgency arrives as the third positional arg (shim parity).
+        let (sink_u, events_u) = recording_sink();
+        st.add_sink(sink_u);
+        st.dispatch(
+            "desktop:notify",
+            &[json!("Urgent"), json!("now"), json!("critical")],
+        )
+        .expect("urgent notify ok");
+        let hits_u = wait_for(
+            &events_u,
+            |(ch, p)| ch == "desktop:notify" && p["urgency"] == json!("critical"),
+            Duration::from_secs(2),
+        );
+        let (_, payload_u) = hits_u
+            .iter()
+            .find(|(ch, _)| ch == "desktop:notify")
+            .expect("urgent notify event");
+        assert_eq!(payload_u["title"], json!("Urgent"));
+        assert_eq!(payload_u["urgency"], json!("critical"));
+        let (_c, sink_dead) = recording_sink();
+        drop(sink_dead); // a dead sink must not panic other fan-outs
+        st.dispatch("desktop:notify", &[json!("Second"), json!("")])
+            .expect("second notify ok");
+    }
+
+    #[test]
+    fn unknown_channel_errors() {
+        let st = state();
+        assert!(st.dispatch("no:such-channel", &[]).is_err());
+    }
+
+    #[test]
+    fn open_terminal_app_requires_a_cwd() {
+        let st = state();
+        let err = st.dispatch("desktop:open-terminal-app", &[]).unwrap_err();
+        assert!(err.contains("working directory"), "{err}");
+    }
+
+    // ── provider bridge over the real runner + fake CLI ─────────────────────
+
+    #[test]
+    fn provider_start_send_and_events_over_fake_codex_cli() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_codex(&dir);
+        let st = state();
+        let (sink, events) = recording_sink();
+        st.add_sink(sink);
+
+        let resolver = fake_codex_resolver(&script);
+        st.set_resolver(Box::new(resolver));
+
+        let started = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("start"),
+                    json!({"provider": "codex", "sessionId": "sess-glue-1", "cwd": dir.to_string_lossy(), "mode": "default"}),
+                ],
+            )
+            .expect("provider start ok");
+        assert_eq!(started["providerThreadId"], json!("sess-glue-1"));
+
+        // The runner should surface as alive.
+        let alive = st
+            .dispatch("desktop:provider-op", &[json!("alive-sessions")])
+            .unwrap();
+        let ids = alive.as_array().expect("alive ids array");
+        assert!(
+            ids.iter().any(|v| v == "sess-glue-1"),
+            "session alive: {alive}"
+        );
+
+        st.dispatch(
+            "desktop:provider-op",
+            &[
+                json!("send"),
+                json!({"providerThreadId": "sess-glue-1", "message": "hello glue"}),
+            ],
+        )
+        .expect("send ok");
+
+        // Events reach the registered sink with the legacy desktop shell-compatible shape:
+        // flat { "type": "provider.turn-started" | ..., "sessionId": "..." }.
+        let snapshot = wait_for(
+            &events,
+            |(ch, p)| {
+                ch == "gateway:event"
+                    && p["type"] == "provider.turn-completed"
+                    && p["sessionId"] == "sess-glue-1"
+            },
+            Duration::from_secs(10),
+        );
+        let gateway: Vec<&Value> = snapshot
+            .iter()
+            .filter(|(ch, _)| ch == "gateway:event")
+            .map(|(_, p)| p)
+            .collect();
+        assert!(
+            gateway.iter().any(|p| p["type"] == "provider.turn-started"),
+            "turn-started relayed: {gateway:?}"
+        );
+        assert!(
+            gateway.iter().any(|p| p["type"] == "provider.line"
+                && p["sessionId"] == "sess-glue-1"
+                && p["line"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("FAKE-CODEX-NOTICE")),
+            "raw stdout lines relayed: {gateway:?}"
+        );
+        assert!(
+            !gateway.iter().any(|p| p["line"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("\"result\"")),
+            "rpc responses are never echoed as provider lines: {gateway:?}"
+        );
+
+        st.dispatch(
+            "desktop:provider-op",
+            &[json!("stop"), json!({"providerThreadId": "sess-glue-1"})],
+        )
+        .expect("stop ok");
+        let after = wait_for(
+            &events,
+            |(ch, p)| ch == "gateway:event" && p["type"] == "provider.stopped",
+            Duration::from_secs(5),
+        );
+        assert!(
+            after
+                .iter()
+                .any(|(ch, p)| ch == "gateway:event" && p["type"] == "provider.stopped"),
+            "provider.stopped relayed after stop"
+        );
+        let alive = st
+            .dispatch("desktop:provider-op", &[json!("alive-sessions")])
+            .unwrap();
+        let ids = alive.as_array().expect("alive array");
+        assert!(
+            !ids.iter().any(|v| v == "sess-glue-1"),
+            "session gone after stop: {alive}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn provider_list_models_uses_the_selected_codex_account() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_codex(&dir);
+        let st = HostState::new_with_dir(dir.clone());
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+
+        let models = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("list-models"),
+                    json!({"providerId": "codex-work", "providerType": "codex"}),
+                ],
+            )
+            .expect("Codex models load through the Tauri provider bridge");
+
+        assert_eq!(
+            models,
+            json!({
+                "data": [{"id": "gpt-5-codex", "displayName": "GPT-5 Codex"}]
+            })
+        );
+        assert!(dir.join("provider-accounts/codex-work").is_dir());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn codex_login_uses_cli_device_flow_instead_of_claude_url() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_provider_login(&dir);
+        let st = HostState::new_with_dir(dir.clone());
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+
+        let started = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("start-login"),
+                    json!({"providerId": "codex-work", "providerType": "codex"}),
+                ],
+            )
+            .expect("Codex device login starts");
+        assert_eq!(started["ok"], true);
+        assert_eq!(started["providerId"], "codex-work");
+        assert_eq!(
+            started["verificationUri"],
+            "https://auth.openai.com/codex/device"
+        );
+        assert_eq!(started["userCode"], "AB12-CD34E");
+        assert!(started.get("url").is_none());
+        assert!(!started.to_string().contains("claude.ai"));
+
+        let status = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("auth-status"),
+                    json!({"providerId": "codex-work", "providerType": "codex"}),
+                ],
+            )
+            .expect("auth status uses the Codex CLI");
+        assert_eq!(status["authenticated"], false);
+        assert_eq!(status["login"], true);
+        assert_eq!(status["deviceCode"], true);
+
+        st.dispatch(
+            "desktop:provider-op",
+            &[
+                json!("logout"),
+                json!({"providerId": "codex-work", "providerType": "codex"}),
+            ],
+        )
+        .expect("logout stops the login process");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn provider_start_accepts_gateway_provider_type_and_working_directory() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = dir.join("fake-codex-alias.sh");
+        std::fs::copy(write_fake_codex(&dir), &script).unwrap();
+        let st = state();
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+        // `workingDirectory` instead of `cwd` must normalize to the same start.
+        let started = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("start-session"),
+                    json!({"providerId": "work-account", "providerType": "claude-code", "sessionId": "sess-alias", "workingDirectory": dir.to_string_lossy()}),
+                ],
+            )
+            .expect("start with workingDirectory ok");
+        assert_eq!(started["providerThreadId"], json!("sess-alias"));
+        assert_eq!(started["provider"], json!("claude-code"));
+        st.dispatch(
+            "desktop:provider-op",
+            &[json!("stop"), json!({"providerThreadId": "sess-alias"})],
+        )
+        .ok();
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn provider_start_without_resolvable_cli_fails_on_send() {
+        let st = state();
+        st.set_resolver(Box::new(StaticResolver { command: None }));
+        // Starting does not spawn anything (resolution happens per-turn), so it succeeds.
+        let started = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("start"),
+                    json!({"provider": "codex", "sessionId": "sess-none", "cwd": "."}),
+                ],
+            )
+            .expect("start is lazy about CLI resolution");
+        assert_eq!(started["providerThreadId"], json!("sess-none"));
+        // The turn send is where the missing CLI surfaces.
+        let err = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("send"),
+                    json!({"providerThreadId": "sess-none", "message": "hi"}),
+                ],
+            )
+            .expect_err("unresolvable CLI must error on send");
+        assert!(
+            err.contains("provider CLI not found"),
+            "resolver error surfaced: {err}"
+        );
+    }
+
+    // ── terminal bridge over a real PTY ─────────────────────────────────────
+
+    #[test]
+    fn terminal_lifecycle_echoes_input_and_stops() {
+        let st = state();
+        let dir = temp_dir();
+
+        // The sink must exist before start: start snapshots the sink list for
+        // PTY output fan-out, so a sink added afterwards never sees events.
+        let (sink, events) = recording_sink();
+        st.add_sink(sink);
+
+        let started = st
+            .dispatch(
+                "desktop:terminal-op",
+                &[
+                    json!("start"),
+                    json!({"terminalId": "gateway-terminal-test", "projectRoot": dir.to_string_lossy(), "cols": 100}),
+                ],
+            )
+            .expect("terminal start ok");
+        let term_id = started["terminalId"]
+            .as_str()
+            .expect("terminal_id str")
+            .to_string();
+
+        assert_eq!(term_id, "gateway-terminal-test");
+        assert_eq!(started["ok"], true);
+        assert_eq!(started["cwd"], dir.to_string_lossy().as_ref());
+
+        let command = if cfg!(windows) {
+            "Write-Output ('glue-' + 'pty-ok')\r"
+        } else {
+            "printf '%s%s\\n' glue- pty-ok\r"
+        };
+        st.dispatch(
+            "desktop:terminal-op",
+            &[
+                json!("input"),
+                json!({"terminalId": term_id, "data": command}),
+            ],
+        )
+        .map(|result| assert_eq!(result["ok"], true))
+        .expect("terminal input ok");
+
+        let snapshot = wait_for(
+            &events,
+            |(ch, p)| ch == "terminal:output" && p.to_string().contains("glue-pty-ok"),
+            Duration::from_secs(10),
+        );
+        assert!(
+            snapshot.iter().any(|(ch, p)| ch == "terminal:output"
+                && p["data"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("glue-pty-ok")),
+            "terminal output events fanned out: {snapshot:?}"
+        );
+
+        assert!(snapshot
+            .iter()
+            .filter(|(ch, _)| ch == "terminal:output")
+            .all(|(_, p)| p["terminalId"] == term_id));
+        let repeated = st
+            .dispatch(
+                "desktop:terminal-op",
+                &[
+                    json!("start"),
+                    json!({"terminalId": term_id, "projectRoot": dir.to_string_lossy()}),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            repeated["pid"], started["pid"],
+            "repeat start reuses the shell"
+        );
+
+        let alive = st
+            .dispatch(
+                "desktop:terminal-op",
+                &[json!("is-alive"), json!({"terminalId": term_id})],
+            )
+            .unwrap();
+        assert_eq!(alive, json!(true));
+
+        st.dispatch(
+            "desktop:terminal-op",
+            &[
+                json!("resize"),
+                json!({"terminalId": term_id, "cols": 120, "rows": 40}),
+            ],
+        )
+        .expect("resize ok");
+
+        st.dispatch(
+            "desktop:terminal-op",
+            &[json!("stop"), json!({"terminalId": term_id})],
+        )
+        .expect("terminal stop ok");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let alive = st
+                .dispatch(
+                    "desktop:terminal-op",
+                    &[json!("is-alive"), json!({"terminalId": term_id})],
+                )
+                .unwrap();
+            if alive == json!(false) || Instant::now() > deadline {
+                assert_eq!(alive, json!(false), "terminal dead after stop");
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let snapshot = wait_for(
+            &events,
+            |(ch, p)| ch == "terminal:exit" && p["terminalId"] == term_id,
+            Duration::from_secs(10),
+        );
+        assert!(snapshot
+            .iter()
+            .any(|(ch, p)| ch == "terminal:exit" && p["terminalId"] == term_id));
+        assert!(
+            st.dispatch(
+                "desktop:terminal-op",
+                &[json!("input"), json!({"terminalId": term_id, "data": "x"})]
+            )
+            .is_err(),
+            "missing terminal errors propagate"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // ── desktop:fs-op contract (the legacy shell parity) ───────────────────────────
+
+    #[test]
+    fn resolve_fs_path_matches_node_semantics() {
+        // Empty → cwd.
+        let cwd = std::env::current_dir().unwrap();
+        assert_eq!(resolve_fs_path(""), cwd);
+        assert_eq!(resolve_fs_path("  "), cwd);
+
+        // Absolute kept, backslashes normalized.
+        let abs = if cfg!(windows) {
+            "C:\\repo\\file.ts"
+        } else {
+            "/repo/file.ts"
+        };
+        let resolved = resolve_fs_path(abs);
+        assert!(resolved.is_absolute());
+
+        // Relative → cwd-joined.
+        assert_eq!(resolve_fs_path("sub/dir"), cwd.join("sub/dir"));
+
+        // `~` → home.
+        if let Some(home) = core::info::home_dir() {
+            assert_eq!(resolve_fs_path("~/notes.txt"), home.join("notes.txt"));
+            assert_eq!(resolve_fs_path("~"), home);
+        }
+    }
+
+    #[test]
+    fn fs_op_gateway_shapes() {
+        let st = state();
+        let dir = temp_dir();
+        std::fs::write(dir.join("a.txt"), "hello").unwrap();
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+
+        // Gateway contract shape: (op, params-object, requestId).
+        let read = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("read"),
+                    json!({ "path": dir.join("a.txt") }),
+                    json!(1),
+                ],
+            )
+            .unwrap();
+        assert_eq!(read, json!({ "content": "hello", "size": 5 }));
+
+        // `list` → dirs suffixed with "/".
+        let list = st
+            .dispatch("desktop:fs-op", &[json!("list"), json!({ "path": dir })])
+            .unwrap();
+        let list = list.as_array().unwrap();
+        assert!(list.contains(&json!("a.txt")));
+        assert!(list.contains(&json!("sub/")));
+
+        // `readdir` → [{ name, path, type }].
+        let entries = st
+            .dispatch("desktop:fs-op", &[json!("readdir"), json!({ "path": dir })])
+            .unwrap();
+        let entries = entries.as_array().unwrap();
+        let a = entries.iter().find(|e| e["name"] == "a.txt").unwrap();
+        assert_eq!(a["type"], "file");
+        assert_eq!(
+            a["path"],
+            json!(dir.join("a.txt").to_string_lossy().into_owned())
+        );
+        let sub = entries.iter().find(|e| e["name"] == "sub").unwrap();
+        assert_eq!(sub["type"], "dir");
+
+        // stat → { size, isDirectory, isFile, modified }.
+        let stat = st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("stat"), json!({ "path": dir.join("a.txt") })],
+            )
+            .unwrap();
+        assert_eq!(stat["size"], json!(5));
+        assert_eq!(stat["isDirectory"], json!(false));
+        assert_eq!(stat["isFile"], json!(true));
+        assert!(stat["modified"].as_str().is_some());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// gh-check → the legacy shell shape `{ installed, authenticated, username }`
+    /// regardless of whether `gh` exists on this machine.
+    #[test]
+    fn gh_check_reports_legacy_shape() {
+        let st = state();
+        let out = st
+            .dispatch("desktop:fs-op", &[json!("gh-check"), json!({})])
+            .expect("gh-check ok");
+        assert!(out.get("installed").is_some());
+        assert!(out.get("authenticated").is_some());
+        if out["installed"].as_bool() == Some(false) {
+            assert_eq!(out["authenticated"], json!(false));
+        }
+    }
+
+    /// git-file-diffs (uncommitted mode) mirrors the legacy shell: rows carry
+    /// path/original/modified/status against a real git repo.
+    #[test]
+    fn git_file_diffs_lists_working_tree_changes() {
+        let st = state();
+        let dir = temp_dir();
+        let run = |args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&dir)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .expect("git runs");
+            assert!(
+                out.status.success(),
+                "git {args:?} failed: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(&["init", "-q"]);
+        std::fs::write(dir.join("kept.txt"), "one\n").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "-q", "-m", "init"]);
+        std::fs::write(dir.join("kept.txt"), "one\ntwo\n").unwrap();
+        std::fs::write(dir.join("new.txt"), "fresh\n").unwrap();
+
+        let rows = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("git-file-diffs"),
+                    json!({ "cwd": dir.to_string_lossy() }),
+                ],
+            )
+            .expect("git-file-diffs ok");
+        let rows = rows.as_array().expect("rows array");
+
+        let kept = rows
+            .iter()
+            .find(|r| r["path"] == "kept.txt")
+            .expect("kept.txt row");
+        assert_eq!(kept["status"], "M");
+        assert_eq!(kept["original"], "one\n");
+        assert!(kept["modified"].as_str().unwrap().contains("two"));
+
+        let fresh = rows
+            .iter()
+            .find(|r| r["path"] == "new.txt")
+            .expect("new.txt row");
+        assert_eq!(fresh["status"], "?");
+        assert_eq!(fresh["original"], "");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fs_op_patch_roundtrip() {
+        let st = state();
+        let dir = temp_dir();
+        let file = dir.join("f.txt");
+        std::fs::write(&file, "const a = 1;").unwrap();
+
+        let out = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("patch"),
+                    json!({ "path": file, "oldString": "1", "newString": "2" }),
+                ],
+            )
+            .unwrap();
+        assert_eq!(out, json!({ "ok": true, "matched": true }));
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "const a = 2;");
+
+        // Missing oldString errors instead of silently writing.
+        let err = st
+            .dispatch(
+                "desktop:fs-op",
+                &[
+                    json!("patch"),
+                    json!({ "path": file, "oldString": "nope", "newString": "x" }),
+                ],
+            )
+            .unwrap_err();
+        assert!(err.contains("not found"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fs_op_write_then_read_positional_shape() {
+        let st = state();
+        let dir = temp_dir();
+        let file = dir.join("pos.txt");
+
+        // Positional shape: (op, path, content).
+        st.dispatch(
+            "desktop:fs-op",
+            &[json!("write"), json!(file), json!("body")],
+        )
+        .unwrap();
+        let read = st
+            .dispatch("desktop:fs-op", &[json!("read"), json!(file)])
+            .unwrap();
+        assert_eq!(read, json!({ "content": "body", "size": 4 }));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn fs_op_unknown_op_errors() {
+        let st = state();
+        assert!(st
+            .dispatch(
+                "desktop:fs-op",
+                &[json!("teleport"), json!({ "path": "/x" })]
+            )
+            .is_err());
+    }
+}

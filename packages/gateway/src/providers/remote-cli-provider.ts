@@ -2,7 +2,7 @@
  * Remote CLI Provider — proxies provider operations to a remote desktop node via WS.
  *
  * Instead of spawning a local child process, this adapter sends operations
- * (start-session, send-turn, stop-session, list-models) to a remote Electron
+ * (start-session, send-turn, stop-session, list-models) to a remote Desktop
  * desktop client that actually runs the CLI provider (codex / claude-code).
  *
  * Events from the child process are relayed back through the WS control plane
@@ -377,7 +377,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       try {
         this.handleRemoteEvent(sessionId, JSON.parse(line) as unknown);
       } catch {
-        // Match the Electron runner: only JSON app-server notifications are provider events.
+        // Match the Desktop runner: only JSON app-server notifications are provider events.
       }
       return;
     }

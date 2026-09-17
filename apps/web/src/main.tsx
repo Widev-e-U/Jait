@@ -29,10 +29,10 @@ function ThemeAwareToaster() {
     return () => observer.disconnect()
   }, [])
 
-  // On Electron/Windows, offset toasts below the titlebar overlay controls
-  const isElectronWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
+  // On Desktop/Windows, offset toasts below the titlebar overlay controls
+  const isDesktopWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
 
-  return <Toaster position="top-right" theme={theme} closeButton gap={8} visibleToasts={4} offset={isElectronWin32 ? 44 : undefined} />
+  return <Toaster position="top-right" theme={theme} closeButton gap={8} visibleToasts={4} offset={isDesktopWin32 ? 44 : undefined} />
 }
 
 // Note: this app intentionally does NOT wrap the tree in <React.StrictMode>.

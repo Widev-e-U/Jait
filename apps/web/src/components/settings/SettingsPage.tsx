@@ -419,7 +419,7 @@ interface SettingsPageProps {
   releases: ReleaseNote[] | null
   releasesLoading: boolean
   onCheckChangelog: () => void
-  platform: 'web' | 'electron' | 'capacitor'
+  platform: 'web' | 'desktop' | 'capacitor'
 }
 
 export function SettingsPage({
@@ -511,7 +511,7 @@ export function SettingsPage({
   const [launchAtLogin, setLaunchAtLogin] = useState(false)
   const [launchAtLoginSupported, setLaunchAtLoginSupported] = useState(true)
   useEffect(() => {
-    if (platform !== 'electron' || !window.jaitDesktop?.getInfo) return
+    if (platform !== 'desktop' || !window.jaitDesktop?.getInfo) return
     void window.jaitDesktop.getInfo().then((info) => {
       if (info.appVersion) setAppVersion(info.appVersion)
     })
@@ -567,13 +567,13 @@ export function SettingsPage({
     }
   }, [refreshWearStatus, updateInfo?.wearDownloadUrl])
   useEffect(() => {
-    if (platform !== 'electron' || !window.jaitDesktop?.getSetting) return
+    if (platform !== 'desktop' || !window.jaitDesktop?.getSetting) return
     void window.jaitDesktop.getSetting('closeOnWindowClose', false).then((v) => {
       setCloseOnWindowClose(v === true)
     })
   }, [platform])
   useEffect(() => {
-    if (platform !== 'electron' || !window.jaitDesktop?.getLoginItem) return
+    if (platform !== 'desktop' || !window.jaitDesktop?.getLoginItem) return
     void window.jaitDesktop.getLoginItem().then((res) => {
       setLaunchAtLogin(res.enabled)
       setLaunchAtLoginSupported(res.supported)
@@ -1144,7 +1144,7 @@ export function SettingsPage({
     && !!updateInfo?.latestVersion
     && updateInfo.latestVersion !== updateInfo.currentVersion
     && !updateInfo.downloadUrl
-  const showDesktopSection = platform === 'electron' && matchesSearch(
+  const showDesktopSection = platform === 'desktop' && matchesSearch(
     'desktop tray close window quit minimize app',
     appVersion,
   )
@@ -1570,7 +1570,7 @@ const providerAccountsCard = (
                         {updateApplying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
                         {updateApplying ? 'Updating...' : `Update gateway to v${updateInfo.latestVersion}`}
                       </Button>
-                    ) : platform === 'electron' ? (
+                    ) : platform === 'desktop' ? (
                       <Button size="sm" onClick={async () => {
                         const desktop = (window as any).jaitDesktop
                         toast.info('Downloading update...')

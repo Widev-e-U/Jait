@@ -1,4 +1,4 @@
-export type DevicePlatform = "electron" | "react-native" | "web";
+export type DevicePlatform = "desktop" | "react-native" | "web";
 
 export interface ScreenShareDevice {
   id: string;

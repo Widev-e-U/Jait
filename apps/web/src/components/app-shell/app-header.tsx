@@ -51,13 +51,13 @@ interface AppHeaderProps {
   closeScreenSharePanel: any
   currentView: any
   desktopPlatform: any
-  desktopRuntime: 'electron' | 'tauri' | null
+  desktopRuntime: 'tauri' | null
   handleApplyUpdate: any
   handleLogout: any
   handleThemeModeChange: any
   isAuthLoading: boolean
   isAuthenticated: any
-  isElectron: any
+  isDesktop: any
   isMaximized: any
   isMobile: any
   onOpenMobileNav: any
@@ -100,7 +100,7 @@ export function AppHeader(props: AppHeaderProps) {
     handleThemeModeChange,
     isAuthLoading,
     isAuthenticated,
-    isElectron,
+    isDesktop,
     isMaximized,
     isMobile,
     onOpenMobileNav,
@@ -188,35 +188,33 @@ export function AppHeader(props: AppHeaderProps) {
       : []),
   ]
 
+  // Linux uses native window-manager decorations. Besides matching KDE/GNOME
+  // conventions, this avoids WebKitGTK/X11 swallowing clicks on controls that
+  // are nested below a `data-tauri-drag-region` ancestor.
+  const hasCustomTitleBar = desktopRuntime === 'tauri'
+    && desktopPlatform !== null
+    && desktopPlatform !== 'linux'
+
   return (
             <>
             <header
               className={
                 isMobile
                   ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
-                  : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
+                  : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isDesktop ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
               }
-              data-tauri-drag-region={desktopRuntime === 'tauri' || undefined}
-              style={isElectron ? {
-                // `WebkitAppRegion` is Electron's drag-region property. The
-                // Tauri shell also exposes `jaitDesktop`, so `isElectron` is
-                // true under Tauri too — but WebView2 doesn't honor
-                // app-region, and the Tauri header drags via the
-                // `data-tauri-drag-region` attribute above instead. Keep the
-                // style Electron-only so the two drag mechanisms don't
-                // compete on the same mousedown (a frame of hitch at drag
-                // start).
-                WebkitAppRegion: desktopRuntime === 'electron' ? 'drag' : undefined,
+              data-tauri-drag-region={hasCustomTitleBar || undefined}
+              style={isDesktop ? {
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
                 // Reserve the right edge for the caption-button strip: the
-                // native titleBarOverlay on Electron Windows, the custom
+                // native titleBarOverlay on Desktop Windows, the custom
                 // WinCaptionButtons on the Tauri Windows shell (3 × 47 px
                 // native-metric buttons, see below).
-                paddingRight: (!isMobile && desktopPlatform === 'win32' && (desktopRuntime === 'electron' || desktopRuntime === 'tauri')) ? 140 : undefined,
+                paddingRight: (!isMobile && desktopPlatform === 'win32' && desktopRuntime === 'tauri') ? 140 : undefined,
               } as React.CSSProperties : undefined}
             >
           {/* Left: Logo + mobile mic */}
-          <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <JaitIcon size={20} className="shrink-0" />
             <VoiceMicButtonMobile {...voiceControlProps} />
             {isMobile && currentView === 'chat' && activeManagerThreads.length > 0 && (
@@ -244,7 +242,7 @@ export function AppHeader(props: AppHeaderProps) {
               items={navItems}
               availableWidth={navAvailableWidth}
               navRef={navRef}
-              tauriDragRegion={desktopRuntime === 'tauri'}
+              tauriDragRegion={hasCustomTitleBar}
               className="flex-1"
             />
           )}
@@ -255,11 +253,11 @@ export function AppHeader(props: AppHeaderProps) {
               setVoiceOverlayOpen={setVoiceOverlayOpen}
               voiceAssistant={voiceAssistant}
               isMobile={isMobile}
-              isElectron={isElectron}
+              isDesktop={isDesktop}
               activeProjectTitle={activeProjectTitle}
             />
           ) : currentView === 'chat' ? (
-            <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
           ) : null}
@@ -268,7 +266,7 @@ export function AppHeader(props: AppHeaderProps) {
           <div className={`${isMobile ? 'flex-1' : 'hidden'} min-w-0`} />
 
           {/* Right: Context + Model + Account */}
-          <div ref={rightRef} className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div ref={rightRef} className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
 
             {/* Desktop status items — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
@@ -314,7 +312,7 @@ export function AppHeader(props: AppHeaderProps) {
                         if (!updateApplying && !updateAwaitingRestart) {
                           await handleApplyUpdate()
                         }
-                      } else if (appPlatform === 'electron') {
+                      } else if (appPlatform === 'desktop') {
                         const desktop = (window as any).jaitDesktop
                         toast.info('Downloading update...')
                         const dl = await desktop.downloadUpdate()
@@ -428,11 +426,11 @@ export function AppHeader(props: AppHeaderProps) {
             ) : (
             <>
             {isAuthLoading ? (
-              <div className={`h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted ${isElectron ? 'mr-4' : ''}`} aria-label="Loading account" />
+              <div className={`h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted ${isDesktop ? 'mr-4' : ''}`} aria-label="Loading account" />
             ) : isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className={`rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isElectron ? 'mr-4' : ''}`}>
+                  <button className={`rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isDesktop ? 'mr-4' : ''}`}>
                     <Avatar className="h-7 w-7">
                       <AvatarFallback className="text-xs">{userInitial}</AvatarFallback>
                     </Avatar>
@@ -498,16 +496,13 @@ export function AppHeader(props: AppHeaderProps) {
             </>
             )}
 
-            {/* Custom caption buttons. Electron Linux: no native controls.
-                Tauri: frameless on every platform (no titleBarOverlay or
-                traffic lights) — Windows gets the native-metric strip
-                (absolutely positioned at the top-right corner), other
-                platforms the compact control. Electron Windows/macOS use
-                their native chrome. */}
-            {isElectron && (desktopPlatform === 'linux' || (desktopRuntime === 'tauri' && (isMobile || desktopPlatform !== 'win32'))) && (
+            {/* Linux uses native WM decorations. Frameless Tauri platforms
+                keep custom controls: Windows gets the native-metric strip;
+                other platforms use the compact control. */}
+            {isDesktop && hasCustomTitleBar && (isMobile || desktopPlatform !== 'win32') && (
               <LinuxWindowControls isMaximized={isMaximized} />
             )}
-            {isElectron && !isMobile && desktopRuntime === 'tauri' && desktopPlatform === 'win32' && (
+            {isDesktop && !isMobile && hasCustomTitleBar && desktopPlatform === 'win32' && (
               <WinCaptionButtons isMaximized={isMaximized} />
             )}
           </div>

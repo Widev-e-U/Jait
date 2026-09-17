@@ -37,14 +37,14 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
       ? body["capabilities"].map(String)
       : [];
 
-    if (!id || !name || !["electron", "react-native", "web"].includes(platform)) {
-      return reply.code(400).send({ error: "Invalid device: id, name, and platform (electron|react-native|web) required." });
+    if (!id || !name || !["desktop", "react-native", "web"].includes(platform)) {
+      return reply.code(400).send({ error: "Invalid device: id, name, and platform (desktop|react-native|web) required." });
     }
 
     const device = screenShare.registerDevice({
       id,
       name,
-      platform: platform as "electron" | "react-native" | "web",
+      platform: platform as "desktop" | "react-native" | "web",
       authorized: true,
       capabilities,
     });

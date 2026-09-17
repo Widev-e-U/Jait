@@ -182,7 +182,7 @@ describe("project routes", () => {
     userService.updateSettings(user.id, { apiKeys: { OPENAI_API_KEY: "test-key" } });
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
-      choices: [{ message: { content: "Diagnose Electron gray screens" } }]
+      choices: [{ message: { content: "Diagnose Desktop gray screens" } }]
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     try {
@@ -204,7 +204,7 @@ describe("project routes", () => {
       expect(titleRes.statusCode).toBe(200);
       const titleBody = JSON.parse(titleRes.body) as { session: { name: string }; generated: boolean };
       expect(titleBody.generated).toBe(true);
-      expect(titleBody.session.name).toBe("Diagnose Electron gray screens");
+      expect(titleBody.session.name).toBe("Diagnose Desktop gray screens");
       expect(fetchSpy).toHaveBeenCalledOnce();
     } finally {
       fetchSpy.mockRestore();

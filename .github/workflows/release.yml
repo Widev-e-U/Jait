@@ -35,7 +35,6 @@ on:
       - packages/shared/package.json
       - apps/web/package.json
       - packages/screen-share/package.json
-      - apps/desktop/package.json
       - apps/mobile/package.json
     tags:
       - 'v*'
@@ -82,7 +81,6 @@ jobs:
       shared_changed: ${{ steps.version.outputs.shared_changed || 'false' }}
       web_changed: ${{ steps.version.outputs.web_changed || 'false' }}
       screen_share_changed: ${{ steps.version.outputs.screen_share_changed || 'false' }}
-      desktop_changed: ${{ steps.version.outputs.desktop_changed || 'false' }}
       mobile_changed: ${{ steps.version.outputs.mobile_changed || 'false' }}
     steps:
       - uses: actions/checkout@v4
@@ -102,9 +100,8 @@ jobs:
           SHARED_CHANGED=false
           WEB_CHANGED=false
           SCREEN_SHARE_CHANGED=false
-          DESKTOP_CHANGED=false
           MOBILE_CHANGED=false
-          for PKG in packages/gateway/package.json packages/shared/package.json apps/web/package.json packages/screen-share/package.json apps/desktop/package.json apps/mobile/package.json; do
+          for PKG in packages/gateway/package.json packages/shared/package.json apps/web/package.json packages/screen-share/package.json apps/mobile/package.json; do
             NEW=$(jq -r '.version' "$PKG" 2>/dev/null || echo "")
             OLD=$(git show HEAD~1:"$PKG" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
             if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
@@ -115,7 +112,6 @@ jobs:
                 packages/shared/package.json) SHARED_CHANGED=true ;;
                 apps/web/package.json) WEB_CHANGED=true ;;
                 packages/screen-share/package.json) SCREEN_SHARE_CHANGED=true ;;
-                apps/desktop/package.json) DESKTOP_CHANGED=true ;;
                 apps/mobile/package.json) MOBILE_CHANGED=true ;;
               esac
             fi
@@ -125,7 +121,6 @@ jobs:
           echo "shared_changed=$SHARED_CHANGED" >> $GITHUB_OUTPUT
           echo "web_changed=$WEB_CHANGED" >> $GITHUB_OUTPUT
           echo "screen_share_changed=$SCREEN_SHARE_CHANGED" >> $GITHUB_OUTPUT
-          echo "desktop_changed=$DESKTOP_CHANGED" >> $GITHUB_OUTPUT
           echo "mobile_changed=$MOBILE_CHANGED" >> $GITHUB_OUTPUT
 
           if [ "$CHANGED" = "true" ]; then
@@ -165,143 +160,9 @@ jobs:
           echo "tagged=true" >> "$GITHUB_OUTPUT"
           echo "✅ Tagged $TAG"
 
-  # ── Build desktop apps (Electron) ──────────────────────────────────
-  desktop:
-    name: "Desktop Builds (Linux runner: Linux + Windows)"
-    runs-on: [self-hosted, linux]
-    needs: [auto-tag]
-    if: |
-      always() && (
-        needs.auto-tag.outputs.desktop_changed == 'true' ||
-        needs.auto-tag.outputs.changed == 'true' ||
-        startsWith(github.ref, 'refs/tags/v') ||
-        github.event_name == 'workflow_dispatch'
-      )
-      && (
-        github.event_name != 'push' ||
-        github.ref != 'refs/heads/main' ||
-        needs.auto-tag.outputs.changed == 'true'
-      )
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - name: Prepare release asset directory
-        run: mkdir -p "$RELEASE_ASSET_DIR"
-      - name: Stamp desktop version with release version
-        run: |
-          # The desktop app bundles the web frontend, so it must ship a new
-          # build on every gateway release. Stamp its package.json with the
-          # release version so electron-builder emits a latest.yml carrying the
-          # new version — electron-updater then detects the update on already
-          # installed apps. Prefer auto-tag output, fall back to the tag name
-          # or the gateway package.json version.
-          if [ -n "${{ needs.auto-tag.outputs.version }}" ]; then
-            REL_VERSION="${{ needs.auto-tag.outputs.version }}"
-          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            REL_VERSION="${GITHUB_REF_NAME#v}"
-          else
-            REL_VERSION=$(jq -r '.version' packages/gateway/package.json)
-          fi
-          echo "Stamping desktop version -> $REL_VERSION"
-          jq --arg v "$REL_VERSION" '.version = $v' apps/desktop/package.json > tmp.json && mv tmp.json apps/desktop/package.json
-          echo "desktop_release_version=$REL_VERSION" >> $GITHUB_ENV
-      - run: bun install --frozen-lockfile
-      - run: bun run build
-      - name: Check Linux runner prerequisites
-        run: |
-          echo "Runner: $(uname -a)"
-          if ! command -v wine &>/dev/null; then
-            echo "::error::Wine is not installed. Install it on the runner: sudo apt install -y wine64"
-            exit 1
-          fi
-          echo "Wine found: $(wine --version)"
-      - name: Ensure 7za is available for NSIS packaging
-        run: |
-          if command -v 7za &>/dev/null; then
-            echo "7za found: $(command -v 7za)"
-            exit 0
-          fi
-
-          if command -v 7zz &>/dev/null; then
-            mkdir -p "$RUNNER_TEMP/bin"
-            printf '%s\n' '#!/usr/bin/env bash' 'exec 7zz "$@"' > "$RUNNER_TEMP/bin/7za"
-            chmod +x "$RUNNER_TEMP/bin/7za"
-            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-            echo "Using 7zz shim at $RUNNER_TEMP/bin/7za"
-            exit 0
-          fi
-
-          BUNDLED_7ZA="$(node -p "try { require('7zip-bin').path7za || '' } catch { '' }")"
-          if [ -n "$BUNDLED_7ZA" ] && [ -x "$BUNDLED_7ZA" ]; then
-            mkdir -p "$RUNNER_TEMP/bin"
-            ln -sf "$BUNDLED_7ZA" "$RUNNER_TEMP/bin/7za"
-            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-            echo "Using bundled 7za from $BUNDLED_7ZA"
-            exit 0
-          fi
-
-          if command -v sudo &>/dev/null && command -v apt-get &>/dev/null; then
-            if sudo -n true 2>/dev/null; then
-              sudo apt-get update
-              sudo apt-get install -y p7zip-full
-            else
-              echo "::warning::sudo is available but requires a password; skipping automatic p7zip installation."
-            fi
-          fi
-
-          if ! command -v 7za &>/dev/null; then
-            echo "::error::Missing 7za. Install p7zip-full on the runner or provide 7zz/7za in PATH before starting the job."
-            exit 1
-          fi
-
-          echo "7za found: $(command -v 7za)"
-      - name: Build AppX assets (Win11 context menu DLL)
-        run: |
-          # Install MinGW cross-compiler if not present
-          if ! command -v x86_64-w64-mingw32-g++ &>/dev/null; then
-            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
-              sudo apt-get update && sudo apt-get install -y g++-mingw-w64-x86-64
-            else
-              echo "::warning::MinGW cross-compiler not available. Win11 modern context menu DLL will be skipped."
-            fi
-          fi
-          DESKTOP_VERSION=$(node -p "require('./apps/desktop/package.json').version")
-          chmod +x apps/desktop/build/build-appx.sh
-          apps/desktop/build/build-appx.sh --version "$DESKTOP_VERSION"
-      - name: Build Electron (Linux)
-        working-directory: apps/desktop
-        run: bun run build:linux
-      - name: Build Electron (Windows)
-        working-directory: apps/desktop
-        env:
-          USE_SYSTEM_7ZA: "true"
-        run: bun run build:win
-      - name: Stage desktop release assets on runner
-        if: env.RELEASE_ASSET_MODE == 'runner'
-        run: |
-          cp -v apps/desktop/release/*.AppImage "$RELEASE_ASSET_DIR"/
-          cp -v apps/desktop/release/*.deb "$RELEASE_ASSET_DIR"/
-          cp -v apps/desktop/release/latest-linux.yml "$RELEASE_ASSET_DIR"/
-          cp -v apps/desktop/release/*.exe "$RELEASE_ASSET_DIR"/
-          cp -v apps/desktop/release/latest.yml "$RELEASE_ASSET_DIR"/
-      - name: Upload desktop release assets to GitHub Artifacts
-        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
-        uses: actions/upload-artifact@v4
-        with:
-          name: desktop-release-assets
-          retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
-          if-no-files-found: error
-          path: |
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
-            apps/desktop/release/latest-linux.yml
-            apps/desktop/release/*.exe
-            apps/desktop/release/latest.yml
-
-  # ── Tauri desktop shell (Windows NSIS setup.exe built via cargo-xwin) ──
-  # Companion to the Electron app: ships Jait_*-setup.exe alongside the
-  # Electron installers on the release. Mirror-tested in the tauri-cicd
-  # container: cargo tauri build --runner cargo-xwin --target
+  # ── Desktop shell (Windows NSIS setup.exe built via cargo-xwin) ────
+  # Mirror-tested in the tauri-cicd container: cargo tauri build --runner
+  # cargo-xwin --target
   # x86_64-pc-windows-msvc --bundles nsis (needs llvm-rc for resource
   # embedding and makensis for the installer).
   desktop-gateway-runtime:
@@ -310,7 +171,6 @@ jobs:
     needs: [auto-tag]
     if: |
       always() && (
-        needs.auto-tag.outputs.desktop_changed == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
@@ -332,7 +192,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build gateway distribution
         env:
-          JAIT_HOSTING_TEST_RESOURCES: ${{ github.workspace }}/apps/desktop-tauri/src-tauri/gateway
+          JAIT_HOSTING_TEST_RESOURCES: ${{ github.workspace }}/apps/desktop/src-tauri/gateway
           JAIT_GRAPHIFY_COMMAND: __jait_smoke_no_optional_python__
         run: |
           bun install --frozen-lockfile
@@ -343,21 +203,20 @@ jobs:
           bun run --filter @jait/gateway build
           node packages/gateway/scripts/package-desktop.mjs
           node packages/gateway/scripts/smoke-desktop.mjs
-          cargo test --manifest-path apps/desktop-tauri/src-tauri/Cargo.toml packaged_runtime_lifecycle -- --ignored
-          tar -czf desktop-gateway.tar.gz -C apps/desktop-tauri/src-tauri gateway
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml packaged_runtime_lifecycle -- --ignored
+          tar -czf desktop-gateway.tar.gz -C apps/desktop/src-tauri gateway
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-gateway-runtime
           path: desktop-gateway.tar.gz
           retention-days: 3
 
-  desktop-tauri:
-    name: "Tauri Desktop Builds (Linux runner: Windows setup.exe)"
+  desktop:
+    name: "Desktop Build (Windows setup.exe)"
     runs-on: [self-hosted, linux]
     needs: [auto-tag, desktop-gateway-runtime]
     if: |
       always() && (
-        needs.auto-tag.outputs.desktop_changed == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
@@ -372,7 +231,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - name: Prepare release asset directory
         run: mkdir -p "$RELEASE_ASSET_DIR"
-      - name: Stamp Tauri version with release version
+      - name: Stamp desktop version with release version
         run: |
           # The Tauri shell embeds the web frontend, so it must ship a new
           # build on every gateway release. Stamp tauri.conf.json with the
@@ -384,17 +243,11 @@ jobs:
           else
             REL_VERSION=$(jq -r '.version' packages/gateway/package.json)
           fi
-          echo "Stamping Tauri version -> $REL_VERSION"
-          # Testing-phase naming: build as Jait-Tauri so the NSIS output and
-          # setup paths (Jait-Tauri_<ver>_x64-setup.exe, install dir, Start
-          # Menu entry) are distinguishable from Electron's
-          # Jait-<ver>-x64-setup.exe while both builds coexist side by side.
-          # Remove the productName stamp when Tauri replaces Electron.
-          jq --arg v "$REL_VERSION" --arg n "Jait-Tauri" \
-            '.version = $v | .productName = $n' \
-            apps/desktop-tauri/src-tauri/tauri.conf.json > tmp.json \
-            && mv tmp.json apps/desktop-tauri/src-tauri/tauri.conf.json
-          echo "tauri_release_version=$REL_VERSION" >> $GITHUB_ENV
+          echo "Stamping desktop version -> $REL_VERSION"
+          jq --arg v "$REL_VERSION" '.version = $v' \
+            apps/desktop/src-tauri/tauri.conf.json > tmp.json \
+            && mv tmp.json apps/desktop/src-tauri/tauri.conf.json
+          echo "desktop_release_version=$REL_VERSION" >> $GITHUB_ENV
       - name: Build Tauri frontend
         run: |
           bun install --frozen-lockfile
@@ -411,7 +264,7 @@ jobs:
           name: desktop-gateway-runtime
           path: desktop-gateway-artifact
       - name: Unpack gateway runtime
-        run: tar -xzf desktop-gateway-artifact/desktop-gateway.tar.gz -C apps/desktop-tauri/src-tauri
+        run: tar -xzf desktop-gateway-artifact/desktop-gateway.tar.gz -C apps/desktop/src-tauri
       - name: Ensure Tauri Windows cross toolchain
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
@@ -438,7 +291,7 @@ jobs:
             echo "$HOME/.local/usr/bin" >> "$GITHUB_PATH"
             echo "$HOME/.local/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
             echo "LD_LIBRARY_PATH=$HOME/.local/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
-            local marker="$HOME/.local/.jait-tauri-ci-tools"
+            local marker="$HOME/.local/.jait-desktop-ci-tools"
             if [ -f "$marker" ]; then
               echo "userspace toolchain already installed at $HOME/.local"
             else
@@ -594,18 +447,18 @@ jobs:
           echo "NSIS_LD_PRELOAD=$SO" >> "$GITHUB_ENV"
           echo "NSIS redirect shim ready: $SO ($(wc -c < "$SO") bytes, root: $NSIS_TREE)"
       - name: Build Tauri NSIS (Windows setup.exe)
-        working-directory: apps/desktop-tauri/src-tauri
+        working-directory: apps/desktop/src-tauri
         env:
           # Updater signing (minisign). TAURI_SIGNING_PRIVATE_KEY holds the
-          # base64 body of apps/desktop-tauri/.updater-keys/jait-updater.key;
+          # base64 body of apps/desktop/.updater-keys/jait-updater.key;
           # the key was generated with an empty password. `createUpdaterArtifacts`
           # (v2 updater mode) makes the bundler sign the NSIS installer in
-          # place: Jait-Tauri_*_x64-setup.exe + Jait-Tauri_*_x64-setup.exe.sig.
+          # place: Jait_*_x64-setup.exe + Jait_*_x64-setup.exe.sig.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         run: |
           if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is not configured (content of apps/desktop-tauri/.updater-keys/jait-updater.key)"
+            echo "::error::TAURI_SIGNING_PRIVATE_KEY secret is not configured (content of apps/desktop/.updater-keys/jait-updater.key)"
             exit 1
           fi
           export PATH="$HOME/.cargo/bin:$PATH"
@@ -637,75 +490,47 @@ jobs:
           export NSIS_REAL_DIR="${NSIS_REAL_DIR:-}"
           cargo tauri build --config tauri.gateway.conf.json --features shell,frontend --runner cargo-xwin \
             --target x86_64-pc-windows-msvc --bundles nsis
-      - name: Generate Tauri updater manifest (latest.json)
+      - name: Generate desktop updater manifest (latest.json)
         run: |
           # The Tauri updater polls .../releases/latest/download/latest.json
-          # (static feed, mirrors what electron-updater gets from latest.yml).
+          # (static feed consumed by the desktop updater).
           # With createUpdaterArtifacts: true (v2 updater mode) the bundler
           # signs the NSIS installer in place: *-setup.exe + *-setup.exe.sig.
           # The sig is copied verbatim from that .exe.sig; the download URL
           # points at the tagged release asset.
-          NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+          NSIS_DIR=apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
           EXE=$(ls "$NSIS_DIR"/*-setup.exe | head -n1)
           SIG=$(ls "$NSIS_DIR"/*-setup.exe.sig | head -n1)
           test -s "$EXE" || { echo "::error::updater installer not found in $NSIS_DIR"; exit 1; }
           test -s "$SIG" || { echo "::error::updater signature not found in $NSIS_DIR (createUpdaterArtifacts?)"; exit 1; }
-          VERSION="${{ env.tauri_release_version }}"
+          VERSION="${{ env.desktop_release_version }}"
           PUBKEY="dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0RThDQzkwMDZGMjg4NDYKUldSR2lQSUdrTXpvdEhuWkVYRU5idGtMRXpDZy8weXY3OWsrRmdZSUk5cUxUdHlFRlVOUmR1dXkK"
           jq -n --arg v "$VERSION" --arg pk "$PUBKEY" \
                 --arg sig "$(cat "$SIG")" \
                 --arg url "https://github.com/Widev-e-U/Jait/releases/download/v$VERSION/$(basename "$EXE")" \
-                '{version: $v, notes: "Jait Tauri desktop", pubkey: $pk,
+                '{version: $v, notes: "Jait desktop", pubkey: $pk,
                   platforms: {"windows-x86_64": {signature: $sig, url: $url}}}' \
             > "$NSIS_DIR/latest.json"
           cp -v "$EXE" "$SIG" "$RELEASE_ASSET_DIR"/
           echo "latest.json ->"; cat "$NSIS_DIR/latest.json"
-      - name: Stage Tauri release assets on runner
+      - name: Stage desktop release assets on runner
         if: env.RELEASE_ASSET_MODE == 'runner'
         run: |
-          NSIS_DIR=apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
+          NSIS_DIR=apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis
           cp -v "$NSIS_DIR"/*-setup.exe "$NSIS_DIR"/*-setup.exe.sig \
                 "$NSIS_DIR/latest.json" \
                 "$RELEASE_ASSET_DIR"/
-      - name: Upload Tauri release assets to GitHub Artifacts
+      - name: Upload desktop release assets to GitHub Artifacts
         if: env.RELEASE_ASSET_MODE == 'github-artifacts'
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-tauri-release-assets
+          name: desktop-release-assets
           retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
           if-no-files-found: error
           path: |
-            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
-            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
-            apps/desktop-tauri/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
-
-  # ── Build macOS desktop app (skipped — no macOS runner available) ─
-  # To enable: add a macOS self-hosted runner or fix GitHub billing,
-  # then uncomment this job and add it back to the release 'needs'.
-  # desktop-macos:
-  #   name: Desktop Build (macOS)
-  #   runs-on: macos-latest
-  #   needs: [auto-tag]
-  #   if: |
-  #     always() && (
-  #       needs.auto-tag.outputs.tagged == 'true' ||
-  #       needs.auto-tag.outputs.changed == 'true' ||
-  #       startsWith(github.ref, 'refs/tags/v') ||
-  #       github.event_name == 'workflow_dispatch'
-  #     )
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: oven-sh/setup-bun@v2
-  #     - run: bun install --frozen-lockfile
-  #     - run: bun run build
-  #     - name: Build Electron (macOS)
-  #       working-directory: apps/desktop
-  #       run: bun run build:mac
-  #     - uses: actions/upload-artifact@v4
-  #       with:
-  #         name: desktop-macos
-  #         path: |
-  #           apps/desktop/release/*.dmg
+            apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
+            apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
+            apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/latest.json
 
   # ── Build Android APK ──────────────────────────────────────────────
   android:
@@ -1091,12 +916,11 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: [self-hosted, linux]
-    needs: [auto-tag, npm-publish, desktop, desktop-tauri, android]
+    needs: [auto-tag, npm-publish, desktop, android]
     if: |
       always() && 
       needs.npm-publish.result == 'success' && 
       contains(fromJSON('["success","skipped"]'), needs.desktop.result) && 
-      contains(fromJSON('["success","skipped"]'), needs.desktop-tauri.result) && 
       contains(fromJSON('["success","skipped"]'), needs.android.result) && (
         needs.auto-tag.outputs.tagged == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||

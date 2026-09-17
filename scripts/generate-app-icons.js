@@ -24,12 +24,11 @@ async function main() {
     copyFileSync(join(ROOT, 'packages/shared/assets/logo/icon.svg'), join(webPublic, 'icon.svg'));
     console.log('  ✓ apps/web/public/icon.svg (theme-adaptive, currentColor)');
     // 3. Desktop
-    const desktopAssets = join(ROOT, 'apps/desktop/assets');
-    await generate(SVG_APP, join(desktopAssets, 'icon-1024.png'), 1024);
+    const desktopAssets = join(ROOT, 'apps/desktop/src-tauri/icons');
+    await generate(SVG_APP, join(desktopAssets, '32x32.png'), 32);
+    await generate(SVG_APP, join(desktopAssets, '128x128.png'), 128);
+    await generate(SVG_APP, join(desktopAssets, '128x128@2x.png'), 256);
     await generate(SVG_APP, join(desktopAssets, 'icon.png'), 256);
-    await generate(SVG_APP, join(desktopAssets, 'tray-icon.png'), 16);
-    copyFileSync(join(ROOT, 'packages/shared/assets/logo/icon-app.svg'), join(desktopAssets, 'icon.svg'));
-    console.log('  ✓ apps/desktop/assets/icon.svg (white bg)');
     // 4. Mobile
     const mobileAssets = join(ROOT, 'apps/mobile/assets');
     await generate(SVG_APP, join(mobileAssets, 'icon.png'), 1024);

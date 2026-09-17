@@ -46,11 +46,9 @@ Download the latest installer from [**GitHub Releases**](https://github.com/Wide
 
 | Platform | File |
 |----------|------|
-| Windows  | `Jait-*-x64-setup.exe` or portable `.exe` |
-| macOS    | `Jait-*-arm64.dmg` / `Jait-*-x64.dmg` |
-| Linux    | `Jait-*-x64.AppImage` or `.deb` |
+| Windows  | `Jait_*_x64-setup.exe` |
 
-The desktop app bundles the gateway + web UI in one window. No separate install needed.
+The desktop app currently ships for Windows and bundles the gateway + web UI in one window. No separate install needed.
 
 ### Option C — From source
 
@@ -212,7 +210,7 @@ packages/
   screen-share/ Screen-share service primitives
 apps/
   web/        Vite + React frontend (bundled into gateway on publish)
-  desktop/    Electron wrapper
+  desktop/ Rust + Tauri desktop shell
   mobile/     Capacitor mobile client
 ```
 

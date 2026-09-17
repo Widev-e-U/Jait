@@ -17,7 +17,7 @@ interface AppPageOutletProps {
   activeSessionId: string | null
   activityEvents: ActivityEvent[]
   apiKeys: Record<string, string>
-  appPlatform: 'web' | 'electron' | 'capacitor'
+  appPlatform: 'web' | 'desktop' | 'capacitor'
   chatProvider: ProviderId
   chatProviderRuntimeMode: RuntimeMode
   cliModel: string | null

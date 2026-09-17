@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 export interface AuthFormProps {
   /**
    * `gate` renders plain headings for the full-screen auth gate (avoids Radix
-   * focus-trap overhead during Electron window drag). `dialog` renders Radix
+   * focus-trap overhead during Desktop window drag). `dialog` renders Radix
    * Dialog header primitives for the re-login dialog.
    */
   variant: 'gate' | 'dialog'

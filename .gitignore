@@ -14,7 +14,6 @@ venv/
 # Build outputs
 dist/
 build/
-!apps/desktop/build/
 web-dist/
 *.egg-info/
 *.tsbuildinfo
@@ -71,9 +70,7 @@ temp-*/
 .jait/shots/
 playwright-report/
 
-# Desktop releases
-apps/desktop/release/
-apps/desktop/build/appx-dist/
+# App-specific generated files
 apps/mobile/.expo/
 
 # Local release signing material
@@ -86,14 +83,14 @@ apps/mobile/android/app/google-services.json
 docker/windows-sandbox-storage/
 
 # Tauri desktop shell (standalone crate, cross-compiled for Windows)
-apps/desktop-tauri/src-tauri/target/
-apps/desktop-tauri/target/
+apps/desktop/src-tauri/target/
+apps/desktop/target/
 
 # Local Tauri Windows cross-compile workdir / container build mirror (14GB+)
-tauri-win/
+jait-win/
 
 # Tauri build output (installers are staged via CI, never committed)
-apps/desktop-tauri/dist/
+apps/desktop/dist/
 
-# stale build dir left by a containerized build (root-owned, not deletable here)
-apps/desktop-tauri/src-tauri/target.stale-root-junk/
+# desktop shell test harness artifacts
+apps/desktop/src-tauri/tests/harness/out/

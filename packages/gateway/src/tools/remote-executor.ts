@@ -24,7 +24,7 @@
  * gets added to the registry defaults to running on the gateway — the only
  * way a tool becomes remotely executable is to be explicitly listed here
  * AND implemented by every remote node handler (primary-link.ts and the
- * Electron desktop main process).
+ * desktop shell).
  */
 
 import type { ToolResult, ToolContext } from "./contracts.js";
@@ -39,7 +39,7 @@ import { resolveCommandTimeoutMs } from "../lib/command-timeout.js";
  *
  * Each entry here MUST be implemented by both remote node handlers:
  *  - `packages/gateway/src/services/primary-link.ts`  (headless node)
- *  - `apps/desktop/src/electron-main.ts`               (desktop app)
+ *  - `apps/desktop/crates/jait-desktop-glue/src/lib.rs` (desktop app)
  *
  * Adding a tool here without implementing it on the nodes will cause a
  * "Tool 'X' is not supported for remote execution" error at runtime.

@@ -2,7 +2,7 @@
  * GitActionsControl — Commit / Push / Create PR flow.
  *
  * Adapted from the t3code GitActionsControl but using HTTP API
- * instead of Electron IPC. Shows the quick-action button + drop-down
+ * instead of Desktop IPC. Shows the quick-action button + drop-down
  * menu for git operations on a registered repository.
  */
 

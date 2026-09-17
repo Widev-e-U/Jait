@@ -55,7 +55,7 @@ Everything lives in `.github/workflows/release.yml`:
 3. The `auto-tag` job in `release.yml` detects the version change and creates a `v<version>` git tag.
 4. In the same workflow run, downstream jobs execute:
    - npm publish for `@jait/shared`, `@jait/screen-share`, `@jait/web`, `@jait/gateway` (in dependency order, skipping already-published versions).
-   - Desktop builds (Windows, macOS, Linux) and Android APK.
+   - Desktop build (Windows, Rust + Tauri shell) and Android APK.
    - GitHub Release with all artifacts attached.
 5. `.github/workflows/ci.yml` runs lint, typecheck, test, and Docker builds on every push/PR.
 

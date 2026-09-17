@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const output = join(root, 'apps/desktop-tauri/src-tauri/gateway');
+const output = join(root, 'apps/desktop/src-tauri/gateway');
 if (process.release.name !== 'node' || Number(process.versions.node.split('.')[0]) < 22) throw new Error('Package with Node 22 or newer on the target OS');
 rmSync(output, { recursive: true, force: true });
 mkdirSync(join(output, 'runtime'), { recursive: true });

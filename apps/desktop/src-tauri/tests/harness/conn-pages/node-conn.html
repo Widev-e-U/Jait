@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"><title>node-conn test</title></head><body><h1>node-conn test</h1><pre id="out">starting…</pre><script>
+(async () => {
+  const R = { tests: {}, app: 'unknown', reportingError: null, ts: new Date().toISOString() };
+  try {
+    console.warn('tauri-bridge-wait', 0, location.origin, location.pathname, JSON.stringify(window.__TAURI_INTERNALS__ || null));
+    for (let i = 0; i < 100 && !(window.__TAURI_INTERNALS__ || window.jaitDesktop); i++) {
+      console.warn('tauri-bridge-wait', i, location.origin, location.pathname, JSON.stringify(window.__TAURI_INTERNALS__ || null));
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (!window.jaitDesktop) {
+      R.reportingError = 'no window.jaitDesktop (platform bridge missing: ' + (window.__TAURI_INTERNALS__ ? 'internals-present' : 'internals-missing') + ')';
+    } else {
+      R.app = window.jaitDesktop.platform;
+      // shim sync/statics (no node roundtrip yet)
+      R.tests.bootGatewayUrl = { ok: true, v: (window.__JAIT_DESKTOP_BOOT__ || {}).gatewayUrl || null };
+      const j = window.jaitDesktop;
+      const t = async (name, fn) => {
+        try {
+          const v = await fn();
+          R.tests[name] = { ok: true, v: typeof v === 'string' ? v.slice(0, 120) : JSON.stringify(v).slice(0, 200) };
+        } catch (e) { R.tests[name] = { ok: false, err: String(e).slice(0, 200) }; }
+      };
+      // Node-backed commands through the desktop shell bridge.
+      await t('getInfo', () => j.getInfo());
+      await t('rootBrowse', () => j.browsePath());
+      await t('hostsFile', () => j.fsOp('read', { path: '/etc/hosts' }));
+      await t('detectProviders', () => j.detectProviders());
+      await t('searchOp', () => j.searchOp('run', { root: '/jait/apps/desktop/src-tauri', query: 'run-conn-test', mode: 'files' }));
+      await t('toolOpExec', async () => {
+        const r = await j.toolOp('execute', { command: 'echo glue-tool-ok' }, {});
+        // The foreground envelope is { ok, message } with the
+        // combined output in `message` (no data payload).
+        if (!r || r.ok !== true || typeof r.message !== 'string'
+            || !r.message.includes('glue-tool-ok')) {
+          throw new Error('toolOp envelope mismatch: ' + JSON.stringify(r).slice(0, 200));
+        }
+        const f = await j.toolOp('execute', { command: 'exit 3' }, {});
+        if (!f || f.ok !== false || typeof f.message !== 'string') {
+          throw new Error('toolOp failure envelope mismatch: ' + JSON.stringify(f).slice(0, 200));
+        }
+        return r;
+      });
+      // login item round-trip: read -> enable -> verify -> restore
+      await t('loginItem', async () => {
+        const before = await j.getLoginItem();
+        let setRes, restore;
+        try { setRes = await j.setLoginItem(true); } catch (e) { setRes = { ok: false, error: String(e) }; }
+        const toggledState = await j.getLoginItem();
+        try { restore = await j.setLoginItem(!!before.enabled); } catch (e) { restore = { ok: false, error: String(e) }; }
+        return {
+          before: before.enabled,
+          setOk: Boolean(setRes && setRes.ok),
+          setErr: setRes && setRes.error ? String(setRes.error).slice(0, 120) : '',
+          toggled: toggledState.enabled,
+          restoredOk: Boolean(restore && restore.ok),
+        };
+      });
+    }
+  } catch (e) { R.reportingError = String(e); }
+  try {
+    await fetch('/report', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(R) });
+  } catch (e) { R.reportingError = 'report fail: ' + e; }
+  document.getElementById('out').textContent = JSON.stringify(R);
+  document.title = 'REPORT_SENT';
+})();
+</script></body></html>

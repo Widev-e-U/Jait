@@ -6,20 +6,19 @@ import { useEffect, useState } from 'react'
  * No-ops in the browser (`window.jaitDesktop` absent), leaving
  * `desktopPlatform` null.
  *
- * `desktopRuntime` distinguishes the two shells: both expose
- * `window.jaitDesktop`, but the Tauri shell has no native
- * `titleBarOverlay`/traffic lights (the window is always frameless), so the
- * web app must render custom window controls there.
+ * `desktopRuntime` lets the web UI enable shell-specific drag regions and
+ * custom controls. Tauri is frameless outside Linux; Linux keeps native
+ * window-manager decorations.
  */
 export function useDesktopWindow() {
   const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
-  const [desktopRuntime, setDesktopRuntime] = useState<'electron' | 'tauri' | null>(null)
+  const [desktopRuntime, setDesktopRuntime] = useState<'tauri' | null>(null)
 
   useEffect(() => {
     const desktop = (window as any).jaitDesktop
     if (!desktop) return
-    setDesktopRuntime((window as any).__TAURI_INTERNALS__ ? 'tauri' : 'electron')
+    setDesktopRuntime('tauri')
     desktop.getInfo?.().then((info: any) => setDesktopPlatform(info.platform))
     desktop.windowIsMaximized?.().then((max: boolean) => setIsMaximized(max))
     const cleanup = desktop.onMaximizedChange?.((_: unknown, maximized: boolean) => setIsMaximized(maximized))

@@ -7,7 +7,6 @@ const releasePackages = [
   'packages/shared/package.json',
   'apps/web/package.json',
   'packages/screen-share/package.json',
-  'apps/desktop/package.json',
   'apps/mobile/package.json',
 ];
 

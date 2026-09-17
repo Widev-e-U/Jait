@@ -14,7 +14,7 @@ describe("MobilePushService", () => {
 
   it("revokes everywhere when the resolving device is unknown", () => {
     expect(attentionRevokeTargets(registrations, null)).toEqual(registrations);
-    expect(attentionRevokeTargets(registrations, "desktop-electron")).toEqual(registrations);
+    expect(attentionRevokeTargets(registrations, "desktop-desktop")).toEqual(registrations);
   });
 
   it("pushes chat completion only to the chat owner's devices", async () => {

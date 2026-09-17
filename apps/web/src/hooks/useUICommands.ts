@@ -33,7 +33,7 @@ const WS_URL = getWsUrl()
 /** Maps the build target onto the gateway's `ClientSurface` vocabulary. */
 function clientSurface(): 'desktop' | 'mobile' | 'web' {
   const platform = detectPlatform()
-  if (platform === 'electron') return 'desktop'
+  if (platform === 'desktop') return 'desktop'
   if (platform === 'capacitor') return 'mobile'
   return 'web'
 }
@@ -66,7 +66,7 @@ const DESKTOP_NODE_TOOLS = [
 function getDeviceName(): string {
   const platform = detectPlatform()
   const ua = navigator.userAgent
-  if (platform === 'electron') return `Desktop (${navigator.platform})`
+  if (platform === 'desktop') return `Desktop (${navigator.platform})`
   if (platform === 'capacitor') return 'Mobile'
   if (ua.includes('Chrome')) return `Chrome (${navigator.platform})`
   if (ua.includes('Firefox')) return `Firefox (${navigator.platform})`
@@ -80,7 +80,7 @@ export function resolveFsNodePlatform(
   browserPlatform: string,
 ): string {
   if (appPlatform === 'capacitor') return 'android' // or ios, but we'll keep it simple
-  if (appPlatform === 'electron') {
+  if (appPlatform === 'desktop') {
     const plat = (nativePlatform || browserPlatform).toLowerCase()
     if (plat === 'win32' || plat === 'windows' || plat.includes('win')) return 'windows'
     if (plat === 'darwin' || plat === 'macos' || plat.includes('mac')) return 'macos'
@@ -100,11 +100,11 @@ function detectFsNodePlatform(): string {
 /**
  * Whether this client can act as a filesystem node (browse local files).
  * Browser clients served from a local dev server can't really expose files,
- * but Electron and Capacitor can.
+ * but Desktop and Capacitor can.
  */
 function canActAsFsNode(): boolean {
   const p = detectPlatform()
-  return p === 'electron' || p === 'capacitor'
+  return p === 'desktop' || p === 'capacitor'
 }
 
 // ── Listener map ────────────────────────────────────────────────────
@@ -373,7 +373,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         })
       } else if (msg.type === 'attention.raised') {
         // The gateway decides which surface owns the OS notification for this
-        // machine. When Electron is connected it takes the toast and this tab
+        // machine. When Desktop is connected it takes the toast and this tab
         // shows the in-app prompt only, so one request never pops twice.
         const attention = msg.payload as { native?: boolean }
         setNativeNotificationsEnabled(attention.native !== false)
@@ -461,7 +461,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     try {
       let result: { path: string; parent: string | null; entries: { name: string; path: string; type: 'dir' | 'file' }[] }
       const platform = detectPlatform()
-      if (platform === 'electron' && window.jaitDesktop?.browsePath) {
+      if (platform === 'desktop' && window.jaitDesktop?.browsePath) {
         result = await window.jaitDesktop.browsePath(path)
       } else if (platform === 'capacitor') {
         result = await capacitorBrowse(path)
@@ -496,7 +496,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     try {
       let roots: { name: string; path: string; type: 'dir' | 'file' }[]
       const platform = detectPlatform()
-      if (platform === 'electron' && window.jaitDesktop?.getRoots) {
+      if (platform === 'desktop' && window.jaitDesktop?.getRoots) {
         const result = await window.jaitDesktop.getRoots()
         roots = result.roots
       } else if (platform === 'capacitor') {
@@ -522,7 +522,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
   /**
    * Handle a generic filesystem operation request from the gateway.
    * Operations: stat, read, write, list, exists, mkdir, readdir
-   * Each is dispatched to the Electron IPC bridge (or Capacitor on mobile).
+   * Each is dispatched to the Desktop IPC bridge (or Capacitor on mobile).
    */
   const handleFsOpRequest = useCallback(async (payload: { requestId: string; op: string; [key: string]: unknown }) => {
     const ws = wsRef.current
@@ -530,7 +530,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     const { requestId, op, ...params } = payload
     try {
       const platform = detectPlatform()
-      if (platform === 'electron' && window.jaitDesktop?.fsOp) {
+      if (platform === 'desktop' && window.jaitDesktop?.fsOp) {
         const result = await window.jaitDesktop.fsOp(op, params)
         ws.send(JSON.stringify({
           type: 'fs.op-response',
@@ -556,7 +556,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
   /**
    * Handle a provider operation request from the gateway.
    * Operations: start-session, send-turn, stop-session, list-models
-   * Dispatches to the Electron IPC bridge.
+   * Dispatches to the Desktop IPC bridge.
    */
   const handleProviderOpRequest = useCallback(async (payload: { requestId: string; op: string; [key: string]: unknown }) => {
     const ws = wsRef.current
@@ -564,7 +564,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     const { requestId, op, ...params } = payload
     try {
       const platform = detectPlatform()
-      if (platform === 'electron' && window.jaitDesktop?.providerOp) {
+      if (platform === 'desktop' && window.jaitDesktop?.providerOp) {
         const result = await window.jaitDesktop.providerOp(op, params)
         ws.send(JSON.stringify({
           type: 'provider.op-response',
@@ -586,7 +586,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
   /**
    * Handle a tool execution request from the gateway.
-   * Dispatches to the Electron IPC bridge for local execution on this node.
+   * Dispatches to the Desktop IPC bridge for local execution on this node.
    */
   const handleToolOpRequest = useCallback(async (payload: {
     requestId: string; tool: string; args: Record<string, unknown>;
@@ -597,7 +597,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     const { requestId, tool, args, sessionId, projectRoot, backgroundId } = payload
     try {
       const platform = detectPlatform()
-      if (platform === 'electron' && window.jaitDesktop?.toolOp) {
+      if (platform === 'desktop' && window.jaitDesktop?.toolOp) {
         const result = await window.jaitDesktop.toolOp(
           tool,
           args,
@@ -627,7 +627,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     const { requestId, op, ...params } = payload
     try {
       const platform = detectPlatform()
-      if (platform === 'electron' && window.jaitDesktop?.terminalOp) {
+      if (platform === 'desktop' && window.jaitDesktop?.terminalOp) {
         const result = await window.jaitDesktop.terminalOp(op, params)
         if (requestId && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
@@ -656,7 +656,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
   useEffect(() => {
     // Don't open a WebSocket until the user is authenticated.
     // Without this guard the hook reconnects every 1 s during the auth gate,
-    // causing state churn and drag-lag on Windows/Electron.
+    // causing state churn and drag-lag on Windows/Desktop.
     if (!token) return
 
     mountedRef.current = true
@@ -679,18 +679,18 @@ export function useUICommands(opts: UseUICommandsOptions) {
       currentSessionRef.current = null
     }
 
-    // Electron desktops act as always-on nodes and must keep their gateway
+    // Desktop desktops act as always-on nodes and must keep their gateway
     // WebSocket alive even when the window is hidden to the tray. Only
     // browsers/capacitor pause (and later reconnect) on visibility.
-    const isAlwaysOnNode = detectPlatform() === 'electron'
+    const isAlwaysOnNode = detectPlatform() === 'desktop'
 
     const connect = () => {
       if (!mountedRef.current) return
-      // Always-on (Electron) nodes stay connected in the background; only
+      // Always-on (Desktop) nodes stay connected in the background; only
       // browsers/capacitor skip connecting while the tab/window is hidden.
       if (!isAlwaysOnNode && typeof document !== 'undefined' && document.hidden) return
       // Declare the surface so the gateway's attention fan-out can decide who
-      // owns the OS notification — an Electron window and a browser tab on the
+      // owns the OS notification — an Desktop window and a browser tab on the
       // same machine are two clients but one human.
       const ws = new WebSocket(
         `${WS_URL}?token=${tokenRef.current ?? 'dev'}&surface=${clientSurface()}`,
@@ -735,7 +735,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
             // Detect locally installed CLI providers and whether the desktop's
             // own CLI authentication is ready for remote execution.
             let providerStatuses: Array<{ id: string; installed: boolean; authenticated: boolean | null; detail?: string }> = []
-            if (detectPlatform() === 'electron' && window.jaitDesktop?.detectProviders) {
+            if (detectPlatform() === 'desktop' && window.jaitDesktop?.detectProviders) {
               try {
                 const detectedProviders = await window.jaitDesktop.detectProviders()
                 providerStatuses = detectedProviders.map((provider) => (
@@ -754,7 +754,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 id: deviceId,
                 name: getDeviceName(),
                 platform: detectFsNodePlatform(),
-                role: detectPlatform() === 'electron' ? 'desktop' : 'mobile',
+                role: detectPlatform() === 'desktop' ? 'desktop' : 'mobile',
                 protocolVersion: NODE_PROTOCOL_VERSION,
                 capabilities: {
                   providers,
@@ -767,7 +767,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
                   // bridge actually exposes terminalOp. Older builds register the
                   // "terminal" surface (subscribe/output) but never answer
                   // terminal.op-request, which would otherwise hang the gateway.
-                  interactiveTerminal: detectPlatform() === 'electron' && !!window.jaitDesktop?.terminalOp,
+                  interactiveTerminal: detectPlatform() === 'desktop' && !!window.jaitDesktop?.terminalOp,
                 },
               },
             })
@@ -804,12 +804,12 @@ export function useUICommands(opts: UseUICommandsOptions) {
       }
     }
 
-    // Electron always-on nodes keep their connection live while hidden to the
+    // Desktop always-on nodes keep their connection live while hidden to the
     // tray; browsers/capacitor pause and reconnect on visibility changes.
     const handleVisibilityChange = () => {
       const hidden = typeof document !== 'undefined' && document.hidden
       if (isAlwaysOnNode) {
-        // Electron: keep the connection live while hidden to tray.
+        // Desktop: keep the connection live while hidden to tray.
         // If the socket dropped while hidden, reconnect on visibility.
         if (!hidden && !wsRef.current && mountedRef.current) connect()
         return
@@ -835,7 +835,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       document.addEventListener('visibilitychange', handleVisibilityChange)
     }
 
-    // Set up Electron IPC listener for provider events from child processes
+    // Set up Desktop IPC listener for provider events from child processes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const gatewayEventHandler = (_event: unknown, data: any) => {
       if (data?.type === 'provider.event-from-child') {
@@ -877,7 +877,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         else outgoingQueueRef.current.push(msg)
       }
     }
-    if (detectPlatform() === 'electron' && window.jaitDesktop?.onGatewayEvent) {
+    if (detectPlatform() === 'desktop' && window.jaitDesktop?.onGatewayEvent) {
       window.jaitDesktop.onGatewayEvent(gatewayEventHandler)
     }
 
@@ -887,8 +887,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange)
       }
-      // Clean up Electron IPC listener
-      if (detectPlatform() === 'electron' && window.jaitDesktop?.removeGatewayEventListener) {
+      // Clean up Desktop IPC listener
+      if (detectPlatform() === 'desktop' && window.jaitDesktop?.removeGatewayEventListener) {
         window.jaitDesktop.removeGatewayEventListener()
       }
       closeSocket()

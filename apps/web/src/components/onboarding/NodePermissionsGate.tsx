@@ -45,15 +45,15 @@ function grantedCount(perms: Record<NodeCapability, boolean>): number {
  * Desktop first-run permission onboarding + a lightweight banner for any other
  * newly connected node that is still unconfigured (deny-all by default).
  *
- * On the first launch of the Electron app it blocks the UI until the user has
+ * On the first launch of the Desktop app it blocks the UI until the user has
  * chosen which capabilities the LOCAL node may use, then persists the choice in
  * desktop-settings.json via the `permissionsSetupDone` flag. On every later
  * launch it only surfaces a dismissible banner for other nodes whose grants are
  * still all-denied, prompting the user to configure them in Settings → Nodes.
  */
 export function NodePermissionsGate({ token }: { token: string | null }) {
-  const isElectron = typeof window !== 'undefined' && !!window.jaitDesktop
-  const localNodeId = useMemo(() => (isElectron ? generateDeviceId() : null), [isElectron])
+  const isDesktop = typeof window !== 'undefined' && !!window.jaitDesktop
+  const localNodeId = useMemo(() => (isDesktop ? generateDeviceId() : null), [isDesktop])
 
   const { nodes, loading, error, saving, saveError, updatePermissions } = useNodePermissions(token)
 
@@ -62,7 +62,7 @@ export function NodePermissionsGate({ token }: { token: string | null }) {
   // flash of the main UI before we know whether onboarding is required.
   const [firstRunDone, setFirstRunDone] = useState<boolean | null>(null)
   useEffect(() => {
-    if (!isElectron) {
+    if (!isDesktop) {
       setFirstRunDone(true)
       return
     }
@@ -80,7 +80,7 @@ export function NodePermissionsGate({ token }: { token: string | null }) {
     return () => {
       mounted = false
     }
-  }, [isElectron])
+  }, [isDesktop])
 
   const localNode = useMemo(
     () => (localNodeId ? nodes.find((n) => n.id === localNodeId) : undefined),
@@ -111,11 +111,11 @@ export function NodePermissionsGate({ token }: { token: string | null }) {
   }, [localNode, draft])
 
   useEffect(() => {
-    if (savingStarted && !saving && saved && isElectron) {
+    if (savingStarted && !saving && saved && isDesktop) {
       setSavingStarted(false)
       window.jaitDesktop!.setSetting(SETTINGS_KEY, true).then(() => setFirstRunDone(true))
     }
-  }, [savingStarted, saving, saved, isElectron])
+  }, [savingStarted, saving, saved, isDesktop])
 
   const handleSave = () => {
     if (!localNodeId) return
@@ -135,7 +135,7 @@ export function NodePermissionsGate({ token }: { token: string | null }) {
   if (firstRunDone === null) return null
 
   // ── First-run onboarding overlay (local node only) ───────────────────
-  if (isElectron && firstRunDone === false) {
+  if (isDesktop && firstRunDone === false) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/95 p-6 backdrop-blur-sm">
         <div className="w-full max-w-lg">
