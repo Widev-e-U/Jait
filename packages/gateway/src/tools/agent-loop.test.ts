@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __testUtils,
+  applyProviderPromptCaching,
   formatLLMError,
   parseOpenAIStream,
   parseOllamaStream,
@@ -8,6 +9,7 @@ import {
   buildTieredToolSchemas,
   fromOpenAIName,
   runAgentLoop,
+  serializeToolResultForModel,
   SteeringController,
   retryToolCall,
   ToolCallPriority,
@@ -356,6 +358,36 @@ describe("ToolCallQueue.dequeueBatch", () => {
   });
 });
 
+describe("serializeToolResultForModel", () => {
+  it("omits structured fields that exactly repeat the result message", () => {
+    expect(JSON.parse(serializeToolResultForModel({
+      ok: true,
+      message: "command output",
+      data: { output: "command output", exitCode: 0 },
+    }))).toEqual({ ok: true, message: "command output", data: { exitCode: 0 } });
+  });
+
+  it("keeps distinct structured data", () => {
+    expect(JSON.parse(serializeToolResultForModel({
+      ok: true,
+      message: "2 results",
+      data: { items: ["a", "b"] },
+    }))).toEqual({ ok: true, message: "2 results", data: { items: ["a", "b"] } });
+  });
+});
+
+describe("applyProviderPromptCaching", () => {
+  it("adds a non-identifying application cache key only for OpenAI", () => {
+    const openAI: Record<string, unknown> = {};
+    applyProviderPromptCaching(openAI, { backend: "openai" });
+    expect(openAI.prompt_cache_key).toBe("jait-agent");
+
+    const compatible: Record<string, unknown> = {};
+    applyProviderPromptCaching(compatible, { backend: "openrouter" });
+    expect(compatible).not.toHaveProperty("prompt_cache_key");
+  });
+});
+
 describe("parseOpenAIStream", () => {
   it("processes the final buffered SSE event without a trailing newline", async () => {
     const parsed = await parseOpenAIStream(streamReader([
@@ -369,6 +401,20 @@ describe("parseOpenAIStream", () => {
       prompt_tokens: 2,
       completion_tokens: 1,
       total_tokens: 3,
+    });
+  });
+
+  it("captures cached usage from OpenAI's empty final choices chunk", async () => {
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":120,"completion_tokens":8,"total_tokens":128,"prompt_tokens_details":{"cached_tokens":96}}}\n',
+    ]));
+
+    expect(parsed.usage).toEqual({
+      prompt_tokens: 120,
+      completion_tokens: 8,
+      total_tokens: 128,
+      cached_tokens: 96,
     });
   });
 

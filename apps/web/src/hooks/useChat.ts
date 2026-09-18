@@ -292,6 +292,7 @@ export interface LlmContextFlowRound {
 export interface RoundMetrics {
   durationMs: number
   promptTokens?: number
+  cachedPromptTokens?: number
   completionTokens?: number
   totalTokens?: number
   tokenUsageEstimated?: boolean

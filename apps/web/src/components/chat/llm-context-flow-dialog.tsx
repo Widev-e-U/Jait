@@ -181,6 +181,7 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
   let totalDuration = 0
   let hasDurationData = false
   let totalPromptTokens = 0
+  let totalCachedPromptTokens = 0
   let totalCompletionTokens = 0
   let totalTokens = 0
   let lastContextUsage: RoundMetrics['contextUsage'] | undefined
@@ -195,6 +196,7 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
       hasDurationData = true
     }
     if (m.promptTokens) totalPromptTokens += m.promptTokens
+    if (m.cachedPromptTokens) totalCachedPromptTokens += m.cachedPromptTokens
     if (m.completionTokens) totalCompletionTokens += m.completionTokens
     if (m.totalTokens) totalTokens += m.totalTokens
     if (m.tokensPerSecond && m.completionTokens) {
@@ -226,6 +228,7 @@ function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
         </div>
         <div className="text-xs text-muted-foreground">
           {totalPromptTokens > 0 ? `${formatNumber(totalPromptTokens)} in` : ''}
+          {totalCachedPromptTokens > 0 ? ` (${formatNumber(totalCachedPromptTokens)} cached)` : ''}
           {totalPromptTokens > 0 && totalCompletionTokens > 0 ? ' · ' : ''}
           {totalCompletionTokens > 0 ? `${formatNumber(totalCompletionTokens)} out` : ''}
           {totalPromptTokens === 0 && totalCompletionTokens === 0 ? 'estimated' : ''}
@@ -273,6 +276,7 @@ function RoundMetricsBar({ metrics }: { metrics?: RoundMetrics }) {
     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
       <TooltipHint content="LLM request duration"><span>{metrics.durationMs > 0 ? formatDuration(metrics.durationMs) : '—'}</span></TooltipHint>
       {metrics.promptTokens != null && <TooltipHint content={`${tokenLabelPrefix}prompt tokens`}><span>{tokenTextPrefix}{formatNumber(metrics.promptTokens)} prompt</span></TooltipHint>}
+      {metrics.cachedPromptTokens != null && metrics.cachedPromptTokens > 0 && <TooltipHint content="Prompt tokens served from provider cache"><span>{formatNumber(metrics.cachedPromptTokens)} cached</span></TooltipHint>}
       {metrics.completionTokens != null && <TooltipHint content={`${tokenLabelPrefix}completion tokens`}><span>{tokenTextPrefix}{formatNumber(metrics.completionTokens)} completion</span></TooltipHint>}
       {metrics.tokensPerSecond != null && (
         <TooltipHint content="Completion tokens per second"><span className="font-medium text-foreground/80">{metrics.tokensPerSecond} tok/s</span></TooltipHint>

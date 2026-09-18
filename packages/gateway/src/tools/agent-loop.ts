@@ -91,6 +91,8 @@ export interface RoundMetrics {
   durationMs: number;
   /** Provider-reported token usage (when available). */
   promptTokens?: number;
+  /** Prompt tokens served from the provider cache (included in promptTokens). */
+  cachedPromptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
   /** True when token counts were estimated because the provider reported no usage. */
@@ -1355,7 +1357,12 @@ interface ParsedStream {
   finishReason: string | null;
   interrupted?: boolean;
   /** Token usage reported by the provider (from the final chunk). */
-  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cached_tokens?: number;
+  };
   /**
    * Set when the stream was cut short because the model started repeating
    * itself verbatim. `finishReason` is "repetition" in that case.
@@ -1409,6 +1416,24 @@ export async function parseOpenAIStream(
           : chunk.error.message ?? JSON.stringify(chunk.error);
         throw new Error(`Provider stream error: ${detail}`);
       }
+      // With stream_options.include_usage, OpenAI sends usage in a final
+      // chunk whose choices array is empty. Capture it before returning on a
+      // missing choice; compatible providers may instead attach it to the
+      // normal finish chunk.
+      if (chunk.usage && typeof chunk.usage === "object") {
+        const u = chunk.usage;
+        if (typeof u.prompt_tokens === "number" && typeof u.completion_tokens === "number") {
+          const cachedTokens = u.prompt_tokens_details?.cached_tokens
+            ?? u.input_tokens_details?.cached_tokens;
+          usage = {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens ?? (u.prompt_tokens + u.completion_tokens),
+            ...(typeof cachedTokens === "number" ? { cached_tokens: cachedTokens } : {}),
+          };
+        }
+      }
+
       const choice = chunk.choices?.[0];
       if (!choice) return;
 
@@ -1502,17 +1527,6 @@ export async function parseOpenAIStream(
         finishReason = choice.finish_reason;
       }
 
-      // Usage stats (sent in the final chunk by OpenAI-compatible APIs)
-      if (chunk.usage && typeof chunk.usage === "object") {
-        const u = chunk.usage;
-        if (typeof u.prompt_tokens === "number" && typeof u.completion_tokens === "number") {
-          usage = {
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens ?? (u.prompt_tokens + u.completion_tokens),
-          };
-        }
-      }
     } catch (error) {
       if (error instanceof SyntaxError) {
         throw new Error("Provider returned malformed SSE data");
@@ -1754,13 +1768,7 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
     },
     historyEntry: {
       role: "tool",
-      content: JSON.stringify({
-        ok: result.ok,
-        message: result.message.length > TOOL_RESULT_MAX_CHARS
-          ? result.message.slice(0, TOOL_RESULT_MAX_CHARS) + `\n\n[truncated — ${result.message.length} chars total, showing first ${TOOL_RESULT_MAX_CHARS}]`
-          : result.message,
-        data: capToolResultData(stripUiOnlyToolResultFields(result.data)),
-      }),
+      content: serializeToolResultForModel(result),
       tool_call_id: tc.id,
       name: tc.function.name,
     },
@@ -1936,6 +1944,27 @@ function stripUiOnlyToolResultFields(data: unknown): unknown {
   const clone: Record<string, unknown> = { ...(data as Record<string, unknown>) };
   for (const key of UI_ONLY_TOOL_RESULT_KEYS) delete clone[key];
   return clone;
+}
+
+/** Serialize the model-facing result once, omitting data fields that repeat its message. */
+export function serializeToolResultForModel(
+  result: Pick<ToolResult, "ok" | "message" | "data">,
+): string {
+  const message = result.message.length > TOOL_RESULT_MAX_CHARS
+    ? result.message.slice(0, TOOL_RESULT_MAX_CHARS)
+      + `\n\n[truncated — ${result.message.length} chars total, showing first ${TOOL_RESULT_MAX_CHARS}]`
+    : result.message;
+  let data = capToolResultData(stripUiOnlyToolResultFields(result.data));
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const compactData = Object.fromEntries(
+      Object.entries(data as Record<string, unknown>)
+        .filter(([, value]) => value !== result.message),
+    );
+    data = Object.keys(compactData).length > 0 ? compactData : undefined;
+  }
+  return JSON.stringify(data === undefined
+    ? { ok: result.ok, message }
+    : { ok: result.ok, message, data });
 }
 /** Max times we re-prompt when detecting plain-text tool calls in content. */
 const MAX_PLAIN_TEXT_RETRIES = 2;
@@ -2856,6 +2885,16 @@ function compactActiveTurnHistory(
   return true;
 }
 
+/** Add provider-specific cache affinity without disclosing session identifiers. */
+export function applyProviderPromptCaching(
+  requestBody: Record<string, unknown>,
+  llm: Pick<LLMConfig, "backend">,
+): void {
+  if (llm.backend === "openai") {
+    requestBody.prompt_cache_key = "jait-agent";
+  }
+}
+
 export async function runAgentLoop(
   options: AgentLoopOptions,
   executeTool: ToolExecutor,
@@ -3185,6 +3224,7 @@ export async function runAgentLoop(
           stream: true,
           stream_options: { include_usage: true },
         };
+    applyProviderPromptCaching(reqBody, llm);
     // Re-sending a discarded generation's request unchanged only helps when the
     // backend samples non-deterministically. Ollama's defaults are effectively
     // replayable for a byte-identical payload, so a resample there has to move
@@ -3333,6 +3373,7 @@ export async function runAgentLoop(
       const metrics: RoundMetrics = { durationMs };
       if (parsed.usage) {
         metrics.promptTokens = parsed.usage.prompt_tokens;
+        metrics.cachedPromptTokens = parsed.usage.cached_tokens;
         metrics.completionTokens = parsed.usage.completion_tokens;
         metrics.totalTokens = parsed.usage.total_tokens;
         if (parsed.usage.completion_tokens > 0 && durationMs > 0) {
@@ -4706,11 +4747,7 @@ export async function retryToolCall(
   if (histIdx !== -1) {
     history[histIdx] = {
       role: "tool",
-      content: JSON.stringify({
-        ok: result.ok,
-        message: result.message,
-        data: capToolResultData(stripUiOnlyToolResultFields(result.data)),
-      }),
+      content: serializeToolResultForModel(result),
       tool_call_id: callId,
       name: toOpenAIName(original.tool),
     };

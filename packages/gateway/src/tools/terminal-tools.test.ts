@@ -13,7 +13,24 @@ import {
   hasStrongPagerPrompt,
   isCmdShell,
   rewriteProjectPathForSandboxCommand,
+  truncateTerminalToolOutput,
 } from "./terminal-tools.js";
+
+describe("truncateTerminalToolOutput", () => {
+  it("leaves output within the limit unchanged", () => {
+    expect(truncateTerminalToolOutput("short output", 20)).toBe("short output");
+  });
+
+  it("preserves the head and tail while removing the middle", () => {
+    const output = `START-${"x".repeat(100)}-END`;
+    const truncated = truncateTerminalToolOutput(output, 50);
+
+    expect(truncated).toHaveLength(50);
+    expect(truncated).toMatch(/^START-/);
+    expect(truncated).toMatch(/-END$/);
+    expect(truncated).toContain("…(middle truncated)…");
+  });
+});
 
 describe("rewriteProjectPathForSandboxCommand", () => {
   it("rewrites the project root when used as a standalone path token", () => {

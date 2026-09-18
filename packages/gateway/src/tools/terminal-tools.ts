@@ -32,7 +32,28 @@ import { tmpdir } from "node:os";
 // ── Constants ────────────────────────────────────────────────────
 
 const MAX_TERMINALS = 10;
+export const MAX_TERMINAL_TOOL_OUTPUT_CHARS = 16_000;
+const TERMINAL_OUTPUT_TRUNCATION_MARKER = "\n…(middle truncated)…\n";
 const SANDBOX_PROJECT_PATH = "/project";
+
+/** Keep both command setup/errors and the most recent output without flooding model context. */
+export function truncateTerminalToolOutput(
+  output: string,
+  maxChars = MAX_TERMINAL_TOOL_OUTPUT_CHARS,
+): string {
+  if (output.length <= maxChars) return output;
+  if (maxChars <= 0) return "";
+  if (maxChars <= TERMINAL_OUTPUT_TRUNCATION_MARKER.length) {
+    return output.slice(0, maxChars);
+  }
+
+  const retainedChars = maxChars - TERMINAL_OUTPUT_TRUNCATION_MARKER.length;
+  const headChars = Math.ceil(retainedChars / 2);
+  const tailChars = retainedChars - headChars;
+  return output.slice(0, headChars)
+    + TERMINAL_OUTPUT_TRUNCATION_MARKER
+    + output.slice(output.length - tailChars);
+}
 const INTERACTIVE_PROMPT_PATTERNS = [
   /\[sudo\]\s+password\s+for\s+[^:]+:/i,
   /password:\s*$/im,
@@ -953,10 +974,7 @@ function executeInTerminal(
         }
       }
 
-      output = lines.join("\n").trim();
-      if (output.length > 200_000) {
-        output = "…(truncated)\n" + output.slice(-200_000);
-      }
+      output = truncateTerminalToolOutput(lines.join("\n").trim());
 
       resolve({ output: output || "(no output)", exitCode, timedOut, interactionRequired, pagerEscaped });
     };
