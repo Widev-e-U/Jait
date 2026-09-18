@@ -345,6 +345,24 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the desktop_gateway_configure command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-gateway-configure",
+          "markdownDescription": "Enables the desktop_gateway_configure command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_gateway_restart_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-gateway-restart-app",
+          "markdownDescription": "Enables the desktop_gateway_restart_app command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_gateway_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-gateway-status",
+          "markdownDescription": "Enables the desktop_gateway_status command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_get_login_item command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-get-login-item",
@@ -367,6 +385,24 @@
           "type": "string",
           "const": "allow-desktop-set-login-item",
           "markdownDescription": "Enables the desktop_set_login_item command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_update_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-update-check",
+          "markdownDescription": "Enables the desktop_update_check command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_update_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-update-download",
+          "markdownDescription": "Enables the desktop_update_download command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_update_install command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-update-install",
+          "markdownDescription": "Enables the desktop_update_install command without any pre-configured scope."
         },
         {
           "description": "Enables the open_project_window command without any pre-configured scope.",
@@ -405,6 +441,24 @@
           "markdownDescription": "Enables the window_toggle_maximize command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_gateway_configure command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-gateway-configure",
+          "markdownDescription": "Denies the desktop_gateway_configure command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_gateway_restart_app command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-gateway-restart-app",
+          "markdownDescription": "Denies the desktop_gateway_restart_app command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_gateway_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-gateway-status",
+          "markdownDescription": "Denies the desktop_gateway_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_get_login_item command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-get-login-item",
@@ -427,6 +481,24 @@
           "type": "string",
           "const": "deny-desktop-set-login-item",
           "markdownDescription": "Denies the desktop_set_login_item command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_update_check command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-update-check",
+          "markdownDescription": "Denies the desktop_update_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_update_download command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-update-download",
+          "markdownDescription": "Denies the desktop_update_download command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_update_install command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-update-install",
+          "markdownDescription": "Denies the desktop_update_install command without any pre-configured scope."
         },
         {
           "description": "Denies the open_project_window command without any pre-configured scope.",

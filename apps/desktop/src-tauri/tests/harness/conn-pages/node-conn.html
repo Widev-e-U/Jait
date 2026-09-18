@@ -22,7 +22,7 @@
       };
       // Node-backed commands through the desktop shell bridge.
       await t('getInfo', () => j.getInfo());
-      await t('rootBrowse', () => j.browsePath());
+      await t('rootBrowse', () => j.browsePath('/'));
       await t('hostsFile', () => j.fsOp('read', { path: '/etc/hosts' }));
       await t('detectProviders', () => j.detectProviders());
       await t('searchOp', () => j.searchOp('run', { root: '/jait/apps/desktop/src-tauri', query: 'run-conn-test', mode: 'files' }));
