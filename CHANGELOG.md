@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.863](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.863) — 2026-09-18
+- fix(desktop): embed tray icon from Tauri assets — e80949b6
+
 ## [v0.1.862](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.862) — 2026-09-17
 - feat(desktop): replace Electron shell with Tauri — 1b430cdd
 
