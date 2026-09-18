@@ -122,10 +122,10 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-/// Tray icon, bundled from the same asset the legacy shell uses. Requires the
+/// Tray icon, bundled with the Tauri application icons. Requires the
 /// `image-png` tauri feature to decode at runtime.
 fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
-    const TRAY_PNG: &[u8] = include_bytes!("../../../desktop/assets/tray-icon.png");
+    const TRAY_PNG: &[u8] = include_bytes!("../icons/32x32.png");
     tauri::image::Image::from_bytes(TRAY_PNG)
         .map_err(|e| tauri::Error::AssetNotFound(format!("tray-icon.png: {e}").into()))
 }
