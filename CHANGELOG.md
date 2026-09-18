@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.864](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.864) — 2026-09-18
+- chore(desktop): refresh Tauri command schemas — ce611c00
+- perf(agent): reduce repeated model context usage — d1fe5a26
+
 ## [v0.1.863](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.863) — 2026-09-18
 - fix(desktop): embed tray icon from Tauri assets — e80949b6
 
