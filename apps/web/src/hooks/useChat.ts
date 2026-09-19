@@ -795,6 +795,7 @@ export function useChat(
     }
 
     let cancelled = false
+    const requestAbort = new AbortController()
     const runId = ++subscriptionRunIdRef.current
     const isCurrent = () => !cancelled && subscriptionRunIdRef.current === runId
 
@@ -1218,7 +1219,7 @@ export function useChat(
         try {
           const res = await fetch(
             `${API_URL}/api/sessions/${sessionId}/messages?limit=${STREAM_SNAPSHOT_LIMIT}`,
-            { headers: authHeaders(authToken), credentials: 'include' },
+            { headers: authHeaders(authToken), credentials: 'include', signal: requestAbort.signal },
           )
           if (!res.ok || !isCurrent()) return
           const data = await res.json() as SnapshotResponse
@@ -1310,7 +1311,7 @@ export function useChat(
         try {
           const res = await fetch(
             `${API_URL}/api/sessions/${sessionId}/messages?limit=${STREAM_SNAPSHOT_LIMIT}`,
-            { headers: authHeaders(authToken), credentials: 'include' },
+            { headers: authHeaders(authToken), credentials: 'include', signal: requestAbort.signal },
           )
           if (!isCurrent()) return
           if (res.status === 401) {
@@ -1355,6 +1356,7 @@ export function useChat(
 
     return () => {
       cancelled = true
+      requestAbort.abort()
       if (validationTimer !== null) clearTimeout(validationTimer)
       if (validateHistoryRef.current === validateHistory) validateHistoryRef.current = null
       subscriptionRef.current?.close()

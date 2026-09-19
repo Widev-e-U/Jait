@@ -367,6 +367,17 @@ describe('durable subscription lifecycle', () => {
     expect(src).toContain("subscribe(typeof data.seq === 'number' ? String(data.seq) : null)")
   })
 
+  it('aborts the previous chat history requests when the session changes', () => {
+    const src = source()
+    const effectStart = src.indexOf('  useLayoutEffect(() => {', src.indexOf('// ══ The session\'s single live connection'))
+    const effectEnd = src.indexOf('  }, [authToken, cacheScope, clearUnfinishedTodoList', effectStart)
+    const effect = src.slice(effectStart, effectEnd)
+
+    expect(effect).toContain('const requestAbort = new AbortController()')
+    expect(effect.match(/signal: requestAbort\.signal/g)).toHaveLength(2)
+    expect(effect).toContain('return () => {\n      cancelled = true\n      requestAbort.abort()')
+  })
+
   it('resets the per-turn accumulator at the turn boundary, not per connection', () => {
     const src = source()
     // The subscription outlives turns now. Without an explicit reset the next

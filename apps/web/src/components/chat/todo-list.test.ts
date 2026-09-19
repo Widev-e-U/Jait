@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { areAllTodoItemsCompleted, getActiveTodoItems, getCollapsedTodoDisplay, type TodoItem } from './todo-list'
+import { areAllTodoItemsCompleted, getActiveTodoItems, getCollapsedTodoDisplay, getTodoListContainerClassName, type TodoItem } from './todo-list'
+
+describe('getTodoListContainerClassName', () => {
+  it('keeps the mobile clear button close to the right edge without changing desktop padding', () => {
+    expect(getTodoListContainerClassName(true)).toBe('pl-3 pr-1 py-2 sm:px-3')
+  })
+
+  it('keeps standalone todo cards unchanged', () => {
+    expect(getTodoListContainerClassName(false)).toBe('rounded-lg border bg-muted/30 p-3')
+  })
+})
 
 describe('getActiveTodoItems', () => {
   it('returns all in-progress items', () => {

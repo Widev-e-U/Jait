@@ -36,6 +36,12 @@ export function areAllTodoItemsCompleted(items: TodoItem[]): boolean {
   return items.length > 0 && items.every((item) => item.status === 'completed')
 }
 
+export function getTodoListContainerClassName(merged: boolean | undefined): string {
+  return merged
+    ? 'pl-3 pr-1 py-2 sm:px-3'
+    : 'rounded-lg border bg-muted/30 p-3'
+}
+
 export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay {
   const activeItems = getActiveTodoItems(items)
   const allCompleted = areAllTodoItemsCompleted(items)
@@ -74,7 +80,7 @@ export function TodoList({ items: rawItems, className, onClear, merged }: TodoLi
   return (
     <div className={cn(
       'space-y-2',
-      merged ? 'px-3 py-2' : 'rounded-lg border bg-muted/30 p-3',
+      getTodoListContainerClassName(merged),
       className,
     )}>
       {/* Header with progress — clickable to toggle */}
