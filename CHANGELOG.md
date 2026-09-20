@@ -5,8 +5,8 @@ it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
 ## [v0.1.866](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.866) — 2026-09-20
-- fix(gateway): hide misleading Ollama quota reset dates — 152d375a
-- fix(web): align mobile todo close button — 152d375a
+- fix(gateway): hide misleading Ollama quota reset dates — 880d5ea3
+- fix(web): align mobile todo close button — 880d5ea3
 
 ## [v0.1.865](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.865) — 2026-09-19
 - fix(web): smooth chat switches and align mobile todo close — ac66b342
