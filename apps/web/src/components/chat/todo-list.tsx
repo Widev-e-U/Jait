@@ -84,45 +84,48 @@ export function TodoList({ items: rawItems, className, onClear, merged }: TodoLi
       className,
     )}>
       {/* Header with progress — clickable to toggle */}
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 w-full text-left"
-      >
-        <ChevronDown
-          className={cn(
-            'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200',
-            !expanded && '-rotate-90',
-          )}
-        />
-        {!expanded && collapsedDisplay.showHeaderSpinner && (
-          <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
-        )}
-        {!expanded && collapsedDisplay.showHeaderCompleted && (
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
-        )}
-        <span className="min-w-0 truncate text-xs font-medium text-foreground">{headerLabel}</span>
-        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-          <div
-            className={cn('h-full rounded-full transition-all duration-300', progressBarClassName)}
-            style={{ width: `${pct}%` }}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200',
+              !expanded && '-rotate-90',
+            )}
           />
-        </div>
-        <span className="text-2xs text-muted-foreground tabular-nums">
-          {completed}/{total}
-        </span>
+          {!expanded && collapsedDisplay.showHeaderSpinner && (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
+          )}
+          {!expanded && collapsedDisplay.showHeaderCompleted && (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+          )}
+          <span className="min-w-0 truncate text-xs font-medium text-foreground">{headerLabel}</span>
+          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn('h-full rounded-full transition-all duration-300', progressBarClassName)}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-2xs text-muted-foreground tabular-nums">
+            {completed}/{total}
+          </span>
+        </button>
         {onClear && (
           <TooltipHint content="Clear todo list">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onClear() }}
-            className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Clear todo list"
-          >
-            <X className="h-3 w-3" />
-          </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onClear() }}
+              className="flex items-center justify-end shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Clear todo list"
+            >
+              <X className="h-3 w-3" />
+            </button>
           </TooltipHint>
         )}
-      </button>
+      </div>
 
       {/* Items — collapsible */}
       {expanded && (

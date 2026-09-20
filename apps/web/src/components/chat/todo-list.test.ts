@@ -1,5 +1,7 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { areAllTodoItemsCompleted, getActiveTodoItems, getCollapsedTodoDisplay, getTodoListContainerClassName, type TodoItem } from './todo-list'
+import { TodoList, areAllTodoItemsCompleted, getActiveTodoItems, getCollapsedTodoDisplay, getTodoListContainerClassName, type TodoItem } from './todo-list'
 
 describe('getTodoListContainerClassName', () => {
   it('keeps the mobile clear button close to the right edge without changing desktop padding', () => {
@@ -85,5 +87,18 @@ describe('getCollapsedTodoDisplay', () => {
       showHeaderSpinner: false,
       showHeaderCompleted: true,
     })
+  })
+})
+
+describe('TodoList controls', () => {
+  it('renders clear and expand as separate buttons', () => {
+    const html = renderToStaticMarkup(createElement(TodoList, {
+      items: [{ id: 1, title: 'Check layout', status: 'in-progress' }],
+      merged: true,
+      onClear: () => {},
+    }))
+    const clearPosition = html.indexOf('aria-label="Clear todo list"')
+    expect(clearPosition).toBeGreaterThan(html.indexOf('</button>'))
+    expect(html.match(/<button/g)).toHaveLength(2)
   })
 })

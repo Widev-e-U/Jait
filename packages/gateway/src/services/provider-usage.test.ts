@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateDatabase, openDatabase, type JaitDB } from "../db/connection.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import type { NotificationService } from "./notifications.js";
+import { providerUsage } from "../db/schema.js";
 import { ProviderUsageService } from "./provider-usage.js";
 
 let sqlite: SqliteDatabase;
@@ -201,6 +202,7 @@ describe("ProviderUsageService", () => {
             usage: 0.25,
             models: [{ name: "gpt-oss", request_count: 4 }],
           },
+          weekly: { usage: 0.4, models: [] },
           monthly: { usage: 0.6, models: [] },
         },
         activity: {
@@ -212,6 +214,8 @@ describe("ProviderUsageService", () => {
     );
 
     const snapshots = service.listForUser(["ollama"]);
+    expect(snapshots).toHaveLength(3);
+    expect(snapshots.map((snapshot) => snapshot.resetsAt)).toEqual([null, null, null]);
     expect(snapshots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -229,4 +233,22 @@ describe("ProviderUsageService", () => {
       ]),
     );
   });
+  it("does not expose activity end dates from cached Ollama snapshots as quota resets", () => {
+    db.insert(providerUsage).values({
+      accountId: "ollama",
+      rateLimitType: "five_hour",
+      providerType: "ollama",
+      utilization: 0.25,
+      resetsAt: "2026-09-20T13:45:00.000Z",
+      updatedAt: "2026-09-20T13:45:00.000Z",
+      rawJson: "{}",
+    }).run();
+    const service = new ProviderUsageService(db);
+    expect(service.listForUser(["ollama"])[0]).toMatchObject({
+      resetsAt: null,
+      updatedAt: "2026-09-20T13:45:00.000Z",
+      utilization: 0.25,
+    });
+  });
+
 });

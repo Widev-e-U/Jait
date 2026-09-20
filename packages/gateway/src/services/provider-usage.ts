@@ -168,7 +168,9 @@ export class ProviderUsageService {
         providerType: "ollama",
         status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
-        resetsAt: response.activity?.period?.ending_at ?? null,
+        // The activity reporting period is not a quota reset window.
+        // Ollama usage buckets do not supply reset timestamps.
+        resetsAt: null,
         isUsingOverage: false,
         raw: {
           planType: planType ?? null,
@@ -251,7 +253,8 @@ export class ProviderUsageService {
           providerType: row.providerType,
           status: row.status,
           utilization: row.utilization,
-          resetsAt: row.resetsAt,
+          // Older Ollama snapshots stored the activity period end as a reset.
+          resetsAt: row.providerType === "ollama" ? null : row.resetsAt,
           isUsingOverage: !!row.isUsingOverage,
           updatedAt: row.updatedAt,
           planType: typeof raw.planType === "string" ? raw.planType : null,
