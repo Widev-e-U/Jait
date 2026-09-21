@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.867](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.867) — 2026-09-21
+- feat(notifications): open the originating chat from notification taps — 8e6fe6f0
+- fix(web): keep the todo clear button from stretching in narrow panels — abe9d413
+- docs: correct v0.1.866 changelog commit — 10ec1733
+
 ## [v0.1.866](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.866) — 2026-09-20
 - fix(gateway): hide misleading Ollama quota reset dates — 880d5ea3
 - fix(web): align mobile todo close button — 880d5ea3
