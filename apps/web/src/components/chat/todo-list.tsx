@@ -119,7 +119,7 @@ export function TodoList({ items: rawItems, className, onClear, merged }: TodoLi
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onClear() }}
-              className="flex items-center justify-end shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Clear todo list"
+              className="flex items-center justify-end !min-w-0 shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Clear todo list"
             >
               <X className="h-3 w-3" />
             </button>
