@@ -52,6 +52,7 @@ public class AgentOverlayPlugin extends Plugin {
     public void load() {
         registerResultReceiver();
         createNotificationChannel();
+        NotificationNavigation.capture(getContext(), getActivity().getIntent());
     }
 
     @PluginMethod
@@ -182,7 +183,48 @@ public class AgentOverlayPlugin extends Plugin {
         String id = call.getString("id", "");
         if (id.isEmpty()) { call.reject("Notification id is required"); return; }
         ChatNotifications.show(getContext(), id, call.getString("title", "Jait"),
-            call.getString("body", ""));
+            call.getString("body", ""), call.getString("replaceId", id),
+            call.getString("link", "/chat"), call.getString("scope", NotificationNavigation.scope(getContext())),
+            call.getString("sessionId", ""), "completion".equals(call.getString("kind", "")));
+        call.resolve();
+    }
+
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        JSObject activation = NotificationNavigation.capture(getContext(), intent);
+        if (activation != null) notifyListeners("notificationOpen", activation, true);
+    }
+
+    @Override
+    protected void handleOnResume() { NotificationNavigation.resumed = true; }
+
+    @Override
+    protected void handleOnPause() { NotificationNavigation.resumed = false; }
+
+    @PluginMethod
+    public void getPendingNotification(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("activation", NotificationNavigation.pending(getContext()));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void acknowledgeNotification(PluginCall call) {
+        NotificationNavigation.acknowledge(getContext(), call.getString("id", ""));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void setNotificationContext(PluginCall call) {
+        NotificationNavigation.visibleSession = Boolean.TRUE.equals(call.getBoolean("visible", false))
+            ? call.getString("sessionId", "") : "";
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void cancelNotification(PluginCall call) {
+        String id = call.getString("id", "");
+        ((NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE)).cancel(id, 0);
         call.resolve();
     }
 

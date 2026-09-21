@@ -1,3 +1,5 @@
+import { safeNotificationLink } from '@jait/shared'
+import { openNotification, subscribeNotificationNavigation, retryNotificationNavigation, androidNotificationBridge } from '@/lib/notification-navigation'
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthOverlays } from '@/components/auth/auth-overlays'
@@ -92,7 +94,7 @@ import { shouldAutoTitleSession } from '@/lib/session-title'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { updateModeProviderSelection, type ModeProviderSelection } from '@/lib/mode-provider-selection'
 import { gitApi, useGitChangeCounts } from '@/lib/git-service'
-import { triggerSystemNotification } from '@/lib/system-notifications'
+import { triggerSystemNotification, revokeSystemNotification, setVisibleNotificationSession } from '@/lib/system-notifications'
 import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
   mergeAttachmentsIntoSegments
@@ -1085,7 +1087,6 @@ function App() {
     if (chatCompletionSignal <= lastChatNotificationSignalRef.current) return
     if (isLoading || isLoadingHistory || messageQueue.length > 0) return
 
-    const queueFinished = chatQueueSeenRef.current
     lastChatNotificationSignalRef.current = chatCompletionSignal
     chatQueueSeenRef.current = false
     if (suppressNextChatNotificationRef.current) {
@@ -1093,15 +1094,8 @@ function App() {
       return
     }
 
-    void triggerSystemNotification({
-      id: `chat-complete:${activeSessionId ?? 'global'}:${chatCompletionSignal}`,
-      title: queueFinished ? 'Queued chat finished' : 'Chat finished',
-      body: queueFinished
-        ? 'All queued chat messages finished generating.'
-        : 'Agent response finished generating.',
-      level: 'success',
-      includeToast: false,
-    })
+    // Completion delivery is gateway-owned so push and WebSocket share one ID.
+
   }, [activeSessionId, chatCompletionSignal, isLoading, isLoadingHistory, messageQueue.length])
 
   // ── Voice-assistant session (OpenAI Realtime via gateway) ───
@@ -1152,6 +1146,8 @@ function App() {
 
         void triggerSystemNotification({
           id: `thread-complete:${thread.id}:${completedThread.updatedAt}`,
+          replaceId: `thread-complete:${thread.id}`,
+          link: `/chat?threadId=${encodeURIComponent(thread.id)}`,
           title,
           body,
           level: completedThread.status === 'completed' ? 'success' : 'warning',
@@ -2847,7 +2843,7 @@ function App() {
     return handler
   }, [])
 
-  const handleSelectProjectSession = useCallback((projectId: string, sessionId: string) => {
+  const handleSelectProjectSession = useCallback(async (projectId: string, sessionId: string) => {
     setPrimaryChatPanelHidden(false)
     if (isMobile) handleMobileChatClick()
     setParallelChats((current) => closeSecondaryChatPanel(current, sessionId))
@@ -2859,14 +2855,95 @@ function App() {
       // selecting a chat of an already-active project looks like a plain
       // chat with no project controls.
       if (!activeProjectRef.current) {
-        void handleSwitchProject(projectId, sessionId, true)
+        await handleSwitchProject(projectId, sessionId, true)
         return
       }
       switchSession(projectId, sessionId)
       return
     }
-    void handleSwitchProject(projectId, sessionId, true)
+    await handleSwitchProject(projectId, sessionId, true)
   }, [activeProjectId, activeSessionId, handleMobileChatClick, isMobile, switchSession, handleSwitchProject],)
+
+  useEffect(() => {
+    const android = androidNotificationBridge()
+    const update = () => {
+      const visible = currentView === 'chat' && viewMode !== 'manager' && document.visibilityState === 'visible' && document.hasFocus()
+      setVisibleNotificationSession(visible ? activeSessionId : null)
+      void android?.setNotificationContext?.({ sessionId: activeSessionId ?? '', visible }).catch(() => {})
+      if (visible && activeSessionId) void revokeSystemNotification(`chat-complete:${activeSessionId}`)
+      retryNotificationNavigation()
+    }
+    update()
+    window.addEventListener('focus', update)
+    window.addEventListener('blur', update)
+    document.addEventListener('visibilitychange', update)
+    window.addEventListener('online', update)
+    return () => {
+      setVisibleNotificationSession(null)
+      window.removeEventListener('focus', update)
+      window.removeEventListener('blur', update)
+      document.removeEventListener('visibilitychange', update)
+      window.removeEventListener('online', update)
+    }
+  }, [activeSessionId, currentView, viewMode])
+
+  useEffect(() => {
+    const desktop = window.jaitDesktop
+    const android = androidNotificationBridge()
+    let disposed = false
+    let removeAndroid: (() => Promise<void>) | undefined
+    const accept = (activation: import('@jait/shared').NotificationActivation) => { if (!disposed) openNotification(activation) }
+    const removeDesktop = desktop?.onNotificationOpen?.(accept)
+    void android?.addListener?.('notificationOpen', accept).then((listener) => {
+      if (disposed) void listener.remove()
+      else removeAndroid = () => listener.remove()
+    }).catch(() => {})
+    const read = () => {
+      void desktop?.getPendingNotification?.().then((r) => { if (r.activation) accept(r.activation) }).catch(() => {})
+      void android?.getPendingNotification?.().then((r) => { if (r.activation) accept(r.activation) }).catch(() => {})
+    }
+    read()
+    window.addEventListener('focus', read)
+    return () => { disposed = true; removeDesktop?.(); void removeAndroid?.(); window.removeEventListener('focus', read) }
+  }, [])
+
+  useEffect(() => {
+    if (!token || projectsLoading) return
+    return subscribeNotificationNavigation(async (activation) => {
+      const scope = (API_URL || window.location.origin).replace(/\/$/, '')
+      if (activation.scope && activation.scope.replace(/\/$/, '') !== scope) {
+        toast.info('This notification belongs to another gateway. Connect to it to open the chat.')
+        return false
+      }
+      const link = safeNotificationLink(activation.link)
+      if (!link) return true
+      const url = new URL(link, window.location.origin)
+      const sessionId = url.searchParams.get('sessionId')
+      const threadId = url.searchParams.get('threadId')
+      if (sessionId) {
+        const session = await loadSession(sessionId)
+        if (!session) { toast.error('Chat unavailable. Reconnect and tap the notification again.'); return false }
+        if (session.projectId && !await loadProject(session.projectId)) return false
+        setCurrentView('chat')
+        setViewMode('developer')
+        if (session.projectId) await handleSelectProjectSession(session.projectId, session.id)
+        else await handleSelectPersonalSession(session.id)
+      } else if (threadId) {
+        setCurrentView('chat')
+        setViewMode('manager')
+        automation.setSelectedThreadId(threadId)
+      } else {
+        const view = parseAppView(url.pathname.replace(/^\//, '')) ?? 'chat'
+        setCurrentView(view)
+      }
+      await Promise.allSettled([
+        window.jaitDesktop?.acknowledgeNotification?.({ id: activation.id }),
+        androidNotificationBridge()?.acknowledgeNotification?.({ id: activation.id }),
+        revokeSystemNotification(activation.id),
+      ])
+      return true
+    })
+  }, [token, projectsLoading, loadSession, loadProject, handleSelectProjectSession, handleSelectPersonalSession, automation.setSelectedThreadId])
 
   // The "+" opens the same dialog the folder button used to, rather than the raw
   // file explorer. One form creates both: leave the directory empty for a

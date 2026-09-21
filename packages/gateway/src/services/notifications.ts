@@ -12,11 +12,11 @@
  */
 
 import type { WsControlPlane } from "../ws.js";
-import type { WsEventType } from "@jait/shared";
+import type { NotificationContext, WsEventType } from "@jait/shared";
 
 export type NotificationLevel = "info" | "success" | "warning" | "error";
 
-export interface JaitNotification {
+export interface JaitNotification extends NotificationContext {
   /** Unique ID for deduplication on the client */
   id: string;
   /** Notification title (short) */

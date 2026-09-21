@@ -1,3 +1,4 @@
+import { chatNotificationLink, notificationPreview } from "@jait/shared";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
@@ -5072,20 +5073,27 @@ export function registerChatRoutes(
       });
     }
 
-    // Mobile/Wear completion toast — mirrors the web's "Chat finished"
-    // notification for the session owner's registered devices. Success turns
-    // only: errors and cancels already surfaced their own event, and the web's
-    // isLoading guard suppresses the toast there too. Skip when more queued
-    // prompts are about to drain so the user isn't toasted after every item.
-    if (mobilePush && !loopErrorMessage && !turnCancelledOrErrored) {
+    // One event identity on every transport: push and the open app must not
+    // independently invent IDs for the same completed turn.
+    if (!loopErrorMessage && !turnCancelledOrErrored && !hitMaxRounds) {
       const queuedState = sessionStateService?.get(sessionId, ["queued_messages"]);
-      const remainingQueue = parseQueuedChatMessages(queuedState?.queued_messages);
-      if (remainingQueue.length === 0) {
-        void mobilePush.sendChatCompleted(authUser.id, {
-          id: `chat-complete:${sessionId}`,
-          title: "Chat finished",
-          body: "Agent response finished generating.",
-        }).catch(() => { /* push is best-effort */ });
+      if (parseQueuedChatMessages(queuedState?.queued_messages).length === 0) {
+        const projectName = completedSession?.projectId ? projectService?.getById(completedSession.projectId, authUser.id)?.title : null;
+        const notification = {
+          id: `chat-complete:${sessionId}:${randomUUID()}`,
+          replaceId: `chat-complete:${sessionId}`,
+          kind: "completion" as const,
+          sessionId,
+          link: chatNotificationLink(sessionId, completedSession?.projectId),
+          title: completedSession?.name ? `Response ready · ${completedSession.name}` : "Response ready",
+          body: [projectName, notificationPreview(fullContent) || "Agent response finished. Open chat to read it."].filter(Boolean).join(" · "),
+          level: "success" as const,
+          includeToast: false,
+        };
+        ws?.broadcastToUser(authUser.id, {
+          type: "notification", sessionId, timestamp: new Date().toISOString(), payload: notification,
+        });
+        void mobilePush?.sendChatCompleted(authUser.id, notification).catch(() => { /* best effort */ });
       }
     }
     void drainQueuedChatMessages(sessionId);

@@ -20,7 +20,10 @@ interface JaitDesktop {
   onOpenFolder?: (callback: (event: unknown, folderPath: string) => void) => () => void
   getInfo: () => Promise<{ platform: string; arch: string; appVersion?: string; gatewayUrl?: string }>
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>
-  notify: (opts: { id?: string; title: string; body: string }) => Promise<void>
+  notify: (opts: { id?: string; title: string; body: string; link?: string; scope?: string; replaceId?: string }) => Promise<void>
+  getPendingNotification?: () => Promise<{ activation?: import('@jait/shared').NotificationActivation | null }>
+  acknowledgeNotification?: (input: { id: string }) => Promise<unknown>
+  onNotificationOpen?: (callback: (activation: import('@jait/shared').NotificationActivation) => void) => () => void
   /** Dismiss a keyed notification — used when another device answers first. */
   closeNotification?: (id: string) => Promise<{ ok: boolean }>
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>

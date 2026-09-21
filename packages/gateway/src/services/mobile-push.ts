@@ -1,3 +1,4 @@
+import type { NotificationContext } from "@jait/shared";
 import { and, eq } from "drizzle-orm";
 import { SignJWT, importPKCS8 } from "jose";
 import type { JaitDB } from "../db/index.js";
@@ -126,7 +127,7 @@ export class MobilePushService {
    * one stale registration failing must not suppress the toast on healthy
    * devices, and devices owned by other users never receive it.
    */
-  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string }): Promise<number> {
+  async sendChatCompleted(userId: string, notification: { id: string; title: string; body: string } & NotificationContext): Promise<number> {
     if (!this.serviceAccount) return 0;
     const targets = this.list(userId);
     await Promise.all(targets.map(async (registration) => {
@@ -136,6 +137,9 @@ export class MobilePushService {
           id: notification.id,
           title: notification.title,
           body: notification.body,
+          ...(notification.link ? { link: notification.link } : {}),
+          ...(notification.replaceId ? { replaceId: notification.replaceId } : {}),
+          ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
         }, "3600s");
       } catch (error) {
         console.warn("[mobile-push] chat completion push failed for", registration.deviceId, error);

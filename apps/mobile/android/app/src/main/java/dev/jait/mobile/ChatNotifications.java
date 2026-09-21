@@ -8,38 +8,54 @@ import android.content.Intent;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
-/** Shared native entry for WebView and background push completion alerts. */
+/** Shared entry for WebView and FCM alerts. Event dedupe and card replacement are separate. */
 final class ChatNotifications {
     private static final String CHANNEL = "jait-chat-completions";
     private ChatNotifications() {}
 
     static void show(Context context, String id, String title, String body) {
+        show(context, id, title, body, id, "/chat", NotificationNavigation.scope(context), "", false);
+    }
+
+    static void show(Context context, String id, String title, String body, String replaceId,
+                     String link, String scope, String sessionId, boolean completion) {
         NotificationManager manager = context.getSystemService(NotificationManager.class);
-        NotificationChannel channel = new NotificationChannel(CHANNEL, "Chat completions",
-            NotificationManager.IMPORTANCE_HIGH);
+        NotificationChannel channel = new NotificationChannel(CHANNEL, "Chat completions", NotificationManager.IMPORTANCE_HIGH);
         channel.enableVibration(true);
         manager.createNotificationChannel(channel);
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return;
-        // A short persisted dedupe window covers push and WebView racing, and service restarts.
+        String cardId = replaceId == null || replaceId.isEmpty() ? id : replaceId;
         android.content.SharedPreferences prefs = context.getSharedPreferences(CHANNEL, Context.MODE_PRIVATE);
         synchronized (ChatNotifications.class) {
             long now = System.currentTimeMillis();
-            if (id.equals(prefs.getString("lastId", "")) && now - prefs.getLong("lastAt", 0) < 60_000) return;
-            prefs.edit().putString("lastId", id).putLong("lastAt", now).apply();
+            // Remember multiple recent events so interleaved chats and delayed FCM deliveries dedupe too.
+            if (prefs.contains(id)) return;
+            android.content.SharedPreferences.Editor edit = prefs.edit();
+            for (java.util.Map.Entry<String, ?> entry : prefs.getAll().entrySet()) {
+                if (!(entry.getValue() instanceof Long) || now - (Long) entry.getValue() > 3_600_000L) edit.remove(entry.getKey());
+            }
+            edit.putLong(id, now).apply();
         }
-        Intent intent = new Intent(context, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent open = PendingIntent.getActivity(context, id.hashCode(), intent,
+        if (completion && NotificationNavigation.resumed && !sessionId.isEmpty()
+            && sessionId.equals(NotificationNavigation.visibleSession)) {
+            manager.cancel(cardId, 0);
+            return;
+        }
+        Intent intent = NotificationNavigation.intent(context, cardId, link, scope);
+        PendingIntent open = PendingIntent.getActivity(context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        manager.notify(id, 0, new NotificationCompat.Builder(context, CHANNEL)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_jait_notification)
             .setContentTitle(title).setContentText(body)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true)
-            // Standard Android bridging also reaches watches without the companion installed.
-            .setLocalOnly(false).build());
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setContentIntent(open).setAutoCancel(true)
+            .setGroup("jait-chats")
+            .addAction(R.drawable.ic_jait_notification, "Open chat", open)
+            .setLocalOnly(false);
+        manager.notify(cardId, 0, builder.build());
         PhoneWearListenerService.pushSnapshot(context);
     }
 }

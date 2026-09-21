@@ -485,23 +485,23 @@ test('windowMaximize is an alias of windowMaximizeToggle', async () => {
   );
 });
 
-test('notify maps to desktop:notify with title/body/urgency args', async () => {
+test('notify preserves destination metadata and dismisses keyed notifications', async () => {
   const { window, log } = loadShim({
     responder: (cmd, args) => {
-      if (cmd === 'desktop_ipc' && args.channel === 'desktop:notify') {
+      if (cmd === 'desktop_ipc' && ['desktop:notify', 'desktop:close-notification'].includes(args.channel)) {
         return { status: 'ok', value: { ok: true } };
       }
       return { status: 'error', error: { message: `unexpected ${cmd}` } };
     },
   });
   const d = window.jaitDesktop;
-  await d.showNotification({ title: 'Gateway up', body: 'listening', urgency: 'normal' });
+  await d.showNotification({ id: 'event-1', replaceId: 'chat-1', title: 'Gateway up', body: 'listening', urgency: 'normal', link: '/chat?sessionId=one', scope: 'https://gateway' });
   const call = log.find((l) => l.args.channel === 'desktop:notify');
   assert.ok(call, 'showNotification must hit desktop:notify');
-  assert.deepEqual([...call.args.args], ['Gateway up', 'listening', 'normal']);
+  assert.deepEqual(JSON.parse(JSON.stringify(call.args.args)), [{ id: 'event-1', replaceId: 'chat-1', title: 'Gateway up', body: 'listening', urgency: 'normal', link: '/chat?sessionId=one', scope: 'https://gateway' }]);
   await d.showNotification('Gateway up'); // string shorthand also fine
-  // closeNotification has no glue channel: resolves true-style response.
-  await d.closeNotification();
+  await d.closeNotification('chat-1');
+  assert.equal(log.find((l) => l.args.channel === 'desktop:close-notification').args.args[0], 'chat-1');
 });
 
 test('confirmShare bridges the web confirm() dialog into accepted flag', async () => {

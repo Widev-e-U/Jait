@@ -36,6 +36,19 @@ pub mod login_item;
 
 /// Glue host shared between the setup hook (sink installation) and commands.
 pub struct GlueHost(pub Arc<Mutex<HostState>>);
+#[derive(Default)]
+struct PendingNotification(Mutex<Option<Value>>);
+fn receive_notification_args(app: &AppHandle, args: &[String]) -> bool {
+    for arg in args {
+        if let Some(activation) = crate::notification::activation_from_arg(arg) {
+            *app.state::<PendingNotification>().0.lock() = Some(activation.clone());
+            show_main_window(app);
+            let _ = app.emit("notification-open", activation);
+            return true;
+        }
+    }
+    false
+}
 
 /// Command channels the webview may reach. Mirrors the preload shim's
 /// `invoke` map 1:1 — anything else is rejected before glue dispatch.
@@ -218,11 +231,41 @@ fn create_tray(app: &AppHandle, glue: &Arc<Mutex<HostState>>) -> tauri::Result<(
 /// Single funnel for every legacy-style IPC call from the preload shim.
 #[tauri::command]
 pub async fn desktop_ipc(
-    _app: AppHandle,
+    app: AppHandle,
     glue: State<'_, GlueHost>,
     channel: String,
     args: Vec<Value>,
 ) -> Result<Value, String> {
+    match channel.as_str() {
+        "desktop:notify" => {
+            let payload = if args.first().is_some_and(Value::is_object) { args[0].clone() }
+                else { json!({"title": args.first(), "body": args.get(1), "urgency": args.get(2)}) };
+            #[cfg(windows)]
+            crate::notification::show(&app.config().identifier, &payload)?;
+            #[cfg(not(windows))]
+            {
+                use tauri_plugin_notification::NotificationExt;
+                app.notification().builder()
+                    .title(payload["title"].as_str().unwrap_or("Jait"))
+                    .body(payload["body"].as_str().unwrap_or_default())
+                    .show().map_err(|e| e.to_string())?;
+            }
+            return Ok(json!({"ok": true}));
+        }
+        "desktop:close-notification" => {
+            #[cfg(windows)]
+            crate::notification::remove(&app.config().identifier, args.first().and_then(Value::as_str).unwrap_or_default())?;
+            return Ok(json!({"ok": true}));
+        }
+        "desktop:pending-notification" => return Ok(json!({"activation": app.state::<PendingNotification>().0.lock().clone()})),
+        "desktop:acknowledge-notification" => {
+            let state = app.state::<PendingNotification>();
+            let mut pending = state.0.lock();
+            if pending.as_ref().and_then(|v| v.get("id")) == args.first() { *pending = None; }
+            return Ok(json!({"ok": true}));
+        }
+        _ => {}
+    }
     if !ALLOWED_CHANNELS.contains(&channel.as_str()) {
         return Err(format!("unknown desktop channel: {channel}"));
     }
@@ -471,6 +514,7 @@ pub fn run() {
             // forward any `--open-folder` / bare path hand-off to the
             // renderer (the legacy desktop shell sends `renderer:open-folder`).
             show_main_window(app);
+            if receive_notification_args(app, &argv) { return; }
             if let Some(folder) = crate::resolve_folder_arg(&argv) {
                 let _ = app.emit(
                     "open-folder",
@@ -493,6 +537,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_deep_link::init())
+        .manage(PendingNotification::default())
         // desktop-shell parity auto-updater (tauri-plugin-updater + custom
         // check/download/install commands in super::updater). Config lives in
         // tauri.conf.json `plugins.updater`.
@@ -500,6 +546,7 @@ pub fn run() {
         .manage(GlueHost(glue.clone()))
         .setup(move |app| {
             glue.lock().add_sink(install_sink(app.handle()));
+            receive_notification_args(app.handle(), &std::env::args().collect::<Vec<_>>());
 
             // First-launch login-item takeover: re-adopt the OS autostart
             // choice made for the legacy desktop shell install (shared Run key on

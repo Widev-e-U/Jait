@@ -26,6 +26,7 @@ import {
   revokeSystemNotification,
   setNativeNotificationsEnabled,
   triggerSystemNotification,
+  type SystemNotificationInput,
 } from '@/lib/system-notifications'
 
 const WS_URL = getWsUrl()
@@ -269,16 +270,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
   // ── Cross-platform notification handler ──────────────────────────
 
-  const handleGatewayNotification = useCallback(async (notif: {
-    id: string; title: string; body: string; level: string; link?: string
-  }) => {
-    await triggerSystemNotification({
-      id: notif.id,
-      title: notif.title,
-      body: notif.body,
-      level: notif.level as 'info' | 'success' | 'warning' | 'error',
-      includeToast: true,
-    })
+  const handleGatewayNotification = useCallback(async (notif: SystemNotificationInput) => {
+    await triggerSystemNotification({ ...notif, includeToast: notif.includeToast ?? notif.kind !== 'completion' })
   }, [])
 
   // Handle incoming messages — extracted so it's stable across reconnects
@@ -369,7 +362,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'notification') {
         // Cross-platform notification from the gateway
         void handleGatewayNotification(msg.payload as {
-          id: string; title: string; body: string; level: string; link?: string
+          id: string; title: string; body: string; level: 'info' | 'success' | 'warning' | 'error'; link?: string
         })
       } else if (msg.type === 'attention.raised') {
         // The gateway decides which surface owns the OS notification for this

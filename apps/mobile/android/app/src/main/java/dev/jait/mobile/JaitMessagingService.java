@@ -65,7 +65,9 @@ public class JaitMessagingService extends FirebaseMessagingService {
         if ("chat.completed".equals(type)) {
             String id = message.getData().get("id");
             if (id != null) ChatNotifications.show(this, id,
-                message.getData().get("title"), message.getData().get("body"));
+                message.getData().get("title"), message.getData().get("body"),
+                message.getData().get("replaceId"), message.getData().get("link"),
+                NotificationNavigation.scope(this), message.getData().getOrDefault("sessionId", ""), true);
             return;
         }
         if ("alarm.schedule".equals(type)) {
@@ -195,7 +197,9 @@ public class JaitMessagingService extends FirebaseMessagingService {
     ) {
         createChannel();
         int notificationId = AgentPromptActivity.notificationId(requestId);
-        Intent contentIntent = promptIntent != null ? promptIntent : launchIntent();
+        String link = "/chat?sessionId=" + android.net.Uri.encode(item.optString("sessionId", ""));
+        Intent chatIntent = NotificationNavigation.intent(this, item.optString("key", requestId), link, NotificationNavigation.scope(this));
+        Intent contentIntent = chatIntent;
         PendingIntent pendingIntent = PendingIntent.getActivity(
             this, notificationId, contentIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
@@ -216,9 +220,12 @@ public class JaitMessagingService extends FirebaseMessagingService {
             .setLocalOnly(true)
             .setTimeoutAfter(300_000L);
         if (allowFullScreenIntent) {
-            notification.setFullScreenIntent(pendingIntent, true);
+            PendingIntent prompt = PendingIntent.getActivity(this, notificationId, promptIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            notification.setFullScreenIntent(prompt, true);
         }
         addAttentionActions(notification, item, requestId);
+
 
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE))
             .notify(notificationId, notification.build());
@@ -236,7 +243,7 @@ public class JaitMessagingService extends FirebaseMessagingService {
         JSONArray actions = item.optJSONArray("actions");
         if (actions == null) return;
         String kind = item.optString("kind");
-        for (int index = 0; index < actions.length(); index++) {
+        for (int index = 0; index < Math.min(actions.length(), 3); index++) {
             JSONObject action = actions.optJSONObject(index);
             if (action == null) continue;
             String actionId = action.optString("id", "");

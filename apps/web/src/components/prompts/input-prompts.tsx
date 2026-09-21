@@ -1,3 +1,4 @@
+import { chatNotificationLink } from '@jait/shared'
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { ArrowUpRight, Eye, EyeOff, KeyRound, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -90,6 +91,7 @@ export function useSecretInputPrompt({
           if (request.sessionId !== sessionId) {
             void triggerSystemNotification({
               id: `secret-request:${request.id}`,
+              link: chatNotificationLink(request.sessionId),
               title: 'Password needed in another chat',
               body: getSecretRequestCommand(request),
               level: 'warning',
@@ -558,6 +560,7 @@ export function useUserQuestionPrompt({
       }
       await triggerSystemNotification({
         id: attentionKey('question', request.id),
+        link: chatNotificationLink(request.sessionId),
         title: request.title,
         body: request.questions[0]?.question ?? 'Jait needs your input.',
         level: 'warning',
@@ -573,6 +576,7 @@ export function useUserQuestionPrompt({
     }
     await triggerSystemNotification({
       id: attentionKey('question', request.id),
+      link: chatNotificationLink(request.sessionId),
       title: request.title,
       body: request.questions[0]?.question ?? 'Jait needs your input.',
       level: 'warning',
@@ -623,6 +627,7 @@ export function useUserQuestionPrompt({
           }) && !hasAndroidUserQuestionPresenter()) {
             void triggerSystemNotification({
               id: attentionKey('question', request.id),
+              link: chatNotificationLink(request.sessionId),
               title: request.title,
               body: request.questions[0]?.question ?? 'Jait needs your input.',
               level: 'info',

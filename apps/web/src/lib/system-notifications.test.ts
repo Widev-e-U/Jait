@@ -3,6 +3,7 @@ import {
   normalizeSystemNotification,
   revokeSystemNotification,
   setNativeNotificationsEnabled,
+  setVisibleNotificationSession,
   triggerSystemNotification,
 } from './system-notifications'
 
@@ -63,6 +64,7 @@ describe('normalizeSystemNotification', () => {
     NotificationMock.instances = []
     NotificationMock.live = []
     setNativeNotificationsEnabled(true)
+    setVisibleNotificationSession(null)
     vi.stubGlobal('window', {
       Notification: NotificationMock,
       jaitDesktop: undefined,
@@ -204,4 +206,32 @@ describe('normalizeSystemNotification', () => {
 
     expect(closeNotification).toHaveBeenCalledWith('question:req-9')
   })
+})
+
+
+it('deduplicates the same completion but replaces the card for the next turn', async () => {
+  const notify = vi.fn(async (_input: unknown) => {})
+  vi.stubGlobal('window', { jaitDesktop: { notify } })
+  try {
+    const input = { id: 'completion:dedupe:1', replaceId: 'chat:dedupe', kind: 'completion' as const, sessionId: 'dedupe', title: 'Response ready', body: 'Done', link: '/chat?sessionId=dedupe', includeToast: false }
+    await triggerSystemNotification(input)
+    await triggerSystemNotification(input)
+    await triggerSystemNotification({ ...input, id: 'completion:dedupe:2' })
+    expect(notify).toHaveBeenCalledTimes(2)
+    expect(notify.mock.calls[1]?.[0]).toMatchObject({ id: 'completion:dedupe:2', replaceId: 'chat:dedupe', link: input.link })
+  } finally { vi.unstubAllGlobals() }
+})
+
+it('suppresses only the visible focused chat completion', async () => {
+  const notify = vi.fn(async (_input: unknown) => {})
+  vi.stubGlobal('window', { jaitDesktop: { notify } })
+  vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
+  setVisibleNotificationSession('visible-chat')
+  try {
+    const input = { id: 'visible:1', kind: 'completion' as const, sessionId: 'visible-chat', title: 'Done', body: 'Result', includeToast: false }
+    await triggerSystemNotification(input)
+    expect(notify).not.toHaveBeenCalled()
+    await triggerSystemNotification({ ...input, id: 'other:1', sessionId: 'other-chat' })
+    expect(notify).toHaveBeenCalledOnce()
+  } finally { setVisibleNotificationSession(null); vi.unstubAllGlobals() }
 })

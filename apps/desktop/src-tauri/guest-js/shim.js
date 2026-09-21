@@ -267,25 +267,17 @@
   // the legacy desktop shell object form showNotification({ title, body, urgency }).
   function showNotification(a, b) {
     var opts = a && typeof a === 'object' ? a : { title: a, body: b };
-    return dispatch('desktop:notify', [
-      String((opts && opts.title) || 'Jait'),
-      String((opts && opts.body) || ''),
-      String((opts && opts.urgency) || 'normal'),
-    ]);
+    return dispatch('desktop:notify', [{
+      id: opts.id, title: String(opts.title || 'Jait'), body: String(opts.body || ''),
+      urgency: opts.urgency || 'normal', link: opts.link, scope: opts.scope, replaceId: opts.replaceId,
+    }]);
   }
-  // Legacy shell contract: notify({ id?, title, body, urgency }). The glue
-  // channel takes positional (title, body, urgency); `id` cannot be
-  // round-tripped without a close-capable backend, so it is accepted and
-  // ignored.
-  function notify(opts) {
-    var o = opts || {};
-    return showNotification(o);
-  }
-  // Glue has no notification-close channel yet; resolve so callers that
-  // dismiss on first-answer keep working.
-  function closeNotification() {
-    return Promise.resolve({ ok: true });
-  }
+  function notify(opts) { return showNotification(opts || {}); }
+  function closeNotification(id) { return dispatch('desktop:close-notification', [id]); }
+  function getPendingNotification() { return dispatch('desktop:pending-notification', []); }
+  function acknowledgeNotification(input) { return dispatch('desktop:acknowledge-notification', [input.id]); }
+  function onNotificationOpen(callback) { return onTauriWindowEvent('notification-open', function (_event, payload) { callback(payload); }); }
+
   // Legacy shell shows a native dialog here; the webview's confirm() is the
   // closest portable equivalent and is synchronous inside a Promise.
   function confirmShare(opts) {
@@ -572,6 +564,9 @@
     showNotification: showNotification,
     notify: notify,
     closeNotification: closeNotification,
+    getPendingNotification: getPendingNotification,
+    acknowledgeNotification: acknowledgeNotification,
+    onNotificationOpen: onNotificationOpen,
     confirmShare: confirmShare,
     getDesktopSources: getDesktopSources,
     getPathForFile: getPathForFile,

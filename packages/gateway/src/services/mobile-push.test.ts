@@ -28,11 +28,11 @@ describe("MobilePushService", () => {
       Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
       service.register("phone-a", "user-a", "token-a");
       service.register("phone-b", "user-b", "token-b");
-      await service.sendChatCompleted("user-a", { id: "chat-complete:s:1", title: "Chat finished", body: "Done" });
+      await service.sendChatCompleted("user-a", { id: "chat-complete:s:1", title: "Chat finished", body: "Done", replaceId: "chat-complete:s", sessionId: "s", link: "/chat?sessionId=s&projectId=p" });
       expect(send).toHaveBeenCalledTimes(1);
       expect(JSON.parse(send.mock.calls[0]![1]!.body as string)).toEqual({
         message: { token: "token-a", data: {
-          type: "chat.completed", id: "chat-complete:s:1", title: "Chat finished", body: "Done",
+          type: "chat.completed", id: "chat-complete:s:1", title: "Chat finished", body: "Done", replaceId: "chat-complete:s", sessionId: "s", link: "/chat?sessionId=s&projectId=p",
         }, android: { priority: "high", ttl: "3600s" } },
       });
     } finally { sqlite.close(); }

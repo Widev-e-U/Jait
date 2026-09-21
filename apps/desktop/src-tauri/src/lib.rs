@@ -11,6 +11,8 @@
 //! event-translation layer tested below — compiles and tests on any machine
 //! via plain `cargo test` (default features).
 
+pub mod notification;
+
 pub mod gateway_host;
 
 // `updater` must be declared before `shell` with `#[macro_use]`: the
