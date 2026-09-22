@@ -5,7 +5,7 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
     let saved = false
     let refreshes = 0
-    await page.route('**/api/provider-usage/summary', async route => {
+    await page.route('**/api/provider-usage/summary*', async route => {
       refreshes++
       await route.fulfill({ json: { generatedAt: new Date().toISOString(), profiles: [{
         id: 'jait-backend:ollama', providerType: 'ollama', providerLabel: 'Ollama', profileLabel: 'Ollama',

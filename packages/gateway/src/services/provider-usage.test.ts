@@ -215,7 +215,7 @@ describe("ProviderUsageService", () => {
 
     const snapshots = service.listForUser(["ollama"]);
     expect(snapshots).toHaveLength(3);
-    expect(snapshots.map((snapshot) => snapshot.resetsAt)).toEqual([null, null, null]);
+    expect(snapshots.every((snapshot) => snapshot.resetsAt === "2026-10-01T00:00:00.000Z")).toBe(true);
     expect(snapshots).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -233,7 +233,7 @@ describe("ProviderUsageService", () => {
       ]),
     );
   });
-  it("does not expose activity end dates from cached Ollama snapshots as quota resets", () => {
+  it("exposes the stored quota reset date for cached Ollama snapshots", () => {
     db.insert(providerUsage).values({
       accountId: "ollama",
       rateLimitType: "five_hour",
@@ -245,7 +245,7 @@ describe("ProviderUsageService", () => {
     }).run();
     const service = new ProviderUsageService(db);
     expect(service.listForUser(["ollama"])[0]).toMatchObject({
-      resetsAt: null,
+      resetsAt: "2026-09-20T13:45:00.000Z",
       updatedAt: "2026-09-20T13:45:00.000Z",
       utilization: 0.25,
     });

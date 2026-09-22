@@ -47,6 +47,8 @@ export interface ProviderUsageSnapshot {
   } | null;
   models: Array<{ name: string; requestCount: number }>;
   activityCost: string | null;
+  /** Signed-in provider account behind this snapshot (e.g. an Ollama Cloud email). */
+  accountLabel: string | null;
 }
 
 const WARNING_THRESHOLD = 0.9;
@@ -153,7 +155,12 @@ export class ProviderUsageService {
     }
   }
 
-  recordOllamaUsage(accountId: string, response: OllamaUsageResponse, planType?: string | null): void {
+  recordOllamaUsage(
+    accountId: string,
+    response: OllamaUsageResponse,
+    planType?: string | null,
+    accountLabel?: string | null,
+  ): void {
     const buckets = [
       ["five_hour", response.limits.session, 300],
       ["seven_day", response.limits.weekly, 10_080],
@@ -168,13 +175,14 @@ export class ProviderUsageService {
         providerType: "ollama",
         status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
-        // The activity reporting period is not a quota reset window.
-        // Ollama usage buckets do not supply reset timestamps.
-        resetsAt: null,
+        // Ollama's usage endpoint only exposes the activity reporting period
+        // end, which is the closest thing to a quota reset date it has.
+        resetsAt: response.activity?.period?.ending_at ?? null,
         isUsingOverage: false,
         raw: {
           planType: planType ?? null,
           windowDurationMins,
+          accountLabel: accountLabel ?? null,
           models: limit.models.map((model) => ({
             name: model.name,
             requestCount: model.request_count,
@@ -253,8 +261,7 @@ export class ProviderUsageService {
           providerType: row.providerType,
           status: row.status,
           utilization: row.utilization,
-          // Older Ollama snapshots stored the activity period end as a reset.
-          resetsAt: row.providerType === "ollama" ? null : row.resetsAt,
+          resetsAt: row.resetsAt,
           isUsingOverage: !!row.isUsingOverage,
           updatedAt: row.updatedAt,
           planType: typeof raw.planType === "string" ? raw.planType : null,
@@ -262,6 +269,7 @@ export class ProviderUsageService {
           credits,
           models,
           activityCost: typeof raw.activityCost === "string" ? raw.activityCost : null,
+          accountLabel: typeof raw.accountLabel === "string" ? raw.accountLabel : null,
         };
       });
   }

@@ -128,8 +128,14 @@ export function registerProviderRoutes(
   app.get("/api/provider-usage/summary", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
+    // `refresh=0` returns the last known snapshots without touching the provider
+    // APIs, so the modal can paint every configured profile immediately and then
+    // upgrade the numbers with a follow-up `refresh=1` request.
+    const refresh = (request.query as { refresh?: string } | undefined)?.refresh !== "0";
     const accounts = deps.providerAccountService?.list(authUser.id) ?? [];
-    const quotaErrors = await deps.providerAccountService?.refreshUsage(authUser.id) ?? {};
+    const quotaErrors: Record<string, string> = refresh
+      ? await deps.providerAccountService?.refreshUsage(authUser.id) ?? {}
+      : {};
     const settings = deps.userService?.getSettings(authUser.id);
     const apiKeys = settings?.apiKeys ?? {};
     const instances = parseJaitBackendInstances(apiKeys["JAIT_BACKEND_INSTANCES"]);
@@ -152,7 +158,7 @@ export function registerProviderRoutes(
     // line and plan badge even when no quota buckets are available.
     const ollamaAccounts = new Map<string, OllamaCloudAccount>();
 
-    await Promise.all(ollamaBackends.map(async (backend) => {
+    if (refresh) await Promise.all(ollamaBackends.map(async (backend) => {
       const quotaAccountId = `jait-backend:${backend.id}`;
       const cloud = isOllamaCloudUrl(backend.baseUrl);
       const backendApiKey = "apiKey" in backend ? backend.apiKey?.trim() : undefined;
@@ -186,7 +192,12 @@ export function registerProviderRoutes(
         const usage = usageApiKey
           ? await fetchOllamaUsage(usageApiKey)
           : await fetchSignedInOllamaUsage(backend.baseUrl, probe.account!);
-        deps.providerUsageService.recordOllamaUsage(quotaAccountId, usage, probe.account?.plan ?? null);
+        deps.providerUsageService.recordOllamaUsage(
+          quotaAccountId,
+          usage,
+          probe.account?.plan ?? null,
+          probe.account?.email ?? probe.account?.name ?? null,
+        );
       } catch (error) {
         quotaErrors[quotaAccountId] =
           usageApiKey && error instanceof OllamaUsageError && error.status === 401
@@ -212,20 +223,23 @@ export function registerProviderRoutes(
       jaitBackendProfiles: ollamaBackends.map((backend) => {
         const quotaAccountIdValue = `jait-backend:${backend.id}`;
         const account = ollamaAccounts.get(quotaAccountIdValue);
+        const cached = quotas.find(
+          (quota) => quota.accountId === quotaAccountIdValue && (quota.planType || quota.accountLabel),
+        );
         return {
           id: quotaAccountIdValue,
           providerType: "ollama",
           providerLabel: "Ollama",
           profileLabel: backend.name,
           quotaAccountId: quotaAccountIdValue,
-          accountLabel: account?.email ?? account?.name ?? null,
-          planType: account?.plan ?? null,
+          accountLabel: account?.email ?? account?.name ?? cached?.accountLabel ?? null,
+          planType: account?.plan ?? cached?.planType ?? null,
         };
       }),
     });
     await Promise.all(summary.profiles.map(async (profile) => {
       const backend = ollamaBackends.find((item) => profile.id === `jait-backend:${item.id}`);
-      if (backend && (profile.error || profile.quotas.length === 0)) {
+      if (refresh && backend && (profile.error || profile.quotas.length === 0)) {
         profile.ollamaSetup = await getOllamaUsageSetup(backend.baseUrl);
       }
     }));

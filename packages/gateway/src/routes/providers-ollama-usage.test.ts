@@ -34,7 +34,7 @@ describe("Ollama quota route", () => {
     try {
       expect((await request()).statusCode).toBe(200);
       expect(fetchSignedInOllamaUsage).toHaveBeenCalledWith("http://localhost:11434", account);
-      expect(recordOllamaUsage).toHaveBeenCalledWith("jait-backend:ollama", usage, "pro");
+      expect(recordOllamaUsage).toHaveBeenCalledWith("jait-backend:ollama", usage, "pro", account.email);
     } finally { await app.close(); }
   });
 
