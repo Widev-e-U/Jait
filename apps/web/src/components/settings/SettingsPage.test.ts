@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { shouldShowProviderLoginAction } from './provider-account-actions'
-import { getBackendInstanceDrafts, mergeApiSettingsDraft } from './SettingsPage'
+import { getBackendInstanceDrafts, getJaitProviderModelRequirements, mergeApiSettingsDraft } from './SettingsPage'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 
 describe('highlightSearchMatch', () => {
@@ -80,6 +80,41 @@ describe('getBackendInstanceDrafts', () => {
     }, 'openai')
 
     expect(drafts.map((instance) => instance.id)).toEqual(['one', 'two'])
+  })
+})
+
+describe('getJaitProviderModelRequirements', () => {
+  it('reports both models as unconfigured when nothing is set', () => {
+    const requirements = getJaitProviderModelRequirements({})
+    expect(requirements.map((requirement) => requirement.key)).toEqual(['system-two', 'system-one'])
+    expect(requirements.every((requirement) => !requirement.configured)).toBe(true)
+  })
+
+  it('counts System Two from saved backend instances or the live draft count', () => {
+    expect(getJaitProviderModelRequirements({ JAIT_BACKEND_INSTANCES: '[{"id":"a"}]' })[0].configured).toBe(true)
+    expect(getJaitProviderModelRequirements({}, 2)[0].configured).toBe(true)
+    // Invalid JSON does not count as a configured backend.
+    expect(getJaitProviderModelRequirements({ JAIT_BACKEND_INSTANCES: 'not-json' })[0].configured).toBe(false)
+  })
+
+  it('accepts any System One endpoint, including keyless local servers', () => {
+    const [, systemOne] = getJaitProviderModelRequirements({ SYSTEM_ONE_BASE_URL: 'http://localhost:11434/v1' })
+    expect(systemOne.configured).toBe(true)
+  })
+
+  it('falls back to the legacy Jev key for the System One model', () => {
+    const [, systemOne] = getJaitProviderModelRequirements({ JEV_API_KEY: 'legacy-key' })
+    expect(systemOne.configured).toBe(true)
+  })
+
+  it('prefers the explicit System One endpoint and reports what was chosen', () => {
+    const [, systemOne] = getJaitProviderModelRequirements({
+      SYSTEM_ONE_BASE_URL: 'https://api.openai.com/v1',
+      SYSTEM_ONE_MODEL: 'gpt-4o-mini',
+      JEV_API_KEY: 'legacy-key',
+    })
+    expect(systemOne.configured).toBe(true)
+    expect(systemOne.detail).toBe('gpt-4o-mini @ https://api.openai.com/v1')
   })
 })
 

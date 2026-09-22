@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { evaluateDecision, rankSystemOne, systemOneEnabled } from "./system-one.js";
+import { evaluateDecision, rankSystemOne, resolveSystemOne, systemOneEnabled } from "./system-one.js";
 import { ToolRegistry } from "../tools/registry.js";
 import { buildSystemOneToolSchemas, buildTieredToolSchemas } from "../tools/agent-loop.js";
 import { createDecisionEvaluateTool } from "../tools/decision.js";
@@ -116,5 +116,31 @@ describe("System One Model", () => {
     expect(buildSystemPrompt("agent", endpoint, { systemOne: true })).toContain("decision.evaluate");
     expect(buildCliProviderSystemPrompt("codex", undefined, "agent", {})).not.toContain("<systemOneModel>");
     expect(buildCliProviderSystemPrompt("codex", undefined, "agent", { systemOne: true })).toContain("decision.evaluate");
+  });
+
+  it("prefers the generic System One fields over the legacy JEV fields", () => {
+    expect(resolveSystemOne({ JEV_API_KEY: "legacy", SYSTEM_ONE_API_KEY: "generic", SYSTEM_ONE_MODEL: "gpt-4o-mini" }))
+      .toMatchObject({ key: "generic", model: "gpt-4o-mini", baseUrl: undefined });
+    expect(resolveSystemOne({ JEV_API_KEY: "legacy", JEV_MODEL: "jev-latest" }))
+      .toMatchObject({ key: "legacy", model: "jev-latest", baseUrl: undefined });
+    // A generic endpoint may be keyless (e.g. a local Ollama server).
+    expect(resolveSystemOne({ SYSTEM_ONE_BASE_URL: "http://localhost:11434/v1" }))
+      .toMatchObject({ key: "", baseUrl: "http://localhost:11434/v1" });
+    expect(resolveSystemOne({})).toBeNull();
+  });
+
+  it("routes to any OpenAI-compatible chat/completions endpoint", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: JSON.stringify({ answers: { relevant: { type: "noul", noul: 0.9 } } }) } }],
+    }))); vi.stubGlobal("fetch", fetcher);
+    const account = { SYSTEM_ONE_BASE_URL: "https://api.example.com/v1/", SYSTEM_ONE_API_KEY: `generic-${++sequence}`, SYSTEM_ONE_MODEL: "gpt-4o-mini" };
+    expect(systemOneEnabled(account)).toBe(true);
+    const result = await evaluateDecision(account, "user request", questions);
+    expect(result.answers.relevant.noul).toBe(0.9);
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe("https://api.example.com/v1/chat/completions");
+    expect(init.headers.Authorization).toBe(`Bearer ${account.SYSTEM_ONE_API_KEY}`);
+    expect(JSON.parse(init.body)).toMatchObject({ model: "gpt-4o-mini", temperature: 0 });
+    expect(JSON.parse(init.body).messages[0].role).toBe("system");
   });
 });

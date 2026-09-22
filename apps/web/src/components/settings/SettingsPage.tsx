@@ -109,7 +109,7 @@ function renderLoginWindowPlaceholder(loginWindow: Window, label: string): void 
 // Chat providers (Perplexity, xAI/Grok, Google Gemini, Moonshot/Kimi, …) are
 // configured as Jait backend instances above — no standalone API-key group here.
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
-  { label: 'System One Model', fields: ['JEV_API_KEY', 'JEV_MODEL'] },
+  { label: 'System One Model', fields: ['SYSTEM_ONE_BASE_URL', 'SYSTEM_ONE_API_KEY', 'SYSTEM_ONE_MODEL', 'SYSTEM_ONE_TIMEOUT_MS', 'JEV_API_KEY', 'JEV_MODEL'] },
   { label: 'OpenAI services', fields: ['OPENAI_API_KEY', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
   { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
   { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE', 'STT_PROMPT'] },
@@ -128,6 +128,69 @@ export function mergeApiSettingsDraft(
     else next[field] = value
   }
   return next
+}
+
+export interface JaitProviderModelRequirement {
+  key: 'system-two' | 'system-one'
+  label: string
+  description: string
+  configured: boolean
+  detail: string
+}
+
+function countNamedBackendInstances(value: string | undefined): number {
+  const raw = value?.trim()
+  if (!raw) return 0
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.length : 0
+  } catch {
+    return 0
+  }
+}
+
+/**
+ * The Jait provider is defined by two models, both freely chosen by the user:
+ *  - System Two Model: the reasoning/agent backend, stored as Jait backend instances.
+ *  - System One Model: the bounded-decision model, pointing at *any* OpenAI-compatible
+ *    endpoint via SYSTEM_ONE_BASE_URL/SYSTEM_ONE_API_KEY/SYSTEM_ONE_MODEL (Jev is only
+ *    the fallback when the base URL is empty).
+ */
+export function getJaitProviderModelRequirements(
+  apiKeys: Record<string, string>,
+  backendInstanceCount = 0,
+): JaitProviderModelRequirement[] {
+  const namedInstances = countNamedBackendInstances(apiKeys.JAIT_BACKEND_INSTANCES)
+  const backendCount = Math.max(namedInstances, backendInstanceCount)
+  const systemTwoConfigured = backendCount > 0
+
+  const baseUrl = apiKeys.SYSTEM_ONE_BASE_URL?.trim() ?? ''
+  const apiKey = apiKeys.SYSTEM_ONE_API_KEY?.trim() || apiKeys.JEV_API_KEY?.trim() || ''
+  const model = apiKeys.SYSTEM_ONE_MODEL?.trim() || apiKeys.JEV_MODEL?.trim() || ''
+  // Matches the gateway resolver: a System One model is defined once a base URL or
+  // an API key is present (keyless local endpoints included).
+  const systemOneConfigured = Boolean(baseUrl || apiKey)
+
+  return [
+    {
+      key: 'system-two',
+      label: 'System Two Model',
+      description: 'Reasoning backend used for agent turns.',
+      configured: systemTwoConfigured,
+      detail: systemTwoConfigured
+        ? `${backendCount} backend instance${backendCount === 1 ? '' : 's'} configured`
+        : 'Add at least one Jait backend instance below',
+    },
+    {
+      key: 'system-one',
+      label: 'System One Model',
+      description: 'Bounded-decision model for the Jait provider (any endpoint).',
+      configured: systemOneConfigured,
+      detail: systemOneConfigured
+        ? `${model || 'default model'} @ ${baseUrl || 'TypeSafe Jev'}`
+        : 'Set a SYSTEM_ONE_BASE_URL or key below',
+    },
+  ]
 }
 
 type FieldName = string
@@ -609,6 +672,23 @@ export function SettingsPage({
     && instance.baseUrl.trim()
     && (!instance.numCtx.trim() || Number(instance.numCtx) >= 2048)
   ))
+  // The Jait provider is only fully defined once both models are chosen: a System Two
+  // Model (reasoning backend instances) and a System One Model (any OpenAI-compatible
+  // endpoint). System One is still only enforced when the user touches its fields so
+  // unrelated settings can always be saved.
+  const jaitModelRequirements = getJaitProviderModelRequirements(
+    draft,
+    backendInstancesDraft.filter((instance) => instance.type && instance.name.trim() && instance.baseUrl.trim()).length,
+  )
+  const systemOneDirty = API_KEY_FIELDS.some(
+    (field) => field.startsWith('SYSTEM_ONE_') && (draft[field] ?? '') !== (apiKeys[field] ?? ''),
+  )
+  const systemOneConfigured = jaitModelRequirements.some(
+    (requirement) => requirement.key === 'system-one' && requirement.configured,
+  )
+  const backendInstancesInvalid = backendInstancesDirty && !backendInstancesValid
+  const systemOneInvalid = systemOneDirty && !systemOneConfigured
+  const saveBlockedByJaitModels = backendInstancesInvalid || systemOneInvalid
   const handleTestBackendInstance = async (instance: BackendInstanceDraft) => {
     setBackendTestingId(instance.id)
     setBackendTestResults((prev) => ({ ...prev, [instance.id]: { ok: false, message: 'Testing…' } }))
@@ -1977,12 +2057,44 @@ const providerAccountsCard = (
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6 pb-20">
+          {(showJaitBackendSection || filteredApiFields.some((field) => field.startsWith('SYSTEM_ONE_') || field.startsWith('JEV_'))) && (
+            <Card className="space-y-3 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Jait provider models')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  The Jait provider needs two models, and you choose both: a <strong>System Two Model</strong> for
+                  reasoning and a <strong>System One Model</strong> for bounded decisions. Neither is restricted to a
+                  specific vendor.
+                </p>
+              </div>
+              <ul className="space-y-2">
+                {jaitModelRequirements.map((requirement) => (
+                  <li key={requirement.key} className="flex items-start gap-3">
+                    {requirement.configured
+                      ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-500" />
+                      : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />}
+                    <div className="space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{highlight(requirement.label)}</span>
+                        <Badge variant={requirement.configured ? 'secondary' : 'destructive'} className="text-2xs">
+                          {requirement.configured ? 'Configured' : 'Required'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {requirement.description} — {requirement.detail}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
           {showJaitBackendSection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">{highlight('Jait\'s own harness LLM')}</h2>
+                <h2 className="text-base font-medium">{highlight('System Two Model')}</h2>
                 <p className="text-sm text-muted-foreground">
-                  Configure named inference backends. The model picker combines their catalogues and routes each request to the instance that supplied the model.
+                  The Jait provider's own reasoning model (System Two). Configure named inference backends; the model picker combines their catalogues and routes each request to the instance that supplied the model. Bounded decisions are delegated to the separately configured System One Model below under API keys.
                 </p>
               </div>
               <div className="max-w-sm">
@@ -2164,7 +2276,7 @@ const providerAccountsCard = (
           if (groupFields.length === 0) return null
           const GroupIcon = getFieldIcon(groupFields[0] as FieldName)
           return (
-            <Collapsible key={group.label} defaultOpen={false}>
+            <Collapsible key={group.label} defaultOpen={group.label === 'System One Model'}>
               <Card className="p-0 overflow-hidden">
                 <CollapsibleTrigger className="flex w-full items-center gap-2 px-5 py-3.5 text-left hover:bg-muted/50 transition-colors group">
                   <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
@@ -2172,7 +2284,7 @@ const providerAccountsCard = (
                   <span className="text-sm font-semibold">{highlight(group.label)}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  {group.label === 'System One Model' && <p className="px-5 pb-4 text-sm text-muted-foreground">Add a TypeSafe Jev API key to enable tool selection, prompt context and memory ranking, recovery advice, and decision.evaluate. Relevant request context is sent to TypeSafe. Leave the key empty to keep existing behavior. Model defaults to jev-latest.</p>}
+                  {group.label === 'System One Model' && <p className="px-5 pb-4 text-sm text-muted-foreground">System One handles bounded decisions for the Jait provider: tool selection, prompt context and memory ranking, recovery advice, and decision.evaluate. It can be <strong>any</strong> model — point it at any OpenAI-compatible endpoint with <code className="rounded bg-muted px-1 py-0.5 text-2xs">SYSTEM_ONE_BASE_URL</code> (e.g. <code className="rounded bg-muted px-1 py-0.5 text-2xs">https://api.openai.com/v1</code>), <code className="rounded bg-muted px-1 py-0.5 text-2xs">SYSTEM_ONE_API_KEY</code>, and <code className="rounded bg-muted px-1 py-0.5 text-2xs">SYSTEM_ONE_MODEL</code>. The base URL may be keyless for local servers (e.g. Ollama). Leave the base URL empty to use TypeSafe Jev via <code className="rounded bg-muted px-1 py-0.5 text-2xs">JEV_API_KEY</code> (model defaults to jev-latest). Relevant request context is sent to the configured endpoint. Leave everything empty to keep existing behavior.</p>}
                   <div className="grid gap-4 px-5 pb-5 md:grid-cols-2">
                     {groupFields.map((field) => {
                       const secret = isSecretField(field)
@@ -2263,12 +2375,19 @@ const providerAccountsCard = (
         })}
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
-            <Button onClick={() => { void handleSave() }} disabled={saving || !isDirty || (backendInstancesDirty && !backendInstancesValid)}>
+            <Button onClick={() => { void handleSave() }} disabled={saving || !isDirty || saveBlockedByJaitModels}>
               {saving ? 'Saving...' : 'Save API settings'}
             </Button>
             <Button variant="ghost" onClick={handleDiscard} disabled={!isDirty}>
               Discard
             </Button>
+            {saveBlockedByJaitModels && (
+              <span className="text-sm text-amber-600 dark:text-amber-500">
+                {systemOneInvalid
+                  ? 'Finish the System One Model first'
+                  : 'Finish the System Two Model first'}
+              </span>
+            )}
             {status && <span className="text-sm text-muted-foreground">{status}</span>}
             {error && <span className="text-sm text-destructive">{error}</span>}
           </div>
