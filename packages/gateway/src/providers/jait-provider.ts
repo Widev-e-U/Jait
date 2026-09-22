@@ -14,7 +14,7 @@ import type { ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import {
   buildSystemPrompt,
-  buildTieredToolSchemas,
+  buildSystemOneToolSchemas,
   computeContextUsage,
   CONTEXT_COMPACT_TRIGGER_RATIO,
   generateLLMConversationSummary,
@@ -237,13 +237,13 @@ export class JaitProvider implements CliProviderAdapter {
           ? new Set(userSettings.disabledTools)
           : undefined;
         if (this.deps.toolRegistry) {
-          const selected = this.deps.toolRegistry.selectForLLM(message, disabledTools);
+          const selected = (await this.deps.toolRegistry.rankSearchWithSystemOne(message, { disabledTools, limit: 10, candidates: this.deps.toolRegistry.list().filter(tool => (tool.tier ?? "standard") !== "core") }, userSettings?.apiKeys)).map(match => match.tool);
           rememberActivatedToolNames(state.activatedToolNames, selected.map((tool) => tool.name));
         }
         const toolSchemas = this.deps.toolRegistry
-          ? buildTieredToolSchemas(this.deps.toolRegistry, disabledTools, {
+          ? await buildSystemOneToolSchemas(this.deps.toolRegistry, disabledTools, {
               activatedToolNames: state.activatedToolNames,
-            })
+            }, userSettings?.apiKeys)
           : [];
         const llm = this.buildLlmConfig(state.userId, state.model);
         const result = await runAgentLoop(

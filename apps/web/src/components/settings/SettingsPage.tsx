@@ -109,6 +109,7 @@ function renderLoginWindowPlaceholder(loginWindow: Window, label: string): void 
 // Chat providers (Perplexity, xAI/Grok, Google Gemini, Moonshot/Kimi, …) are
 // configured as Jait backend instances above — no standalone API-key group here.
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
+  { label: 'System One Model', fields: ['JEV_API_KEY', 'JEV_MODEL'] },
   { label: 'OpenAI services', fields: ['OPENAI_API_KEY', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
   { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
   { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE', 'STT_PROMPT'] },
@@ -1187,6 +1188,7 @@ export function SettingsPage({
   const filteredApiFields = API_KEY_FIELDS.filter((field) => matchesSearch(
     field,
     field.replaceAll('_', ' '),
+    API_FIELD_GROUPS.find(group => group.fields.includes(field))?.label,
     draft[field],
   ))
   const showToolsSection = matchesSearch(
@@ -2170,6 +2172,7 @@ const providerAccountsCard = (
                   <span className="text-sm font-semibold">{highlight(group.label)}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
+                  {group.label === 'System One Model' && <p className="px-5 pb-4 text-sm text-muted-foreground">Add a TypeSafe Jev API key to enable tool selection, prompt context and memory ranking, recovery advice, and decision.evaluate. Relevant request context is sent to TypeSafe. Leave the key empty to keep existing behavior. Model defaults to jev-latest.</p>}
                   <div className="grid gap-4 px-5 pb-5 md:grid-cols-2">
                     {groupFields.map((field) => {
                       const secret = isSecretField(field)

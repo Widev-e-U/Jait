@@ -36,6 +36,7 @@ export function isValidChatMode(value: unknown): value is ChatMode {
  * mutate the filesystem, run destructive commands, or change system state.
  */
 export const ASK_MODE_TOOLS = new Set([
+  "decision.evaluate",
   // Core tools (read-only ones)
   "read",
   "search",

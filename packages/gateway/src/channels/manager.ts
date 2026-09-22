@@ -1,3 +1,4 @@
+import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
 /**
  * Channel manager — lifecycle, persistence, and the inbound→agent→outbound pipeline.
  *
@@ -11,7 +12,7 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { AuditWriter } from "../services/audit.js";
 import {
   runAgentLoop,
-  buildTieredToolSchemas,
+  buildSystemOneToolSchemas,
   toOpenAIName,
   SteeringController,
   type LLMConfig,
@@ -1367,6 +1368,7 @@ export function looksLikeCliAuthFailure(message: string): boolean {
 
 /** Context a CLI-provider turn needs on top of the usual reply context. */
 interface CliTurnContext {
+  allowedTools?: Set<string>;
   channelId: string;
   sessionId: string;
   model?: string;
@@ -1430,15 +1432,16 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
     const isOllama = (auth?.jaitBackend ?? "") === "ollama";
     const latestUserQuery = [...history].reverse().find((message) => message.role === "user")?.content ?? "";
     let toolSchemas = toolRegistry
-      ? buildTieredToolSchemas(toolRegistry, disabledTools, {
+      ? await buildSystemOneToolSchemas(toolRegistry, disabledTools, {
           ollamaEssentials: isOllama,
           query: latestUserQuery,
+          allowedTools: restrictTo,
           // Memory, reminders and skill authoring are what make this an
           // assistant rather than a chat window. Leaving them to `tools.search`
           // costs a round trip, and a model that doesn't take it answers "I
           // can't schedule that" — so they are always on the table.
           activatedToolNames: CHANNEL_ACTIVATED_TOOLS,
-        })
+        }, auth?.apiKeys)
       : [];
     if (restrictTo) {
       const allowedOpenAiNames = new Set([...restrictTo].map(toOpenAIName));
@@ -1458,8 +1461,9 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
         backend: auth?.jaitBackend,
       };
       const promptCtx: PromptContext = {
+        systemOne: systemOneEnabled(auth?.apiKeys) && !disabledTools?.has("decision.evaluate") && (!restrictTo || restrictTo.has("decision.evaluate")),
         projectRoot: this.deps.projectRoot ?? process.cwd(),
-        skills: this.deps.resolveSkills?.(),
+        skills: await rankSystemOne(auth?.apiKeys, latestUserQuery, this.deps.resolveSkills?.() ?? [], skill => `${skill.name}: ${skill.description}`, "skill for the system prompt"),
         backend: auth?.jaitBackend,
       };
       const channelNote = this.deps.systemPrompt ?? CHANNEL_ASSISTANT_NOTE;
@@ -1621,7 +1625,8 @@ export class AgentLoopReplyGenerator implements ReplyGenerator {
     }
 
     const { runAcpSpecialistTurn } = await import("../tools/agent-acp-runner.js");
-    const prompt = buildCliPrompt(history);
+    const decisionGuidance = systemOneEnabled(auth.apiKeys) && !auth.disabledTools?.has("decision.evaluate") && (!ctx.allowedTools?.size || ctx.allowedTools.has("decision.evaluate")) ? `${SYSTEM_ONE_PROMPT}\n\n` : "";
+    const prompt = decisionGuidance + buildCliPrompt(history);
 
     const result = await runAcpSpecialistTurn({
       providerRegistry,

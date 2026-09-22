@@ -1,3 +1,4 @@
+import { rankSystemOne, systemOneEnabled } from "../services/system-one.js";
 /**
  * Tool Registry — Sprint 3.5
  *
@@ -346,6 +347,18 @@ export class ToolRegistry {
 
     matches.sort((left, right) => right.score - left.score || left.tool.name.localeCompare(right.tool.name));
     return options.limit ? matches.slice(0, options.limit) : matches;
+  }
+
+  async rankSearchWithSystemOne(query: string, options: ToolSearchOptions = {}, apiKeys?: Record<string, string>): Promise<RankedToolMatch[]> {
+    const fallback = this.rankSearch(query, options);
+    if (!systemOneEnabled(apiKeys)) return fallback;
+    const lexical = this.rankSearch(query, { ...options, limit: 48 });
+    const known = new Set(lexical.map(match => match.tool.name));
+    const extras = (options.candidates ?? this.list()).filter(tool => !known.has(tool.name) && !options.disabledTools?.has(tool.name));
+    const candidates = [...lexical, ...extras.map(tool => ({ tool, score: 0, matchedTerms: [] as string[] }))].slice(0, 48);
+    const ranked = await rankSystemOne(apiKeys, query, candidates, match => `${match.tool.name}: ${match.tool.description}`, "tool", undefined, (match, score) => { match.score = score; });
+    // Identity signals no model result: preserve lexical filtering, including no matches.
+    return ranked === candidates ? fallback : ranked.slice(0, options.limit ?? ranked.length);
   }
 
   /** Search tools in ranked relevance order. */

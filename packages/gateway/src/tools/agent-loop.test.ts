@@ -3791,7 +3791,7 @@ describe("runAgentLoop tool-loop detection", () => {
 
   describe("investigation without progress", () => {
     /** Read-only rounds that never repeat a call, so no duplicate guard can fire. */
-    function investigateForever(sessionId: string) {
+    function investigateForever(sessionId: string, systemOne = false) {
       let fetchCalls = 0;
       let sawToolFreeRound = false;
       const history: AgentMessage[] = [
@@ -3799,6 +3799,7 @@ describe("runAgentLoop tool-loop detection", () => {
         { role: "user", content: "Find out why the build is slow." },
       ];
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+        if (String(_input).includes("api.typesafe.ai")) return new Response(JSON.stringify({ model: "jev-latest", answers: { recovery: { type: "choice", choice: "act", confidence: 0.95 } } }));
         const body = JSON.parse(String(init?.body ?? "{}")) as { tools?: unknown[] };
         if (!body.tools || body.tools.length === 0) {
           sawToolFreeRound = true;
@@ -3831,6 +3832,7 @@ describe("runAgentLoop tool-loop detection", () => {
           sessionId,
           abort: new AbortController(),
           maxRounds: 80,
+          auth: systemOne ? { apiKeys: { JEV_API_KEY: "recovery-assessment-test" } } : undefined,
           mode: "agent",
         },
         async () => ({ ok: true, message: "file contents" }),
@@ -3838,6 +3840,15 @@ describe("runAgentLoop tool-loop detection", () => {
 
       return { run, history, sawToolFree: () => sawToolFreeRound, rounds: () => fetchCalls };
     }
+
+    it("adds configured recovery advice without bypassing the forced-answer guard", async () => {
+      const { run, history, sawToolFree } = investigateForever("system-one-recovery", true);
+      const result = await run;
+      expect(history.some(message => message.content.includes("System One recovery advice: Prefer a concrete"))).toBe(true);
+      expect(sawToolFree()).toBe(true);
+      expect(result.hitMaxRounds).toBe(false);
+      expect(result.content).toBe("Here is what I found.");
+    });
 
     it("withholds tools to force an answer when nothing changes for many rounds", async () => {
       const { run, sawToolFree } = investigateForever("session-wandering");

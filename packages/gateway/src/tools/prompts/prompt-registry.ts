@@ -1,3 +1,4 @@
+import { SYSTEM_ONE_PROMPT } from "../../services/system-one.js";
 import { getStateDirectory } from "../../state-directory.js";
 /**
  * Prompt Registry — per-model prompt resolution for Jait.
@@ -125,6 +126,7 @@ import { formatSkillsForPrompt } from "../../skills/index.js";
 // ── Helpers ──────────────────────────────────────────────────────────
 
 export interface PromptContext {
+  systemOne?: boolean;
   /** The resolved project root for the current session (if any) */
   projectRoot?: string;
   /** Enabled skills to inject into the system prompt */
@@ -228,6 +230,7 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
     prompt += `\n\n<projectInstructions>\nContext and instructions the user attached to this chat's project folder (and any folder above it), ordered from the outermost folder inwards. The innermost entry is the most specific — prefer it when two entries conflict. These outrank the global instruction file.\n\n${projectInstructions}\n</projectInstructions>`;
   }
 
+  if (ctx?.systemOne) prompt += `\n\n${SYSTEM_ONE_PROMPT}`;
   return prompt;
 }
 

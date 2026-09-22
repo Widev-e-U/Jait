@@ -28,6 +28,12 @@ describe('highlightSearchMatch', () => {
 })
 
 describe('mergeApiSettingsDraft', () => {
+  it('saves and clears the System One key and model without touching backends', () => {
+    const saved = mergeApiSettingsDraft({ JAIT_BACKEND_INSTANCES: '[]' }, { JEV_API_KEY: 'user-key', JEV_MODEL: 'jev-latest' })
+    expect(saved).toEqual({ JAIT_BACKEND_INSTANCES: '[]', JEV_API_KEY: 'user-key', JEV_MODEL: 'jev-latest' })
+    expect(mergeApiSettingsDraft(saved, { JEV_API_KEY: '', JEV_MODEL: '' }).JEV_API_KEY).toBe('')
+  })
+
   it('preserves named backend instances and legacy backend values', () => {
     const instances = '[{"id":"current"}]'
     expect(mergeApiSettingsDraft({

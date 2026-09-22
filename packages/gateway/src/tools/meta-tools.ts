@@ -138,7 +138,7 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
     async execute(input, context) {
       const limit = Math.max(1, Math.min(20, Math.floor(input.limit ?? 8)));
       const candidates = context.requestedBy === "mcp-client" ? registry.listForMcp() : undefined;
-      const ranked = registry.rankSearch(input.query, { candidates, limit });
+      const ranked = await registry.rankSearchWithSystemOne(input.query, { candidates, limit }, context.apiKeys);
 
       if (ranked.length === 0) {
         return {

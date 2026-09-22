@@ -1,3 +1,4 @@
+import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
 import { chatNotificationLink, notificationPreview } from "@jait/shared";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
@@ -42,7 +43,7 @@ import {
   runAgentLoop,
   repairToolCallHistory,
   retryToolCall,
-  buildTieredToolSchemas,
+  buildSystemOneToolSchemas,
   fromOpenAIName,
   SteeringController,
   type AgentLoopEvent,
@@ -433,6 +434,7 @@ export function buildCliProviderSystemPrompt(
     parts.push(`<projectInstructions>\n${promptCtx.projectInstructions.trim()}\n</projectInstructions>`);
   }
 
+  if (promptCtx.systemOne) parts.push(SYSTEM_ONE_PROMPT);
   return parts.join("\n\n");
 }
 
@@ -632,6 +634,7 @@ function buildRelevantMemoryPromptBlock(entries: MemoryEntry[]): string {
 async function retrieveRelevantMemoryContext(
   memoryService: MemoryService | undefined,
   content: string,
+  apiKeys?: Record<string, string>,
 ): Promise<{ block: string; flow: LlmContextFlowMemory } | null> {
   const query = content.trim();
   if (!memoryService || !query) return null;
@@ -652,7 +655,8 @@ async function retrieveRelevantMemoryContext(
     }
   }
 
-  const entries = [...byId.values()].slice(0, 5);
+  const ranked = await rankSystemOne(apiKeys, query, [...byId.values()], entry => entry.content, "memory");
+  const entries = ranked.slice(0, 5);
   if (entries.length === 0) {
     return {
       block: "",
@@ -3542,8 +3546,9 @@ export function registerChatRoutes(
       ? projectService?.resolveInstructionChain(sessionRecord.projectId, authUser.id) ?? undefined
       : undefined;
     const promptCtx: PromptContext = {
+      systemOne: systemOneEnabled(userApiKeys) && !userSettings?.disabledTools?.includes("decision.evaluate"),
       projectRoot: wsRoot,
-      skills: skillRegistry?.listEnabled(),
+      skills: await rankSystemOne(userApiKeys, content, skillRegistry?.listEnabled() ?? [], skill => `${skill.name}: ${skill.description}`, "skill for the system prompt"),
       architectureGraph,
       responseStyle,
       ...(projectInstructions ? { projectInstructions } : {}),
@@ -3832,7 +3837,7 @@ export function registerChatRoutes(
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
-    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content);
+    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content, userApiKeys);
     const memoryToolCall = relevantMemory?.flow.retrieved.length
       ? buildSyntheticMemoryToolCall(content, memoryService)
       : null;
@@ -4644,10 +4649,10 @@ export function registerChatRoutes(
           : undefined;
         const isOllama = llmRuntime.backend === "ollama";
         const toolSchemas = toolRegistry
-          ? buildTieredToolSchemas(toolRegistry, disabledTools, {
+          ? await buildSystemOneToolSchemas(toolRegistry, disabledTools, {
               ollamaEssentials: isOllama,
               query: content,
-            })
+            }, userApiKeys)
           : [];
 
         const onEvent = (event: AgentLoopEvent) => {

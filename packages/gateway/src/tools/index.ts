@@ -1,3 +1,4 @@
+import { createDecisionEvaluateTool } from "./decision.js";
 export type {
   ToolContext,
   ToolDefinition,
@@ -129,6 +130,7 @@ export {
   CONTEXT_COMPACT_TRIGGER_RATIO,
   buildToolSchemas,
   buildTieredToolSchemas,
+  buildSystemOneToolSchemas,
   toolDefsToSchemas,
   parseOpenAIStream,
   serializeMessages,
@@ -543,6 +545,7 @@ export function createToolRegistry(
   // Meta-tools (tool discovery — always core tier)
   tools.register(createToolsListTool(tools));
   tools.register(createToolsSearchTool(tools));
+  tools.register(createDecisionEvaluateTool());
 
   // Browser + web tools
   tools.register(createBrowserNavigateTool(surfaceRegistry, undefined));
