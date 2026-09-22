@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.868](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.868) — 2026-09-22
+- docs: describe the opt-in System One ranking model — e8756709
+- feat(gateway): add System One model for tool, prompt and memory ranking — 79774f0d
+- fix(web): collapse queued-message actions to icons on mobile — d30c30de
+
 ## [v0.1.867](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.867) — 2026-09-21
 - feat(notifications): open the originating chat from notification taps — 8e6fe6f0
 - fix(web): keep the todo clear button from stretching in narrow panels — abe9d413
