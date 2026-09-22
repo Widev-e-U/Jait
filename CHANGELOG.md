@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.869](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.869) — 2026-09-22
+- fix(web): open composer control tooltips below the trigger — 31ab69f5
+- fix(web): show cached provider limits before the live usage refresh — 016e111b
+- feat(gateway): let the System One Model use any OpenAI-compatible endpoint — d4d2fcfa
+
 ## [v0.1.868](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.868) — 2026-09-22
 - docs: describe the opt-in System One ranking model — e8756709
 - feat(gateway): add System One model for tool, prompt and memory ranking — 79774f0d
