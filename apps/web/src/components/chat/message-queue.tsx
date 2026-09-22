@@ -22,6 +22,11 @@ interface MessageQueueProps {
   onSendToParallelThread?: (id: string) => void
   parallelActionLabel?: string
   onToggleHold?: (id: string) => void
+  /**
+   * Render row actions as icon-only buttons (no text labels). Used on narrow
+   * mobile layouts where the labelled action buttons take too much space.
+   */
+  iconOnly?: boolean
   className?: string
 }
 
@@ -101,6 +106,7 @@ function QueueItem({
   onSendToParallelThread,
   parallelActionLabel,
   onToggleHold,
+  iconOnly,
   dragActive,
   dropBefore,
   dropAfter,
@@ -115,6 +121,7 @@ function QueueItem({
   onSendToParallelThread?: (id: string) => void
   parallelActionLabel?: string
   onToggleHold?: (id: string) => void
+  iconOnly?: boolean
   dragActive?: boolean
   dropBefore?: boolean
   dropAfter?: boolean
@@ -300,10 +307,16 @@ function QueueItem({
               <button
                 type="button"
                 data-no-drag="true"
-                className="inline-flex h-6 items-center gap-1 rounded border border-primary/25 bg-primary/5 px-1.5 text-2xs font-medium text-primary transition-colors hover:bg-primary/10"
+                aria-label="Steer with message"
+                className={cn(
+                  'text-primary transition-colors',
+                  iconOnly
+                    ? 'p-1 rounded hover:bg-primary/10'
+                    : 'inline-flex h-6 items-center gap-1 rounded border border-primary/25 bg-primary/5 px-1.5 text-2xs font-medium hover:bg-primary/10',
+                )}
                 onClick={() => onSteer(item.id)}
               >
-                <span>Steer</span>
+                {!iconOnly && <span>Steer</span>}
                 <ArrowRight className="h-3 w-3" />
               </button>
               </TooltipHint>
@@ -313,13 +326,16 @@ function QueueItem({
               <button
                 type="button"
                 data-no-drag="true"
+                aria-label={parallelActionLabel ?? 'Send to parallel thread'}
                 className={cn(
                   'rounded text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary',
-                  parallelActionLabel ? 'inline-flex h-6 items-center gap-1 border border-primary/20 px-1.5 text-2xs font-medium' : 'p-1',
+                  iconOnly || !parallelActionLabel
+                    ? 'p-1'
+                    : 'inline-flex h-6 items-center gap-1 border border-primary/20 px-1.5 text-2xs font-medium',
                 )}
                 onClick={() => onSendToParallelThread(item.id)}
               >
-                {parallelActionLabel && <span>{parallelActionLabel}</span>}
+                {!iconOnly && parallelActionLabel && <span>{parallelActionLabel}</span>}
                 <GitBranch className="h-3 w-3" />
               </button>
               </TooltipHint>
@@ -367,7 +383,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, className }: MessageQueueProps) {
+export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSendToParallelThread, parallelActionLabel, onToggleHold, iconOnly, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -522,6 +538,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSe
           onSendToParallelThread={onSendToParallelThread}
           parallelActionLabel={parallelActionLabel}
           onToggleHold={onToggleHold}
+          iconOnly={iconOnly}
           dragActive={dragSourceId === item.id}
           dropBefore={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'before' && dragSourceId !== item.id)}
           dropAfter={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'after' && dragSourceId !== item.id)}

@@ -647,6 +647,7 @@ export function DeveloperChatWorkspace({
                     onSendToParallelThread={onAskQueuedMessageInParallel}
                     parallelActionLabel="Ask in parallel"
                     onToggleHold={onToggleHoldQueueItem}
+                    iconOnly={isMobile}
                   />
                 )}
               </Conversation>

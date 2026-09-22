@@ -267,6 +267,7 @@ export function ManagerWorkspace({
                     onSteer={automation.selectedThread.status === 'running' ? onSteerManagerQueueItem : undefined}
                     onSendToParallelThread={onSendManagerQueueItemToParallelThread}
                     className="mb-2"
+                    iconOnly={isMobile}
                   />
                 )}
                 <div className="overflow-hidden rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
