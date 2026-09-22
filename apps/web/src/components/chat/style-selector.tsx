@@ -8,6 +8,8 @@ interface StyleSelectorProps {
   disabled?: boolean
   className?: string
   compact?: boolean
+  /** Which side the trigger tooltip opens on. Defaults to "bottom" (composer footer). */
+  tooltipSide?: 'top' | 'bottom'
 }
 
 const STYLES: Array<DropdownOption<ResponseStyle>> = [
@@ -37,7 +39,7 @@ const STYLES: Array<DropdownOption<ResponseStyle>> = [
   },
 ]
 
-export function StyleSelector({ value, onChange, disabled, className, compact = false }: StyleSelectorProps) {
+export function StyleSelector({ value, onChange, disabled, className, compact = false, tooltipSide = 'bottom' }: StyleSelectorProps) {
   return (
     <OptionDropdown
       value={value}
@@ -48,6 +50,7 @@ export function StyleSelector({ value, onChange, disabled, className, compact = 
       disabled={disabled}
       className={className}
       compact={compact}
+      tooltipSide={tooltipSide}
     />
   )
 }

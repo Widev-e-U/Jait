@@ -67,6 +67,7 @@ export function DeveloperComposerControlRow({
       disabled={threadRepoPickerDisabled}
       compact={compact}
       className={compact ? 'w-full' : ''}
+      tooltipSide="bottom"
       getRuntimeInfo={getRuntimeInfo}
       onSelect={onSelectRepo}
       onAddRepository={onAddRepository}
@@ -92,7 +93,7 @@ export function DeveloperComposerControlRow({
             />
           )}
           {approveAllInSession && (
-            <TooltipHint content="Auto-approved. Clear approve all">
+            <TooltipHint side="bottom" content="Auto-approved. Clear approve all">
             <button
               type="button"
               onClick={onClearApproveAll}

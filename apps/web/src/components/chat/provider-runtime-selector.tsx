@@ -51,7 +51,7 @@ export function ProviderRuntimeSelector({ provider, value, onChange, disabled, c
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
-        <TooltipHint content={`Runtime: ${activeDef.label}`}>
+        <TooltipHint side="bottom" content={`Runtime: ${activeDef.label}`}>
         <button
           type="button"
           className={cn(

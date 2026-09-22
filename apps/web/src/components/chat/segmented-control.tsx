@@ -23,6 +23,8 @@ interface SegmentedControlProps<T extends string> {
   iconOnly?: boolean
   bordered?: boolean
   minOptionWidth?: string
+  /** Which side the option tooltips open on. Defaults to "top". */
+  tooltipSide?: 'top' | 'bottom'
 }
 
 export function SegmentedControl<T extends string>({
@@ -35,6 +37,7 @@ export function SegmentedControl<T extends string>({
   iconOnly = false,
   bordered = true,
   minOptionWidth = 'min-w-[5.25rem]',
+  tooltipSide = 'top',
 }: SegmentedControlProps<T>) {
   const activeIndex = options.findIndex((option) => option.value === value)
   const safeActiveIndex = activeIndex >= 0 ? activeIndex : 0
@@ -65,7 +68,7 @@ export function SegmentedControl<T extends string>({
         const Icon = option.icon
         const isActive = value === option.value
         return (
-          <TooltipHint key={option.value} content={`${option.label}: ${option.description}`}>
+          <TooltipHint key={option.value} side={tooltipSide} content={`${option.label}: ${option.description}`}>
           <button
             type="button"
             role="tab"

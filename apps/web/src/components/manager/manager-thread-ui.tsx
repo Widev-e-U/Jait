@@ -160,6 +160,7 @@ interface ManagerRepoPickerProps {
   disabled?: boolean
   compact?: boolean
   className?: string
+  tooltipSide?: 'top' | 'bottom'
   getRuntimeInfo: (repo: AutomationRepository) => RepositoryRuntimeInfo
   onSelect: (repoId: string) => void
   onAddRepository: () => void
@@ -171,6 +172,7 @@ export function ManagerRepoPicker({
   disabled = false,
   compact = false,
   className = '',
+  tooltipSide = 'top',
   getRuntimeInfo,
   onSelect,
   onAddRepository,
@@ -178,7 +180,7 @@ export function ManagerRepoPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <TooltipHint content={selectedRepo ? selectedRepo.name : 'Select repository'}>
+        <TooltipHint side={tooltipSide} content={selectedRepo ? selectedRepo.name : 'Select repository'}>
         <Button
           variant="outline"
           size="sm"

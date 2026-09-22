@@ -9,6 +9,8 @@ interface ModeSelectorProps {
   disabled?: boolean
   className?: string
   compact?: boolean
+  /** Which side the trigger tooltip opens on. Defaults to "bottom" (composer footer). */
+  tooltipSide?: 'top' | 'bottom'
 }
 
 const MODES: Array<DropdownOption<ChatMode>> = [
@@ -32,7 +34,7 @@ const MODES: Array<DropdownOption<ChatMode>> = [
   },
 ]
 
-export function ModeSelector({ mode, onChange, disabled, className, compact = false }: ModeSelectorProps) {
+export function ModeSelector({ mode, onChange, disabled, className, compact = false, tooltipSide = 'bottom' }: ModeSelectorProps) {
   return (
     <OptionDropdown
       value={mode}
@@ -43,6 +45,7 @@ export function ModeSelector({ mode, onChange, disabled, className, compact = fa
       disabled={disabled}
       className={className}
       compact={compact}
+      tooltipSide={tooltipSide}
     />
   )
 }

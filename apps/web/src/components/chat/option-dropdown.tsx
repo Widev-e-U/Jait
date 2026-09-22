@@ -31,6 +31,8 @@ interface OptionDropdownProps<T extends string> {
   compact?: boolean
   align?: 'start' | 'center' | 'end'
   side?: 'top' | 'bottom'
+  /** Which side the trigger tooltip opens on. Defaults to "top". */
+  tooltipSide?: 'top' | 'bottom'
   contentClassName?: string
 }
 
@@ -45,6 +47,7 @@ export function OptionDropdown<T extends string>({
   compact = false,
   align = 'start',
   side = 'top',
+  tooltipSide = 'top',
   contentClassName = 'w-64',
 }: OptionDropdownProps<T>) {
   const current = options.find((option) => option.value === value) ?? (options.find((option) => option.value === fallbackValue) ?? options[0])
@@ -53,7 +56,7 @@ export function OptionDropdown<T extends string>({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
-        <TooltipHint content={`${titlePrefix}: ${current.label}`}>
+        <TooltipHint side={tooltipSide} content={`${titlePrefix}: ${current.label}`}>
         <button
           type="button"
           className={cn(

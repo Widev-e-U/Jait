@@ -10,6 +10,8 @@ interface SendTargetSelectorProps {
   disabled?: boolean
   className?: string
   compact?: boolean
+  /** Which side the option tooltips open on. Defaults to "bottom" (composer footer). */
+  tooltipSide?: 'top' | 'bottom'
 }
 
 const TARGETS: Array<SegmentedOption<SendTarget>> = [
@@ -33,7 +35,7 @@ const TARGETS: Array<SegmentedOption<SendTarget>> = [
   },
 ]
 
-export function SendTargetSelector({ target, onChange, disabled, className, compact = false }: SendTargetSelectorProps) {
+export function SendTargetSelector({ target, onChange, disabled, className, compact = false, tooltipSide = 'bottom' }: SendTargetSelectorProps) {
   const isMobile = useIsMobile()
 
   return (
@@ -46,6 +48,7 @@ export function SendTargetSelector({ target, onChange, disabled, className, comp
       className={className}
       iconOnly={compact || isMobile}
       minOptionWidth="min-w-[5.25rem]"
+      tooltipSide={tooltipSide}
     />
   )
 }

@@ -400,6 +400,7 @@ export function ManagerWorkspace({
                       disabled={automation.creating}
                       compact={isMobile}
                       className={isMobile ? 'flex-1' : ''}
+                      tooltipSide="bottom"
                       getRuntimeInfo={automation.getRuntimeInfoForRepository}
                       onSelect={onSelectRepository}
                       onAddRepository={onAddRepository}

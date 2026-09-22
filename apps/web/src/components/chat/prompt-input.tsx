@@ -1825,6 +1825,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   return (
     <div
       ref={rootRef}
+      data-testid="chat-composer"
       className={cn(
         'group relative z-10 flex flex-col',
         merged
@@ -1839,7 +1840,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onDrop={onDrop}
     >
       {projectDisplayName && (
-        <TooltipHint content={projectPath?.trim() || projectDisplayName}>
+        <TooltipHint side="bottom" content={projectPath?.trim() || projectDisplayName}>
         <div
           className="absolute top-2 right-3 z-10 flex items-center gap-1 text-[10px] leading-none text-muted-foreground"
         >
@@ -1848,7 +1849,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             {projectDisplayName}
           </span>
           {chatId && (
-            <TooltipHint content={`Copy chat id: ${chatId}`}>
+            <TooltipHint side="bottom" content={`Copy chat id: ${chatId}`}>
             <button
               type="button"
               aria-label="Copy chat id"
@@ -2089,6 +2090,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                         projectId={projectId}
                         reasoningEffort={reasoningEffort}
                         onReasoningEffortChange={onReasoningEffortChange}
+                        tooltipSide="bottom"
                       />
                     )}
                     {showProviderRuntimeSelector && (
@@ -2120,7 +2122,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </div>
         )}
         <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterLeftContent ? 'pl-1' : 'ml-auto')}>
-          <TooltipHint content="Attach files">
+          <TooltipHint side="bottom" content="Attach files">
           <Button
             type="button"
             size="icon"
@@ -2132,7 +2134,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </Button>
           </TooltipHint>
           {onVoiceInput && !voiceRecording && !voiceTranscribing && (
-            <TooltipHint content="Voice input">
+            <TooltipHint side="bottom" content="Voice input">
             <Button
               type="button"
               size="icon"
@@ -2171,7 +2173,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           )}
           {footerTrailingContent}
           {isLoading && sendTarget !== 'thread' && (
-            <TooltipHint content="Stop generating">
+            <TooltipHint side="bottom" content="Stop generating">
             <Button
               type="button"
               size="icon"
@@ -2205,7 +2207,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                     <ArrowUp className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">Steer instead</TooltipContent>
+                <TooltipContent side="bottom">Steer instead</TooltipContent>
               </Tooltip>
               {onQueue && (
                 <Tooltip>
@@ -2229,7 +2231,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       <ListPlus className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Add to queue</TooltipContent>
+                  <TooltipContent side="bottom">Add to queue</TooltipContent>
                 </Tooltip>
               )}
               {onAskInParallel && (
@@ -2254,13 +2256,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       <GitFork className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">Ask in parallel</TooltipContent>
+                  <TooltipContent side="bottom">Ask in parallel</TooltipContent>
                 </Tooltip>
               )}
             </TooltipProvider>
           ) : canThreadWhileLoading ? (
             <>
-              <TooltipHint content="Send as new thread (Enter)">
+              <TooltipHint side="bottom" content="Send as new thread (Enter)">
               <Button
                 type="button"
                 size="icon"
@@ -2279,7 +2281,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               </Button>
               </TooltipHint>
               {onSteer ? (
-                <TooltipHint content="Steer instead (Alt+Enter)">
+                <TooltipHint side="bottom" content="Steer instead (Alt+Enter)">
                 <Button
                   type="button"
                   size="icon"
@@ -2299,7 +2301,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 </Button>
                 </TooltipHint>
               ) : onQueue ? (
-                <TooltipHint content="Add to queue (Alt+Enter)">
+                <TooltipHint side="bottom" content="Add to queue (Alt+Enter)">
                 <Button
                   type="button"
                   size="icon"
@@ -2321,7 +2323,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               ) : null}
             </>
           ) : canQueueWhileLoading && submitEmpty ? (
-            <TooltipHint content="Sending">
+            <TooltipHint side="bottom" content="Sending">
             <Button
               type="button"
               size="icon"
@@ -2333,7 +2335,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </TooltipHint>
           ) : canQueueWhileLoading && onQueue ? (
             <>
-              <TooltipHint content="Add to queue">
+              <TooltipHint side="bottom" content="Add to queue">
               <Button
                 type="button"
                 size="icon"
@@ -2353,7 +2355,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               </Button>
               </TooltipHint>
               {onSteer && (
-                <TooltipHint content="Steer instead (Alt+Enter)">
+                <TooltipHint side="bottom" content="Steer instead (Alt+Enter)">
                 <Button
                   type="button"
                   size="icon"
@@ -2375,7 +2377,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               )}
             </>
           ) : !isLoading || sendTarget === 'thread' ? (
-            <TooltipHint content={submitLoading ? 'Loading chat' : undefined}>
+            <TooltipHint side="bottom" content={submitLoading ? 'Loading chat' : undefined}>
             <Button
               type="button"
               size="icon"
@@ -2396,7 +2398,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </Button>
             </TooltipHint>
           ) : (
-            <TooltipHint content="Sending">
+            <TooltipHint side="bottom" content="Sending">
             <Button
               type="button"
               size="icon"

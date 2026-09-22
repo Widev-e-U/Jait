@@ -117,10 +117,12 @@ interface ProviderModelSelectorProps {
   projectId?: string | null
   reasoningEffort?: SessionReasoningEffort | null
   onReasoningEffortChange?: (reasoningEffort: SessionReasoningEffort | null) => void
+  /** Which side the trigger tooltip opens on. Defaults to "top". */
+  tooltipSide?: 'top' | 'bottom'
 }
 
 const PROVIDER_DEFS: ProviderDef[] = [
-  { value: 'jait', label: 'Jait', icon: JaitIcon, description: 'Native Jait agent loop with full tool access' },
+  { value: 'jait', label: 'Jait', icon: JaitIcon, description: 'Native Jait agent loop. The System Two Model handles reasoning + tools; the System One Model handles bounded decisions' },
   { value: 'codex', label: 'Codex', icon: OpenAIIcon, description: 'OpenAI Codex CLI — coding agent with MCP tools' },
   { value: 'claude-code', label: 'Claude Code', icon: ClaudeIcon, description: 'Anthropic Claude Code CLI — coding agent with MCP tools' },
   { value: 'cursor', label: 'Cursor', icon: CursorIcon, description: 'Cursor agent via Agent Client Protocol' },
@@ -234,6 +236,7 @@ export function ProviderModelSelector({
   projectId,
   reasoningEffort: controlledReasoningEffort,
   onReasoningEffortChange,
+  tooltipSide = 'top',
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
   const { updateSettings, settings } = useAuth()
@@ -733,7 +736,7 @@ export function ProviderModelSelector({
   }, [isMobile])
 
   const triggerButton = (
-    <TooltipHint side="top" content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
+    <TooltipHint side={tooltipSide} content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
     <button
       type="button"
       disabled={disabled}
