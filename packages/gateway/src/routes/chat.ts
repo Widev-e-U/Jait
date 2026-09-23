@@ -3545,6 +3545,10 @@ export function registerChatRoutes(
     const projectInstructions = sessionRecord?.projectId
       ? projectService?.resolveInstructionChain(sessionRecord.projectId, authUser.id) ?? undefined
       : undefined;
+    const projectNode = projectRecord?.nodeId && projectRecord.nodeId !== "gateway"
+      ? ws?.findNodeByDeviceId(projectRecord.nodeId)
+      : undefined;
+    const projectPlatform = projectNode?.platform ?? process.platform;
     const promptCtx: PromptContext = {
       systemOne: systemOneEnabled(userApiKeys) && !userSettings?.disabledTools?.includes("decision.evaluate"),
       projectRoot: wsRoot,
@@ -3553,9 +3557,9 @@ export function registerChatRoutes(
       responseStyle,
       ...(projectInstructions ? { projectInstructions } : {}),
       backend: llmRuntime.backend,
-      platform: process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux",
-      shell: process.platform === "win32" ? "PowerShell" : process.env.SHELL?.split("/").pop() ?? "bash",
-      hostname: hostname(),
+      platform: /^(win32|windows)$/.test(projectPlatform) ? "Windows" : /^(darwin|macos)$/.test(projectPlatform) ? "macOS" : "Linux",
+      shell: /^(win32|windows)$/.test(projectPlatform) ? "PowerShell" : projectNode ? "bash" : process.env.SHELL?.split("/").pop() ?? "bash",
+      hostname: projectNode?.name ?? hostname(),
     };
 
     if (!sessionHistory.has(sessionId)) {
@@ -3947,7 +3951,8 @@ export function registerChatRoutes(
         // enabling the keep/discard (undo) flow.
         // Use _skipBroadcast so the UI doesn't open the project panel.
         let cliFsSurface: FileSystemSurface | null = null;
-        if (surfaceRegistry) {
+        // Gateway snapshots cannot back up files owned by a remote provider.
+        if (surfaceRegistry && !isRemote) {
           const fsId = `fs-${sessionId}`;
           const existing = surfaceRegistry.getSurface(fsId);
           if (existing instanceof FileSystemSurface && existing.state === "running") {

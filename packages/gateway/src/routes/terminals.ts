@@ -11,6 +11,7 @@ import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface, availableShells } from "../surfaces/terminal.js";
+import { RemoteFileSystemSurface } from "../surfaces/remote-filesystem.js";
 import { RemoteTerminalSurface } from "../surfaces/remote-terminal.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { getManagedTerminalExecution, getManagedTerminalExecutions } from "../tools/terminal-tools.js";
@@ -111,7 +112,13 @@ export function registerTerminalRoutes(
     const rows = typeof body["rows"] === "number" ? body["rows"] : 30;
     const shell = typeof body["shell"] === "string" ? body["shell"] : undefined;
     const nodeId = typeof body["nodeId"] === "string" ? body["nodeId"].trim() : "";
-    const remoteNodeId = nodeId && nodeId !== "gateway" ? nodeId : "";
+    // Rehydration may not have populated the UI's transient nodeId yet.
+    // Keep terminals on the device already owning this session's filesystem.
+    const remoteProject = surfaceRegistry.getBySession(sessionId)
+      .find((surface) => surface instanceof RemoteFileSystemSurface && surface.state === "running");
+    const ownerNodeId = remoteProject?.snapshot().metadata?.nodeId;
+    const resolvedNodeId = nodeId || (typeof ownerNodeId === "string" ? ownerNodeId : "");
+    const remoteNodeId = resolvedNodeId && resolvedNodeId !== "gateway" ? resolvedNodeId : "";
 
     const termId = `term-${uuidv7()}`;
 

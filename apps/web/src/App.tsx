@@ -3618,7 +3618,7 @@ function App() {
     handleToggleTerminal
   } = useTerminalInteractionHandlers({
     activeProjectRoot,
-    activeProjectNodeId: activeProject?.nodeId ?? 'gateway',
+    activeProjectNodeId: activeProject?.nodeId ?? activeProjectRecord?.nodeId ?? 'gateway',
     activeSessionId,
     activeTerminalId: activeProjectTerminalId,
     appliedThemeMode,
@@ -5278,7 +5278,7 @@ function App() {
                     onAvailableFilesChange={handleAvailableFilesForMentionChange}
                     onCloseTerminal={closeTerminalPanel}
                     onCreateTerminal={(shell) => {
-                      const nodeId = activeProject?.nodeId ?? 'gateway'
+                      const nodeId = activeProject?.nodeId ?? activeProjectRecord?.nodeId ?? 'gateway'
                       void createTerminal(activeSessionId ?? 'default', activeProjectRoot ?? undefined, shell, nodeId).catch((err) => {
                         const reason = err instanceof Error ? err.message : 'Failed to create terminal'
                         const isRemote = nodeId && nodeId !== 'gateway'

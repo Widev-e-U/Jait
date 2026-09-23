@@ -252,7 +252,11 @@ export function resolveProjectRoot(
 ): string {
   let best: string | null = null;
   let bestLen = -1;
-  for (const s of registry.getBySession(sessionId)) {
+  const surfaces = registry.getBySession(sessionId);
+  // Remote ownership wins over local helper surfaces, including stale CLI backups.
+  const hasRemote = surfaces.some((s) => s instanceof RemoteFileSystemSurface && s.state === "running");
+  for (const s of surfaces) {
+    if (hasRemote && !(s instanceof RemoteFileSystemSurface)) continue;
     if (
       (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) &&
       s.state === "running"

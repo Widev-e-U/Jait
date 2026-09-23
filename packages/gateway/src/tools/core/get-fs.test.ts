@@ -103,3 +103,12 @@ describe("resolveProjectRoot — remote surfaces", () => {
     expect(root).toBe("E:\\Zinsrechner");
   });
 });
+it("prefers the remote project over a longer local CLI backup surface", async () => {
+  const registry = new SurfaceRegistry();
+  const root = "C:\\Users\\jakob\\Tankstelle";
+  await withRemoteSurface(registry, root);
+  const local = new FileSystemSurface(`fs-${SESSION_ID}`);
+  await local.start({ sessionId: SESSION_ID, projectRoot: `/home/jakob/${root}` });
+  registry.registerInstance(local.id, local);
+  expect(resolveProjectRoot(registry, SESSION_ID, root)).toBe(root);
+});
