@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.871](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.871) — 2026-09-23
+- feat: improve manager views and gateway startup reliability — cc9a6924
+
 ## [v0.1.870](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.870) — 2026-09-23
 - fix(gateway): contain queued-message drain failures instead of crashing — b0c9b5e3
 - fix(desktop): surface codex turn failures instead of faking success — fe1a9351
