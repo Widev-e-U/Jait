@@ -10,7 +10,14 @@ import { signAuthToken } from "../security/http-auth.js";
 import type { MemoryEntry, MemoryScope, MemoryService, SaveMemoryInput } from "../memory/contracts.js";
 import { MemoryEngine } from "../memory/service.js";
 import { SqliteMemoryBackend } from "../memory/sqlite-backend.js";
+import type { MobilePushService } from "../services/mobile-push.js";
+import { generateChatNotificationDetail } from "../services/chat-notification.js";
 import { ToolRegistry } from "../tools/registry.js";
+
+vi.mock("../services/chat-notification.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
+  return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
+});
 
 const testConfig = {
   ...loadConfig(),
@@ -135,6 +142,7 @@ function createMockMemoryService(entries: MemoryEntry[]): MemoryService {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
+  vi.mocked(generateChatNotificationDetail).mockImplementation(async () => null);
 });
 
 describe("chat route OpenRouter backend selection", () => {
@@ -189,6 +197,55 @@ describe("chat route OpenRouter backend selection", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await app.close();
+  });
+
+  it.each([false, true])("sends an outcome notification with summary failure=%s", async (failSummary) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("notification-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Notification Session" });
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: { OPENROUTER_API_KEY: "openrouter-test-key" },
+    });
+    globalThis.fetch = vi.fn(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      if (body.stream === false) {
+        expect(body.messages[1].content).toContain("Assistant response:");
+        expect(body.messages[1].content).toContain("ok");
+        if (failSummary) throw new Error("Summary backend unavailable");
+        return Response.json({ choices: [{ message: { content: "Confirmed the connection works" } }] });
+      }
+      return createOpenAIStreamResponse();
+    }) as typeof fetch;
+    // This test is about the summarizer itself, so use the real implementation.
+    const actualNotifications =
+      await vi.importActual<typeof import("../services/chat-notification.js")>("../services/chat-notification.js");
+    vi.mocked(generateChatNotificationDetail).mockImplementation(actualNotifications.generateChatNotificationDetail);
+    const sendChatCompleted = vi.fn().mockResolvedValue(undefined);
+    const app = await createServer(testConfig, {
+      db, sqlite, userService, sessionService,
+      mobilePush: { sendChatCompleted } as unknown as MobilePushService,
+    });
+    try {
+      const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+      const response = await app.inject({
+        method: "POST", url: "/api/chat",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: "Check connection", sessionId: session.id, model: "gpt-4o" },
+      });
+      expect(response.statusCode).toBe(200);
+      await vi.waitFor(() => expect(sendChatCompleted).toHaveBeenCalledOnce());
+      expect(sendChatCompleted).toHaveBeenCalledWith(user.id, expect.objectContaining({
+        kind: "completion",
+        body: failSummary ? "ok" : "Confirmed the connection works",
+      }));
+    } finally {
+      await app.close();
+      sqlite.close();
+    }
   });
 
   it("uses per-request reasoning effort while preserving explicit Default", async () => {
@@ -450,12 +507,14 @@ describe("chat route OpenRouter backend selection", () => {
     });
     globalThis.fetch = fetchMock as typeof fetch;
 
+    const sendChatCompleted = vi.fn().mockResolvedValue(undefined);
     const app = await createServer(testConfig, {
       db,
       sqlite,
       userService,
       sessionService,
       toolRegistry,
+      mobilePush: { sendChatCompleted } as unknown as MobilePushService,
     });
     await app.listen({ port: 0, host: "127.0.0.1" });
 
@@ -504,6 +563,8 @@ describe("chat route OpenRouter backend selection", () => {
         if (Date.now() - startedAt > 10000) throw new Error("Timed out waiting for done");
       }
       await reader?.cancel().catch(() => {});
+
+      expect(sendChatCompleted).not.toHaveBeenCalled();
 
       const messagesResponse = await app.inject({
         method: "GET",

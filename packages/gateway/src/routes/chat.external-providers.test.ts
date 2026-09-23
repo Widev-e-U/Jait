@@ -1171,3 +1171,53 @@ it("marks replies completed after a reader leaves as new unread activity", async
     sqlite.close();
   }
 });
+
+it("keeps remote CLI startup and its prompt on the Windows project", async () => {
+  const { ProjectService } = await import("../services/projects.js");
+  const { SurfaceRegistry } = await import("../surfaces/registry.js");
+  const { FileSystemSurfaceFactory } = await import("../surfaces/filesystem.js");
+  const { RemoteFileSystemSurface } = await import("../surfaces/remote-filesystem.js");
+  const { RemoteCliProvider } = await import("../providers/remote-cli-provider.js");
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const userService = new UserService(db);
+  const user = userService.createUser("windows-project-owner", "password123");
+  const projectService = new ProjectService(db);
+  const root = "C:\\Users\\jakob\\Tankstelle";
+  const node = { id: "windows-node", name: "Windows desktop", platform: "windows", clientId: "connected", providers: ["codex"] };
+  const project = projectService.create({ userId: user.id, title: "Tankstelle", rootPath: root, nodeId: node.id });
+  const sessionService = new SessionService(db);
+  const session = sessionService.create({ userId: user.id, projectId: project.id, projectPath: root });
+  const provider = new MockChatProvider();
+  const spies = [
+    vi.spyOn(RemoteCliProvider.prototype, "startSession").mockImplementation(provider.startSession),
+    vi.spyOn(RemoteCliProvider.prototype, "sendTurn").mockImplementation(provider.sendTurn),
+    vi.spyOn(RemoteCliProvider.prototype, "checkAvailability").mockResolvedValue(true),
+    vi.spyOn(RemoteCliProvider.prototype, "onEvent").mockImplementation(provider.onEvent.bind(provider)),
+    vi.spyOn(RemoteCliProvider.prototype, "stopSession").mockResolvedValue(),
+  ];
+  const ws = {
+    getFsNodes: () => [node], findNodeByDeviceId: () => node,
+    broadcast: vi.fn(), broadcastToUser: vi.fn(), registerGatewayFsNode: vi.fn(),
+    proxyFsOp: vi.fn(async () => ({ isDirectory: true })),
+  } as unknown as import("../ws.js").WsControlPlane;
+  const surfaceRegistry = new SurfaceRegistry();
+  surfaceRegistry.register(new FileSystemSurfaceFactory());
+  const remote = new RemoteFileSystemSurface("windows-files", ws);
+  await remote.start({ sessionId: session.id, projectRoot: root, nodeId: node.id });
+  surfaceRegistry.registerInstance(remote.id, remote);
+  const app = await createServer(testConfig, { db, sqlite, sessionService, projectService, userService, surfaceRegistry, ws, providerRegistry: new ProviderRegistry() });
+  try {
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const response = await app.inject({ method: "POST", url: "/api/chat", headers: { authorization: `Bearer ${token}` }, payload: { sessionId: session.id, content: "hello", provider: "codex" } });
+    expect(response.body).toContain('"type":"done"');
+    expect(provider.startSession).toHaveBeenCalledWith(expect.objectContaining({ workingDirectory: root }));
+    expect(surfaceRegistry.getBySession(session.id).map((s) => s.type)).toEqual(["remote-filesystem"]);
+    expect(provider.sendTurn.mock.calls[0]?.[1]).toContain("OS: Windows");
+    expect(provider.sendTurn.mock.calls[0]?.[1]).toContain("Shell: PowerShell");
+  } finally {
+    await app.close();
+    sqlite.close();
+    for (const spy of spies) spy.mockRestore();
+  }
+});

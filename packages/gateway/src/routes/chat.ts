@@ -32,6 +32,7 @@ import { serializePersistedToolCalls } from "../lib/persisted-tool-calls.js";
 import { persistSubAgentHistories, stripSubAgentPayloads } from "../lib/sub-agent-persistence.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { generateChatNotificationDetail } from "../services/chat-notification.js";
 import { JaitConfigError, resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
 import {
   estimateJsonTokens,
@@ -5094,6 +5095,15 @@ export function registerChatRoutes(
       const queuedState = sessionStateService?.get(sessionId, ["queued_messages"]);
       if (parseQueuedChatMessages(queuedState?.queued_messages).length === 0) {
         const projectName = completedSession?.projectId ? projectService?.getById(completedSession.projectId, authUser.id)?.title : null;
+        // The raw markdown preview often reads as noise on a lock screen. Ask
+        // the model for a one-line outcome summary and fall back to the
+        // deterministic preview when that is unavailable. This branch only
+        // runs when nothing is queued, so the extra call never delays a drain.
+        const notificationDetail = await generateChatNotificationDetail({
+          task: content,
+          response: fullContent,
+          llm: llmRuntime,
+        });
         const notification = {
           id: `chat-complete:${sessionId}:${randomUUID()}`,
           replaceId: `chat-complete:${sessionId}`,
@@ -5101,7 +5111,7 @@ export function registerChatRoutes(
           sessionId,
           link: chatNotificationLink(sessionId, completedSession?.projectId),
           title: completedSession?.name ? `Response ready · ${completedSession.name}` : "Response ready",
-          body: [projectName, notificationPreview(fullContent) || "Agent response finished. Open chat to read it."].filter(Boolean).join(" · "),
+          body: [projectName, notificationDetail ?? (notificationPreview(fullContent) || "Agent response finished. Open chat to read it.")].filter(Boolean).join(" · "),
           level: "success" as const,
           includeToast: false,
         };
