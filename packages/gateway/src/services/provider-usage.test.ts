@@ -194,44 +194,95 @@ describe("ProviderUsageService", () => {
 
   it("stores Ollama session, weekly and monthly usage metadata", () => {
     const service = new ProviderUsageService(db);
-    service.recordOllamaUsage(
-      "ollama",
-      {
-        limits: {
-          session: {
-            usage: 0.25,
-            models: [{ name: "gpt-oss", request_count: 4 }],
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-11T09:37:00.000Z"));
+    try {
+      service.recordOllamaUsage(
+        "ollama",
+        {
+          limits: {
+            session: {
+              usage: 0.25,
+              models: [{ name: "gpt-oss", request_count: 4 }],
+            },
+            weekly: { usage: 0.4, models: [] },
+            monthly: { usage: 0.6, models: [] },
           },
-          weekly: { usage: 0.4, models: [] },
-          monthly: { usage: 0.6, models: [] },
+          activity: {
+            cost: "3.20",
+            period: { ending_at: "2026-10-01T00:00:00.000Z" },
+          },
         },
-        activity: {
-          cost: "3.20",
-          period: { ending_at: "2026-10-01T00:00:00.000Z" },
-        },
-      },
-      "pro",
-    );
+        "pro",
+      );
 
-    const snapshots = service.listForUser(["ollama"]);
-    expect(snapshots).toHaveLength(3);
-    expect(snapshots.every((snapshot) => snapshot.resetsAt === "2026-10-01T00:00:00.000Z")).toBe(true);
-    expect(snapshots).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          rateLimitType: "five_hour",
-          providerType: "ollama",
-          utilization: 0.25,
-          planType: "pro",
-          models: [{ name: "gpt-oss", requestCount: 4 }],
-        }),
-        expect.objectContaining({
-          rateLimitType: "monthly",
-          utilization: 0.6,
-          activityCost: "3.20",
-        }),
-      ]),
-    );
+      const snapshots = service.listForUser(["ollama"]);
+      expect(snapshots).toHaveLength(3);
+      // The reported activity period is *not* a reset time — echoing it made the
+      // Usage modal claim the quota reset at fetch time. Each window instead gets
+      // a reset derived from the boundaries Ollama exposes.
+      expect(snapshots.map((snapshot) => snapshot.resetsAt)).toEqual([
+        "2026-03-11T10:00:00.000Z",
+        "2026-03-16T00:00:00.000Z",
+        "2026-04-01T00:00:00.000Z",
+      ]);
+      expect(snapshots).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            rateLimitType: "five_hour",
+            providerType: "ollama",
+            utilization: 0.25,
+            planType: "pro",
+            models: [{ name: "gpt-oss", requestCount: 4 }],
+          }),
+          expect.objectContaining({
+            rateLimitType: "monthly",
+            utilization: 0.6,
+            activityCost: "3.20",
+          }),
+        ]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps an observed Ollama rollover instead of re-guessing the next reset", () => {
+    const service = new ProviderUsageService(db);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-11T10:20:00.000Z"));
+    try {
+      db.insert(providerUsage).values({
+        accountId: "ollama",
+        rateLimitType: "five_hour",
+        providerType: "ollama",
+        utilization: 0.82,
+        resetsAt: "2026-03-11T10:00:00.000Z",
+        updatedAt: "2026-03-11T09:37:00.000Z",
+        rawJson: JSON.stringify({ resetSource: "observed", windowStartAt: "2026-03-11T05:00:00.000Z" }),
+      }).run();
+
+      // Ollama reports 0.03 used: the quota demonstrably reset since the snapshot above.
+      service.recordOllamaUsage(
+        "ollama",
+        {
+          limits: {
+            session: { usage: 0.03, models: [] },
+            weekly: { usage: 0.4, models: [] },
+            monthly: { usage: 0.6, models: [] },
+          },
+          activity: { cost: "0", period: { starting_at: "2026-03-09T00:00:00.000Z" } },
+        },
+        "pro",
+      );
+
+      const session = service
+        .listForUser(["ollama"])
+        .find((snapshot) => snapshot.rateLimitType === "five_hour");
+      expect(session?.resetsAt).toBe("2026-03-11T15:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("exposes the stored quota reset date for cached Ollama snapshots", () => {
     db.insert(providerUsage).values({

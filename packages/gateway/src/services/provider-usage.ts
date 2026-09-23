@@ -18,6 +18,7 @@ import type { JaitDB } from "../db/connection.js";
 import { providerUsage } from "../db/schema.js";
 import type { NotificationService } from "./notifications.js";
 import type { CodexRateLimitsResponse, OllamaUsageResponse } from "./provider-quota-fetchers.js";
+import { deriveOllamaResetWindow, parseOllamaResetSource, type OllamaResetSource } from "./provider-reset-windows.js";
 
 /** Mirrors the Claude Agent SDK's `SDKRateLimitInfo` (see @anthropic-ai/claude-agent-sdk). */
 export interface ClaudeRateLimitInfo {
@@ -40,6 +41,12 @@ export interface ProviderUsageSnapshot {
   updatedAt: string;
   planType: string | null;
   windowDurationMins: number | null;
+  /**
+   * How `resetsAt` was determined. Ollama's usage endpoint does not publish reset
+   * times, so those snapshots report whether the value was observed, carried
+   * forward, or estimated — null for providers that report resets directly.
+   */
+  resetSource: OllamaResetSource | null;
   credits: {
     hasCredits?: boolean;
     unlimited?: boolean;
@@ -166,23 +173,53 @@ export class ProviderUsageService {
       ["seven_day", response.limits.weekly, 10_080],
       ["monthly", response.limits.monthly, 43_200],
     ] as const;
+    const now = new Date();
     for (const [rateLimitType, limit, windowDurationMins] of buckets) {
       if (!limit) continue;
       const utilization = Math.min(1, Math.max(0, limit.usage));
+      const existing = this.db
+        .select()
+        .from(providerUsage)
+        .where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, rateLimitType)))
+        .get();
+      let previousRaw: Record<string, unknown> = {};
+      if (existing) {
+        try {
+          previousRaw = JSON.parse(existing.rawJson) as Record<string, unknown>;
+        } catch {
+          /* old snapshot */
+        }
+      }
+      // The endpoint reports usage but no reset time, so the window is
+      // reconstructed (and refined by observed rollovers) rather than echoed.
+      const resetWindow = deriveOllamaResetWindow({
+        windowDurationMins,
+        now,
+        utilization,
+        previous: existing
+          ? {
+              utilization: existing.utilization ?? null,
+              resetsAt: existing.resetsAt ?? null,
+              source: parseOllamaResetSource(previousRaw.resetSource),
+              observedAt: existing.updatedAt ?? null,
+            }
+          : null,
+        anchorIso: response.activity?.period?.starting_at ?? null,
+      });
       this.recordSnapshot({
         accountId,
         rateLimitType,
         providerType: "ollama",
         status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
-        // Ollama's usage endpoint only exposes the activity reporting period
-        // end, which is the closest thing to a quota reset date it has.
-        resetsAt: response.activity?.period?.ending_at ?? null,
+        resetsAt: resetWindow.resetsAt,
         isUsingOverage: false,
         raw: {
           planType: planType ?? null,
           windowDurationMins,
           accountLabel: accountLabel ?? null,
+          windowStartAt: resetWindow.windowStartAt,
+          resetSource: resetWindow.source,
           models: limit.models.map((model) => ({
             name: model.name,
             requestCount: model.request_count,
@@ -266,6 +303,7 @@ export class ProviderUsageService {
           updatedAt: row.updatedAt,
           planType: typeof raw.planType === "string" ? raw.planType : null,
           windowDurationMins: typeof raw.windowDurationMins === "number" ? raw.windowDurationMins : null,
+          resetSource: parseOllamaResetSource(raw.resetSource),
           credits,
           models,
           activityCost: typeof raw.activityCost === "string" ? raw.activityCost : null,
