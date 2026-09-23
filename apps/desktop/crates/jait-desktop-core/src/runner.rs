@@ -465,6 +465,40 @@ pub fn list_codex_models(
     })
 }
 
+/// Pull a human-readable message out of an error *value*: either a bare JSON
+/// string (`"boom"`) or an object carrying a `message` field.
+fn message_of(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        other => other
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    }
+}
+
+/// Extract the failure reason from a codex notification. The real app-server
+/// nests the payload under `params`, so an error notification looks like
+/// `{"method":"error","params":{"error":{"message":"…","codexErrorInfo":…},"willRetry":false}}`
+/// and a failed turn looks like
+/// `{"method":"turn/completed","params":{"turn":{"status":"failed","error":{…}}}}`.
+/// We probe every shape seen in the wild and fall back to a generic message.
+fn extract_error_message(msg: &Value) -> String {
+    let params = msg.get("params");
+    let from_error = params.and_then(|p| p.get("error")).and_then(message_of);
+    let from_turn = params
+        .and_then(|p| p.get("turn"))
+        .and_then(|t| t.get("error"))
+        .and_then(message_of);
+    let top_level = msg.get("error").and_then(message_of);
+    let plain = msg.get("message").and_then(Value::as_str).map(str::to_string);
+    from_error
+        .or(from_turn)
+        .or(top_level)
+        .or(plain)
+        .unwrap_or_else(|| "codex turn failed".to_string())
+}
+
 /// Read-loop for the codex app-server: resolves pending rpcs by id, forwards
 /// notifications as events, settles the active turn on `turn/completed` /
 /// error notifications, and reports EOF via `exit_tx`.
@@ -518,20 +552,47 @@ fn pump_codex(
             });
             let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
             if method == "turn/completed" {
-                let notify = codex.lock().turn_notify.take();
-                if let Some(tx) = notify {
-                    let _ = tx.send(Ok(()));
-                }
-            } else if matches!(method, "session/error" | "error" | "turn/failed") {
-                let message = msg
-                    .get("error")
-                    .or_else(|| msg.get("message"))
+                // A `turn/completed` notification is *not* always a success:
+                // `params.turn.status` is `"failed"` when the turn errored (the
+                // reason lives in `params.turn.error`) and `"interrupted"` when
+                // it was aborted. Only a clean run settles the turn as Ok;
+                // anything else must surface as a failure so the UI doesn't
+                // silently "succeed" and then die on the next turn.
+                let status = msg
+                    .pointer("/params/turn/status")
                     .and_then(Value::as_str)
-                    .unwrap_or("codex turn failed")
-                    .to_string();
+                    .unwrap_or("completed");
                 let notify = codex.lock().turn_notify.take();
                 if let Some(tx) = notify {
-                    let _ = tx.send(Err(message));
+                    if status == "failed" {
+                        let _ = tx.send(Err(extract_error_message(&msg)));
+                    } else {
+                        // "completed" or "interrupted" — the turn has settled
+                        // and the app-server is ready for the next `turn/start`.
+                        let _ = tx.send(Ok(()));
+                    }
+                }
+            } else if method == "error" {
+                // Structured error notification. `params.willRetry == true`
+                // means the app-server is retrying the request itself, so the
+                // turn is NOT finished — keep the notifier pending and only
+                // relay the line (already forwarded above). Settling the turn
+                // here was the abort bug: the retry then had nowhere to report.
+                let will_retry = msg
+                    .pointer("/params/willRetry")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                if will_retry {
+                    continue;
+                }
+                let notify = codex.lock().turn_notify.take();
+                if let Some(tx) = notify {
+                    let _ = tx.send(Err(extract_error_message(&msg)));
+                }
+            } else if matches!(method, "session/error" | "turn/failed") {
+                let notify = codex.lock().turn_notify.take();
+                if let Some(tx) = notify {
+                    let _ = tx.send(Err(extract_error_message(&msg)));
                 }
             }
         }

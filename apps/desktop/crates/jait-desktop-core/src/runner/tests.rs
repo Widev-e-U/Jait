@@ -112,6 +112,75 @@ done
     script
 }
 
+/// Fake codex app-server that runs a turn which fails *terminally*: the
+/// app-server answers `turn/start` and then reports the failure the way the
+/// real CLI does — a `turn/completed` notification whose `params.turn.status`
+/// is `"failed"` and whose reason sits in `params.turn.error.message`.
+fn write_fake_codex_failed_turn(dir: &std::path::Path) -> std::path::PathBuf {
+    let script = dir.join("fake-codex-failed.sh");
+    std::fs::write(
+        &script,
+        r#"#!/usr/bin/env bash
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  id=$(printf '%s' "$line" | sed -n 's/^{"id":\([0-9]*\).*/\1/p')
+  method=$(printf '%s' "$line" | sed -n 's/.*"method":"\([^"]*\)".*/\1/p')
+  case "$method" in
+    initialize)
+      printf '{"id":%s,"result":{"userAgent":{"name":"fake-codex","version":"0.0.0"}}}\n' "$id" ;;
+    thread/start)
+      printf '{"id":%s,"result":{"thread":{"id":"thr-fake-1"}}}\n' "$id" ;;
+    turn/start)
+      printf '{"id":%s,"result":{"turnStatus":"inProgress"}}\n' "$id"
+      printf '{"method":"turn/started","params":{"threadId":"thr-fake-1"}}\n'
+      printf '{"method":"turn/completed","params":{"threadId":"thr-fake-1","turn":{"status":"failed","error":{"message":"boom: quota exceeded"}}}}\n' ;;
+    model/list)
+      printf '{"id":%s,"result":{"models":[{"id":"fake-mini"}]}}\n' "$id" ;;
+    *)
+      printf '{"id":%s,"error":{"message":"rpc unknown method"}}\n' "$id" ;;
+  esac
+done
+"#,
+    )
+    .unwrap();
+    script
+}
+
+/// Fake codex app-server that first emits a *retryable* error notification
+/// (`params.willRetry == true`) — the app-server is still working — and then a
+/// non-retryable error carrying the real reason. The turn must only fail on the
+/// second one, and with the second message.
+fn write_fake_codex_will_retry(dir: &std::path::Path) -> std::path::PathBuf {
+    let script = dir.join("fake-codex-retry.sh");
+    std::fs::write(
+        &script,
+        r#"#!/usr/bin/env bash
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  id=$(printf '%s' "$line" | sed -n 's/^{"id":\([0-9]*\).*/\1/p')
+  method=$(printf '%s' "$line" | sed -n 's/.*"method":"\([^"]*\)".*/\1/p')
+  case "$method" in
+    initialize)
+      printf '{"id":%s,"result":{"userAgent":{"name":"fake-codex","version":"0.0.0"}}}\n' "$id" ;;
+    thread/start)
+      printf '{"id":%s,"result":{"thread":{"id":"thr-fake-1"}}}\n' "$id" ;;
+    turn/start)
+      printf '{"id":%s,"result":{"turnStatus":"inProgress"}}\n' "$id"
+      printf '{"method":"turn/started","params":{"threadId":"thr-fake-1"}}\n'
+      printf '{"method":"error","params":{"threadId":"thr-fake-1","willRetry":true,"error":{"message":"retry-me-please"}}}\n'
+      printf '{"method":"error","params":{"threadId":"thr-fake-1","willRetry":false,"error":{"message":"hard-fail-now"}}}\n' ;;
+    model/list)
+      printf '{"id":%s,"result":{"models":[{"id":"fake-mini"}]}}\n' "$id" ;;
+    *)
+      printf '{"id":%s,"error":{"message":"rpc unknown method"}}\n' "$id" ;;
+  esac
+done
+"#,
+    )
+    .unwrap();
+    script
+}
+
 /// Resolves every provider to the given fixed argv (test double).
 #[derive(Clone)]
 struct StaticResolver {
@@ -560,6 +629,114 @@ fn codex_rpc_error_propagates_as_turn_failure() {
             .iter()
             .any(|e| matches!(e, ProviderEvent::Error { .. })),
         "error event relayed: {events:?}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn extract_error_message_handles_real_codex_shapes() {
+    // params.error.message — the structured `error` notification shape.
+    let notif = serde_json::json!({
+        "method": "error",
+        "params": { "error": { "message": "stream disconnected" }, "willRetry": false }
+    });
+    assert_eq!(extract_error_message(&notif), "stream disconnected");
+
+    // params.turn.error.message — a failed `turn/completed` notification.
+    let failed = serde_json::json!({
+        "method": "turn/completed",
+        "params": { "turn": { "status": "failed", "error": { "message": "model overloaded" } } }
+    });
+    assert_eq!(extract_error_message(&failed), "model overloaded");
+
+    // Top-level `error` as a bare string, and top-level `message`.
+    assert_eq!(
+        extract_error_message(&serde_json::json!({ "error": "kaboom" })),
+        "kaboom"
+    );
+    assert_eq!(
+        extract_error_message(&serde_json::json!({ "message": "plain" })),
+        "plain"
+    );
+
+    // Nothing informative → generic fallback (never an empty string).
+    assert_eq!(
+        extract_error_message(&serde_json::json!({ "method": "error" })),
+        "codex turn failed"
+    );
+}
+
+#[test]
+fn codex_failed_turn_completed_settles_as_error() {
+    if !bash_available() {
+        return;
+    }
+    let dir = temp_dir();
+    let script = write_fake_codex_failed_turn(&dir);
+    let registry = RunnerRegistry::new();
+    let sink = EventSink::default();
+    let sink_clone = sink.clone();
+    let resolver = StaticResolver {
+        command: ResolvedCommand {
+            program: "/bin/bash".into(),
+            args: vec![script.to_string_lossy().into_owned()],
+        },
+    };
+    let handle = start(&registry, &resolver, spec("codex", &dir), move |e| {
+        sink_clone.push(e)
+    })
+    .unwrap();
+
+    let err = handle.send_turn(&resolver, "doomed").unwrap_err();
+    assert!(
+        err.contains("boom: quota exceeded"),
+        "failed turn must carry the nested reason: {err}"
+    );
+    // A failure must NOT masquerade as a completed turn.
+    let events = sink.wait_for(
+        |events| events.iter().any(|e| matches!(e, ProviderEvent::Error { .. })),
+        Duration::from_secs(10),
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, ProviderEvent::Error { message, .. } if message.contains("boom: quota exceeded"))),
+        "error event relayed: {events:?}"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, ProviderEvent::TurnCompleted { .. })),
+        "failed turn must not emit turn-completed: {events:?}"
+    );
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn codex_will_retry_error_does_not_settle_turn() {
+    if !bash_available() {
+        return;
+    }
+    let dir = temp_dir();
+    let script = write_fake_codex_will_retry(&dir);
+    let registry = RunnerRegistry::new();
+    let resolver = StaticResolver {
+        command: ResolvedCommand {
+            program: "/bin/bash".into(),
+            args: vec![script.to_string_lossy().into_owned()],
+        },
+    };
+    let handle = start(&registry, &resolver, spec("codex", &dir), |_| {}).unwrap();
+
+    let err = handle.send_turn(&resolver, "retry then die").unwrap_err();
+    // The retryable notification must be ignored; the *hard* failure wins.
+    assert!(
+        err.contains("hard-fail-now"),
+        "turn must fail on the non-retryable error: {err}"
+    );
+    assert!(
+        !err.contains("retry-me-please"),
+        "retryable error must not settle the turn: {err}"
     );
     std::fs::remove_dir_all(&dir).ok();
 }
