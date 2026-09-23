@@ -4838,6 +4838,11 @@ export function registerChatRoutes(
         }
         resultSegmentsJson = resultSegments.length > 0 ? JSON.stringify(resultSegments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
+        // The loop swallows user aborts and returns partial results, so the
+        // catch below never runs for a cancelled turn. Mirror the flag here so
+        // an interrupted turn is not reported as a completed response (no
+        // "response ready" push/toast) and no error marker is recorded.
+        if (result.aborted) turnCancelledOrErrored = true;
         loopPersisted = result.persisted === true;
 
         // Re-serialize through the same storage cap now that round metrics
