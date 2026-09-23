@@ -961,6 +961,9 @@ describe("WsControlPlane", () => {
       await expect(
         plane.proxyProviderOp("agent-deny-node", "stop-session", { sessionId: "s1" }),
       ).rejects.toThrow(/not granted agent/);
+      await expect(
+        plane.proxyProviderOp("agent-deny-node", "update", { providerId: "codex", providerType: "codex" }),
+      ).rejects.toThrow(/not granted agent/);
 
       // No provider.op-request was ever forwarded to the node.
       const forwarded = await remote.collector.maybeNext(150);

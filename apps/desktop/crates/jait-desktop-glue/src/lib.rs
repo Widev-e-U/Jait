@@ -698,6 +698,8 @@ impl HostState {
                     "login-input" => self.provider_login_input(&params),
                     "logout" => self.provider_logout(&params),
                     "list-models" => self.provider_list_models(&params),
+                    "update-status" => self.provider_update_status(&params),
+                    "update" => self.provider_update(&params),
                     "start" | "start-session" => self.provider_start(&params),
                     "send" | "send-turn" => {
                         let session_id = params
@@ -1405,6 +1407,126 @@ impl HostState {
         }))
     }
 
+    fn provider_update_spec(provider_type: &str) -> Result<&'static str, String> {
+        match provider_type {
+            "codex" => Ok("@openai/codex"),
+            "claude-code" | "claude" => Ok("@anthropic-ai/claude-code"),
+            _ => Err(format!(
+                "Updates are not supported for provider {provider_type}"
+            )),
+        }
+    }
+
+    fn parse_provider_version(value: &str) -> Option<String> {
+        value
+            .split_whitespace()
+            .map(|part| {
+                part.trim_matches(|character: char| {
+                    !character.is_ascii_alphanumeric() && character != '.' && character != '-'
+                })
+            })
+            .find(|part| {
+                let core = part
+                    .trim_start_matches('v')
+                    .split('-')
+                    .next()
+                    .unwrap_or_default();
+                let segments: Vec<&str> = core.split('.').collect();
+                segments.len() == 3
+                    && segments
+                        .iter()
+                        .all(|segment| segment.parse::<u64>().is_ok())
+            })
+            .map(|part| part.trim_start_matches('v').to_string())
+    }
+
+    fn provider_update_status(&self, params: &Value) -> Result<Value, String> {
+        let (_provider_id, provider_type) = Self::provider_identity(params)?;
+        let package = Self::provider_update_spec(&provider_type)?;
+        let env: HashMap<String, String> = std::env::vars().collect();
+
+        let current_output = self
+            .provider_command(&provider_type, &["--version"], &env)?
+            .output()
+            .map_err(|error| format!("Failed to read {provider_type} version: {error}"))?;
+        let current_text = format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&current_output.stdout),
+            String::from_utf8_lossy(&current_output.stderr)
+        );
+        let current = Self::parse_provider_version(&current_text)
+            .ok_or_else(|| format!("Could not read the installed {provider_type} version"))?;
+
+        let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
+        let mut latest_command = Command::new(npm);
+        latest_command.args(["view", package, "version", "--json"]);
+        core::StdCommandConsoleHide::hide_console(&mut latest_command);
+        let latest_output = latest_command.output().map_err(|error| {
+            format!("Failed to check the latest {provider_type} version: {error}")
+        })?;
+        if !latest_output.status.success() {
+            return Err(String::from_utf8_lossy(&latest_output.stderr)
+                .trim()
+                .to_string());
+        }
+        let latest = Self::parse_provider_version(&String::from_utf8_lossy(&latest_output.stdout))
+            .ok_or_else(|| format!("Could not read the latest {provider_type} version"))?;
+        let version_numbers = |version: &str| -> Vec<u64> {
+            version
+                .split('-')
+                .next()
+                .unwrap_or_default()
+                .split('.')
+                .map(|segment| segment.parse::<u64>().unwrap_or(0))
+                .collect()
+        };
+        let checked_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+
+        Ok(json!({
+            "currentVersion": current,
+            "latestVersion": latest,
+            "updateAvailable": version_numbers(&current) < version_numbers(&latest),
+            "checkedAt": checked_at,
+        }))
+    }
+
+    fn provider_update(&self, params: &Value) -> Result<Value, String> {
+        let (_provider_id, provider_type) = Self::provider_identity(params)?;
+        let package = Self::provider_update_spec(&provider_type)?;
+        let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
+        let mut command = Command::new(npm);
+        command.args(["install", "--global", &format!("{package}@latest")]);
+        core::StdCommandConsoleHide::hide_console(&mut command);
+        let output = command
+            .output()
+            .map_err(|error| format!("Failed to update {provider_type}: {error}"))?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(if detail.is_empty() {
+                format!("Failed to update {provider_type}")
+            } else {
+                detail
+            });
+        }
+        let mut status = self.provider_update_status(params)?;
+        let current = status["currentVersion"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        if status["updateAvailable"].as_bool() == Some(true) {
+            return Err(format!(
+                "Updated {package}, but {provider_type} still resolves to {current}. Check PATH and the npm global prefix."
+            ));
+        }
+        status["ok"] = json!(true);
+        status["message"] = json!(format!("{provider_type} updated to {current}."));
+        Ok(status)
+    }
+
     fn provider_list_models(&self, params: &Value) -> Result<Value, String> {
         let (provider_id, provider_type) = Self::provider_identity(params)?;
         if provider_type != "codex" {
@@ -1850,6 +1972,19 @@ mod tests {
 
     fn state() -> HostState {
         HostState::new_with_dir(temp_dir())
+    }
+
+    #[test]
+    fn provider_update_version_parser_handles_cli_and_npm_output() {
+        assert_eq!(
+            HostState::parse_provider_version("codex-cli 0.156.1"),
+            Some("0.156.1".to_string())
+        );
+        assert_eq!(
+            HostState::parse_provider_version("\"2.1.280\"\n"),
+            Some("2.1.280".to_string())
+        );
+        assert_eq!(HostState::parse_provider_version("unknown"), None);
     }
 
     /// Fake provider CLI: same shape as `runner::tests::write_fake_codex`.

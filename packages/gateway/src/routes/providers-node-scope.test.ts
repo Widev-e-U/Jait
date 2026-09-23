@@ -226,3 +226,50 @@ describe('provider model routing', () => {
     await app.close()
   })
 })
+
+describe('provider update routing', () => {
+  it('updates a remote provider on the device that owns the account', async () => {
+    const result = {
+      ok: true,
+      message: 'Updated Codex to 0.157.0',
+      currentVersion: '0.157.0',
+      latestVersion: '0.157.0',
+      updateAvailable: false,
+      checkedAt: '2026-09-23T12:00:00.000Z',
+    }
+    const proxyProviderOp = vi.fn(async () => result)
+    const { app, headers } = await buildApp(proxyProviderOp as never)
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/providers/codex-windows/update',
+      headers,
+    })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual(result)
+    expect(proxyProviderOp).toHaveBeenCalledWith(
+      'windows-node',
+      'update',
+      { providerId: 'codex-windows', providerType: 'codex' },
+      300_000,
+    )
+
+    await app.close()
+  })
+
+  it('rejects an update for an unknown provider', async () => {
+    const { app, headers, proxyProviderOp } = await buildApp()
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/providers/unknown/update',
+      headers,
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(proxyProviderOp).not.toHaveBeenCalled()
+
+    await app.close()
+  })
+})

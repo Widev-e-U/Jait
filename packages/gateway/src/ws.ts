@@ -81,7 +81,7 @@ interface ConnectedClient {
  * list-models, etc.) do not execute the agent, so they stay ungated.
  */
 function isAgentProviderOp(op: string): boolean {
-  return op === "start-session" || op === "send-turn" || op === "stop-session";
+  return op === "start-session" || op === "send-turn" || op === "stop-session" || op === "update";
 }
 
 export function nodeCapabilityForTool(

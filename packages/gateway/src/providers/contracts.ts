@@ -24,6 +24,8 @@ export type {
   ProviderAuthStatus,
   ProviderId,
   ProviderInfo,
+  ProviderUpdateInfo,
+  ProviderUpdateResult,
   ProviderLoginResult,
   ProviderLogoutResult,
   ProviderModelInfo,

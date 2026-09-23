@@ -74,6 +74,14 @@ export interface ProviderInfo {
   unavailableReason?: string;
   modes: RuntimeMode[];
   auth?: ProviderAuthInfo;
+  /** Update state for provider CLIs that Jait knows how to upgrade. */
+  update?: ProviderUpdateInfo;
+  /**
+   * Optional logo URL advertised by the provider registry (for example an ACP
+   * agent's `icon`). Clients prefer it over the bundled brand glyph, but only
+   * when it is an `https:` URL — anything else is ignored.
+   */
+  icon?: string;
   /**
    * Device the provider actually runs on: `"gateway"` for gateway-hosted
    * providers, otherwise the connected node's id. Every provider belongs to
@@ -87,6 +95,18 @@ export interface ProviderInfo {
 
 export type RuntimeMode = "full-access" | "supervised";
 export type ThreadKind = "delivery" | "delegation";
+
+export interface ProviderUpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  checkedAt: string;
+}
+
+export interface ProviderUpdateResult extends ProviderUpdateInfo {
+  ok: boolean;
+  message: string;
+}
 
 export interface ProviderAuthCapabilities {
   login: boolean;
@@ -148,6 +168,7 @@ export interface RemoteProviderStatus {
   installed: boolean;
   authenticated: boolean | null;
   detail?: string;
+  update?: ProviderUpdateInfo;
 }
 
 export interface RemoteProviderInfo {

@@ -91,6 +91,8 @@ export type {
   JaitBackend,
   ProviderId,
   ProviderInfo,
+  ProviderUpdateInfo,
+  ProviderUpdateResult,
   ProviderAuthCapabilities,
   ProviderAuthInfo,
   ProviderAuthStatus,

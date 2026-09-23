@@ -8,6 +8,7 @@
  *   GET    /api/providers/:id/auth/status  — get provider auth status
  *   POST   /api/providers/:id/auth/login   — start provider login
  *   POST   /api/providers/:id/auth/logout  — log out provider
+ *   POST   /api/providers/:id/update       — update a supported provider CLI
  *   GET    /api/providers/:id/models       — list models for a provider
  *   POST   /api/providers/omniroute/test   — probe a self-hosted OmniRoute router
  *   POST   /api/providers/models/reset     — drop cached model catalogues so the next fetch is fresh
@@ -16,7 +17,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { ProviderRegistry } from "../providers/registry.js";
-import type { ProviderId } from "../providers/contracts.js";
+import type { ProviderId, ProviderUpdateInfo } from "../providers/contracts.js";
 import { listJaitModels } from "../services/jait-models.js";
 import type { UserService } from "../services/users.js";
 import type { ProviderAccountService } from "../services/provider-accounts.js";
@@ -37,6 +38,7 @@ import { requireAuth } from "../security/http-auth.js";
 import { ProviderSnapshotCache, type ProviderSnapshot } from "../providers/provider-snapshot.js";
 import { resetModelFetcherCaches } from "../providers/model-fetchers.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
+import { ProviderUpdateService } from "../services/provider-updates.js";
 import { isJaitBackend, JAIT_BACKEND_DEFAULT_URLS, normalizeJaitBackendBaseUrl, parseJaitBackendInstances } from "@jait/shared";
 
 // ── Route registration ───────────────────────────────────────────
@@ -45,6 +47,7 @@ const GATEWAY_NODE_NAME = "Gateway";
 
 /** Probe budget for the OmniRoute connection test — long enough for a cold local start. */
 const OMNIROUTE_PROBE_TIMEOUT_MS = 8_000;
+const REMOTE_UPDATE_CACHE_TTL_MS = 6 * 60 * 60 * 1_000;
 
 function isOllamaCloudUrl(raw: string): boolean {
   try {
@@ -55,7 +58,7 @@ function isOllamaCloudUrl(raw: string): boolean {
   }
 }
 
-type ProviderInfoPayload = ProviderSnapshot & { nodeId: string; nodeName: string };
+type ProviderInfoPayload = ProviderSnapshot & { nodeId: string; nodeName: string; update?: ProviderUpdateInfo; icon?: string };
 
 interface RemoteProviderPayload {
   nodeId: string;
@@ -70,6 +73,8 @@ interface RemoteProviderPayload {
     installed: boolean;
     authenticated: boolean | null;
     detail?: string;
+    icon?: string;
+    update?: ProviderInfoPayload["update"];
   }>;
 }
 
@@ -80,6 +85,7 @@ export interface ProviderRouteDeps {
   userService?: UserService;
   ws?: WsControlPlane;
   sqlite?: SqliteDatabase;
+  providerUpdateService?: ProviderUpdateService;
 }
 
 export function registerProviderRoutes(
@@ -88,6 +94,33 @@ export function registerProviderRoutes(
   deps: ProviderRouteDeps,
 ): void {
   const { providerRegistry, ws } = deps;
+  const providerUpdates = deps.providerUpdateService ?? new ProviderUpdateService();
+  // Background version checks spawn provider CLIs and hit the npm registry, so
+  // they stay off in tests. Vitest sets `VITEST=true`, and some environments
+  // expose an ambient `NODE_ENV=production`, so check both rather than relying
+  // on `NODE_ENV` alone. Injecting a service (e.g. in tests) still forces it on.
+  const inTestEnvironment = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  const providerUpdateChecksEnabled = Boolean(deps.providerUpdateService) || !inTestEnvironment;
+  if (providerUpdateChecksEnabled) providerUpdates.start();
+  app.addHook("onClose", async () => providerUpdates.stop());
+  const remoteUpdateCache = new Map<string, { value: ProviderUpdateInfo; cachedAt: number }>();
+
+  const getRemoteUpdateStatus = async (
+    nodeId: string,
+    providerId: string,
+    providerType: string,
+  ): Promise<ProviderUpdateInfo | null> => {
+    if (!ws || !providerUpdateChecksEnabled || !providerUpdates.supports(providerType)) return null;
+    const key = `${nodeId}:${providerType}`;
+    const cached = remoteUpdateCache.get(key);
+    if (cached && Date.now() - cached.cachedAt < REMOTE_UPDATE_CACHE_TTL_MS) return cached.value;
+    const value = await ws.proxyProviderOp<ProviderUpdateInfo>(nodeId, "update-status", {
+      providerId,
+      providerType,
+    }).catch(() => null);
+    if (value) remoteUpdateCache.set(key, { value, cachedAt: Date.now() });
+    return value;
+  };
 
   // Availability + auth probing is expensive (spawns provider CLIs / ACP agents).
   // Compute it once, serve from cache, and refresh in the background so page
@@ -354,10 +387,22 @@ export function registerProviderRoutes(
     const force = fresh === "1" || fresh === "true";
     const accounts = deps.providerAccountService?.list(authUser.id) ?? [];
     const accountById = new Map(accounts.map((account) => [account.id, account]));
-    const gatewayProviders: ProviderInfoPayload[] = (await snapshotCache.get(force))
+    const gatewayProviderSnapshots = (await snapshotCache.get(force))
       .filter((provider) => providerRegistry.isVisibleTo(provider.id, authUser.id))
-      .filter((provider) => (accountById.get(provider.id)?.nodeId ?? "gateway") === "gateway")
-      .map((provider) => ({ ...provider, nodeId: "gateway", nodeName: GATEWAY_NODE_NAME }));
+      .filter((provider) => (accountById.get(provider.id)?.nodeId ?? "gateway") === "gateway");
+    const gatewayProviders: ProviderInfoPayload[] = await Promise.all(gatewayProviderSnapshots.map(async (provider) => {
+      const update = providerUpdateChecksEnabled
+        ? await providerUpdates.getStatus(provider.providerType ?? provider.id).catch(() => null)
+        : null;
+      const icon = deps.providerAccountService?.getType(provider.providerType ?? provider.id)?.icon;
+      return {
+        ...provider,
+        ...(update ? { update } : {}),
+        ...(icon ? { icon } : {}),
+        nodeId: "gateway",
+        nodeName: GATEWAY_NODE_NAME,
+      };
+    }));
 
     // Collect remote provider info from connected filesystem nodes (cheap, live).
     const remoteProviders: RemoteProviderPayload[] = [];
@@ -368,13 +413,17 @@ export function registerProviderRoutes(
         const nodeAccounts = accounts.filter((account) => account.nodeId === node.id);
         const accountStatuses = await Promise.all(nodeAccounts.map(async (account) => {
           const provider = new RemoteCliProvider(ws, node.id, account.id, account.providerType);
-          const status = await provider.getAuthStatus().catch((error) => ({
-            authenticated: null,
-            detail: error instanceof Error ? error.message : "Unable to check account",
-            login: true,
-            logout: true,
-            deviceCode: true,
-          }));
+          const [status, update] = await Promise.all([
+            provider.getAuthStatus().catch((error) => ({
+              authenticated: null,
+              detail: error instanceof Error ? error.message : "Unable to check account",
+              login: true,
+              logout: true,
+              deviceCode: true,
+            })),
+            getRemoteUpdateStatus(node.id, account.id, account.providerType),
+          ]);
+          const accountIcon = deps.providerAccountService?.getType(account.providerType)?.icon;
           return {
             id: account.id,
             providerType: account.providerType,
@@ -382,6 +431,8 @@ export function registerProviderRoutes(
             installed: node.providers?.includes(account.providerType) ?? false,
             authenticated: status.authenticated,
             detail: status.detail,
+            ...(accountIcon ? { icon: accountIcon } : {}),
+            ...(update ? { update } : {}),
           };
         }));
         remoteProviders.push({
@@ -415,6 +466,8 @@ export function registerProviderRoutes(
               authenticated: status.authenticated,
               detail: status.detail,
             },
+            ...(status.update ? { update: status.update } : {}),
+            ...(status.icon ? { icon: status.icon } : {}),
             nodeId: node.id,
             nodeName: node.name,
           });
@@ -426,6 +479,39 @@ export function registerProviderRoutes(
       providers: [...gatewayProviders, ...nodeProviders],
       remoteProviders,
     };
+  });
+
+  /** Install the latest supported CLI release on the provider's owning device. */
+  app.post("/api/providers/:id/update", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const { id } = request.params as { id: string };
+    const account = deps.providerAccountService?.get(id, authUser.id) ?? null;
+    const provider = providerRegistry.getForUser(id as ProviderId, authUser.id);
+    if (!account && !provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
+    const providerType = account?.providerType ?? provider?.providerType ?? id;
+    const nodeId = account?.nodeId ?? "gateway";
+    if (!providerUpdates.supports(providerType)) {
+      return reply.status(404).send({ error: `Updates are not supported for provider ${providerType}` });
+    }
+
+    try {
+      if (nodeId !== "gateway") {
+        if (!ws) return reply.status(503).send({ error: "Remote provider routing is unavailable" });
+        const result = await ws.proxyProviderOp<ProviderUpdateInfo>(
+          nodeId,
+          "update",
+          { providerId: id, providerType },
+          5 * 60_000,
+        );
+        remoteUpdateCache.set(`${nodeId}:${providerType}`, { value: result, cachedAt: Date.now() });
+        return result;
+      }
+      return await providerUpdates.update(providerType);
+    } catch (error) {
+      return reply.status(500).send({ error: error instanceof Error ? error.message : "Provider update failed" });
+    }
   });
 
   /** Get provider auth status */
