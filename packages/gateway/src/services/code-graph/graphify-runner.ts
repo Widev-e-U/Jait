@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { resolveGraphifyCommand } from "./graphify-runtime.js";
+import { ensureGraphifyRuntime, resolveGraphifyCommand } from "./graphify-runtime.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -20,6 +20,7 @@ export interface GraphifyRunnerOptions {
     args: string[],
     options: { cwd: string; env: NodeJS.ProcessEnv; signal?: AbortSignal },
   ) => Promise<{ stdout: string; stderr: string }>;
+  ensureRuntime?: () => Promise<unknown>;
 }
 
 export class GraphifyUnavailableError extends Error {
@@ -58,10 +59,14 @@ async function defaultExecute(
 export class GraphifyRunner {
   private readonly command: string;
   private readonly execute: NonNullable<GraphifyRunnerOptions["execute"]>;
+  private readonly ensureRuntime: () => Promise<unknown>;
 
   constructor(options: GraphifyRunnerOptions = {}) {
     this.command = options.command ?? resolveGraphifyCommand();
     this.execute = options.execute ?? defaultExecute;
+    this.ensureRuntime = options.ensureRuntime ?? (options.command || options.execute
+      ? async () => {}
+      : ensureGraphifyRuntime);
   }
 
   async getVersion(cwd: string): Promise<string | null> {
@@ -82,6 +87,7 @@ export class GraphifyRunner {
     outputDir: string;
     signal?: AbortSignal;
   }): Promise<GraphifyRunResult> {
+    await this.ensureRuntime();
     await mkdir(params.outputDir, { recursive: true });
     const version = await this.getVersion(params.projectRoot);
     const result = await this.execute(

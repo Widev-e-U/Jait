@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
+import { registerStaticAssetCache } from "./services/static-asset-cache.js";
 import { WebSocket, WebSocketServer } from "ws";
 import { existsSync } from "node:fs";
 import { join, dirname, extname, relative, resolve, sep } from "node:path";
@@ -163,6 +164,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     logger: {
       level: config.logLevel,
     },
+    logController: new Fastify.LogController({ disableRequestLogging: config.nodeEnv === "production" }),
     // Outlook/Microsoft Graph message ids are ~150+ chars and ride in route
     // params (e.g. /api/email/messages/:id). Fastify defaults maxParamLength to
     // 100, which makes those routes silently fall through to the SPA 404.
@@ -172,6 +174,14 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     // mono audio or a small image. 25MB matches OpenAI's own audio upload cap.
     bodyLimit: 25 * 1024 * 1024,
   });
+
+  if (config.nodeEnv === "production") {
+    app.addHook("onResponse", async (request, reply) => {
+      if (reply.statusCode >= 500) {
+        request.log.error({ statusCode: reply.statusCode, url: request.url }, "request failed");
+      }
+    });
+  }
 
   await app.register(fastifyCookie);
 
@@ -471,6 +481,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   // (npm global install), monorepo apps/web/dist (dev)
   const webDir = resolveWebDir();
   if (webDir) {
+    if (config.nodeEnv === "production") registerStaticAssetCache(app, webDir);
     await app.register(fastifyStatic, {
       root: webDir,
       prefix: "/",

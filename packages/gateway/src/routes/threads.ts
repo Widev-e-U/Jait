@@ -1189,7 +1189,7 @@ export function registerThreadRoutes(
         : undefined;
       const displaySegments = Array.isArray(body["displaySegments"])
         ? (() => {
-            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "skill"; id: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
+            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "chat"; sessionId: string; name: string } | { type: "skill"; id: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
             for (const entry of body["displaySegments"] as unknown[]) {
               if (!entry || typeof entry !== "object") continue;
               const record = entry as Record<string, unknown>;
@@ -1202,6 +1202,14 @@ export function registerThreadRoutes(
                   type: "file",
                   path: record.path,
                   name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+                });
+                continue;
+              }
+              if (record.type === "chat" && typeof record.sessionId === "string" && record.sessionId.trim()) {
+                parsed.push({
+                  type: "chat",
+                  sessionId: record.sessionId,
+                  name: typeof record.name === "string" && record.name.trim() ? record.name : record.sessionId,
                 });
                 continue;
               }
@@ -1449,7 +1457,7 @@ export function registerThreadRoutes(
       : undefined;
     const displaySegments = Array.isArray(body["displaySegments"])
       ? (() => {
-          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "skill"; id: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
+          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string } | { type: "chat"; sessionId: string; name: string } | { type: "skill"; id: string; name: string } | { type: "image"; name: string; mimeType: string; data: string } | { type: "attachment"; name: string; mimeType: string; data: string }> = [];
           for (const entry of body["displaySegments"] as unknown[]) {
             if (!entry || typeof entry !== "object") continue;
             const record = entry as Record<string, unknown>;
@@ -1462,6 +1470,14 @@ export function registerThreadRoutes(
                 type: "file",
                 path: record.path,
                 name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+              });
+              continue;
+            }
+            if (record.type === "chat" && typeof record.sessionId === "string" && record.sessionId.trim()) {
+              parsed.push({
+                type: "chat",
+                sessionId: record.sessionId,
+                name: typeof record.name === "string" && record.name.trim() ? record.name : record.sessionId,
               });
               continue;
             }

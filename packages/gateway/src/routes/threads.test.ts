@@ -141,6 +141,50 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("preserves chat references in persisted start and follow-up messages", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider());
+    registerThreadRoutes(app, config, { threadService, providerRegistry });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const segments = [
+      { type: "text", text: "See " },
+      { type: "chat", sessionId: "referenced-chat", name: "Earlier chat" },
+      { type: "text", text: " please" },
+    ];
+    const first = threadService.create({
+      userId: "user-1", title: "First", providerId: "codex", workingDirectory: process.cwd(),
+    });
+    const started = await app.inject({
+      method: "POST", url: `/api/threads/${first.id}/start`, headers,
+      payload: { message: "See earlier chat please", displaySegments: segments, titleTask: "" },
+    });
+    expect(started.statusCode).toBe(200);
+    expect(threadService.getActivities(first.id).find((activity) => activity.kind === "message")?.payload)
+      .toMatchObject({ displaySegments: segments });
+
+    const second = threadService.create({
+      userId: "user-1", title: "Second", providerId: "codex", workingDirectory: process.cwd(),
+    });
+    threadService.update(second.id, { status: "completed", providerSessionId: "mock-session-1" });
+    const sent = await app.inject({
+      method: "POST", url: `/api/threads/${second.id}/send`, headers,
+      payload: { message: "See earlier chat please", displaySegments: segments },
+    });
+    expect(sent.statusCode).toBe(200);
+    expect(threadService.getActivities(second.id).find((activity) => activity.kind === "message")?.payload)
+      .toMatchObject({ displaySegments: segments });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("creates a literal jait thread when jait is selected", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

@@ -106,12 +106,55 @@ const PROVIDER_DEFS: ProviderDef[] = [
 
 export const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
 
-export function providerIconFor(providerType: string | undefined, id: string): ComponentType<{ className?: string }> {
+/**
+ * Curated/brand icon for a provider, or null when the provider has no known
+ * logo. Prefers the curated provider definition, then the shared brand library
+ * so dynamic ACP agents (e.g. `github-copilot-cli`) still resolve.
+ */
+export function providerBrandIconOrNull(providerType: string | undefined, id: string): ComponentType<{ className?: string }> | null {
   const key = providerType ?? id
-  // Prefer the curated provider definition, then fall back to the shared brand
-  // library so dynamic ACP agents (e.g. `github-copilot-cli`) still resolve to
-  // their real logo instead of the generic network glyph.
-  return PROVIDER_DEF_BY_ID.get(key)?.icon ?? providerBrandIcon(key) ?? providerBrandIcon(id) ?? Network
+  return PROVIDER_DEF_BY_ID.get(key)?.icon ?? providerBrandIcon(key) ?? providerBrandIcon(id) ?? null
+}
+
+export function providerIconFor(providerType: string | undefined, id: string): ComponentType<{ className?: string }> {
+  return providerBrandIconOrNull(providerType, id) ?? Network
+}
+
+/**
+ * Remote logo (e.g. an ACP registry SVG) to use when a provider has no brand
+ * icon. Registry SVGs paint with `currentColor`, which an `<img>` cannot
+ * resolve — they render as solid black and vanish in dark mode. So a remote
+ * logo is only used as a last resort, and is drawn as a CSS mask (see
+ * `RemoteProviderLogo`) so it follows the surrounding text colour.
+ */
+export function providerRemoteIconUrl(providerType: string | undefined, id: string, icon: unknown): string | undefined {
+  if (providerBrandIconOrNull(providerType, id)) return undefined
+  return providerIconUrl(icon)
+}
+
+/**
+ * Draws a remote provider logo as a themed mask: the SVG is used as a
+ * `mask-image` over a `currentColor` background, so monochrome registry logos
+ * stay legible in both light and dark mode instead of always rendering black.
+ */
+export function RemoteProviderLogo({ url, className }: { url: string; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      data-provider-logo="remote"
+      className={cn('inline-block shrink-0 bg-current', className)}
+      style={{
+        maskImage: `url("${url}")`,
+        WebkitMaskImage: `url("${url}")`,
+        maskRepeat: 'no-repeat',
+        WebkitMaskRepeat: 'no-repeat',
+        maskPosition: 'center',
+        WebkitMaskPosition: 'center',
+        maskSize: 'contain',
+        WebkitMaskSize: 'contain',
+      }}
+    />
+  )
 }
 
 export function providerLabelFor(providerType: string | undefined, id: string): string {
@@ -401,7 +444,7 @@ export function ProviderModelSelector({
     value: entry.id,
     label: entry.name || entry.id,
     icon: providerIconFor(entry.providerType, entry.id),
-    iconUrl: providerIconUrl(entry.icon),
+    iconUrl: providerRemoteIconUrl(entry.providerType, entry.id, entry.icon),
     description: entry.description,
     isAvailable: entry.isAvailable,
     reason: entry.reason,
@@ -736,7 +779,7 @@ export function ProviderModelSelector({
       aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
     >
       {currentProvider.iconUrl
-        ? <img src={currentProvider.iconUrl} alt="" aria-hidden="true" loading="lazy" referrerPolicy="no-referrer" className="h-4 w-4 shrink-0 rounded-sm object-contain" />
+        ? <RemoteProviderLogo url={currentProvider.iconUrl} className="h-4 w-4" />
         : <CurrentIcon className="h-4 w-4 shrink-0" />}
       {!compact && (
         <span className="flex min-w-0 items-center gap-1.5">
@@ -835,7 +878,7 @@ export function ProviderModelSelector({
                   )}
                 >
                   {entry.iconUrl
-                    ? <img src={entry.iconUrl} alt="" aria-hidden="true" loading="lazy" referrerPolicy="no-referrer" className="mt-0.5 h-4 w-4 shrink-0 rounded-sm object-contain" />
+                    ? <RemoteProviderLogo url={entry.iconUrl} className="mt-0.5 h-4 w-4" />
                     : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">

@@ -42,6 +42,7 @@ Object.assign(process.env, {
   JWT_SECRET: secrets.jwt, HOOK_SECRET: secrets.hook, NODE_ENV: 'production',
 });
 process.chdir(stateDir);
+await import('./compile-cache.mjs');
 let stopping = false;
 function stop() {
   if (stopping) return;

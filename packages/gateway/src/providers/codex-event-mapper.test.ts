@@ -2,6 +2,23 @@ import { describe, expect, it } from "vitest";
 import { mapCodexNotification } from "./codex-event-mapper.js";
 
 describe("mapCodexNotification", () => {
+  it("keeps a Codex turn open while the app server retries", () => {
+    expect(mapCodexNotification("error", {
+      error: { message: "temporary connection issue" },
+      willRetry: true,
+    }, "session-1")).toEqual([]);
+  });
+
+  it("does not complete a failed turn when Codex omits the error message", () => {
+    expect(mapCodexNotification("turn/completed", {
+      turn: { status: "failed", error: null },
+    }, "session-1")).toEqual([{
+      type: "session.error",
+      sessionId: "session-1",
+      error: "Codex turn failed",
+    }]);
+  });
+
   it("maps codex agent message deltas as assistant text tokens", () => {
     const events = mapCodexNotification("codex/event/agent_message_delta", {
       delta: "Implemented the todo runner.",

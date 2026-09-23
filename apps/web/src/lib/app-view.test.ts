@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { APP_VIEWS, appViewToPath, parseAppView } from './app-view'
+import { APP_VIEWS, appViewToPath, isManagerView, parseAppView } from './app-view'
 
 describe('parseAppView', () => {
   it('accepts every canonical view', () => {
@@ -38,6 +38,16 @@ describe('appViewToPath', () => {
 
   it('uses the calendar route', () => {
     expect(appViewToPath('calendar')).toBe('/calendar')
+  })
+
+  it('routes manager pages separately', () => {
+    expect(appViewToPath('threads')).toBe('/threads')
+    expect(appViewToPath('agents')).toBe('/agents')
+    expect(parseAppView('threads')).toBe('threads')
+    expect(parseAppView('agents')).toBe('agents')
+    expect(isManagerView('threads')).toBe(true)
+    expect(isManagerView('agents')).toBe(true)
+    expect(isManagerView('chat')).toBe(false)
   })
 
   it('prefixes other views with a slash', () => {

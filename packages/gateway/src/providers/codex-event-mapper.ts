@@ -183,14 +183,20 @@ export function mapCodexNotification(
       const turn = params.turn as Record<string, unknown> | undefined;
       const status = typeof turn?.status === "string" ? turn.status : "";
       const errorObj = turn?.error as Record<string, unknown> | undefined;
-      if (status === "failed" && errorObj?.message) {
-        return [{ type: "session.error", sessionId, error: String(errorObj.message) }];
+      if (status === "failed") {
+        const error = typeof errorObj?.message === "string" && errorObj.message.trim()
+          ? errorObj.message
+          : "Codex turn failed";
+        return [{ type: "session.error", sessionId, error }];
       }
       return [{ type: "turn.completed", sessionId }];
     }
 
     // ── Errors ──
     case "error": {
+      // Codex reports transient failures while retrying. The desktop runner
+      // keeps the turn active in this case, so do not end the gateway session.
+      if (params.willRetry === true) return [];
       const errorObj = params.error as Record<string, unknown> | undefined;
       const message = typeof errorObj?.message === "string" ? errorObj.message : "Codex error";
       return [{ type: "session.error", sessionId, error: message }];

@@ -1,6 +1,6 @@
-export type AppView = 'chat' | 'pulls' | 'todo' | 'email' | 'calendar' | 'memory' | 'jobs' | 'network' | 'settings'
+export type AppView = 'chat' | 'pulls' | 'todo' | 'email' | 'calendar' | 'memory' | 'jobs' | 'network' | 'settings' | 'threads' | 'agents'
 
-export const APP_VIEWS: readonly AppView[] = ['chat', 'pulls', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings']
+export const APP_VIEWS: readonly AppView[] = ['chat', 'pulls', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings', 'threads', 'agents']
 
 /**
  * Normalize a raw path/host segment into an {@link AppView}.
@@ -18,4 +18,10 @@ export function parseAppView(raw: string): AppView | null {
 export function appViewToPath(view: AppView): string {
   if (view === 'email') return '/emails'
   return view === 'chat' ? '/' : `/${view}`
+}
+
+export type ManagerPage = Extract<AppView, 'threads' | 'agents'>
+
+export function isManagerView(view: AppView): view is ManagerPage {
+  return view === 'threads' || view === 'agents'
 }

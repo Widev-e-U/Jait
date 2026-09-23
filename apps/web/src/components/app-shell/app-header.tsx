@@ -65,7 +65,6 @@ interface AppHeaderProps {
   remainingPrompts: any
   screenShare: any
   setCurrentView: any
-  setSendTarget: any
   setShowLoginDialog: any
   setShowProject: any
   setShowProjectEditor: any
@@ -108,7 +107,6 @@ export function AppHeader(props: AppHeaderProps) {
     remainingPrompts,
     screenShare,
     setCurrentView,
-    setSendTarget,
     setShowLoginDialog,
     setShowProject,
     setShowProjectEditor,
@@ -139,7 +137,7 @@ export function AppHeader(props: AppHeaderProps) {
   // Provider usage modal (avatar dropdown → "Usage")
   const [usageModalOpen, setUsageModalOpen] = useState(false)
 
-  const hasCentered = currentView === 'chat' && !voiceOverlayOpen
+  const hasCentered = !voiceOverlayOpen
 
   useEffect(() => {
     const update = () => {
@@ -217,17 +215,15 @@ export function AppHeader(props: AppHeaderProps) {
           <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <JaitIcon size={20} className="shrink-0" />
             <VoiceMicButtonMobile {...voiceControlProps} />
-            {isMobile && currentView === 'chat' && activeManagerThreads.length > 0 && (
+            {isMobile && activeManagerThreads.length > 0 && (
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
                 getRepositoryForThread={automation.getRepositoryForThread}
                 threadPrStates={automation.threadPrStates}
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
-                  setCurrentView('chat')
-                  setViewMode('manager')
+                  setCurrentView('threads')
                   automation.setSelectedThreadId(threadId)
-                  setSendTarget('thread')
                   setShowProject(false)
                   setShowProjectEditor(false)
                 }}
@@ -237,7 +233,7 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
 
           {/* Full nav only appears when it cannot collide with the centered mode selector. */}
-          {!isMobile && (
+          {!isMobile && viewMode === 'developer' && (
             <ProgressiveNav
               items={navItems}
               availableWidth={navAvailableWidth}
@@ -246,6 +242,8 @@ export function AppHeader(props: AppHeaderProps) {
               className="flex-1"
             />
           )}
+
+          {viewMode === 'manager' && <div className="min-w-0 flex-1" />}
 
           {/* Center: ViewModeSelector OR voice controls when voice active */}
           {voiceOverlayOpen ? (
@@ -256,11 +254,11 @@ export function AppHeader(props: AppHeaderProps) {
               isDesktop={isDesktop}
               activeProjectTitle={activeProjectTitle}
             />
-          ) : currentView === 'chat' ? (
+          ) : (
             <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
-          ) : null}
+          )}
 
           {/* Spacer */}
           <div className={`${isMobile ? 'flex-1' : 'hidden'} min-w-0`} />
@@ -277,17 +275,15 @@ export function AppHeader(props: AppHeaderProps) {
               </span>
             )}
             <VoiceWakeWordPill {...voiceControlProps} />
-            {currentView === 'chat' && activeManagerThreads.length > 0 && (
+            {activeManagerThreads.length > 0 && (
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
                 getRepositoryForThread={automation.getRepositoryForThread}
                 threadPrStates={automation.threadPrStates}
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
-                  setCurrentView('chat')
-                  setViewMode('manager')
+                  setCurrentView('threads')
                   automation.setSelectedThreadId(threadId)
-                  setSendTarget('thread')
                   setShowProject(false)
                   setShowProjectEditor(false)
                 }}
@@ -419,9 +415,9 @@ export function AppHeader(props: AppHeaderProps) {
                     Sign in
                   </Button>
                 )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
+                {viewMode === 'developer' && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
                   <Menu className="h-4 w-4" />
-                </Button>
+                </Button>}
               </div>
             ) : (
             <>

@@ -1,14 +1,21 @@
-import { X } from 'lucide-react'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ResponseStyle } from '@jait/shared'
 
-import { ChatComposerSurface, Conversation, Message, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
+import { toast } from 'sonner'
+
+import { X } from 'lucide-react'
+
+import { ChatComposerSurface, Conversation, Message, MessageQueue, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
 import { Button } from '@/components/ui/button'
 import { useChat, type ChatAttachment, type ChatMode } from '@/hooks/useChat'
 import type { ProjectSession } from '@/hooks/useProjects'
+import { API_URL } from '@/lib/gateway-url'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import { shouldProcessQueuedMessage } from '@/lib/chat-queue-decision'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
+import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
+import type { DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { TooltipHint } from '@/components/ui/tooltip'
 import { ChatPanelDivider } from './chat-panel-divider'
 
@@ -46,6 +53,12 @@ export interface ParallelChatPanelProps {
    * developer chat keeps the panel footer identical instead of a bespoke copy.
    */
   composerControlRow?: ReactNode
+  /**
+   * Enter-while-streaming behavior for the panel composer: steer the running
+   * turn or queue the message. Mirrors the main chat's setting; defaults to
+   * 'steer' when omitted.
+   */
+  defaultStreamingAction?: DefaultStreamingAction
 }
 
 /**
@@ -92,7 +105,8 @@ export function areParallelChatPanelPropsEqual(prev: ParallelChatPanelProps, nex
     prev.onClose === next.onClose &&
     prev.onSessionViewed === next.onSessionViewed &&
     prev.composerControlRow === next.composerControlRow &&
-    (prev.showDivider ?? true) === (next.showDivider ?? true)
+    (prev.showDivider ?? true) === (next.showDivider ?? true) &&
+    prev.defaultStreamingAction === next.defaultStreamingAction
   )
 }
 
@@ -117,6 +131,7 @@ function ParallelChatPanelImpl({
   onClose,
   composerControlRow,
   showDivider = true,
+  defaultStreamingAction = 'steer',
 }: ParallelChatPanelProps) {
   const {
     messages,
@@ -128,6 +143,13 @@ function ParallelChatPanelImpl({
     sendMessage,
     cancelRequest,
     loadOlderMessages,
+    messageQueue,
+    enqueueMessage,
+    dequeueMessage,
+    recordSteeredMessage,
+    updateQueueItem,
+    reorderQueueItem,
+    toggleHoldQueueItem,
   } = useChat(session.id, token, undefined, null, session.lastActiveAt)
   const handleLatestContentViewed = useCallback(() => {
     if (viewedActivityAt) onSessionViewed?.(session.id, viewedActivityAt)
@@ -190,7 +212,7 @@ function ParallelChatPanelImpl({
     setPanelMode(next)
   }, [customizeSelection])
 
-  const sendPrompt = useCallback(async (prompt: ParallelChatPrompt) => {
+  const sendPrompt = useCallback(async (prompt: ParallelChatPrompt, options?: { queued?: boolean }) => {
     const result = await sendMessage(prompt.content, {
       token,
       sessionId: session.id,
@@ -204,6 +226,10 @@ function ParallelChatPanelImpl({
       referencedFiles: prompt.referencedFiles,
       displaySegments: prompt.displaySegments,
       attachments: prompt.attachments,
+      // Mark queue-drain sends so the 202 handler in `useChat` does not mirror
+      // the server-assigned entry back into the local queue (which would
+      // multiply the message).
+      ...(options?.queued ? { queued: true } : {}),
     })
     return result
   }, [panelMode, panelModel, panelProvider, panelReasoningEffort, panelResponseStyle, panelRuntimeMode, sendMessage, session.id, token])
@@ -213,6 +239,118 @@ function ParallelChatPanelImpl({
     initialPromptSentRef.current = true
     void sendPrompt(initialPrompt)
   }, [initialPrompt, isLoadingHistory, sendPrompt])
+
+  // Queue auto-drain. A panel's queue lives only in this client: unlike the
+  // main chat it is never synced to the server as `queued_messages`, so the
+  // gateway's server-side drain does not know about locally enqueued (`q-`)
+  // items and the panel must send them itself once the current turn ends.
+  // Server-mirrored entries (ids without the `q-` prefix, created when a send
+  // returns 202 during streaming) are skipped — the gateway drains those on
+  // `done` and the panel sees them reappear as user messages.
+  const isProcessingQueueRef = useRef(false)
+
+  useEffect(() => {
+    if (
+      !shouldProcessQueuedMessage({
+        hasInterruptedExit: false,
+        isLoading,
+        isLoadingHistory,
+        queuedCount: messageQueue.length,
+        allowQueuedMessageAfterInterruptedExit: false,
+        isProcessing: isProcessingQueueRef.current,
+        nextItemHeld: messageQueue[0]?.held ?? false,
+      })
+    ) {
+      return
+    }
+
+    const nextItem = messageQueue[0]
+    if (!nextItem || !nextItem.id.startsWith('q-')) return
+    if (nextItem.held) return
+
+    isProcessingQueueRef.current = true
+    void Promise.resolve(
+      sendPrompt(
+        {
+          content: nextItem.content,
+          ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
+          ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
+          ...(nextItem.displaySegments?.length ? { displaySegments: nextItem.displaySegments } : {}),
+          ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
+        },
+        { queued: true },
+      ),
+    )
+      .then((result) => {
+        if (result === 'sent' || result === 'queued') {
+          dequeueMessage(nextItem.id)
+        } else {
+          toast.error('Failed to send queued message')
+        }
+      })
+      .catch(() => {
+        toast.error('Failed to send queued message')
+      })
+      .finally(() => {
+        isProcessingQueueRef.current = false
+      })
+  }, [dequeueMessage, isLoading, isLoadingHistory, messageQueue, sendPrompt])
+
+  const handleSteer = useCallback((
+    referencedFiles?: ReferencedFile[],
+    attachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
+    if (!isLoading) return
+    const content = draft.trim()
+    if (!content) return
+    const chipFiles = referencedFiles?.map(({ path, name }) => ({ path, name })) ?? []
+    const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, attachments)
+    const displayContent = nextDisplaySegments ? undefined : content
+    recordSteeredMessage(content, displayContent)
+    setDraft('')
+    setInputVersion((version) => version + 1)
+    void (async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(session.id)}/steer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            message: content,
+            ...(chipFiles.length ? { referencedFiles: chipFiles } : {}),
+            ...(nextDisplaySegments ? { displaySegments: nextDisplaySegments } : {}),
+          }),
+        })
+        if (!response.ok) {
+          throw new Error(`Steer failed (${response.status})`)
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to steer')
+        enqueueMessage({ content })
+      }
+    })()
+  }, [draft, enqueueMessage, isLoading, recordSteeredMessage, session.id, token])
+
+  const handleQueueMessage = useCallback((
+    referencedFiles?: ReferencedFile[],
+    attachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
+    if (!isLoading) return
+    const content = draft.trim()
+    if ((!content && !attachments?.length) || !content) return
+    enqueueMessage({
+      content,
+      referencedFiles: referencedFiles?.map(({ path, name }) => ({ path, name })),
+      displaySegments,
+      attachments,
+    })
+    setDraft('')
+    setInputVersion((version) => version + 1)
+  }, [draft, enqueueMessage, isLoading])
 
   const handleSubmit = useCallback((
     referencedFiles?: ReferencedFile[],
@@ -311,6 +449,16 @@ function ParallelChatPanelImpl({
           </div>
         )}
         <div className="mx-auto w-full max-w-4xl space-y-1.5">
+        {messageQueue.length > 0 && (
+          <MessageQueue
+            items={messageQueue}
+            onRemove={dequeueMessage}
+            onEdit={updateQueueItem}
+            onReorder={reorderQueueItem}
+            onToggleHold={toggleHoldQueueItem}
+            iconOnly={isMobile}
+          />
+        )}
         <ChatComposerSurface>
         <PromptInput
           value={draft}
@@ -318,6 +466,9 @@ function ParallelChatPanelImpl({
           draftStateKey={`parallel:${session.id}`}
           onChange={setDraft}
           onSubmit={handleSubmit}
+          onSteer={handleSteer}
+          onQueue={handleQueueMessage}
+          defaultStreamingAction={defaultStreamingAction}
           onStop={cancelRequest}
           isLoading={isLoading}
           placeholder="Ask about the running task…"

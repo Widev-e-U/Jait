@@ -24,7 +24,9 @@ import { DeveloperWorkspacePanes } from '@/components/app-shell/developer-worksp
 import { ParallelChatPanel, type ParallelChatPrompt } from '@/components/app-shell/parallel-chat-panel'
 import { appendSecondaryChatPanel, closeSecondaryChatPanel, getOpenChatSessionIds, getVisibleChatPanelCount, MAX_SECONDARY_CHAT_PANELS, shouldShowChatPanelHideButton } from '@/lib/secondary-chat-panels'
 import { beginEditorSubpanelToggle, endEditorSubpanelToggle, getEditorSubpanelToggleIntent } from '@/lib/editor-subpanels'
-import { ManagerWorkspace } from '@/components/app-shell/manager-workspace'
+import { ThreadsPage } from '@/components/manager/threads-page'
+import { ManagerMode } from '@/components/manager/manager-mode'
+import { AgentsPage } from '@/components/manager/agents-page'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProjectActiveTerminalId, resolveProjectTerminalSelection } from '@/components/terminal'
@@ -99,7 +101,7 @@ import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
   mergeAttachmentsIntoSegments
 } from '@/lib/message-segment-builders'
-import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
+import { VIEW_MODE_STORAGE_KEY, readStoredViewMode, readStoredManagerPage, storeManagerPage } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
 import { activeProjectDuringSwitch, areActiveProjectsEqual, type ActiveProjectState } from '@/lib/active-project'
 import {
@@ -260,7 +262,7 @@ function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
-    return parseAppView(path) ?? 'chat'
+    return parseAppView(path) ?? (path === '' && readStoredViewMode() === 'manager' ? readStoredManagerPage() : 'chat')
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
@@ -352,12 +354,14 @@ function App() {
   )
   const cliModel = cliModelsByProvider[chatProvider] ?? null
   const managerCliModel = cliModelsByProvider[managerProvider] ?? null
-  const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
+  const viewMode: ViewMode = currentView === 'settings' ? readStoredViewMode() : currentView === 'threads' || currentView === 'agents' ? 'manager' : 'developer'
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setCurrentView(mode === 'manager' ? readStoredManagerPage() : 'chat')
+  }, [])
   const threadProvider = viewMode === 'manager' ? managerProvider : chatProvider
   const threadProviderRuntimeMode = viewMode === 'manager' ? managerProviderRuntimeMode : chatProviderRuntimeMode
   const threadCliModel = viewMode === 'manager' ? managerCliModel : cliModel
   const threadReasoningEffort = viewMode === 'manager' ? managerReasoningEffort : chatReasoningEffort
-  const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
   const isDesktop = !!(window as any).jaitDesktop
   // @capacitor/core attaches `window.Capacitor` as a module-load side effect even in
@@ -1817,9 +1821,7 @@ function App() {
         }
         break
       case 'chat.view':
-        if (value === 'developer' || value === 'manager') {
-          setViewMode(value)
-        }
+        // Legacy session mode is no longer the route source of truth.
         break
       case 'todo_list':
         setTodoList(normalizeTodoStateValue(value))
@@ -1960,17 +1962,6 @@ function App() {
       const migrated = loadLegacyCliModelsByProvider(chatProvider)
       setCliModelsByProvider(migrated)
       writeProjectModelSelections(activeProjectId, migrated)
-    }
-
-    const cv = state['chat.view']
-    if (cv === 'developer' || cv === 'manager') {
-      const storedViewMode = readStoredViewMode()
-      // localStorage wins on mismatch: it reflects the most recent explicit
-      // choice on this device (see the viewMode persistence effect below),
-      // while the recovered session state can be stale across sessions.
-      if (storedViewMode === cv) {
-        setViewMode(cv)
-      }
     }
 
     // The running message snapshot and this WebSocket packet race on reload.
@@ -2522,9 +2513,9 @@ function App() {
 
 
   useEffect(() => {
-    prevViewModeRef.current = viewMode
-    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
-  }, [viewMode])
+    if (currentView !== 'settings') window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
+    if (currentView === 'threads' || currentView === 'agents') storeManagerPage(currentView)
+  }, [currentView, viewMode])
 
   useEffect(() => {
     if (viewMode === 'manager' && showDebugPanel) {
@@ -2929,8 +2920,7 @@ function App() {
         if (session.projectId) await handleSelectProjectSession(session.projectId, session.id)
         else await handleSelectPersonalSession(session.id)
       } else if (threadId) {
-        setCurrentView('chat')
-        setViewMode('manager')
+        setCurrentView('threads')
         automation.setSelectedThreadId(threadId)
       } else {
         const view = parseAppView(url.pathname.replace(/^\//, '')) ?? 'chat'
@@ -3924,8 +3914,13 @@ function App() {
   )
 
   const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
-    if (viewMode === 'manager' || sendTarget === 'thread') {
-      return handleThreadSubmit(chipFiles, fileAttachments, displaySegments)
+    if (sendTarget === 'thread') {
+      const sent = await handleThreadSubmit(chipFiles, fileAttachments, displaySegments)
+      if (sent) {
+        setCurrentView('threads')
+        setSendTarget('agent')
+      }
+      return
     }
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
@@ -3995,7 +3990,7 @@ function App() {
   const handleThreadSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[], displaySegments?: UserMessageSegment[]) => {
     const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     const promptWithUploads = appendUploadedAttachmentPromptBlock(prepared?.promptWithReferences ?? '', fileAttachments)
-    if ((!prepared && !promptWithUploads) || threadComposerDisabled) return
+    if ((!prepared && !promptWithUploads) || threadComposerDisabled) return false
     const displayContent = prepared?.displayContent || getUploadedAttachmentDisplayLabel(fileAttachments) || promptWithUploads
     const nextDisplaySegments = mergeAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const selectedThreadQueueLength = automation.selectedThread ? (managerMessageQueues[automation.selectedThread.id]?.length ?? 0) : 0
@@ -4016,7 +4011,7 @@ function App() {
       })
       setInputValue('')
       setInputSegments(undefined)
-      return
+      return true
     }
     setInputValue('')
     setInputSegments(undefined)
@@ -4036,12 +4031,13 @@ function App() {
       },
       threadTargetRepo?.id ?? undefined,
     )
+    return true
   }
 
   const chatQueueProcessingRef = useRef(false)
 
   useEffect(() => {
-    if (viewMode === 'manager' || sendTarget === 'thread') return
+    if (sendTarget === 'thread') return
     if (!token || !activeSessionId) return
     if (
       !shouldProcessQueuedMessage({
@@ -4117,7 +4113,7 @@ function App() {
       .finally(() => {
         chatQueueProcessingRef.current = false
       })
-  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, hitMaxRounds, isLoading, isLoadingHistory, messageQueue, sendMessage, sendTarget, token, viewMode, wsConnected])
+  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, hitMaxRounds, isLoading, isLoadingHistory, messageQueue, sendMessage, sendTarget, token, wsConnected])
 
   const handleContinueChat = useCallback(
     (options: { token: string | null; sessionId: string | null }) => {
@@ -5016,7 +5012,6 @@ function App() {
               remainingPrompts={remainingPrompts}
               screenShare={screenShare}
               setCurrentView={setCurrentView}
-              setSendTarget={setSendTarget}
               setShowLoginDialog={setShowLoginDialog}
               setShowProject={setShowProject}
               setShowProjectEditor={setShowProjectEditor}
@@ -5069,6 +5064,7 @@ function App() {
               }}
               onToggleDebugPanel={() => setShowDebugPanel((d) => !d)}
               onToggleEditor={() => {
+                if (viewMode === 'manager') setCurrentView('chat')
                 void handleToggleEditor()
               }}
               onToggleManagerRepos={() => setShowManagerRepos((s) => !s)}
@@ -5081,7 +5077,82 @@ function App() {
               }}
             />
 
-            {currentView !== 'chat' ? (
+            {currentView === 'threads' || currentView === 'agents' ? (
+              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile}>
+                {currentView === 'threads' ? (
+                    <ThreadsPage
+                      automation={automation}
+                      automationMessages={automationMessages}
+                      availableFiles={availableFilesForMention}
+                      availableSkills={availableSkills}
+                      chatProvider={managerProvider}
+                      chatProviderRuntimeMode={managerProviderRuntimeMode}
+                      chatReasoningEffort={managerReasoningEffort}
+                      chatResponseStyle={chatResponseStyle}
+                      cliModel={managerCliModel}
+                      inputValueRef={inputValueRef}
+                      inputVersion={inputVersion}
+                      isMobile={isMobile}
+                      managerThreads={managerThreads}
+                      promptInputRef={promptInputRef}
+                      selectedManagerQueue={selectedManagerQueue}
+                      selectedRepoOffline={selectedRepoOffline}
+                      selectedRepoRuntime={selectedRepoRuntime}
+                      selectedThreadRepoRuntime={selectedThreadRepoRuntime}
+                      showManagerRepos={showManagerRepos}
+                      showProject={showProject}
+                      threadComposerDisabled={threadComposerDisabled}
+                      threadPlaceholder={threadPlaceholder}
+                      voiceLevels={voiceLevels}
+                      voiceRecording={voiceRecording}
+                      voiceTranscribing={voiceTranscribing}
+                      onAddRepository={() => automation.setFolderPickerOpen(true)}
+                      onChangedFileClick={(file) => { setCurrentView('chat'); handleChangedFileClick(file) }}
+                      onCliModelChange={handleManagerCliModelChange}
+                      onDeleteThread={automation.handleDelete}
+                      onDequeueManagerMessage={dequeueManagerMessage}
+                      onHandleInputChange={handleInputChange}
+                      onManagerQueue={handleManagerQueue}
+                      onMemorySourceOpen={handleOpenMemorySource}
+                      onMoveRepoToGateway={handleMoveRepoToGateway}
+                      onOpenManagerPlan={setPlanRepo}
+                      onOpenManagerStrategy={setStrategyRepo}
+                      onOpenMessagePath={(path) => { setCurrentView('chat'); handleOpenMessagePath(path) }}
+                      onProviderChange={handleManagerProviderChange}
+                      onProviderRuntimeModeChange={handleManagerProviderRuntimeModeChange}
+                      onReasoningEffortChange={handleManagerReasoningEffortChange}
+                      onRefreshThreads={() => {
+                        void automation.refresh()
+                      }}
+                      onRemoveRepository={(repoId) => {
+                        void automation.removeRepository(repoId)
+                      }}
+                      onReorderManagerQueueItem={reorderManagerQueueItem}
+                      onResponseStyleChange={handleChatResponseStyleChange}
+                      onSearchFiles={handleSearchFiles}
+                      onSelectRepository={automation.setSelectedRepoId}
+                      onSelectThread={automation.setSelectedThreadId}
+                      onSendManagerQueueItemToParallelThread={sendManagerQueueItemToParallelThread}
+                      onSetProjectEditorVisible={setShowProjectEditor}
+                      onSetProjectVisible={setShowProject}
+                      onSteerManagerQueueItem={steerManagerQueueItem}
+                      onStopRecording={() => {
+                        void stopRecordingAndTranscribe()
+                      }}
+                      onStopThread={(threadId) => {
+                        void automation.handleStop(threadId)
+                      }}
+                      onSubmit={handleThreadSubmit}
+                      onUpdateManagerQueueItem={updateManagerQueueItem}
+                      onVoiceInput={handleVoiceInput}
+                      renderInlineSecretPrompt={renderInlineSecretPrompt}
+                      inlinePrompts={inlinePrompts}
+                    />
+                ) : (
+                  <AgentsPage repositories={automation.repositories} />
+                )}
+              </ManagerMode>
+            ) : currentView !== 'chat' ? (
               <AppPageOutlet
                 activeSessionId={activeSessionId}
                 activityEvents={activityEvents}
@@ -5234,12 +5305,10 @@ function App() {
                     architectureDiagram={architectureDiagram}
                     architectureGenerating={architectureGenerating}
                     architectureRequest={architectureRequest}
-                    automationSelectedThread={automation.selectedThread}
                     changedPaths={changedPaths}
                     chatCollapsed={chatCollapsed}
                     chatProvider={chatProvider}
                     cliModel={cliModel}
-                    currentView={currentView}
                     devPreviewTarget={devPreviewTarget}
                     fsWatcherPayload={fsWatcherPayload}
                     fsWatcherVersion={fsWatcherVersion}
@@ -5267,7 +5336,6 @@ function App() {
                     terminalShells={terminalShells}
                     terminalViewRef={terminalViewRef}
                     token={token}
-                    viewMode={viewMode}
                     onActiveProjectFileChange={(fileId) => {
                       setActiveProjectFileId(fileId)
                       if (fileId) showProjectEditorPanel()
@@ -5322,77 +5390,7 @@ function App() {
 
                 {!showMobileProjectFullscreen &&
                   !showMobileTerminalFullscreen &&
-                  (viewMode === 'manager' ? (
-                    <ManagerWorkspace
-                      automation={automation}
-                      automationMessages={automationMessages}
-                      availableFiles={availableFilesForMention}
-                      availableSkills={availableSkills}
-                      chatProvider={managerProvider}
-                      chatProviderRuntimeMode={managerProviderRuntimeMode}
-                      chatReasoningEffort={managerReasoningEffort}
-                      chatResponseStyle={chatResponseStyle}
-                      cliModel={managerCliModel}
-                      inputValueRef={inputValueRef}
-                      inputVersion={inputVersion}
-                      isMobile={isMobile}
-                      managerThreads={managerThreads}
-                      promptInputRef={promptInputRef}
-                      selectedManagerQueue={selectedManagerQueue}
-                      selectedRepoOffline={selectedRepoOffline}
-                      selectedRepoRuntime={selectedRepoRuntime}
-                      selectedThreadRepoRuntime={selectedThreadRepoRuntime}
-                      showManagerRepos={showManagerRepos}
-                      showProject={showProject}
-                      threadComposerDisabled={threadComposerDisabled}
-                      threadPlaceholder={threadPlaceholder}
-                      voiceLevels={voiceLevels}
-                      voiceRecording={voiceRecording}
-                      voiceTranscribing={voiceTranscribing}
-                      onAddRepository={() => automation.setFolderPickerOpen(true)}
-                      onChangedFileClick={handleChangedFileClick}
-                      onCliModelChange={handleManagerCliModelChange}
-                      onDeleteThread={automation.handleDelete}
-                      onDequeueManagerMessage={dequeueManagerMessage}
-                      onHandleInputChange={handleInputChange}
-                      onManagerQueue={handleManagerQueue}
-                      onMemorySourceOpen={handleOpenMemorySource}
-                      onMoveRepoToGateway={handleMoveRepoToGateway}
-                      onOpenManagerPlan={setPlanRepo}
-                      onOpenManagerStrategy={setStrategyRepo}
-                      onOpenMessagePath={handleOpenMessagePath}
-                      onProviderChange={handleManagerProviderChange}
-                      onProviderRuntimeModeChange={handleManagerProviderRuntimeModeChange}
-                      onReasoningEffortChange={handleManagerReasoningEffortChange}
-                      onRefreshThreads={() => {
-                        void automation.refresh()
-                      }}
-                      onRemoveRepository={(repoId) => {
-                        void automation.removeRepository(repoId)
-                      }}
-                      onReorderManagerQueueItem={reorderManagerQueueItem}
-                      onResponseStyleChange={handleChatResponseStyleChange}
-                      onSearchFiles={handleSearchFiles}
-                      onSelectRepository={automation.setSelectedRepoId}
-                      onSelectThread={automation.setSelectedThreadId}
-                      onSendManagerQueueItemToParallelThread={sendManagerQueueItemToParallelThread}
-                      onSetProjectEditorVisible={setShowProjectEditor}
-                      onSetProjectVisible={setShowProject}
-                      onSteerManagerQueueItem={steerManagerQueueItem}
-                      onStopRecording={() => {
-                        void stopRecordingAndTranscribe()
-                      }}
-                      onStopThread={(threadId) => {
-                        void automation.handleStop(threadId)
-                      }}
-                      onSubmit={handleSubmit}
-                      onUpdateManagerQueueItem={updateManagerQueueItem}
-                      onVoiceInput={handleVoiceInput}
-                      renderInlineSecretPrompt={renderInlineSecretPrompt}
-                      inlinePrompts={inlinePrompts}
-                    />
-                  ) : (
-                    <>
+                  (<>
                       <DeveloperChatWorkspace
                         onLatestContentViewed={viewedActivityAt ? handleLatestContentViewed : undefined}
                         showDebugPanel={showDebugPanel}
@@ -5541,7 +5539,7 @@ function App() {
                         )
                       })}
                     </>
-                  ))}
+                  )}
               </div>
             )}
 

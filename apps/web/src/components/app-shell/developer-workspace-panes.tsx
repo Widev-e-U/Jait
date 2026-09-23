@@ -21,7 +21,6 @@ interface DeveloperWorkspacePanesProps {
   chatCollapsed: boolean
   chatProvider: ProviderId
   cliModel: string | null
-  currentView: string
   devPreviewTarget: string | null
   fsWatcherPayload: unknown
   fsWatcherVersion: number
@@ -49,8 +48,6 @@ interface DeveloperWorkspacePanesProps {
   terminalShells: unknown[]
   terminalViewRef: RefObject<any>
   token: string | null
-  viewMode: string
-  automationSelectedThread: unknown
   onActiveProjectFileChange: (fileId: string | null) => void
   onApplyDiff: (filePath: string, resultContent: string) => void | Promise<void>
   onArchitectureOpenChange: (open: boolean) => void
@@ -98,7 +95,6 @@ export function DeveloperWorkspacePanes({
   chatCollapsed,
   chatProvider,
   cliModel,
-  currentView,
   devPreviewTarget,
   fsWatcherPayload,
   fsWatcherVersion,
@@ -126,8 +122,6 @@ export function DeveloperWorkspacePanes({
   terminalShells,
   terminalViewRef,
   token,
-  viewMode,
-  automationSelectedThread,
   onActiveProjectFileChange,
   onApplyDiff,
   onArchitectureOpenChange,
@@ -160,11 +154,9 @@ export function DeveloperWorkspacePanes({
   onSidebarWidthChange,
   onLayoutSizeChange,
 }: DeveloperWorkspacePanesProps) {
-  const hasManagerThread = Boolean(automationSelectedThread)
-  const shouldShowDesktopPanes = (viewMode === 'developer' && currentView === 'chat' && !isMobile && (showDesktopProject || showTerminal))
-    || (viewMode === 'manager' && hasManagerThread && showDesktopProject)
-  const shouldShowProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showDesktopProject && Boolean(activeProject)
-  const shouldShowMobileProject = (viewMode === 'developer' || (viewMode === 'manager' && hasManagerThread)) && showMobileProjectFullscreen && Boolean(activeProject)
+  const shouldShowDesktopPanes = !isMobile && (showDesktopProject || showTerminal)
+  const shouldShowProject = showDesktopProject && Boolean(activeProject)
+  const shouldShowMobileProject = showMobileProjectFullscreen && Boolean(activeProject)
 
   const renderProjectPanel = (mobile = false) => activeProject?.opening ? (
     <div className={mobile ? 'flex h-full min-h-0 items-center justify-center' : 'flex min-h-0 flex-1 items-center justify-center'}>
@@ -274,7 +266,7 @@ export function DeveloperWorkspacePanes({
               {renderProjectPanel()}
             </div>
           )}
-          {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
+          {showTerminal && !isMobile && (
             <div className={`flex min-h-0 flex-col bg-background ${terminalFullscreen ? 'absolute inset-0 z-20 border-r' : `relative border-r border-t ${showDesktopProject ? 'shrink-0' : 'flex-1'}`}`} style={terminalFullscreen || !showDesktopProject ? undefined : { height: terminalHeight }}>
               {!terminalFullscreen && (
                 <div
@@ -356,7 +348,7 @@ export function DeveloperWorkspacePanes({
       )}
 
       {shouldShowMobileProject && (
-        <section className={`flex-1 min-h-0 overflow-hidden border-b bg-background ${viewMode === 'manager' ? '' : 'pt-16'}`}>
+        <section className="flex-1 min-h-0 overflow-hidden border-b bg-background pt-16">
           {renderProjectPanel(true)}
         </section>
       )}

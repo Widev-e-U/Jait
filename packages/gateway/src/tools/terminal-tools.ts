@@ -36,11 +36,57 @@ export const MAX_TERMINAL_TOOL_OUTPUT_CHARS = 16_000;
 const TERMINAL_OUTPUT_TRUNCATION_MARKER = "\n…(middle truncated)…\n";
 const SANDBOX_PROJECT_PATH = "/project";
 
-/** Keep both command setup/errors and the most recent output without flooding model context. */
-export function truncateTerminalToolOutput(
+/**
+ * Per-line ceiling for output handed to the model. A single unbounded line is
+ * the cheap way to burn a whole model context: one `grep -nE ... | head -100`
+ * over a minified bundle, a `.map` file, a lockfile or a one-line JSON dump
+ * returns hundreds of thousands of chars on *one* line, and head/tail
+ * truncation then keeps a useless slice of it. Long lines are therefore
+ * elided mid-line before any character budget is applied.
+ */
+export const MAX_TERMINAL_TOOL_LINE_CHARS = 2_000;
+const TERMINAL_LINE_HEAD_CHARS = 700;
+const TERMINAL_LINE_TAIL_CHARS = 200;
+/** Larger ceilings for the chat-card replay: the user asked for the output, the model did not. */
+export const MAX_TERMINAL_UI_ECHO_CHARS = 200_000;
+const MAX_TERMINAL_UI_ECHO_LINE_CHARS = 8_000;
+/** Only bother measuring output that is big enough to be suspicious. */
+const TERMINAL_OUTPUT_STATS_MIN_CHARS = 8_000;
+/** Output this large, or with a line this long, is nearly always generated noise. */
+const TERMINAL_OUTPUT_FLOOD_CHARS = 60_000;
+const TERMINAL_OUTPUT_FLOOD_LINE_CHARS = 5_000;
+
+/**
+ * Collapse oversized single lines, keeping the start and (when the budget
+ * allows) the end so a match's head and trailing context both stay visible.
+ */
+export function collapseLongTerminalLines(
   output: string,
-  maxChars = MAX_TERMINAL_TOOL_OUTPUT_CHARS,
+  maxLineChars = MAX_TERMINAL_TOOL_LINE_CHARS,
+  elisionSuffix = "",
 ): string {
+  if (maxLineChars <= 0) return output;
+  // Cheap bail-out: nothing to do when no line can possibly exceed the limit.
+  if (output.length <= maxLineChars) return output;
+
+  let changed = false;
+  const lines = output.split("\n").map((line) => {
+    if (line.length <= maxLineChars) return line;
+    changed = true;
+    const headChars = Math.min(TERMINAL_LINE_HEAD_CHARS, Math.max(0, maxLineChars - 40));
+    let budget = maxLineChars - headChars;
+    const tailChars = budget > 0
+      ? Math.max(0, Math.min(TERMINAL_LINE_TAIL_CHARS, budget - 1))
+      : 0;
+    budget -= tailChars;
+    const elided = line.length - headChars - tailChars;
+    const marker = `…(line truncated: ${elided} chars elided)…`;
+    return line.slice(0, headChars) + marker + elisionSuffix + line.slice(line.length - tailChars);
+  });
+  return changed ? lines.join("\n") : output;
+}
+
+function truncateMiddleChars(output: string, maxChars: number): string {
   if (output.length <= maxChars) return output;
   if (maxChars <= 0) return "";
   if (maxChars <= TERMINAL_OUTPUT_TRUNCATION_MARKER.length) {
@@ -53,6 +99,98 @@ export function truncateTerminalToolOutput(
   return output.slice(0, headChars)
     + TERMINAL_OUTPUT_TRUNCATION_MARKER
     + output.slice(output.length - tailChars);
+}
+
+/**
+ * Keep both command setup/errors and the most recent output without flooding
+ * model context: long lines are elided first, then the whole text is bounded.
+ */
+export function truncateTerminalToolOutput(
+  output: string,
+  maxChars = MAX_TERMINAL_TOOL_OUTPUT_CHARS,
+): string {
+  return truncateMiddleChars(collapseLongTerminalLines(output), maxChars);
+}
+
+/**
+ * Same bounding for the ANSI copy replayed into the chat card. The elision
+ * suffix resets SGR state so a slice through a colour sequence cannot bleed
+ * into the rest of the card.
+ */
+export function truncateTerminalAnsiEcho(
+  output: string,
+  maxChars = MAX_TERMINAL_UI_ECHO_CHARS,
+): string {
+  return truncateMiddleChars(
+    collapseLongTerminalLines(output, MAX_TERMINAL_UI_ECHO_LINE_CHARS, "\x1b[0m"),
+    maxChars,
+  );
+}
+
+/**
+ * The PTY capture handed to the model normally starts with the shell's own echo
+ * of the command (prompt + auto-injected env preamble) and then repeats the
+ * command output verbatim — so a flooding command costs its output twice. When
+ * the capture provably ends with exactly the same body that `output` already
+ * carries, only the echo prefix is kept. Screens that genuinely differ (pagers,
+ * interactive prompts) are left untouched.
+ */
+export function dedupeTerminalEchoForModel(terminalOutput: string, output: string): string {
+  const body = output.trimEnd();
+  if (!body) return terminalOutput;
+
+  const capture = terminalOutput.trimEnd();
+  if (capture === body) return "";
+  if (!capture.endsWith(body)) return terminalOutput;
+  return capture.slice(0, capture.length - body.length);
+}
+
+export interface TerminalOutputStats {
+  totalChars: number;
+  lineCount: number;
+  longestLineChars: number;
+}
+
+export function measureTerminalOutput(output: string): TerminalOutputStats {
+  let lineCount = 1;
+  let longestLineChars = 0;
+  let currentLineChars = 0;
+  for (let index = 0; index < output.length; index += 1) {
+    if (output.charCodeAt(index) === 10) {
+      if (currentLineChars > longestLineChars) longestLineChars = currentLineChars;
+      lineCount += 1;
+      currentLineChars = 0;
+    } else {
+      currentLineChars += 1;
+    }
+  }
+  if (currentLineChars > longestLineChars) longestLineChars = currentLineChars;
+  return { totalChars: output.length, lineCount, longestLineChars };
+}
+
+/** `null` for output small enough that measuring it is pointless. */
+export function terminalOutputStatsFor(output: string): TerminalOutputStats | null {
+  return output.length >= TERMINAL_OUTPUT_STATS_MIN_CHARS ? measureTerminalOutput(output) : null;
+}
+
+/**
+ * Floods are almost never information — they are minified bundles, source maps,
+ * lockfiles or single-line data. Detecting one lets the tool tell the model what
+ * it just did and how to narrow the command next time.
+ */
+export function describeTerminalOutputFlood(stats: TerminalOutputStats): string | null {
+  const tooLong = stats.longestLineChars > TERMINAL_OUTPUT_FLOOD_LINE_CHARS;
+  if (!tooLong && stats.totalChars <= TERMINAL_OUTPUT_FLOOD_CHARS) return null;
+
+  const parts = [
+    `${stats.totalChars.toLocaleString("en-US")} chars`,
+    `${stats.lineCount.toLocaleString("en-US")} lines`,
+  ];
+  if (tooLong) parts.push(`longest line ${stats.longestLineChars.toLocaleString("en-US")} chars`);
+  const hint = tooLong
+    ? " — that is a generated/minified or single-line file; narrow the command (paths, --include/--exclude, per-file head) or use the search/read tools instead of dumping it"
+    : " — scope the command with paths, --include/--exclude, or head/tail";
+  return `output flood (${parts.join(", ")})${hint}`;
 }
 const INTERACTIVE_PROMPT_PATTERNS = [
   /\[sudo\]\s+password\s+for\s+[^:]+:/i,
@@ -1338,11 +1476,25 @@ export function createTerminalRunTool(
             ).trimEnd()
           : result.output;
 
+        // One runaway `grep`/`cat` can dump megabytes of generated/minified text
+        // into model context. Every copy handed out is bounded per line and
+        // overall, and a flood note explains the elision instead of leaving the
+        // model to guess why output looks clipped.
+        const outputStats = terminalOutputStatsFor(result.output);
+        const floodNote = outputStats ? describeTerminalOutputFlood(outputStats) : null;
+        const modelOutput = truncateTerminalToolOutput(result.output);
+        const modelTerminalOutput = truncateTerminalToolOutput(
+          dedupeTerminalEchoForModel(terminalOutput, result.output),
+        );
+        const uiTerminalOutputAnsi = truncateTerminalAnsiEcho(terminalOutputAnsi);
+
         if (movedToBackground) {
           return {
             ok: true,
-            message: `Wait timed out after ${timeout}ms. The command is still running in terminal ${terminalId} and has not been interrupted. Continue independent work, or end your turn to await automatic completion. Do not poll or rerun the command.`,
-            data: { output: result.output, terminalOutput, terminalOutputAnsi, exitCode: null, timedOut: true,
+            message: `Wait timed out after ${timeout}ms. The command is still running in terminal ${terminalId} and has not been interrupted. Continue independent work, or end your turn to await automatic completion. Do not poll or rerun the command.`
+              + (floodNote ? ` [${floodNote}]` : ""),
+            data: { output: modelOutput, terminalOutput: modelTerminalOutput, terminalOutputAnsi: uiTerminalOutputAnsi,
+              exitCode: null, timedOut: true, outputStats: outputStats ?? undefined,
               terminalId, outputOffset, isBackground: true, watched: true, timeoutMs: timeout },
           };
         }
@@ -1373,6 +1525,7 @@ export function createTerminalRunTool(
         }
         if (isNew) message += ` [new terminal ${terminalId}]`;
         if (warning) message += ` [${warning}]`;
+        if (floodNote) message += ` [${floodNote}]`;
 
         if (needsInteraction) {
           ws?.sendUICommand(
@@ -1396,9 +1549,10 @@ export function createTerminalRunTool(
           ok,
           message,
           data: {
-            output: result.output,
-            terminalOutput,
-            terminalOutputAnsi,
+            output: modelOutput,
+            terminalOutput: modelTerminalOutput,
+            terminalOutputAnsi: uiTerminalOutputAnsi,
+            outputStats: outputStats ?? undefined,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             terminalId,

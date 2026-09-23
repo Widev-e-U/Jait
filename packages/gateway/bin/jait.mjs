@@ -1071,6 +1071,8 @@ const envCandidates = [
   flags.envPath,
   resolve(process.cwd(), ".env"),
   join(homedir(), ".jait", ".env"),
+  // Match config.ts when running from the monorepo package directory.
+  existsSync(resolve(__dirname, "../src")) ? resolve(__dirname, "../../../.env") : null,
 ].filter(Boolean);
 
 let envLoaded = false;
@@ -1085,6 +1087,10 @@ for (const candidate of envCandidates) {
 
 if (flags.port) process.env.PORT = flags.port;
 if (flags.host) process.env.HOST = flags.host;
+// The installed CLI is a production entrypoint; an explicit .env or shell
+// NODE_ENV still takes precedence for local development.
+process.env.NODE_ENV ??= "production";
+await import("./compile-cache.mjs");
 
 // Mark that env was loaded externally so config.ts doesn't try again
 process.env.__JAIT_CLI = "1";

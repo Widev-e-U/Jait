@@ -846,6 +846,7 @@ interface QueuedChatMessage {
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
     | { type: "project"; path: string; name: string }
     | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+    | { type: "chat"; sessionId: string; name: string }
     | { type: "skill"; id: string; name: string }
     | { type: "image"; name: string; mimeType: string; data: string }
     | { type: "attachment"; name: string; mimeType: string; data: string }
@@ -862,6 +863,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
   | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
   | { type: "project"; path: string; name: string }
   | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+  | { type: "chat"; sessionId: string; name: string }
   | { type: "skill"; id: string; name: string }
   | { type: "image"; name: string; mimeType: string; data: string }
   | { type: "attachment"; name: string; mimeType: string; data: string }
@@ -872,6 +874,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
     | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
     | { type: "project"; path: string; name: string }
     | { type: "terminal"; terminalId: string; name: string; projectRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
+    | { type: "chat"; sessionId: string; name: string }
     | { type: "skill"; id: string; name: string }
     | { type: "image"; name: string; mimeType: string; data: string }
     | { type: "attachment"; name: string; mimeType: string; data: string }
@@ -908,6 +911,14 @@ function parseUserDisplaySegments(raw: unknown): Array<
         ...(typeof record.projectRoot === "string" ? { projectRoot: record.projectRoot } : {}),
         ...(parseDisplayLineRange(record) ? { lineRange: parseDisplayLineRange(record)! } : {}),
         ...(typeof record.selectedText === "string" ? { selectedText: record.selectedText } : {}),
+      });
+      continue;
+    }
+    if (record.type === "chat" && typeof record.sessionId === "string" && record.sessionId.trim()) {
+      segments.push({
+        type: "chat",
+        sessionId: record.sessionId,
+        name: typeof record.name === "string" && record.name.trim() ? record.name : record.sessionId,
       });
       continue;
     }
@@ -4899,8 +4910,14 @@ export function registerChatRoutes(
         const streamedToolCalls = partialToolCalls.length > 0
           ? partialToolCalls
           : (acc?.toolCalls ?? []);
-        const streamedSegmentsJson = resultSegmentsJson
-          ?? (acc?.segments.length ? JSON.stringify(acc.segments) : undefined);
+        const errorMessage = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
+        const streamedSegments = resultSegmentsJson
+          ? JSON.parse(resultSegmentsJson) as Array<{ type: string; content?: string }>
+          : [...(acc?.segments ?? [])];
+        if (!streamedSegments.some((segment) => segment.type === "error" && segment.content === errorMessage)) {
+          streamedSegments.push({ type: "error", content: errorMessage });
+        }
+        const streamedSegmentsJson = JSON.stringify(streamedSegments);
         const streamedThinking = acc?.thinking || undefined;
         if (
           streamedContent ||
@@ -4912,18 +4929,18 @@ export function registerChatRoutes(
             ? JSON.stringify(streamedToolCalls)
             : undefined;
           persistAssistantMessage(
-            streamedContent,
+            streamedContent || errorMessage,
             tcJson,
             streamedSegmentsJson,
             streamedThinking,
           );
           history.push({
             role: "assistant",
-            content: streamedContent,
+            content: streamedContent || errorMessage,
             ...(streamedToolCalls.length > 0
               ? { uiToolCalls: streamedToolCalls.map((call) => ({ ...call })) }
               : {}),
-            ...(acc?.segments.length ? { segments: [...acc.segments] } : {}),
+            segments: streamedSegments,
             ...(streamedThinking ? { thinking: streamedThinking } : {}),
           });
         } else {
@@ -5080,8 +5097,12 @@ export function registerChatRoutes(
       hit_max_rounds: hitMaxRounds,
       has_timed_out_tools: hasTimedOutTools,
     };
-    emitTurnDone(sessionId, doneEvent);
-    safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);
+    // An error event already ended the client turn. A following done event
+    // makes the chat hook replace the visible error with an empty completion.
+    if (!turnErrorMessage && !loopErrorMessage) {
+      emitTurnDone(sessionId, doneEvent);
+      safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);
+    }
 
     try { reply.raw.end(); } catch { /* already closed */ }
 

@@ -24,7 +24,7 @@ describe('haveRenderInputsChanged', () => {
 
   it.each([
     'developer-chat-workspace.tsx',
-    'manager-workspace.tsx',
+    '../manager/threads-page.tsx',
   ])('uses identity comparison in %s instead of serializing shared props', (fileName) => {
     const source = readFileSync(new URL(`../components/app-shell/${fileName}`, import.meta.url), 'utf8')
 

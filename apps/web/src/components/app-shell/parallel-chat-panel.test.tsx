@@ -8,7 +8,13 @@ const fixture = vi.hoisted(() => ({
   inputs: [] as ChatMessage[],
 }))
 vi.mock('@/hooks/useChat', () => ({
-  useChat: () => ({ messages: fixture.messages, isLoading: true }),
+  useChat: () => ({
+    messages: fixture.messages,
+    isLoading: true,
+    messageQueue: [],
+    enqueueMessage: () => {},
+    dequeueMessage: () => {},
+  }),
 }))
 vi.mock('@/components/chat', () => ({
   Conversation: (props: { messageEstimateInputs: ChatMessage[] }) => {

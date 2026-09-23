@@ -148,15 +148,6 @@ async function listenWithRetryOnConflict(
 }
 
 async function main() {
-  const graphifyReady = ensureGraphifyRuntime({
-    onProgress: (message) => console.log(`[graphify] ${message}`),
-  });
-  // Desktop first launch must work before optional Python tooling is installed.
-  if (process.env["JAIT_DESKTOP_HOST"] === "1") {
-    void graphifyReady.catch((error) => console.warn("[graphify] Setup unavailable:", error.message));
-  } else {
-    await graphifyReady;
-  }
   const config = loadConfig();
 
   if (config.nodeOnly) {
@@ -302,13 +293,6 @@ async function main() {
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
   const previewService = new PreviewService(surfaceRegistry);
   const browserSandboxManager = new SandboxManager();
-  const startupBrowserCleanup = await browserSandboxManager.cleanupBrowserSandboxes().catch((err) => {
-    console.warn("[browser] Failed to clean stale browser sandboxes on startup:", err instanceof Error ? err.message : err);
-    return [];
-  });
-  if (startupBrowserCleanup.length > 0) {
-    console.log(`[browser] Removed ${startupBrowserCleanup.length} stale browser sandbox container(s) from previous runs.`);
-  }
   previewService.onSessionChanged((session) => {
     ws.broadcastAll({
       type: "preview.session" as any,
@@ -1419,8 +1403,22 @@ async function main() {
 
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
   console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
+  // Python environment creation and package downloads can take many seconds on
+  // first run. Keep HTTP/WS available while the optional code graph runtime sets up.
+  void ensureGraphifyRuntime({
+    onProgress: (message) => console.log(`[graphify] ${message}`),
+  }).catch((error) => console.warn("[graphify] Setup unavailable:", error instanceof Error ? error.message : error));
   databaseRetention.start();
   diskJanitor.start();
+
+  // Docker discovery and cleanup can wait until the gateway is responsive.
+  void browserSandboxManager.cleanupBrowserSandboxes().then((removed) => {
+    if (removed.length > 0) {
+      console.log(`[browser] Removed ${removed.length} stale browser sandbox container(s) from previous runs.`);
+    }
+  }).catch((err) => {
+    console.warn("[browser] Failed to clean stale browser sandboxes on startup:", err instanceof Error ? err.message : err);
+  });
 
   // Auto-start channels (e.g. WhatsApp) that were previously enabled.
   void channelManager.startEnabled().catch((err) => console.error("Channel auto-start failed:", err));

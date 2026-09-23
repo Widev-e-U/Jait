@@ -8,11 +8,17 @@ import {
   buildRemoteTerminalInput,
   buildTerminalExitMarkerCommand,
   buildSingleLineTerminalInput,
+  collapseLongTerminalLines,
+  dedupeTerminalEchoForModel,
+  describeTerminalOutputFlood,
   detectPagerPrompt,
   getTerminalCommandDoneEndOffset,
   hasStrongPagerPrompt,
   isCmdShell,
+  measureTerminalOutput,
   rewriteProjectPathForSandboxCommand,
+  terminalOutputStatsFor,
+  truncateTerminalAnsiEcho,
   truncateTerminalToolOutput,
 } from "./terminal-tools.js";
 
@@ -29,6 +35,105 @@ describe("truncateTerminalToolOutput", () => {
     expect(truncated).toMatch(/^START-/);
     expect(truncated).toMatch(/-END$/);
     expect(truncated).toContain("…(middle truncated)…");
+  });
+});
+
+describe("dedupeTerminalEchoForModel", () => {
+  it("keeps only the command echo when the capture repeats the output", () => {
+    const capture = "$ grep -n foo src/a.ts\n3:foo\n7:foo\n";
+    expect(dedupeTerminalEchoForModel(capture, "3:foo\n7:foo\n")).toBe("$ grep -n foo src/a.ts\n");
+  });
+
+  it("drops the whole capture when it is exactly the output", () => {
+    expect(dedupeTerminalEchoForModel("same body\n", "same body\n")).toBe("");
+  });
+
+  it("leaves a genuinely different screen (pager/REPL) untouched", () => {
+    const screen = "$ git log\ncommit abc\n--More--";
+    expect(dedupeTerminalEchoForModel(screen, "")).toBe(screen);
+    expect(dedupeTerminalEchoForModel(screen, "commit abc\n")).toBe(screen);
+  });
+});
+
+describe("collapseLongTerminalLines", () => {
+  it("leaves ordinary multi-line output untouched", () => {
+    expect(collapseLongTerminalLines("a\nb\nc")).toBe("a\nb\nc");
+  });
+
+  it("elides the middle of a single oversized line but keeps both ends", () => {
+    const line = `head:${"A".repeat(200_000)}:tail`;
+    const collapsed = collapseLongTerminalLines(`ok\n${line}`, 1_000);
+
+    expect(collapsed.startsWith("ok\nhead:")).toBe(true);
+    expect(collapsed.trimEnd().endsWith(":tail")).toBe(true);
+    expect(collapsed).toContain("chars elided");
+    expect(collapsed.length).toBeLessThan(1_100);
+  });
+
+  it("still bounds the line when the budget is tighter than head plus tail", () => {
+    const collapsed = collapseLongTerminalLines(`ok\n${"B".repeat(200_000)}`, 500);
+
+    expect(collapsed.startsWith("ok\n")).toBe(true);
+    expect(collapsed.length).toBeLessThan(600);
+  });
+
+  it("does nothing when the whole output already fits", () => {
+    expect(collapseLongTerminalLines("tiny", 2_000)).toBe("tiny");
+  });
+});
+
+describe("truncateTerminalAnsiEcho", () => {
+  it("collapses a source-map-sized line and resets SGR state after the cut", () => {
+    const ansi = `\x1b[32m${"CAAC,".repeat(400_000)}`;
+    const bounded = truncateTerminalAnsiEcho(ansi);
+
+    expect(bounded.startsWith("\x1b[32m")).toBe(true);
+    expect(bounded).toContain("\x1b[0m");
+    expect(bounded).toContain("chars elided");
+    expect(bounded.length).toBeLessThan(2_000);
+  });
+
+  it("keeps the larger UI budget for large multi-line output", () => {
+    const output = `${"d".repeat(5_000)}\n`.repeat(80);
+    const bounded = truncateTerminalAnsiEcho(output);
+
+    expect(bounded.length).toBe(200_000);
+    expect(bounded).toContain("…(middle truncated)…");
+  });
+
+  it("passes small output through unchanged", () => {
+    expect(truncateTerminalAnsiEcho("short \x1b[31mred\x1b[0m")).toBe("short \x1b[31mred\x1b[0m");
+  });
+});
+
+describe("terminal output flood detection", () => {
+  it("ignores output too small to be suspicious", () => {
+    expect(terminalOutputStatsFor("a".repeat(1_000))).toBeNull();
+    expect(describeTerminalOutputFlood(measureTerminalOutput("normal\noutput\n"))).toBeNull();
+  });
+
+  it("measures output once it crosses the measurement threshold", () => {
+    expect(terminalOutputStatsFor("a".repeat(10_000))).toEqual({
+      totalChars: 10_000,
+      lineCount: 1,
+      longestLineChars: 10_000,
+    });
+  });
+
+  it("flags one enormous line as generated/minified output", () => {
+    const note = describeTerminalOutputFlood(measureTerminalOutput("x".repeat(120_000)));
+
+    expect(note).toContain("output flood");
+    expect(note).toContain("longest line 120,000 chars");
+    expect(note).toContain("generated/minified");
+    expect(note).toContain("--include/--exclude");
+  });
+
+  it("flags many ordinary lines as a flood too", () => {
+    const note = describeTerminalOutputFlood(measureTerminalOutput("line\n".repeat(20_000)));
+
+    expect(note).toContain("output flood");
+    expect(note).toContain("scope the command");
   });
 });
 

@@ -95,7 +95,7 @@ export function ChatToolbar({
   onToggleSidebar,
   onToggleTerminal,
 }: ChatToolbarProps) {
-  if (currentView !== 'chat' || (!isMobile && viewMode !== 'manager')) return null
+  if ((currentView !== 'chat' && currentView !== 'threads') || (!isMobile && viewMode !== 'manager')) return null
 
   return (
     <div

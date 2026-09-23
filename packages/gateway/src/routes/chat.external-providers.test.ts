@@ -386,6 +386,7 @@ describe("chat external provider runtime mode selection", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("Your workspace is out of credits");
+    expect(response.body).not.toContain('"type":"done"');
     expect(response.body).not.toContain('"message":"Internal error"');
     expect(provider.startSession).toHaveBeenCalledTimes(1);
     expect(provider.sendTurn).toHaveBeenCalledTimes(1);

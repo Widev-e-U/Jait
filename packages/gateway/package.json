@@ -22,7 +22,7 @@
     "copy-assets": "node scripts/copy-shell-integration.mjs",
     "embed-shell-integration": "node scripts/embed-shell-integration.mjs",
     "dev": "bun run --filter @jait/web build && bun --watch src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node ./bin/jait.mjs",
     "postinstall": "node ./bin/install-runtime.mjs",
     "typecheck": "tsc --noEmit"
   },

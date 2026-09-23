@@ -363,7 +363,8 @@ pub fn open_project_window(
         .map_err(|e| format!("open-project-window: invalid url {url:?}: {e}"))?;
     let n = PROJECT_WINDOW_SEQ.fetch_add(1, Ordering::Relaxed);
     let label = format!("project-{n}");
-    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed));
+    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed))
+        .disable_drag_drop_handler();
     if let Some(t) = title {
         builder = builder.title(t);
     }
@@ -600,10 +601,8 @@ pub fn run() {
             if opts.start_hidden {
                 builder = builder.visible(false);
             }
-            // Legacy shell disables HTML file drops on webviews (drag-drop is
-            // handled by the app itself); wry exposes that knob on Windows only.
-            #[cfg(windows)]
-            let builder = builder.drag_and_drop(false);
+            // The web app handles project and chat drops with HTML drag events.
+            let builder = builder.disable_drag_drop_handler();
             builder
                 // init scripts run in order before any page script — same
                 // guarantee as the legacy desktop shell's preload on every navigation.

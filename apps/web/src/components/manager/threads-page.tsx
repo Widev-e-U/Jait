@@ -19,7 +19,7 @@ import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { ResponseStyle } from '@jait/shared'
 
-interface ManagerWorkspaceProps {
+interface ThreadsPageProps {
   automation: any
   automationMessages: any[]
   availableFiles: any[]
@@ -80,7 +80,7 @@ interface ManagerWorkspaceProps {
   inlinePrompts?: ReactNode
 }
 
-export function ManagerWorkspace({
+export function ThreadsPage({
   automation,
   automationMessages,
   availableFiles,
@@ -139,7 +139,7 @@ export function ManagerWorkspace({
   onVoiceInput,
   renderInlineSecretPrompt,
   inlinePrompts,
-}: ManagerWorkspaceProps) {
+}: ThreadsPageProps) {
   // ── Memoized message elements ─────────────────────────────────────────
   // Same rationale as DeveloperChatWorkspace: streaming thread activity
   // rebuilds the messages array per token; caching per-message elements by
@@ -231,7 +231,7 @@ export function ManagerWorkspace({
   }
 
   return (
-    <div className={`flex-1 min-w-0 flex flex-col min-h-0 ${isMobile && !automation.selectedThread ? 'pt-12' : ''}`}>
+    <div className="flex-1 min-w-0 flex flex-col min-h-0">
       {automation.selectedThread ? (
         <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : ''}`}>
           <div className="flex min-w-0 flex-1 flex-col min-h-0">

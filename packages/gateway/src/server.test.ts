@@ -2,10 +2,10 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { signAuthToken } from "./security/http-auth.js";
-import { resolve, dirname, join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer } from "node:http";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, unlinkSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +25,44 @@ async function createAuthedServer() {
   const headers = { authorization: `Bearer ${token}` };
   return { app, headers };
 }
+
+describe("production asset cache", () => {
+  it("serves a cached small fingerprinted asset without another disk read", async () => {
+    const webDir = mkdtempSync(join("/tmp", "jait-web-cache-"));
+    const assetDir = join(webDir, "assets");
+    const assetName = "app-B1234567.js";
+    const assetPath = join(assetDir, assetName);
+    mkdirSync(assetDir);
+    writeFileSync(join(webDir, "index.html"), "<!doctype html><title>test</title>");
+    writeFileSync(assetPath, "export const cached = true;");
+    const previous = process.env["JAIT_WEB_DIR"];
+    process.env["JAIT_WEB_DIR"] = webDir;
+    let app: Awaited<ReturnType<typeof createServer>> | undefined;
+    try {
+      app = await createServer({ ...testConfig, nodeEnv: "production" });
+      const first = await app.inject({ method: "GET", url: `/assets/${assetName}` });
+      expect(first.statusCode).toBe(200);
+      expect(first.body).toBe("export const cached = true;");
+      expect(first.headers["cache-control"]).toContain("immutable");
+      const range = await app.inject({
+        method: "GET",
+        url: `/assets/${assetName}`,
+        headers: { range: "bytes=0-5" },
+      });
+      expect(range.statusCode).toBe(206);
+      expect(range.body).toBe("export");
+      unlinkSync(assetPath);
+      const second = await app.inject({ method: "GET", url: `/assets/${assetName}` });
+      expect(second.statusCode).toBe(200);
+      expect(second.body).toBe(first.body);
+    } finally {
+      await app?.close();
+      if (previous === undefined) delete process.env["JAIT_WEB_DIR"];
+      else process.env["JAIT_WEB_DIR"] = previous;
+      rmSync(webDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("@jait/gateway health", () => {
   it("GET /health returns healthy status", async () => {
