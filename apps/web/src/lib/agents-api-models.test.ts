@@ -70,3 +70,34 @@ describe('AgentsApi.refreshProviderModels', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('AgentsApi.updateProvider', () => {
+  it('posts the provider update request and returns the installed version', async () => {
+    const result = {
+      ok: true,
+      message: 'Updated Codex to 0.157.0',
+      currentVersion: '0.157.0',
+      latestVersion: '0.157.0',
+      updateAvailable: false,
+      checkedAt: '2026-09-23T12:00:00.000Z',
+    }
+    const fetchMock = vi.fn(async () => Response.json(result))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(new AgentsApi().updateProvider('codex-work')).resolves.toEqual(result)
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/providers/codex-work/update'),
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('surfaces the provider update error returned by the gateway', async () => {
+    const fetchMock = vi.fn(async () => Response.json(
+      { error: 'npm install failed' },
+      { status: 500 },
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(new AgentsApi().updateProvider('codex-work')).rejects.toThrow('npm install failed')
+  })
+})

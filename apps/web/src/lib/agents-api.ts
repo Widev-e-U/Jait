@@ -27,6 +27,7 @@ import type {
   ProviderLoginResult,
   ProviderLogoutResult,
   ProviderModelInfo,
+  ProviderUpdateResult,
   RemoteProviderInfo,
   ReminderRecord,
   ReminderSnapshot,
@@ -68,6 +69,7 @@ export type {
   ProviderLoginResult,
   ProviderLogoutResult,
   ProviderModelInfo,
+  ProviderUpdateResult,
   RemoteProviderInfo,
   ReminderRecord,
   ReminderSnapshot,
@@ -279,6 +281,24 @@ export class AgentsApi {
       throw new Error(message)
     }
     return data as ProviderLoginResult
+  }
+
+  async updateProvider(providerId: ProviderId): Promise<ProviderUpdateResult> {
+    const res = await fetch(`${API_URL}/api/providers/${providerId}/update`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    const data = await res.json().catch(() => null) as ProviderUpdateResult | { error?: string } | null
+    if (!res.ok) {
+      const message = data && 'message' in data && typeof data.message === 'string'
+        ? data.message
+        : data && 'error' in data && typeof data.error === 'string'
+          ? data.error
+          : `Failed to update provider: ${res.statusText}`
+      throw new Error(message)
+    }
+    return data as ProviderUpdateResult
   }
 
   async logoutProvider(providerId: ProviderId): Promise<ProviderLogoutResult> {

@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
-import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain } from 'lucide-react'
+import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import OpenAI from '@lobehub/icons/es/OpenAI'
-import Claude from '@lobehub/icons/es/Claude'
-import Cursor from '@lobehub/icons/es/Cursor'
-import Gemini from '@lobehub/icons/es/Gemini'
+import {
+  ClaudeCodeIcon,
+  CodexIcon,
+  CursorIcon,
+  DeepAgentsIcon,
+  GeminiIcon,
+  GithubCopilotIcon,
+  JaitIcon,
+  PiIcon,
+  providerBrandIcon,
+  providerIconUrl,
+} from '@/components/icons/provider-icons'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -27,42 +35,6 @@ import {
   saveProjectReasoningEffortSelection,
 } from '@/lib/project-model-cache'
 import { TooltipHint } from '@/components/ui/tooltip'
-
-const JaitIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
-    <path d="M318 372 L430 486 L318 600" fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715" fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
-const OpenAIIcon = ({ className }: { className?: string }) => <OpenAI size={16} className={className} />
-const ClaudeIcon = ({ className }: { className?: string }) => <Claude size={16} className={className} />
-const CursorIcon = ({ className }: { className?: string }) => <Cursor size={16} className={className} />
-const GeminiIcon = ({ className }: { className?: string }) => <Gemini size={16} className={className} />
-
-// Pi (pi.dev) — official pixel-art "pi" wordmark, sourced from pi.dev/logo.svg
-const PiIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 800 800" fill="none" className={className}>
-    <rect width="800" height="800" rx="150" fill="#09090b" />
-    <path
-      fill="#fff"
-      fillRule="evenodd"
-      d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-    />
-    <path fill="#fff" d="M517.36 400H634.72V634.72H517.36Z" />
-  </svg>
-)
-
-// DeepAgents (multi-agent framework) has no dedicated brand icon — use a
-// stack-of-agents glyph so it is distinct from the generic network fallback.
-const DeepAgentsIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className={className}>
-    <rect x="4" y="3" width="16" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
-    <path d="M8 6h8M8 9h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M5 17h6a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" strokeWidth="2" />
-    <path d="M14 19h5a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" strokeWidth="2" />
-  </svg>
-)
 
 interface ModelDef {
   id: string
@@ -123,9 +95,10 @@ interface ProviderModelSelectorProps {
 
 const PROVIDER_DEFS: ProviderDef[] = [
   { value: 'jait', label: 'Jait', icon: JaitIcon, description: 'Native Jait agent loop. The System Two Model handles reasoning + tools; the System One Model handles bounded decisions' },
-  { value: 'codex', label: 'Codex', icon: OpenAIIcon, description: 'OpenAI Codex CLI — coding agent with MCP tools' },
-  { value: 'claude-code', label: 'Claude Code', icon: ClaudeIcon, description: 'Anthropic Claude Code CLI — coding agent with MCP tools' },
+  { value: 'codex', label: 'Codex', icon: CodexIcon, description: 'OpenAI Codex CLI — coding agent with MCP tools' },
+  { value: 'claude-code', label: 'Claude Code', icon: ClaudeCodeIcon, description: 'Anthropic Claude Code CLI — coding agent with MCP tools' },
   { value: 'cursor', label: 'Cursor', icon: CursorIcon, description: 'Cursor agent via Agent Client Protocol' },
+  { value: 'github-copilot-cli', label: 'GitHub Copilot CLI', icon: GithubCopilotIcon, description: 'GitHub Copilot CLI agent via Agent Client Protocol' },
   { value: 'pi', label: 'Pi', icon: PiIcon, description: 'Pi coding agent via Agent Client Protocol' },
   { value: 'pi-gemini', label: 'Pi Gemini', icon: GeminiIcon, description: 'Gemini-backed Pi ACP provider' },
   { value: 'deepagents', label: 'DeepAgents', icon: DeepAgentsIcon, description: 'DeepAgents multi-agent framework via Agent Client Protocol' },
@@ -134,7 +107,11 @@ const PROVIDER_DEFS: ProviderDef[] = [
 export const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
 
 export function providerIconFor(providerType: string | undefined, id: string): ComponentType<{ className?: string }> {
-  return PROVIDER_DEF_BY_ID.get(providerType ?? id)?.icon ?? Network
+  const key = providerType ?? id
+  // Prefer the curated provider definition, then fall back to the shared brand
+  // library so dynamic ACP agents (e.g. `github-copilot-cli`) still resolve to
+  // their real logo instead of the generic network glyph.
+  return PROVIDER_DEF_BY_ID.get(key)?.icon ?? providerBrandIcon(key) ?? providerBrandIcon(id) ?? Network
 }
 
 export function providerLabelFor(providerType: string | undefined, id: string): string {
@@ -424,15 +401,17 @@ export function ProviderModelSelector({
     value: entry.id,
     label: entry.name || entry.id,
     icon: providerIconFor(entry.providerType, entry.id),
+    iconUrl: providerIconUrl(entry.icon),
     description: entry.description,
     isAvailable: entry.isAvailable,
     reason: entry.reason,
     nodeId: entry.nodeId,
     nodeLabel: entry.nodeName,
     auth: entry.auth,
+    update: entry.update,
   })), [scopedEntries])
 
-  const runProviderAction = async (entry: typeof providerEntries[number], action: 'refresh' | 'logout') => {
+  const runProviderAction = async (entry: typeof providerEntries[number], action: 'refresh' | 'logout' | 'update') => {
     if (providerActionRef.current || authBusyProvider) return
     providerActionRef.current = true
     setProviderActionBusy(entry.value)
@@ -441,6 +420,11 @@ export function ProviderModelSelector({
         await agentsApi.refreshProviderModels(entry.value, entry.nodeId)
         setModelReloadVersion((version) => version + 1)
         toast.success(`${entry.label} models refreshed.`)
+      } else if (action === 'update') {
+        const result = await agentsApi.updateProvider(entry.value)
+        await refreshProviders({ fresh: true, force: true })
+        setModelReloadVersion((version) => version + 1)
+        toast.success(result.message || `${entry.label} updated.`)
       } else {
         const result = await agentsApi.logoutProvider(entry.value)
         agentsApi.resetProviderModels()
@@ -449,7 +433,8 @@ export function ProviderModelSelector({
         toast.success(result.message || `${entry.label} logged out.`)
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : `Failed to ${action === 'refresh' ? 'refresh models' : 'log out'} for ${entry.label}.`)
+      const verb = action === 'refresh' ? 'refresh models' : action === 'update' ? 'update' : 'log out'
+      toast.error(error instanceof Error ? error.message : `Failed to ${verb} for ${entry.label}.`)
     } finally {
       providerActionRef.current = false
       setProviderActionBusy(null)
@@ -750,7 +735,9 @@ export function ProviderModelSelector({
       )}
       aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
     >
-      <CurrentIcon className="h-4 w-4 shrink-0" />
+      {currentProvider.iconUrl
+        ? <img src={currentProvider.iconUrl} alt="" aria-hidden="true" loading="lazy" referrerPolicy="no-referrer" className="h-4 w-4 shrink-0 rounded-sm object-contain" />
+        : <CurrentIcon className="h-4 w-4 shrink-0" />}
       {!compact && (
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="max-w-32 truncate text-foreground/90">{currentProvider.label}</span>
@@ -819,6 +806,8 @@ export function ProviderModelSelector({
             && entry.auth?.authenticated !== true
             && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)
           const loginBusy = authBusyProvider === entry.value
+          const showUpdateAction = Boolean(entry.update?.updateAvailable)
+            && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)
           return (
             <ProviderActionsMenu
               key={entry.value}
@@ -845,7 +834,9 @@ export function ProviderModelSelector({
                     !entry.isAvailable && 'cursor-not-allowed opacity-60',
                   )}
                 >
-                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                  {entry.iconUrl
+                    ? <img src={entry.iconUrl} alt="" aria-hidden="true" loading="lazy" referrerPolicy="no-referrer" className="mt-0.5 h-4 w-4 shrink-0 rounded-sm object-contain" />
+                    : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                       {entry.label}
@@ -861,6 +852,23 @@ export function ProviderModelSelector({
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
                 </TooltipHint>
+                {showUpdateAction && (
+                  <TooltipHint side="left" content={`Update ${entry.label} from ${entry.update?.currentVersion} to ${entry.update?.latestVersion}`}>
+                  <button
+                    type="button"
+                    aria-label={`Update ${entry.label} to ${entry.update?.latestVersion}`}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      void runProviderAction(entry, 'update')
+                    }}
+                    disabled={Boolean(authBusyProvider || providerActionBusy)}
+                    className="mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {providerActionBusy === entry.value ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  </button>
+                  </TooltipHint>
+                )}
                 {showLoginAction && (
                   <TooltipHint side="left" content={`Login to ${entry.label}`}>
                   <button
