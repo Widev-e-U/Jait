@@ -4,6 +4,16 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.870](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.870) — 2026-09-23
+- fix(gateway): contain queued-message drain failures instead of crashing — b0c9b5e3
+- fix(desktop): surface codex turn failures instead of faking success — fe1a9351
+- feat(notifications): summarize finished responses in push notifications — d1cae02c
+- fix(gateway): stop reporting a cancelled turn as completed — b05ee7f3
+- fix(remote): keep project sessions and terminals on the owning node — cf6e0d20
+- fix(gateway): derive provider quota reset windows consistently — 936c77e6
+- feat(web): show provider brand icons and CLI update actions — 536732b1
+- feat(providers): surface CLI update availability and add update action — ae1def37
+
 ## [v0.1.869](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.869) — 2026-09-22
 - fix(web): open composer control tooltips below the trigger — 31ab69f5
 - fix(web): show cached provider limits before the live usage refresh — 016e111b
