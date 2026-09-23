@@ -2890,6 +2890,12 @@ export function registerChatRoutes(
           return;
         }
       }
+    } catch (err) {
+      // The drain runs fire-and-forget (every caller uses `void`), so an error
+      // escaping here becomes an unhandled rejection that can crash the process
+      // or fail the whole test run. A failing drain is best-effort work: log it
+      // and let the next trigger (client sync, turn completion, restart) retry.
+      app.log.warn({ err, sessionId }, "Queued chat message drain failed");
     } finally {
       drainingQueuedSessions.delete(sessionId);
     }
