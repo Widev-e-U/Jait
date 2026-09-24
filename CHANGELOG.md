@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.874](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.874) — 2026-09-24
+- test(e2e): cover jumping to a restarted turn when editing — 38f4a25b
+- fix(web): snap restarted turns into view instead of animating — ceda831a
+- fix(web): align unread sidebar icons and bolden unread titles — 5e80808c
+- fix(web): restore composer input styling and move controls to a plain footer — 180ce625
+- fix(web): make production sourcemaps opt-in via BUILD_SOURCEMAP — 083b9d3b
+
 ## [v0.1.873](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.873) — 2026-09-24
 - feat(web): mode sidebar, session unread accents, dicebear avatars — 60367deb
 - feat(mobile): persist device id in native Android preferences — b5f5f8be
