@@ -4,6 +4,9 @@ export interface PersonaAgentDraft {
   id: string
   name: string
   persona: string
+  avatar: string
+  providerId: 'jait' | 'codex' | 'claude-code'
+  skillIds: string[]
   repositoryIds: string[]
   schedule: PersonaSchedule
   allowedTools: string[]
@@ -15,6 +18,7 @@ export interface PersonaAgentDraft {
 }
 
 export const PERSONA_AGENTS_STORAGE_KEY = 'jait.personaAgentDrafts'
+export const PERSONA_AVATARS = ['🦊', '🦉', '🐼', '🦁', '🐻', '🦋', '🌿', '⭐', '🎨', '🧭'] as const
 
 export function readPersonaAgentDrafts(): PersonaAgentDraft[] {
   if (typeof window === 'undefined') return []
@@ -36,7 +40,12 @@ export function readPersonaAgentDrafts(): PersonaAgentDraft[] {
       && agent.notificationChannels.every((channel: unknown) => typeof channel === 'string')
       && Array.isArray(agent.notificationEvents)
       && agent.notificationEvents.every((event: unknown) => event === 'task_done' || event === 'blocked' || event === 'question')
-    )
+    ).map((agent) => ({
+      ...agent,
+      avatar: typeof agent.avatar === 'string' && PERSONA_AVATARS.includes(agent.avatar as typeof PERSONA_AVATARS[number]) ? agent.avatar : PERSONA_AVATARS[0],
+      providerId: agent.providerId === 'codex' || agent.providerId === 'claude-code' ? agent.providerId : 'jait',
+      skillIds: Array.isArray(agent.skillIds) ? agent.skillIds.filter((id): id is string => typeof id === 'string') : [],
+    }))
   } catch {
     return []
   }
@@ -51,6 +60,9 @@ export function newPersonaAgentDraft(): PersonaAgentDraft {
     id: globalThis.crypto?.randomUUID?.() ?? `agent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: '',
     persona: '',
+    avatar: PERSONA_AVATARS[0],
+    providerId: 'jait',
+    skillIds: [],
     repositoryIds: [],
     schedule: { kind: 'adaptive', rules: '' },
     allowedTools: [],

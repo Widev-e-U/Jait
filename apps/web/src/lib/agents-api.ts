@@ -6,6 +6,7 @@ import type { GitStepResult } from './git-api'
 import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
+import type { PersonaAgentDraft } from '@/lib/persona-agents'
 import type {
   AgentThread,
   AutomationPlan,
@@ -379,6 +380,28 @@ export class AgentsApi {
   }
 
   // ── Threads CRUD ───────────────────────────────────────────────
+
+  async listPersonaAgents(): Promise<PersonaAgentDraft[]> {
+    const res = await fetch(`${API_URL}/api/persona-agents`, { headers: this.getHeaders() })
+    if (!res.ok) throw new Error(`Failed to load agents: ${res.statusText}`)
+    const data = await res.json() as { agents: PersonaAgentDraft[] }
+    return data.agents
+  }
+
+  async savePersonaAgent(agent: PersonaAgentDraft): Promise<PersonaAgentDraft> {
+    const res = await fetch(`${API_URL}/api/persona-agents/${encodeURIComponent(agent.id)}`, {
+      method: 'PUT', headers: this.getHeaders(true), body: JSON.stringify(agent),
+    })
+    if (!res.ok) throw new Error((await res.json().catch(() => ({})) as { error?: string }).error || `Failed to save agent: ${res.statusText}`)
+    return res.json() as Promise<PersonaAgentDraft>
+  }
+
+  async deletePersonaAgent(id: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/persona-agents/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to delete agent: ${res.statusText}`)
+  }
 
   async listThreads(sessionId?: string): Promise<AgentThread[]> {
     const data = await this.listThreadsPage({ sessionId })

@@ -5149,7 +5149,13 @@ function App() {
                       inlinePrompts={inlinePrompts}
                     />
                 ) : (
-                  <AgentsPage repositories={automation.repositories} />
+                  <AgentsPage
+                    repositories={automation.repositories}
+                    availableSkills={availableSkills}
+                    threads={managerThreads}
+                    onOpenThread={(id) => { automation.setSelectedThreadId(id); setCurrentView('threads') }}
+                    onRefreshThreads={() => { void automation.refresh() }}
+                  />
                 )}
               </ManagerMode>
             ) : currentView !== 'chat' ? (

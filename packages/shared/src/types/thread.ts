@@ -237,6 +237,7 @@ export interface ThreadInfo {
   id: string;
   userId: string | null;
   sessionId: string | null;
+  personaAgentId: string | null;
   title: string;
   providerId: ProviderId;
   model: string | null;
@@ -300,6 +301,7 @@ export interface ThreadActivity {
 
 export interface CreateThreadRequest {
   sessionId?: string;
+  personaAgentId?: string;
   title: string;
   providerId: ProviderId;
   model?: string;
@@ -317,6 +319,7 @@ export interface CreateThreadParams extends CreateThreadRequest {
 }
 
 export interface UpdateThreadRequest {
+  personaAgentId?: string | null;
   title?: string;
   model?: string;
   reasoningEffort?: string | null;

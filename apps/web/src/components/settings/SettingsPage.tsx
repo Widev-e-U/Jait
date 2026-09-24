@@ -560,8 +560,43 @@ export function SettingsPage({
     waitingForCompletion?: boolean
   } | null>(null)
   const [providerLoginCode, setProviderLoginCode] = useState('')
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
-  const [search, setSearch] = useState('')
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    try {
+      const saved = window.localStorage.getItem('jait.settings.activeTab')
+      return saved && Object.hasOwn(SETTINGS_TAB_LABELS, saved) ? saved as SettingsTab : 'general'
+    } catch { return 'general' }
+  })
+  const settingsRootRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    try { window.localStorage.setItem('jait.settings.activeTab', activeTab) } catch { /* storage may be disabled */ }
+    let scroller = settingsRootRef.current?.parentElement
+    while (scroller && !['auto', 'scroll'].includes(window.getComputedStyle(scroller).overflowY)) {
+      scroller = scroller.parentElement
+    }
+    const key = `jait.settings.scroll.${activeTab}`
+    let saved = 0
+    try { saved = Math.max(0, Number(window.sessionStorage.getItem(key)) || 0) } catch { /* storage may be disabled */ }
+    let restoring = true
+    const restore = () => { if (scroller) scroller.scrollTop = saved }
+    const frame = window.requestAnimationFrame(restore)
+    const timer = window.setTimeout(() => { restore(); restoring = false }, 250)
+    const onScroll = () => {
+      if (restoring) return
+      try { window.sessionStorage.setItem(key, String(scroller?.scrollTop ?? 0)) } catch { /* storage may be disabled */ }
+    }
+    scroller?.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+      scroller?.removeEventListener('scroll', onScroll)
+    }
+  }, [activeTab])
+  const [search, setSearch] = useState(() => {
+    try { return window.sessionStorage.getItem('jait.settings.search') ?? '' } catch { return '' }
+  })
+  useEffect(() => {
+    try { window.sessionStorage.setItem('jait.settings.search', search) } catch { /* storage may be disabled */ }
+  }, [search])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { importedThemes, activeTheme } = useVsCodeThemeStore()
 
@@ -1571,7 +1606,7 @@ const providerAccountsCard = (
   )
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
+    <div ref={settingsRootRef} className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>

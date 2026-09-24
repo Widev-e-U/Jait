@@ -1498,14 +1498,41 @@ impl HostState {
         let (_provider_id, provider_type) = Self::provider_identity(params)?;
         let package = Self::provider_update_spec(&provider_type)?;
         let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
-        let mut command = Command::new(npm);
-        command.args(["install", "--global", &format!("{package}@latest")]);
+        let resolved = self.resolver.lock().resolve(&provider_type);
+        let native_claude = (provider_type == "claude-code" || provider_type == "claude")
+            && resolved.as_ref().is_some_and(|cli| {
+                let program = PathBuf::from(&cli.program);
+                let path = if program.is_absolute() {
+                    program
+                } else {
+                    std::env::var_os("PATH")
+                        .into_iter()
+                        .flat_map(|paths| std::env::split_paths(&paths).collect::<Vec<_>>())
+                        .map(|dir| dir.join(&cli.program))
+                        .find(|candidate| candidate.exists())
+                        .unwrap_or(program)
+                };
+                let path = path.canonicalize().unwrap_or(path);
+                let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
+                normalized.contains("/.local/share/claude/") || normalized.contains("/.claude/local/")
+            });
+        let mut command = if native_claude {
+            let cli = resolved.as_ref().expect("native Claude CLI was resolved");
+            let mut command = Command::new(&cli.program);
+            command.args(&cli.args).arg("update");
+            command
+        } else {
+            let mut command = Command::new(npm);
+            command.args(["install", "--global", &format!("{package}@latest")]);
+            command
+        };
         core::StdCommandConsoleHide::hide_console(&mut command);
         let output = command
             .output()
             .map_err(|error| format!("Failed to update {provider_type}: {error}"))?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let detail = if detail.is_empty() { String::from_utf8_lossy(&output.stdout).trim().to_string() } else { detail };
             return Err(if detail.is_empty() {
                 format!("Failed to update {provider_type}")
             } else {
@@ -1519,7 +1546,7 @@ impl HostState {
             .to_string();
         if status["updateAvailable"].as_bool() == Some(true) {
             return Err(format!(
-                "Updated {package}, but {provider_type} still resolves to {current}. Check PATH and the npm global prefix."
+                "The {provider_type} update finished, but the active CLI still resolves to {current}. Check the executable on PATH."
             ));
         }
         status["ok"] = json!(true);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ProviderUpdateService } from "./provider-updates.js";
+import { ProviderUpdateService, isNativeClaudeInstall } from "./provider-updates.js";
 
 describe("ProviderUpdateService", () => {
   it("detects an available Codex update and caches the result", async () => {
@@ -52,5 +52,35 @@ describe("ProviderUpdateService", () => {
     const service = new ProviderUpdateService();
     await expect(service.getStatus("jait")).resolves.toBeNull();
     await expect(service.update("jait")).rejects.toThrow("Updates are not supported");
+  });
+
+  it("uses Claude's native updater when the resolved CLI is a native install", async () => {
+    let updated = false;
+    const run = vi.fn(async (command: string, args: string[]) => {
+      if (args[0] === "update") {
+        expect(command).toBe("claude");
+        updated = true;
+        return { stdout: "updated", stderr: "" };
+      }
+      return { stdout: updated ? "2.1.0" : "2.0.0", stderr: "" };
+    });
+    const service = new ProviderUpdateService({
+      execFile: run,
+      resolveCommandPath: () => "/home/user/.local/share/claude/versions/2.0.0",
+      fetchImpl: vi.fn(async () => new Response(JSON.stringify({ version: "2.1.0" }), { status: 200 })) as typeof fetch,
+    });
+    await expect(service.update("claude-code")).resolves.toMatchObject({ currentVersion: "2.1.0", ok: true });
+    expect(run).not.toHaveBeenCalledWith("npm", expect.anything(), expect.anything());
+  });
+
+  it("uses npm for npm-installed Claude and exposes the actual command error", async () => {
+    const run = vi.fn(async (command: string, args: string[]) => {
+      expect(command).toMatch(/^npm/);
+      expect(args).toEqual(["install", "--global", "@anthropic-ai/claude-code@latest"]);
+      throw Object.assign(new Error("install failed"), { stderr: "EACCES: permission denied" });
+    });
+    const service = new ProviderUpdateService({ execFile: run, resolveCommandPath: () => "/home/user/.npm-global/bin/claude" });
+    await expect(service.update("claude-code")).rejects.toThrow("EACCES: permission denied");
+    expect(isNativeClaudeInstall("/home/user/.npm-global/bin/claude")).toBe(false);
   });
 });

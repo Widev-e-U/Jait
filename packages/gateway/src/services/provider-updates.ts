@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { accessSync, constants, realpathSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 import type { ProviderUpdateInfo, ProviderUpdateResult } from "@jait/shared";
 
@@ -26,9 +28,31 @@ type ExecFileLike = (
 
 export interface ProviderUpdateServiceOptions {
   execFile?: ExecFileLike;
+  resolveCommandPath?: (command: string) => string | null;
   fetchImpl?: typeof fetch;
   intervalMs?: number;
   now?: () => Date;
+}
+
+export function resolveCommandPath(command: string): string | null {
+  const extensions = process.platform === "win32" ? [".exe", ".cmd", ".bat", ""] : [""];
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    if (!directory) continue;
+    for (const extension of extensions) {
+      const path = join(directory, `${command}${extension}`);
+      try {
+        accessSync(path, constants.X_OK);
+        return realpathSync(path);
+      } catch { /* try the next PATH entry */ }
+    }
+  }
+  return null;
+}
+
+export function isNativeClaudeInstall(path: string | null): boolean {
+  if (!path) return false;
+  const normalized = path.replaceAll("\\", "/").toLowerCase();
+  return normalized.includes("/.local/share/claude/") || normalized.includes("/.claude/local/");
 }
 
 function parseVersion(value: string): string | null {
@@ -53,12 +77,14 @@ export class ProviderUpdateService {
   private readonly fetchImpl: typeof fetch;
   private readonly intervalMs: number;
   private readonly now: () => Date;
+  private readonly resolvePath: (command: string) => string | null;
 
   constructor(options: ProviderUpdateServiceOptions = {}) {
     this.run = options.execFile ?? (execFileAsync as ExecFileLike);
     this.fetchImpl = options.fetchImpl ?? fetch;
     this.intervalMs = options.intervalMs ?? CHECK_INTERVAL_MS;
     this.now = options.now ?? (() => new Date());
+    this.resolvePath = options.resolveCommandPath ?? resolveCommandPath;
   }
 
   start(): void {
@@ -95,16 +121,22 @@ export class ProviderUpdateService {
     const spec = UPDATE_SPECS[providerType];
     if (!spec) throw new Error(`Updates are not supported for provider ${providerType}`);
 
+    const nativeClaude = providerType === "claude-code" && isNativeClaudeInstall(this.resolvePath(spec.command));
     const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-    await this.run(npmCommand, ["install", "--global", `${spec.packageName}@latest`], {
-      timeout: UPDATE_TIMEOUT_MS,
-      maxBuffer: 4 * 1024 * 1024,
-    });
+    const command = nativeClaude ? spec.command : npmCommand;
+    const args = nativeClaude ? ["update"] : ["install", "--global", `${spec.packageName}@latest`];
+    try {
+      await this.run(command, args, { timeout: UPDATE_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 });
+    } catch (error) {
+      const detail = error && typeof error === "object" && "stderr" in error && typeof error.stderr === "string"
+        ? error.stderr.trim() : "";
+      throw new Error(detail || (error instanceof Error ? error.message : `Failed to update ${providerType}`));
+    }
     this.statuses.delete(providerType);
     const status = await this.getStatus(providerType, true);
     if (!status) throw new Error(`Unable to verify the ${providerType} update`);
     if (status.updateAvailable) {
-      throw new Error(`Updated ${spec.packageName}, but ${spec.command} still resolves to ${status.currentVersion}. Check your PATH and npm global prefix.`);
+      throw new Error(`The ${providerType} update finished, but ${spec.command} still resolves to ${status.currentVersion}. Check the active executable on PATH.`);
     }
     return { ...status, ok: true, message: `${providerType} updated to ${status.currentVersion}.` };
   }

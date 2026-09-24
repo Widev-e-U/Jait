@@ -8,7 +8,7 @@
 
 import { and, eq, desc, gt } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
-import { agentThreads, agentThreadActivities } from "../db/schema.js";
+import { agentThreads, agentThreadActivities, personaAgents } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { limitUtf8, serializeBoundedJson } from "../lib/bounded-json.js";
 import type { ProviderEvent } from "../providers/contracts.js";
@@ -92,6 +92,34 @@ export class ThreadService {
 
   constructor(private db: JaitDB) {}
 
+  listPersonaAgents(userId: string): Record<string, unknown>[] {
+    return this.db.select().from(personaAgents).where(eq(personaAgents.userId, userId)).all()
+      .map((row) => JSON.parse(row.data) as Record<string, unknown>);
+  }
+
+  getPersonaAgent(id: string, userId: string): Record<string, unknown> | null {
+    const row = this.db.select().from(personaAgents)
+      .where(and(eq(personaAgents.id, id), eq(personaAgents.userId, userId))).get();
+    return row ? JSON.parse(row.data) as Record<string, unknown> : null;
+  }
+
+  savePersonaAgent(userId: string, agent: Record<string, unknown>): Record<string, unknown> {
+    const id = agent.id as string;
+    const existing = this.db.select().from(personaAgents).where(eq(personaAgents.id, id)).get();
+    if (existing && existing.userId !== userId) throw new Error("Agent profile not found");
+    const updatedAt = new Date().toISOString();
+    const data = JSON.stringify({ ...agent, id, updatedAt });
+    this.db.insert(personaAgents).values({ id, userId, data, updatedAt })
+      .onConflictDoUpdate({ target: personaAgents.id, set: { data, updatedAt } }).run();
+    return JSON.parse(data) as Record<string, unknown>;
+  }
+
+  deletePersonaAgent(id: string, userId: string): void {
+    this.db.update(agentThreads).set({ personaAgentId: null })
+      .where(and(eq(agentThreads.personaAgentId, id), eq(agentThreads.userId, userId))).run();
+    this.db.delete(personaAgents).where(and(eq(personaAgents.id, id), eq(personaAgents.userId, userId))).run();
+  }
+
   // ── CRUD ─────────────────────────────────────────────────────────
 
   create(params: CreateThreadParams): ThreadRow {
@@ -103,6 +131,7 @@ export class ThreadService {
         id,
         userId: params.userId ?? null,
         sessionId: params.sessionId ?? null,
+        personaAgentId: params.personaAgentId ?? null,
         title: params.title,
         providerId: params.providerId,
         model: params.model ?? null,
@@ -175,6 +204,7 @@ export class ThreadService {
     const now = new Date().toISOString();
     const updates: Partial<typeof agentThreads.$inferInsert> & { updatedAt: string } = { updatedAt: now };
     if (params.title !== undefined) updates.title = params.title;
+    if (params.personaAgentId !== undefined) updates.personaAgentId = params.personaAgentId;
     if (params.providerId !== undefined) updates.providerId = params.providerId;
     if (params.model !== undefined) updates.model = params.model;
     if (params.reasoningEffort !== undefined) updates.reasoningEffort = params.reasoningEffort;

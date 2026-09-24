@@ -1,4 +1,4 @@
-import { Code, Users } from 'lucide-react'
+import { Code, Workflow } from 'lucide-react'
 import { SegmentedControl, type SegmentedOption } from '@/components/chat/segmented-control'
 
 export type ViewMode = 'developer' | 'manager'
@@ -21,7 +21,7 @@ const MODES: Array<SegmentedOption<ViewMode>> = [
   {
     value: 'manager',
     label: 'Manager',
-    icon: Users,
+    icon: Workflow,
     description: 'Automation — delegate tasks to agent threads on repos',
   },
 ]

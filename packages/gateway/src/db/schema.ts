@@ -480,12 +480,20 @@ export const codeGraphIndexes = sqliteTable(
 );
 
 // ─── Agent Threads ───────────────────────────────────────────────────
+export const personaAgents = sqliteTable("persona_agents", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  data: text("data").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [index("idx_persona_agents_user").on(table.userId)]);
+
 export const agentThreads = sqliteTable(
   "agent_threads",
   {
     id: text("id").primaryKey(), // UUIDv7
     userId: text("user_id"),
     sessionId: text("session_id"), // Links to the chat session
+    personaAgentId: text("persona_agent_id"),
     title: text("title").notNull(),
     providerId: text("provider_id").notNull(), // "jait" | "codex" | "claude-code"
     model: text("model"),

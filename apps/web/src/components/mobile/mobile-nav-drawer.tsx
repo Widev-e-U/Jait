@@ -6,6 +6,8 @@ import {
   GitPullRequest,
   Mail,
   MessageSquare,
+  MessagesSquare,
+  UsersRound,
   Brain,
   Settings,
   Wifi,
@@ -32,6 +34,11 @@ const NAV_ITEMS: readonly NavItem[] = [
   { view: 'network', label: 'Network', icon: Wifi },
 ] as const
 
+const MANAGER_NAV_ITEMS: readonly NavItem[] = [
+  { view: 'threads', label: 'Threads', icon: MessagesSquare },
+  { view: 'agents', label: 'Agents', icon: UsersRound },
+]
+
 interface MobileNavDrawerProps {
   open: boolean
   onClose: () => void
@@ -55,6 +62,7 @@ export function MobileNavDrawer({
   sessionSelector,
   onOpenSettings,
 }: MobileNavDrawerProps) {
+  const managerMode = currentView === 'threads' || currentView === 'agents'
   return (
     <>
       {/* Backdrop */}
@@ -88,7 +96,7 @@ export function MobileNavDrawer({
           {/* Nav items */}
           <nav className="shrink-0 border-b p-1.5">
             <div className="grid grid-cols-3 gap-0.5">
-              {NAV_ITEMS.map(({ view, label, icon: Icon }) => (
+              {(managerMode ? MANAGER_NAV_ITEMS : NAV_ITEMS).map(({ view, label, icon: Icon }) => (
                 <button
                   key={view}
                   onClick={() => { onNavigate(view); onClose() }}
@@ -121,14 +129,14 @@ export function MobileNavDrawer({
           </nav>
 
           {/* Projects / sessions selector */}
-          <div className="flex min-h-0 flex-1 flex-col">
+          {!managerMode && <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex h-9 shrink-0 items-center border-b px-3 text-xs font-medium text-foreground">
               <span>Projects & Chats</span>
             </div>
             <div className="min-h-0 flex-1">
               {sessionSelector}
             </div>
-          </div>
+          </div>}
 
         </div>
       </aside>

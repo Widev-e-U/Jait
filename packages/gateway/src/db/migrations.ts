@@ -1628,4 +1628,20 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 65,
+    name: "persona_agents_and_thread_link",
+    run(db) {
+      db.exec(`CREATE TABLE IF NOT EXISTS persona_agents (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_persona_agents_user ON persona_agents(user_id)`);
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN persona_agent_id TEXT`); } catch { /* exists */ }
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_threads_persona_agent ON agent_threads(persona_agent_id)`);
+    },
+  },
+
 ];

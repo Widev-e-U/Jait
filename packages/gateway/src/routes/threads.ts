@@ -247,6 +247,7 @@ export function registerThreadRoutes(
           id: thread.id,
           userId: thread.userId,
           sessionId: thread.sessionId,
+          personaAgentId: thread.personaAgentId,
           title: thread.title,
           providerId: thread.providerId as ThreadInfo["providerId"],
           model: thread.model,
@@ -749,6 +750,48 @@ export function registerThreadRoutes(
 
   // ── CRUD Routes ──────────────────────────────────────────────────
 
+  app.get("/api/persona-agents", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    return { agents: threadService.listPersonaAgents(authUser.id) };
+  });
+
+  app.put("/api/persona-agents/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = request.body as Record<string, unknown> | null;
+    const stringArray = (value: unknown) => Array.isArray(value) && value.length <= 100
+      && value.every((item) => typeof item === "string" && item.length <= 200);
+    if (!id || id.length > 100 || !body || Array.isArray(body)
+      || typeof body.name !== "string" || body.name.length > 200
+      || typeof body.persona !== "string" || body.persona.length > 10_000
+      || typeof body.avatar !== "string" || body.avatar.length > 40
+      || !["jait", "codex", "claude-code"].includes(String(body.providerId))
+      || !stringArray(body.repositoryIds) || !stringArray(body.skillIds)
+      || !stringArray(body.allowedTools) || !stringArray(body.notificationChannels)
+      || !stringArray(body.notificationEvents)
+      || typeof body.requiresApproval !== "boolean" || typeof body.paused !== "boolean"
+      || !body.schedule || typeof body.schedule !== "object"
+      || JSON.stringify(body).length > 30_000) {
+      return reply.status(400).send({ error: "Invalid agent profile" });
+    }
+    try {
+      return threadService.savePersonaAgent(authUser.id, { ...body, id });
+    } catch {
+      return reply.status(404).send({ error: "Agent profile not found" });
+    }
+  });
+
+  app.delete("/api/persona-agents/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    if (!threadService.getPersonaAgent(id, authUser.id)) return reply.status(404).send({ error: "Agent profile not found" });
+    threadService.deletePersonaAgent(id, authUser.id);
+    return { ok: true };
+  });
+
   /** List threads (optionally filtered by sessionId) */
   app.get("/api/threads", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
@@ -786,6 +829,10 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = request.body as Record<string, unknown>;
+    if (body["personaAgentId"] !== undefined &&
+        (typeof body["personaAgentId"] !== "string" || !threadService.getPersonaAgent(body["personaAgentId"], authUser.id))) {
+      return reply.status(400).send({ error: "Agent profile not found" });
+    }
     const defaults = resolveThreadSelectionDefaults({
       userId: authUser.id,
       sessionId: typeof body["sessionId"] === "string" ? body["sessionId"] : undefined,
@@ -806,6 +853,7 @@ export function registerThreadRoutes(
     const thread = threadService.create({
       userId: authUser.id,
       sessionId: typeof body["sessionId"] === "string" ? body["sessionId"] : undefined,
+      personaAgentId: typeof body["personaAgentId"] === "string" ? body["personaAgentId"] : undefined,
       title: typeof body["title"] === "string" ? body["title"] : "New Thread",
       providerId: resolvedProvider.providerId,
       model: typeof body["model"] === "string" ? body["model"] : defaults.model,
@@ -846,6 +894,10 @@ export function registerThreadRoutes(
     const existing = getOwnedThread(id, authUser.id);
     if (!assertOwnership(reply, existing, authUser.id, "Thread not found")) return;
     const body = request.body as Record<string, unknown>;
+    if (body["personaAgentId"] !== undefined && body["personaAgentId"] !== null
+      && (typeof body["personaAgentId"] !== "string" || !threadService.getPersonaAgent(body["personaAgentId"], authUser.id))) {
+      return reply.status(400).send({ error: "Agent profile not found" });
+    }
     const prState =
       body["prState"] === "creating" || body["prState"] === "open" || body["prState"] === "closed" || body["prState"] === "merged"
         ? body["prState"]
@@ -879,6 +931,7 @@ export function registerThreadRoutes(
     }
     const thread = threadService.update(id, {
       title: typeof body["title"] === "string" ? body["title"] : undefined,
+      personaAgentId: typeof body["personaAgentId"] === "string" ? body["personaAgentId"] : body["personaAgentId"] === null ? null : undefined,
       providerId,
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       reasoningEffort: body["reasoningEffort"] === null ? null : normalizeReasoningEffort(body["reasoningEffort"]),

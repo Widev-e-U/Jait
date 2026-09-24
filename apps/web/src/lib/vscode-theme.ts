@@ -79,6 +79,7 @@ const appliedThemeVariableKeys = new Set<string>()
 export const BUILT_IN_DARK_PLUS_MONACO_THEME_NAME = 'dark-plus'
 export const BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME = 'light-plus'
 const shikiMonacoInitialized = new WeakSet<object>()
+const registeredMonacoThemeModes = new WeakMap<object, Map<string, 'dark' | 'light'>>()
 
 const BUNDLED_DARK_PLUS_THEME = darkPlusTheme as BundledVsCodeThemeDocument
 const BUNDLED_LIGHT_PLUS_THEME = lightPlusTheme as BundledVsCodeThemeDocument
@@ -169,13 +170,27 @@ export function ensureBuiltInDarkPlusTextMateTheme(monaco: unknown): void {
       themes: [BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME],
       langs: ['javascript', 'typescript', 'jsx', 'tsx', 'json', 'css', 'html', 'markdown', 'python', 'yaml', 'diff'],
     })
-    shikiToMonaco(highlighter, monaco as never)
-    registerBuiltInMonacoThemes(monaco as Parameters<typeof registerBuiltInMonacoThemes>[0])
     const editor = (monaco as { editor?: MonacoEditorApi }).editor
-    const currentTheme = typeof document !== 'undefined' ? document.documentElement.dataset.monacoTheme : null
-    if (currentTheme === BUILT_IN_DARK_PLUS_MONACO_THEME_NAME || currentTheme === BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME) {
-      editor?.setTheme?.(currentTheme)
+    const setMonacoTheme = editor?.setTheme?.bind(editor)
+    shikiToMonaco(highlighter, monaco as never)
+    const setShikiTheme = editor?.setTheme?.bind(editor)
+    registerBuiltInMonacoThemes(monaco as Parameters<typeof registerBuiltInMonacoThemes>[0])
+    if (editor && setMonacoTheme && setShikiTheme) {
+      editor.setTheme = (themeName) => {
+        if (themeName === BUILT_IN_DARK_PLUS_MONACO_THEME_NAME || themeName === BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME) {
+          setShikiTheme(themeName)
+          return
+        }
+        // Shiki only loads the built-in themes. Keep its token scopes in the
+        // matching color mode, then let Monaco apply the imported palette.
+        const colorMode = registeredMonacoThemeModes.get(monaco)?.get(themeName)
+          ?? (typeof document !== 'undefined' && !document.documentElement.classList.contains('dark') ? 'light' : 'dark')
+        setShikiTheme(colorMode === 'light' ? BUILT_IN_LIGHT_PLUS_MONACO_THEME_NAME : BUILT_IN_DARK_PLUS_MONACO_THEME_NAME)
+        setMonacoTheme(themeName)
+      }
     }
+    const currentTheme = typeof document !== 'undefined' ? document.documentElement.dataset.monacoTheme : null
+    if (currentTheme) editor?.setTheme?.(currentTheme)
   }).catch((error) => {
     console.error('Failed to initialize Shiki Monaco Dark Plus theme:', error)
   })
@@ -226,6 +241,12 @@ export function registerMonacoTheme(
   theme: StoredVsCodeTheme | null | undefined,
 ): void {
   if (!theme || !monaco?.editor?.defineTheme) return
+  let modes = registeredMonacoThemeModes.get(monaco)
+  if (!modes) {
+    modes = new Map()
+    registeredMonacoThemeModes.set(monaco, modes)
+  }
+  modes.set(theme.monacoThemeName, theme.colorMode)
   monaco.editor.defineTheme(theme.monacoThemeName, theme.monacoThemeData)
 }
 

@@ -19,4 +19,12 @@ describe('MobileNavDrawer', () => {
     expect(markup).not.toContain('Project tools')
     expect(markup).not.toContain('aria-label="Terminal"')
   })
+
+  it('shows Manager pages without Developer navigation in Manager mode', () => {
+    const markup = renderToStaticMarkup(<MobileNavDrawer open onClose={() => {}} currentView="agents" onNavigate={() => {}} sessionSelector={<div>Session list</div>} onOpenSettings={() => {}} />)
+    expect(markup).toContain('aria-label="Threads"')
+    expect(markup).toContain('aria-label="Agents"')
+    expect(markup).not.toContain('aria-label="Chat"')
+    expect(markup).not.toContain('Projects &amp; Chats')
+  })
 })

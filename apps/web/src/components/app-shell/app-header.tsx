@@ -415,9 +415,9 @@ export function AppHeader(props: AppHeaderProps) {
                     Sign in
                   </Button>
                 )}
-                {viewMode === 'developer' && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 p-0" onClick={onOpenMobileNav} aria-label="Open menu">
                   <Menu className="h-4 w-4" />
-                </Button>}
+                </Button>
               </div>
             ) : (
             <>

@@ -141,6 +141,43 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("persists agent profiles and links threads only for their owner", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider());
+    registerThreadRoutes(app, config, { threadService: new ThreadService(db), providerRegistry });
+    const owner = await authHeader(config.jwtSecret, "owner");
+    const other = await authHeader(config.jwtSecret, "other");
+    const profile = {
+      name: "Researcher", persona: "Find evidence", avatar: "🦉", providerId: "codex",
+      repositoryIds: [], skillIds: ["research"], schedule: { kind: "adaptive", rules: "" },
+      allowedTools: [], requiresApproval: true, notificationChannels: [], notificationEvents: [], paused: true,
+    };
+    const saved = await app.inject({ method: "PUT", url: "/api/persona-agents/agent-1", headers: owner, payload: profile });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({ id: "agent-1", name: "Researcher", skillIds: ["research"] });
+    const list = await app.inject({ method: "GET", url: "/api/persona-agents", headers: owner });
+    expect(list.json().agents).toHaveLength(1);
+    const otherList = await app.inject({ method: "GET", url: "/api/persona-agents", headers: other });
+    expect(otherList.json().agents).toHaveLength(0);
+    const denied = await app.inject({ method: "POST", url: "/api/threads", headers: other,
+      payload: { title: "Unauthorized", providerId: "codex", personaAgentId: "agent-1" } });
+    expect(denied.statusCode).toBe(400);
+    const created = await app.inject({ method: "POST", url: "/api/threads", headers: owner,
+      payload: { title: "Research", providerId: "codex", personaAgentId: "agent-1" } });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().personaAgentId).toBe("agent-1");
+    const removed = await app.inject({ method: "DELETE", url: "/api/persona-agents/agent-1", headers: owner });
+    expect(removed.statusCode).toBe(200);
+    const thread = await app.inject({ method: "GET", url: `/api/threads/${created.json().id}`, headers: owner });
+    expect(thread.json().personaAgentId).toBeNull();
+    await app.close();
+    sqlite.close();
+  });
+
   it("preserves chat references in persisted start and follow-up messages", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

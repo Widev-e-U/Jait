@@ -137,6 +137,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
   // Map of table -> expected columns with their DDL fragments
   const expectedColumns: Record<string, Record<string, string>> = {
     agent_threads: {
+      persona_agent_id: "TEXT",
       kind: "TEXT NOT NULL DEFAULT 'delivery'",
       reasoning_effort: "TEXT",
       pr_url: "TEXT",
