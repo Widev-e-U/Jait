@@ -162,6 +162,18 @@ export class NodePermissionsService {
     }
   }
 
+  /** Forget an offline node and revoke its stored grants. */
+  forgetNode(nodeId: string): boolean {
+    if (!this.db) return false;
+    return this.db.transaction((tx) => {
+      const existing = tx.select({ nodeId: nodes.nodeId }).from(nodes).where(eq(nodes.nodeId, nodeId)).get();
+      if (!existing) return false;
+      tx.delete(nodePermissions).where(eq(nodePermissions.nodeId, nodeId)).run();
+      tx.delete(nodes).where(eq(nodes.nodeId, nodeId)).run();
+      return true;
+    });
+  }
+
   /** Update a node's capability grants (toggle). Returns the updated grant map. */
   updatePermissions(
     nodeId: string,

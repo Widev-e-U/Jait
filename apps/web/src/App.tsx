@@ -5153,11 +5153,13 @@ function App() {
                     />
                 ) : (
                   <AgentsPage
+                    token={token}
                     repositories={automation.repositories}
                     availableSkills={availableSkills}
                     threads={managerThreads}
                     onOpenThread={(id) => { automation.setSelectedThreadId(id); setCurrentView('threads') }}
                     onRefreshThreads={() => { void automation.refresh() }}
+                    onOpenSettings={(tab) => { window.localStorage.setItem('jait.settings.activeTab', tab); setCurrentView('settings') }}
                   />
                 )}
               </ManagerMode>

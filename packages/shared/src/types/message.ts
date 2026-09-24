@@ -46,6 +46,7 @@ export type WsEventType =
   | "nodes.list"
   | "nodes.get"
   | "nodes.update-permissions"
+  | "nodes.forget"
   | "nodes.permissions"
   | "message.delta"
   | "message.started"

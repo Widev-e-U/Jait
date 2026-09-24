@@ -1022,6 +1022,38 @@ describe("WsControlPlane", () => {
       admin.ws.close();
     });
 
+    it("refuses to forget a connected node and removes it after disconnect", async () => {
+      const token = await createToken("user-forget-node");
+      const nodeClient = openWs(port, { token });
+      await waitForOpen(nodeClient.ws);
+      await nodeClient.collector.next();
+      const admin = openWs(port, { token });
+      await waitForOpen(admin.ws);
+      await admin.collector.next();
+
+      nodeClient.ws.send(JSON.stringify({
+        type: "node.hello",
+        payload: { id: "forget-node", name: "Forget Node", platform: "android", role: "remote" },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+      admin.ws.send(JSON.stringify({ type: "nodes.forget", payload: { nodeId: "forget-node" } }));
+      let onlineError: any;
+      for (;;) {
+        onlineError = await admin.collector.next();
+        if (onlineError.type === "error") break;
+      }
+      expect(onlineError.payload.code).toBe("NODE_ONLINE");
+
+      nodeClient.ws.close();
+      await new Promise((r) => setTimeout(r, 50));
+      admin.ws.send(JSON.stringify({ type: "nodes.forget", payload: { nodeId: "forget-node" } }));
+      for (;;) {
+        const snapshot = await nextNodesPermissions(admin);
+        if (!snapshot.payload.nodes.some((node: any) => node.id === "forget-node")) break;
+      }
+      admin.ws.close();
+    });
+
     it("accepts nodes.update-permissions with nodeId/grants at the message top level (web legacy shape)", async () => {
       const token = await createToken("user-top-level-perms");
 

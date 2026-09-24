@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 export interface ModeSidebarItem {
   id: string
   label: string
+  description?: string
   icon: LucideIcon
   active?: boolean
   disabled?: boolean
@@ -39,7 +40,7 @@ export function ModeSidebar({ items, bottomItems = [], onOpenSettings }: ModeSid
         key={item.id}
         variant={item.active ? 'secondary' : 'ghost'}
         size="sm"
-        className={`h-9 w-full shrink-0 rounded-md transition-all duration-200 ${expanded ? 'justify-start gap-3 px-3' : 'justify-center px-0'}`}
+        className={`${expanded && item.description ? 'h-12' : 'h-9'} shrink-0 rounded-md transition-all duration-200 ${expanded ? 'w-full justify-start gap-3 px-3' : 'mx-auto w-9 justify-center gap-0 px-0'}`}
         onClick={item.onSelect}
         disabled={item.disabled}
         aria-label={item.label}
@@ -53,9 +54,7 @@ export function ModeSidebar({ items, bottomItems = [], onOpenSettings }: ModeSid
             </span>
           )}
         </span>
-        <span className={`overflow-hidden whitespace-nowrap text-left transition-all duration-200 ${expanded ? 'max-w-40 flex-1 opacity-100' : 'max-w-0 opacity-0'}`}>
-          {item.label}
-        </span>
+        {expanded && <span className="min-w-0 flex-1 text-left"><span className="block truncate">{item.label}</span>{item.description && <span className="block truncate text-2xs font-normal text-muted-foreground">{item.description}</span>}</span>}
       </Button>
     )
     if (expanded) return button
@@ -70,17 +69,16 @@ export function ModeSidebar({ items, bottomItems = [], onOpenSettings }: ModeSid
   return (
     <aside
       aria-label="Workspace sidebar"
-      className={`flex shrink-0 flex-col gap-2 overflow-hidden border-r bg-background px-1 py-2 transition-[width] duration-200 ease-in-out ${expanded ? 'w-48' : 'w-12'}`}
+      className={`flex shrink-0 flex-col gap-2 overflow-hidden border-r bg-background px-1 py-2 transition-[width] duration-200 ease-in-out ${expanded ? 'w-52' : 'w-12'}`}
     >
       <div className="flex flex-col gap-1">{items.map(renderItem)}</div>
       <div className="flex-1" />
       <div className="flex flex-col gap-1">
         {bottomItems.map(renderItem)}
-        {renderItem({ id: 'settings', label: 'Settings', icon: Settings, onSelect: onOpenSettings })}
         <Button
           variant="ghost"
           size="sm"
-          className={`h-9 w-full rounded-md ${expanded ? 'justify-start gap-3 px-3' : 'justify-center px-0'}`}
+          className={`h-9 w-full rounded-md ${expanded ? 'justify-start gap-3 px-3' : 'mx-auto w-9 justify-center gap-0 px-0'}`}
           onClick={toggleExpanded}
           aria-label={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
           aria-expanded={expanded}
@@ -88,6 +86,7 @@ export function ModeSidebar({ items, bottomItems = [], onOpenSettings }: ModeSid
           {expanded ? <PanelLeftClose className="h-4 w-4 shrink-0" /> : <PanelLeftOpen className="h-4 w-4 shrink-0" />}
           {expanded && <span>Collapse sidebar</span>}
         </Button>
+        {renderItem({ id: 'settings', label: 'Settings', icon: Settings, onSelect: onOpenSettings })}
       </div>
     </aside>
   )

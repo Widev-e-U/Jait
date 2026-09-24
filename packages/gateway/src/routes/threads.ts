@@ -767,7 +767,9 @@ export function registerThreadRoutes(
       || typeof body.name !== "string" || body.name.length > 200
       || typeof body.persona !== "string" || body.persona.length > 10_000
       || typeof body.avatar !== "string" || body.avatar.length > 40
-      || !["jait", "codex", "claude-code"].includes(String(body.providerId))
+      || typeof body.providerId !== "string" || body.providerId.length > 100
+      || !(providerRegistry.getForUser(body.providerId, authUser.id)
+        || ws?.getFsNodes().some((node) => node.providers?.includes(body.providerId as string)))
       || !stringArray(body.repositoryIds) || !stringArray(body.skillIds)
       || !stringArray(body.allowedTools) || !stringArray(body.notificationChannels)
       || !stringArray(body.notificationEvents)

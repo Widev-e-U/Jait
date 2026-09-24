@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, Monitor, Save, Smartphone } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, Monitor, Save, Smartphone, Trash2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -33,7 +33,7 @@ function statusBadge(node: NodeWithPermissions) {
 }
 
 export function NodesPermissionsTab({ token, focusNodeId }: { token: string | null; focusNodeId: string | null }) {
-  const { nodes, loading, error, saving, saveError, refresh, updatePermissions } = useNodePermissions(token)
+  const { nodes, loading, error, saving, saveError, refresh, updatePermissions, forgetNode } = useNodePermissions(token)
   const scrolledToNode = useRef<string | null>(null)
   useEffect(() => {
     if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId) || scrolledToNode.current === focusNodeId) return
@@ -123,6 +123,7 @@ export function NodesPermissionsTab({ token, focusNodeId }: { token: string | nu
 
             <div className="text-xs text-muted-foreground">
               First seen {formatDate(node.firstSeenAt)}
+              {' · '}Last seen {formatDate(node.lastSeenAt)}
               {' · '}Platform {node.platform}
             </div>
 
@@ -141,7 +142,21 @@ export function NodesPermissionsTab({ token, focusNodeId }: { token: string | nu
               ))}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-between gap-2">
+              {node.lifecycle !== 'ready' ? (
+                <Button
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => {
+                    if (window.confirm(`Forget ${node.name} (${node.id})? Its saved permissions will be removed.`)) {
+                      forgetNode(node.id)
+                    }
+                  }}
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Forget node
+                </Button>
+              ) : <span />}
               <Button onClick={() => saveNode(node)} disabled={saving || !isDirty(node)}>
                 {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
                 Save

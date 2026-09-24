@@ -37,7 +37,7 @@ describe("job routes", () => {
         prompt: "Lies den Repo-Status und schreibe ein Daily.",
         provider: "codex",
         model: "gpt-5-codex",
-        payload: { allowedTools: "file.list,file.read", title: "fixed cron title" },
+        payload: { allowedTools: "file.list,file.read", title: "fixed cron title", personaAgentId: "agent-1", skillIds: ["research"], runtimeMode: "supervised" },
       },
     });
 
@@ -62,11 +62,21 @@ describe("job routes", () => {
         kind: "delivery",
         prompt: "Lies den Repo-Status und schreibe ein Daily.",
         providerId: "codex",
+        personaAgentId: "agent-1",
+        skillIds: ["research"],
+        runtimeMode: "supervised",
         start: true,
         detach: true,
       },
     });
     expect((executeTool.mock.calls[0]?.[0] as { input?: Record<string, unknown> }).input).not.toHaveProperty("title");
+
+    const clearedModel = await app.inject({
+      method: "PATCH", url: `/api/jobs/${created.id}`, headers,
+      payload: { model: null },
+    });
+    expect(clearedModel.statusCode).toBe(200);
+    expect(clearedModel.json()).toMatchObject({ model: null });
 
     await app.close();
     sqlite.close();

@@ -1,11 +1,23 @@
 export type PersonaSchedule = { kind: 'adaptive'; rules: string } | { kind: 'cron'; cron: string }
 
+export interface PersonaTask {
+  id: string
+  name: string
+  prompt: string
+  cron: string
+  jobId?: string
+  repositoryId?: string
+}
+
 export interface PersonaAgentDraft {
   id: string
   name: string
   persona: string
   avatar: string
-  providerId: 'jait' | 'codex' | 'claude-code'
+  providerId: string
+  model?: string | null
+  chatThreadId?: string
+  tasks?: PersonaTask[]
   skillIds: string[]
   repositoryIds: string[]
   schedule: PersonaSchedule
@@ -15,6 +27,16 @@ export interface PersonaAgentDraft {
   notificationEvents: Array<'task_done' | 'blocked' | 'question'>
   paused: boolean
   updatedAt: string
+}
+
+export function agentTaskPrompt(agent: PersonaAgentDraft, request: string): string {
+  const responsibilities = (agent.tasks ?? []).map((task) => `- ${task.name}: ${task.prompt}`).join('\n')
+  return [
+    `You are ${agent.name}. ${agent.persona}`.trim(),
+    responsibilities ? `Your assigned tasks and skills:\n${responsibilities}` : '',
+    agent.allowedTools.length ? `Prefer these tools: ${agent.allowedTools.join(', ')}.` : '',
+    `Current request:\n${request.trim()}`,
+  ].filter(Boolean).join('\n\n')
 }
 
 export const PERSONA_AGENTS_STORAGE_KEY = 'jait.personaAgentDrafts'
@@ -51,7 +73,7 @@ export function readPersonaAgentDrafts(): PersonaAgentDraft[] {
     ).map((agent) => ({
       ...agent,
       avatar: normalizePersonaAvatar(agent.avatar),
-      providerId: agent.providerId === 'codex' || agent.providerId === 'claude-code' ? agent.providerId : 'jait',
+      providerId: typeof agent.providerId === 'string' ? agent.providerId : 'jait',
       skillIds: Array.isArray(agent.skillIds) ? agent.skillIds.filter((id): id is string => typeof id === 'string') : [],
     }))
   } catch {
@@ -70,6 +92,8 @@ export function newPersonaAgentDraft(): PersonaAgentDraft {
     persona: '',
     avatar: PERSONA_AVATARS[0],
     providerId: 'jait',
+    model: null,
+    tasks: [],
     skillIds: [],
     repositoryIds: [],
     schedule: { kind: 'adaptive', rules: '' },
@@ -77,7 +101,7 @@ export function newPersonaAgentDraft(): PersonaAgentDraft {
     requiresApproval: true,
     notificationChannels: [],
     notificationEvents: ['task_done', 'blocked', 'question'],
-    paused: true,
+    paused: false,
     updatedAt: new Date().toISOString(),
   }
 }

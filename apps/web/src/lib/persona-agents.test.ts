@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { newPersonaAgentDraft, normalizePersonaAvatar, PERSONA_AVATARS, readPersonaAgentDrafts, savePersonaAgentDrafts, PERSONA_AGENTS_STORAGE_KEY } from './persona-agents'
+import { agentTaskPrompt, newPersonaAgentDraft, normalizePersonaAvatar, PERSONA_AVATARS, readPersonaAgentDrafts, savePersonaAgentDrafts, PERSONA_AGENTS_STORAGE_KEY } from './persona-agents'
 
 function mockStorage() {
   const values = new Map<string, string>()
@@ -16,6 +16,14 @@ function mockStorage() {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('persona agent drafts', () => {
+  it('includes assigned tasks as skills when starting work or asking the agent', () => {
+    const agent = { ...newPersonaAgentDraft(), name: 'Researcher', persona: 'Create sourced reports', tasks: [
+      { id: 'weekly', name: 'Weekly brief', prompt: 'Summarize the important updates', cron: '0 9 * * 1' },
+    ] }
+    expect(agentTaskPrompt(agent, 'What did you find?')).toContain('Weekly brief: Summarize the important updates')
+    expect(agentTaskPrompt(agent, 'What did you find?')).toContain('Current request:\nWhat did you find?')
+  })
+
   it('maps existing emoji choices to illustrated avatars', () => {
     expect(normalizePersonaAvatar('🦊')).toBe(PERSONA_AVATARS[0])
     expect(normalizePersonaAvatar('🎨')).toBe(PERSONA_AVATARS[8])

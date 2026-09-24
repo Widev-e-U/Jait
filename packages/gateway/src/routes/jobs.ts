@@ -345,7 +345,7 @@ export function registerJobRoutes(
         description: typeof body["description"] === "string" ? body["description"] : existingMeta.description,
         prompt: parsePrompt(body["prompt"]) ?? existingMeta.prompt,
         provider: typeof body["provider"] === "string" ? body["provider"] : existingMeta.provider,
-        model: typeof body["model"] === "string" ? body["model"] : existingMeta.model,
+        model: body["model"] === null ? undefined : typeof body["model"] === "string" ? body["model"] : existingMeta.model,
       };
 
       nextToolName = existing.toolName;

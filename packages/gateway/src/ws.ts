@@ -631,6 +631,47 @@ export class WsControlPlane {
         this.broadcastNodePermissions();
         break;
       }
+      case "nodes.forget": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        const nodeId = (msg.payload as { nodeId?: string } | undefined)?.nodeId;
+        if (!nodeId || typeof nodeId !== "string") {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "nodes.forget requires nodeId", code: "BAD_REQUEST" },
+          });
+          return;
+        }
+        if (this.nodeStates.getNode(nodeId)) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Disconnect this node before forgetting it", code: "NODE_ONLINE" },
+          });
+          return;
+        }
+        if (!this.nodePermissions.forgetNode(nodeId)) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Node not found", code: "NOT_FOUND" },
+          });
+          return;
+        }
+        this.broadcastNodePermissions();
+        break;
+      }
       case "terminal.subscribe": {
         if (!client.authenticated) {
           this.send(client.ws, {
@@ -1856,7 +1897,10 @@ export class WsControlPlane {
         permissions: this.nodePermissions.getPermissions(s.id) as Record<NodeCapability, boolean>,
       });
     }
-    return [...nodesMap.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...nodesMap.values()].sort((a, b) => {
+      if (a.lifecycle !== b.lifecycle) return a.lifecycle === "ready" ? -1 : 1;
+      return b.lastSeenAt.localeCompare(a.lastSeenAt);
+    });
   }
 
   /** Broadcast the current permissions snapshot to all connected clients. */

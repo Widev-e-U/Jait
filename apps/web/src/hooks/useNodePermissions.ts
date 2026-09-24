@@ -27,6 +27,8 @@ export interface NodePermissionsApi {
   refresh: () => void;
   /** Send `nodes.update-permissions` for a node. Resolved once the gateway broadcasts the new snapshot. */
   updatePermissions: (nodeId: string, grants: Partial<Record<NodeCapability, boolean>>) => void;
+  /** Forget a disconnected node and its stored permission grants. */
+  forgetNode: (nodeId: string) => void;
 }
 
 /**
@@ -126,6 +128,17 @@ export function useNodePermissions(token: string | null): NodePermissionsApi {
     [],
   );
 
+  const forgetNode = useCallback((nodeId: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setSaveError("Gateway connection is not open yet. Try again in a moment.");
+      return;
+    }
+    setSaveError(null);
+    setSaving(true);
+    ws.send(JSON.stringify({ type: "nodes.forget", payload: { nodeId } }));
+  }, []);
+
   return {
     nodes,
     loading,
@@ -134,6 +147,7 @@ export function useNodePermissions(token: string | null): NodePermissionsApi {
     saveError,
     refresh: requestList,
     updatePermissions,
+    forgetNode,
   };
 }
 

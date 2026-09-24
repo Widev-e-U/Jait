@@ -46,7 +46,7 @@ export interface CreateJobRequest {
   prompt?: string
   payload?: Record<string, unknown>
   provider?: string
-  model?: string
+  model?: string | null
   enabled?: boolean
 }
 
@@ -58,7 +58,7 @@ export interface UpdateJobRequest {
   prompt?: string
   payload?: Record<string, unknown>
   provider?: string
-  model?: string
+  model?: string | null
   enabled?: boolean
 }
 

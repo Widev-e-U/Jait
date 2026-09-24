@@ -110,6 +110,18 @@ describe("NodePermissionsService", () => {
     expect(listed[0]!.permissions.browser).toBe(true);
   });
 
+  it("forgets a node and revokes its saved grants", () => {
+    const svc = service();
+    svc.ensureNodeSeen(hello);
+    svc.updatePermissions(hello.id, { terminal: true });
+
+    expect(svc.forgetNode(hello.id)).toBe(true);
+    expect(svc.forgetNode(hello.id)).toBe(false);
+    expect(db.select().from(nodes).where(eq(nodes.nodeId, hello.id)).all()).toEqual([]);
+    expect(db.select().from(nodePermissions).where(eq(nodePermissions.nodeId, hello.id)).all()).toEqual([]);
+    expect(svc.isGranted(hello.id, "terminal")).toBe(false);
+  });
+
   it("logDenied writes a consent_log row with decision 'rejected'", () => {
     const svc = service();
     svc.logDenied(hello.id, "terminal", "terminal denied by policy");

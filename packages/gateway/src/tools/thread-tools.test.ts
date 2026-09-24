@@ -130,6 +130,33 @@ function createSelectedProviderContext(
 }
 
 describe("thread.control tool", () => {
+  it("links scheduled agent runs to an owned profile and pins its skills", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+      const threadService = new ThreadService(db);
+      threadService.savePersonaAgent(context.userId, { id: "researcher", name: "Researcher" });
+      const tool = createThreadControlTool({ threadService, providerRegistry, userService, sessionState });
+
+      const created = await tool.execute({
+        action: "create", prompt: "Write a report", providerId: "codex",
+        personaAgentId: "researcher", skillIds: ["research"], kind: "delivery",
+      }, { ...context, requestedBy: "scheduler" });
+      expect(created.ok).toBe(true);
+      const thread = (created.data as { thread: { id: string } }).thread;
+      expect(threadService.getById(thread.id)).toMatchObject({ personaAgentId: "researcher", skillIds: ["research"] });
+
+      const denied = await tool.execute({
+        action: "create", prompt: "Write a report", providerId: "codex", personaAgentId: "researcher",
+      }, makeContext("another-user", { providerId: "codex", requestedBy: "scheduler" }));
+      expect(denied.ok).toBe(false);
+      expect(denied.message).toBe("Agent profile not found.");
+    } finally { sqlite.close(); }
+  });
+
   it("creates and starts a thread in one call", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

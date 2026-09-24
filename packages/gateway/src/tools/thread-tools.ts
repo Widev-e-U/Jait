@@ -96,6 +96,8 @@ interface ThreadControlInput {
   runtimeMode?: "full-access" | "supervised";
   kind?: "delivery" | "delegation";
   workingDirectory?: string;
+  personaAgentId?: string;
+  skillIds?: string[];
   branch?: string;
   prompt?: string;
   message?: string;
@@ -831,6 +833,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             "Use delegation for helper/sub-agent work; delegation threads auto-finish after one turn and cannot create PRs.",
         },
         workingDirectory: { type: "string", description: "Working directory for the thread." },
+        personaAgentId: { type: "string", description: "Agent profile to link to the thread." },
+        skillIds: { type: "array", items: { type: "string" }, description: "Skills pinned to the thread." },
         branch: { type: "string", description: "Git branch metadata for the thread." },
         prompt: {
           type: "string",
@@ -940,6 +944,9 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
             }
             const selectedProviderId = resolvedProvider.providerId;
+            if (input.personaAgentId && !deps.threadService.getPersonaAgent(input.personaAgentId, userId)) {
+              return { ok: false, message: "Agent profile not found." };
+            }
             const selectedDefaults = resolveSelectedThreadDefaults(context);
             if (context.requestedBy === "scheduler") {
               const preflight = await preflightScheduledProvider(selectedProviderId);
@@ -947,6 +954,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
             let thread = deps.threadService.create({
               userId,
+              personaAgentId: input.personaAgentId,
               sessionId: input.sessionId,
               title: input.title?.trim() || normalizeGeneratedThreadTitle(prompt, "New Thread"),
               providerId: selectedProviderId,
@@ -955,6 +963,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               runtimeMode: input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
               kind: input.kind === "delivery" ? "delivery" : "delegation",
               workingDirectory: input.workingDirectory,
+              skillIds: input.skillIds,
               branch: input.branch,
             });
             broadcastThreadEvent(thread.id, "created", { thread });
