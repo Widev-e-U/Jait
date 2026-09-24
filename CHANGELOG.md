@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.875](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.875) — 2026-09-24
+- feat(web): scrollable chat sidebar panes with draggable persisted divider — 9e55ed95
+- feat(manager): fully-working agents page with node permission management — 201e0928
+
 ## [v0.1.874](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.874) — 2026-09-24
 - test(e2e): cover jumping to a restarted turn when editing — 38f4a25b
 - fix(web): snap restarted turns into view instead of animating — ceda831a
