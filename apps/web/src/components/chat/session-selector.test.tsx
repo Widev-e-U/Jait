@@ -172,15 +172,15 @@ describe('SessionSelector', () => {
     expect(markup).toContain('/workspace/jait')
   })
 
-  it('shows five recent personal chats and offers to reveal older ones', () => {
-    const personalSessions = Array.from({ length: 6 }, (_, index) => ({
+  it('shows twenty recent personal chats and offers to reveal older ones', () => {
+    const personalSessions = Array.from({ length: 21 }, (_, index) => ({
       id: `personal-${index + 1}`,
       projectId: null,
       name: `Personal ${index + 1}`,
       projectPath: null,
       status: 'active' as const,
-      createdAt: `2026-07-0${6 - index}T00:00:00.000Z`,
-      lastActiveAt: `2026-07-0${6 - index}T00:00:00.000Z`,
+      createdAt: `2026-07-${String(26 - index).padStart(2, '0')}T00:00:00.000Z`,
+      lastActiveAt: `2026-07-${String(26 - index).padStart(2, '0')}T00:00:00.000Z`,
       viewedAt: null,
       metadata: null,
     }))
@@ -197,8 +197,8 @@ describe('SessionSelector', () => {
     )
 
     expect(markup).toContain('Personal 1')
-    expect(markup).toContain('Personal 5')
-    expect(markup).not.toContain('Personal 6')
+    expect(markup).toContain('Personal 20')
+    expect(markup).not.toContain('Personal 21')
     expect(markup).toContain('Show older')
   })
 

@@ -27,6 +27,13 @@ import { getProjectRepository } from '@/lib/project-repositories'
 import { SessionRow, isSessionUnread } from '@/components/chat/session-row'
 import { formatAgo } from '@/lib/relative-time'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import {
+  DEFAULT_SESSION_SIDEBAR_SPLIT,
+  clampSessionSidebarSplit,
+  readSessionSidebarSplit,
+  sessionSidebarSplitFromPointer,
+  writeSessionSidebarSplit,
+} from '@/lib/session-sidebar-split'
 
 export type SessionSelectorView = 'combined' | 'projects' | 'chats'
 
@@ -84,6 +91,8 @@ interface SessionSelectorProps {
 }
 
 const RECENT_SESSIONS_LIMIT = 5
+/** Personal chats shown before "Show older" — long enough to scroll, short enough to scan. */
+const PERSONAL_SESSIONS_LIMIT = 20
 const COLLAPSED_FOLDERS_STORAGE_KEY = 'jait.sidebar.collapsedFolders'
 /** Per nesting level; deep enough to read, shallow enough for a 256px sidebar. */
 const FOLDER_INDENT_PX = 12
@@ -209,7 +218,27 @@ export function SessionSelector({
   const onlineNodeIds = useMemo(() => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)), [nodes])
   const [searchQuery, setSearchQuery] = useState('')
   const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
-  const [visiblePersonalSessions, setVisiblePersonalSessions] = useState(RECENT_SESSIONS_LIMIT)
+  const [visiblePersonalSessions, setVisiblePersonalSessions] = useState(PERSONAL_SESSIONS_LIMIT)
+  // Projects & Chats / Personal chats split. Resizable and persisted locally,
+  // mirroring the developer sidebar's draggable width.
+  const paneContainerRef = useRef<HTMLDivElement | null>(null)
+  const [splitRatio, setSplitRatio] = useState(() => readSessionSidebarSplit())
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false)
+  const applySplitFromPointer = useCallback((clientY: number, persist: boolean) => {
+    const container = paneContainerRef.current
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const next = sessionSidebarSplitFromPointer(clientY, rect.top, rect.height)
+    setSplitRatio(next)
+    if (persist) writeSessionSidebarSplit(next)
+  }, [])
+  const nudgeSplit = useCallback((delta: number) => {
+    setSplitRatio((current) => {
+      const next = clampSessionSidebarSplit(current + delta)
+      writeSessionSidebarSplit(next)
+      return next
+    })
+  }, [])
   const [sessionContextMenu, setSessionContextMenu] = useState<{
     sessionId: string
     projectId: string | null
@@ -244,6 +273,30 @@ export function SessionSelector({
     const timer = window.setTimeout(() => onSearch(searchQuery.trim()), 250)
     return () => window.clearTimeout(timer)
   }, [normalizedSearchQuery, onSearch, searchQuery])
+
+  // Drag lives on window so the pointer can leave the thin divider while dragging.
+  useEffect(() => {
+    if (!isDraggingSplit) return
+    const handleMove = (event: PointerEvent) => applySplitFromPointer(event.clientY, false)
+    const handleUp = (event: PointerEvent) => {
+      applySplitFromPointer(event.clientY, true)
+      setIsDraggingSplit(false)
+    }
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    const previousCursor = document.body.style.cursor
+    const previousSelect = document.body.style.userSelect
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+      document.body.style.cursor = previousCursor
+      document.body.style.userSelect = previousSelect
+    }
+  }, [applySplitFromPointer, isDraggingSplit])
 
   const filteredProjects = useMemo(() => {
     if (!normalizedSearchQuery || onSearch) return displayedProjects
@@ -547,9 +600,14 @@ export function SessionSelector({
                 )}
               </div>
             )}
-            <ScrollArea className="min-h-0 flex-1">
+            <div ref={paneContainerRef} className="flex min-h-0 flex-1 flex-col">
               {showProjects && (
-                <div className="space-y-0.5 px-1.5 pb-1.5">
+                <div
+                  className="flex min-h-0 flex-col"
+                  style={showPersonalChats ? { flex: `0 1 ${splitRatio * 100}%` } : { flex: '1 1 auto' }}
+                >
+                  <ScrollArea className="min-h-0 flex-1">
+                    <div className="space-y-0.5 px-1.5 pb-1.5">
                   {!normalizedSearchQuery && projects.length === 0 && (!showPersonalChats || personalSessions.length === 0) && (
                     <p className="text-xs text-muted-foreground text-center py-4">
                       {view === 'projects' ? 'No projects yet.' : 'No projects or chats yet.'}
@@ -1014,11 +1072,54 @@ export function SessionSelector({
                     Show fewer projects
                   </button>
                 )}
+                    </div>
+                  </ScrollArea>
                 </div>
               )}
-              {showProjects && showPersonalChats && <div className="mx-1.5 my-1 border-t" />}
+              {showProjects && showPersonalChats && (
+                <div
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="Resize personal chats"
+                  aria-valuenow={Math.round(splitRatio * 100)}
+                  aria-valuemin={15}
+                  aria-valuemax={85}
+                  tabIndex={0}
+                  data-testid="session-sidebar-divider"
+                  className={`group relative mx-1 h-2 shrink-0 cursor-row-resize touch-none outline-none focus-visible:bg-primary/20 ${
+                    isDraggingSplit ? 'bg-primary/40' : ''
+                  }`}
+                  onPointerDown={(event) => {
+                    event.preventDefault()
+                    setIsDraggingSplit(true)
+                  }}
+                  onDoubleClick={() => {
+                    setSplitRatio(DEFAULT_SESSION_SIDEBAR_SPLIT)
+                    writeSessionSidebarSplit(DEFAULT_SESSION_SIDEBAR_SPLIT)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowUp') {
+                      event.preventDefault()
+                      nudgeSplit(-0.05)
+                    }
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault()
+                      nudgeSplit(0.05)
+                    }
+                  }}
+                >
+                  <div
+                    className={`absolute inset-x-0 top-1/2 h-px -translate-y-1/2 transition-colors ${
+                      isDraggingSplit ? 'bg-primary' : 'bg-border group-hover:bg-primary/60'
+                    }`}
+                  />
+                </div>
+              )}
               {showPersonalChats && (
-                <>
+                <div
+                  className="flex min-h-0 flex-col"
+                  style={showProjects ? { flex: `1 1 ${(1 - splitRatio) * 100}%` } : { flex: '1 1 auto' }}
+                >
                   {/* Dropping a chat here moves it back to the personal chats
                       (top level), mirroring the "Projects & Chats" header. */}
                   <div
@@ -1047,7 +1148,8 @@ export function SessionSelector({
                   >
                     <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
                   </div>
-                  <div className="space-y-0.5 px-1.5 pb-1.5">
+                  <ScrollArea className="min-h-0 flex-1">
+                    <div className="space-y-0.5 px-1.5 pb-1.5">
                     {view === 'chats' && !normalizedSearchQuery && personalSessions.length === 0 && (
                       <p className="py-4 text-center text-xs text-muted-foreground">
                         No personal chats yet.
@@ -1113,15 +1215,16 @@ export function SessionSelector({
                   <button
                     type="button"
                     className="w-full rounded-md px-1.5 py-1 text-left text-2xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                    onClick={() => setVisiblePersonalSessions((current) => current + RECENT_SESSIONS_LIMIT)}
+                    onClick={() => setVisiblePersonalSessions((current) => current + PERSONAL_SESSIONS_LIMIT)}
                   >
                     Show older
                   </button>
                 )}
-                  </div>
-                </>
+                    </div>
+                  </ScrollArea>
+                </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
 
           {sessionContextMenu && (
