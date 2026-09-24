@@ -7,17 +7,17 @@ interface ChatComposerSurfaceProps {
   className?: string
 }
 
-/** Bordered toolbar for chat history, send target, and new chat controls. */
+/** Plain footer for chat history, send target, and new chat controls. */
 export function ChatComposerSurface({ children, className }: ChatComposerSurfaceProps) {
   return (
-    <div
+    <footer
       data-chat-composer-surface="true"
       className={cn(
-        'overflow-hidden rounded-xl border bg-background dark:bg-card px-2 py-1',
+        'px-1 py-1',
         className,
       )}
     >
       {children}
-    </div>
+    </footer>
   )
 }

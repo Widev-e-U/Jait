@@ -449,7 +449,6 @@ export function DeveloperChatWorkspace({
                 sessionInfo={sessionInfo}
                 projectNodeId={projectNodeId ?? undefined}
                 projectId={activeProjectId}
-                merged
               />
             </ErrorBoundary>
             {developerComposerControlRow}
@@ -757,7 +756,6 @@ export function DeveloperChatWorkspace({
                   sessionInfo={sessionInfo}
                   projectNodeId={projectNodeId ?? undefined}
                   projectId={activeProjectId}
-                  merged
                 />
               </ErrorBoundary>
               {developerComposerControlRow}

@@ -368,7 +368,6 @@ export function ThreadsPage({
                     onSearchFiles={onSearchFiles}
                     projectOpen={showProject}
                     chatId={automation.selectedThread?.id ?? undefined}
-                    merged
                   />
                 </ErrorBoundary>
                 <div className="flex items-center gap-2 px-1 mt-1.5">

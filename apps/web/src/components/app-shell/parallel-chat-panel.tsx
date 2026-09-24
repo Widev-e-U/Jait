@@ -492,7 +492,6 @@ function ParallelChatPanelImpl({
           projectNodeId={projectNodeId ?? undefined}
           projectId={session.projectId}
           chatId={session.id}
-          merged
         />
         {composerControlRow}
         </div>
