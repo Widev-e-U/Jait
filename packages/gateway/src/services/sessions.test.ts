@@ -20,12 +20,13 @@ describe("SessionService", () => {
     sqlite.close();
   });
 
-  it("acknowledges only observed activity and keeps later replies unread", () => {
+  it("starts new chats read and acknowledges only observed activity", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(new Date("2026-09-13T10:00:00.000Z"));
       const session = sessions.create({ userId });
       const observedAt = session.lastActiveAt;
+      expect(session.viewedAt).toBe(observedAt);
       vi.setSystemTime(new Date("2026-09-13T10:01:00.000Z"));
       sessions.touch(session.id);
       sessions.markViewed(session.id, userId, observedAt);
@@ -34,6 +35,23 @@ describe("SessionService", () => {
       sessions.markViewed(session.id, userId, "2026-09-13T10:01:00.000Z");
       sessions.markViewed(session.id, userId, observedAt);
       expect(sessions.getById(session.id)?.viewedAt).toBe("2026-09-13T10:01:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps consecutive activity timestamps ordered within one millisecond", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-09-13T10:00:00.000Z"));
+      const session = sessions.create({ userId });
+      sessions.touch(session.id);
+      const promptAt = sessions.getById(session.id)!.lastActiveAt;
+      sessions.markViewed(session.id, userId, promptAt);
+      sessions.touch(session.id);
+      const reply = sessions.getById(session.id)!;
+      expect(Date.parse(reply.lastActiveAt)).toBeGreaterThan(Date.parse(promptAt));
+      expect(reply.viewedAt).toBe(promptAt);
     } finally {
       vi.useRealTimers();
     }

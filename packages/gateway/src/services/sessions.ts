@@ -42,6 +42,7 @@ export class SessionService {
       projectPath: params.projectPath ?? null,
       createdAt: now,
       lastActiveAt: now,
+      viewedAt: now,
       status: "active",
       metadata: params.metadata ? JSON.stringify(params.metadata) : null,
     }).run();
@@ -98,6 +99,7 @@ export class SessionService {
         projectPath: source.projectPath,
         createdAt: forkedAt,
         lastActiveAt: forkedAt,
+        viewedAt: forkedAt,
         status: "active",
         metadata: JSON.stringify(metadata),
       }).run();
@@ -244,9 +246,13 @@ export class SessionService {
 
   /** Touch the session (update last_active_at). */
   touch(id: string) {
+    const previous = this.getById(id);
+    const now = Date.now();
+    const lastActive = previous ? Date.parse(previous.lastActiveAt) : -Infinity;
+    const nextActive = now > lastActive ? now : lastActive + 1;
     this.db
       .update(sessions)
-      .set({ lastActiveAt: new Date().toISOString() })
+      .set({ lastActiveAt: new Date(nextActive).toISOString() })
       .where(eq(sessions.id, id))
       .run();
   }

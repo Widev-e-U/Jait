@@ -305,10 +305,6 @@ export function registerProjectEntityRoutes(
       if (!project) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Project not found" });
       }
-      projectService.touch(projectId);
-    }
-    if (sessionId) {
-      sessionService.touch(sessionId);
     }
     deps.userService?.setLastSelection(authUser.id, projectId, sessionId);
     return { ok: true };

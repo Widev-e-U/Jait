@@ -3646,6 +3646,7 @@ export function registerChatRoutes(
     }
     try {
       sessionService?.touch(sessionId);
+      sessionService?.markViewed(sessionId, authUser.id);
       if (sessionRecord?.projectId) {
         projectService?.touch(sessionRecord.projectId);
       }
@@ -5356,7 +5357,10 @@ export function registerChatRoutes(
     }
     const truncatedHistory = sessionHistory.get(sessionId) ?? [];
 
-    try { sessionService?.touch(sessionId); } catch { /* ignore */ }
+    try {
+      sessionService?.touch(sessionId);
+      sessionService?.markViewed(sessionId, authUser.id);
+    } catch { /* ignore */ }
 
     const windowed = db
       ? persistedMessageWindow(db, sessionId, DEFAULT_UI_MESSAGE_LIMIT)
