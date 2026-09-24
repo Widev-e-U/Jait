@@ -26,6 +26,7 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.google.firebase.messaging.FirebaseMessaging;
 import java.util.Objects;
+import java.util.UUID;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -53,6 +54,22 @@ public class AgentOverlayPlugin extends Plugin {
         registerResultReceiver();
         createNotificationChannel();
         NotificationNavigation.capture(getContext(), getActivity().getIntent());
+    }
+
+    @PluginMethod
+    public void getOrCreateDeviceId(PluginCall call) {
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences("jait-identity", Context.MODE_PRIVATE);
+        String deviceId = prefs.getString("deviceId", null);
+        if (deviceId == null || deviceId.isEmpty()) {
+            String candidate = call.getString("candidate");
+            deviceId = candidate != null && !candidate.trim().isEmpty()
+                ? candidate.trim()
+                : "capacitor-" + UUID.randomUUID();
+            prefs.edit().putString("deviceId", deviceId).apply();
+        }
+        JSObject result = new JSObject();
+        result.put("deviceId", deviceId);
+        call.resolve(result);
     }
 
     @PluginMethod

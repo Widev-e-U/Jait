@@ -1,3 +1,11 @@
+interface NativeDeviceIdentity {
+  getOrCreateDeviceId(options: { candidate: string | null }): Promise<{ deviceId: string }>
+}
+
+function nativeDeviceIdentity(): NativeDeviceIdentity | undefined {
+  return (window as any).Capacitor?.Plugins?.AgentOverlay as NativeDeviceIdentity | undefined
+}
+
 /**
  * Device identification utilities.
  *
@@ -8,7 +16,7 @@
 
 export function detectPlatform(): 'desktop' | 'capacitor' | 'web' {
   if (typeof window !== 'undefined' && (window as any).jaitDesktop) return 'desktop'
-  if (typeof window !== 'undefined' && 'Capacitor' in window) return 'capacitor'
+  if (typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.() === true) return 'capacitor'
   return 'web'
 }
 
@@ -85,7 +93,22 @@ export async function initDeviceId(): Promise<string> {
     return id
   }
 
-  // Non-desktop: localStorage only
+  // Android's native preferences survive WebView origin and storage changes.
+  // Seed them with the current ID on upgrade so existing grants remain valid.
+  if (platform === 'capacitor' && (window as any).Capacitor?.getPlatform?.() === 'android') {
+    try {
+      const identity = nativeDeviceIdentity()
+      if (!identity) throw new Error('Native device identity unavailable')
+      const { deviceId } = await identity.getOrCreateDeviceId({ candidate: readStoredDeviceId(storageKey) })
+      _cachedDeviceId = deviceId
+      persistDeviceId(storageKey, deviceId)
+      return deviceId
+    } catch {
+      // Older app builds do not expose this native method yet.
+    }
+  }
+
+  // Web and older native builds: localStorage fallback.
   const stored = readStoredDeviceId(storageKey)
   if (stored) {
     _cachedDeviceId = stored

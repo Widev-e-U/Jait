@@ -52,10 +52,16 @@ describe('detectPlatform', () => {
     expect(detectPlatform()).toBe('desktop')
   })
 
-  it('returns "capacitor" when Capacitor is present', async () => {
-    windowMock.Capacitor = {}
+  it('returns "capacitor" when the native bridge is present', async () => {
+    windowMock.Capacitor = { isNativePlatform: () => true }
     const { detectPlatform } = await loadModule()
     expect(detectPlatform()).toBe('capacitor')
+  })
+
+  it('does not mistake a bundled Capacitor global for the native app', async () => {
+    windowMock.Capacitor = { isNativePlatform: () => false }
+    const { detectPlatform } = await loadModule()
+    expect(detectPlatform()).toBe('web')
   })
 
   it('returns "web" by default', async () => {
@@ -109,7 +115,7 @@ describe('generateDeviceId (sync)', () => {
   })
 
   it('uses capacitor prefix on Capacitor platform', async () => {
-    windowMock.Capacitor = {}
+    windowMock.Capacitor = { isNativePlatform: () => true }
     const { generateDeviceId } = await loadModule()
     const id = generateDeviceId()
     expect(id).toMatch(/^capacitor-/)
@@ -131,6 +137,28 @@ describe('generateDeviceId (sync)', () => {
 })
 
 describe('initDeviceId (async)', () => {
+  it('keeps the Android node ID after WebView storage is cleared', async () => {
+    let nativeId: string | null = null
+    const getOrCreateDeviceId = vi.fn(async ({ candidate }: { candidate: string | null }) => {
+      nativeId ??= candidate ?? 'capacitor-native-1'
+      return { deviceId: nativeId }
+    })
+    windowMock.Capacitor = {
+      isNativePlatform: () => true,
+      getPlatform: () => 'android',
+      Plugins: { AgentOverlay: { getOrCreateDeviceId } },
+    }
+    localStorageMap.set('jait-device-id-capacitor', 'capacitor-existing-1')
+    const first = await (await loadModule()).initDeviceId()
+    expect(first).toBe('capacitor-existing-1')
+
+    vi.resetModules()
+    localStorageMap.clear()
+    const second = await (await loadModule()).initDeviceId()
+    expect(second).toBe(first)
+    expect(getOrCreateDeviceId).toHaveBeenLastCalledWith({ candidate: null })
+  })
+
   describe('web platform', () => {
     it('generates and stores a new ID when nothing exists', async () => {
       const { initDeviceId } = await loadModule()
