@@ -288,7 +288,8 @@ export function ThreadsPage({
                     iconOnly={isMobile}
                   />
                 )}
-                <div className="max-h-[40vh] overflow-y-auto">
+                <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
+                <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
                   {automation.selectedThreadTodos.length > 0 && (
                     <TodoList items={automation.selectedThreadTodos} merged />
                   )}
@@ -329,8 +330,10 @@ export function ThreadsPage({
                     onSearchFiles={onSearchFiles}
                     projectOpen={showProject}
                     chatId={automation.selectedThread?.id ?? undefined}
+                    merged
                   />
                 </ErrorBoundary>
+                </div>
                 <div className="flex items-center gap-2 px-1 mt-1.5">
                   {selectedThreadRepoRuntime && <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />}
                   {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (

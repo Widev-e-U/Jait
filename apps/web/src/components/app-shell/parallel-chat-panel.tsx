@@ -459,7 +459,9 @@ function ParallelChatPanelImpl({
             iconOnly={isMobile}
           />
         )}
+        <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
         <PromptInput
+          merged
           value={draft}
           syncKey={inputVersion}
           draftStateKey={`parallel:${session.id}`}
@@ -493,6 +495,7 @@ function ParallelChatPanelImpl({
           projectId={session.projectId}
           chatId={session.id}
         />
+        </div>
         {composerControlRow}
         </div>
       </div>

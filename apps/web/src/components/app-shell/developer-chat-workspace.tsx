@@ -689,6 +689,7 @@ export function DeveloperChatWorkspace({
               {limitReached && (
                 <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
               )}
+              <div className="rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 overflow-hidden">
               <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
                 {developerChatUiState.showTodoList && (
                   <TodoList items={todoList} onClear={onClearTodoList} merged />
@@ -756,8 +757,10 @@ export function DeveloperChatWorkspace({
                   sessionInfo={sessionInfo}
                   projectNodeId={projectNodeId ?? undefined}
                   projectId={activeProjectId}
+                  merged
                 />
               </ErrorBoundary>
+              </div>
               {developerComposerControlRow}
             </div>
           </div>
