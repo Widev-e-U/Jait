@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.876](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.876) — 2026-09-24
+- fix(web): restore merged todo + file-changes surface around chat composer — eeefc180
+
 ## [v0.1.875](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.875) — 2026-09-24
 - feat(web): scrollable chat sidebar panes with draggable persisted divider — 9e55ed95
 - feat(manager): fully-working agents page with node permission management — 201e0928
