@@ -13,6 +13,8 @@ import {
   LogOut,
   Mail,
   MessageSquare,
+  MessagesSquare,
+  UsersRound,
   Monitor,
   Moon,
   Settings,
@@ -166,7 +168,10 @@ export function AppHeader(props: AppHeaderProps) {
   }, [hasCentered])
 
   // Nav items in display order (leftmost first). Items overflow right-to-left.
-  const navItems: ProgressiveNavItem[] = [
+  const navItems: ProgressiveNavItem[] = viewMode === 'manager' ? [
+    { id: 'agents', label: 'Agents', icon: UsersRound, active: currentView === 'agents', onSelect: () => setCurrentView('agents') },
+    { id: 'threads', label: 'Threads', icon: MessagesSquare, active: currentView === 'threads', onSelect: () => setCurrentView('threads') },
+  ] : [
     { id: 'chat', label: 'Chat', icon: MessageSquare, active: currentView === 'chat', onSelect: () => setCurrentView('chat') },
     { id: 'pulls', label: 'Pull Requests', shortLabel: 'PRs', icon: GitPullRequest, active: currentView === 'pulls', onSelect: () => setCurrentView('pulls') },
     { id: 'todo', label: 'Todo', icon: ListChecks, active: currentView === 'todo', onSelect: () => setCurrentView('todo') },
@@ -233,7 +238,7 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
 
           {/* Full nav only appears when it cannot collide with the centered mode selector. */}
-          {!isMobile && viewMode === 'developer' && (
+          {!isMobile && (
             <ProgressiveNav
               items={navItems}
               availableWidth={navAvailableWidth}
@@ -243,7 +248,6 @@ export function AppHeader(props: AppHeaderProps) {
             />
           )}
 
-          {viewMode === 'manager' && <div className="min-w-0 flex-1" />}
 
           {/* Center: ViewModeSelector OR voice controls when voice active */}
           {voiceOverlayOpen ? (

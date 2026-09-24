@@ -1,10 +1,9 @@
-import { Boxes, Bug, Code, FolderOpen, Folders, GitBranch, Globe, Settings, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, Bug, Code, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { useRef, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ModeSidebar, type ModeSidebarItem } from '@/components/app-shell/mode-sidebar'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
 import type { ActiveProjectState } from '@/lib/active-project'
@@ -154,143 +153,25 @@ export function DeveloperSidebars({
   return (
     <>
       {!isMobile && (
-        <aside className="flex w-12 shrink-0 flex-col items-center gap-2 border-r bg-background px-1 py-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showSidebar && sidebarView === 'projects' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-9 w-9 rounded-md p-0"
-                onClick={() => onSelectSidebarView('projects')}
-                aria-label="Projects and chats"
-                aria-pressed={showSidebar && sidebarView === 'projects'}
-              >
-                <Folders className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Projects & Chats</TooltipContent>
-          </Tooltip>
-          {(activeProjectId || activeProject) && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showSidebar && sidebarView === 'files' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-9 w-9 rounded-md p-0"
-                  onClick={() => onSelectSidebarView('files')}
-                  aria-label="Files"
-                  aria-pressed={showSidebar && sidebarView === 'files'}
-                >
-                  <FolderOpen className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Files</TooltipContent>
-            </Tooltip>
-          )}
-          {(activeProjectId || activeProject) && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showSidebar && sidebarView === 'git' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="relative h-9 w-9 rounded-md p-0"
-                  onClick={() => onSelectSidebarView('git')}
-                  aria-label="Source Control"
-                  aria-pressed={showSidebar && sidebarView === 'git'}
-                >
-                  <GitBranch className="h-4 w-4" />
-                  {changedFilesCount > 0 && (
-                    <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">
-                      {changedFilesCount > 99 ? '99+' : changedFilesCount}
-                    </span>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">Source Control</TooltipContent>
-            </Tooltip>
-          )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant={showTerminal ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={onToggleTerminal} aria-label="Terminal">
-                <TerminalIcon className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Terminal</TooltipContent>
-          </Tooltip>
-          {(activeProjectId || activeProject) && (
-            <>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showProject && showProjectEditor ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-9 w-9 rounded-md p-0"
-                    onClick={onToggleEditor}
-                    aria-label="Editor"
-                    aria-pressed={showProject && showProjectEditor}
-                  >
-                    <Code className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Editor</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={previewOpen ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-9 w-9 rounded-md p-0"
-                    aria-label="Preview"
-                    disabled={authLoading || projectsLoading}
-                    onClick={onTogglePreview}
-                  >
-                    <Globe className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Preview</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showArchitecture ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-9 w-9 rounded-md p-0"
-                    disabled={authLoading || projectsLoading}
-                    aria-label="Architecture"
-                    onClick={onToggleArchitecture}
-                  >
-                    <Boxes className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">Architecture</TooltipContent>
-              </Tooltip>
-            </>
-          )}
-          <div className="flex-1" />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showDebugPanel ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-9 w-9 rounded-md p-0"
-                disabled={!activeSessionId}
-                aria-label="Trajectory"
-                onClick={onToggleDebug}
-              >
-                <Bug className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Trajectory</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-9 w-9 rounded-md p-0" aria-label="Settings" onClick={onOpenSettings}>
-                <Settings className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Settings</TooltipContent>
-          </Tooltip>
-        </aside>
+        <ModeSidebar
+          items={[
+            { id: 'projects', label: 'Projects & Chats', icon: Folders, active: showSidebar && sidebarView === 'projects', onSelect: () => onSelectSidebarView('projects') },
+            ...((activeProjectId || activeProject) ? [
+              { id: 'files', label: 'Files', icon: FolderOpen, active: showSidebar && sidebarView === 'files', onSelect: () => onSelectSidebarView('files') },
+              { id: 'git', label: 'Source Control', icon: GitBranch, active: showSidebar && sidebarView === 'git', badge: changedFilesCount, onSelect: () => onSelectSidebarView('git') },
+            ] : []),
+            { id: 'terminal', label: 'Terminal', icon: TerminalIcon, active: showTerminal, onSelect: onToggleTerminal },
+            ...((activeProjectId || activeProject) ? [
+              { id: 'editor', label: 'Editor', icon: Code, active: showProject && showProjectEditor, onSelect: onToggleEditor },
+              { id: 'preview', label: 'Preview', icon: Globe, active: previewOpen, disabled: authLoading || projectsLoading, onSelect: onTogglePreview },
+              { id: 'architecture', label: 'Architecture', icon: Boxes, active: showArchitecture, disabled: authLoading || projectsLoading, onSelect: onToggleArchitecture },
+            ] : []),
+          ] satisfies ModeSidebarItem[]}
+          bottomItems={[
+            { id: 'trajectory', label: 'Trajectory', icon: Bug, active: showDebugPanel, disabled: !activeSessionId, onSelect: onToggleDebug },
+          ]}
+          onOpenSettings={onOpenSettings}
+        />
       )}
 
       {showSidebar && sidebarView === 'projects' && !isMobile && (

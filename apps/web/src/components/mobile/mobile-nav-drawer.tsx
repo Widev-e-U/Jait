@@ -35,8 +35,8 @@ const NAV_ITEMS: readonly NavItem[] = [
 ] as const
 
 const MANAGER_NAV_ITEMS: readonly NavItem[] = [
-  { view: 'threads', label: 'Threads', icon: MessagesSquare },
   { view: 'agents', label: 'Agents', icon: UsersRound },
+  { view: 'threads', label: 'Threads', icon: MessagesSquare },
 ]
 
 interface MobileNavDrawerProps {

@@ -460,6 +460,7 @@ const SETTINGS_TAB_LABELS: Record<SettingsTab, string> = {
 }
 
 interface SettingsPageProps {
+  focusNodeId: string | null
   username: string
   token: string | null
   apiKeys: Record<string, string>
@@ -487,6 +488,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({
+  focusNodeId,
   username,
   token,
   apiKeys,
@@ -561,6 +563,7 @@ export function SettingsPage({
   } | null>(null)
   const [providerLoginCode, setProviderLoginCode] = useState('')
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    if (focusNodeId) return 'nodes'
     try {
       const saved = window.localStorage.getItem('jait.settings.activeTab')
       return saved && Object.hasOwn(SETTINGS_TAB_LABELS, saved) ? saved as SettingsTab : 'general'
@@ -577,7 +580,7 @@ export function SettingsPage({
     let saved = 0
     try { saved = Math.max(0, Number(window.sessionStorage.getItem(key)) || 0) } catch { /* storage may be disabled */ }
     let restoring = true
-    const restore = () => { if (scroller) scroller.scrollTop = saved }
+    const restore = () => { if (scroller && !focusNodeId) scroller.scrollTop = saved }
     const frame = window.requestAnimationFrame(restore)
     const timer = window.setTimeout(() => { restore(); restoring = false }, 250)
     const onScroll = () => {
@@ -590,10 +593,16 @@ export function SettingsPage({
       window.clearTimeout(timer)
       scroller?.removeEventListener('scroll', onScroll)
     }
-  }, [activeTab])
+  }, [activeTab, focusNodeId])
   const [search, setSearch] = useState(() => {
     try { return window.sessionStorage.getItem('jait.settings.search') ?? '' } catch { return '' }
   })
+  useEffect(() => {
+    if (focusNodeId) {
+      setActiveTab('nodes')
+      setSearch('')
+    }
+  }, [focusNodeId])
   useEffect(() => {
     try { window.sessionStorage.setItem('jait.settings.search', search) } catch { /* storage may be disabled */ }
   }, [search])
@@ -2462,7 +2471,7 @@ const providerAccountsCard = (
         </TabsContent>
 
         <TabsContent value="nodes" className="space-y-6">
-          <NodesPermissionsTab token={token} />
+          <NodesPermissionsTab token={token} focusNodeId={focusNodeId} />
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">

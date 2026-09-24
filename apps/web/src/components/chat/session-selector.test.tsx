@@ -226,14 +226,15 @@ describe('SessionSelector', () => {
     )
 
     expect(markup).toContain('h-3.5 w-3.5')
-    expect(markup).toContain('truncate text-xs font-medium')
+    expect(markup).toContain('truncate text-xs font-semibold')
     expect(markup).not.toContain('h-4 w-4 shrink-0')
     expect(markup).not.toContain('truncate text-sm font-medium')
   })
 
-  it('renders an unread dot for sessions with new activity since last viewed', () => {
+  it('renders unread session and project names in bold', () => {
     const project = createProject()
-    // Session 1: never viewed → unread. Session 2: viewed after last activity → read.
+    // Session 1 has new activity; session 2 was viewed after its last activity.
+    project.sessions[0].lastActiveAt = '2026-07-06T00:00:01.000Z'
     project.sessions[1].viewedAt = '2026-07-06T00:00:00.500Z' // after its lastActiveAt
     const markup = renderToStaticMarkup(
       <SessionSelector
@@ -245,13 +246,12 @@ describe('SessionSelector', () => {
         onChangeDirectory={() => {}}
       />
     )
-    expect(markup).toContain('rounded-full bg-blue-500')
+    expect(markup).toContain('truncate text-xs font-semibold')
   })
 
-  it('does not render an unread dot for the active session', () => {
+  it('keeps a read active session at normal weight', () => {
     const project = createProject()
-    // Mark every session as already read so the only unread candidate is the
-    // active one (session-1, never viewed) whose dot must be suppressed.
+    // Mark every session as read, including the active one.
     project.sessions.forEach((session) => { session.viewedAt = '2026-07-07T00:00:00.000Z' })
     const markup = renderToStaticMarkup(
       <SessionSelector
@@ -264,9 +264,8 @@ describe('SessionSelector', () => {
         onChangeDirectory={() => {}}
       />
     )
-    // Session 1 is active (never viewed) but its dot is suppressed.
-    const unreadCount = (markup.match(/rounded-full bg-blue-500/g) ?? []).length
-    expect(unreadCount).toBe(0)
+    expect(markup).not.toContain('bg-blue-500')
+    expect(markup).toContain('truncate text-xs font-normal')
   })
 
   it('keeps project actions visible on mobile alongside the editor state', () => {

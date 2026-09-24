@@ -2,6 +2,7 @@ import { CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } from 'l
 
 import { ManagerRepoPicker } from '@/components/manager/manager-thread-ui'
 import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
+import { ChatComposerSurface } from '@/components/chat/chat-composer-surface'
 import { SessionSwitcher } from '@/components/chat/session-switcher'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -75,90 +76,99 @@ export function DeveloperComposerControlRow({
   ) : null
 
   return (
-    <div className={`${compact ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
-      <div className={`${compact ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
-        <div className={`${compact ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
-          {sendTarget === 'thread' ? (
-            threadToolbarRepoPicker
-          ) : (
-            <SessionSwitcher
-              sessions={activeProjectSessions}
-              activeSessionId={activeSessionId}
-              projectTitle={activeProjectTitle ?? 'Personal chat'}
-              onSelectSession={(sessionId) => onSelectSession(activeProjectId, sessionId)}
-              onNewSession={onCreateSession}
-              onOpenChange={onSessionSwitcherOpenChange}
-              showTitle={false}
-              triggerLabel="History"
-            />
-          )}
-          {approveAllInSession && (
-            <TooltipHint side="bottom" content="Auto-approved. Clear approve all">
-            <button
-              type="button"
-              onClick={onClearApproveAll}
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-600 transition-colors hover:bg-green-500/20 dark:text-green-400"
-              aria-label="Auto-approved. Clear approve all"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-            </button>
-            </TooltipHint>
-          )}
-        </div>
-        {!compact && (
-          <div className="justify-self-center">
-            <SendTargetSelector
-              target={sendTarget}
-              onChange={onSendTargetChange}
-              disabled={disableSendTargetSelector}
-            />
+    <>
+      <ChatComposerSurface>
+      <div className={`${compact ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
+        <div className={`${compact ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
+          <div className={`${compact ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
+            {sendTarget === 'thread' ? (
+              threadToolbarRepoPicker
+            ) : (
+              <SessionSwitcher
+                sessions={activeProjectSessions}
+                activeSessionId={activeSessionId}
+                projectTitle={activeProjectTitle ?? 'Personal chat'}
+                onSelectSession={(sessionId) => onSelectSession(activeProjectId, sessionId)}
+                onNewSession={onCreateSession}
+                onOpenChange={onSessionSwitcherOpenChange}
+                showTitle={false}
+                triggerLabel="History"
+              />
+            )}
           </div>
-        )}
-        <div className={`${compact ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
-          {sendTarget !== 'thread' && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <MessageSquarePlus className="h-3.5 w-3.5" />
-                  New chat
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onSelect={onStartNewChat} className="gap-2 text-xs">
-                  <MessageSquarePlus className="h-3.5 w-3.5" />
-                  Open here
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={onStartNewChatInTab} className="gap-2 text-xs" disabled={!onStartNewChatInTab}>
-                  <PanelRightOpen className="h-3.5 w-3.5" />
-                  Open in new tab
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={onStartNewChatInWindow} className="gap-2 text-xs" disabled={!onStartNewChatInWindow}>
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open in new window
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {compact && (
-            <div className="shrink-0">
+          {!compact && (
+            <div className="justify-self-center">
               <SendTargetSelector
                 target={sendTarget}
                 onChange={onSendTargetChange}
                 disabled={disableSendTargetSelector}
-                compact
               />
             </div>
           )}
-          {remainingPrompts !== null && (
-            <span className={`${compact ? 'hidden' : 'shrink-0'} text-xs text-muted-foreground`}>{remainingPrompts} remaining</span>
-          )}
+          <div className={`${compact ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
+            {sendTarget !== 'thread' && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <MessageSquarePlus className="h-3.5 w-3.5" />
+                    New chat
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onSelect={onStartNewChat} className="gap-2 text-xs">
+                    <MessageSquarePlus className="h-3.5 w-3.5" />
+                    Open here
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onStartNewChatInTab} className="gap-2 text-xs" disabled={!onStartNewChatInTab}>
+                    <PanelRightOpen className="h-3.5 w-3.5" />
+                    Open in new tab
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onStartNewChatInWindow} className="gap-2 text-xs" disabled={!onStartNewChatInWindow}>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Open in new window
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {compact && (
+              <div className="shrink-0">
+                <SendTargetSelector
+                  target={sendTarget}
+                  onChange={onSendTargetChange}
+                  disabled={disableSendTargetSelector}
+                  compact
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      </ChatComposerSurface>
+      {(approveAllInSession || (!compact && remainingPrompts !== null)) && (
+        <div className="flex items-center justify-between px-2 text-xs text-muted-foreground">
+          {approveAllInSession && (
+            <TooltipHint side="bottom" content="Auto-approved. Clear approve all">
+              <button
+                type="button"
+                onClick={onClearApproveAll}
+                className="inline-flex h-7 items-center gap-1.5 rounded-md px-1 text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400"
+                aria-label="Auto-approved. Clear approve all"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Auto-approved
+              </button>
+            </TooltipHint>
+          )}
+          {remainingPrompts !== null && !compact && (
+            <span className="ml-auto">{remainingPrompts} remaining</span>
+          )}
+        </div>
+      )}
+    </>
   )
 }

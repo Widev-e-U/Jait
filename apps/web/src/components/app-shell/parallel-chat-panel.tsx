@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { X } from 'lucide-react'
 
-import { ChatComposerSurface, Conversation, Message, MessageQueue, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
+import { Conversation, Message, MessageQueue, PromptInput, type PromptSkill, type ReferencedFile } from '@/components/chat'
 import { Button } from '@/components/ui/button'
 import { useChat, type ChatAttachment, type ChatMode } from '@/hooks/useChat'
 import type { ProjectSession } from '@/hooks/useProjects'
@@ -403,7 +403,7 @@ function ParallelChatPanelImpl({
 
       <Conversation
         onLatestContentViewed={viewedActivityAt ? handleLatestContentViewed : undefined}
-        className="min-h-0 flex-1 border-b"
+        className="min-h-0 flex-1"
         loading={isLoadingHistory}
         loadingLabel="Loading chat"
         messageContents={messageContents}
@@ -459,7 +459,6 @@ function ParallelChatPanelImpl({
             iconOnly={isMobile}
           />
         )}
-        <ChatComposerSurface>
         <PromptInput
           value={draft}
           syncKey={inputVersion}
@@ -493,8 +492,8 @@ function ParallelChatPanelImpl({
           projectNodeId={projectNodeId ?? undefined}
           projectId={session.projectId}
           chatId={session.id}
+          merged
         />
-        </ChatComposerSurface>
         {composerControlRow}
         </div>
       </div>

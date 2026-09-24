@@ -1,6 +1,6 @@
 export type AppView = 'chat' | 'pulls' | 'todo' | 'email' | 'calendar' | 'memory' | 'jobs' | 'network' | 'settings' | 'threads' | 'agents'
 
-export const APP_VIEWS: readonly AppView[] = ['chat', 'pulls', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings', 'threads', 'agents']
+export const APP_VIEWS: readonly AppView[] = ['chat', 'pulls', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings', 'agents', 'threads']
 
 /**
  * Normalize a raw path/host segment into an {@link AppView}.

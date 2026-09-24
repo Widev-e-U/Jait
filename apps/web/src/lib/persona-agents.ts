@@ -18,7 +18,15 @@ export interface PersonaAgentDraft {
 }
 
 export const PERSONA_AGENTS_STORAGE_KEY = 'jait.personaAgentDrafts'
-export const PERSONA_AVATARS = ['🦊', '🦉', '🐼', '🦁', '🐻', '🦋', '🌿', '⭐', '🎨', '🧭'] as const
+export const PERSONA_AVATARS = ['Nova', 'Atlas', 'Pixel', 'Orbit', 'Echo', 'Sage', 'Bolt', 'Muse', 'Scout', 'Cosmo'] as const
+const LEGACY_PERSONA_AVATARS = ['🦊', '🦉', '🐼', '🦁', '🐻', '🦋', '🌿', '⭐', '🎨', '🧭'] as const
+
+export function normalizePersonaAvatar(avatar: unknown): typeof PERSONA_AVATARS[number] {
+  if (typeof avatar !== 'string') return PERSONA_AVATARS[0]
+  const legacyIndex = LEGACY_PERSONA_AVATARS.findIndex((legacy) => legacy === avatar)
+  if (legacyIndex !== -1) return PERSONA_AVATARS[legacyIndex]
+  return PERSONA_AVATARS.find((choice) => choice === avatar) ?? PERSONA_AVATARS[0]
+}
 
 export function readPersonaAgentDrafts(): PersonaAgentDraft[] {
   if (typeof window === 'undefined') return []
@@ -42,7 +50,7 @@ export function readPersonaAgentDrafts(): PersonaAgentDraft[] {
       && agent.notificationEvents.every((event: unknown) => event === 'task_done' || event === 'blocked' || event === 'question')
     ).map((agent) => ({
       ...agent,
-      avatar: typeof agent.avatar === 'string' && PERSONA_AVATARS.includes(agent.avatar as typeof PERSONA_AVATARS[number]) ? agent.avatar : PERSONA_AVATARS[0],
+      avatar: normalizePersonaAvatar(agent.avatar),
       providerId: agent.providerId === 'codex' || agent.providerId === 'claude-code' ? agent.providerId : 'jait',
       skillIds: Array.isArray(agent.skillIds) ? agent.skillIds.filter((id): id is string => typeof id === 'string') : [],
     }))

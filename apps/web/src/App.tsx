@@ -101,7 +101,7 @@ import { enrichChangedFilesWithDiffCounts } from '@/lib/project-path'
 import {
   mergeAttachmentsIntoSegments
 } from '@/lib/message-segment-builders'
-import { VIEW_MODE_STORAGE_KEY, readStoredViewMode, readStoredManagerPage, storeManagerPage } from '@/lib/view-mode-storage'
+import { VIEW_MODE_STORAGE_KEY, readStoredViewMode } from '@/lib/view-mode-storage'
 import { areAvailableFilesEqual, type AvailableFileForMention } from '@/lib/mention-files'
 import { activeProjectDuringSwitch, areActiveProjectsEqual, type ActiveProjectState } from '@/lib/active-project'
 import {
@@ -260,9 +260,10 @@ function App() {
     prewarmDraftRef.current(text)
   }, [handleInputChange],)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
+  const [nodeSettingsTargetId, setNodeSettingsTargetId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0]
-    return parseAppView(path) ?? (path === '' && readStoredViewMode() === 'manager' ? readStoredManagerPage() : 'chat')
+    return parseAppView(path) ?? (path === '' && readStoredViewMode() === 'manager' ? 'agents' : 'chat')
   })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
@@ -356,7 +357,7 @@ function App() {
   const managerCliModel = cliModelsByProvider[managerProvider] ?? null
   const viewMode: ViewMode = currentView === 'settings' ? readStoredViewMode() : currentView === 'threads' || currentView === 'agents' ? 'manager' : 'developer'
   const setViewMode = useCallback((mode: ViewMode) => {
-    setCurrentView(mode === 'manager' ? readStoredManagerPage() : 'chat')
+    setCurrentView(mode === 'manager' ? 'agents' : 'chat')
   }, [])
   const threadProvider = viewMode === 'manager' ? managerProvider : chatProvider
   const threadProviderRuntimeMode = viewMode === 'manager' ? managerProviderRuntimeMode : chatProviderRuntimeMode
@@ -2514,7 +2515,6 @@ function App() {
 
   useEffect(() => {
     if (currentView !== 'settings') window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
-    if (currentView === 'threads' || currentView === 'agents') storeManagerPage(currentView)
   }, [currentView, viewMode])
 
   useEffect(() => {
@@ -4988,7 +4988,10 @@ function App() {
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
-        {showNodePermissionsGate && <NodePermissionsGate token={token} />}
+        {showNodePermissionsGate && <NodePermissionsGate token={token} onOpenNodeSettings={(nodeId) => {
+          setNodeSettingsTargetId(nodeId)
+          setCurrentView('settings')
+        }} />}
         {!requiresAuthGate && (
           <>
             <AppHeader
@@ -5169,6 +5172,7 @@ function App() {
                 cliModel={cliModel}
                 currentView={currentView}
                 isMobile={isMobile}
+                nodeSettingsTargetId={nodeSettingsTargetId}
                 repositories={automation.repositories}
                 jaitBackend={settings.jait_backend ?? 'openai'}
                 chatStreamingAction={settings.chat_streaming_action ?? 'steer'}

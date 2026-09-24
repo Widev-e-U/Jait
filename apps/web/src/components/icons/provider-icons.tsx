@@ -98,6 +98,26 @@ export const QwenIcon = brand(Qwen)
 export const WindsurfIcon = brand(Windsurf)
 export const ZhipuIcon = brand(Zhipu)
 
+const COLOR_ICONS: Array<{ test: RegExp; icon: ProviderIconComponent }> = [
+  { test: /claude[-_]?code|claudecode/, icon: brand(ClaudeCode.Color) },
+  { test: /claude/, icon: brand(Claude.Color) },
+  { test: /codex/, icon: brand(Codex.Color) },
+  { test: /deepseek/, icon: brand(DeepSeek.Color) },
+  { test: /gemini|google|vertex|pi[-_]?gemini/, icon: brand(Gemini.Color) },
+  { test: /kimi/, icon: brand(Kimi.Color) },
+  { test: /mistral/, icon: brand(Mistral.Color) },
+  { test: /perplexity/, icon: brand(Perplexity.Color) },
+  { test: /qwen|tongyi/, icon: brand(Qwen.Color) },
+  { test: /zhipu|chatglm|glm/, icon: brand(Zhipu.Color) },
+]
+
+/** Use the provider's full-color mark when one exists. */
+export function providerBrandColorIcon(idOrType: string | undefined | null): ProviderIconComponent | null {
+  if (!idOrType) return null
+  const key = idOrType.trim().toLowerCase()
+  return COLOR_ICONS.find(({ test }) => test.test(key))?.icon ?? null
+}
+
 /**
  * Ordered provider-id/type → icon matchers. The first matching pattern wins, so
  * more specific patterns (e.g. `claude-code`, `github-copilot`) must precede

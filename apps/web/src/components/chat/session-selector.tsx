@@ -24,7 +24,7 @@ import { buildChatDragPayload, buildProjectDragPayload, JAIT_CHAT_REF_MIME, JAIT
 import type { AutomationRepository } from '@/lib/automation-repositories'
 import { getLatestProjectSessionId } from '@/lib/project-sessions'
 import { getProjectRepository } from '@/lib/project-repositories'
-import { SessionRow } from '@/components/chat/session-row'
+import { SessionRow, isSessionUnread } from '@/components/chat/session-row'
 import { formatAgo } from '@/lib/relative-time'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -588,6 +588,7 @@ export function SessionSelector({
                   const offline = isNodeOffline(project.nodeId, onlineNodeIds)
                   const pathMissing = project.rootPathStatus === 'missing'
                   const repository = getProjectRepository(project, repositories)
+                  const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
                   const sortedSessions = [...project.sessions]
                     .sort((a, b) =>
                       Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt
@@ -694,7 +695,7 @@ export function SessionSelector({
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
                           <ProjectColorDot color={project.color} />
-                          <span className="min-w-0 truncate text-xs font-medium">
+                          <span className={`min-w-0 truncate text-xs ${hasUnreadSessions ? 'font-semibold' : 'font-normal'}`}>
                             {project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')}
                           </span>
                           {project.instructions?.trim() && (
@@ -756,8 +757,6 @@ export function SessionSelector({
                         )}
                         {isActiveProject && sessionInfo && (
                           <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
-                            <span className="truncate">{sessionInfo.provider}</span>
-                            <span className="shrink-0 text-muted-foreground">·</span>
                             <Monitor className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">
                               {sessionInfo.isRemote && sessionInfo.remoteNode

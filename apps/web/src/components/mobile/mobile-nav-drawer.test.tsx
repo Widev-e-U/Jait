@@ -24,6 +24,7 @@ describe('MobileNavDrawer', () => {
     const markup = renderToStaticMarkup(<MobileNavDrawer open onClose={() => {}} currentView="agents" onNavigate={() => {}} sessionSelector={<div>Session list</div>} onOpenSettings={() => {}} />)
     expect(markup).toContain('aria-label="Threads"')
     expect(markup).toContain('aria-label="Agents"')
+    expect(markup.indexOf('aria-label="Agents"')).toBeLessThan(markup.indexOf('aria-label="Threads"'))
     expect(markup).not.toContain('aria-label="Chat"')
     expect(markup).not.toContain('Projects &amp; Chats')
   })

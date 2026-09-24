@@ -14,6 +14,10 @@ function renderRow(props: Partial<Parameters<typeof SessionRow>[0]> = {}) {
 }
 
 describe('isSessionUnread', () => {
+  it('keeps a new empty chat read', () => {
+    expect(isSessionUnread({ createdAt: '2026-08-01T00:00:00.000Z', lastActiveAt: '2026-08-01T00:00:00.000Z', viewedAt: null })).toBe(false)
+  })
+
   it('flags sessions never viewed', () => {
     expect(isSessionUnread({ lastActiveAt: '2026-08-01T00:00:00.000Z', viewedAt: null })).toBe(true)
   })
@@ -79,20 +83,34 @@ describe('SessionRow', () => {
     expect(html).toContain('lucide-message-square')
   })
 
-  it('marks the active row and hides its unread dot', () => {
+  it('keeps an unread active row bold until its content is acknowledged', () => {
     const html = renderRow({
       isActive: true,
       session: { id: 'chat-1', name: 'Deploy fix', viewedAt: null, lastActiveAt: '2026-08-01T00:00:00.000Z' },
     })
     expect(html).toContain('bg-secondary/70')
-    expect(html).not.toContain('bg-blue-500')
+    expect(html).toContain('truncate text-xs font-semibold')
   })
 
-  it('shows the unread dot for inactive unviewed rows', () => {
+  it('shows bold text for inactive unviewed rows', () => {
     const html = renderRow({
       session: { id: 'chat-1', name: 'Deploy fix', viewedAt: null, lastActiveAt: '2026-08-01T00:00:00.000Z' },
     })
-    expect(html).toContain('bg-blue-500')
+    expect(html).toContain('truncate text-xs font-semibold')
+  })
+
+  it('uses the provider color mark for unread chats and dims read chats', () => {
+    const session = {
+      id: 'chat-1', name: 'Deploy fix',
+      lastActiveAt: '2026-08-01T00:00:00.000Z',
+      metadata: JSON.stringify({ chat: { provider: 'gemini', model: 'gemini-2.5-pro' } }),
+    }
+    const unread = renderRow({ session })
+    const read = renderRow({ session: { ...session, viewedAt: session.lastActiveAt } })
+    expect(unread).toContain('font-semibold')
+    expect(unread).toContain('text-foreground')
+    expect(read).toContain('font-normal')
+    expect(read).toContain('opacity-55')
   })
 
   it('shows a spinner instead of the chat icon while streaming', () => {

@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { AuthProvider } from '@/hooks/useAuth'
 import { installVersionWatchdog } from '@/lib/version-watchdog'
 import App from './App'
+import { detectPlatform, initDeviceId } from '@/lib/device-id'
 import './index.css'
 
 // Auto-reload when a new bundle is deployed, so a long-lived tab never keeps
@@ -45,15 +46,24 @@ function ThemeAwareToaster() {
 // already implement correct cleanup and stable deps, so the double-invoke
 // provides no additional safety here. Re-enable StrictMode (wrap this render
 // tree) if you want dev-only strict warnings back; production is unaffected.
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary>
-    <AuthProvider>
-      <ConfirmDialogProvider>
-        <HotkeysProvider>
-          <App />
-          <ThemeAwareToaster />
-        </HotkeysProvider>
-      </ConfirmDialogProvider>
-    </AuthProvider>
-  </ErrorBoundary>,
-)
+function renderApp() {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <ErrorBoundary>
+      <AuthProvider>
+        <ConfirmDialogProvider>
+          <HotkeysProvider>
+            <App />
+            <ThemeAwareToaster />
+          </HotkeysProvider>
+        </ConfirmDialogProvider>
+      </AuthProvider>
+    </ErrorBoundary>,
+  )
+}
+
+// Resolve the phone's native identity before any hooks can stamp a node ID.
+if (detectPlatform() === 'capacitor') {
+  void initDeviceId().catch(() => {}).finally(renderApp)
+} else {
+  renderApp()
+}

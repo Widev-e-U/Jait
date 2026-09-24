@@ -51,7 +51,7 @@ function grantedCount(perms: Record<NodeCapability, boolean>): number {
  * launch it only surfaces a dismissible banner for other nodes whose grants are
  * still all-denied, prompting the user to configure them in Settings → Nodes.
  */
-export function NodePermissionsGate({ token }: { token: string | null }) {
+export function NodePermissionsGate({ token, onOpenNodeSettings }: { token: string | null; onOpenNodeSettings: (nodeId: string) => void }) {
   const isDesktop = typeof window !== 'undefined' && !!window.jaitDesktop
   const localNodeId = useMemo(() => (isDesktop ? generateDeviceId() : null), [isDesktop])
 
@@ -199,9 +199,15 @@ export function NodePermissionsGate({ token }: { token: string | null }) {
           <div className="text-sm">
             <div className="font-medium">A node needs your permission</div>
             <div className="text-muted-foreground">
-              {needsConfigNodes.map((n) => n.name).join(', ')} connected but has all capabilities{' '}
-              <strong>denied</strong>. Grant what you trust in Settings → Nodes.
+              {needsConfigNodes[0]?.name} connected with all capabilities <strong>denied</strong>.
+              {needsConfigNodes.length > 1 && ` ${needsConfigNodes.length - 1} more nodes need permissions.`}
             </div>
+            <Button size="sm" className="mt-2" onClick={() => {
+              setBannerDismissed(true)
+              onOpenNodeSettings(needsConfigNodes[0]!.id)
+            }}>
+              Go to this node in Settings
+            </Button>
           </div>
           <button
             onClick={() => setBannerDismissed(true)}

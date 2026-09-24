@@ -7,13 +7,13 @@ interface ChatComposerSurfaceProps {
   className?: string
 }
 
-/** Shared visual shell for the primary and additional chat composers. */
+/** Bordered toolbar for chat history, send target, and new chat controls. */
 export function ChatComposerSurface({ children, className }: ChatComposerSurfaceProps) {
   return (
     <div
       data-chat-composer-surface="true"
       className={cn(
-        'overflow-hidden rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+        'overflow-hidden rounded-xl border bg-background dark:bg-card px-2 py-1',
         className,
       )}
     >

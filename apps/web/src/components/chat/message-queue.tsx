@@ -183,6 +183,7 @@ function QueueItem({
       data-queue-id={item.id}
       className={cn(
         'group flex cursor-grab touch-none items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70 active:cursor-grabbing',
+        iconOnly && 'relative gap-1 pl-2 pr-1 py-2',
         dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
       )}
       onPointerDown={(event) => {
@@ -211,7 +212,7 @@ function QueueItem({
       </button>
       </TooltipHint>
 
-      {onReorder && !editing && (
+      {onReorder && !editing && !iconOnly && (
         <TooltipHint content="Drag to reorder">
         <div
           className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
@@ -223,9 +224,9 @@ function QueueItem({
       )}
 
       {/* Content: read-only or editable */}
-      <div className="flex-1 min-w-0">
+      <div className={cn('flex-1 min-w-0', iconOnly && editing && 'pt-6')}>
         {!editing && (
-          <span className="mb-0.5 flex items-center gap-1.5">
+          <span className={cn('mb-0.5 flex items-center gap-1.5', iconOnly && 'mb-3')}>
             {index === 0 ? (
               <span className="text-2xs font-medium uppercase tracking-wider text-primary/70">
                 Next
@@ -254,7 +255,7 @@ function QueueItem({
             className="w-full resize-none rounded border border-primary/30 bg-background px-2 py-1 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
           />
         ) : collapsed ? (
-          <span className="block truncate text-foreground">{item.displayContent ?? item.content}</span>
+          <span className={cn('block text-foreground', iconOnly ? 'line-clamp-2 break-words' : 'truncate')}>{item.displayContent ?? item.content}</span>
         ) : (
           <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
         )}
@@ -263,7 +264,8 @@ function QueueItem({
       {/* Action buttons */}
       <div className={cn(
         'mt-0.5 flex shrink-0 items-center gap-0.5 transition-opacity',
-        onSteer ? 'opacity-100' : showActions ? 'opacity-0 group-hover:opacity-100' : 'opacity-0',
+        iconOnly && 'absolute right-1 top-1.5 mt-0 gap-0',
+        iconOnly || onSteer ? 'opacity-100' : showActions ? 'opacity-0 group-hover:opacity-100' : 'opacity-0',
       )}>
         {editing ? (
           <>

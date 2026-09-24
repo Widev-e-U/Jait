@@ -148,8 +148,6 @@ interface PromptInputProps {
   syncKey?: number
   /** When true the input sits inside a shared composer surface and should not draw its own outer border. */
   merged?: boolean
-  /** When true and `merged` is also true, draw the top divider inside the shared composer surface. */
-  mergedShowTopDivider?: boolean
 }
 
 /* ------------------------------------------------------------------ */
@@ -749,7 +747,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   draftStateKey,
   syncKey,
   merged,
-  mergedShowTopDivider,
 }: PromptInputProps, ref) {
   const rootRef = useRef<HTMLDivElement>(null)
   const editableRef = useRef<HTMLDivElement>(null)
@@ -1829,7 +1826,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       className={cn(
         'group relative z-10 flex flex-col',
         merged
-          ? (mergedShowTopDivider ? 'border-t bg-background dark:bg-card' : 'bg-background dark:bg-card')
+          ? 'bg-transparent'
           : 'rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         !merged && dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,

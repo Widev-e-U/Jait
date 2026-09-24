@@ -23,7 +23,6 @@ vi.mock('@/components/chat', () => ({
   },
   Message: () => null,
   PromptInput: () => null,
-  ChatComposerSurface: () => null,
 }))
 import {
   ParallelChatPanel,

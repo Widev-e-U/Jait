@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
+import { Avatar, Style } from '@dicebear/core'
+import bottts from '@dicebear/styles/bottts.json' with { type: 'json' }
+import { ArrowLeft, Check, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { agentsApi, type AgentThread } from '@/lib/agents-api'
 import {
   newPersonaAgentDraft,
+  normalizePersonaAvatar,
   PERSONA_AGENTS_STORAGE_KEY,
   PERSONA_AVATARS,
   readPersonaAgentDrafts,
@@ -33,8 +36,19 @@ function agentStatus(agent: PersonaAgentDraft, threads: AgentThread[]): 'working
   return latest?.status === 'running' ? 'working' : latest?.status === 'error' ? 'needs attention' : 'idle'
 }
 
-function AgentAvatar({ avatar }: { avatar: string }) {
-  return <span aria-hidden="true" className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 via-sky-500/10 to-violet-500/20 text-3xl ring-1 ring-border">{avatar}</span>
+const avatarStyle = new Style(bottts)
+const avatarSources = new Map(PERSONA_AVATARS.map((seed) => [
+  seed,
+  new Avatar(avatarStyle, {
+    seed,
+    size: 128,
+    borderRadius: 50,
+    backgroundColor: ['#dbeafe', '#e9d5ff', '#cffafe', '#fce7f3', '#dcfce7'],
+  }).toDataUri(),
+]))
+
+function AgentAvatar({ avatar, className = 'h-20 w-20' }: { avatar: string; className?: string }) {
+  return <img alt="" src={avatarSources.get(normalizePersonaAvatar(avatar))} className={`${className} shrink-0 rounded-full object-cover`} />
 }
 
 function commaList(value: string): string[] {
@@ -83,7 +97,7 @@ export function AgentsPage({ repositories, availableSkills, threads, onOpenThrea
         if (!known.has(agent.id)) migrated.push(await agentsApi.savePersonaAgent(agent))
       }
       if (legacy.length) window.localStorage.removeItem(PERSONA_AGENTS_STORAGE_KEY)
-      if (!cancelled) setDrafts([...saved, ...migrated])
+      if (!cancelled) setDrafts([...saved, ...migrated].map((agent) => ({ ...agent, avatar: normalizePersonaAvatar(agent.avatar) })))
     }).catch((error) => {
       if (!cancelled) toast.error(error instanceof Error ? error.message : 'Could not load agents')
     }).finally(() => { if (!cancelled) setLoading(false) })
@@ -143,9 +157,9 @@ export function AgentsPage({ repositories, availableSkills, threads, onOpenThrea
           Agent profiles and linked tasks are saved on the server. Scheduled work and notifications are not active yet.
         </div>
         {loading && <p className="mt-6 text-sm text-muted-foreground">Loading agents…</p>}
-        {!selected && <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4" aria-label="Agents">
+        {!selected && <div className="mt-6 grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 lg:grid-cols-4" aria-label="Agents">
             {!loading && drafts.length === 0 && (
-              <div className="rounded-xl border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+              <div className="col-span-full py-10 text-center text-sm text-muted-foreground">
                 No agents yet. Create one to give it a role and tasks.
               </div>
             )}
@@ -156,11 +170,16 @@ export function AgentsPage({ repositories, availableSkills, threads, onOpenThrea
                 type="button"
                 key={agent.id}
                 onClick={() => setSelectedId(agent.id)}
-                className="flex flex-col items-center rounded-2xl border bg-card px-3 py-6 text-center transition hover:border-primary/50 hover:shadow-md"
+                className="group flex min-w-0 flex-col items-center rounded-2xl px-2 py-2 text-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
-                <span className="relative"><AgentAvatar avatar={agent.avatar} /><span aria-label={status} className={`absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px] border-card ${status === 'working' ? 'animate-pulse bg-emerald-500' : status === 'needs attention' ? 'bg-amber-500' : 'bg-slate-400'}`} /></span>
-                <span className="mt-3 font-semibold">{agent.name || 'Untitled agent'}</span>
-                <span className="mt-1 text-xs text-muted-foreground">{agent.providerId === 'claude-code' ? 'Claude Code' : agent.providerId === 'codex' ? 'Codex' : 'Jait'} · {status}</span>
+                <span className="transition-transform group-hover:scale-105"><AgentAvatar avatar={agent.avatar} className="h-20 w-20 sm:h-24 sm:w-24" /></span>
+                <span className="mt-3 max-w-full break-words font-semibold leading-tight group-hover:text-primary">{agent.name || 'Untitled agent'}</span>
+                <span className="mt-1 flex max-w-full flex-wrap items-center justify-center gap-x-1.5 text-xs text-muted-foreground">
+                  <span>{agent.providerId === 'claude-code' ? 'Claude Code' : agent.providerId === 'codex' ? 'Codex' : 'Jait'}</span>
+                  <span aria-hidden="true">·</span>
+                  <span className={`h-1.5 w-1.5 rounded-full ${status === 'working' ? 'bg-emerald-500' : status === 'needs attention' ? 'bg-amber-500' : 'bg-slate-400'}`} aria-hidden="true" />
+                  <span>{status}</span>
+                </span>
               </button>
             )})}
         </div>}
@@ -171,7 +190,27 @@ export function AgentsPage({ repositories, availableSkills, threads, onOpenThrea
                 <Button variant="ghost" size="sm" onClick={() => void remove()} aria-label="Delete agent"><Trash2 className="h-4 w-4" /></Button>
               </div>
               <div className="flex items-center gap-4"><AgentAvatar avatar={selected.avatar} /><div><h2 className="text-lg font-semibold">{selected.name || 'Untitled agent'}</h2><p className="text-sm capitalize text-muted-foreground">{agentStatus(selected, threads)}</p></div></div>
-              <fieldset><legend className="mb-2 text-sm font-medium">Avatar</legend><div className="flex flex-wrap gap-2">{PERSONA_AVATARS.map((avatar) => <button key={avatar} type="button" aria-label={`Choose ${avatar} avatar`} aria-pressed={selected.avatar === avatar} onClick={() => update({ avatar })} className={`rounded-xl p-1 ${selected.avatar === avatar ? 'ring-2 ring-primary' : ''}`}><span className="text-2xl">{avatar}</span></button>)}</div></fieldset>
+              <fieldset>
+                <legend className="mb-2 text-sm font-medium">Avatar</legend>
+                <div className="grid grid-cols-3 gap-x-2 gap-y-3 min-[360px]:grid-cols-4 sm:grid-cols-5 lg:grid-cols-10">
+                  {PERSONA_AVATARS.map((avatar) => (
+                    <button
+                      key={avatar}
+                      type="button"
+                      aria-label={`Choose ${avatar} avatar`}
+                      aria-pressed={selected.avatar === avatar}
+                      onClick={() => update({ avatar })}
+                      className="group flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <span className="relative transition-transform group-hover:scale-105">
+                        <AgentAvatar avatar={avatar} className="h-14 w-14" />
+                        {selected.avatar === avatar && <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground"><Check className="h-3 w-3" /></span>}
+                      </span>
+                      <span className="text-xs text-muted-foreground group-hover:text-foreground">{avatar}</span>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
               <label className="block text-sm font-medium">Name
                 <input className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm" value={selected.name} onChange={(event) => update({ name: event.target.value })} placeholder="Research assistant" />
               </label>

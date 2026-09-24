@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, Monitor, Save, Smartphone } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,8 +32,17 @@ function statusBadge(node: NodeWithPermissions) {
   )
 }
 
-export function NodesPermissionsTab({ token }: { token: string | null }) {
+export function NodesPermissionsTab({ token, focusNodeId }: { token: string | null; focusNodeId: string | null }) {
   const { nodes, loading, error, saving, saveError, refresh, updatePermissions } = useNodePermissions(token)
+  const scrolledToNode = useRef<string | null>(null)
+  useEffect(() => {
+    if (!focusNodeId || !nodes.some((node) => node.id === focusNodeId) || scrolledToNode.current === focusNodeId) return
+    const timer = window.setTimeout(() => {
+      document.getElementById(`node-permissions-${focusNodeId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      scrolledToNode.current = focusNodeId
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [focusNodeId, nodes])
   // Per-node editable drafts, keyed by node id.
   const [drafts, setDrafts] = useState<Record<string, NodeRow>>({})
 
@@ -99,7 +108,7 @@ export function NodesPermissionsTab({ token }: { token: string | null }) {
       {nodes.map((node) => {
         const { draft } = rowFor(node)
         return (
-          <Card key={node.id} className="space-y-3 p-5">
+          <Card key={node.id} id={`node-permissions-${node.id}`} className={`space-y-3 p-5 ${node.id === focusNodeId ? 'ring-2 ring-primary' : ''}`}>
             <div className="flex flex-wrap items-center gap-2">
               {node.platform === 'android' || node.platform === 'ios' ? (
                 <Smartphone className="h-4 w-4 text-muted-foreground" />

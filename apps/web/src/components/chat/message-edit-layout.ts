@@ -1,5 +1,5 @@
 export function getChatTranscriptBoundaryClassName(): string {
-  return 'relative z-0 isolate min-h-0 flex-1 overflow-hidden border-b'
+  return 'relative z-0 isolate min-h-0 flex-1 overflow-hidden'
 }
 
 export function getChatComposerBoundaryClassName(isMobile: boolean, showDesktopProject: boolean): string {

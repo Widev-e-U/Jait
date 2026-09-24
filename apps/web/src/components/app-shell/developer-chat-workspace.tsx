@@ -2,7 +2,6 @@ import { AlertTriangle, FolderOpen, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import {
-  ChatComposerSurface,
   Conversation,
   Message,
   PromptInput,
@@ -273,7 +272,6 @@ export function DeveloperChatWorkspace({
   renderInlineSecretPrompt,
 }: DeveloperChatWorkspaceProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
-  const [consentPresent, setConsentPresent] = useState(false)
   // Width of the chat panel, used to hide the floating top indicators when the
   // panel gets too narrow (they would overlap transcript text otherwise).
   // Measured by the App-level `useChatPanelMeasure` hook and handed down via
@@ -397,7 +395,7 @@ export function DeveloperChatWorkspace({
           ) : (
             <Suggestions suggestions={showProject && activeProject ? projectSuggestions : suggestions} onSelect={onHandleSuggestion} />
           )}
-          <ChatComposerSurface>
+          <div className="space-y-1.5">
             {developerChatUiState.showTodoList && (
               <TodoList items={todoList} onClear={onClearTodoList} merged />
             )}
@@ -452,11 +450,10 @@ export function DeveloperChatWorkspace({
                 projectNodeId={projectNodeId ?? undefined}
                 projectId={activeProjectId}
                 merged
-                mergedShowTopDivider={developerChatUiState.showTodoList || Boolean(inlinePrompts)}
               />
             </ErrorBoundary>
-          </ChatComposerSurface>
-          {developerComposerControlRow}
+            {developerComposerControlRow}
+          </div>
         </div>
       </div>
     )
@@ -615,7 +612,7 @@ export function DeveloperChatWorkspace({
           {showDebugPanel ? (
             // Trajectory/debug mode replaces only the transcript — the composer
             // and its controls stay, and auto-scroll keeps matching the chat.
-            <ErrorBoundary name="Trajectory panel" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, showDebugPanel]}>
+            <ErrorBoundary name="Trajectory panel" variant="section" className="min-h-0 flex-1" resetKeys={[activeSessionId, messages.length, showDebugPanel]}>
               <TrajectoryPanel onClose={onCloseDebugPanel} sessionId={activeSessionId} token={token} />
             </ErrorBoundary>
           ) : (
@@ -693,84 +690,76 @@ export function DeveloperChatWorkspace({
               {limitReached && (
                 <p className="text-center text-sm text-destructive">Daily limit reached. Come back tomorrow.</p>
               )}
-              <ChatComposerSurface>
-                <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
-                  {developerChatUiState.showTodoList && (
-                    <TodoList items={todoList} onClear={onClearTodoList} merged />
-                  )}
-                  {changedFiles.length > 0 && (
-                    <FilesChanged
-                      files={changedFilesForComposer}
-                      onAccept={onAcceptFile}
-                      onReject={onRejectFile}
-                      onAcceptAll={onAcceptAllFiles}
-                      onRejectAll={onRejectAllFiles}
-                      onFileClick={onChangedFileClick}
-                      merged
-                    />
-                  )}
-                  <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} onVisibleChange={setConsentPresent} />
-                  {inlinePrompts}
-                </div>
-                {(() => {
-                  const hasItemsAboveComposer = developerChatUiState.showTodoList || changedFiles.length > 0 || Boolean(inlinePrompts) || consentPresent
-                  return (
-                <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
-                  <PromptInput
-                    ref={promptInputRef}
-                    availableSkills={availableSkills}
-                    draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-                    value={inputValueRef.current}
-                    syncKey={inputVersion}
-                    segments={inputSegments}
-                    onChange={onHandleInputChange}
-                    onSubmit={onSubmit}
-                    onStop={onCancelRequest}
-                    defaultStreamingAction={defaultStreamingAction}
-                    onQueue={onQueue}
-                    onSteer={onSteer}
-                    isLoading={isLoading}
-                    submitLoading={developerChatSubmitLoading}
-                    disabled={limitReached}
-                    placeholder={developerPlaceholder}
-                    onVoiceInput={onVoiceInput}
-                    voiceRecording={voiceRecording}
-                    voiceLevels={voiceLevels}
-                    voiceTranscribing={voiceTranscribing}
-                    onVoiceStop={onStopRecording}
-                    mode={chatMode}
-                    onModeChange={onChatModeChange}
-                    responseStyle={chatResponseStyle}
-                    onResponseStyleChange={onResponseStyleChange}
-                    sendTarget={sendTarget}
-                    onSendTargetChange={onSendTargetChange}
-                    showSendTargetSelector={false}
-                    provider={chatProvider}
-                    onProviderChange={onProviderChange}
-                    providerRuntimeMode={chatProviderRuntimeMode}
-                    onProviderRuntimeModeChange={onProviderRuntimeModeChange}
-                    cliModel={cliModel}
-                    onCliModelChange={onCliModelChange}
-                    reasoningEffort={reasoningEffort}
-                    onReasoningEffortChange={onReasoningEffortChange}
-                    repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
-                    onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
-                    availableFiles={availableFilesForMention}
-                    onSearchFiles={onSearchFiles}
-                    projectOpen={Boolean(activeProjectRoot)}
-                    projectName={activeProjectDisplayName ?? undefined}
-                    projectPath={activeProjectRoot ?? undefined}
-                    chatId={activeSessionId ?? undefined}
-                    sessionInfo={sessionInfo}
-                    projectNodeId={projectNodeId ?? undefined}
-                    projectId={activeProjectId}
+              <div className="max-h-[40vh] overflow-y-auto divide-y divide-border">
+                {developerChatUiState.showTodoList && (
+                  <TodoList items={todoList} onClear={onClearTodoList} merged />
+                )}
+                {changedFiles.length > 0 && (
+                  <FilesChanged
+                    files={changedFilesForComposer}
+                    onAccept={onAcceptFile}
+                    onReject={onRejectFile}
+                    onAcceptAll={onAcceptAllFiles}
+                    onRejectAll={onRejectAllFiles}
+                    onFileClick={onChangedFileClick}
                     merged
-                    mergedShowTopDivider={hasItemsAboveComposer}
                   />
-                </ErrorBoundary>
-                  )
-                })()}
-              </ChatComposerSurface>
+                )}
+                <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />
+                {inlinePrompts}
+              </div>
+              <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
+                <PromptInput
+                  ref={promptInputRef}
+                  availableSkills={availableSkills}
+                  draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                  value={inputValueRef.current}
+                  syncKey={inputVersion}
+                  segments={inputSegments}
+                  onChange={onHandleInputChange}
+                  onSubmit={onSubmit}
+                  onStop={onCancelRequest}
+                  defaultStreamingAction={defaultStreamingAction}
+                  onQueue={onQueue}
+                  onSteer={onSteer}
+                  isLoading={isLoading}
+                  submitLoading={developerChatSubmitLoading}
+                  disabled={limitReached}
+                  placeholder={developerPlaceholder}
+                  onVoiceInput={onVoiceInput}
+                  voiceRecording={voiceRecording}
+                  voiceLevels={voiceLevels}
+                  voiceTranscribing={voiceTranscribing}
+                  onVoiceStop={onStopRecording}
+                  mode={chatMode}
+                  onModeChange={onChatModeChange}
+                  responseStyle={chatResponseStyle}
+                  onResponseStyleChange={onResponseStyleChange}
+                  sendTarget={sendTarget}
+                  onSendTargetChange={onSendTargetChange}
+                  showSendTargetSelector={false}
+                  provider={chatProvider}
+                  onProviderChange={onProviderChange}
+                  providerRuntimeMode={chatProviderRuntimeMode}
+                  onProviderRuntimeModeChange={onProviderRuntimeModeChange}
+                  cliModel={cliModel}
+                  onCliModelChange={onCliModelChange}
+                  reasoningEffort={reasoningEffort}
+                  onReasoningEffortChange={onReasoningEffortChange}
+                  repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
+                  onMoveToGateway={sendTarget === 'thread' ? onMoveRepoToGateway : undefined}
+                  availableFiles={availableFilesForMention}
+                  onSearchFiles={onSearchFiles}
+                  projectOpen={Boolean(activeProjectRoot)}
+                  projectName={activeProjectDisplayName ?? undefined}
+                  projectPath={activeProjectRoot ?? undefined}
+                  chatId={activeSessionId ?? undefined}
+                  sessionInfo={sessionInfo}
+                  projectNodeId={projectNodeId ?? undefined}
+                  projectId={activeProjectId}
+                  merged
+                />
+              </ErrorBoundary>
               {developerComposerControlRow}
             </div>
           </div>

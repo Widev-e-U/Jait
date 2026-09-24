@@ -23,6 +23,7 @@ interface AppPageOutletProps {
   cliModel: string | null
   currentView: AppView
   isMobile: boolean
+  nodeSettingsTargetId: string | null
   repositories: AutomationRepository[]
   jaitBackend: JaitBackend
   sttProvider: SttProvider
@@ -66,6 +67,7 @@ export function AppPageOutlet({
   cliModel,
   currentView,
   isMobile,
+  nodeSettingsTargetId,
   repositories,
   jaitBackend,
   chatStreamingAction,
@@ -179,6 +181,7 @@ export function AppPageOutlet({
     <PageFrame isMobile={isMobile}>
       <ErrorBoundary name="Settings" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
         <SettingsPage
+          focusNodeId={nodeSettingsTargetId}
           username={username}
           token={token}
           apiKeys={apiKeys}
