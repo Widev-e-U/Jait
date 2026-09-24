@@ -98,24 +98,22 @@ export const QwenIcon = brand(Qwen)
 export const WindsurfIcon = brand(Windsurf)
 export const ZhipuIcon = brand(Zhipu)
 
-const COLOR_ICONS: Array<{ test: RegExp; icon: ProviderIconComponent }> = [
-  { test: /claude[-_]?code|claudecode/, icon: brand(ClaudeCode.Color) },
-  { test: /claude/, icon: brand(Claude.Color) },
-  { test: /codex/, icon: brand(Codex.Color) },
-  { test: /deepseek/, icon: brand(DeepSeek.Color) },
-  { test: /gemini|google|vertex|pi[-_]?gemini/, icon: brand(Gemini.Color) },
-  { test: /kimi/, icon: brand(Kimi.Color) },
-  { test: /mistral/, icon: brand(Mistral.Color) },
-  { test: /perplexity/, icon: brand(Perplexity.Color) },
-  { test: /qwen|tongyi/, icon: brand(Qwen.Color) },
-  { test: /zhipu|chatglm|glm/, icon: brand(Zhipu.Color) },
+const BRAND_ACCENT_CLASSES: Array<{ test: RegExp; className: string }> = [
+  { test: /claude[-_]?code|claudecode|claude|anthropic/, className: 'text-orange-600 dark:text-orange-400' },
+  { test: /codex/, className: 'text-indigo-600 dark:text-indigo-400' },
+  { test: /deepseek/, className: 'text-blue-700 dark:text-blue-400' },
+  { test: /gemini|google|vertex|pi[-_]?gemini/, className: 'text-blue-600 dark:text-blue-400' },
+  { test: /kimi|moonshot/, className: 'text-violet-600 dark:text-violet-400' },
+  { test: /mistral/, className: 'text-amber-600 dark:text-amber-400' },
+  { test: /perplexity/, className: 'text-teal-600 dark:text-teal-400' },
+  { test: /qwen|tongyi/, className: 'text-purple-600 dark:text-purple-400' },
+  { test: /zhipu|chatglm|glm/, className: 'text-sky-600 dark:text-sky-400' },
 ]
 
-/** Use the provider's full-color mark when one exists. */
-export function providerBrandColorIcon(idOrType: string | undefined | null): ProviderIconComponent | null {
-  if (!idOrType) return null
-  const key = idOrType.trim().toLowerCase()
-  return COLOR_ICONS.find(({ test }) => test.test(key))?.icon ?? null
+/** Tint the same brand glyph used for read chats when a chat is unread. */
+export function providerBrandAccentClass(idOrType: string | undefined | null): string {
+  const key = idOrType?.trim().toLowerCase() ?? ''
+  return BRAND_ACCENT_CLASSES.find(({ test }) => test.test(key))?.className ?? 'text-primary'
 }
 
 /**

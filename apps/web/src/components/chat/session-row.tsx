@@ -83,7 +83,7 @@ export function SessionRow({
         <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
       )}
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-xs ${unread ? 'font-semibold' : 'font-normal'}`}>
+        <div className={`truncate text-xs ${unread ? 'font-bold text-foreground' : 'font-normal'}`}>
           {session.name || fallbackLabel}
         </div>
       </div>

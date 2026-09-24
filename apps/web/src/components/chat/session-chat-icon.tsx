@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { providerTypeFromId } from '@jait/shared'
 import { providerIconFor } from '@/components/chat/provider-model-selector'
-import { providerBrandColorIcon } from '@/components/icons/provider-icons'
+import { providerBrandAccentClass } from '@/components/icons/provider-icons'
 import { formatSessionChatSelectionLabel, parseSessionChatSelection } from '@/lib/session-chat-selection'
 import { TooltipHint } from '@/components/ui/tooltip'
 
@@ -16,9 +16,8 @@ export function SessionChatIcon({ metadata, unread = false }: { metadata: string
   if (!selection) return null
 
   const providerType = providerTypeFromId(selection.provider)
-  const Icon = unread
-    ? providerBrandColorIcon(selection.provider) ?? providerBrandColorIcon(providerType) ?? providerIconFor(providerType, selection.provider)
-    : providerIconFor(providerType, selection.provider)
+  const Icon = providerIconFor(providerType, selection.provider)
+  const iconColor = unread ? providerBrandAccentClass(selection.provider || providerType) : 'text-muted-foreground opacity-55'
   const selectionLabel = formatSessionChatSelectionLabel(selection)
 
   return (
@@ -26,7 +25,7 @@ export function SessionChatIcon({ metadata, unread = false }: { metadata: string
     <span
       role="img"
       aria-label={selectionLabel}
-      className={`inline-flex size-3 shrink-0 items-center justify-center ${unread ? 'text-foreground' : 'text-muted-foreground opacity-55'}`}
+      className={`inline-flex size-3 shrink-0 items-center justify-center ${iconColor}`}
     >
       <span aria-hidden="true" className="pointer-events-none inline-flex">
         <Icon className="size-3" />

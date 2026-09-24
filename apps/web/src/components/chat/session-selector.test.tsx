@@ -226,7 +226,7 @@ describe('SessionSelector', () => {
     )
 
     expect(markup).toContain('h-3.5 w-3.5')
-    expect(markup).toContain('truncate text-xs font-semibold')
+    expect(markup).toContain('truncate text-xs font-bold text-foreground')
     expect(markup).not.toContain('h-4 w-4 shrink-0')
     expect(markup).not.toContain('truncate text-sm font-medium')
   })
@@ -246,7 +246,7 @@ describe('SessionSelector', () => {
         onChangeDirectory={() => {}}
       />
     )
-    expect(markup).toContain('truncate text-xs font-semibold')
+    expect(markup).toContain('truncate text-xs font-bold text-foreground')
   })
 
   it('keeps a read active session at normal weight', () => {

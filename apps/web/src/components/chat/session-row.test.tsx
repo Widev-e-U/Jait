@@ -89,28 +89,34 @@ describe('SessionRow', () => {
       session: { id: 'chat-1', name: 'Deploy fix', viewedAt: null, lastActiveAt: '2026-08-01T00:00:00.000Z' },
     })
     expect(html).toContain('bg-secondary/70')
-    expect(html).toContain('truncate text-xs font-semibold')
+    expect(html).toContain('truncate text-xs font-bold text-foreground')
   })
 
   it('shows bold text for inactive unviewed rows', () => {
     const html = renderRow({
       session: { id: 'chat-1', name: 'Deploy fix', viewedAt: null, lastActiveAt: '2026-08-01T00:00:00.000Z' },
     })
-    expect(html).toContain('truncate text-xs font-semibold')
+    expect(html).toContain('truncate text-xs font-bold text-foreground')
   })
 
-  it('uses the provider color mark for unread chats and dims read chats', () => {
-    const session = {
-      id: 'chat-1', name: 'Deploy fix',
-      lastActiveAt: '2026-08-01T00:00:00.000Z',
-      metadata: JSON.stringify({ chat: { provider: 'gemini', model: 'gemini-2.5-pro' } }),
+  it('uses the same provider glyph at the same size for read and unread chats', () => {
+    for (const provider of ['codex', 'gemini']) {
+      const session = {
+        id: 'chat-1', name: 'Deploy fix',
+        lastActiveAt: '2026-08-01T00:00:00.000Z',
+        metadata: JSON.stringify({ chat: { provider, model: 'test-model' } }),
+      }
+      const unread = renderRow({ session })
+      const read = renderRow({ session: { ...session, viewedAt: session.lastActiveAt } })
+      const providerGlyph = (markup: string) =>
+        markup.match(/<span aria-hidden="true" class="pointer-events-none inline-flex">(<svg[\s\S]*?<\/svg>)/)?.[1]
+
+      expect(providerGlyph(unread)).toBeDefined()
+      expect(providerGlyph(unread)).toBe(providerGlyph(read))
+      expect(unread).toContain('font-bold text-foreground')
+      expect(read).toContain('font-normal')
+      expect(read).toContain('opacity-55')
     }
-    const unread = renderRow({ session })
-    const read = renderRow({ session: { ...session, viewedAt: session.lastActiveAt } })
-    expect(unread).toContain('font-semibold')
-    expect(unread).toContain('text-foreground')
-    expect(read).toContain('font-normal')
-    expect(read).toContain('opacity-55')
   })
 
   it('shows a spinner instead of the chat icon while streaming', () => {

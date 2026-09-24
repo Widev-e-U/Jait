@@ -695,7 +695,7 @@ export function SessionSelector({
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
                           <ProjectColorDot color={project.color} />
-                          <span className={`min-w-0 truncate text-xs ${hasUnreadSessions ? 'font-semibold' : 'font-normal'}`}>
+                          <span className={`min-w-0 truncate text-xs ${hasUnreadSessions ? 'font-bold text-foreground' : 'font-normal'}`}>
                             {project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')}
                           </span>
                           {project.instructions?.trim() && (
