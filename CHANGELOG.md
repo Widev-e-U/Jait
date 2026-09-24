@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.873](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.873) — 2026-09-24
+- feat(web): mode sidebar, session unread accents, dicebear avatars — 60367deb
+- feat(mobile): persist device id in native Android preferences — b5f5f8be
+- feat(gateway): track session unread state with viewedAt — ed97b172
+
 ## [v0.1.872](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.872) — 2026-09-24
 - feat: manager workspace navigation and persistent agent profiles — 35c605fe
 
