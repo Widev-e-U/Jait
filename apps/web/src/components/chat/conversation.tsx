@@ -1183,7 +1183,9 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     // transcript. Wait for the render that actually holds the space.
     if (newTurnTailPadding <= 0) return
     pendingTopAlignIdRef.current = null
-    virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start', behavior: 'smooth' })
+    // A restarted earlier turn may be far from the current viewport. Place it
+    // immediately so the transcript does not animate through every message.
+    virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start', behavior: 'auto' })
   }, [topAnchoredMessageId, topAnchoredMessageIndex, topAnchoredMeasurement, newTurnTailPadding])
 
   useLayoutEffect(() => {
