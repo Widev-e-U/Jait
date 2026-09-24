@@ -166,7 +166,7 @@ function InstalledSkills({ token }: { token: string | null }) {
           <BookOpen className="mx-auto h-8 w-8 text-muted-foreground/40" />
           <p className="mt-2 text-sm text-muted-foreground">
             {skills.length === 0
-              ? 'No skills discovered. Install from the Marketplace or create a SKILL.md in ~/.jait/skills/.'
+              ? 'No skills yet. Use Find skills to install one, or ask an agent to help create one.'
               : 'No skills match your filter.'}
           </p>
         </Card>
@@ -471,23 +471,12 @@ export function SkillSettings({ token }: SkillSettingsProps) {
         <div>
           <h2 className="text-base font-medium">Skills</h2>
           <p className="text-sm text-muted-foreground">
-            Specialized instruction sets that teach the AI how to use specific tools and
-            workflows. Install from{' '}
-            <a
-              href="https://clawhub.ai/skills"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-foreground"
-            >
-              ClawHub
-            </a>{' '}
-            or place SKILL.md files in{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">~/.jait/skills/</code>.
+            Skills teach Jait repeatable workflows. Enabled skills are ready for your agents. Browse the marketplace to add one, or open an agent’s Skills page to create a skill together in chat.
           </p>
         </div>
         <TabsList>
-          <TabsTrigger value="installed">Installed</TabsTrigger>
-          <TabsTrigger value="marketplace">Marketplace</TabsTrigger>
+          <TabsTrigger value="installed">My skills</TabsTrigger>
+          <TabsTrigger value="marketplace">Find skills</TabsTrigger>
         </TabsList>
       </Card>
 

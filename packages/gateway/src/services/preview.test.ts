@@ -5,6 +5,32 @@ import { describe, expect, it, vi } from "vitest";
 import { PreviewService } from "./preview.js";
 
 describe("PreviewService", () => {
+  it("does not revive a preview stopped while its browser is starting", async () => {
+    let finishStart!: (browser: unknown) => void;
+    const browser = {
+      type: "browser",
+      state: "running",
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getEvents: vi.fn().mockReturnValue([]),
+      getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const surfaceRegistry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockImplementation(() => new Promise((resolve) => { finishStart = resolve; })),
+      getSurface: vi.fn().mockReturnValue(browser),
+    };
+    const service = new PreviewService(surfaceRegistry as any);
+    const starting = service.start({ sessionId: "closing-session", target: "4173" });
+    await vi.waitFor(() => expect(surfaceRegistry.startSurface).toHaveBeenCalledOnce());
+    expect(await service.stop("closing-session")).toBe(true);
+    finishStart(browser);
+    const result = await starting;
+    expect(result.status).toBe("stopped");
+    expect(service.get("closing-session")).toBeNull();
+    expect(surfaceRegistry.stopSurface).toHaveBeenCalledWith("preview-browser-closing-session", "preview-stop");
+  });
+
   it("attaches to an existing localhost target instead of spawning a managed preview", async () => {
     const browser = {
       type: "browser",

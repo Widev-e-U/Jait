@@ -169,8 +169,7 @@ export function ToolSettings({ token }: ToolSettingsProps) {
       <div>
         <h2 className="text-base font-medium">Tools</h2>
         <p className="text-sm text-muted-foreground">
-          Manage which tools are available to the AI agent.
-          Core tools are always enabled. Standard tools can be toggled. External (MCP) tools are discovered on demand.
+          Enabled tools are available to your agents automatically. You can leave these settings as they are. Turn off a tool only when you want to prevent agents from using it; core tools stay on.
         </p>
       </div>
 
@@ -211,10 +210,10 @@ export function ToolSettings({ token }: ToolSettingsProps) {
         {sortedCategories.map((category) => {
           const items = grouped.get(category)!
           return (
-            <div key={category}>
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                {category}
-              </h3>
+            <details key={`${category}:${Boolean(filtered)}`} open={filtered ? true : undefined} className="group">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                {category} · {items.length} tools
+              </summary>
               <div className="space-y-1">
                 {items.map((tool) => {
                   const tierInfo = TIER_BADGE[tool.tier] ?? TIER_BADGE.standard
@@ -251,7 +250,7 @@ export function ToolSettings({ token }: ToolSettingsProps) {
                   )
                 })}
               </div>
-            </div>
+            </details>
           )
         })}
 

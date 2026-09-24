@@ -1875,7 +1875,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       )}
       {/* Attachment previews */}
       {attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2 px-3 pt-3">
+        <div className="flex flex-wrap gap-2 border-b border-border px-3 py-3">
           {attachments.map((att) => (
             <div key={att.name} className="group relative flex items-center gap-1.5 rounded-lg border bg-muted/50 px-2 py-1.5 text-xs">
               {att.preview ? (
@@ -2380,6 +2380,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
               disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
+              aria-label="Send message"
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []

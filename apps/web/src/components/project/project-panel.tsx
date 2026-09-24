@@ -3882,6 +3882,11 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [activeTabId])
 
   const handleClosePreviewTarget = useCallback(() => {
+    // The editor can unmount immediately after this callback. Stop the managed
+    // browser now; removing its tab alone leaves the browser and dev server alive.
+    if (activePreviewTab && (managedPreviewSession || previewBusy)) {
+      void stopManagedPreviewSession(false)
+    }
     setPreviewSidePanelOpen(false)
     setOpenTabs((prev) => {
       const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
@@ -3923,7 +3928,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       return next
     })
     onPreviewOpenChange?.({ open: false, target: null })
-  }, [activeTabId, onPreviewOpenChange])
+  }, [activePreviewTab, activeTabId, managedPreviewSession, onPreviewOpenChange, previewBusy, stopManagedPreviewSession])
 
   const handleRefreshPreviewTarget = useCallback(() => {
     setPreviewFrameLoading(true)
@@ -4258,6 +4263,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     const closingTab = openTabs.find((tab) => tab.id === tabId) ?? null
     if (closingTab?.type === 'preview' && !options?.preserveManagedPreview) {
       setPreviewSidePanelOpen(false)
+      if (managedPreviewSession || previewBusy) void stopManagedPreviewSession(false)
     }
     setOpenTabs(prev => {
       const idx = prev.findIndex(t => t.id === tabId)
@@ -4293,7 +4299,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       }
       return next
     })
-  }, [activeTabId, openTabs])
+  }, [activeTabId, managedPreviewSession, openTabs, previewBusy, stopManagedPreviewSession])
 
   const handleDetachTab = useCallback(async (tabId: string) => {
     const tab = openTabs.find((entry) => entry.id === tabId) ?? null

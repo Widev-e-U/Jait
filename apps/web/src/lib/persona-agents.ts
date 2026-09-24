@@ -17,8 +17,11 @@ export interface PersonaAgentDraft {
   providerId: string
   model?: string | null
   chatThreadId?: string
+  chatSessionId?: string
+  legacyChatThreadIds?: string[]
   tasks?: PersonaTask[]
   skillIds: string[]
+  usesAllSkills?: boolean
   repositoryIds: string[]
   schedule: PersonaSchedule
   allowedTools: string[]

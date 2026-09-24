@@ -212,6 +212,10 @@ export class PreviewService {
           (stream, text) => this.appendLog(session, stream, text),
         );
 
+        if (session.terminating) {
+          await this.runner.stop(result).catch(() => {});
+          return this.toPublicSession(session);
+        }
         session.runnerResult = result;
         session.process = result.process;
         session.port = result.port;
@@ -243,6 +247,7 @@ export class PreviewService {
       }
 
       await this.ensureBrowser(session);
+      if (session.terminating) return this.toPublicSession(session);
       if (!session.remoteBrowser) {
         throw new Error("Preview browser did not expose a live VNC session");
       }
@@ -253,6 +258,7 @@ export class PreviewService {
       this.notifyChanged(session);
       return this.toPublicSession(session);
     } catch (error) {
+      if (session.terminating) return this.toPublicSession(session);
       session.status = "error";
       session.lastError = error instanceof Error ? error.message : "Preview start failed";
       session.updatedAt = nowIso();
@@ -395,16 +401,25 @@ export class PreviewService {
   private async ensureBrowser(session: InternalPreviewSession): Promise<void> {
     const browserId = session.browserId!;
     await this.surfaceRegistry.stopSurface(browserId, "preview-refresh").catch(() => {});
+    if (session.terminating) return;
     const started = await this.surfaceRegistry.startSurface("browser", browserId, {
       sessionId: session.sessionId,
       projectRoot: session.projectRoot ?? process.cwd(),
       requireLiveView: true,
     });
+    if (session.terminating) {
+      await this.surfaceRegistry.stopSurface(browserId, "preview-stop").catch(() => {});
+      return;
+    }
     if (started.type !== "browser") {
       throw new Error("Preview browser surface failed to start");
     }
     const browser = started as BrowserSurface;
     await browser.navigate(session.browserUrl!);
+    if (session.terminating) {
+      await this.surfaceRegistry.stopSurface(browserId, "preview-stop").catch(() => {});
+      return;
+    }
     session.browserEvents = browser.getEvents();
     session.metrics = await browser.getMetrics().catch(() => null);
 
