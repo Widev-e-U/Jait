@@ -9,7 +9,9 @@ export default defineConfig({
   plugins: [react()],
   base: '/',
   build: {
-    sourcemap: true,
+    // Sourcemaps make the production build take hours on this bundle size,
+    // so they are opt-in via BUILD_SOURCEMAP=true.
+    sourcemap: process.env.BUILD_SOURCEMAP === 'true',
   },
   resolve: {
     alias: {
