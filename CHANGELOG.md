@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.872](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.872) — 2026-09-24
+- feat: manager workspace navigation and persistent agent profiles — 35c605fe
+
 ## [v0.1.871](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.871) — 2026-09-23
 - feat: improve manager views and gateway startup reliability — cc9a6924
 
