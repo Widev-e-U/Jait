@@ -4,13 +4,11 @@
 
 # Jait
 
-**Local-first AI coding agent workspace** with terminal, filesystem, browser control, screen sharing, and task automation — no cloud backend required.
+**Your AI coding agent, everywhere you work.**
 
-This is from now on a passion project of mine. I really like to build and make building easier. Feel free to critisize my approaches (issues are very welcome and help me a lot) in any way possible I really want to make this usable because it really makes me have fun at building stuff again 😁
+Jait is a local-first agent gateway: it runs on your machine (or a server), gives your agents a real toolbox — terminal, filesystem, browser, screen, email, calendar, smart home — and lets you pick up any conversation on any device. Phone, watch, laptop, desktop app: same session, same memory, live.
 
-Just a quick notice this is really new and breaks on many occasions. Lets fix it and make it work thogether! or at least let me know what fails 🙏
-
-Jait runs as a lightweight gateway on your machine (or a server) and serves a web UI to any browser. Think of it as your own self-hosted AI dev environment: connect your API key, open the UI, and start building.
+> This is a passion project. I build it because it makes building fun again. It's new and it breaks — open issues, tell me what fails, and let's make it good together 🙏
 
 <p align="center">
   <a href="https://github.com/Widev-e-U/Jait/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/Widev-e-U/Jait/ci.yml?branch=main&label=typecheck&style=for-the-badge" alt="Typecheck"></a>
@@ -22,23 +20,26 @@ Jait runs as a lightweight gateway on your machine (or a server) and serves a we
 
 ---
 
-## Install 
+## Why Jait
+
+Most AI agents are trapped in one window. Jait flips that:
+
+- **Engine swapping** — run Jait's toolbox on top of your favorite CLI coding agent. Jait speaks the [Agent Client Protocol](https://agentclientprotocol.com) and drives engines like **Claude Code**, **Codex**, **Gemini CLI**, **OpenCode**, or **Copilot CLI** — or bring your own via OpenAI-compatible APIs, Ollama, or OpenRouter. Swap engines without losing your history.
+- **Device hopping** — start a task on your desktop, approve a terminal command from your phone, check on it from your watch. Sessions, memory, and scheduled jobs live on the gateway, not the client.
+- **Agents, not chat** — spawn sub-agents and swarm managers that work in parallel, remember what matters, and wake up on a schedule. Approve/reject controls keep sensitive actions in your hands.
+
+---
+
+## Install
 
 ### Option A — npm (recommended)
 
 ```bash
 npm install -g @jait/gateway
-```
-
-That's it. Now run it:
-
-```bash
 jait start
 ```
 
-The gateway starts on **http://localhost:8000** — open it in your browser.
-
-On first launch you'll create a local account (stored in SQLite, never leaves your machine) and paste an API key.
+The gateway starts on **http://localhost:8000** — open it in any browser. On first launch you create a local account (stored in SQLite on your machine) and connect a provider or CLI engine.
 
 ### Option B — Desktop app
 
@@ -48,7 +49,7 @@ Download the latest installer from [**GitHub Releases**](https://github.com/Wide
 |----------|------|
 | Windows  | `Jait_*_x64-setup.exe` |
 
-The desktop app currently ships for Windows and bundles the gateway + web UI in one window. No separate install needed.
+The desktop app ships for Windows and bundles the gateway + web UI in one window. A Capacitor-based Android client lives under `apps/mobile` for building from source.
 
 ### Option C — From source
 
@@ -64,21 +65,22 @@ bun run dev
 
 ## Configuration
 
-Jait uses environment variables for configuration. You can set them in:
+Jait reads configuration from (first found wins):
 
-1. `~/.jait/.env` (created automatically, persists across updates)
-2. A `.env` file next to the binary
-3. Shell environment variables
+1. `--env /path/to/.env` flag
+2. `./.env` (current directory)
+3. `~/.jait/.env` (created automatically, persists across updates)
+4. Shell environment variables
 
 ### Minimal setup
 
-The only thing you *need* is an LLM provider. Set one of these:
+The only thing you *need* is an LLM provider — or a CLI engine on your PATH:
 
 ```bash
 # OpenAI (or any OpenAI-compatible API)
 OPENAI_API_KEY=sk-...
 
-# Or use Ollama for fully local inference (no API key needed)
+# Or fully local inference
 # LLM_PROVIDER=ollama
 # OLLAMA_MODEL=llama3
 ```
@@ -88,17 +90,17 @@ OPENAI_API_KEY=sk-...
 ```bash
 PORT=8000                  # HTTP port (default: 8000)
 HOST=0.0.0.0               # Bind address (default: 0.0.0.0)
-JWT_SECRET=change-me        # Auth secret (auto-generated if not set)
+JWT_SECRET=change-me       # Auth secret (auto-generated if not set)
 ```
 
 ### Global agent instructions
 
-Jait also reads `~/.jait/SOUL.md` when building provider system prompts. Use it for durable user-level instructions that should apply across projects and providers, such as tool-routing preferences. Set `JAIT_SOUL_PATH=/path/to/file.md` or `JAIT_GLOBAL_INSTRUCTIONS_PATH=/path/to/file.md` to use a different file. The file is token-bounded and ignored when missing or empty.
+Jait reads `~/.jait/SOUL.md` when building provider system prompts — durable user-level instructions that apply across projects and providers. Set `JAIT_SOUL_PATH` or `JAIT_GLOBAL_INSTRUCTIONS_PATH` to use a different file. Token-bounded; ignored when missing or empty.
 
 ### All provider options
 
 See [`.env.example`](.env.example) for the full list, including:
-- **OpenAI** / **Ollama** — primary LLM
+- **OpenAI** / **Ollama** / **OpenRouter** — primary LLM
 - **Brave**, **Perplexity**, **xAI Grok**, **Gemini**, **Moonshot** — web search
 - **Faster Whisper** — local speech-to-text
 
@@ -152,10 +154,7 @@ jait daemon uninstall   # remove service
 jait update
 ```
 
-This installs the latest gateway and automatically restarts gateways managed by
-`jait start` or `jait daemon`. To install a specific release, run
-`jait update 0.1.705`. You can also trigger the update from the web UI:
-**Settings → Check for updates → Apply**.
+This installs the latest gateway and automatically restarts gateways managed by `jait start` or `jait daemon`. To install a specific release, run `jait update 0.1.877`. You can also trigger the update from the web UI: **Settings → Check for updates → Apply**.
 
 ---
 
@@ -166,6 +165,7 @@ jait                       Start the gateway (default port 8000)
 jait start                 Start the gateway in the background
 jait stop                  Stop the background gateway
 jait status                Check if the gateway is running
+jait doctor                Run local diagnostics
 jait update [version]      Update the gateway (default: latest)
 jait reset                 Wipe all data (~/.jait) — double confirmation
 jait --port 9000           Custom port
@@ -178,25 +178,29 @@ jait daemon install        Install systemd user service (Linux only)
 jait daemon start|stop|restart|status|logs|uninstall
 ```
 
-The `start`, `stop`, and `status` commands work on **all platforms** (Windows, macOS, Linux).
+The `start`, `stop`, `status`, and `doctor` commands work on **all platforms** (Windows, macOS, Linux).
 The `daemon` commands use systemd and are Linux-only.
 
 ---
 
 ## What can Jait do?
 
-| Capability | Description |
-|------------|-------------|
-| **Chat** | Conversational AI with streaming, message queuing, and session history |
-| **Terminal** | Full PTY terminal access — the agent can run commands with your approval |
-| **Filesystem** | Read, write, and diff files in your workspace with backup & restore |
-| **Browser** | Playwright-controlled browser for web research and testing |
-| **Preview** | Live-preview web apps inside the workspace (proxied localhost ports) |
-| **Screen share** | Share your screen with the AI for visual context |
-| **Automation** | Manager mode: delegate tasks to background agent threads |
-| **Jobs** | Schedule recurring tasks (cron-style) |
-| **Multi-device** | Open the same session on multiple browsers — state syncs in real-time |
-| **Consent controls** | Approve/reject sensitive actions before they run |
+**120+ built-in tools**, grouped by what they give the agent:
+
+| Group | Tools |
+|-------|-------|
+| **Development** | Terminal (PTY), filesystem read/write/diff with backup & restore, code graph, architecture tools, project editor, repo proposals, live app preview |
+| **Web & research** | Playwright browser control, web search (Brave/Perplexity/Grok/Gemini/Moonshot), session & chat-trace search, web fetch |
+| **Machine control** | OS control, computer use (screen/mouse/keyboard), screenshots, SSH & network tools, Windows VM sandbox |
+| **Life & comms** | Email, calendar, Home Assistant, channel messaging (Telegram/WhatsApp), voice, mobile push |
+| **Agent brain** | Semantic memory, reminders, cron jobs, swarm sub-agents & mailboxes, MCP bridge, skills, decision model, user questions |
+
+### Agents, not just chat
+
+- **Manager mode** — delegate a goal; a manager thread spawns specialist sub-agents that work in parallel with their own transcripts and tool calls.
+- **Engine swapping** — any sub-agent can run on an ACP engine (Claude Code, Codex, …) or on Jait's HTTP backends; transcripts render identically either way.
+- **Device hopping** — sessions, memory, and scheduled jobs live on the gateway. Start on desktop, continue from phone or watch.
+- **Consent controls** — sensitive actions require your approve/reject before they run, on whichever device you're on.
 
 ---
 
@@ -204,15 +208,19 @@ The `daemon` commands use systemd and are Linux-only.
 
 ```
 packages/
-  gateway/    Fastify server, tools, surfaces, scheduler, memory, SQLite DB
+  gateway/    Fastify server, 120+ tools, surfaces, scheduler, memory, SQLite DB
   shared/     Shared schemas, constants, and domain types
   api-client/ Typed API client for apps
+  cli/        Service-oriented CLI (setup, start/stop, doctor, resources)
   screen-share/ Screen-share service primitives
+  tui-shared/ Shared terminal-UI primitives
 apps/
   web/        Vite + React frontend (bundled into gateway on publish)
-  desktop/ Rust + Tauri desktop shell
+  desktop/    Rust + Tauri desktop shell
   mobile/     Capacitor mobile client
 ```
+
+The codebase is ~200k lines of strict TypeScript across **350+ test files**, shipped in 870+ releases so far.
 
 ---
 
