@@ -206,6 +206,16 @@ export function parseQueuedChatResponse(body: string): Record<string, unknown> |
   return null
 }
 
+/**
+ * `content` is normally a string, but queue entries can be rehydrated from
+ * older persisted state or an out-of-date WS broadcast where it is something
+ * else (null, a number, a segments array). Trim only real strings so a
+ * malformed entry can never throw `content.trim is not a function`.
+ */
+function safeTrim(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export function reconcileQueuedMessagesAtTurnStart(
   queue: QueuedChatMessage[],
   startedContent: unknown,
@@ -214,7 +224,7 @@ export function reconcileQueuedMessagesAtTurnStart(
   const normalizedContent = startedContent.trim()
   if (!normalizedContent) return queue
 
-  const nextQueue = queue.filter((item) => item.content.trim() !== normalizedContent)
+  const nextQueue = queue.filter((item) => safeTrim(item.content) !== normalizedContent)
   return nextQueue.length === queue.length ? queue : nextQueue
 }
 
@@ -983,13 +993,13 @@ export function useChat(
           const pending = localPendingSendRef.current
           if (!pending) return false
           if (Date.now() - pending.at > LOCAL_SEND_TURN_START_TOLERANCE_MS) return false
-          return startedContent !== null && pending.content.trim() === startedContent
+          return startedContent !== null && safeTrim(pending.content) === startedContent
         })()
         localPendingSendRef.current = null
 
         const queueBefore = messageQueueRef.current
         const drainedItem = startedContent !== null
-          ? queueBefore.find((item) => item.content.trim() === startedContent)
+          ? queueBefore.find((item) => safeTrim(item.content) === startedContent)
           : undefined
 
         if (!isReplay && !wasLocallySent && startedContent !== null) {
@@ -1822,7 +1832,9 @@ export function useChat(
 
   /** Update the content of a queued message (inline edit). */
   const updateQueueItem = useCallback((id: string, content: string) => {
-    const trimmed = content.trim()
+    // Guard: a stale queue entry or malformed edit payload could hold a
+    // non-string at runtime; safeTrim never throws.
+    const trimmed = safeTrim(content)
     if (!trimmed) return
     updateQueue(prev => prev.map(q => q.id === id
       ? {

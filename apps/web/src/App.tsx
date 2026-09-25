@@ -4194,7 +4194,9 @@ function App() {
   }, [])
 
   const updateManagerQueueItem = useCallback((threadId: string, id: string, content: string) => {
-    const trimmed = content.trim()
+    // content is typed as string, but guard anyway: a malformed queue entry
+    // restored from persisted state could hold a non-string at runtime.
+    const trimmed = typeof content === 'string' ? content.trim() : ''
     if (!trimmed) return
     setManagerMessageQueues((prev) => {
       const existing = prev[threadId] ?? []

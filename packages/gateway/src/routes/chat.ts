@@ -766,6 +766,12 @@ function emitSyntheticSkillToolCall(
   accumulateToolResult(sessionId, toolCall.callId, true, toolCall.message, toolCall.data);
 }
 
+/** `content` fields in queue/history payloads can arrive as non-strings from
+ * older persisted state or malformed client requests; never let `.trim()` throw. */
+function safeTrim(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function buildSyntheticMemoryToolCall(content: string, memoryService: MemoryService | undefined): PersistedToolCall | null {
   const query = content.trim();
   if (!memoryService || !query) return null;
@@ -2793,13 +2799,15 @@ export function registerChatRoutes(
   // re-sent.
   const removeQueuedMessageByContent = (sessionId: string, content: string): void => {
     if (!sessionStateService) return;
-    const normalized = content.trim();
+    // `content` is typed as string, but a malformed request payload or a stale
+    // persisted queue entry could hold a non-string at runtime; never throw.
+    const normalized = safeTrim(content);
     if (!normalized) return;
     const state = sessionStateService.get(sessionId, ["queued_messages"]);
     const queue = parseQueuedChatMessages(state["queued_messages"]);
     if (queue.length === 0) return;
-    const removed = queue.filter((entry) => entry.content.trim() === normalized);
-    const filtered = queue.filter((entry) => entry.content.trim() !== normalized);
+    const removed = queue.filter((entry) => safeTrim(entry.content) === normalized);
+    const filtered = queue.filter((entry) => safeTrim(entry.content) !== normalized);
     if (removed.length === 0) return; // nothing matched
     let tracked = consumedQueuedMessageIds.get(sessionId);
     if (!tracked) {
@@ -3422,9 +3430,9 @@ export function registerChatRoutes(
       // content the client just re-sent), reuse the existing entry instead
       // of appending a duplicate. This is the server-side guard against the
       // client/server drain race that multiplied queued messages.
-      const normalizedContent = content.trim();
+      const normalizedContent = safeTrim(content);
       const existing = queue.find(
-        (entry) => entry.content.trim() === normalizedContent,
+        (entry) => safeTrim(entry.content) === normalizedContent,
       );
       let queuedMessage: QueuedChatMessage;
       if (existing) {
