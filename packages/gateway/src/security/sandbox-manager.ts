@@ -459,20 +459,25 @@ export class SandboxManager {
 
     // Port mappings are published on the host, so consumers must connect to the
     // host-side endpoint rather than mixing a host port with a container IP.
-    const host = await resolvePublishedPortHost(this.runProcess);
+    try {
+      const host = await resolvePublishedPortHost(this.runProcess);
+      await waitForHttpReady(`http://${host}:${novncPort}/vnc_lite.html`, 15_000);
+      if (typeof cdpPort === "number" && options.waitForCdp !== false) {
+        await waitForPort(host, cdpPort, 15_000);
+        await waitForHttpReady(`http://${host}:${cdpPort}/json/version`, 15_000);
+      }
 
-    if (typeof cdpPort === "number" && options.waitForCdp !== false) {
-      await waitForPort(host, cdpPort, 15_000);
-      await waitForHttpReady(`http://${host}:${cdpPort}/json/version`, 15_000);
+      return {
+        containerName,
+        novncUrl: `http://${host}:${novncPort}/vnc_lite.html`,
+        vncPort,
+        novncPort,
+        cdpUrl: typeof cdpPort === "number" ? `http://${host}:${cdpPort}` : undefined,
+      };
+    } catch (error) {
+      await this.stopContainer(containerName).catch(() => {});
+      throw error;
     }
-
-    return {
-      containerName,
-      novncUrl: `http://${host}:${novncPort}/vnc_lite.html`,
-      vncPort,
-      novncPort,
-      cdpUrl: typeof cdpPort === "number" ? `http://${host}:${cdpPort}` : undefined,
-    };
   }
 
   async stopContainer(containerName: string): Promise<void> {
@@ -752,20 +757,25 @@ export class SandboxManager {
 
     // Port mappings are published on the host, so consumers must connect to the
     // host-side endpoint rather than mixing a host port with a container IP.
-    const host = await resolvePublishedPortHost(this.runProcess);
+    try {
+      const host = await resolvePublishedPortHost(this.runProcess);
+      await waitForHttpReady(`http://${host}:${novncPort}/vnc_lite.html`, 15_000);
+      if (typeof cdpPort === "number" && options.waitForCdp !== false) {
+        await waitForPort(host, cdpPort, 15_000);
+        await waitForHttpReady(`http://${host}:${cdpPort}/json/version`, 15_000);
+      }
 
-    if (typeof cdpPort === "number" && options.waitForCdp !== false) {
-      await waitForPort(host, cdpPort, 15_000);
-      await waitForHttpReady(`http://${host}:${cdpPort}/json/version`, 15_000);
+      return {
+        containerName,
+        novncUrl: `http://${host}:${novncPort}/vnc_lite.html`,
+        vncPort,
+        novncPort,
+        cdpUrl: typeof cdpPort === "number" ? `http://${host}:${cdpPort}` : undefined,
+      };
+    } catch (error) {
+      await this.stopContainer(containerName).catch(() => {});
+      throw error;
     }
-
-    return {
-      containerName,
-      novncUrl: `http://${host}:${novncPort}/vnc_lite.html`,
-      vncPort,
-      novncPort,
-      cdpUrl: typeof cdpPort === "number" ? `http://${host}:${cdpPort}` : undefined,
-    };
   }
 
   /** Stop and remove a Linux desktop sandbox container. */

@@ -548,10 +548,10 @@ export function createToolRegistry(
   tools.register(createDecisionEvaluateTool());
 
   // Browser + web tools
-  tools.register(createBrowserNavigateTool(surfaceRegistry, undefined));
-  tools.register(createBrowserSnapshotTool(surfaceRegistry, undefined));
-  tools.register(createBrowserInspectTool(surfaceRegistry, undefined));
-  for (const tool of createBrowserInteractionTools(surfaceRegistry, undefined)) {
+  tools.register(createBrowserNavigateTool(surfaceRegistry, deps.previewService));
+  tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.previewService));
+  tools.register(createBrowserInspectTool(surfaceRegistry, deps.previewService));
+  for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService)) {
     tools.register(tool);
   }
   tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));

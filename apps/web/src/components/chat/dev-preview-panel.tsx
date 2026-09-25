@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
+import { Activity, AlertCircle, Camera, ExternalLink, Globe, Bot, MessageSquare, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
@@ -65,6 +65,7 @@ interface PreviewSessionState {
   port: number | null
   url: string | null
   browserId: string | null
+  sharedWithAgent: boolean
   processId: number | null
   containerId: string | null
   logs: PreviewLogEntry[]
@@ -313,6 +314,29 @@ export function DevPreviewPanel({
     }
   }, [managedPreviewSessionId, token])
 
+  const handleShareWithAgent = useCallback(async () => {
+    if (!managedPreviewSessionId || !token || !managedSession) return
+    setIsBusy(true)
+    setPanelError(null)
+    try {
+      const response = await fetch(`${getApiUrl()}/api/preview/share`, {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({
+          sessionId: managedPreviewSessionId,
+          sharedWithAgent: !managedSession.sharedWithAgent,
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+      if (!response.ok || !data.session) throw new Error(data.error || 'Failed to update preview sharing')
+      setManagedSession(data.session)
+    } catch (error) {
+      setPanelError(error instanceof Error ? error.message : 'Failed to update preview sharing')
+    } finally {
+      setIsBusy(false)
+    }
+  }, [managedPreviewSessionId, managedSession, token])
+
   const handleStop = useCallback(async () => {
     if (!managedPreviewSessionId || !token) {
       setManagedSession(null)
@@ -438,6 +462,24 @@ export function DevPreviewPanel({
         <div className="ml-auto flex items-center gap-1">
           {managedSession ? (
             <>
+              {managedSession.status === 'ready' && managedSession.browserId ? (
+                <TooltipHint content={managedSession.sharedWithAgent
+                  ? 'Agent can read and control this live browser, including its page and saved session data. Click to stop sharing.'
+                  : 'Allow the agent to read and control this live browser, including its page and saved session data.'}>
+                  <Button
+                    type="button"
+                    variant={managedSession.sharedWithAgent ? 'secondary' : 'outline'}
+                    size="sm"
+                    className={managedSession.sharedWithAgent ? 'h-7 px-2 text-xs text-primary' : 'h-7 px-2 text-xs'}
+                    aria-pressed={managedSession.sharedWithAgent}
+                    onClick={() => { void handleShareWithAgent() }}
+                    disabled={isBusy}
+                  >
+                    <Bot className="mr-1 h-3 w-3" />
+                    {managedSession.sharedWithAgent ? 'Sharing with Agent' : 'Share with Agent'}
+                  </Button>
+                </TooltipHint>
+              ) : null}
               <Button
                 type="button"
                 variant="ghost"
@@ -564,7 +606,7 @@ export function DevPreviewPanel({
         </div>
       </div>
 
-      <div className="h-[420px] bg-muted/5">
+      <div className={`h-[420px] bg-muted/5 ${managedSession?.sharedWithAgent && activeTab === 'preview' ? 'preview-shared-frame' : ''}`}>
         {activeTab === 'preview' ? (
           screenshotUrl ? (
             <div className="relative h-full">

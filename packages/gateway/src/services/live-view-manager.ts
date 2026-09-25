@@ -5,6 +5,7 @@ import { SandboxManager, reserveLocalPort } from "../security/sandbox-manager.js
 
 const DEFAULT_MAX_CONTAINER_LIVE_VIEW_STARTS = 1;
 let activeContainerLiveViewStarts = 0;
+const waitingContainerLiveViewStarts: Array<() => void> = [];
 
 export interface LiveViewSession {
   kind: "host" | "container";
@@ -32,17 +33,11 @@ export async function startLiveView(options?: {
   const preferContainer = options?.preferContainer !== false;
   if (preferContainer) {
     try {
-      const maxStarts = readMaxContainerLiveViewStarts();
-      if (activeContainerLiveViewStarts >= maxStarts) {
-        throw new Error(
-          `Preview browser start already in progress (${activeContainerLiveViewStarts} active, max ${maxStarts})`,
-        );
-      }
-      activeContainerLiveViewStarts += 1;
+      await acquireContainerLiveViewSlot();
       try {
         return await startContainerLiveView(options);
       } finally {
-        activeContainerLiveViewStarts -= 1;
+        releaseContainerLiveViewSlot();
       }
     } catch (err) {
       throw new Error(`Docker sandbox browser failed: ${(err as Error)?.message ?? err}`);
@@ -50,6 +45,21 @@ export async function startLiveView(options?: {
   }
 
   return startHostLiveView(options);
+}
+
+async function acquireContainerLiveViewSlot(): Promise<void> {
+  if (activeContainerLiveViewStarts < readMaxContainerLiveViewStarts()
+    && waitingContainerLiveViewStarts.length === 0) {
+    activeContainerLiveViewStarts += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => waitingContainerLiveViewStarts.push(resolve));
+}
+
+function releaseContainerLiveViewSlot(): void {
+  const next = waitingContainerLiveViewStarts.shift();
+  if (next) next();
+  else activeContainerLiveViewStarts -= 1;
 }
 
 function readMaxContainerLiveViewStarts(): number {

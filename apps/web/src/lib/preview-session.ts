@@ -23,6 +23,7 @@ export interface PreviewSessionLike {
   port: number | null
   url: string | null
   browserId: string | null
+  sharedWithAgent: boolean
   processId: number | null
   containerId: string | null
   remoteBrowser?: PreviewRemoteBrowserLike | null
@@ -74,6 +75,7 @@ export function isSamePreviewSession(
     && previous.port === next.port
     && previous.url === next.url
     && previous.browserId === next.browserId
+    && previous.sharedWithAgent === next.sharedWithAgent
     && previous.processId === next.processId
     && previous.containerId === next.containerId
     && isSameRemoteBrowser(previous.remoteBrowser, next.remoteBrowser)

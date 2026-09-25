@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import { createTerminalRunTool } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
@@ -16,6 +16,14 @@ const baseContext = {
 };
 
 describe("Sprint 13 — Docker Sandboxing", () => {
+  beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true } as Response);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("runs sandboxed terminal command when sandbox=true", async () => {
     const manager = new SandboxManager(async () => ({
       output: "inside-container",
@@ -76,6 +84,10 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     const result = await tool.execute({ novncPort: 6600, vncPort: 6000 }, baseContext);
 
     expect(result.ok).toBe(true);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://127.0.0.1:6600/vnc_lite.html",
+      expect.any(Object),
+    );
     expect(result.data).toMatchObject({
       novncUrl: "http://127.0.0.1:6600/vnc_lite.html",
       novncPort: 6600,

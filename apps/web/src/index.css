@@ -550,3 +550,31 @@ html.is-dragging-row-resize {
 @media (prefers-reduced-motion: reduce) {
   .sash-handle::after { transition: none; }
 }
+
+@property --preview-share-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.preview-shared-frame {
+  --preview-share-angle: 0deg;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--preview-share-angle),
+    hsl(var(--primary) / 0.25),
+    hsl(var(--primary) / 0.95),
+    hsl(var(--primary) / 0.25),
+    hsl(var(--primary) / 0.95),
+    hsl(var(--primary) / 0.25)
+  );
+  animation: preview-share-border 5s linear infinite;
+}
+
+@keyframes preview-share-border {
+  to { --preview-share-angle: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-shared-frame { animation: none; }
+}

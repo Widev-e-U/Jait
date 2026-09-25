@@ -10,6 +10,28 @@ async function authHeader(jwtSecret: string, userId: string) {
 }
 
 describe("preview routes", () => {
+  it("lets only the owning user change preview sharing", async () => {
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const previewService = {
+      setSharedWithAgent: vi.fn().mockReturnValue({ sessionId: "session-1", sharedWithAgent: true }),
+    };
+    const sessionService = {
+      getById: vi.fn((id: string, userId: string) => id === "session-1" && userId === "user-1" ? { id } : null),
+    };
+    registerPreviewRoutes(app, config, { previewService: previewService as any, sessionService: sessionService as any });
+
+    const body = { sessionId: "session-1", sharedWithAgent: true };
+    const denied = await app.inject({ method: "POST", url: "/api/preview/share", headers: await authHeader(config.jwtSecret, "user-2"), payload: body });
+    expect(denied.statusCode).toBe(404);
+    expect(previewService.setSharedWithAgent).not.toHaveBeenCalled();
+
+    const allowed = await app.inject({ method: "POST", url: "/api/preview/share", headers: await authHeader(config.jwtSecret, "user-1"), payload: body });
+    expect(allowed.statusCode).toBe(200);
+    expect(previewService.setSharedWithAgent).toHaveBeenCalledWith("session-1", true);
+    await app.close();
+  });
+
   it("returns preview inspection including selector diagnostics", async () => {
     const app = Fastify();
     const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };

@@ -53,6 +53,11 @@ const RECONNECT_ATTEMPTS_BEFORE_BANNER = 3
 /** Bounded retries for the one-shot snapshot fetch that seeds the subscription. */
 const SNAPSHOT_RETRY_DELAYS_MS = [400, 1_200, 3_000]
 
+// How long after a local send the turn-start event is allowed to arrive. In
+// practice the gateway starts the turn immediately; the tolerance only exists
+// so a stale marker can never suppress a bubble for a later, unrelated turn.
+const LOCAL_SEND_TURN_START_TOLERANCE_MS = 60_000
+
 function authHeaders(token?: string | null): Record<string, string> {
   if (!token) return {}
   return { Authorization: `Bearer ${token}` }
@@ -649,6 +654,21 @@ export function useChat(
   const [messageQueue, setMessageQueue] = useState<QueuedChatMessage[]>([])
   const [completionCount, setCompletionCount] = useState(0)
   const [fileChangeCount, setFileChangeCount] = useState(0)
+
+  // Synchronous mirror of `messageQueue` so event handlers can read the queue
+  // without waiting for the next render. State updaters may run more than once
+  // (StrictMode), so the mirror is only ever touched through `updateQueue`,
+  // never from inside a setState updater.
+  const messageQueueRef = useRef<QueuedChatMessage[]>([])
+  const updateQueue = useCallback((action: QueuedChatMessage[] | ((prev: QueuedChatMessage[]) => QueuedChatMessage[])) => {
+    messageQueueRef.current = typeof action === 'function' ? action(messageQueueRef.current) : action
+    setMessageQueue(messageQueueRef.current)
+  }, [])
+
+  // Marks a turn this client initiated (direct send or client-side queue
+  // drain): its optimistic user bubble is already on screen, so the turn-start
+  // handler must not append a second one when the gateway confirms the turn.
+  const localPendingSendRef = useRef<{ content: string; at: number } | null>(null)
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
 
@@ -775,7 +795,7 @@ export function useChat(
       setPendingPlan(null)
       setTodoList([])
       setChangedFiles([])
-      setMessageQueue([])
+      updateQueue([])
       messageQueueSessionRef.current = null
       startedTurnContentRef.current = null
       setContextUsage(null)
@@ -791,7 +811,7 @@ export function useChat(
     setSessionInfo(null)
     if (messageQueueSessionRef.current !== sessionId) {
       messageQueueSessionRef.current = sessionId
-      setMessageQueue([])
+      updateQueue([])
     }
 
     let cancelled = false
@@ -951,7 +971,50 @@ export function useChat(
         startedTurnContentRef.current = typeof data.content === 'string'
           ? data.content.trim() || null
           : null
-        setMessageQueue(prev => reconcileQueuedMessagesAtTurnStart(prev, data.content))
+
+        // A queued message drained by the gateway never went through
+        // `sendMessage`, so its user bubble only exists if we synthesize it
+        // here from the queue entry being consumed. Skip it when the turn was
+        // sent by this client (`sendMessage` already rendered the optimistic
+        // bubble, including client-side queue drains), and for replays (the
+        // bubble is part of the authoritative history).
+        const startedContent = startedTurnContentRef.current
+        const wasLocallySent = (() => {
+          const pending = localPendingSendRef.current
+          if (!pending) return false
+          if (Date.now() - pending.at > LOCAL_SEND_TURN_START_TOLERANCE_MS) return false
+          return startedContent !== null && pending.content.trim() === startedContent
+        })()
+        localPendingSendRef.current = null
+
+        const queueBefore = messageQueueRef.current
+        const drainedItem = startedContent !== null
+          ? queueBefore.find((item) => item.content.trim() === startedContent)
+          : undefined
+
+        if (!isReplay && !wasLocallySent && startedContent !== null) {
+          const userBubble: ChatMessage = drainedItem
+            ? {
+                id: createOptimisticMessageId('user'),
+                role: 'user',
+                content: drainedItem.content,
+                optimistic: true,
+                ...(drainedItem.displayContent ? { displayContent: drainedItem.displayContent } : {}),
+                ...(drainedItem.displaySegments?.length ? { displaySegments: drainedItem.displaySegments } : {}),
+                ...(drainedItem.referencedFiles?.length ? { referencedFiles: drainedItem.referencedFiles } : {}),
+                ...(drainedItem.attachments?.length ? { attachments: drainedItem.attachments } : {}),
+              }
+            : {
+                id: createOptimisticMessageId('user'),
+                role: 'user',
+                content: data.content as string,
+                displayContent: data.content as string,
+                optimistic: true,
+              }
+          setState(prev => ({ ...prev, messages: [...prev.messages, userBubble] }))
+        }
+
+        updateQueue(prev => reconcileQueuedMessagesAtTurnStart(prev, data.content))
         beginTurn()
       } else if (data.type === 'token') {
         if (!ensureStreamingAssistant()) return
@@ -1366,7 +1429,7 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger])
+  }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger, updateQueue])
 
   /** WS lifecycle signals validate persisted state without rebuilding a healthy stream. */
   const refreshMessages = useCallback((options?: { lifecycle?: 'started' | 'complete' }) => {
@@ -1647,7 +1710,7 @@ export function useChat(
         // over WS. Re-adding here with a freshly generated server id raced the
         // server-side drain and caused every queued message to multiply.
         if (!options.queued && queued?.id && typeof queued.content === 'string') {
-          setMessageQueue(prev => prev.some(item => item.id === queued.id)
+          updateQueue(prev => prev.some(item => item.id === queued.id)
             ? prev
             : [...prev, {
                 ...queued,
@@ -1664,6 +1727,10 @@ export function useChat(
       // carried is already on this session's subscription, and the gateway
       // keeps producing the turn after a client close.
       void response.body?.cancel().catch(() => {})
+      // The turn was accepted and this client initiated it (directly or via a
+      // client-side queue drain): the optimistic user bubble is already on
+      // screen, so the turn-start event must not append another one.
+      localPendingSendRef.current = { content, at: Date.now() }
       return 'sent'
     } catch (error) {
       const transientConnectionError = isTransientConnectionError(error)
@@ -1721,12 +1788,12 @@ export function useChat(
       ...item,
       queuedAt: Date.now(),
     }
-    setMessageQueue(prev => [...prev, queueItem])
-  }, [])
+    updateQueue(prev => [...prev, queueItem])
+  }, [updateQueue])
 
   const dequeueMessage = useCallback((id: string) => {
-    setMessageQueue(prev => prev.filter(q => q.id !== id))
-  }, [])
+    updateQueue(prev => prev.filter(q => q.id !== id))
+  }, [updateQueue])
 
   /**
    * Insert a visible marker into the transcript for a message that was injected
@@ -1757,7 +1824,7 @@ export function useChat(
   const updateQueueItem = useCallback((id: string, content: string) => {
     const trimmed = content.trim()
     if (!trimmed) return
-    setMessageQueue(prev => prev.map(q => q.id === id
+    updateQueue(prev => prev.map(q => q.id === id
       ? {
         ...q,
         content: trimmed,
@@ -1766,10 +1833,10 @@ export function useChat(
         displaySegments: undefined,
       }
       : q))
-  }, [])
+  }, [updateQueue])
 
   const reorderQueueItem = useCallback((sourceId: string, targetId: string | null, placement: 'before' | 'after') => {
-    setMessageQueue(prev => {
+    updateQueue(prev => {
       const sourceIndex = prev.findIndex(item => item.id === sourceId)
       if (sourceIndex < 0) return prev
 
@@ -1787,18 +1854,18 @@ export function useChat(
       next.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, moved)
       return next
     })
-  }, [])
+  }, [updateQueue])
 
   const toggleHoldQueueItem = useCallback((id: string) => {
-    setMessageQueue(prev => prev.map(q => q.id === id ? { ...q, held: !q.held } : q))
-  }, [])
+    updateQueue(prev => prev.map(q => q.id === id ? { ...q, held: !q.held } : q))
+  }, [updateQueue])
 
   const setMessageQueueState = useCallback((items: QueuedChatMessage[]) => {
     const startedContent = startedTurnContentRef.current
     const nextItems = reconcileQueuedMessagesAtTurnStart(items, startedContent)
-    setMessageQueue(nextItems)
+    updateQueue(nextItems)
     if (items.length === 0) startedTurnContentRef.current = null
-  }, [])
+  }, [updateQueue])
 
   // ── Wake / reconnect nudges ──
   // A socket parked by a sleeping tab, a Wi-Fi→LTE handoff or a bfcache restore
@@ -2010,8 +2077,8 @@ export function useChat(
     setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null, hitMaxRounds: false, hasMore: false, totalMessages: 0 })
     setTodoList([])
     updateAndBroadcastFiles(() => [])
-    setMessageQueue([])
-  }, [updateAndBroadcastFiles])
+    updateQueue([])
+  }, [updateAndBroadcastFiles, updateQueue])
 
   /** Send "Continue" to resume the agent after hitting max tool rounds */
   const continueChat = useCallback((options: SendMessageOptions = {}) => {

@@ -6,7 +6,6 @@ import type {
   SurfaceSnapshot,
 } from "./contracts.js";
 import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -591,10 +590,18 @@ async function createPlaywrightDriver(input: SurfaceStartInput): Promise<Browser
   const runtime = resolveBrowserRuntimeMode();
   const requireLiveView = input.requireLiveView === true;
   const liveViewSession = await startOptionalLiveView(input, requireLiveView);
-  if (runtime === "node-bridge") {
-    return createNodeBridgePlaywrightDriver(liveViewSession);
+  try {
+    if (runtime === "node-bridge") {
+      return await createNodeBridgePlaywrightDriver(liveViewSession);
+    }
+    return await createInProcessPlaywrightDriver(input, liveViewSession);
+  } catch (error) {
+    if (liveViewSession) {
+      const { stopLiveView } = await import("../services/live-view-manager.js");
+      await stopLiveView(liveViewSession).catch(() => {});
+    }
+    throw error;
   }
-  return createInProcessPlaywrightDriver(input, liveViewSession);
 }
 
 type BrowserRuntimeMode = "auto" | "in-process" | "node-bridge";
@@ -1493,13 +1500,27 @@ async function createNodeBridgePlaywrightDriver(
   const closeBridge = async () => {
     if (stopped) return;
     try {
-      await sendCommand("close", {});
+      await sendCommand("close", {}, AbortSignal.timeout(5_000));
     } catch {
-      child.kill();
+      // A stuck page must not make preview stop or restart hang.
     }
     stopped = true;
+    if (child.exitCode !== null || child.signalCode !== null) return;
     child.kill();
-    await once(child, "exit").catch(() => {});
+    await new Promise<void>((resolveExit) => {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        resolveExit();
+        return;
+      }
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        resolveExit();
+      }, 3_000);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolveExit();
+      });
+    });
   };
 
   const driver: BrowserDriver = {

@@ -312,6 +312,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.previewService) {
     registerPreviewRoutes(app, config, {
       previewService: deps.previewService,
+      sessionService: deps.sessionService,
     });
   }
   if (deps.architectureDiagramService) {

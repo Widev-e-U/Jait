@@ -34,6 +34,7 @@ export interface PreviewSession {
   port: number | null;
   url: string | null;
   browserId: string | null;
+  sharedWithAgent: boolean;
   processId: number | null;
   containerId: string | null;
   logs: PreviewLogEntry[];
@@ -60,6 +61,7 @@ export interface StartPreviewInput {
   command?: string | null;
   port?: number | null;
   frameworkHint?: string | null;
+  sharedWithAgent?: boolean;
 }
 
 interface InternalPreviewSession extends PreviewSession {
@@ -146,12 +148,24 @@ export class PreviewService {
     this._onSessionChanged?.(this.toPublicSession(session));
   }
 
-  async start(input: StartPreviewInput): Promise<PreviewSession> {
+  async start(input: StartPreviewInput, forceRestart = false): Promise<PreviewSession> {
     if (!input.sessionId) throw new Error("sessionId is required");
     const inFlight = this.startingSessions.get(input.sessionId);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      if (!forceRestart) return inFlight;
+      await inFlight;
+    }
 
-    const startPromise = this.startFresh(input);
+    const existing = this.sessions.get(input.sessionId);
+    if (!forceRestart && existing && this.canReuse(existing, input)) {
+      if (input.sharedWithAgent !== undefined) {
+        this.setSharedWithAgent(input.sessionId, input.sharedWithAgent);
+      }
+      return this.get(input.sessionId)!;
+    }
+
+    const sharedWithAgent = input.sharedWithAgent ?? existing?.sharedWithAgent ?? false;
+    const startPromise = this.startFresh({ ...input, sharedWithAgent });
     this.startingSessions.set(input.sessionId, startPromise);
     try {
       return await startPromise;
@@ -160,6 +174,18 @@ export class PreviewService {
         this.startingSessions.delete(input.sessionId);
       }
     }
+  }
+
+  private canReuse(session: InternalPreviewSession, input: StartPreviewInput): boolean {
+    if (session.status !== "ready" || session.terminating || !session.browserId) return false;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return false;
+    if (session.process && (session.process.exitCode !== null || session.process.signalCode !== null)) return false;
+    if (session.projectRoot !== (input.projectRoot?.trim() || null)) return false;
+    if (session.target !== (input.target?.trim() || null)) return false;
+    if (input.command?.trim() && session.command !== input.command.trim()) return false;
+    if (input.port != null && session.port !== input.port) return false;
+    return true;
   }
 
   private async startFresh(input: StartPreviewInput): Promise<PreviewSession> {
@@ -179,6 +205,7 @@ export class PreviewService {
       port: null,
       url: null,
       browserId: `preview-browser-${input.sessionId}`,
+      sharedWithAgent: input.sharedWithAgent ?? false,
       processId: null,
       containerId: null,
       logs: [],
@@ -228,7 +255,7 @@ export class PreviewService {
         // Listen for process exit
         if (result.process) {
           result.process.on("exit", (code, signal) => {
-            if (session.status === "stopped" || session.terminating) return;
+            if (session.status === "stopped" || session.status === "error" || session.terminating) return;
             session.updatedAt = nowIso();
             session.status = "error";
             const message = `Preview process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`;
@@ -263,6 +290,16 @@ export class PreviewService {
       session.lastError = error instanceof Error ? error.message : "Preview start failed";
       session.updatedAt = nowIso();
       this.appendLog(session, "stderr", session.lastError);
+      if (session.runnerResult) {
+        await this.runner.stop(session.runnerResult).catch(() => {});
+        session.runnerResult = null;
+        session.process = null;
+        session.processId = null;
+      }
+      if (session.browserId) {
+        await this.surfaceRegistry.stopSurface(session.browserId, "preview-failed").catch(() => {});
+      }
+      session.remoteBrowser = null;
       this.notifyChanged(session);
       return this.toPublicSession(session);
     }
@@ -277,7 +314,8 @@ export class PreviewService {
       target: existing.target,
       command: existing.command,
       port: existing.port,
-    });
+      sharedWithAgent: existing.sharedWithAgent,
+    }, true);
   }
 
   async stop(sessionId: string): Promise<boolean> {
@@ -308,6 +346,43 @@ export class PreviewService {
     if (!session) return null;
     session.browserEvents = this.readBrowserEvents(session);
     return this.toPublicSession(session);
+  }
+
+  setSharedWithAgent(sessionId: string, shared: boolean): PreviewSession | null {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    if (session.sharedWithAgent !== shared) {
+      session.sharedWithAgent = shared;
+      session.updatedAt = nowIso();
+      this.notifyChanged(session);
+    }
+    return this.toPublicSession(session);
+  }
+
+  getSessionByPreviewSessionId(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    return {
+      id: session.id,
+      browserId: session.browserId ?? undefined,
+      controller: session.sharedWithAgent ? "agent" : "user",
+      previewUrl: session.url ?? undefined,
+      projectRoot: session.projectRoot ?? undefined,
+      status: session.status,
+    };
+  }
+
+  getSessionByBrowserId(browserId: string) {
+    const session = [...this.sessions.values()].find((item) => item.browserId === browserId);
+    return session ? this.getSessionByPreviewSessionId(session.sessionId) : null;
+  }
+
+  assertAgentControl(browserId?: string): void {
+    if (!browserId) return;
+    const session = [...this.sessions.values()].find((item) => item.browserId === browserId);
+    if (session && !session.sharedWithAgent) {
+      throw new Error("This preview is not shared with the agent. Use Share with Agent in the preview tab to allow browser tools.");
+    }
   }
 
   async refreshSessionCapture(sessionId: string): Promise<PreviewSession | null> {
@@ -516,6 +591,7 @@ export class PreviewService {
       port: session.port,
       url: session.url,
       browserId: session.browserId,
+      sharedWithAgent: session.sharedWithAgent,
       processId: session.processId,
       containerId: session.containerId,
       logs: [...session.logs],

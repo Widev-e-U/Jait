@@ -419,6 +419,50 @@ describe('turn boundary event classification', () => {
   })
 })
 
+describe('gateway-drained queue messages', () => {
+  const source = () => readFileSync(new URL('./useChat.ts', import.meta.url), 'utf8')
+
+  // ── The bug this guards against ──
+  // A queued message drained by the gateway on turn `done` (deferToServerDrain)
+  // never goes through `sendMessage`, so no optimistic user bubble exists and
+  // the transcript streamed the whole turn without its user message.
+  it('synthesizes the user bubble at turn start for messages this client did not send', () => {
+    const src = source()
+    // The synthesis is gated on: not a replay (history owns the bubble) and
+    // not a turn this client initiated (`sendMessage` already rendered it).
+    const gateAt = src.indexOf('if (!isReplay && !wasLocallySent && startedContent !== null) {')
+    expect(gateAt).toBeGreaterThan(-1)
+    const appendedAt = src.indexOf('setState(prev => ({ ...prev, messages: [...prev.messages, userBubble] }))', gateAt)
+    expect(appendedAt).toBeGreaterThan(-1)
+
+    const block = src.slice(gateAt, appendedAt)
+    expect(block).toContain("role: 'user'")
+    expect(block).toContain('optimistic: true')
+    // Display fields of the drained queue entry survive onto the bubble.
+    expect(block).toContain('drainedItem.displayContent')
+    expect(block).toContain('drainedItem.displaySegments')
+    expect(block).toContain('drainedItem.referencedFiles')
+    expect(block).toContain('drainedItem.attachments')
+  })
+
+  it('marks locally initiated sends so turn start does not double-render them', () => {
+    const src = source()
+    // Set inside the single-consumer send path, cleared inside the turn-start
+    // handler, and matched on trimmed content with a bounded arrival window.
+    expect(src).toContain('localPendingSendRef.current = { content, at: Date.now() }')
+    expect(src).toContain('localPendingSendRef.current = null')
+    expect(src).toContain('LOCAL_SEND_TURN_START_TOLERANCE_MS')
+    expect(src).toContain('pending.content.trim() === startedContent')
+  })
+
+  it('still releases the chat POST body on the single-consumer path', () => {
+    const src = source()
+    // The local-send marker replaced this once; without the cancel the socket
+    // leaks and the gateway never sees the client disconnect.
+    expect(src).toContain('void response.body?.cancel().catch(() => {})')
+  })
+})
+
 describe('reconcileQueuedMessagesAtTurnStart', () => {
   it('removes a queued row once that same message has started running', () => {
     const queue = [

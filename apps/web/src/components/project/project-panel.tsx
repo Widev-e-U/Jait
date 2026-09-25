@@ -1,7 +1,7 @@
 import { useGitChangeCounts, refreshGitChangeCounts } from '@/lib/git-service'
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type SetStateAction } from 'react'
 import Editor, { loader } from '@monaco-editor/react'
-import { AlertCircle, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, Bot, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitectureWorkspace } from './architecture-workspace'
@@ -758,6 +758,7 @@ interface PreviewSessionState {
   port: number | null
   url: string | null
   browserId: string | null
+  sharedWithAgent: boolean
   processId: number | null
   containerId: string | null
   logs: PreviewLogEntry[]
@@ -2727,7 +2728,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   )
 
   const renderPreviewPane = (emptyLabel: string) => (
-    <div className="relative h-full bg-muted/5 overflow-hidden">
+    <div className={cn("relative h-full bg-muted/5 overflow-hidden", managedPreviewSession?.sharedWithAgent && "preview-shared-frame")}>
       {previewFrameLoading && (
         <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
           <div className="h-full w-full animate-pulse bg-primary/80" />
@@ -2755,6 +2756,24 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
           {emptyLabel}
         </div>
       )}
+      {managedPreviewSession?.status === 'ready' && managedPreviewSession.browserId ? (
+        <TooltipHint content={managedPreviewSession.sharedWithAgent
+          ? 'Agent can read and control this live browser, including its page and saved session data. Click to stop sharing.'
+          : 'Allow the agent to read and control this live browser, including its page and saved session data.'}>
+          <Button
+            type="button"
+            variant={managedPreviewSession.sharedWithAgent ? 'secondary' : 'outline'}
+            size="sm"
+            className="absolute left-3 top-3 z-10 h-8 bg-background/95 px-2 text-xs shadow-sm"
+            aria-pressed={managedPreviewSession.sharedWithAgent}
+            onClick={() => { void handleShareManagedPreview() }}
+            disabled={previewBusy}
+          >
+            <Bot className="mr-1 h-3 w-3" />
+            {managedPreviewSession.sharedWithAgent ? 'Sharing with Agent' : 'Share with Agent'}
+          </Button>
+        </TooltipHint>
+      ) : null}
       {previewSidePanelOpen && renderPreviewSidePanel()}
     </div>
   )
@@ -4020,6 +4039,29 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       setPreviewBusy(false)
     }
   }, [activePreviewSessionId, previewToken])
+
+  const handleShareManagedPreview = useCallback(async () => {
+    if (!activePreviewSessionId || !previewToken || !managedPreviewSession) return
+    setPreviewBusy(true)
+    setPreviewPanelError(null)
+    try {
+      const response = await fetch(`${API_URL}/api/preview/share`, {
+        method: 'POST',
+        headers: authHeaders(previewToken),
+        body: JSON.stringify({
+          sessionId: activePreviewSessionId,
+          sharedWithAgent: !managedPreviewSession.sharedWithAgent,
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+      if (!response.ok || !data.session) throw new Error(data.error || 'Failed to update preview sharing')
+      setManagedPreviewSession(data.session)
+    } catch (error) {
+      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to update preview sharing')
+    } finally {
+      setPreviewBusy(false)
+    }
+  }, [activePreviewSessionId, managedPreviewSession, previewToken])
 
   const handleStopManagedPreview = useCallback(async () => {
     setPreviewBusy(true)

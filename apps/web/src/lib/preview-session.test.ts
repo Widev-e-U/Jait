@@ -11,6 +11,7 @@ function createSession(overrides: Partial<PreviewSessionLike> = {}): PreviewSess
     port: 3000,
     url: '/api/dev-proxy/3000/',
     browserId: 'browser-1',
+    sharedWithAgent: false,
     processId: 1234,
     containerId: null,
     remoteBrowser: {
@@ -44,6 +45,10 @@ describe('isSamePreviewSession', () => {
     const previous = createSession()
     const next = createSession({ browserEvents: [{ id: 10 }, { id: 11 }, { id: 12 }] })
     expect(isSamePreviewSession(previous, next)).toBe(false)
+  })
+
+  it('detects sharing changes as meaningful', () => {
+    expect(isSamePreviewSession(createSession(), createSession({ sharedWithAgent: true }))).toBe(false)
   })
 
   it('detects status changes as meaningful', () => {

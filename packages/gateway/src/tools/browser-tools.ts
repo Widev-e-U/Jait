@@ -3,8 +3,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
-// BrowserCollaborationService was removed — keep stub types so existing signatures compile.
-// All collaboration parameters are always `undefined` at runtime now.
+// PreviewService provides the sharing boundary for managed browser sessions.
 type BrowserCollaborationService = {
   getSessionByPreviewSessionId(id: string): BrowserSessionRecord | null;
   getSessionByBrowserId(id: string): BrowserSessionRecord | null;

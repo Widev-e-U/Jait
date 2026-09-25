@@ -5,6 +5,84 @@ import { describe, expect, it, vi } from "vitest";
 import { PreviewService } from "./preview.js";
 
 describe("PreviewService", () => {
+  it("cleans up a managed server when the preview browser fails", async () => {
+    const registry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockRejectedValue(new Error("browser unavailable")),
+      getSurface: vi.fn().mockReturnValue(null),
+    };
+    const service = new PreviewService(registry as any);
+    const runnerResult = {
+      process: null, port: 4173, command: "npm run dev", url: "http://127.0.0.1:4173/",
+      mode: "local" as const,
+    };
+    const runnerStop = vi.fn().mockResolvedValue(undefined);
+    (service as any).runner = {
+      mode: "local",
+      start: vi.fn().mockResolvedValue(runnerResult),
+      stop: runnerStop,
+    };
+    const result = await service.start({ sessionId: "broken-browser", projectRoot: "/project/app" });
+    expect(result.status).toBe("error");
+    expect(result.lastError).toBe("browser unavailable");
+    expect(runnerStop).toHaveBeenCalledWith(runnerResult);
+    expect(registry.stopSurface).toHaveBeenCalledWith("preview-browser-broken-browser", "preview-failed");
+  });
+
+  it("reuses an unchanged healthy preview and only recreates it on restart", async () => {
+    const browser = {
+      type: "browser", state: "running",
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getEvents: vi.fn().mockReturnValue([]),
+      getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const registry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockResolvedValue(browser),
+      getSurface: vi.fn().mockReturnValue(browser),
+    };
+    const service = new PreviewService(registry as any);
+    const first = await service.start({ sessionId: "same-session", target: "4173" });
+    const second = await service.start({ sessionId: "same-session", target: "4173" });
+    expect(second.createdAt).toBe(first.createdAt);
+    expect(registry.startSurface).toHaveBeenCalledTimes(1);
+    await service.restart("same-session");
+    expect(registry.startSurface).toHaveBeenCalledTimes(2);
+  });
+
+  it("gates agent browser control by the preview sharing state and preserves it on restart", async () => {
+    const browser = {
+      type: "browser",
+      state: "running",
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getEvents: vi.fn().mockReturnValue([]),
+      getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue({ vncPort: 5900, websockifyPort: 6080, novncUrl: "ws://127.0.0.1:6080" }),
+    };
+    const registry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockResolvedValue(browser),
+      getSurface: vi.fn().mockReturnValue(browser),
+    };
+    const service = new PreviewService(registry as any);
+    const started = await service.start({ sessionId: "sharing-session", target: "4173" });
+    expect(started.sharedWithAgent).toBe(false);
+    expect(() => service.assertAgentControl(started.browserId!)).toThrow(/not shared with the agent/i);
+
+    const shared = service.setSharedWithAgent("sharing-session", true);
+    expect(shared?.sharedWithAgent).toBe(true);
+    expect(service.getSessionByPreviewSessionId("sharing-session")?.browserId).toBe(started.browserId);
+    expect(() => service.assertAgentControl(started.browserId!)).not.toThrow();
+
+    const restarted = await service.restart("sharing-session");
+    expect(restarted?.sharedWithAgent).toBe(true);
+    const reloaded = await service.start({ sessionId: "sharing-session", target: "4174" });
+    expect(reloaded.sharedWithAgent).toBe(true);
+    service.setSharedWithAgent("sharing-session", false);
+    expect(() => service.assertAgentControl(started.browserId!)).toThrow(/not shared with the agent/i);
+  });
+
   it("does not revive a preview stopped while its browser is starting", async () => {
     let finishStart!: (browser: unknown) => void;
     const browser = {

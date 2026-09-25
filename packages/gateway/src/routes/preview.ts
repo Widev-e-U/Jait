@@ -2,12 +2,14 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { PreviewService } from "../services/preview.js";
+import type { SessionService } from "../services/sessions.js";
 
 export function registerPreviewRoutes(
   app: FastifyInstance,
   config: AppConfig,
   deps: {
     previewService: PreviewService;
+    sessionService?: SessionService;
     browserCollaborationService?: {
       getSessionByPreviewSessionId(sessionId: string): { secretSafe?: boolean } | null;
     };
@@ -18,6 +20,7 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (deps.sessionService && !deps.sessionService.getById(sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const session = await deps.previewService.refreshSessionCapture(sessionId);
     return { session };
   });
@@ -26,6 +29,7 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (deps.sessionService && !deps.sessionService.getById(sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const screenshot = await deps.previewService.screenshot(sessionId);
     return { screenshot };
   });
@@ -34,6 +38,7 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (deps.sessionService && !deps.sessionService.getById(sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const query = request.query as { sinceId?: string };
     const sinceId = query.sinceId ? Number.parseInt(query.sinceId, 10) : 0;
     const logs = deps.previewService.getLogs(sessionId, sinceId);
@@ -44,6 +49,7 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (deps.sessionService && !deps.sessionService.getById(sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const query = request.query as { selector?: string };
     const linkedBrowserSession = deps.browserCollaborationService?.getSessionByPreviewSessionId(sessionId);
     if (linkedBrowserSession?.secretSafe) {
@@ -67,6 +73,7 @@ export function registerPreviewRoutes(
     if (!body.sessionId) {
       return reply.status(400).send({ error: "sessionId is required" });
     }
+    if (deps.sessionService && !deps.sessionService.getById(body.sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const session = await deps.previewService.start({
       sessionId: body.sessionId,
       projectRoot: body.projectRoot ?? null,
@@ -85,10 +92,26 @@ export function registerPreviewRoutes(
     if (!body.sessionId) {
       return reply.status(400).send({ error: "sessionId is required" });
     }
+    if (deps.sessionService && !deps.sessionService.getById(body.sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const session = await deps.previewService.restart(body.sessionId);
     if (!session) {
       return reply.status(404).send({ error: "Preview session not found" });
     }
+    return { session };
+  });
+
+  app.post("/api/preview/share", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = (request.body ?? {}) as { sessionId?: string; sharedWithAgent?: boolean };
+    if (!body.sessionId || typeof body.sharedWithAgent !== "boolean") {
+      return reply.status(400).send({ error: "sessionId and sharedWithAgent are required" });
+    }
+    if (!deps.sessionService?.getById(body.sessionId, authUser.id)) {
+      return reply.status(404).send({ error: "Session not found" });
+    }
+    const session = deps.previewService.setSharedWithAgent(body.sessionId, body.sharedWithAgent);
+    if (!session) return reply.status(404).send({ error: "Preview session not found" });
     return { session };
   });
 
@@ -99,6 +122,7 @@ export function registerPreviewRoutes(
     if (!body.sessionId) {
       return reply.status(400).send({ error: "sessionId is required" });
     }
+    if (deps.sessionService && !deps.sessionService.getById(body.sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
     const stopped = await deps.previewService.stop(body.sessionId);
     return { ok: stopped };
   });

@@ -306,6 +306,7 @@ describe("createPreviewInspectTool", () => {
   it("omits screenshots by default and reports browser error counts", async () => {
     const previewService = {
       get: vi.fn().mockReturnValue({ browserId: "preview-browser-session-1" }),
+      assertAgentControl: vi.fn(),
       inspect: vi.fn().mockResolvedValue({
         status: "ready",
         url: "/api/dev-proxy/4173/",
@@ -344,6 +345,7 @@ describe("createPreviewInspectTool", () => {
   it("keeps screenshots when explicitly requested", async () => {
     const previewService = {
       get: vi.fn().mockReturnValue({ browserId: "preview-browser-session-1" }),
+      assertAgentControl: vi.fn(),
       inspect: vi.fn().mockResolvedValue({
         status: "ready",
         url: "/api/dev-proxy/4173/",

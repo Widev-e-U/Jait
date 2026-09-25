@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { createServer } from "node:net";
 
 // ── Contracts ────────────────────────────────────────────────────────
@@ -34,9 +34,15 @@ export interface PreviewRunner {
 // ── Detection helpers ────────────────────────────────────────────────
 
 export function detectPackageManager(projectRoot: string): "bun" | "pnpm" | "npm" {
-  if (existsSync(join(projectRoot, "bun.lockb"))) return "bun";
-  if (existsSync(join(projectRoot, "pnpm-lock.yaml"))) return "pnpm";
-  return "npm";
+  let directory = resolve(projectRoot);
+  while (true) {
+    if (existsSync(join(directory, "bun.lock")) || existsSync(join(directory, "bun.lockb"))) return "bun";
+    if (existsSync(join(directory, "pnpm-lock.yaml"))) return "pnpm";
+    if (existsSync(join(directory, "package-lock.json"))) return "npm";
+    const parent = dirname(directory);
+    if (parent === directory) return "npm";
+    directory = parent;
+  }
 }
 
 export function loadPackageJson(projectRoot: string): Record<string, any> | null {
@@ -53,6 +59,33 @@ export interface DetectedFramework {
   name: string;
   devCommand: string;
   likelyPort: number;
+}
+
+/** Choose a single frontend workspace when a monorepo root is not itself a web app. */
+export function resolvePreviewProjectRoot(projectRoot: string): string {
+  const pkg = loadPackageJson(projectRoot);
+  if (!pkg?.workspaces || detectFramework(projectRoot)) return projectRoot;
+  const appsRoot = join(projectRoot, "apps");
+  if (!existsSync(appsRoot)) return projectRoot;
+  let appNames: string[];
+  try {
+    appNames = readdirSync(appsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return projectRoot;
+  }
+  const frontends = appNames
+    .map((name) => join(appsRoot, name))
+    .filter((root) => {
+      const app = loadPackageJson(root);
+      return Boolean(app?.scripts?.dev && detectFramework(root));
+    });
+  if (frontends.length === 1) return frontends[0]!;
+  if (frontends.length > 1) {
+    throw new Error(`Multiple frontend apps found: ${frontends.join(", ")}. Set projectRoot to the app to preview.`);
+  }
+  return projectRoot;
 }
 
 function isAllowedPreviewHost(hostname: string): boolean {
@@ -83,7 +116,10 @@ function buildExecCommand(
   if (packageManager === "npm") {
     return `npm exec -- ${executable}${suffix}`;
   }
-  return `${packageManager} exec ${executable}${suffix}`;
+  if (packageManager === "bun") {
+    return `bun run ${executable}${suffix}`;
+  }
+  return `pnpm exec ${executable}${suffix}`;
 }
 
 export function detectFramework(projectRoot: string, hint?: string | null): DetectedFramework | null {
@@ -134,13 +170,13 @@ export function detectPreviewCommand(projectRoot: string, requestedCommand: stri
   if (framework) {
     switch (framework.name) {
       case "vite":
-        return buildExecCommand(pm, "vite", ["--host", "127.0.0.1", "--port", String(port)]);
+        return buildExecCommand(pm, "vite", ["--host", "0.0.0.0", "--port", String(port)]);
       case "next":
-        return buildExecCommand(pm, "next", ["dev", "--hostname", "127.0.0.1", "--port", String(port)]);
+        return buildExecCommand(pm, "next", ["dev", "--hostname", "0.0.0.0", "--port", String(port)]);
       case "nuxt":
-        return buildExecCommand(pm, "nuxt", ["dev", "--host", "127.0.0.1", "--port", String(port)]);
+        return buildExecCommand(pm, "nuxt", ["dev", "--host", "0.0.0.0", "--port", String(port)]);
       case "astro":
-        return buildExecCommand(pm, "astro", ["dev", "--host", "127.0.0.1", "--port", String(port)]);
+        return buildExecCommand(pm, "astro", ["dev", "--host", "0.0.0.0", "--port", String(port)]);
       default:
         return `${pm} run dev`;
     }
@@ -151,7 +187,7 @@ export function detectPreviewCommand(projectRoot: string, requestedCommand: stri
     throw new Error("No package.json found and no preview command was provided.");
   }
   const scripts = (pkg.scripts ?? {}) as Record<string, string>;
-  if (scripts.preview) return `${pm} run preview -- --host 127.0.0.1 --port ${port}`;
+  if (scripts.preview) return `${pm} run preview -- --host 0.0.0.0 --port ${port}`;
   if (scripts.dev) return `${pm} run dev`;
 
   throw new Error("Unable to detect a preview command. Provide one explicitly.");
@@ -174,17 +210,32 @@ export async function allocatePort(preferred?: number | null): Promise<number> {
   });
 }
 
-export async function waitForHttp(url: string, timeoutMs = 45_000): Promise<void> {
+export async function waitForHttp(url: string, timeoutMs = 45_000, signal?: AbortSignal): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
+    if (signal?.aborted) throw signal.reason;
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      const requestSignal = signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(3000)])
+        : AbortSignal.timeout(3000);
+      const response = await fetch(url, { signal: requestSignal });
       if (response.ok || response.status < 500) return;
     } catch {
-      // retry
+      if (signal?.aborted) throw signal.reason;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise<void>((resolve) => {
+      const onAbort = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      }, 1000);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
   }
+  if (signal?.aborted) throw signal.reason;
   throw new Error(`Preview server did not become ready at ${url} within ${timeoutMs}ms`);
 }
 
@@ -206,43 +257,74 @@ function normalizeTargetUrl(target: string, port: number): string {
   }
 }
 
+function stopProcessTree(child: ChildProcessWithoutNullStreams): void {
+  if (process.platform !== "win32" && child.pid) {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+    }
+  }
+  if (!child.killed) child.kill("SIGTERM");
+}
+
 // ── LocalPreviewRunner ───────────────────────────────────────────────
 
 export class LocalPreviewRunner implements PreviewRunner {
   readonly mode = "local" as const;
 
   async start(input: PreviewRunnerInput, onLog: PreviewLogCallback): Promise<PreviewRunnerResult> {
+    const projectRoot = input.command || input.frameworkHint
+      ? input.projectRoot
+      : resolvePreviewProjectRoot(input.projectRoot);
     const port = await allocatePort(input.port);
-    const command = detectPreviewCommand(input.projectRoot, input.command ?? null, port, input.frameworkHint);
+    const command = detectPreviewCommand(projectRoot, input.command ?? null, port, input.frameworkHint);
     const url = normalizeTargetUrl(input.target ?? "", port);
 
+    if (projectRoot !== input.projectRoot) onLog("system", `Using frontend app: ${projectRoot}`);
     onLog("system", `Running: ${command} (port ${port})`);
 
     const child = spawn(command, {
-      cwd: input.projectRoot,
+      cwd: projectRoot,
       env: {
         ...process.env,
         PORT: String(port),
-        HOST: "127.0.0.1",
-        HOSTNAME: "127.0.0.1",
+        HOST: "0.0.0.0",
+        HOSTNAME: "0.0.0.0",
         BROWSER: "none",
       },
       shell: true,
+      detached: process.platform !== "win32",
       stdio: "pipe",
       windowsHide: true,
     });
 
+    const startupAbort = new AbortController();
+    let lastOutput = "";
+    const capture = (stream: "stdout" | "stderr", chunk: string) => {
+      onLog(stream, chunk);
+      lastOutput = (lastOutput + chunk).slice(-500).trim();
+    };
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => onLog("stdout", chunk));
-    child.stderr.on("data", (chunk: string) => onLog("stderr", chunk));
-    child.on("error", (error) => onLog("stderr", error.message));
+    child.stdout.on("data", (chunk: string) => capture("stdout", chunk));
+    child.stderr.on("data", (chunk: string) => capture("stderr", chunk));
+    child.on("error", (error) => {
+      capture("stderr", error.message);
+      startupAbort.abort(error);
+    });
+    child.once("exit", (code, signal) => {
+      startupAbort.abort(new Error(
+        `Preview command exited before the server was ready (code=${code ?? "null"}, signal=${signal ?? "null"}).${lastOutput ? ` Last output: ${lastOutput}` : ""}`,
+      ));
+    });
 
     try {
-      await waitForHttp(url);
+      await waitForHttp(url, 45_000, startupAbort.signal);
+      if (startupAbort.signal.aborted) throw startupAbort.signal.reason;
     } catch (err) {
-      // Kill the child process so it doesn't leak
-      if (!child.killed) child.kill("SIGTERM");
+      stopProcessTree(child);
       throw err;
     }
 
@@ -257,9 +339,7 @@ export class LocalPreviewRunner implements PreviewRunner {
   }
 
   async stop(result: PreviewRunnerResult): Promise<void> {
-    if (result.process && !result.process.killed) {
-      result.process.kill("SIGTERM");
-    }
+    if (result.process) stopProcessTree(result.process);
   }
 }
 

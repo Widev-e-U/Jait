@@ -284,9 +284,10 @@ export function createPreviewStatusTool(
           processId: session.processId,
           containerId: session.containerId,
           lastError: session.lastError,
-          eventCount: session.browserEvents.length,
+          sharedWithAgent: session.sharedWithAgent,
+          eventCount: session.sharedWithAgent ? session.browserEvents.length : 0,
           logCount: session.logs.length,
-          metrics: session.metrics,
+          metrics: session.sharedWithAgent ? session.metrics : null,
         },
       };
     },
@@ -336,7 +337,7 @@ export function createPreviewLogsTool(
         logs = logs.filter((entry) => entry.stream === input.stream);
       }
 
-      const browserEvents = session.browserEvents;
+      const browserEvents = session.sharedWithAgent ? session.browserEvents : [];
       const errors = browserEvents.filter((e) =>
         e.type === "pageerror" || e.type === "requestfailed" || (e.type === "response" && (e.status ?? 0) >= 400),
       );
@@ -391,6 +392,8 @@ export function createPreviewInspectTool(
       const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
+      const preview = previewService.get(sessionId);
+      if (preview?.browserId) previewService.assertAgentControl(preview.browserId);
       const result = await previewService.inspect(sessionId);
       if (!result) return { ok: false, message: "No active preview session" };
 
