@@ -107,6 +107,19 @@ export class ThreadService {
     const id = agent.id as string;
     const existing = this.db.select().from(personaAgents).where(eq(personaAgents.id, id)).get();
     if (existing && existing.userId !== userId) throw new Error("Agent profile not found");
+    const managerId = agent.reportsToId;
+    if (managerId != null) {
+      if (typeof managerId !== "string" || managerId === id) throw new Error("Invalid reporting line");
+      const seen = new Set([id]);
+      let nextId: string | null = managerId;
+      while (nextId) {
+        if (seen.has(nextId)) throw new Error("Invalid reporting line");
+        seen.add(nextId);
+        const manager = this.getPersonaAgent(nextId, userId);
+        if (!manager) throw new Error("Invalid reporting line");
+        nextId = typeof manager.reportsToId === "string" ? manager.reportsToId : null;
+      }
+    }
     const updatedAt = new Date().toISOString();
     const data = JSON.stringify({ ...agent, id, updatedAt });
     this.db.insert(personaAgents).values({ id, userId, data, updatedAt })
@@ -115,6 +128,9 @@ export class ThreadService {
   }
 
   deletePersonaAgent(id: string, userId: string): void {
+    for (const report of this.listPersonaAgents(userId)) {
+      if (report.reportsToId === id) this.savePersonaAgent(userId, { ...report, reportsToId: null });
+    }
     this.db.update(agentThreads).set({ personaAgentId: null })
       .where(and(eq(agentThreads.personaAgentId, id), eq(agentThreads.userId, userId))).run();
     this.db.delete(personaAgents).where(and(eq(personaAgents.id, id), eq(personaAgents.userId, userId))).run();

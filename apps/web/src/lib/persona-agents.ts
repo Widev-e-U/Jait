@@ -12,6 +12,8 @@ export interface PersonaTask {
 export interface PersonaAgentDraft {
   id: string
   name: string
+  role?: string
+  reportsToId?: string | null
   persona: string
   avatar: string
   providerId: string
@@ -32,10 +34,14 @@ export interface PersonaAgentDraft {
   updatedAt: string
 }
 
-export function agentTaskPrompt(agent: PersonaAgentDraft, request: string): string {
+export function agentTaskPrompt(agent: PersonaAgentDraft, request: string, colleagues: PersonaAgentDraft[] = []): string {
   const responsibilities = (agent.tasks ?? []).map((task) => `- ${task.name}: ${task.prompt}`).join('\n')
+  const manager = colleagues.find((colleague) => colleague.id === agent.reportsToId)
+  const directReports = colleagues.filter((colleague) => colleague.reportsToId === agent.id)
   return [
-    `You are ${agent.name}. ${agent.persona}`.trim(),
+    `You are ${agent.name}${agent.role?.trim() ? `, ${agent.role.trim()}` : ''}. ${agent.persona}`.trim(),
+    manager ? `You report to ${manager.name}${manager.role?.trim() ? ` (${manager.role.trim()})` : ''}.` : '',
+    directReports.length ? `Your direct reports: ${directReports.map((report) => `${report.name}${report.role?.trim() ? ` (${report.role.trim()})` : ''}`).join(', ')}.` : '',
     responsibilities ? `Your assigned tasks and skills:\n${responsibilities}` : '',
     agent.allowedTools.length ? `Prefer these tools: ${agent.allowedTools.join(', ')}.` : '',
     `Current request:\n${request.trim()}`,
@@ -76,6 +82,8 @@ export function readPersonaAgentDrafts(): PersonaAgentDraft[] {
     ).map((agent) => ({
       ...agent,
       avatar: normalizePersonaAvatar(agent.avatar),
+      role: typeof agent.role === 'string' ? agent.role : '',
+      reportsToId: typeof agent.reportsToId === 'string' ? agent.reportsToId : null,
       providerId: typeof agent.providerId === 'string' ? agent.providerId : 'jait',
       skillIds: Array.isArray(agent.skillIds) ? agent.skillIds.filter((id): id is string => typeof id === 'string') : [],
     }))
@@ -92,6 +100,8 @@ export function newPersonaAgentDraft(): PersonaAgentDraft {
   return {
     id: globalThis.crypto?.randomUUID?.() ?? `agent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: '',
+    role: '',
+    reportsToId: null,
     persona: '',
     avatar: PERSONA_AVATARS[0],
     providerId: 'jait',

@@ -767,6 +767,9 @@ export function registerThreadRoutes(
       || typeof body.name !== "string" || body.name.length > 200
       || typeof body.persona !== "string" || body.persona.length > 10_000
       || typeof body.avatar !== "string" || body.avatar.length > 40
+      || (body.role !== undefined && (typeof body.role !== "string" || body.role.length > 200))
+      || (body.reportsToId !== undefined && body.reportsToId !== null
+        && (typeof body.reportsToId !== "string" || body.reportsToId.length > 100))
       || typeof body.providerId !== "string" || body.providerId.length > 100
       || !(providerRegistry.getForUser(body.providerId, authUser.id)
         || ws?.getFsNodes().some((node) => node.providers?.includes(body.providerId as string)))
@@ -780,7 +783,10 @@ export function registerThreadRoutes(
     }
     try {
       return threadService.savePersonaAgent(authUser.id, { ...body, id });
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message === "Invalid reporting line") {
+        return reply.status(400).send({ error: error.message });
+      }
       return reply.status(404).send({ error: "Agent profile not found" });
     }
   });

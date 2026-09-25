@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { agentTaskPrompt, newPersonaAgentDraft, normalizePersonaAvatar, PERSONA_AVATARS, readPersonaAgentDrafts, savePersonaAgentDrafts, PERSONA_AGENTS_STORAGE_KEY } from './persona-agents'
+import { availableManagers, organizationEntries } from './agent-organization'
 
 function mockStorage() {
   const values = new Map<string, string>()
@@ -22,6 +23,26 @@ describe('persona agent drafts', () => {
     ] }
     expect(agentTaskPrompt(agent, 'What did you find?')).toContain('Weekly brief: Summarize the important updates')
     expect(agentTaskPrompt(agent, 'What did you find?')).toContain('Current request:\nWhat did you find?')
+  })
+
+  it('includes role and reporting context in work prompts', () => {
+    const lead = { ...newPersonaAgentDraft(), id: 'lead', name: 'Ari', role: 'Research lead' }
+    const worker = { ...newPersonaAgentDraft(), id: 'worker', name: 'Bo', role: 'Researcher', reportsToId: lead.id }
+    const prompt = agentTaskPrompt(lead, 'Plan the work', [lead, worker])
+    expect(prompt).toContain('You are Ari, Research lead.')
+    expect(prompt).toContain('Your direct reports: Bo (Researcher).')
+    expect(agentTaskPrompt(worker, 'Send an update', [lead, worker])).toContain('You report to Ari (Research lead).')
+  })
+
+  it('shows a hierarchy and excludes descendants from manager choices', () => {
+    const lead = { ...newPersonaAgentDraft(), id: 'lead', name: 'Ari' }
+    const worker = { ...newPersonaAgentDraft(), id: 'worker', name: 'Bo', reportsToId: lead.id }
+    const intern = { ...newPersonaAgentDraft(), id: 'intern', name: 'Cy', reportsToId: worker.id }
+    expect(organizationEntries([intern, worker, lead]).map(({ agent, depth }) => [agent.id, depth])).toEqual([
+      ['lead', 0], ['worker', 1], ['intern', 2],
+    ])
+    expect(availableManagers(lead.id, [lead, worker, intern])).toEqual([])
+    expect(availableManagers(intern.id, [lead, worker, intern]).map((agent) => agent.id)).toEqual(['lead', 'worker'])
   })
 
   it('maps existing emoji choices to illustrated avatars', () => {

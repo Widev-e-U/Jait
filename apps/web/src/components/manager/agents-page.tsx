@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Avatar, Style } from '@dicebear/core'
 import bottts from '@dicebear/styles/bottts.json' with { type: 'json' }
-import { ArrowLeft, Clock3, ExternalLink, ListChecks, Maximize2, MessageSquare, Minimize2, Plus, Settings2, Sparkles, Trash2, Wrench } from 'lucide-react'
+import { ArrowLeft, Clock3, ExternalLink, ListChecks, Maximize2, MessageSquare, Minimize2, Plus, Settings2, Sparkles, Trash2, UsersRound, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Conversation, Message, PromptInput } from '@/components/chat'
@@ -19,6 +19,7 @@ import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user
 import { getAuthToken } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 import { jobsApi } from '@/lib/jobs-api'
+import { availableManagers, organizationEntries } from '@/lib/agent-organization'
 import {
   agentTaskPrompt, newPersonaAgentDraft, normalizePersonaAvatar, PERSONA_AGENTS_STORAGE_KEY,
   PERSONA_AVATARS, readPersonaAgentDrafts, type PersonaAgentDraft, type PersonaTask,
@@ -181,7 +182,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       for (const task of agent.tasks ?? []) {
         if (!task.jobId) continue
         await jobsApi.updateJob(task.jobId, {
-          name: `${agent.name}: ${task.name}`, prompt: `Task: ${task.name}\n\n${agentTaskPrompt(agent, task.prompt)}`,
+          name: `${agent.name}: ${task.name}`, prompt: `Task: ${task.name}\n\n${agentTaskPrompt(agent, task.prompt, agents)}`,
           provider: agent.providerId, model: agent.model ?? null,
           payload: { personaAgentId: agent.id, skillIds: skillIdsFor(agent), runtimeMode: agent.requiresApproval ? 'supervised' : 'full-access' },
         })
@@ -194,7 +195,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
     if (creating) setCreating(next)
     else {
       save(next)
-      if (patch.providerId !== undefined || patch.model !== undefined || patch.skillIds !== undefined || patch.requiresApproval !== undefined) syncSchedules(next)
+      if (patch.providerId !== undefined || patch.model !== undefined || patch.skillIds !== undefined || patch.requiresApproval !== undefined || patch.role !== undefined || patch.reportsToId !== undefined) syncSchedules(next)
     }
   }
   const prepareBuilderChat = (kind: 'skill' | 'task') => {
@@ -224,7 +225,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       await saveQueue.current
       for (const task of selected.tasks ?? []) if (task.jobId) await jobsApi.deleteJob(task.jobId)
       await agentsApi.deletePersonaAgent(selected.id)
-      setAgents((existing) => existing.filter((agent) => agent.id !== selected.id))
+      setAgents((existing) => existing.filter((agent) => agent.id !== selected.id).map((agent) => agent.reportsToId === selected.id ? { ...agent, reportsToId: null } : agent))
       setSelectedId(null); setDeleteOpen(false); setDeleteName(''); onRefreshThreads()
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Could not delete agent') }
     finally { setBusy(false) }
@@ -237,7 +238,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       runtimeMode: agent.requiresApproval ? 'supervised' : 'full-access',
       workingDirectory: repo?.localPath,
     })
-    await agentsApi.startThread(thread.id, { message: agentTaskPrompt(agent, prompt), displayContent: prompt })
+    await agentsApi.startThread(thread.id, { message: agentTaskPrompt(agent, prompt, agents), displayContent: prompt })
     onRefreshThreads()
     return thread
   }
@@ -264,7 +265,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
           // Commit the new session before sending so useChat attaches its event stream.
           flushSync(() => save({ ...selected, chatSessionId: createdId, updatedAt: new Date().toISOString() }))
         }
-        const result = await sessionChat.sendMessage(activeChatSessionId && sessionChat.messages.length > 0 ? message : agentTaskPrompt(selected, message), {
+        const result = await sessionChat.sendMessage(activeChatSessionId && sessionChat.messages.length > 0 ? message : agentTaskPrompt(selected, message, agents), {
           sessionId, mode: 'agent', provider: selected.providerId,
           model: selected.model, runtimeMode: selected.requiresApproval ? 'supervised' : 'full-access',
           displayContent, displaySegments: displaySegments?.length ? displaySegments : [{ type: 'text', text: displayContent }],
@@ -274,7 +275,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       } else if (activeChatThreadId) {
         const thread = await agentsApi.getThread(activeChatThreadId)
         if (thread.providerSessionId) await agentsApi.sendTurn(activeChatThreadId, { message: prompt, displayContent, displaySegments })
-        else await agentsApi.startThread(activeChatThreadId, { message: agentTaskPrompt(selected, prompt), displayContent, displaySegments })
+        else await agentsApi.startThread(activeChatThreadId, { message: agentTaskPrompt(selected, prompt, agents), displayContent, displaySegments })
         setChatActivities(await agentsApi.getActivities(activeChatThreadId))
       }
       if (!activeChatSessionId) setChatStatus('running')
@@ -314,7 +315,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       const nextAgent = { ...selected, tasks: [...(selected.tasks ?? []).filter((task) => task.id !== previous?.id), next], updatedAt: new Date().toISOString() }
       const jobData = {
         name: `${selected.name}: ${next.name}`, cron_expression: next.cron, job_type: 'agent_task' as const,
-        prompt: `Task: ${next.name}\n\n${agentTaskPrompt(nextAgent, next.prompt)}`, provider: selected.providerId,
+        prompt: `Task: ${next.name}\n\n${agentTaskPrompt(nextAgent, next.prompt, agents)}`, provider: selected.providerId,
         model: selected.model ?? undefined, enabled: !selected.paused,
         payload: { personaAgentId: selected.id, skillIds: skillIdsFor(selected), runtimeMode: selected.requiresApproval ? 'supervised' : 'full-access' },
       }
@@ -359,10 +360,10 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
         <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">Agents</h1><p className="mt-1 text-sm text-muted-foreground">People you can ask, assign work to, and schedule.</p></div><Button size="sm" onClick={() => setCreating({ ...newPersonaAgentDraft(), skillIds: availableSkills.map((skill) => skill.id), usesAllSkills: true })}><Plus className="mr-1 h-4 w-4" /> New agent</Button></div>
         {loading && <p className="mt-8 text-center text-sm text-muted-foreground">Loading agents…</p>}
         {!loading && agents.length === 0 && <p className="mt-12 text-center text-sm text-muted-foreground">Create an agent to start a conversation or schedule work.</p>}
-        <div className="mx-auto mt-10 grid max-w-4xl grid-cols-2 justify-items-center gap-4 sm:grid-cols-3 lg:grid-cols-4">{agents.map((agent) => {
+        {agents.length > 0 && <div className="mt-8"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization</div><div className="space-y-1 rounded-lg border p-2 sm:p-3">{organizationEntries(agents).map(({ agent, depth }) => {
           const latest = threads.filter((thread) => thread.personaAgentId === agent.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
-          return <button key={agent.id} type="button" onClick={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} className="flex w-full max-w-44 flex-col items-center rounded-2xl px-3 py-5 text-center transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><AgentAvatar avatar={agent.avatar} className="h-20 w-20" /><strong className="mt-3 text-sm">{agent.name || 'Untitled agent'}</strong><span className="mt-1 text-xs text-muted-foreground">{latest?.status === 'running' ? 'Working' : latest?.status === 'error' ? 'Needs attention' : 'Ready'}</span></button>
-        })}</div>
+          return <button key={agent.id} type="button" onClick={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" style={{ paddingLeft: `${Math.min(depth, 8) * 22 + 8}px` }}><AgentAvatar avatar={agent.avatar} className="h-10 w-10" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{agent.name || 'Untitled agent'}</strong><span className="block truncate text-xs text-muted-foreground">{agent.role || (depth === 0 ? 'Top level agent' : 'Agent')} · {agent.providerId}</span></span><span className="shrink-0 text-xs text-muted-foreground">{latest?.status === 'running' ? 'Working' : latest?.status === 'error' ? 'Needs attention' : 'Ready'}</span></button>
+        })}</div></div>}
       </div>
     </div> : <>
       <div className="shrink-0 px-4 pt-4 sm:px-6">
@@ -371,6 +372,8 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       </div>
       {creating ? <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"><div className="mx-auto max-w-2xl space-y-5">
         <label className="block text-sm font-medium">Name<input value={current.name} onChange={(event) => change({ name: event.target.value })} placeholder="Research assistant" className="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label>
+        <label className="block text-sm font-medium">Role<input value={current.role ?? ''} onChange={(event) => change({ role: event.target.value })} placeholder="Research lead" className="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label>
+        <label className="block text-sm font-medium">Reports to<select value={current.reportsToId ?? ''} onChange={(event) => change({ reportsToId: event.target.value || null })} className="mt-1 w-full rounded-md border bg-background px-3 py-2"><option value="">No manager (top level)</option>{availableManagers(current.id, agents).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}{agent.role ? ` · ${agent.role}` : ''}</option>)}</select></label>
         <label className="block text-sm font-medium">Role and responsibilities<textarea value={current.persona} onChange={(event) => change({ persona: event.target.value })} placeholder="Research topics, create concise reports, and explain findings" className="mt-1 min-h-28 w-full rounded-md border bg-background px-3 py-2" /></label>
         <div><span className="mb-2 block text-sm font-medium">Provider and model</span><ProviderModelSelector provider={current.providerId} model={current.model ?? null} onProviderChange={(providerId) => change({ providerId, model: null })} onModelChange={(model) => change({ model })} tooltipSide="bottom" /></div>
         <fieldset><legend className="mb-2 text-sm font-medium">Avatar</legend><div className="flex flex-wrap gap-2">{PERSONA_AVATARS.map((avatar) => <button type="button" key={avatar} aria-label={`Choose ${avatar} avatar`} aria-pressed={current.avatar === avatar} onClick={() => change({ avatar })} className={`rounded-full p-1 ${current.avatar === avatar ? 'ring-2 ring-primary' : ''}`}><AgentAvatar avatar={avatar} className="h-11 w-11" /></button>)}</div></fieldset>
@@ -412,7 +415,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
                 </div>
               </details>
             </div>}
-            {tab === 'profile' && <div className="max-w-2xl space-y-5"><h2 className="font-semibold">Profile</h2><label className="block text-sm font-medium">Name<input value={selected!.name} onChange={(event) => change({ name: event.target.value })} onBlur={() => syncSchedules(selected!)} className="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Role and responsibilities<textarea value={selected!.persona} onChange={(event) => change({ persona: event.target.value })} onBlur={() => syncSchedules(selected!)} className="mt-1 min-h-28 w-full rounded-md border bg-background px-3 py-2" /></label><div><span className="mb-2 block text-sm font-medium">Provider and model</span><ProviderModelSelector provider={selected!.providerId} model={selected!.model ?? null} onProviderChange={(providerId) => change({ providerId, model: null })} onModelChange={(model) => change({ model })} tooltipSide="bottom" /></div><fieldset><legend className="mb-2 text-sm font-medium">Avatar</legend><div className="flex flex-wrap gap-2">{PERSONA_AVATARS.map((avatar) => <button type="button" key={avatar} aria-label={`Choose ${avatar} avatar`} aria-pressed={selected!.avatar === avatar} onClick={() => change({ avatar })} className={`rounded-full p-1 ${selected!.avatar === avatar ? 'ring-2 ring-primary' : ''}`}><AgentAvatar avatar={avatar} className="h-11 w-11" /></button>)}</div></fieldset><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected!.requiresApproval} onChange={(event) => change({ requiresApproval: event.target.checked })} />Require approval for actions</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!selected!.paused} disabled={busy} onChange={(event) => void setPaused(!event.target.checked)} />Enable scheduled tasks</label></div>}
+            {tab === 'profile' && <div className="max-w-2xl space-y-5"><h2 className="font-semibold">Profile</h2><label className="block text-sm font-medium">Name<input value={selected!.name} onChange={(event) => change({ name: event.target.value })} onBlur={() => syncSchedules(selected!)} className="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Role<input value={selected!.role ?? ''} onChange={(event) => change({ role: event.target.value })} className="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label><label className="block text-sm font-medium">Reports to<select value={selected!.reportsToId ?? ''} onChange={(event) => change({ reportsToId: event.target.value || null })} className="mt-1 w-full rounded-md border bg-background px-3 py-2"><option value="">No manager (top level)</option>{availableManagers(selected!.id, agents).map((agent) => <option key={agent.id} value={agent.id}>{agent.name}{agent.role ? ` · ${agent.role}` : ''}</option>)}</select></label><div className="rounded-lg border p-3 text-sm"><strong>Direct reports</strong><p className="mt-1 text-muted-foreground">{agents.filter((agent) => agent.reportsToId === selected!.id).map((agent) => agent.name).join(', ') || 'None yet'}</p></div><label className="block text-sm font-medium">Role and responsibilities<textarea value={selected!.persona} onChange={(event) => change({ persona: event.target.value })} onBlur={() => syncSchedules(selected!)} className="mt-1 min-h-28 w-full rounded-md border bg-background px-3 py-2" /></label><div><span className="mb-2 block text-sm font-medium">Provider and model</span><ProviderModelSelector provider={selected!.providerId} model={selected!.model ?? null} onProviderChange={(providerId) => change({ providerId, model: null })} onModelChange={(model) => change({ model })} tooltipSide="bottom" /></div><fieldset><legend className="mb-2 text-sm font-medium">Avatar</legend><div className="flex flex-wrap gap-2">{PERSONA_AVATARS.map((avatar) => <button type="button" key={avatar} aria-label={`Choose ${avatar} avatar`} aria-pressed={selected!.avatar === avatar} onClick={() => change({ avatar })} className={`rounded-full p-1 ${selected!.avatar === avatar ? 'ring-2 ring-primary' : ''}`}><AgentAvatar avatar={avatar} className="h-11 w-11" /></button>)}</div></fieldset><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={selected!.requiresApproval} onChange={(event) => change({ requiresApproval: event.target.checked })} />Require approval for actions</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!selected!.paused} disabled={busy} onChange={(event) => void setPaused(!event.target.checked)} />Enable scheduled tasks</label></div>}
         </div></div>}
       </>}
     </>}

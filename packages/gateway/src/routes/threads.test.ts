@@ -163,6 +163,20 @@ describe("thread routes", () => {
     expect(list.json().agents).toHaveLength(1);
     const otherList = await app.inject({ method: "GET", url: "/api/persona-agents", headers: other });
     expect(otherList.json().agents).toHaveLength(0);
+    const report = await app.inject({ method: "PUT", url: "/api/persona-agents/agent-2", headers: owner,
+      payload: { ...profile, name: "Assistant", role: "Analyst", reportsToId: "agent-1" } });
+    expect(report.statusCode).toBe(200);
+    expect(report.json()).toMatchObject({ role: "Analyst", reportsToId: "agent-1" });
+    const cycle = await app.inject({ method: "PUT", url: "/api/persona-agents/agent-1", headers: owner,
+      payload: { ...profile, reportsToId: "agent-2" } });
+    expect(cycle.statusCode).toBe(400);
+    const selfReport = await app.inject({ method: "PUT", url: "/api/persona-agents/agent-1", headers: owner,
+      payload: { ...profile, reportsToId: "agent-1" } });
+    expect(selfReport.statusCode).toBe(400);
+    await app.inject({ method: "PUT", url: "/api/persona-agents/other-agent", headers: other, payload: profile });
+    const crossUserManager = await app.inject({ method: "PUT", url: "/api/persona-agents/agent-2", headers: owner,
+      payload: { ...profile, reportsToId: "other-agent" } });
+    expect(crossUserManager.statusCode).toBe(400);
     const denied = await app.inject({ method: "POST", url: "/api/threads", headers: other,
       payload: { title: "Unauthorized", providerId: "codex", personaAgentId: "agent-1" } });
     expect(denied.statusCode).toBe(400);
@@ -172,6 +186,8 @@ describe("thread routes", () => {
     expect(created.json().personaAgentId).toBe("agent-1");
     const removed = await app.inject({ method: "DELETE", url: "/api/persona-agents/agent-1", headers: owner });
     expect(removed.statusCode).toBe(200);
+    const remaining = await app.inject({ method: "GET", url: "/api/persona-agents", headers: owner });
+    expect(remaining.json().agents).toMatchObject([{ id: "agent-2", reportsToId: null }]);
     const thread = await app.inject({ method: "GET", url: `/api/threads/${created.json().id}`, headers: owner });
     expect(thread.json().personaAgentId).toBeNull();
     await app.close();
