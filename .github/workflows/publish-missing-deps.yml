@@ -51,7 +51,12 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
+      # Cap the Node heap: `bun run build` triggers @jait/gateway prebuild →
+      # apps/web vite build, which needs ~6-8GB heap and gets kernel
+      # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
       - run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
       # ── @jait/shared (no workspace deps) ──────────────────────────────
       - name: Publish @jait/shared

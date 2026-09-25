@@ -192,6 +192,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build gateway distribution
         env:
+          # @jait/gateway build prebuilds apps/web with vite (~6-8GB heap);
+          # uncapped it can be kernel OOM-killed on this shared runner.
+          NODE_OPTIONS: --max-old-space-size=8192
           JAIT_HOSTING_TEST_RESOURCES: ${{ github.workspace }}/apps/desktop/src-tauri/gateway
           JAIT_GRAPHIFY_COMMAND: __jait_smoke_no_optional_python__
         run: |
@@ -580,7 +583,12 @@ jobs:
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
       - run: bun install --frozen-lockfile
+      # Cap the Node heap: `bun run build` triggers @jait/gateway prebuild →
+      # apps/web vite build, which needs ~6-8GB heap and gets kernel
+      # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
       - run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
       - name: Configure Firebase Android client
         env:
           FIREBASE_ANDROID_CONFIG_BASE64: ${{ secrets.FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
@@ -665,7 +673,12 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
+      # Cap the Node heap: `bun run build` triggers @jait/gateway prebuild →
+      # apps/web vite build, which needs ~6-8GB heap and gets kernel
+      # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
       - run: bun run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
       # 1. Publish @jait/shared (no workspace deps)
       #

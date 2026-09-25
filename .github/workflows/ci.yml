@@ -33,6 +33,11 @@ jobs:
         run: bun run typecheck
 
       - name: Build
+        env:
+          # Vite's production build of apps/web needs a ~6-8GB heap. Without a
+          # cap V8 grows unbounded and the kernel OOM-kills the build (exit
+          # 137) on the memory-tight self-hosted runner (v0.1.877-v0.1.878).
+          NODE_OPTIONS: --max-old-space-size=8192
         run: bun run build
 
       - name: Test
