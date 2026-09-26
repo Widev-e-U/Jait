@@ -136,6 +136,8 @@ interface PromptInputProps {
   availableFiles?: ReferencedFile[]
   /** Ordered text/file segments for restoring an existing draft. */
   segments?: UserMessageSegment[]
+  /** Attachments shown when the composer first mounts (used when editing a sent message). */
+  initialAttachments?: ChatAttachment[]
   /** Lazy search across the entire project directory */
   onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
   /** Whether a project directory is currently open — @ mentions only work when true */
@@ -745,6 +747,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   projectOpen = false,
   availableSkills = EMPTY_SKILLS,
   draftStateKey,
+  initialAttachments,
   syncKey,
   merged,
 }: PromptInputProps, ref) {
@@ -759,7 +762,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [chatIdCopied, setChatIdCopied] = useState(false)
   const [isEmpty, setIsEmpty] = useState(isTextEmpty(value))
   const [attachments, setAttachments] = useState<ChatAttachment[]>(
-    () => (draftStateKey ? attachmentDraftStore.get(draftStateKey) ?? [] : []),
+    () => initialAttachments ?? (draftStateKey ? attachmentDraftStore.get(draftStateKey) ?? [] : []),
   )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftSegmentsRef = useRef<UserMessageSegment[]>(normalizeUserMessageSegments(segments))
@@ -866,7 +869,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   useEffect(() => {
     const previousDraftStateKey = previousDraftStateKeyRef.current
     previousDraftStateKeyRef.current = draftStateKey
-    const nextAttachments = getAttachmentDraftForKey({
+    const nextAttachments = initialAttachments ?? getAttachmentDraftForKey({
       store: attachmentDraftStore,
       draftStateKey,
       previousDraftStateKey,

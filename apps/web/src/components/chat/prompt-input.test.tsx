@@ -107,3 +107,16 @@ describe('PromptInput footer selectors', () => {
     expect(markup).not.toContain('aria-label="Provider ')
   })
 })
+describe('PromptInput edit attachments', () => {
+  it('shows existing image and file attachments in the edit composer', () => {
+    const markup = renderToStaticMarkup(
+      <PromptInput {...baseProps} initialAttachments={[
+        { name: 'screen.png', mimeType: 'image/png', data: 'abc123', preview: 'data:image/png;base64,abc123' },
+        { name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' },
+      ]} />,
+    )
+    expect(markup).toContain('alt="screen.png"')
+    expect(markup).toContain('Remove screen.png')
+    expect(markup).toContain('Remove notes.txt')
+  })
+})

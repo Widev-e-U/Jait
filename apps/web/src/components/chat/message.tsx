@@ -27,7 +27,7 @@ import { AgentToolCallWrapper, SubAgentAuthProvider, ToolCallGroup, formatElapse
 import { AssistantBody, shouldUseAgentToolCallWrapper } from './assistant-body'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
-import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
+import type { ChatAttachment, LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
 import type { SendTarget } from './send-target-selector'
@@ -494,9 +494,9 @@ function MessageInner({
     startEditing()
   }
 
-  const saveEditedMessage = useCallback(async (nextText?: string, nextSegments?: UserMessageSegment[]) => {
+  const saveEditedMessage = useCallback(async (nextText?: string, nextSegments?: UserMessageSegment[], nextAttachments?: ChatAttachment[]) => {
     if (!canEdit || !messageId || !onEditMessage || isSavingEdit) return
-    const submission = createUserMessageEditSubmission(nextText ?? editDraft, nextSegments ?? editSegments, userDisplaySegments)
+    const submission = createUserMessageEditSubmission(nextText ?? editDraft, nextSegments ?? editSegments, userDisplaySegments, nextAttachments)
     if (!submission) return
 
     setOptimisticUserDisplayText(submission.text)
@@ -879,15 +879,16 @@ function MessageInner({
                           draftStateKey={`edit:${messageId ?? 'user-message'}`}
                           value={editDraft}
                           segments={editSegments}
+                          initialAttachments={userAttachments}
                           onChange={(nextValue) => {
                             setEditDraft(nextValue)
                             setEditSegments(editPromptInputRef.current?.getSegments() ?? [])
                           }}
-                          onSubmit={(_chipFiles, _attachments, nextSegments) => {
+                          onSubmit={(_chipFiles, nextAttachments, nextSegments) => {
                             const freshSegments = nextSegments ?? []
                             const freshText = userMessageTextFromSegments(freshSegments) || editDraft
                             setEditSegments(freshSegments)
-                            void saveEditedMessage(freshText, freshSegments)
+                            void saveEditedMessage(freshText, freshSegments, nextAttachments)
                           }}
                           disabled={isSavingEdit}
                           controlsDisabled={isSavingEdit}

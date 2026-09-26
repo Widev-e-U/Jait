@@ -29,6 +29,28 @@ describe('message edit submission', () => {
     })
   })
 
+  it('keeps all editable reference types and their order', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'text', text: 'Review ' },
+      { type: 'chat', sessionId: 'chat-1', name: 'Earlier chat' },
+      { type: 'project', path: '/repo', name: 'Project' },
+      { type: 'file', path: '/repo/a.ts', name: 'a.ts' },
+      { type: 'terminal', terminalId: 'term-1', name: 'Terminal', projectRoot: '/repo' },
+      { type: 'text', text: ' now' },
+    ]
+    expect(createUserMessageEditSubmission('Review  now', segments)?.displaySegments).toEqual(segments)
+  })
+
+  it('does not restore references or attachments removed in the editor', () => {
+    const previous: UserMessageSegment[] = [
+      { type: 'text', text: 'Review' },
+      { type: 'file', path: '/repo/a.ts', name: 'a.ts' },
+      { type: 'image', name: 'screen.png', mimeType: 'image/png', data: 'abc123' },
+    ]
+    expect(createUserMessageEditSubmission('Changed', [{ type: 'text', text: 'Changed' }], previous, [])?.displaySegments)
+      .toEqual([{ type: 'text', text: 'Changed' }])
+  })
+
   it('rejects blank edits', () => {
     expect(createUserMessageEditSubmission('   ')).toBeNull()
   })
