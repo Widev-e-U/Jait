@@ -38,7 +38,9 @@ jobs:
           # cap V8 grows unbounded and the kernel OOM-kills the build (exit
           # 137) on the memory-tight self-hosted runner (v0.1.877-v0.1.878).
           NODE_OPTIONS: --max-old-space-size=8192
-        run: bun run build
+        # All self-hosted Linux runners share one memory-limited host.
+        # Serialize Vite builds across CI and release jobs.
+        run: flock /tmp/jait-vite-build.lock bun run build
 
       - name: Test
         run: bun run test

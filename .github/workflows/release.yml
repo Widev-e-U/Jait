@@ -259,7 +259,7 @@ jobs:
           bun run --filter @jait/ui-shared build
           (
             cd apps/web
-            NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
+            flock /tmp/jait-vite-build.lock env NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
           )
           test -s apps/web/dist/index.html
       - uses: actions/download-artifact@v4
@@ -586,7 +586,8 @@ jobs:
       # Cap the Node heap: `bun run build` triggers @jait/gateway prebuild →
       # apps/web vite build, which needs ~6-8GB heap and gets kernel
       # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
-      - run: bun run build
+      # The self-hosted runners share a host; only one Vite build can fit.
+      - run: flock /tmp/jait-vite-build.lock bun run build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
       - name: Configure Firebase Android client
@@ -676,7 +677,8 @@ jobs:
       # Cap the Node heap: `bun run build` triggers @jait/gateway prebuild →
       # apps/web vite build, which needs ~6-8GB heap and gets kernel
       # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
-      - run: bun run build
+      # The self-hosted runners share a host; only one Vite build can fit.
+      - run: flock /tmp/jait-vite-build.lock bun run build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 

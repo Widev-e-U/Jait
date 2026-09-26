@@ -54,7 +54,8 @@ jobs:
       # Cap the Node heap: `bun run build` triggers @jait/gateway prebuild →
       # apps/web vite build, which needs ~6-8GB heap and gets kernel
       # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
-      - run: bun run build
+      # Share the build lock with CI and release on the self-hosted machine.
+      - run: flock /tmp/jait-vite-build.lock bun run build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 
