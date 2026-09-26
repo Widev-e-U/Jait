@@ -1127,7 +1127,13 @@ describe("chat external provider runtime mode selection", () => {
     expect(metrics?.completionTokens).toBeGreaterThan(0);
     expect(metrics?.totalTokens).toBeGreaterThan(0);
     expect(metrics?.tokenUsageEstimated).toBe(true);
-    expect(metrics?.tokensPerSecond).toBeGreaterThan(0);
+    // An immediate mock turn can finish within the same millisecond; a rate
+    // cannot be calculated when the measured duration is zero.
+    if ((metrics?.durationMs as number) > 0) {
+      expect(metrics?.tokensPerSecond).toBeGreaterThan(0);
+    } else {
+      expect(metrics?.tokensPerSecond).toBeUndefined();
+    }
     expect(metrics?.contextUsage).toMatchObject({ limit: expect.any(Number), ratio: expect.any(Number) });
 
     await app.close();

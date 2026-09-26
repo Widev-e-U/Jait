@@ -452,7 +452,7 @@ describe('gateway-drained queue messages', () => {
     expect(src).toContain('localPendingSendRef.current = { content, at: Date.now() }')
     expect(src).toContain('localPendingSendRef.current = null')
     expect(src).toContain('LOCAL_SEND_TURN_START_TOLERANCE_MS')
-    expect(src).toContain('pending.content.trim() === startedContent')
+    expect(src).toContain('safeTrim(pending.content) === startedContent')
   })
 
   it('still releases the chat POST body on the single-consumer path', () => {
