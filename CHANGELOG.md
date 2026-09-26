@@ -4,6 +4,27 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.881](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.881) — 2026-09-26
+- feat(web): ship navigation sidebar and model picker updates — 7e14c723
+
+## [v0.1.880](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.880) — 2026-09-26
+- fix(chat): preserve references and attachments when editing sent messages — 6ad3abea
+- fix(web): restore file divider and tidy provider updates — b9f4162f
+- test: align queue and CLI metrics assertions — 44619942
+- fix(ci): serialize Vite builds on shared runner host — bf30af02
+
+## [v0.1.879](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.879) — 2026-09-25
+- fix(chat): guard queued message content trim against non-string values — 6aab9122
+- fix(ci): cap Node heap for self-hosted vite builds — 38006ef7
+
+## [v0.1.878](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.878) — 2026-09-25
+- docs(readme): rewrite overview, install and configuration sections — 17a12b39
+- feat(preview): shareable preview sessions and reliable starts — d76b4ce1
+
+## [v0.1.877](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.877) — 2026-09-25
+- feat(agents): org structure with roles, reporting lines, and provider/model runtime — bdeb24e4
+- Restore merged composer and rework agent chat on shared PromptInput — d162cfd0
+
 ## [v0.1.876](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.876) — 2026-09-24
 - fix(web): restore merged todo + file-changes surface around chat composer — eeefc180
 
