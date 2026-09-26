@@ -273,7 +273,7 @@ export function ProviderModelSelector({
     refresh: refreshProviders,
   } = useProviders()
   const [modelReloadVersion, setModelReloadVersion] = useState(0)
-  const [providerActionBusy, setProviderActionBusy] = useState<ProviderId | null>(null)
+  const [providerActionBusy, setProviderActionBusy] = useState<{ provider: ProviderId; action: 'refresh' | 'logout' | 'update' } | null>(null)
   const providerActionRef = useRef(false)
   const [models, setModels] = useState<ModelDef[]>([])
   const [loadedModelScopeKey, setLoadedModelScopeKey] = useState<string | null>(null)
@@ -457,7 +457,7 @@ export function ProviderModelSelector({
   const runProviderAction = async (entry: typeof providerEntries[number], action: 'refresh' | 'logout' | 'update') => {
     if (providerActionRef.current || authBusyProvider) return
     providerActionRef.current = true
-    setProviderActionBusy(entry.value)
+    setProviderActionBusy({ provider: entry.value, action })
     try {
       if (action === 'refresh') {
         await agentsApi.refreshProviderModels(entry.value, entry.nodeId)
@@ -849,6 +849,7 @@ export function ProviderModelSelector({
             && entry.auth?.authenticated !== true
             && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)
           const loginBusy = authBusyProvider === entry.value
+          const updating = providerActionBusy?.provider === entry.value && providerActionBusy.action === 'update'
           const showUpdateAction = Boolean(entry.update?.updateAvailable)
             && !(scopeNodeOffline && entry.nodeId !== GATEWAY_NODE_ID)
           return (
@@ -863,7 +864,7 @@ export function ProviderModelSelector({
               onRefresh={() => { void runProviderAction(entry, 'refresh') }}
               onLogout={() => { void runProviderAction(entry, 'logout') }}
             >
-              <div className="flex items-start gap-1.5">
+              <div className="flex min-w-0 items-start gap-1.5">
                 <TooltipHint side="left" content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
                 <button
                   type="button"
@@ -881,15 +882,15 @@ export function ProviderModelSelector({
                     ? <RemoteProviderLogo url={entry.iconUrl} className="mt-0.5 h-4 w-4" />
                     : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {entry.label}
+                    <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+                      <span className="min-w-0 truncate">{entry.label}</span>
                       {!entry.isAvailable && (
-                        <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
+                        <span className="flex min-w-0 items-center gap-0.5 truncate text-2xs text-destructive/80">
                           <AlertTriangle className="h-3 w-3" />
                           {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
                         </span>
                       )}
-                      {providerActionBusy === entry.value && <Loader2 aria-label="Updating provider" className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                      {providerActionBusy?.provider === entry.value && !updating && <Loader2 aria-label="Provider action in progress" className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
                     </div>
                   </div>
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
@@ -899,16 +900,17 @@ export function ProviderModelSelector({
                   <TooltipHint side="left" content={`Update ${entry.label} from ${entry.update?.currentVersion} to ${entry.update?.latestVersion}`}>
                   <button
                     type="button"
-                    aria-label={`Update ${entry.label} to ${entry.update?.latestVersion}`}
+                    aria-label={updating ? `Updating ${entry.label}` : `Update ${entry.label} to ${entry.update?.latestVersion}`}
+                    aria-busy={updating}
                     onClick={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
                       void runProviderAction(entry, 'update')
                     }}
                     disabled={Boolean(authBusyProvider || providerActionBusy)}
-                    className="mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                    className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
                   >
-                    {providerActionBusy === entry.value ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                   </button>
                   </TooltipHint>
                 )}
