@@ -12,6 +12,7 @@ let shouldInitiallyCollapseAgentToolCallWrapper: typeof import('./tool-call-card
 let isInlineToolCall: typeof import('./tool-call-card')['isInlineToolCall']
 let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCollapsedToolCalls']
 let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting']
+let getTopLevelToolCalls: typeof import('./tool-call-card')['getTopLevelToolCalls']
 let formatOutput: typeof import('./tool-call-card')['formatOutput']
 let getThreadControlListItems: typeof import('./tool-call-card')['getThreadControlListItems']
 let getTodoToolListItems: typeof import('./tool-call-card')['getTodoToolListItems']
@@ -56,6 +57,7 @@ beforeAll(async () => {
     isInlineToolCall,
     summarizeCollapsedToolCalls,
     computeAgentNesting,
+    getTopLevelToolCalls,
     formatOutput,
     getThreadControlListItems,
     getTodoToolListItems,
@@ -940,6 +942,28 @@ describe('getCallSummary', () => {
       new_str: newBlock,
     })).toBe('app.ts (+1 -1)')
   })
+
+  it('summarizes native todo calls from the first in-progress item', () => {
+    expect(getCallSummary('todo', {
+      todoList: [
+        { id: 1, title: 'Trace rendering', status: 'completed' },
+        { id: 2, title: 'Build task card', status: 'in-progress' },
+      ],
+    })).toBe('Build task card')
+  })
+
+  it('survives persisted todo items without a title (trim crash regression)', () => {
+    expect(getCallSummary('todo', {
+      todoList: [
+        { id: 1, status: 'in-progress' },
+        { id: 2, title: 'Run verification', status: 'pending' },
+      ],
+    })).toBe('1 task(s)')
+    expect(getCallSummary('todo', { todoList: [{ id: 1, title: null, status: 'in-progress' }] })).toBe('1 task(s)')
+    expect(getCallSummary('todo', { todoList: [{ id: 1, title: '   ', status: 'completed' }] })).toBe('1 task(s)')
+    expect(getCallSummary('todo', { todoList: [] })).toBe('Track tasks')
+    expect(getCallSummary('todo', {})).toBe('Track tasks')
+  })
 })
 
 describe('getTodoToolListItems', () => {
@@ -1204,6 +1228,31 @@ describe('AgentToolCallWrapper', () => {
   })
 })
 
+describe('getTopLevelToolCalls', () => {
+  it('drops calls nested inside a sub-agent so they count as one unit', () => {
+    // The three calls under agent-1 render inside the sub-agent card; the
+    // wrapper itself only owns the sub-agent call and the sibling todo call.
+    const topLevel = getTopLevelToolCalls([
+      { callId: 'agent-1', tool: 'agent', args: { description: 'Implement feature' }, status: 'success', startedAt: 1, completedAt: 100 },
+      { callId: 'read-1', parentCallId: 'agent-1', tool: 'read', args: { path: 'src/app.ts' }, status: 'success', startedAt: 2, completedAt: 3 },
+      { callId: 'edit-1', parentCallId: 'agent-1', tool: 'edit', args: { path: 'src/app.ts', content: 'x' }, status: 'success', startedAt: 4, completedAt: 5 },
+      { callId: 'exec-1', parentCallId: 'agent-1', tool: 'execute', args: { command: 'bun test' }, status: 'success', startedAt: 6, completedAt: 7 },
+      { callId: 'todo-1', tool: 'todo', args: { todoList: [] }, status: 'success', startedAt: 101, completedAt: 102 },
+    ])
+
+    expect(topLevel.map(call => call.callId)).toEqual(['agent-1', 'todo-1'])
+  })
+
+  it('keeps every call when nothing is nested', () => {
+    const topLevel = getTopLevelToolCalls([
+      { callId: '1', tool: 'execute', args: { command: 'bun test' }, status: 'success', startedAt: 1, completedAt: 2 },
+      { callId: '2', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 3, completedAt: 4 },
+    ])
+
+    expect(topLevel.map(call => call.callId)).toEqual(['1', '2'])
+  })
+})
+
 describe('summarizeCollapsedToolCalls', () => {
   it('groups tool calls by category for collapsed summaries', () => {
     expect(summarizeCollapsedToolCalls([
@@ -1220,6 +1269,18 @@ describe('summarizeCollapsedToolCalls', () => {
       { callId: '1', tool: 'browser.click', args: { selector: 'button' }, status: 'success', startedAt: 1, completedAt: 2 },
       { callId: '2', tool: 'browser.type', args: { selector: 'input', text: 'hello' }, status: 'success', startedAt: 3, completedAt: 4 },
     ])).toBe('2 browser tool calls')
+  })
+
+  it('counts a sub-agent with nested calls as a single unit, not N calls', () => {
+    // Everything nested under the agent call renders inside the sub-agent card
+    // and must not inflate the wrapper's collapsed summary.
+    expect(summarizeCollapsedToolCalls(getTopLevelToolCalls([
+      { callId: 'agent-1', tool: 'agent', args: { description: 'Implement feature' }, status: 'success', startedAt: 1, completedAt: 100 },
+      { callId: 'read-1', parentCallId: 'agent-1', tool: 'read', args: { path: 'src/app.ts' }, status: 'success', startedAt: 2, completedAt: 3 },
+      { callId: 'edit-1', parentCallId: 'agent-1', tool: 'edit', args: { path: 'src/app.ts', content: 'x' }, status: 'success', startedAt: 4, completedAt: 5 },
+      { callId: 'exec-1', parentCallId: 'agent-1', tool: 'execute', args: { command: 'bun test' }, status: 'success', startedAt: 6, completedAt: 7 },
+      { callId: 'todo-1', tool: 'todo', args: { todoList: [] }, status: 'success', startedAt: 101, completedAt: 102 },
+    ]))).toBe('2 tool calls: 1 sub-agent, 1 todo')
   })
 })
 

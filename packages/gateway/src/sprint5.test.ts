@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import {
   BrowserSurfaceFactory,
@@ -52,7 +54,12 @@ class MockBrowserDriver implements BrowserDriver {
   }
   async screenshot(path?: string): Promise<string> {
     this.calls.push(`screenshot:${path ?? "auto"}`);
-    return path ?? "artifacts/default.png";
+    const outputPath = path ?? "artifacts/default.png";
+    if (!outputPath.startsWith("/remote/")) {
+      mkdirSync(dirname(outputPath), { recursive: true });
+      writeFileSync(outputPath, "test screenshot");
+    }
+    return outputPath;
   }
   async snapshot(): Promise<BrowserPageSnapshot> {
     return {
@@ -212,6 +219,26 @@ describe("Sprint 5 — Browser surface and tools", () => {
     expect(data.dialogs[0]?.title).toBe("Sign in");
   });
 
+  it("makes a connected node screenshot displayable by the gateway", async () => {
+    const sourcePath = "/remote/project/capture.png";
+    const png = Buffer.from("test screenshot");
+    const proxyFsOp = vi.fn(async () => ({ content: png.toString("base64") }));
+    const screenshotTool = createBrowserInteractionTools(registry, undefined, { proxyFsOp } as any)
+      .find((tool) => tool.name === "browser.screenshot")!;
+
+    const result = await screenshotTool.execute({ path: sourcePath }, {
+      ...toolContext,
+      executionNodeId: "remote-node",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(proxyFsOp).toHaveBeenCalledWith("remote-node", "readBinary", { path: sourcePath });
+    const displayPath = (result.data as { result: { path: string } }).result.path;
+    expect(displayPath).toMatch(/\.jait\/shots\/browser-[^/]+\.png$/);
+    expect(readFileSync(displayPath)).toEqual(png);
+    unlinkSync(displayPath);
+  });
+
   it("executes browser interaction tools", async () => {
     await createBrowserNavigateTool(registry).execute({ url: "https://example.com" }, toolContext);
     const tools = createBrowserInteractionTools(registry);
@@ -225,6 +252,10 @@ describe("Sprint 5 — Browser surface and tools", () => {
     const screenshot = await byName.get("browser.screenshot")!.execute({ path: "artifacts/page.png" }, toolContext);
 
     expect(screenshot.ok).toBe(true);
+    const displayPath = (screenshot.data as { result: { path: string } }).result.path;
+    expect(readFileSync(displayPath).toString()).toBe("test screenshot");
+    unlinkSync(displayPath);
+    unlinkSync("artifacts/page.png");
     expect(driver.calls).toEqual(
       expect.arrayContaining([
         "click:#submit",

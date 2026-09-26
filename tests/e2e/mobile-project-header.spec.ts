@@ -98,11 +98,11 @@ test.describe('mobile project header chrome', () => {
     })
     expect(openResponse.ok()).toBeTruthy()
 
-    const editorButton = page.locator('button[aria-label="Editor"]').first()
+    const editorButton = page.getByRole('navigation', { name: 'Mobile navigation' }).getByRole('button', { name: 'Editor' })
     await editorButton.click()
 
     await expect(page.getByText('Tap a file in the Files tab to view it here.')).toBeVisible({ timeout: 15000 })
     await expect(page.locator('[data-testid="mobile-project-tabbar"]')).toHaveCount(1)
-    await expect(page.getByText('Editor', { exact: true })).toHaveCount(1)
+    await expect(page.locator('[data-testid="mobile-project-tabbar"]').getByText('Editor', { exact: true })).toHaveCount(1)
   })
 })

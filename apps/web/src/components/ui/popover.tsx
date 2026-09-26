@@ -24,6 +24,7 @@ function PopoverContent({
   align = 'center',
   side,
   sideOffset = 4,
+  variant = 'default',
   ref,
   children,
   ...props
@@ -35,6 +36,11 @@ function PopoverContent({
   onOpenAutoFocus?: (event: Event) => void
   children?: React.ReactNode
   ref?: React.Ref<HTMLDivElement>
+  /**
+   * Opt-in t3code-style frosted surface for menu-like popovers (searchable
+   * pickers etc.). The default variant is untouched for existing consumers.
+   */
+  variant?: 'default' | 'glass'
 }) {
   return (
     <PopoverPrimitive.Portal>
@@ -50,6 +56,10 @@ function PopoverContent({
           'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
           'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2',
           'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+          variant === 'glass' && [
+            'dropdown-glass rounded-lg border-border/60',
+            'shadow-2xl shadow-black/25 outline-none',
+          ],
           className,
         )}
         {...props}

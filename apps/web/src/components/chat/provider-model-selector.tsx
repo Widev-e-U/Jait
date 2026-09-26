@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
-import { ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Download } from 'lucide-react'
+import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -35,6 +35,14 @@ import {
   saveProjectReasoningEffortSelection,
 } from '@/lib/project-model-cache'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { Kbd } from '@/components/ui/kbd'
+import {
+  loadModelFavorites,
+  saveModelFavorites,
+  toggleModelFavorite,
+  type ModelFavorite,
+} from './model-favorites'
+import { ModelPickerRail, type ModelPickerRailSection } from './model-picker-rail'
 
 interface ModelDef {
   id: string
@@ -161,8 +169,46 @@ export function providerLabelFor(providerType: string | undefined, id: string): 
   return PROVIDER_DEF_BY_ID.get(providerType ?? id)?.label ?? id
 }
 
-const RECENT_MODELS_KEY = 'jait-recent-models'
-const MAX_RECENTS = 10
+// Row shapes for the flat, virtualized model list: an optional favorites
+// header + rows, then a labeled section per provider instance. Keeping the
+// list flat lets @tanstack/react-virtual render thousands of models cheaply
+// and gives keyboard quick-jump a single index space (1-9) across sections.
+type ModelListRow =
+  | { type: 'header'; key: string; label: string; sectionIndex: number }
+  | {
+      type: 'model'
+      key: string
+      model: ModelDef
+      instance: { label: string; icon: ComponentType<{ className?: string }>; iconUrl?: string }
+      providerId: ProviderId
+      sectionIndex: number
+      quickJumpIndex: number | null
+    }
+
+const QUICK_JUMP_LIMIT = 9
+
+// Digits 1-9 map onto the first QUICK_JUMP_LIMIT model rows (after favorites),
+// matching the on-row Kbd hints rendered by ModelRow.
+function modelQuickJumpIndex(rows: ModelListRow[]): Map<string, number> {
+  const out = new Map<string, number>()
+  let index = 1
+  for (const row of rows) {
+    if (row.type !== 'model') continue
+    if (index > QUICK_JUMP_LIMIT) break
+    out.set(row.key, index)
+    index += 1
+  }
+  return out
+}
+
+// Array.prototype.findLastIndex is ES2023 and the tsconfig lib is ES2020,
+// so section navigation uses this small backscan helper instead.
+function lastIndexWhere<T>(rows: readonly T[], predicate: (row: T) => boolean): number {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (predicate(rows[index]!)) return index
+  }
+  return -1
+}
 
 export const PROVIDER_SELECTOR_POPOVER_STYLE: CSSProperties = {
   height: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
@@ -216,23 +262,6 @@ function isLoginStateModelError(message: string): boolean {
     || lower.includes('no credentials')
 }
 
-function loadRecentModels(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_MODELS_KEY)
-    if (!raw) return []
-    const arr = JSON.parse(raw)
-    return Array.isArray(arr) ? arr.filter((v: unknown) => typeof v === 'string').slice(0, MAX_RECENTS) : []
-  } catch {
-    return []
-  }
-}
-
-function saveRecentModel(modelId: string): void {
-  const recents = loadRecentModels().filter((id) => id !== modelId)
-  recents.unshift(modelId)
-  localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(recents.slice(0, MAX_RECENTS)))
-}
-
 function blurActiveElement(): void {
   if (typeof document === 'undefined') return
   const activeElement = document.activeElement
@@ -277,11 +306,10 @@ export function ProviderModelSelector({
   const providerActionRef = useRef(false)
   const [models, setModels] = useState<ModelDef[]>([])
   const [loadedModelScopeKey, setLoadedModelScopeKey] = useState<string | null>(null)
-  const [recentIds, setRecentIds] = useState<string[]>([])
+  const [favorites, setFavorites] = useState<ModelFavorite[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
-  const [backendFilter, setBackendFilter] = useState<string | null>(null)
   const [authBusyProvider, setAuthBusyProvider] = useState<ProviderId | null>(null)
   const [loginDialog, setLoginDialog] = useState<{
     providerId: ProviderId
@@ -419,7 +447,6 @@ export function ProviderModelSelector({
   useEffect(() => {
     if (!open) return
     setSearch('')
-    setBackendFilter(null)
     if (!isMobile) {
       requestAnimationFrame(() => inputRef.current?.focus())
     }
@@ -500,8 +527,6 @@ export function ProviderModelSelector({
     setModels([])
     setLoadedModelScopeKey(null)
     setModelError(null)
-    setBackendFilter(null)
-    setRecentIds(loadRecentModels())
 
     let cancelled = false
     setLoadingModels(true)
@@ -511,9 +536,6 @@ export function ProviderModelSelector({
         setModelError(null)
         setModels(result.models)
         setLoadedModelScopeKey(activeModelScopeKey)
-        if (result.recentModels?.length) {
-          setRecentIds(result.recentModels)
-        }
         if (result.currentBackend) {
           setCurrentBackend(result.currentBackend)
         }
@@ -602,68 +624,93 @@ export function ProviderModelSelector({
     )
   }, [models, searchLower])
 
-  const recentModels = useMemo(() => {
+  // Favorites are scoped to the active provider and surface as their own
+  // always-on-top section (T3-style), so the models you actually use never
+  // depend on scrolling position or search state.
+  const favoriteModels = useMemo(() => {
     if (searchLower) return []
     const modelMap = new Map(models.map((entry) => [entry.id, entry]))
-    return recentIds
-      .filter((id) => modelMap.has(id))
-      .map((id) => modelMap.get(id)!)
-      .filter((entry) => !backendFilter || modelGroupLabel(entry) === backendFilter)
-      .slice(0, MAX_RECENTS)
-  }, [models, recentIds, searchLower, backendFilter])
-
-  const nonRecentFiltered = useMemo(() => {
-    if (searchLower) return filteredModels
-    const recentSet = new Set(recentModels.map((entry) => entry.id))
-    return filteredModels.filter((entry) => !recentSet.has(entry.id))
-  }, [filteredModels, recentModels, searchLower])
-
-  // Backend filter chips. One chip per backend instance (group label), so named
-  // instances like "Büro · Ollama" stay individually visible and filterable
-  // instead of collapsing into a generic "Ollama". Shown whenever there is at
-  // least one backend so the current backend is always discoverable.
-  const backendOptions = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const entry of nonRecentFiltered) {
-      const key = modelGroupLabel(entry)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([key, count]) => ({ key, label: key, count }))
-  }, [nonRecentFiltered])
-
-  const backendFilteredModels = useMemo(() => {
-    if (!backendFilter) return nonRecentFiltered
-    return nonRecentFiltered.filter((entry) => modelGroupLabel(entry) === backendFilter)
-  }, [nonRecentFiltered, backendFilter])
-
-  // Flatten the (possibly grouped) model list into virtualizable rows. Header
-  // rows carry the backend group label so you always know which backend you're
-  // scrolled into; model rows are the selectable entries.
-  const modelRows = useMemo(() => {
-    const rows: ({ type: 'header'; label: string } | { type: 'model'; model: ModelDef })[] = []
-    const hasGroups = backendFilteredModels.some((m) => m.group)
-    if (!hasGroups) {
-      for (const entry of backendFilteredModels) rows.push({ type: 'model', model: entry })
-      return rows
-    }
-    const groups: { label: string; items: ModelDef[] }[] = []
     const seen = new Set<string>()
-    for (const m of backendFilteredModels) {
-      const g = m.group || 'Other'
-      if (!seen.has(g)) {
-        seen.add(g)
-        groups.push({ label: g, items: [] })
-      }
-      groups.find((gr) => gr.label === g)!.items.push(m)
+    const out: ModelDef[] = []
+    for (const favorite of favorites) {
+      if (favorite.provider !== provider) continue
+      const entry = modelMap.get(favorite.modelId)
+      if (!entry || seen.has(entry.id)) continue
+      seen.add(entry.id)
+      out.push(entry)
     }
-    for (const g of groups) {
-      rows.push({ type: 'header', label: g.label })
-      for (const entry of g.items) rows.push({ type: 'model', model: entry })
+    return out
+  }, [favorites, provider, models, searchLower])
+
+  // Sections: for jait, one section per backend group (so the whole model
+  // catalog is reachable without the old backend filter chips); for CLI/API
+  // providers, a single section labelled with the active provider instance.
+  const instanceSections = useMemo(() => {
+    if (provider !== 'jait') {
+      return filteredModels.length > 0
+        ? [{ key: 'default', label: currentProvider.label, models: filteredModels, instance: currentProvider }]
+        : []
+    }
+    const byKey = new Map<string, { key: string; label: string; models: ModelDef[]; instance: typeof currentProvider }>()
+    for (const entry of filteredModels) {
+      const label = modelGroupLabel(entry)
+      const key = label.toLowerCase()
+      let section = byKey.get(key)
+      if (!section) {
+        section = { key, label, models: [], instance: currentProvider }
+        byKey.set(key, section)
+      }
+      section.models.push(entry)
+    }
+    return Array.from(byKey.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, section]) => section)
+  }, [filteredModels, provider, currentProvider])
+
+  // Flat row list for the virtualizer: optional favorites block, then one
+  // labelled section per provider instance. Digits 1-9 map onto the first nine
+  // model rows (after favorites) as on-row Kbd hints.
+  const modelRows = useMemo<ModelListRow[]>(() => {
+    const rows: ModelListRow[] = []
+    if (favoriteModels.length > 0) {
+      rows.push({ type: 'header', key: 'favorites', label: 'Favorites', sectionIndex: 0 })
+      for (const entry of favoriteModels) {
+        rows.push({ type: 'model', key: `fav:${provider}:${entry.id}`, model: entry, instance: currentProvider, providerId: provider, sectionIndex: 0, quickJumpIndex: null })
+      }
+    }
+    let sectionIndex = favoriteModels.length > 0 ? 1 : 0
+    for (const section of instanceSections) {
+      rows.push({ type: 'header', key: `section:${section.key}`, label: section.label, sectionIndex })
+      for (const entry of section.models) {
+        rows.push({ type: 'model', key: `${provider}:${section.key}:${entry.id}`, model: entry, instance: section.instance, providerId: provider, sectionIndex, quickJumpIndex: null })
+      }
+      sectionIndex += 1
+    }
+    const quickJump = modelQuickJumpIndex(rows)
+    for (const row of rows) {
+      if (row.type === 'model') row.quickJumpIndex = quickJump.get(row.key) ?? null
     }
     return rows
-  }, [backendFilteredModels])
+  }, [favoriteModels, instanceSections, provider, currentProvider])
+
+  // Rail sections (desktop only): one entry per top-level section so you can
+  // click straight to a provider group without scrolling a long catalog.
+  // `startIndex` is the absolute row index of the section header in the
+  // flattened `modelRows` list, so the rail can scroll the virtualizer there.
+  const railSections = useMemo<ModelPickerRailSection[]>(() => {
+    const sections: ModelPickerRailSection[] = []
+    const startIndexFor = (key: string) => {
+      const index = modelRows.findIndex((row) => row.type === 'header' && row.key === key)
+      return index >= 0 ? index : 0
+    }
+    if (favoriteModels.length > 0) {
+      sections.push({ key: 'favorites', startIndex: startIndexFor('favorites'), label: 'Favorites', kind: 'favorites' })
+    }
+    for (const section of instanceSections) {
+      sections.push({ key: section.key, startIndex: startIndexFor(`section:${section.key}`), label: section.label, kind: 'instance' })
+    }
+    return sections
+  }, [favoriteModels, instanceSections, modelRows])
 
   const modelListRef = useRef<HTMLDivElement | null>(null)
   const modelVirtualizer = useVirtualizer({
@@ -682,12 +729,131 @@ export function ProviderModelSelector({
     const raf = requestAnimationFrame(() => {
       modelVirtualizer.measure()
       if (model) {
-        const index = modelRows.findIndex((row) => row.type === 'model' && row.model.id === model)
+        const index = modelRows.findIndex((row) => row.type === 'model' && row.model.id === model && row.sectionIndex > 0)
         if (index >= 0) modelVirtualizer.scrollToIndex(index, { align: 'center' })
       }
     })
     return () => cancelAnimationFrame(raf)
   }, [open, modelVirtualizer, model, modelRows])
+
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+
+  // When the model catalog or search changes, re-anchor the highlight on the
+  // currently selected model (or the first row) so keyboard nav stays sane.
+  useEffect(() => {
+    if (!open || modelRows.length === 0) return
+    const currentIndex = modelRows.findIndex((row) => row.type === 'model' && row.model.id === model)
+    setHighlightedIndex(currentIndex >= 0 ? currentIndex : 0)
+  }, [open, model, modelRows])
+
+  // Reset the search box whenever the selector opens.
+  useEffect(() => {
+    if (!open) return
+    setSearch('')
+  }, [open])
+
+  const moveHighlight = (start: number, delta: number) => {
+    const rowCount = modelRows.length
+    if (rowCount === 0) return
+    const direction = delta >= 0 ? 1 : -1
+    let index = start
+    for (let steps = 0; steps < rowCount; steps += 1) {
+      index += direction
+      if (index < 0 || index >= rowCount) break
+      if (modelRows[index]!.type === 'model') {
+        setHighlightedIndex(index)
+        modelVirtualizer.scrollToIndex(index, { align: 'auto' })
+        return
+      }
+    }
+    if (index < 0) {
+      setHighlightedIndex(0)
+      modelVirtualizer.scrollToIndex(0, { align: 'auto' })
+    }
+  }
+
+  // Keyboard: arrows move the highlight across model rows, Home/End jump to the
+  // list ends, Enter/Space select the highlighted row, Escape closes. Digits
+  // 1-9 quick-jump to the first row of the numbered section and 'f' toggles the
+  // favorite on the highlighted row — both ignored while typing in the search
+  // box (digits fall through to the filter there).
+  const handleModelListKeyDown = (event: KeyboardEvent) => {
+    const rowCount = modelRows.length
+    if (rowCount === 0) return
+
+    const activeElement = document.activeElement
+    const typingInSearch = activeElement instanceof HTMLInputElement && activeElement === inputRef.current
+
+    const digitMatch = /^([1-9])$/.exec(event.key)
+    if (digitMatch) {
+      if (typingInSearch && searchLower) return
+      event.preventDefault()
+      const digit = Number(digitMatch[1])
+      const target = modelRows.find((row) => row.type === 'model' && row.sectionIndex === digit)
+      if (!target) return
+      const index = modelRows.indexOf(target)
+      setHighlightedIndex(index)
+      modelVirtualizer.scrollToIndex(index, { align: 'start' })
+      return
+    }
+
+    if (event.key === 'f' && !typingInSearch) {
+      const current = modelRows[highlightedIndex]
+      if (current?.type !== 'model') return
+      event.preventDefault()
+      setFavorites((currentFavorites) => {
+        const next = toggleModelFavorite(currentFavorites, current.providerId, current.model.id)
+        saveModelFavorites(next)
+        return next
+      })
+      return
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveHighlight(highlightedIndex, event.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      event.preventDefault()
+      const currentSection = modelRows[highlightedIndex]?.sectionIndex
+      if (currentSection === undefined) return
+      const targetIndex = event.key === 'ArrowRight'
+        ? modelRows.findIndex((row) => row.sectionIndex === currentSection + 1)
+        : lastIndexWhere(modelRows, (row) => row.sectionIndex === currentSection - 1)
+      if (targetIndex < 0) return
+      setHighlightedIndex(targetIndex)
+      modelVirtualizer.scrollToIndex(targetIndex, { align: 'start' })
+      return
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      moveHighlight(event.key === 'Home' ? -1 : rowCount, event.key === 'Home' ? -1 : 1)
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      const current = modelRows[highlightedIndex]
+      const target = current?.type === 'model'
+        ? current
+        : modelRows.find((row) => row.type === 'model')
+      if (target?.type === 'model') handleModelSelect(target.model.id)
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setOpen(false)
+    }
+  }
+
+  // Rail jump: scroll the virtualizer to the section header row and anchor the
+  // keyboard highlight there, so Enter starts at the first model of the group.
+  const handleRailJump = (startIndex: number) => {
+    if (modelRows.length === 0) return
+    const target = Math.min(Math.max(startIndex, 0), modelRows.length - 1)
+    setHighlightedIndex(target)
+    modelVirtualizer.scrollToIndex(target, { align: 'start' })
+  }
 
   const modelErrorMessage = useMemo(() => {
     if (!modelError) return null
@@ -751,8 +917,6 @@ export function ProviderModelSelector({
       }
     }
     onModelChange(modelId)
-    saveRecentModel(modelId)
-    setRecentIds(loadRecentModels())
     setOpen(false)
   }
 
@@ -762,6 +926,20 @@ export function ProviderModelSelector({
     }
     setOpen(nextOpen)
   }, [isMobile])
+
+  // Favorites are a purely local affordance ([providerId, modelId] pairs in
+  // localStorage) and never affect the persisted model/backend settings.
+  useEffect(() => {
+    setFavorites(loadModelFavorites())
+  }, [])
+
+  const toggleFavoriteModel = useCallback((entry: ModelDef) => {
+    setFavorites((current) => {
+      const next = toggleModelFavorite(current, provider, entry.id)
+      saveModelFavorites(next)
+      return next
+    })
+  }, [provider])
 
   const triggerButton = (
     <TooltipHint side={tooltipSide} content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
@@ -962,77 +1140,59 @@ export function ProviderModelSelector({
       <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
         <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
       </div>
-      <div className="shrink-0 border-b px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <label htmlFor="provider-model-search" className="sr-only">Search models</label>
-          <input
-            id="provider-model-search"
-            ref={inputRef}
-            type="text"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search models..."
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-      </div>
       {currentGroupLabel && (
         <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </span>
-          <span className="truncate text-2xs font-medium text-foreground">
-            Current: {currentGroupLabel}
-          </span>
+          <span className="truncate text-2xs font-medium text-foreground">Current: {currentGroupLabel}</span>
         </div>
       )}
-      {backendOptions.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setBackendFilter(null)}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium transition-colors',
-              !backendFilter ? 'border-primary/40 bg-accent/50 text-foreground' : 'border-border text-muted-foreground hover:bg-muted',
-            )}
-          >
-            All
-            <span className="opacity-60">{nonRecentFiltered.length}</span>
-          </button>
-          {backendOptions.map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setBackendFilter(backendFilter === opt.key ? null : opt.key)}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium transition-colors',
-                backendFilter === opt.key ? 'border-primary/40 bg-accent/50 text-foreground' : 'border-border text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {opt.label}
-              <span className="opacity-60">{opt.count}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      <div ref={modelListRef} role="listbox" aria-labelledby="model-selector-heading" className="min-h-0 flex-1 overflow-y-auto p-1">
-        {recentModels.length > 0 && (
-          <>
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-              <Clock className="h-3 w-3 text-muted-foreground" />
-              <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Recent</span>
-            </div>
-            {recentModels.map((entry) => (
-              <ModelItem key={`recent-${entry.id}`} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-            ))}
-            <div className="mx-2 my-1 border-t" />
-          </>
-        )}
-        {!searchLower && recentModels.length > 0 && (
-          <div className="px-2 py-1.5">
-            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">All models</span>
+      <div
+          className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring"
+        >
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <input
+            ref={inputRef}
+            type="text"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="model-selector-listbox"
+            aria-autocomplete="list"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End' || event.key === 'Enter' || event.key === 'Escape') {
+                event.preventDefault()
+                event.stopPropagation()
+                handleModelListKeyDown(event.nativeEvent)
+              }
+              // Digits 1-9 fall through to the input; quick-jump handling is
+              // guarded on document.activeElement in handleModelListKeyDown.
+            }}
+            placeholder="Search models..."
+            className="h-7 w-full border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted-foreground"
+            autoFocus
+          />
+      </div>
+      <div
+        ref={modelListRef}
+        id="model-selector-listbox"
+        role="listbox"
+        aria-labelledby="model-selector-heading"
+        className="min-h-0 flex-1 overflow-y-auto p-1"
+        onKeyDown={(event) => {
+          if (event.defaultPrevented) return
+          if (/^[1-9]$/.test(event.key) || ['f', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) {
+            handleModelListKeyDown(event.nativeEvent)
+          }
+        }}
+      >
+        {!loadingModels && modelErrorMessage && (
+          <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{modelErrorMessage}</span>
           </div>
         )}
         {loadingModels && (
@@ -1041,33 +1201,24 @@ export function ProviderModelSelector({
             Loading models…
           </div>
         )}
-        {!loadingModels && modelErrorMessage && (
-          <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{modelErrorMessage}</span>
-          </div>
-        )}
         {!loadingModels && !modelErrorMessage && modelRows.length > 0 && (
-          <div className="relative" style={{ height: modelVirtualizer.getTotalSize() }}>
+          <div className="relative min-h-0 flex-1" style={{ height: modelVirtualizer.getTotalSize() }}>
             {modelVirtualizer.getVirtualItems().map((virtualRow) => {
               const row = modelRows[virtualRow.index]
               if (row.type === 'header') {
-                const isCurrentGroup = currentGroupLabel !== null && row.label === currentGroupLabel
                 return (
                   <div
                     key={`header-${virtualRow.key}`}
                     data-index={virtualRow.index}
                     ref={modelVirtualizer.measureElement}
-                    className={cn('flex items-center gap-1.5 px-2 py-1.5', isCurrentGroup && 'bg-accent/40')}
+                    className="px-3 py-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground/70"
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    {isCurrentGroup && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />}
-                    <span className={cn('text-2xs font-medium uppercase tracking-wider', isCurrentGroup ? 'text-foreground' : 'text-muted-foreground')}>
-                      {row.label}
-                    </span>
+                    {row.label}
                   </div>
                 )
               }
+              const favorite = favorites.some((entry) => entry.provider === row.providerId && entry.modelId === row.model.id)
               return (
                 <div
                   key={virtualRow.key}
@@ -1075,7 +1226,19 @@ export function ProviderModelSelector({
                   ref={modelVirtualizer.measureElement}
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                 >
-                  <ModelItem model={row.model} selected={model === row.model.id} onSelect={handleModelSelect} />
+                  <ModelRow
+                    model={row.model}
+                    instanceLabel={row.instance.label}
+                    instanceIcon={row.instance.icon}
+                    instanceIconUrl={row.instance.iconUrl}
+                    selected={model === row.model.id && provider === row.providerId}
+                    onSelect={handleModelSelect}
+                    onToggleFavorite={toggleFavoriteModel}
+                    isFavorite={favorite}
+                    stopPropagation
+                    quickJumpIndex={row.quickJumpIndex}
+                    highlighted={highlightedIndex === virtualRow.index}
+                  />
                 </div>
               )
             })}
@@ -1083,10 +1246,11 @@ export function ProviderModelSelector({
         )}
         {!loadingModels && !modelErrorMessage && modelRows.length === 0 && (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            {search ? `No models matching "${search}"` : 'No models available'}
+            {search ? `No models found` : 'No models available'}
           </div>
         )}
       </div>
+      <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />
 
       {modelSupportsReasoning && !loadingModels && (
         <div className="shrink-0 border-t px-3 py-2">
@@ -1278,28 +1442,96 @@ export function ProviderModelSelector({
   )
 }
 
-function ModelItem({ model, selected, onSelect }: { model: ModelDef; selected: boolean; onSelect: (id: string) => void }) {
+interface ModelRowProps {
+  model: ModelDef
+  instanceLabel: string
+  instanceIcon: ComponentType<{ className?: string }>
+  instanceIconUrl?: string
+  selected: boolean
+  onSelect: (id: string) => void
+  onToggleFavorite: ((model: ModelDef) => void) | null
+  isFavorite: boolean
+  stopPropagation: boolean
+  quickJumpIndex: number | null
+  highlighted: boolean
+}
+
+function ModelRow({
+  model,
+  instanceLabel,
+  instanceIcon: InstanceIcon,
+  instanceIconUrl,
+  selected,
+  onSelect,
+  onToggleFavorite,
+  isFavorite,
+  stopPropagation,
+  quickJumpIndex,
+  highlighted,
+}: ModelRowProps) {
   return (
-    <button
-      type="button"
+    <div
       role="option"
       aria-selected={selected}
-      aria-label={`${formatModelDisplayLabel(model.name)}${model.isDefault ? ', default model' : ''}`}
+      data-highlighted={highlighted || undefined}
+      data-row-key={quickJumpIndex === null ? undefined : quickJumpIndex}
+      tabIndex={-1}
       onClick={() => onSelect(model.id)}
+      onKeyDown={onToggleFavorite ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          event.stopPropagation()
+          onSelect(model.id)
+        } else if (event.key === 'f') {
+          event.preventDefault()
+          onToggleFavorite(model)
+        }
+      } : undefined}
       className={cn(
-        'flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left transition-colors',
-        'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-        selected && 'bg-accent/50',
+        'group flex w-full cursor-pointer items-start gap-2 px-3 py-1.5 text-left transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+        highlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',
+        selected && !highlighted && 'bg-accent/50',
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">
-          {formatModelDisplayLabel(model.name)}
-          {model.isDefault && <span className="ml-1.5 text-2xs font-normal text-muted-foreground">(default)</span>}
+        <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
+          <span className="truncate">{formatModelDisplayLabel(model.name)}</span>
+          {model.isDefault && <span className="shrink-0 text-2xs font-normal text-muted-foreground">(default)</span>}
         </div>
-        {model.description && <div className="truncate text-xs leading-snug text-muted-foreground">{model.description}</div>}
+        <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[0.6875rem] leading-snug text-muted-foreground/70">
+          {instanceIconUrl ? <RemoteProviderLogo url={instanceIconUrl} className="h-3 w-3" /> : <InstanceIcon className="h-3 w-3" />}
+          <span className="truncate">{instanceLabel}</span>
+          {model.description && <span className="hidden truncate opacity-80 sm:inline">· {model.description}</span>}
+        </div>
       </div>
-      {selected && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />}
-    </button>
+      <span className="flex shrink-0 items-center gap-0.5">
+        {selected && <Check className="h-3.5 w-3.5 text-primary" />}
+        <Kbd keys={quickJumpIndex !== null ? [String(quickJumpIndex)] : []} emptyLabel="" />
+        {onToggleFavorite && (
+          <button
+            type="button"
+            data-favorite-toggle="true"
+            aria-label={isFavorite ? `Remove ${formatModelDisplayLabel(model.name)} from favorites` : `Add ${formatModelDisplayLabel(model.name)} to favorites`}
+            aria-pressed={isFavorite}
+            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+            onClick={stopPropagation ? (event) => {
+              event.stopPropagation()
+              event.preventDefault()
+              onToggleFavorite(model)
+            } : () => onToggleFavorite(model)}
+            className={cn(
+              'inline-flex h-6 w-6 items-center justify-center rounded-sm transition-colors',
+              'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+              isFavorite
+                ? 'opacity-100 text-amber-500 hover:text-amber-400'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+            )}
+          >
+            <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+          </button>
+        )}
+      </span>
+    </div>
   )
 }

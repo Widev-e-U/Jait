@@ -4688,6 +4688,7 @@ export function registerChatRoutes(
           : [];
 
         const onEvent = (event: AgentLoopEvent) => {
+          if (streamAbort.signal.aborted) return;
           emitToSubscribers(sessionId, event as StreamEvent);
           safeWrite(`data: ${JSON.stringify(event)}\n\n`);
 
@@ -4766,7 +4767,9 @@ export function registerChatRoutes(
         if (injectedMemoryMessage) history.push(injectedMemoryMessage);
         let result: Awaited<ReturnType<typeof runAgentLoop>>;
         try {
-          result = await runAgentLoop(
+          // A provider can ignore AbortSignal and leave its request pending forever.
+          // Keep the route's cancellation and stream cleanup independent of it.
+          result = await waitForCliProviderRequest(() => runAgentLoop(
             {
               llm: llmRuntime,
               history,
@@ -4793,6 +4796,7 @@ export function registerChatRoutes(
               mode: chatMode,
               onEvent,
               onContext: (round) => {
+                if (streamAbort.signal.aborted) return;
                 contextRounds.push(round);
                 contextFlowJson = serializePersistedContextFlow({
                   provider: "jait",
@@ -4805,7 +4809,7 @@ export function registerChatRoutes(
               // accumulated assistant output so a mid-turn gateway restart
               // (self-restarts during deploys included) survives on disk.
               onAssistantCheckpoint: (sid, content, tc, seg) => {
-                if (sid !== sessionId) return;
+                if (sid !== sessionId || streamAbort.signal.aborted) return;
                 try {
                   const acc = sessionStreamingState.get(sid);
                   const persistedToolCalls = acc?.toolCalls.length ? JSON.stringify(acc.toolCalls) : tc;
@@ -4823,6 +4827,7 @@ export function registerChatRoutes(
                 }
               },
               onPersist: (sid, role, content, tc, seg, thinking) => {
+                if (streamAbort.signal.aborted) return;
                 const acc = sid === sessionId ? sessionStreamingState.get(sid) : undefined;
                 const persistedToolCalls = acc?.toolCalls.length ? JSON.stringify(acc.toolCalls) : tc;
                 const persistedSegments = acc?.segments.length ? JSON.stringify(acc.segments) : seg;
@@ -4847,7 +4852,7 @@ export function registerChatRoutes(
             },
             executeTool,
             steering,
-          );
+          ), streamAbort.signal);
         } finally {
           if (injectedMemoryMessage) {
             const index = history.indexOf(injectedMemoryMessage);
@@ -4905,6 +4910,17 @@ export function registerChatRoutes(
       // or for Ollama stream errors (including abort).
       const wasCancelled = isAbortError(err);
       turnCancelledOrErrored = true;
+      if (wasCancelled) {
+        // The outer abort race can finish before the agent loop reports tool
+        // results. Persist interrupted calls as cancelled, including when an
+        // earlier checkpoint already wrote the assistant row.
+        const runningCalls = sessionStreamingState.get(sessionId)?.toolCalls
+          .filter((call) => call.status === "running") ?? [];
+        for (const call of runningCalls) {
+          accumulateToolResult(sessionId, call.callId, false, "Cancelled");
+        }
+        if (runningCalls.length > 0) assistantTurnPersisted = false;
+      }
       if (!wasCancelled) {
         app.log.error(err, `${providerLabel} streaming error`);
         markTurnErrored(err instanceof Error ? err.message : `Failed to reach ${providerLabel}`);

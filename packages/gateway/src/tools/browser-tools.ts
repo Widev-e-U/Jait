@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import type { WsControlPlane } from "../ws.js";
 import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
@@ -393,6 +397,7 @@ function makeActionTool<TInput>(
 export function createBrowserInteractionTools(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
+  ws?: Pick<WsControlPlane, "proxyFsOp">,
 ): ToolDefinition[] {
   return [
     makeActionTool<BrowserClickInput>(
@@ -507,10 +512,25 @@ export function createBrowserInteractionTools(
           };
         }
         const screenshotPath = await surface.screenshot(input.path, context.signal);
+        const extension = /\.(png|jpe?g|webp|gif)$/i.exec(screenshotPath)?.[0].toLowerCase() ?? ".png";
+        const displayDir = resolve(process.cwd(), ".jait", "shots");
+        const displayPath = join(displayDir, `browser-${randomUUID()}${extension}`);
+        let bytes: Buffer;
+        try {
+          bytes = await readFile(screenshotPath);
+        } catch (error) {
+          if (!context.executionNodeId || !ws) throw error;
+          const remote = await ws.proxyFsOp<{ content: string }>(
+            context.executionNodeId, "readBinary", { path: screenshotPath },
+          );
+          bytes = Buffer.from(remote.content, "base64");
+        }
+        await mkdir(displayDir, { recursive: true });
+        await writeFile(displayPath, bytes);
         return {
           ok: true,
           message: "browser.screenshot executed",
-          data: { browserId: surface.id, result: { path: screenshotPath } },
+          data: { browserId: surface.id, result: { path: displayPath, capturePath: screenshotPath } },
         };
       },
     },

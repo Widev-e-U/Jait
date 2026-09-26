@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { AssistantMarkdown } from '@/components/chat/assistant-markdown'
 import { MessageContent as AIMessageContent } from '@/components/ai-elements/message'
 import { Reasoning } from '@/components/chat/reasoning'
-import { AgentToolCallWrapper, ToolCallGroup, computeAgentNesting, type ToolCallInfo } from '@/components/chat/tool-call-card'
+import { AgentToolCallWrapper, ToolCallGroup, getTopLevelToolCalls, type ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { ProviderId } from '@/lib/agents-api'
 import type { MessageSegment } from '@/hooks/useChat'
 
@@ -20,9 +20,7 @@ const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
  * many tool calls) from being mistaken for multiple sibling agent-style calls.
  */
 function countTopLevelToolCalls(calls: ToolCallInfo[]): number {
-  if (calls.length === 0) return 0
-  const { parentSet } = computeAgentNesting(calls)
-  return calls.length - parentSet.size
+  return getTopLevelToolCalls(calls).length
 }
 
 export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is ProviderId {

@@ -464,6 +464,56 @@ describe("chat route OpenRouter backend selection", () => {
     }
   });
 
+  it("force-cancels a silent Jait provider request that ignores abort", { timeout: 10_000 }, async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("zombie-cancel-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Zombie Cancellation" });
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: { OPENROUTER_API_KEY: "openrouter-test-key" },
+    });
+
+    let markStarted = () => {};
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let releaseProvider = () => {};
+    const providerPending = new Promise<Response>((resolve) => {
+      releaseProvider = () => resolve(createOpenAIStreamResponse());
+    });
+    globalThis.fetch = vi.fn(async () => {
+      markStarted();
+      return providerPending;
+    }) as typeof fetch;
+
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const turn = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: { content: "silent request", sessionId: session.id, model: "gpt-4o" },
+    });
+    try {
+      await started;
+      const cancel = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/cancel`, headers });
+      expect(cancel.json()).toMatchObject({ ok: true, cancelled: true });
+      await Promise.race([
+        turn,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Cancelled turn stayed active")), 500)),
+      ]);
+      const streaming = await app.inject({ method: "GET", url: "/api/sessions/streaming", headers });
+      expect(streaming.json().sessionIds).not.toContain(session.id);
+    } finally {
+      releaseProvider();
+      await turn;
+      await app.close();
+      sqlite.close();
+    }
+  });
+
   it("persists an interrupted assistant tool card before clearing live stream state", { timeout: 15_000 }, async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

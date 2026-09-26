@@ -1005,14 +1005,10 @@ export function SessionSelector({
                               isActive={isActiveSession}
                               isStreaming={isStreaming}
                               dragProps={{
-                                draggable: Boolean(onMoveSession) && !isStreaming,
+                                draggable: true,
                                 onDragStart: (e) => {
-                                  if (!onMoveSession || isStreaming) {
-                                    e.preventDefault()
-                                    return
-                                  }
-                                  e.dataTransfer.effectAllowed = 'copyMove'
-                                  e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
+                                  e.dataTransfer.effectAllowed = onMoveSession && !isStreaming ? 'copyMove' : 'copy'
+                                  if (onMoveSession && !isStreaming) e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
                                   e.dataTransfer.setData(
                                     JAIT_CHAT_REF_MIME,
                                     JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),
@@ -1177,14 +1173,10 @@ export function SessionSelector({
                       isStreaming={isStreaming}
                       fallbackLabel="Personal chat"
                       dragProps={{
-                        draggable: Boolean(onMoveSession) && !isStreaming,
+                        draggable: true,
                         onDragStart: (e) => {
-                          if (!onMoveSession || isStreaming) {
-                            e.preventDefault()
-                            return
-                          }
-                          e.dataTransfer.effectAllowed = 'copyMove'
-                          e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
+                          e.dataTransfer.effectAllowed = onMoveSession && !isStreaming ? 'copyMove' : 'copy'
+                          if (onMoveSession && !isStreaming) e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
                           e.dataTransfer.setData(
                             JAIT_CHAT_REF_MIME,
                             JSON.stringify(buildChatDragPayload(session.id, session.name || undefined)),

@@ -1,9 +1,12 @@
-import { Boxes, Bug, Code, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
+import { Boxes, Bug, FolderOpen, Folders, GitBranch, Globe, Terminal as TerminalIcon } from 'lucide-react'
 import { useRef, type FocusEvent, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 
 import { SessionSelector } from '@/components/chat'
 import { ErrorBoundary } from '@/components/error-boundary'
-import { ModeSidebar, type ModeSidebarItem } from '@/components/app-shell/mode-sidebar'
+import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
+import type { ModeSidebarItem, SidebarAccount } from '@/components/app-shell/mode-sidebar'
+import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { AppView } from '@/lib/app-view'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { ProjectSearchResults, ProjectSession, ProjectRecord } from '@/hooks/useProjects'
 import type { ActiveProjectState } from '@/lib/active-project'
@@ -16,6 +19,13 @@ import {
 
 interface DeveloperSidebarsProps {
   changedFilesCount?: number
+  account: SidebarAccount
+  currentView: AppView
+  viewMode: ViewMode
+  onNavigate: (view: AppView) => void
+  onViewModeChange: (mode: ViewMode) => void
+  screenShareActive: boolean
+  onToggleScreenShare: () => void
   activeProject: ActiveProjectState
   activeProjectId: string | null
   openSessionIds?: ReadonlySet<string>
@@ -35,8 +45,6 @@ interface DeveloperSidebarsProps {
   sessionInfo: SessionInfo | null
   showArchitecture: boolean
   showDebugPanel: boolean
-  showProject: boolean
-  showProjectEditor: boolean
   showSidebar: boolean
   sidebarView: DeveloperSidebarView
   sidebarWidth: number
@@ -64,7 +72,6 @@ interface DeveloperSidebarsProps {
   onShowMore: () => void
   onToggleArchitecture: () => void
   onToggleDebug: () => void
-  onToggleEditor: () => void
   onTogglePreview: () => void
   onSelectSidebarView: (view: DeveloperSidebarView) => void
   onSidebarWidthChange: (width: number) => void
@@ -74,6 +81,13 @@ interface DeveloperSidebarsProps {
 
 export function DeveloperSidebars({
   changedFilesCount = 0,
+  account,
+  currentView,
+  viewMode,
+  onNavigate,
+  onViewModeChange,
+  screenShareActive,
+  onToggleScreenShare,
   activeProject,
   activeProjectId,
   activeSessionId,
@@ -93,8 +107,6 @@ export function DeveloperSidebars({
   sessionInfo,
   showArchitecture,
   showDebugPanel,
-  showProject,
-  showProjectEditor,
   showSidebar,
   sidebarView,
   sidebarWidth,
@@ -122,7 +134,6 @@ export function DeveloperSidebars({
   onShowMore,
   onToggleArchitecture,
   onToggleDebug,
-  onToggleEditor,
   onTogglePreview,
   onSelectSidebarView,
   onSidebarWidthChange,
@@ -153,7 +164,14 @@ export function DeveloperSidebars({
   return (
     <>
       {!isMobile && (
-        <ModeSidebar
+        <AppNavigationSidebar
+          account={account}
+          currentView={currentView}
+          viewMode={viewMode}
+          onNavigate={onNavigate}
+          onViewModeChange={onViewModeChange}
+          screenShareActive={screenShareActive}
+          onToggleScreenShare={onToggleScreenShare}
           items={[
             { id: 'projects', label: 'Projects & Chats', icon: Folders, active: showSidebar && sidebarView === 'projects', onSelect: () => onSelectSidebarView('projects') },
             ...((activeProjectId || activeProject) ? [
@@ -162,7 +180,6 @@ export function DeveloperSidebars({
             ] : []),
             { id: 'terminal', label: 'Terminal', icon: TerminalIcon, active: showTerminal, onSelect: onToggleTerminal },
             ...((activeProjectId || activeProject) ? [
-              { id: 'editor', label: 'Editor', icon: Code, active: showProject && showProjectEditor, onSelect: onToggleEditor },
               { id: 'preview', label: 'Preview', icon: Globe, active: previewOpen, disabled: authLoading || projectsLoading, onSelect: onTogglePreview },
               { id: 'architecture', label: 'Architecture', icon: Boxes, active: showArchitecture, disabled: authLoading || projectsLoading, onSelect: onToggleArchitecture },
             ] : []),
@@ -206,7 +223,6 @@ export function DeveloperSidebars({
               onCreateProject={onCreateProject}
               onCreateFolder={onCreateFolder}
               onEditProject={onEditProject}
-              showEditorModeStatus
               onMoveProject={onMoveProject}
               onRemoveProject={onRemoveProject}
               onChangeDirectory={onChangeDirectory}

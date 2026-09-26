@@ -209,7 +209,7 @@ test.describe('mobile project close + reload', () => {
     await expect(mobileEditorPlaceholder(page)).toHaveCount(0)
   })
 
-  test('does not reopen the editor on reload when architecture was open before closing it', async ({ page, request }, testInfo) => {
+  test('restores the editor pane on reload when the bottom-nav editor tab was open', async ({ page, request }, testInfo) => {
     test.setTimeout(90000)
     test.skip(!testInfo.project.name.startsWith('mobile'), 'mobile-only regression test')
 
@@ -230,34 +230,39 @@ test.describe('mobile project close + reload', () => {
         path: PROJECT_ROOT,
         sessionId,
         nodeId: 'gateway',
+        openPanel: true,
       },
     })
     expect(openResponse.ok()).toBeTruthy()
 
+    // Reload restores the project panel with the file tree (files pane).
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(historyMarker).toBeVisible({ timeout: 15000 })
 
-    const architectureButton = page.locator('button[aria-label="Open architecture"]').first()
-    await architectureButton.click()
-    await expect(page.getByText('Software Architecture')).toBeVisible({ timeout: 15000 })
+    const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' })
+    const editorButton = mobileNav.getByRole('button', { name: 'Editor' })
+    const filesButton = mobileNav.getByRole('button', { name: 'Files' })
+    await expect(filesButton).toHaveAttribute('aria-current', 'page')
 
-    const editorButton = page.locator('button[aria-label="Editor"]').first()
+    // Opening the editor tab from the bottom nav persists the editor layout.
     await editorButton.click()
     await expectProjectUiState(request, token, projectId, {
-      open: false,
+      open: true,
       tree: false,
-      editor: false,
+      editor: true,
     })
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(historyMarker).toBeVisible({ timeout: 15000 })
 
+    // The editor pane must survive the reload — tree stays closed.
     await expectProjectUiState(request, token, projectId, {
-      open: false,
+      open: true,
       tree: false,
-      editor: false,
+      editor: true,
     })
-    await expect(page.getByText('Software Architecture')).toHaveCount(0)
-    await expect(mobileEditorPlaceholder(page)).toHaveCount(0)
+    await expect(mobileEditorPlaceholder(page)).toBeVisible({ timeout: 15000 })
+    await expect(editorButton).toHaveAttribute('aria-current', 'page')
+    await expect(filesButton).not.toHaveAttribute('aria-current', 'page')
   })
 })

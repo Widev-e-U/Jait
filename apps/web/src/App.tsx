@@ -13,6 +13,8 @@ import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { AppHeader } from '@/components/app-shell/app-header'
+import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
+import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import { AppPageOutlet } from '@/components/app-shell/app-page-outlet'
 import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
 import { AutomationModals } from '@/components/automation/automation-modals'
@@ -140,7 +142,6 @@ import { secretRequestMatchesTool } from '@/lib/secret-input'
 import { appendUploadedAttachmentPromptBlock, getUploadedAttachmentDisplayLabel } from '@/lib/uploaded-attachment-prompt'
 import { mergeHydratedTodoState, normalizeTodoStateValue } from '@/lib/todo-state'
 import {
-  collapseMobileProject,
   getReopenedMobileProjectLayout,
   normalizeHydratedProjectLayout,
   showMobileProjectPane
@@ -1700,7 +1701,11 @@ function App() {
     if (mobileProjectInitKeyRef.current === projectKey) return
     mobileProjectInitKeyRef.current = projectKey
     if (!showProjectTree || !showProjectEditor) return
-    const nextLayout = collapseMobileProject()
+    // A freshly opened project has no persisted layout (both panes still at
+    // their untouched defaults). On mobile that should land on the Files tree —
+    // the natural "I just opened a project" surface — rather than collapsing
+    // straight back to chat.
+    const nextLayout = showMobileProjectPane('tree')
     setShowProjectTree(nextLayout.tree)
     setShowProjectEditor(nextLayout.editor)
   }, [showMobileProject, activeProjectId, activeProject?.surfaceId, activeProject?.projectRoot, showProjectTree, showProjectEditor])
@@ -3327,6 +3332,19 @@ function App() {
   ])
 
   const handleDeveloperSidebarView = useCallback(async (requestedView: DeveloperSidebarView) => {
+    if (requestedView === 'files') {
+      if (!showProject) {
+        await handleToggleEditor()
+        if (!showProjectRef.current) return
+      }
+      showProjectEditorPanel()
+      setShowProjectTree(true)
+      setMobileTreeTab('files')
+      setSidebarView('files')
+      setShowSidebar(true)
+      return
+    }
+
     if (requestedView !== 'projects' && !showProject) {
       await handleToggleEditor()
       if (!showProjectRef.current) return
@@ -3349,7 +3367,7 @@ function App() {
     }
 
     handleSelectDeveloperSidebarView(requestedView)
-  }, [closeProjectPanel, handleSelectDeveloperSidebarView, handleToggleEditor, showProject, showProjectEditor, showSidebar, sidebarView])
+  }, [closeProjectPanel, handleSelectDeveloperSidebarView, handleToggleEditor, showProject, showProjectEditor, showProjectEditorPanel, showSidebar, sidebarView])
 
   // Verify project surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
@@ -4953,6 +4971,16 @@ function App() {
     return <GatewayUnavailable onRetry={retryGatewayReachable} canSetBackend={isStandaloneApp} />
   }
 
+  const sidebarAccount: SidebarAccount = {
+    username: isAuthenticated ? user?.username ?? null : null,
+    initial: userInitial,
+    loading: authLoading,
+    onLogin: () => setShowLoginDialog(true),
+    onLogout: handleLogout,
+    themeMode,
+    onThemeModeChange: (mode) => { void handleThemeModeChange(mode) },
+  }
+
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
@@ -5049,7 +5077,7 @@ function App() {
             />
 
             {currentView === 'threads' || currentView === 'agents' ? (
-              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile}>
+              <ManagerMode currentPage={currentView} onPageChange={setCurrentView} isMobile={isMobile} account={sidebarAccount} viewMode={viewMode} onViewModeChange={setViewMode}>
                 {currentView === 'threads' ? (
                     <ThreadsPage
                       automation={automation}
@@ -5133,57 +5161,71 @@ function App() {
                 )}
               </ManagerMode>
             ) : currentView !== 'chat' ? (
-              <AppPageOutlet
-                activeSessionId={activeSessionId}
-                activityEvents={activityEvents}
-                apiKeys={settings.api_keys}
-                appPlatform={appPlatform}
-                chatProvider={chatProvider}
-                chatProviderRuntimeMode={chatProviderRuntimeMode}
-                cliModel={cliModel}
-                currentView={currentView}
-                isMobile={isMobile}
-                nodeSettingsTargetId={nodeSettingsTargetId}
-                repositories={automation.repositories}
-                jaitBackend={settings.jait_backend ?? 'openai'}
-                chatStreamingAction={settings.chat_streaming_action ?? 'steer'}
-                sttProvider={settings.stt_provider}
-                token={token}
-                updateApplying={updateApplying}
-                updateChecking={updateChecking}
-                updateInfo={updateInfo}
-                releases={releases}
-                releasesLoading={releasesLoading}
-                username={user?.username ?? ''}
-                onApplyUpdate={() => {
-                  void handleApplyUpdate()
-                }}
-                onCheckUpdate={() => {
-                  void handleCheckUpdate()
-                }}
-                onCheckChangelog={() => {
-                  void handleCheckChangelog()
-                }}
-                onClearArchive={handleClearArchive}
-                onClearArchivedProjects={handleClearArchivedProjects}
-                onFetchArchivedProjects={fetchArchivedProjects}
-                onJaitBackendChange={async (next) => {
-                  await updateSettings({ jait_backend: next })
-                }}
-                onRestoreProject={handleRestoreProject}
-                onSaveApiKeys={handleSaveApiKeys}
-                onSttProviderChange={async (next: SttProvider) => {
-                  await updateSettings({ stt_provider: next })
-                }}
-                onChatStreamingActionChange={async (next: ChatStreamingAction) => {
-                  await updateSettings({ chat_streaming_action: next })
-                }}
-                onVoiceInput={handleVoiceInput}
-                onVoiceStop={handleVoiceStop}
-                voiceLevels={voiceLevels}
-                voiceRecording={voiceRecording}
-                voiceTranscribing={voiceTranscribing}
-              />
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                {!isMobile && (
+                  <AppNavigationSidebar
+                    account={sidebarAccount}
+                    currentView={currentView}
+                    viewMode={viewMode}
+                    onNavigate={setCurrentView}
+                    onViewModeChange={setViewMode}
+                    onOpenSettings={() => setCurrentView('settings')}
+                    screenShareActive={showScreenShare}
+                    onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                  />
+                )}
+                <AppPageOutlet
+                  activeSessionId={activeSessionId}
+                  activityEvents={activityEvents}
+                  apiKeys={settings.api_keys}
+                  appPlatform={appPlatform}
+                  chatProvider={chatProvider}
+                  chatProviderRuntimeMode={chatProviderRuntimeMode}
+                  cliModel={cliModel}
+                  currentView={currentView}
+                  isMobile={isMobile}
+                  nodeSettingsTargetId={nodeSettingsTargetId}
+                  repositories={automation.repositories}
+                  jaitBackend={settings.jait_backend ?? 'openai'}
+                  chatStreamingAction={settings.chat_streaming_action ?? 'steer'}
+                  sttProvider={settings.stt_provider}
+                  token={token}
+                  updateApplying={updateApplying}
+                  updateChecking={updateChecking}
+                  updateInfo={updateInfo}
+                  releases={releases}
+                  releasesLoading={releasesLoading}
+                  username={user?.username ?? ''}
+                  onApplyUpdate={() => {
+                    void handleApplyUpdate()
+                  }}
+                  onCheckUpdate={() => {
+                    void handleCheckUpdate()
+                  }}
+                  onCheckChangelog={() => {
+                    void handleCheckChangelog()
+                  }}
+                  onClearArchive={handleClearArchive}
+                  onClearArchivedProjects={handleClearArchivedProjects}
+                  onFetchArchivedProjects={fetchArchivedProjects}
+                  onJaitBackendChange={async (next) => {
+                    await updateSettings({ jait_backend: next })
+                  }}
+                  onRestoreProject={handleRestoreProject}
+                  onSaveApiKeys={handleSaveApiKeys}
+                  onSttProviderChange={async (next: SttProvider) => {
+                    await updateSettings({ stt_provider: next })
+                  }}
+                  onChatStreamingActionChange={async (next: ChatStreamingAction) => {
+                    await updateSettings({ chat_streaming_action: next })
+                  }}
+                  onVoiceInput={handleVoiceInput}
+                  onVoiceStop={handleVoiceStop}
+                  voiceLevels={voiceLevels}
+                  voiceRecording={voiceRecording}
+                  voiceTranscribing={voiceTranscribing}
+                />
+              </div>
             ) : (
               <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
                 <div className={isMobile ? 'contents' : chatCollapsed ? 'relative flex min-h-0 flex-1 min-w-0' : 'relative flex min-h-0 shrink-0'}>
@@ -5191,6 +5233,13 @@ function App() {
                     <DeveloperSidebars
                       openSessionIds={openChatSessionIds}
                       changedFilesCount={gitCounts.fileCount}
+                      account={sidebarAccount}
+                      currentView={currentView}
+                      viewMode={viewMode}
+                      onNavigate={setCurrentView}
+                      onViewModeChange={setViewMode}
+                      screenShareActive={showScreenShare}
+                      onToggleScreenShare={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                       activeProject={activeProject}
                       activeProjectId={activeProjectId}
                       activeSessionId={activeSessionId}
@@ -5209,8 +5258,6 @@ function App() {
                       sessionInfo={sessionInfo}
                       showArchitecture={showArchitecture}
                       showDebugPanel={showDebugPanel}
-                      showProject={showProject}
-                      showProjectEditor={showProjectEditor}
                       showSidebar={showSidebar}
                       sidebarView={sidebarView}
                       sidebarWidth={developerSidebarWidth}
@@ -5259,9 +5306,6 @@ function App() {
                         void handleSidebarArchitectureToggle()
                       }}
                       onToggleDebug={() => setShowDebugPanel((d) => !d)}
-                      onToggleEditor={() => {
-                        void handleToggleEditor()
-                      }}
                       onTogglePreview={() => {
                         void handleSidebarPreviewToggle()
                       }}

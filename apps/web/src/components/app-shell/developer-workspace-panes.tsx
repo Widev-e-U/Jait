@@ -274,17 +274,15 @@ export function DeveloperWorkspacePanes({
                   className="absolute inset-x-0 top-0 h-3 -translate-y-1/2 cursor-row-resize touch-none sash-handle sash-handle-horizontal z-20"
                 />
               )}
-              <div className="relative shrink-0">
-                <TerminalTabs
-                  terminals={projectTerminals as any}
-                  activeTerminalId={activeTerminalId}
-                  onSelect={onTerminalSelect}
-                  onCreate={(shell) => onCreateTerminal(shell)}
-                  onKill={onKillTerminal}
-                  onDetach={onDetachTerminal}
-                  availableShells={terminalShells as any}
-                />
-                <div className="absolute right-0 top-0 bottom-px flex items-center gap-1 pr-2 pl-3 bg-background z-[9]">
+              <TerminalTabs
+                terminals={projectTerminals as any}
+                activeTerminalId={activeTerminalId}
+                onSelect={onTerminalSelect}
+                onCreate={(shell) => onCreateTerminal(shell)}
+                onKill={onKillTerminal}
+                onDetach={onDetachTerminal}
+                availableShells={terminalShells as any}
+                toolbarActions={<>
                   {showDesktopProject && (
                     <button
                       onClick={() => {
@@ -296,7 +294,7 @@ export function DeveloperWorkspacePanes({
                           onSetTerminalFullscreen(true)
                         }
                       }}
-                      className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       aria-label={terminalFullscreen ? 'Exit fullscreen' : 'Fullscreen terminal'}
                     >
                       {terminalFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
@@ -304,20 +302,21 @@ export function DeveloperWorkspacePanes({
                   )}
                   <button
                     onClick={() => { if (activeTerminalId) onDetachTerminal(activeTerminalId) }}
-                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    disabled={!activeTerminalId}
+                    className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
                     aria-label="Open terminal in new window"
                   >
                     <ExternalLink className="h-4 w-4" />
                   </button>
                   <button
                     onClick={onCloseTerminal}
-                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Close terminal"
+                    className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="Close terminal panel"
                   >
                     <X className="h-4 w-4" />
                   </button>
-                </div>
-              </div>
+                </>}
+              />
               {renderTerminalBody()}
             </div>
           )}
@@ -326,23 +325,23 @@ export function DeveloperWorkspacePanes({
 
       {showMobileTerminalFullscreen && (
         <section className="flex flex-1 min-h-0 flex-col overflow-hidden border-b bg-background pt-16">
-          <div className="relative shrink-0 border-b">
-            <TerminalTabs
-              terminals={projectTerminals as any}
-              activeTerminalId={activeTerminalId}
-              onSelect={onTerminalSelect}
-              onCreate={(shell) => onCreateTerminal(shell)}
-              onKill={onKillTerminal}
-              availableShells={terminalShells as any}
-            />
-            <button
-              onClick={onCloseTerminal}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Close terminal"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+          <TerminalTabs
+            terminals={projectTerminals as any}
+            activeTerminalId={activeTerminalId}
+            onSelect={onTerminalSelect}
+            onCreate={(shell) => onCreateTerminal(shell)}
+            onKill={onKillTerminal}
+            availableShells={terminalShells as any}
+            toolbarActions={
+              <button
+                onClick={onCloseTerminal}
+                className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Close terminal panel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            }
+          />
           {renderTerminalBody()}
         </section>
       )}

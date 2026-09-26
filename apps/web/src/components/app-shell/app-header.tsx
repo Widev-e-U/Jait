@@ -139,7 +139,8 @@ export function AppHeader(props: AppHeaderProps) {
   // Provider usage modal (avatar dropdown → "Usage")
   const [usageModalOpen, setUsageModalOpen] = useState(false)
 
-  const hasCentered = !voiceOverlayOpen
+  const sidebarOwnsNavigation = !isMobile
+  const hasCentered = !voiceOverlayOpen && !sidebarOwnsNavigation
 
   useEffect(() => {
     const update = () => {
@@ -204,7 +205,7 @@ export function AppHeader(props: AppHeaderProps) {
               className={
                 isMobile
                   ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
-                  : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isDesktop ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
+                  : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isDesktop ? 'h-10 !pl-[0.8rem]' : 'h-10'}`
               }
               data-tauri-drag-region={hasCustomTitleBar || undefined}
               style={isDesktop ? {
@@ -238,7 +239,7 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
 
           {/* Full nav only appears when it cannot collide with the centered mode selector. */}
-          {!isMobile && (
+          {!isMobile && !sidebarOwnsNavigation && (
             <ProgressiveNav
               items={navItems}
               availableWidth={navAvailableWidth}
@@ -258,11 +259,11 @@ export function AppHeader(props: AppHeaderProps) {
               isDesktop={isDesktop}
               activeProjectTitle={activeProjectTitle}
             />
-          ) : (
+          ) : !sidebarOwnsNavigation ? (
             <div ref={selectorRef} className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
-          )}
+          ) : null}
 
           {/* Spacer */}
           <div className={`${isMobile ? 'flex-1' : 'hidden'} min-w-0`} />
@@ -425,7 +426,7 @@ export function AppHeader(props: AppHeaderProps) {
               </div>
             ) : (
             <>
-            {isAuthLoading ? (
+            {!sidebarOwnsNavigation && (isAuthLoading ? (
               <div className={`h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted ${isDesktop ? 'mr-4' : ''}`} aria-label="Loading account" />
             ) : isAuthenticated ? (
               <DropdownMenu>
@@ -492,7 +493,7 @@ export function AppHeader(props: AppHeaderProps) {
               <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setShowLoginDialog(true)}>
                 Sign in
               </Button>
-            )}
+            ))}
             </>
             )}
 

@@ -63,6 +63,24 @@ describe('SessionSelector', () => {
     expect(markup).toContain('Show older')
   })
 
+  it('keeps a streaming chat draggable as a reference from another project', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject()]}
+        activeProjectId={null}
+        streamingSessionIds={new Set(['session-1'])}
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />,
+    )
+    const chatPosition = markup.indexOf('Chat 1')
+    const rowPosition = markup.lastIndexOf('<div class="group flex items-center', chatPosition)
+    expect(rowPosition).toBeGreaterThan(-1)
+    expect(markup.slice(rowPosition, chatPosition)).toContain('draggable="true"')
+  })
+
   it('renders projects and root chats in one combined list', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector

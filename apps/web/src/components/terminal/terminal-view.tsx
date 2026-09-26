@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle, type ReactNode } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -10,7 +10,7 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { detectTouchDevice } from '@/lib/device-layout'
 import { subscribeSoftKeyboardOpen } from './soft-keyboard'
 import { TerminalSoftKeyBar } from './terminal-soft-key-bar'
-import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
+import { ChevronDown, Copy, ClipboardPaste, Plus } from 'lucide-react'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 const GATEWAY = getApiUrl()
@@ -976,9 +976,10 @@ interface TerminalTabsProps {
   onKill: (id: string) => void
   onDetach?: (id: string) => void
   availableShells?: ShellOption[]
+  toolbarActions?: ReactNode
 }
 
-export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, onKill, onDetach, availableShells }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, onKill, onDetach, availableShells, toolbarActions }: TerminalTabsProps) {
   const [showShellMenu, setShowShellMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -998,7 +999,8 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
 
   const hasMultipleShells = availableShells && availableShells.length > 1
   return (
-    <div className="flex items-center gap-1 px-2 h-9 border-b bg-background shrink-0 overflow-x-auto">
+    <div className="flex items-center gap-1 px-2 h-9 border-b bg-background shrink-0 min-w-0">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
       {terminals.map((t) => (
         <div
           key={t.id}
@@ -1057,13 +1059,14 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
           </button>
         </div>
       ))}
-      <div className="flex items-center">
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-1 rounded-md border bg-background px-0.5">
         <button
           onClick={() => onCreate()}
-          className="px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
+          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label="New terminal"
         >
-          +
+          <Plus className="h-4 w-4" />
         </button>
         {hasMultipleShells && (
           <button
@@ -1083,6 +1086,8 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
             <ChevronDown className="h-3 w-3" />
           </button>
         )}
+        {toolbarActions && <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />}
+        {toolbarActions}
       </div>
       {showShellMenu && hasMultipleShells && menuPos && (
         <div

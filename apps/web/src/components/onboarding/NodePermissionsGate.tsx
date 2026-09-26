@@ -193,7 +193,7 @@ export function NodePermissionsGate({ token, onOpenNodeSettings }: { token: stri
   // ── Dismissible banner for other unconfigured nodes ─────────────────
   if (showBanner) {
     return (
-      <div className="fixed bottom-4 left-1/2 z-[999] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2">
+      <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] left-1/2 z-[999] w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 md:bottom-4">
         <Card className="flex items-start gap-3 border-amber-500/50 p-4 shadow-lg">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
           <div className="text-sm">

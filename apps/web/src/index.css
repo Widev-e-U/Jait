@@ -25,6 +25,12 @@
     --input: 210 12% 80%;
     --ring: 217 91% 60%;
     --radius: 0.5rem;
+    /* Slightly tighter corner for composer pill controls (t3code-style) */
+    --control-radius: 0.625rem;
+    /* Frosted-glass dropdown surface tuning (see .dropdown-glass below) */
+    --glass-blur: 18px;
+    --glass-opacity: 0.72;
+    --glass-saturation: 1.6;
     --scrollbar-track: 210 18% 88%;
     --scrollbar-thumb: 210 10% 62%;
     --scrollbar-thumb-hover: 210 12% 50%;
@@ -75,6 +81,13 @@
 
     --border:              var(--dark-hue) var(--dark-sat) 24%;
     --input:               var(--dark-hue) var(--dark-sat) 24%;
+
+    /* Frosted-glass dropdown surface tuning (see .dropdown-glass below).
+       Dark surfaces sit on dimmer backdrops, so blur harder and let more
+       of the backdrop bleed through at lower saturation. */
+    --glass-blur:          22px;
+    --glass-opacity:       0.6;
+    --glass-saturation:    1.75;
 
     --scrollbar-track:     var(--dark-hue) var(--dark-sat) 8%;
     --scrollbar-thumb:     var(--dark-hue) var(--dark-sat) 32%;
@@ -577,4 +590,32 @@ html.is-dragging-row-resize {
 
 @media (prefers-reduced-motion: reduce) {
   .preview-shared-frame { animation: none; }
+}
+
+/*
+ * dropdown-glass — t3code-style frosted-glass surface for dropdown/popup
+ * menus. Intentionally declared at top level (after Tailwind's utilities) so
+ * it wins the cascade over the `bg-popover` utility that shadcn primitives
+ * carry by default; merge order in cn() does not matter.
+ *
+ * Tuning lives in the --glass-blur / --glass-opacity / --glass-saturation
+ * variables (light + dark values in :root/.dark above). A faint
+ * foreground-tinted gradient is layered on top of the translucent popover
+ * fill: barely-there lift in light mode, subtle sheen in dark mode.
+ */
+.dropdown-glass {
+  background:
+    linear-gradient(
+      hsl(var(--foreground) / 0.02),
+      hsl(var(--foreground) / 0.01)
+    ),
+    hsl(var(--popover) / var(--glass-opacity));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dropdown-glass {
+    background: hsl(var(--popover));
+  }
 }

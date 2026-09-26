@@ -799,8 +799,8 @@ export function getThreadControlListItems(
   return []
 }
 
-function truncate(value: string, max = 64): string {
-  const trimmed = value.trim()
+function truncate(value: string | null | undefined, max = 64): string {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
   if (trimmed.length <= max) return trimmed
   return `${trimmed.slice(0, max - 1)}…`
 }
@@ -1009,7 +1009,9 @@ function getCollapsedToolCategory(tool: string): string {
   if (normalized.startsWith('cron.')) return 'cron'
   if (normalized.startsWith('surfaces.')) return 'surface'
   if (normalized.startsWith('os.')) return 'system'
-  if (isAgentToolName(normalized)) return 'agent'
+  // A delegated sub-agent is one unit: its internal tool calls render inside
+  // its own card, never as siblings of this wrapper's own calls.
+  if (isAgentToolName(normalized)) return 'sub-agent'
   if (normalized === 'thread.control') return 'thread'
   if (normalized === 'todo') return 'todo'
   if (normalized === 'jait') return 'jait'
@@ -1129,15 +1131,22 @@ export function getCallSummary(
     return action || 'thread.control'
   }
   if (normalized === 'todo') {
-    const rawList = args.todoList
+    // Persisted or half-streamed args are not trustworthy: todo items may be
+    // missing a `title` (e.g. a call recovered mid-stream), so route through
+    // the validating extractor instead of the raw cast list.
+    const rawList = normalizedArgs.todoList ?? args.todoList
     const list = Array.isArray(rawList)
-      ? rawList as Array<{ title: string; status: string }>
+      ? rawList as Array<{ title?: unknown; status?: unknown }>
       : Array.isArray((rawList as { items?: unknown })?.items)
-        ? (rawList as { items: Array<{ title: string; status: string }> }).items
+        ? (rawList as { items: Array<{ title?: unknown; status?: unknown }> }).items
         : undefined
-    if (!list) return 'Track tasks'
-    const inProgress = list.filter(t => t.status === 'in-progress')
-    if (inProgress.length) return truncate(inProgress[0].title, 60)
+    const items = getTodoToolListItems(normalizedArgs, resultRecord)
+    if (items.length > 0) {
+      const inProgress = items.filter(item => item.status === 'in-progress')
+      if (inProgress.length) return truncate(inProgress[0].title, 60)
+      return `${items.length} task(s)`
+    }
+    if (!list || list.length === 0) return 'Track tasks'
     return `${list.length} task(s)`
   }
   if (normalized === 'user.ask') {
@@ -2603,6 +2612,7 @@ function BrowserSnapshotView({ snapshot }: { snapshot: string | null | undefined
 
 function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
   const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const trimmedPath = typeof path === 'string' ? path.trim() : ''
   const src = trimmedPath
@@ -2620,8 +2630,8 @@ function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
             src={src}
             alt="Browser screenshot"
             className="max-h-80 w-full cursor-pointer object-contain transition-opacity group-hover:opacity-80"
-            onLoad={() => setLoaded(true)}
-            onError={() => setLoaded(false)}
+            onLoad={() => { setLoaded(true); setFailed(false) }}
+            onError={() => { setLoaded(false); setFailed(true) }}
             onClick={() => loaded && setExpanded(true)}
           />
           {loaded && (
@@ -2631,7 +2641,7 @@ function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
           )}
         </div>
       )}
-      {(!src || !loaded) && (
+      {(!src || failed) && (
         <div className="rounded bg-background p-2 text-muted-foreground">
           Preview unavailable in browser. Open the screenshot path directly from the host environment.
         </div>
@@ -3363,6 +3373,18 @@ export function computeAgentNesting(calls: ToolCallInfo[]): {
   }
 
   return { childMap, parentSet }
+}
+
+/**
+ * Tool calls a wrapper/group owns directly. Tool calls nested inside a
+ * sub-agent card belong to that sub-agent — they collapse with it and count
+ * as one delegated unit in summaries, never as N sibling calls.
+ */
+export function getTopLevelToolCalls(calls: ToolCallInfo[]): ToolCallInfo[] {
+  if (calls.length === 0) return []
+  const { parentSet } = computeAgentNesting(calls)
+  if (parentSet.size === 0) return calls
+  return calls.filter((call) => !parentSet.has(call.callId))
 }
 
 interface ToolCallCardProps {
@@ -4923,17 +4945,19 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
     anchorToggle()
     setOpen(nextOpen)
   }, [anchorToggle, hasInlineSecretPrompt])
-  const successCount = calls.filter(c => c.status === 'success').length
-  const errorCount = calls.filter(c => c.status === 'error').length
+  // Compute agent nesting so inner-agent tool calls render inside the agent card
+  const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
+  const topLevelCalls = useMemo(() => calls.filter(c => !parentSet.has(c.callId)), [calls, parentSet])
+
+  // Header counts reflect this wrapper's own tool calls only: work nested
+  // inside a sub-agent card counts as that one sub-agent, never as N calls.
+  const successCount = topLevelCalls.filter(c => c.status === 'success').length
+  const errorCount = topLevelCalls.filter(c => c.status === 'error').length
   const startedAt = calls.length > 0 ? Math.min(...calls.map(c => c.startedAt)) : Date.now()
   const completedAt = !isActive && calls.length > 0
     ? Math.max(...calls.map(c => c.completedAt ?? c.startedAt))
     : undefined
-  const SummaryIcon = getToolCallWrapperIcon(calls)
-
-  // Compute agent nesting so inner-agent tool calls render inside the agent card
-  const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
-  const topLevelCalls = useMemo(() => calls.filter(c => !parentSet.has(c.callId)), [calls, parentSet])
+  const SummaryIcon = getToolCallWrapperIcon(topLevelCalls)
 
   // Split into active and completed for inner collapsing
   const activeCalls = topLevelCalls.filter(c => c.status === 'running' || c.status === 'pending')
@@ -4991,7 +5015,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
             : <SummaryIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
           }
           <span className="text-sm font-medium text-foreground truncate">
-            {summarizeCollapsedToolCalls(calls)}
+            {summarizeCollapsedToolCalls(topLevelCalls)}
           </span>
           <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground tabular-nums shrink-0">
             {!isActive && errorCount > 0 && (

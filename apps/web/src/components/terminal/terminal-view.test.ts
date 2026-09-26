@@ -1,3 +1,5 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildTerminalSubscribeMessage,
@@ -16,6 +18,7 @@ import {
   shouldSuppressTerminalPasteControlData,
   terminalBelongsToProject,
   terminalTouchDeltaToRows,
+  TerminalTabs,
   type TerminalInfo,
 } from './terminal-view'
 
@@ -538,5 +541,22 @@ describe('terminal content sizing', () => {
 
   it('keeps the minimum when it exceeds the maximum', () => {
     expect(clampTerminalRows(1, 6, 3)).toBe(6)
+  })
+})
+
+
+describe('TerminalTabs toolbar', () => {
+  it('keeps create and panel actions together after the terminal tabs', () => {
+    const markup = renderToStaticMarkup(createElement(TerminalTabs, {
+      terminals: [{ id: 'term-one', type: 'shell', state: 'running', sessionId: 'one', projectRoot: null, metadata: {} }],
+      activeTerminalId: 'term-one',
+      onSelect: () => {},
+      onCreate: () => {},
+      onKill: () => {},
+      toolbarActions: createElement('button', { 'aria-label': 'Close terminal panel' }, 'Close'),
+    }))
+
+    expect(markup.indexOf('term-one')).toBeLessThan(markup.indexOf('aria-label="New terminal"'))
+    expect(markup.indexOf('aria-label="New terminal"')).toBeLessThan(markup.indexOf('aria-label="Close terminal panel"'))
   })
 })

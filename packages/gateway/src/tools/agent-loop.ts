@@ -3326,6 +3326,9 @@ export async function runAgentLoop(
         body: JSON.stringify(reqBody),
         signal: llmSignal,
       });
+      // A custom provider may resolve after cancellation despite the signal.
+      // Do not process its stale response into this session's history.
+      if (abort.signal.aborted) throw new DOMException("Aborted", "AbortError");
 
       if (!response.ok) {
         const errText = await response.text();

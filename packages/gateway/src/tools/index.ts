@@ -551,7 +551,7 @@ export function createToolRegistry(
   tools.register(createBrowserNavigateTool(surfaceRegistry, deps.previewService));
   tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.previewService));
   tools.register(createBrowserInspectTool(surfaceRegistry, deps.previewService));
-  for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService)) {
+  for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService, deps.ws)) {
     tools.register(tool);
   }
   tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
