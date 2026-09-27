@@ -29,6 +29,18 @@ describe('AppHeader manager model control', () => {
     expect(navSource).toContain('data-tauri-drag-region={tauriDragRegion || undefined}')
   })
 
+  it('keeps a transparent drag strip when the desktop header is hidden', () => {
+    const appSource = readFileSync(
+      fileURLToPath(new URL('../../App.tsx', import.meta.url)),
+      'utf8',
+    )
+
+    expect(appSource).toContain("desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux'")
+    expect(appSource).toContain('data-tauri-drag-region')
+    expect(appSource).toContain("WebkitAppRegion: 'drag'")
+    expect(appSource.indexOf('data-tauri-drag-region')).toBeLessThan(appSource.indexOf('<WinCaptionButtons isMaximized={isMaximized} />'))
+  })
+
   it('shows an avatar skeleton while authentication is loading', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./app-header.tsx', import.meta.url)),

@@ -1,5 +1,7 @@
-import { Brain, Calendar, CalendarDays, Cast, GitPullRequest, ListChecks, Mail, MessageSquare, MessagesSquare, UsersRound, Wifi } from 'lucide-react'
+import { Brain, Calendar, CalendarDays, Cast, Code, GitPullRequest, ListChecks, Mail, MessageSquare, MessagesSquare, UsersRound, Wifi, Workflow } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ViewModeSelector, type ViewMode } from '@/components/chat/view-mode-selector'
 import { ModeSidebar, type ModeSidebarItem, type SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import type { AppView } from '@/lib/app-view'
@@ -47,8 +49,18 @@ export function AppNavigationSidebar({
   return (
     <ModeSidebar
       account={account}
-      settingsActive={currentView === 'settings'}
-      header={<ViewModeSelector mode={viewMode} onChange={onViewModeChange} />}
+      header={(collapsed) => collapsed ? (
+        <>{([['developer', Code], ['manager', Workflow]] as const).map(([mode, Icon]) => (
+          <Tooltip key={mode}>
+            <TooltipTrigger asChild>
+              <Button variant={viewMode === mode ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9" aria-label={`${mode} mode`} aria-pressed={viewMode === mode} onClick={() => onViewModeChange(mode)}>
+                <Icon className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{mode === 'developer' ? 'Developer' : 'Manager'}</TooltipContent>
+          </Tooltip>
+        ))}</>
+      ) : <ViewModeSelector mode={viewMode} onChange={onViewModeChange} />}
       navigationItems={navigationItems}
       items={items}
       bottomItems={bottomItems}

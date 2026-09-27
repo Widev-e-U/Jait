@@ -13,6 +13,8 @@ import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { AppHeader } from '@/components/app-shell/app-header'
+import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
+import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
 import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import { AppPageOutlet } from '@/components/app-shell/app-page-outlet'
@@ -4990,7 +4992,19 @@ function App() {
         }} />}
         {!requiresAuthGate && (
           <>
-            <AppHeader
+            {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
+              <div
+                className="h-10 shrink-0"
+                data-tauri-drag-region
+                style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+              />
+            )}
+            {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
+              <div className="absolute right-0 top-0 z-50 bg-background/90" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+                {desktopPlatform === 'win32' ? <WinCaptionButtons isMaximized={isMaximized} /> : <LinuxWindowControls isMaximized={isMaximized} />}
+              </div>
+            )}
+            {isMobile && <AppHeader
               activeManagerThreads={activeManagerThreads}
               appPlatform={appPlatform}
               automation={automation}
@@ -5029,7 +5043,7 @@ function App() {
               voiceControlProps={voiceControlProps}
               voiceOverlayOpen={voiceOverlayOpen}
               activeProjectTitle={activeProjectRecord?.title ?? null}
-            />
+            />}
 
             <ChatToolbar
               activeProject={activeProject}

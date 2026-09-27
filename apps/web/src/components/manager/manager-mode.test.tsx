@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ManagerMode } from './manager-mode'
 
@@ -14,7 +14,7 @@ const account = {
 }
 
 describe('ManagerMode', () => {
-  it('keeps navigation, repository tools, settings, and account in the expanded sidebar', () => {
+  it('keeps navigation, repository tools, and account in the expanded sidebar', () => {
     const markup = renderToStaticMarkup(
       <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account} viewMode="manager" onViewModeChange={() => {}}>
         <div>Thread activity</div>
@@ -26,10 +26,30 @@ describe('ManagerMode', () => {
     expect(markup).toContain('>Threads</span>')
     expect(markup).toContain('>Repositories</span>')
     expect(markup).toContain('Browse connected repositories')
-    expect(markup).toContain('>Settings</span>')
+    expect(markup).not.toContain('aria-label="Settings"')
     expect(markup).toContain('Account: Jakob')
-    expect(markup).not.toContain('Collapse sidebar')
-    expect(markup.indexOf('>Settings</span>')).toBeGreaterThan(markup.indexOf('>Repositories</span>'))
+    expect(markup).toContain('Collapse sidebar')
+    expect(markup).toContain('>Jait</span>')
+  })
+
+  it('shows icon controls and moves expand below the logo when collapsed', () => {
+    vi.stubGlobal('window', { localStorage: { getItem: () => 'true' } })
+    try {
+      const markup = renderToStaticMarkup(
+        <ManagerMode currentPage="threads" onPageChange={() => {}} isMobile={false} account={account} viewMode="manager" onViewModeChange={() => {}}>
+          <div>Thread activity</div>
+        </ManagerMode>,
+      )
+
+      expect(markup).toContain('Expand sidebar')
+      expect(markup).not.toContain('Collapse sidebar')
+      expect(markup).toContain('aria-label="Account: Jakob"')
+      expect(markup).not.toContain('>Jakob</span>')
+      expect(markup.indexOf('Expand sidebar')).toBeLessThan(markup.indexOf('manager mode'))
+      expect(markup).not.toContain('>Repositories</span>')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('keeps the sidebar on Agents', () => {

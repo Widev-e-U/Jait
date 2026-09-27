@@ -293,7 +293,6 @@ export function ProviderModelSelector({
     ? controlledReasoningEffort
     : settings?.reasoning_effort ?? null
   const [open, setOpen] = useState(false)
-  const [selectionStep, setSelectionStep] = useState<'model' | 'mode'>('model')
   const [search, setSearch] = useState('')
   const {
     providers: allProviders,
@@ -864,7 +863,6 @@ export function ProviderModelSelector({
 
   const handleProviderSelect = (nextProvider: ProviderId) => {
     onProviderChange(nextProvider)
-    setSelectionStep('model')
   }
 
   useEffect(() => {
@@ -917,18 +915,11 @@ export function ProviderModelSelector({
       }
     }
     onModelChange(modelId)
-    if (resolveReasoningEffortOptions(selectedModel ?? null)) {
-      setSelectionStep('mode')
-    } else {
-      setOpen(false)
-    }
+    if (!resolveReasoningEffortOptions(selectedModel ?? null)) setOpen(false)
   }
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen) {
-      setSelectionStep('model')
-      if (isMobile) blurActiveElement()
-    }
+    if (nextOpen && isMobile) blurActiveElement()
     setOpen(nextOpen)
   }, [isMobile])
 
@@ -1155,7 +1146,7 @@ export function ProviderModelSelector({
 
       <section className="flex min-h-0 min-w-0 flex-col" aria-labelledby="model-selector-heading">
       <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
-        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{selectionStep === 'mode' ? 'Select model mode' : 'Models'}</div>
+        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
       </div>
       {currentGroupLabel && (
         <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
@@ -1166,9 +1157,7 @@ export function ProviderModelSelector({
           <span className="truncate text-2xs font-medium text-foreground">Current: {currentGroupLabel}</span>
         </div>
       )}
-      <div
-          className={cn('flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring', selectionStep === 'mode' && 'hidden')}
-        >
+      <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             ref={inputRef}
@@ -1192,83 +1181,85 @@ export function ProviderModelSelector({
             className="h-7 w-full border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted-foreground"
           />
       </div>
-      <div
-        ref={modelListRef}
-        id="model-selector-listbox"
-        role="listbox"
-        aria-labelledby="model-selector-heading"
-        className={cn('min-h-0 flex-1 overflow-y-auto p-1', selectionStep === 'mode' && 'hidden')}
-        onKeyDown={(event) => {
-          if (event.defaultPrevented) return
-          if (/^[1-9]$/.test(event.key) || ['f', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) {
-            handleModelListKeyDown(event.nativeEvent)
-          }
-        }}
-      >
-        {!loadingModels && modelErrorMessage && (
-          <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span>{modelErrorMessage}</span>
-          </div>
-        )}
-        {loadingModels && (
-          <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Loading models…
-          </div>
-        )}
-        {!loadingModels && !modelErrorMessage && modelRows.length > 0 && (
-          <div className="relative min-h-0 flex-1" style={{ height: modelVirtualizer.getTotalSize() }}>
-            {modelVirtualizer.getVirtualItems().map((virtualRow) => {
-              const row = modelRows[virtualRow.index]
-              if (row.type === 'header') {
+      <div className="flex min-h-0 flex-1">
+        <div
+          ref={modelListRef}
+          id="model-selector-listbox"
+          role="listbox"
+          aria-labelledby="model-selector-heading"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-1"
+          onKeyDown={(event) => {
+            if (event.defaultPrevented) return
+            if (/^[1-9]$/.test(event.key) || ['f', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) {
+              handleModelListKeyDown(event.nativeEvent)
+            }
+          }}
+        >
+          {!loadingModels && modelErrorMessage && (
+            <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{modelErrorMessage}</span>
+            </div>
+          )}
+          {loadingModels && (
+            <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading models…
+            </div>
+          )}
+          {!loadingModels && !modelErrorMessage && modelRows.length > 0 && (
+            <div className="relative min-h-0 flex-1" style={{ height: modelVirtualizer.getTotalSize() }}>
+              {modelVirtualizer.getVirtualItems().map((virtualRow) => {
+                const row = modelRows[virtualRow.index]
+                if (row.type === 'header') {
+                  return (
+                    <div
+                      key={`header-${virtualRow.key}`}
+                      data-index={virtualRow.index}
+                      ref={modelVirtualizer.measureElement}
+                      className="px-3 py-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground/70"
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
+                    >
+                      {row.label}
+                    </div>
+                  )
+                }
+                const favorite = favorites.some((entry) => entry.provider === row.providerId && entry.modelId === row.model.id)
                 return (
                   <div
-                    key={`header-${virtualRow.key}`}
+                    key={virtualRow.key}
                     data-index={virtualRow.index}
                     ref={modelVirtualizer.measureElement}
-                    className="px-3 py-1.5 text-3xs font-semibold uppercase tracking-wide text-muted-foreground/70"
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                   >
-                    {row.label}
+                    <ModelRow
+                      model={row.model}
+                      instanceLabel={row.instance.label}
+                      instanceIcon={row.instance.icon}
+                      instanceIconUrl={row.instance.iconUrl}
+                      selected={model === row.model.id && provider === row.providerId}
+                      onSelect={handleModelSelect}
+                      onToggleFavorite={toggleFavoriteModel}
+                      isFavorite={favorite}
+                      stopPropagation
+                      quickJumpIndex={row.quickJumpIndex}
+                      highlighted={highlightedIndex === virtualRow.index}
+                    />
                   </div>
                 )
-              }
-              const favorite = favorites.some((entry) => entry.provider === row.providerId && entry.modelId === row.model.id)
-              return (
-                <div
-                  key={virtualRow.key}
-                  data-index={virtualRow.index}
-                  ref={modelVirtualizer.measureElement}
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
-                >
-                  <ModelRow
-                    model={row.model}
-                    instanceLabel={row.instance.label}
-                    instanceIcon={row.instance.icon}
-                    instanceIconUrl={row.instance.iconUrl}
-                    selected={model === row.model.id && provider === row.providerId}
-                    onSelect={handleModelSelect}
-                    onToggleFavorite={toggleFavoriteModel}
-                    isFavorite={favorite}
-                    stopPropagation
-                    quickJumpIndex={row.quickJumpIndex}
-                    highlighted={highlightedIndex === virtualRow.index}
-                  />
-                </div>
-              )
-            })}
-          </div>
-        )}
-        {!loadingModels && !modelErrorMessage && modelRows.length === 0 && (
-          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            {search ? `No models found` : 'No models available'}
-          </div>
-        )}
+              })}
+            </div>
+          )}
+          {!loadingModels && !modelErrorMessage && modelRows.length === 0 && (
+            <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+              {search ? `No models found` : 'No models available'}
+            </div>
+          )}
+        </div>
+        <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />
       </div>
-      {selectionStep !== 'mode' && <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />}
 
-      {selectionStep === 'mode' && modelSupportsReasoning && !loadingModels && (
+      {modelSupportsReasoning && !loadingModels && (
         <div className="shrink-0 border-t px-3 py-2">
           <div className="mb-1.5 flex items-center gap-1.5">
             <Brain className="h-3.5 w-3.5 text-muted-foreground" />
