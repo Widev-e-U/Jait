@@ -151,8 +151,15 @@ function buildSshArgs(input: {
   return args;
 }
 
-function spawnSshPty(args: string[], context: ToolContext, ptyFactory = loadNodePty()): PtyProcess {
-  return ptyFactory("ssh", args, {
+function spawnSshPty(args: string[], context: ToolContext, ptyFactory = loadNodePty(), disableEcho = false): PtyProcess {
+  // ssh leaves a local PTY in echo mode when running a remote command without
+  // a remote TTY. Disable echo before it can receive an SSH or sudo secret.
+  // The shell exits if stty fails, so we never write a secret to an echoing PTY.
+  const command = disableEcho && process.platform !== "win32" ? "sh" : "ssh";
+  const commandArgs = command === "sh"
+    ? ["-c", 'stty -echo || exit 1; exec ssh "$@"', "sh", ...args]
+    : args;
+  return ptyFactory(command, commandArgs, {
     name: "xterm-256color",
     cols: 120,
     rows: 30,
@@ -282,7 +289,7 @@ function startSshSession(input: {
       password: input.password,
       strictHostKeyChecking: input.strictHostKeyChecking,
     });
-    const pty = spawnSshPty(args, context, ptyFactory);
+    const pty = spawnSshPty(args, context, ptyFactory, Boolean(input.password));
     const now = new Date().toISOString();
     const readyMarker = `__JAIT_SSH_READY_${uuidv7().replace(/-/g, "_")}__`;
     const session: SshSession = {
@@ -372,7 +379,7 @@ function runSshInPty(input: {
       strictHostKeyChecking: input.strictHostKeyChecking,
       command: input.command,
     });
-    const pty = spawnSshPty(args, context, ptyFactory);
+    const pty = spawnSshPty(args, context, ptyFactory, Boolean(input.password || input.sudoPassword));
 
     let raw = "";
     let exitCode: number | null = null;
@@ -385,7 +392,11 @@ function runSshInPty(input: {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ output: cleanOutput(raw, input.command, input.sudoMarker), exitCode, timedOut });
+      let output = cleanOutput(raw, input.command, input.sudoMarker);
+      for (const secret of [input.password, input.sudoPassword]) {
+        if (secret) output = output.replaceAll(secret, "[redacted]");
+      }
+      resolve({ output, exitCode, timedOut });
     };
 
     const timer = setTimeout(() => {
@@ -408,7 +419,11 @@ function runSshInPty(input: {
       }
       let clean = stripAnsi(data).replace(/\r/g, "");
       if (input.sudoMarker) clean = clean.split(input.sudoMarker).join("");
-      if (clean && !/password.*:\s*$/im.test(clean)) context.onOutputChunk?.(clean);
+      // PTY echo and remote output can split a secret across arbitrary chunks.
+      // Buffer runs that handle secrets; only the redacted final result may leave.
+      if (!input.password && !input.sudoPassword && clean && !/password.*:\s*$/im.test(clean)) {
+        context.onOutputChunk?.(clean);
+      }
     });
 
     pty.onExit((event) => {

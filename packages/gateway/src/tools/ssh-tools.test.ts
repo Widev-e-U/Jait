@@ -65,6 +65,7 @@ class FakePty {
     this.writes.push(data);
     const remoteCommand = this.args[this.args.length - 1] ?? "";
     if (remoteCommand === "printf codex-remote") {
+      this.emitData(`${data.trim()}\r\n`);
       this.emitData("codex-remote\n");
       this.emitExit(0);
       return;
@@ -110,6 +111,7 @@ describe("ssh tools for external providers", () => {
     const { factory } = fakePtyFactory();
     const registry = new ToolRegistry();
     registry.register(createSshRunTool(service, factory));
+    const chunks: string[] = [];
     const auditEntries: unknown[] = [];
     const audit = {
       write: vi.fn((entry: unknown) => {
@@ -127,12 +129,14 @@ describe("ssh tools for external providers", () => {
         authMethod: "password",
         strictHostKeyChecking: false,
       },
-      context({ providerId: "codex", requestedBy: "agent" }),
+      context({ providerId: "codex", requestedBy: "agent", onOutputChunk: (chunk) => chunks.push(chunk) }),
       audit,
     );
 
     expect(result.ok).toBe(true);
     expect((result.data as { output: string }).output).toContain("codex-remote");
+    expect(JSON.stringify(result.data)).not.toContain(secret);
+    expect(chunks.join("")).not.toContain(secret);
     expect(requests).toEqual([{
       title: "SSH password",
       prompt: "Password for alice@linux-box.local",
@@ -203,6 +207,7 @@ class FakeSudoPty {
     this.writes.push(data);
     // The marker is the sudo prompt; the only line we expect back is the password.
     if (this.marker && data.trim() && this.marker !== data.trim()) {
+      this.emitData(`${data.trim()}\r\n`);
       this.emitData(`\n${this.marker}apt-sudo-ok\n`);
       this.emitExit(0);
     }
@@ -223,20 +228,23 @@ class FakeSudoPty {
 
 function fakeSudoPtyFactory() {
   const ptys: FakeSudoPty[] = [];
-  const factory: SshPtyFactory = (_command, args) => {
+  const spawns: Array<{ command: string; args: string[] }> = [];
+  const factory: SshPtyFactory = (command, args) => {
+    spawns.push({ command, args });
     const pty = new FakeSudoPty(args);
     ptys.push(pty);
     return pty;
   };
-  return { factory, ptys };
+  return { factory, ptys, spawns };
 }
 
 describe("ssh.run sudo elevation", () => {
   it("collects the sudo password via the secure prompt, feeds it to the PTY, and strips the marker from output", async () => {
     const { service, requests, secret } = autoSubmitSecret("super-secret-sudo");
-    const { factory, ptys } = fakeSudoPtyFactory();
+    const { factory, ptys, spawns } = fakeSudoPtyFactory();
     const registry = new ToolRegistry();
     registry.register(createSshRunTool(service, factory));
+    const chunks: string[] = [];
     const auditEntries: unknown[] = [];
     const audit = {
       write: vi.fn((entry: unknown) => {
@@ -254,14 +262,20 @@ describe("ssh.run sudo elevation", () => {
         sudo: true,
         strictHostKeyChecking: false,
       },
-      context({ providerId: "codex", requestedBy: "agent" }),
+      context({ providerId: "codex", requestedBy: "agent", onOutputChunk: (chunk) => chunks.push(chunk) }),
       audit,
     );
 
     expect(result.ok).toBe(true);
     const output = (result.data as { output: string }).output;
     expect(output).toContain("apt-sudo-ok");
+    if (process.platform !== "win32") {
+      expect(spawns[0]?.command).toBe("sh");
+      expect(spawns[0]?.args.slice(0, 2)).toEqual(["-c", 'stty -echo || exit 1; exec ssh "$@"']);
+    }
     expect(output).not.toMatch(/__JAIT_SUDO_/);
+    expect(output).not.toContain(secret);
+    expect(chunks.join("")).not.toContain(secret);
     expect(requests).toEqual([{
       title: "sudo password",
       prompt: "sudo password for alice@linux-box.local",
