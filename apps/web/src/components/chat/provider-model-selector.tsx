@@ -293,7 +293,7 @@ export function ProviderModelSelector({
     ? controlledReasoningEffort
     : settings?.reasoning_effort ?? null
   const [open, setOpen] = useState(false)
-  const [selectionStep, setSelectionStep] = useState<'provider' | 'model' | 'mode'>('provider')
+  const [selectionStep, setSelectionStep] = useState<'model' | 'mode'>('model')
   const [search, setSearch] = useState('')
   const {
     providers: allProviders,
@@ -926,7 +926,7 @@ export function ProviderModelSelector({
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     if (nextOpen) {
-      setSelectionStep('provider')
+      setSelectionStep('model')
       if (isMobile) blurActiveElement()
     }
     setOpen(nextOpen)
@@ -1075,12 +1075,15 @@ export function ProviderModelSelector({
                       )}
                       {providerActionBusy?.provider === entry.value && !updating && <Loader2 aria-label="Provider action in progress" className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
                     </div>
+                    {updating && <div role="status" className="text-2xs text-primary">Updating to {entry.update?.latestVersion}…</div>}
                   </div>
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
                 </TooltipHint>
                 {showUpdateAction && (
-                  <TooltipHint side="left" content={`Update ${entry.label} from ${entry.update?.currentVersion} to ${entry.update?.latestVersion}`}>
+                  <TooltipHint side="left" content={updating
+                    ? `Updating ${entry.label} to ${entry.update?.latestVersion}…`
+                    : `Update ${entry.label} from ${entry.update?.currentVersion} to ${entry.update?.latestVersion}`}>
                   <button
                     type="button"
                     aria-label={updating ? `Updating ${entry.label}` : `Update ${entry.label} to ${entry.update?.latestVersion}`}
@@ -1091,9 +1094,18 @@ export function ProviderModelSelector({
                       void runProviderAction(entry, 'update')
                     }}
                     disabled={Boolean(authBusyProvider || providerActionBusy)}
-                    className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                    className={cn(
+                      'relative mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-primary/40 bg-primary/10 text-primary transition-colors hover:bg-primary/20',
+                      !updating && 'disabled:opacity-50',
+                    )}
                   >
-                    {updating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    {updating && (
+                      <svg aria-hidden="true" viewBox="0 0 28 28" className="absolute inset-0 h-7 w-7 -rotate-90 animate-spin motion-reduce:animate-none">
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
+                        <circle cx="14" cy="14" r="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="24 70" />
+                      </svg>
+                    )}
+                    <Download className="h-3.5 w-3.5" />
                   </button>
                   </TooltipHint>
                 )}
@@ -1141,9 +1153,9 @@ export function ProviderModelSelector({
 
       </section>
 
-      <section className={cn('flex min-h-0 min-w-0 flex-col', selectionStep === 'provider' && 'pointer-events-none opacity-40')} aria-labelledby="model-selector-heading" aria-disabled={selectionStep === 'provider'} inert={selectionStep === 'provider'}>
+      <section className="flex min-h-0 min-w-0 flex-col" aria-labelledby="model-selector-heading">
       <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
-        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{selectionStep === 'provider' ? 'Select a provider first' : selectionStep === 'mode' ? 'Select model mode' : 'Models'}</div>
+        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{selectionStep === 'mode' ? 'Select model mode' : 'Models'}</div>
       </div>
       {currentGroupLabel && (
         <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
