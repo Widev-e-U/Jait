@@ -293,6 +293,7 @@ export function ProviderModelSelector({
     ? controlledReasoningEffort
     : settings?.reasoning_effort ?? null
   const [open, setOpen] = useState(false)
+  const [selectionStep, setSelectionStep] = useState<'provider' | 'model' | 'mode'>('provider')
   const [search, setSearch] = useState('')
   const {
     providers: allProviders,
@@ -447,10 +448,7 @@ export function ProviderModelSelector({
   useEffect(() => {
     if (!open) return
     setSearch('')
-    if (!isMobile) {
-      requestAnimationFrame(() => inputRef.current?.focus())
-    }
-  }, [open, isMobile])
+  }, [open])
 
   // ── Provider scope ─────────────────────────────────────────────────
   // A project pinned to a device scopes the picker to that device; on the
@@ -866,6 +864,7 @@ export function ProviderModelSelector({
 
   const handleProviderSelect = (nextProvider: ProviderId) => {
     onProviderChange(nextProvider)
+    setSelectionStep('model')
   }
 
   useEffect(() => {
@@ -889,6 +888,7 @@ export function ProviderModelSelector({
       const nativeEffort = next === null || isNativeReasoningEffort(next) ? next : null
       updateSettings({ reasoning_effort: nativeEffort }).catch(() => {})
     }
+    setOpen(false)
   }
 
   const handleModelSelect = (modelId: string) => {
@@ -917,12 +917,17 @@ export function ProviderModelSelector({
       }
     }
     onModelChange(modelId)
-    setOpen(false)
+    if (resolveReasoningEffortOptions(selectedModel ?? null)) {
+      setSelectionStep('mode')
+    } else {
+      setOpen(false)
+    }
   }
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
-    if (nextOpen && isMobile) {
-      blurActiveElement()
+    if (nextOpen) {
+      setSelectionStep('provider')
+      if (isMobile) blurActiveElement()
     }
     setOpen(nextOpen)
   }, [isMobile])
@@ -1136,9 +1141,9 @@ export function ProviderModelSelector({
 
       </section>
 
-      <section className="flex min-h-0 min-w-0 flex-col" aria-labelledby="model-selector-heading">
+      <section className={cn('flex min-h-0 min-w-0 flex-col', selectionStep === 'provider' && 'pointer-events-none opacity-40')} aria-labelledby="model-selector-heading" aria-disabled={selectionStep === 'provider'} inert={selectionStep === 'provider'}>
       <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'flex min-h-10 items-center pr-12')}>
-        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
+        <div id="model-selector-heading" className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{selectionStep === 'provider' ? 'Select a provider first' : selectionStep === 'mode' ? 'Select model mode' : 'Models'}</div>
       </div>
       {currentGroupLabel && (
         <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
@@ -1150,7 +1155,7 @@ export function ProviderModelSelector({
         </div>
       )}
       <div
-          className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring"
+          className={cn('flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring', selectionStep === 'mode' && 'hidden')}
         >
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
@@ -1173,7 +1178,6 @@ export function ProviderModelSelector({
             }}
             placeholder="Search models..."
             className="h-7 w-full border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted-foreground"
-            autoFocus
           />
       </div>
       <div
@@ -1181,7 +1185,7 @@ export function ProviderModelSelector({
         id="model-selector-listbox"
         role="listbox"
         aria-labelledby="model-selector-heading"
-        className="min-h-0 flex-1 overflow-y-auto p-1"
+        className={cn('min-h-0 flex-1 overflow-y-auto p-1', selectionStep === 'mode' && 'hidden')}
         onKeyDown={(event) => {
           if (event.defaultPrevented) return
           if (/^[1-9]$/.test(event.key) || ['f', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) {
@@ -1250,9 +1254,9 @@ export function ProviderModelSelector({
           </div>
         )}
       </div>
-      <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />
+      {selectionStep !== 'mode' && <ModelPickerRail sections={railSections} activeRowIndex={highlightedIndex} onJump={handleRailJump} />}
 
-      {modelSupportsReasoning && !loadingModels && (
+      {selectionStep === 'mode' && modelSupportsReasoning && !loadingModels && (
         <div className="shrink-0 border-t px-3 py-2">
           <div className="mb-1.5 flex items-center gap-1.5">
             <Brain className="h-3.5 w-3.5 text-muted-foreground" />

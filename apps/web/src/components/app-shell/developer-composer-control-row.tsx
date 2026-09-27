@@ -75,6 +75,20 @@ export function DeveloperComposerControlRow({
     />
   ) : null
 
+  const approvalButton = approveAllInSession ? (
+    <TooltipHint side="bottom" content="Auto-approved. Clear approve all">
+      <button
+        type="button"
+        onClick={onClearApproveAll}
+        className={`inline-flex h-7 shrink-0 items-center rounded-md text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400 ${compact ? 'w-7 justify-center rounded-full bg-green-500/10 p-0 hover:bg-green-500/20' : 'gap-1.5 px-1'}`}
+        aria-label="Auto-approved. Clear approve all"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {!compact && 'Auto-approved'}
+      </button>
+    </TooltipHint>
+  ) : null
+
   return (
     <>
       <ChatComposerSurface>
@@ -95,6 +109,7 @@ export function DeveloperComposerControlRow({
                 triggerLabel="History"
               />
             )}
+            {compact && approvalButton}
           </div>
           {!compact && (
             <div className="justify-self-center">
@@ -149,22 +164,10 @@ export function DeveloperComposerControlRow({
         </div>
       </div>
       </ChatComposerSurface>
-      {(approveAllInSession || (!compact && remainingPrompts !== null)) && (
+      {!compact && (approvalButton || remainingPrompts !== null) && (
         <div className="flex items-center justify-between px-2 text-xs text-muted-foreground">
-          {approveAllInSession && (
-            <TooltipHint side="bottom" content="Auto-approved. Clear approve all">
-              <button
-                type="button"
-                onClick={onClearApproveAll}
-                className="inline-flex h-7 items-center gap-1.5 rounded-md px-1 text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400"
-                aria-label="Auto-approved. Clear approve all"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Auto-approved
-              </button>
-            </TooltipHint>
-          )}
-          {remainingPrompts !== null && !compact && (
+          {approvalButton}
+          {remainingPrompts !== null && (
             <span className="ml-auto">{remainingPrompts} remaining</span>
           )}
         </div>
