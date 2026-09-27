@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.883](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.883) — 2026-09-27
+- feat(web): open model picker at model step and add circular update progress — f19a8a4b
+
 ## [v0.1.882](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.882) — 2026-09-27
 - fix(web): restore compact approval indicator and stepped model picker — 2d390cdb
 
