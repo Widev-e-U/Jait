@@ -27,7 +27,7 @@ describe('ManagerMode', () => {
     expect(markup).toContain('>Repositories</span>')
     expect(markup).toContain('Browse connected repositories')
     expect(markup).not.toContain('aria-label="Settings"')
-    expect(markup).toContain('Account: Jakob')
+    expect(markup).toContain('aria-label="Account menu"')
     expect(markup).toContain('Collapse sidebar')
     expect(markup).toContain('>Jait</span>')
   })
@@ -43,7 +43,7 @@ describe('ManagerMode', () => {
 
       expect(markup).toContain('Expand sidebar')
       expect(markup).not.toContain('Collapse sidebar')
-      expect(markup).toContain('aria-label="Account: Jakob"')
+      expect(markup).toContain('aria-label="Account menu"')
       expect(markup).not.toContain('>Jakob</span>')
       expect(markup.indexOf('Expand sidebar')).toBeLessThan(markup.indexOf('manager mode'))
       expect(markup).not.toContain('>Repositories</span>')
