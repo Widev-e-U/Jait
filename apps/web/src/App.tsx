@@ -68,6 +68,9 @@ import { useDesktopOpenFolder } from '@/hooks/useDesktopOpenFolder'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useBackendState } from '@/hooks/useBackendState'
 import { NodePermissionsGate, shouldShowNodePermissionsGate } from '@/components/onboarding/NodePermissionsGate'
+import { FirstProjectSetup } from '@/components/onboarding/FirstProjectSetup'
+import { readFirstProjectSetupDone, saveFirstProjectSetupDone, shouldOfferFirstProjectSetup } from '@/components/onboarding/first-project-setup'
+import { getChatCacheScope } from '@/lib/chat-history-cache'
 import { primeStateCache, primeStateValue } from '@/lib/state-batch'
 import { useAutomation } from '@/hooks/useAutomation'
 import { normalizeChangedFiles } from '@/lib/changed-files'
@@ -543,6 +546,7 @@ function App() {
     activeProjectId,
     activeSessionId,
     loading: projectsLoading,
+    initialLoadComplete: projectsInitialLoadComplete,
     createSession,
     forkSession,
     createProject,
@@ -4712,6 +4716,38 @@ function App() {
     activeProjectTitle: activeProjectRecord?.title ?? null,
   }
 
+  const [nodePermissionSetupReady, setNodePermissionSetupReady] = useState(() => typeof window === 'undefined' || !window.jaitDesktop)
+  const firstProjectSetupScope = getChatCacheScope(token, API_URL)
+  const [completedFirstProjectScope, setCompletedFirstProjectScope] = useState<string | null>(null)
+  const firstProjectSetupDone = completedFirstProjectScope === firstProjectSetupScope || readFirstProjectSetupDone(firstProjectSetupScope)
+  useEffect(() => {
+    if (!firstProjectSetupScope || !projectsInitialLoadComplete) return
+    if (projects.length === 0 && personalSessions.length === 0) return
+    saveFirstProjectSetupDone(firstProjectSetupScope)
+    setCompletedFirstProjectScope(firstProjectSetupScope)
+  }, [firstProjectSetupScope, projectsInitialLoadComplete, projects.length, personalSessions.length])
+  const finishFirstProjectSetup = () => {
+    saveFirstProjectSetupDone(firstProjectSetupScope)
+    setCompletedFirstProjectScope(firstProjectSetupScope)
+  }
+  const hasRoutedDestination = typeof window !== 'undefined'
+    && (new URLSearchParams(window.location.search).has('sessionId') || new URLSearchParams(window.location.search).has('threadId'))
+  const showFirstProjectSetup = shouldOfferFirstProjectSetup({
+    gatewayStep,
+    gatewayReachable,
+    authenticated: isAuthenticated,
+    authLoading,
+    projectsLoading,
+    projectsInitialLoadComplete,
+    nodePermissionSetupReady,
+    projectCount: projects.length,
+    personalChatCount: personalSessions.length,
+    completed: firstProjectSetupDone,
+    hasRoutedDestination,
+    view: currentView,
+    mode: viewMode,
+  })
+
   const limitReached = error === 'limit_reached'
   const requiresAuthGate = !authLoading && !isAuthenticated
   const showNodePermissionsGate = shouldShowNodePermissionsGate({
@@ -4991,10 +5027,28 @@ function App() {
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
-        {showNodePermissionsGate && <NodePermissionsGate token={token} onOpenNodeSettings={(nodeId) => {
+        {showNodePermissionsGate && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
           setNodeSettingsTargetId(nodeId)
           setCurrentView('settings')
         }} />}
+        {showFirstProjectSetup && (
+          <FirstProjectSetup
+            nodes={fsNodes}
+            repositories={automation.repositories}
+            providers={automation.providers}
+            onOpenProject={async (path, nodeId) => {
+              await handleProjectFolderSelected(path, nodeId, { openEditor: false })
+              setCurrentView('chat')
+              setViewMode('developer')
+              finishFirstProjectSetup()
+            }}
+            onProviderSettings={() => {
+              finishFirstProjectSetup()
+              setCurrentView('settings')
+            }}
+            onSkip={finishFirstProjectSetup}
+          />
+        )}
         {!requiresAuthGate && (
           <>
             {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (

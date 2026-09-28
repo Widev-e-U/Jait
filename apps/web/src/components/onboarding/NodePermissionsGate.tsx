@@ -51,7 +51,7 @@ function grantedCount(perms: Record<NodeCapability, boolean>): number {
  * launch it only surfaces a dismissible banner for other nodes whose grants are
  * still all-denied, prompting the user to configure them in Settings → Nodes.
  */
-export function NodePermissionsGate({ token, onOpenNodeSettings }: { token: string | null; onOpenNodeSettings: (nodeId: string) => void }) {
+export function NodePermissionsGate({ token, onOpenNodeSettings, onFirstRunComplete }: { token: string | null; onOpenNodeSettings: (nodeId: string) => void; onFirstRunComplete?: () => void }) {
   const isDesktop = typeof window !== 'undefined' && !!window.jaitDesktop
   const localNodeId = useMemo(() => (isDesktop ? generateDeviceId() : null), [isDesktop])
 
@@ -81,6 +81,10 @@ export function NodePermissionsGate({ token, onOpenNodeSettings }: { token: stri
       mounted = false
     }
   }, [isDesktop])
+
+  useEffect(() => {
+    if (firstRunDone === true) onFirstRunComplete?.()
+  }, [firstRunDone, onFirstRunComplete])
 
   const localNode = useMemo(
     () => (localNodeId ? nodes.find((n) => n.id === localNodeId) : undefined),

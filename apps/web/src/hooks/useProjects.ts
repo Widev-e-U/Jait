@@ -168,6 +168,8 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   const [visibleLimit, setVisibleLimit] = useState(PROJECT_LIST_LIMIT)
   const [hasMoreProjects, setHasMoreProjects] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadedProjectScope, setLoadedProjectScope] = useState<string | null>(null)
+  const initialLoadComplete = cacheScope !== null && loadedProjectScope === cacheScope
   const [searchResults, setSearchResults] = useState<ProjectSearchResults | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const searchRequestRef = useRef(0)
@@ -251,6 +253,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       setActiveProjectId(null)
       setActiveSessionId(null)
       setHasMoreProjects(false)
+      setLoadedProjectScope(null)
       cacheHydratedScopeRef.current = null
       hasCachedProjectIndexRef.current = false
       cacheWriteReadyScopeRef.current = null
@@ -270,7 +273,6 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       if (projectsRes.status === 401 || sessionsRes.status === 401 || lastActiveRes.status === 401) {
         onLoginRequired?.()
       }
-
       let nextProjects: ProjectRecord[] = []
       let nextPersonalSessions: ProjectSession[] = []
       if (projectsRes.ok) {
@@ -347,6 +349,9 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
           return data.session?.id ?? nextPersonalSessions[0]?.id ?? getLatestProjectSessionId(nextProjects[0])
         })
       }
+      // Set this only after both lists have been applied. Otherwise the wizard
+      // can briefly see an empty account while their JSON is still being read.
+      if (projectsRes.ok && sessionsRes.ok) setLoadedProjectScope(cacheScope)
     } catch (err) {
       console.error('Failed to fetch projects:', err)
     } finally {
@@ -1354,6 +1359,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     activeProjectId,
     activeSessionId,
     loading,
+    initialLoadComplete,
     hasMoreProjects,
     searchResults,
     searchLoading,
