@@ -77,10 +77,13 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
 
   return (
     <aside aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
-      <div className={`mb-3 flex ${collapsed ? 'flex-col items-center gap-1' : 'items-center gap-2'} px-1`}>
-        {!collapsed && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar"><PanelLeftClose className="h-4 w-4" /></Button>}
-        <div className={`flex ${collapsed ? 'h-9 w-9' : 'min-w-0 flex-1'} items-center justify-center gap-2`}><JaitIcon size={22} className="shrink-0" />{!collapsed && <span className="truncate font-semibold">Jait</span>}</div>
-        {collapsed && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCollapsed(false)} aria-label="Expand sidebar"><PanelLeftOpen className="h-4 w-4" /></Button>}
+      <div className={`mb-3 flex ${collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between'} px-1`}>
+        {collapsed ? (
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCollapsed(false)} aria-label="Expand sidebar"><PanelLeftOpen className="h-4 w-4" /></Button>
+        ) : <JaitIcon size={22} className="shrink-0" />}
+        {collapsed ? <JaitIcon size={22} className="shrink-0" /> : (
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar"><PanelLeftClose className="h-4 w-4" /></Button>
+        )}
       </div>
       {header && <div className={collapsed ? 'flex flex-col items-center gap-1 pb-3' : 'px-1 pb-3'}>{header(collapsed)}</div>}
       {navigationItems.length > 0 && <nav aria-label="Main navigation" className="flex flex-col gap-1 border-b pb-3">{navigationItems.map(renderItem)}</nav>}
@@ -93,11 +96,17 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
           <div className="h-10 animate-pulse rounded-md bg-muted" aria-label="Loading account" />
         ) : account.username ? (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className={`h-12 w-full ${collapsed ? 'justify-center px-0' : 'justify-center px-2'}`} aria-label="Account menu">
-                <Avatar className="h-7 w-7"><AvatarFallback className="text-xs">{account.initial}</AvatarFallback></Avatar>
-              </Button>
-            </DropdownMenuTrigger>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className={`h-12 w-full ${collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3'}`} aria-label="Account menu">
+                    <Avatar className="h-7 w-7 shrink-0"><AvatarFallback className="text-xs">{account.initial}</AvatarFallback></Avatar>
+                    {!collapsed && <span className="min-w-0 truncate text-left">{account.username}</span>}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              {collapsed && <TooltipContent side="right">{account.username}</TooltipContent>}
+            </Tooltip>
             <DropdownMenuContent side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} sideOffset={8} className={`w-52 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-150 ease-out motion-reduce:animate-none ${collapsed ? "origin-left data-[state=open]:slide-in-from-left-2" : "origin-bottom data-[state=open]:slide-in-from-bottom-2"}`}>
               <DropdownMenuItem onSelect={onOpenSettings}><Settings className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}><BarChart3 className="mr-2 h-4 w-4" />Usage</DropdownMenuItem>
