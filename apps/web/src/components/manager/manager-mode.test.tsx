@@ -29,7 +29,11 @@ describe('ManagerMode', () => {
     expect(markup).not.toContain('aria-label="Settings"')
     expect(markup).toContain('aria-label="Account menu"')
     expect(markup).toContain('Collapse sidebar')
-    expect(markup).toContain('>Jait</span>')
+    // The brand is rendered as the Jait logo mark (no "Jait" wordmark).
+    expect(markup).not.toContain('>Jait</span>')
+    const logoIndex = markup.indexOf('viewBox="0 0 1024 1024"')
+    expect(logoIndex).toBeGreaterThan(-1)
+    expect(logoIndex).toBeLessThan(markup.indexOf('aria-label="Collapse sidebar"'))
   })
 
   it('shows icon controls and moves expand below the logo when collapsed', () => {
