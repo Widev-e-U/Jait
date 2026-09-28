@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.887](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.887) — 2026-09-28
+- feat(web): refine sidebar account row and collapse controls — cf210365
+- test(web): align manager sidebar account assertions — 8a8ed812
+
 ## [v0.1.886](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.886) — 2026-09-28
 - feat(web): move update control into navigation sidebar
 - fix(chat): keep new mobile messages clear of floating controls
