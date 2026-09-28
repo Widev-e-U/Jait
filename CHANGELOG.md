@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.889](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.889) — 2026-09-28
+- test(web): fix stale sidebar brand assertion — 85d41f31
+
 ## [v0.1.888](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.888) — 2026-09-28
 - feat(web): guide first-run setup to a chosen project — 4d2cd764
 
