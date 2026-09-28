@@ -12,6 +12,7 @@ interface ConversationProps {
   children: React.ReactNode
   className?: string
   compact?: boolean
+  mobile?: boolean
   loading?: boolean
   onLatestContentViewed?: () => void
   loadingLabel?: string
@@ -86,6 +87,8 @@ const PREVIOUS_MESSAGE_EPSILON_PX = 8
 /** Breathing room between the floating scroll controls and the minimap rail. */
 const FLOATING_CONTROL_GAP_PX = 12
 const DEFAULT_ITEM_HEIGHT = 120
+/** Clear the floating project/context controls when a mobile turn is aligned. */
+const MOBILE_TURN_TOP_INSET_PX = 64
 const BOTTOM_SYNC_INTERVAL_MS = 500
 /**
  * Drift the bottom-sync poll will close. Deliberately tight: the sizer only
@@ -129,13 +132,15 @@ export function computeNewTurnTailPadding({
   viewportHeight,
   messageStart,
   totalSize,
+  topInset = 0,
 }: {
   viewportHeight: number
   messageStart: number
   totalSize: number
+  topInset?: number
 }): number {
   if (viewportHeight <= 0 || messageStart < 0 || totalSize < messageStart) return 0
-  return Math.max(viewportHeight - (totalSize - messageStart), 0)
+  return Math.max(viewportHeight - topInset - (totalSize - messageStart), 0)
 }
 
 /**
@@ -426,7 +431,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
   )
 }
 
-export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId, onLatestContentViewed }: ConversationProps) {
+export function Conversation({ children, className, mobile = false, loading, loadingLabel = 'Loading conversation', messageContents, messageEstimateInputs, hasMore, onLoadMore, onEditPreviousUserMessage, scrollToMessageId, showMinimap = false, elevatedMessageId, onLatestContentViewed }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   // The scroll container may not exist yet on first mount (history still
   // loading renders the skeleton branch), and a plain ref object is not
@@ -664,6 +669,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
     initialOffset: INITIAL_CONVERSATION_SCROLL_OFFSET,
     estimateSize: estimateItemSize,
     overscan: 5,
+    scrollPaddingStart: mobile ? MOBILE_TURN_TOP_INSET_PX : 0,
     useScrollendEvent: true,
     useAnimationFrameWithResizeObserver: true,
     getItemKey: (index) => {
@@ -728,6 +734,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
         viewportHeight: conversationViewportHeight,
         messageStart: topAnchoredMeasurement.start,
         totalSize: committedSize,
+        topInset: mobile ? MOBILE_TURN_TOP_INSET_PX : 0,
       })
     : 0
 

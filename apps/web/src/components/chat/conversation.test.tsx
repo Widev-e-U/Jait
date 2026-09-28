@@ -403,6 +403,15 @@ describe('locating the message to anchor at the top', () => {
 })
 
 describe('computeNewTurnTailPadding', () => {
+  it('keeps a newly sent mobile message below the floating controls', () => {
+    expect(computeNewTurnTailPadding({
+      viewportHeight: 800,
+      messageStart: 4_000,
+      totalSize: 4_120,
+      topInset: 64,
+    })).toBe(616)
+  })
+
   it('reserves the rest of the viewport below a newly sent user message', () => {
     expect(computeNewTurnTailPadding({
       viewportHeight: 800,

@@ -3,7 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { UsageModal } from '@/components/app-shell/usage-modal'
 import { JaitIcon } from '@/components/icons/model-icons'
@@ -26,6 +26,7 @@ export interface SidebarAccount {
   loading: boolean
   onLogin: () => void
   onLogout: () => void
+  updateControl?: (collapsed: boolean) => ReactNode
   themeMode: ThemeMode
   onThemeModeChange: (mode: ThemeMode) => void
 }
@@ -75,7 +76,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
   }
 
   return (
-    <aside aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3`}>
+    <aside aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
       <div className={`mb-3 flex ${collapsed ? 'flex-col items-center gap-1' : 'items-center gap-2'} px-1`}>
         {!collapsed && <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar"><PanelLeftClose className="h-4 w-4" /></Button>}
         <div className={`flex ${collapsed ? 'h-9 w-9' : 'min-w-0 flex-1'} items-center justify-center gap-2`}><JaitIcon size={22} className="shrink-0" />{!collapsed && <span className="truncate font-semibold">Jait</span>}</div>
@@ -86,20 +87,18 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
       <nav aria-label="Workspace tools" className="flex min-h-0 flex-col gap-1 overflow-y-auto py-3">{items.map(renderItem)}</nav>
       <div className="flex-1" />
       <div className="flex flex-col gap-1 border-t pt-2">
+        {account?.updateControl?.(collapsed)}
         {bottomItems.map(renderItem)}
         {account && (account.loading ? (
           <div className="h-10 animate-pulse rounded-md bg-muted" aria-label="Loading account" />
         ) : account.username ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className={`h-12 w-full ${collapsed ? 'justify-center px-0' : 'justify-start gap-2 px-2'}`} aria-label={`Account: ${account.username}`}>
+              <Button variant="ghost" className={`h-12 w-full ${collapsed ? 'justify-center px-0' : 'justify-center px-2'}`} aria-label="Account menu">
                 <Avatar className="h-7 w-7"><AvatarFallback className="text-xs">{account.initial}</AvatarFallback></Avatar>
-                {!collapsed && <span className="min-w-0 flex-1 truncate text-left text-sm">{account.username}</span>}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="end" className="w-52">
-              <DropdownMenuLabel className="truncate">{account.username}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+            <DropdownMenuContent side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} sideOffset={8} className={`w-52 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-150 ease-out motion-reduce:animate-none ${collapsed ? "origin-left data-[state=open]:slide-in-from-left-2" : "origin-bottom data-[state=open]:slide-in-from-bottom-2"}`}>
               <DropdownMenuItem onSelect={onOpenSettings}><Settings className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}><BarChart3 className="mr-2 h-4 w-4" />Usage</DropdownMenuItem>
               <DropdownMenuSeparator />

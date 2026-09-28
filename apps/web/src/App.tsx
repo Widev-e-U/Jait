@@ -16,6 +16,7 @@ import { AppHeader } from '@/components/app-shell/app-header'
 import { LinuxWindowControls } from '@/components/desktop/linux-window-controls'
 import { WinCaptionButtons } from '@/components/desktop/win-caption-buttons'
 import { AppNavigationSidebar } from '@/components/app-shell/app-navigation-sidebar'
+import { UpdateButton } from '@/components/app-shell/update-button'
 import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import { AppPageOutlet } from '@/components/app-shell/app-page-outlet'
 import { ChatToolbar } from '@/components/app-shell/chat-toolbar'
@@ -3641,7 +3642,7 @@ function App() {
     token,
   })
 
-  // Open the project editor with the source-control (Git) tab focused. Triggered
+  // Open the project tree with the source-control (Git) tab focused. Triggered
   // from the git-diff indicator in the chat region's top-left corner.
   const handleOpenSourceControl = useCallback(() => {
     setCurrentView('chat')
@@ -3653,7 +3654,7 @@ function App() {
     if (project) {
       showProjectRef.current = true
       setShowProject(true)
-      applyProjectLayout({ tree: true, editor: true }, { immediateSync: true })
+      applyProjectLayout({ tree: true, editor: false }, { immediateSync: true })
       const state = {
         open: true,
         remotePath: project.projectRoot,
@@ -3666,8 +3667,11 @@ function App() {
     }
     const record = activeProjectRecordRef.current
     if (record?.rootPath) {
-      void reopenPersistedProject(record.rootPath, record.nodeId ?? 'gateway', activeSessionIdRef.current, { mobileTarget: 'editor', forceEditor: true })
-        .then(() => setMobileTreeTab('git'))
+      void reopenPersistedProject(record.rootPath, record.nodeId ?? 'gateway', activeSessionIdRef.current)
+        .then(() => {
+          applyProjectLayout({ tree: true, editor: false }, { immediateSync: true })
+          setMobileTreeTab('git')
+        })
         .catch(() => {})
     }
   }, [
@@ -4974,6 +4978,7 @@ function App() {
   }
 
   const sidebarAccount: SidebarAccount = {
+    updateControl: (collapsed) => <UpdateButton appPlatform={appPlatform} updateInfo={updateInfo} releases={releases} updateApplying={updateApplying} updateAwaitingRestart={updateAwaitingRestart} onApplyUpdate={handleApplyUpdate} collapsed={collapsed} />,
     username: isAuthenticated ? user?.username ?? null : null,
     initial: userInitial,
     loading: authLoading,

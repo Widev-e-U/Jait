@@ -754,14 +754,18 @@ async function ensureSessionTerminal(
   if (!isBackground) {
     const existingId = sessionTerminalMap.get(terminalKey);
     if (existingId) {
-    try {
-      const s = registry.getSurface(existingId);
-      if (s && s.type === "terminal" && s.state === "running") {
-        (s as ManagedTerminalSurface).touch();
-        return { surface: s as ManagedTerminalSurface, terminalId: existingId, isNew: false };
+      // A foreground wait may have expired and left this default terminal
+      // running under the background monitor. Never write a new command into it.
+      if (!backgroundCommandMonitor.hasWatcherForTerminal(existingId)) {
+        try {
+          const s = registry.getSurface(existingId);
+          if (s && s.type === "terminal" && s.state === "running") {
+            (s as ManagedTerminalSurface).touch();
+            return { surface: s as ManagedTerminalSurface, terminalId: existingId, isNew: false };
+          }
+        } catch { /* gone */ }
       }
-    } catch { /* gone */ }
-    sessionTerminalMap.delete(terminalKey);
+      sessionTerminalMap.delete(terminalKey);
     }
   }
 

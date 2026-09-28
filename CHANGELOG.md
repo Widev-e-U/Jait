@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.886](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.886) — 2026-09-28
+- feat(web): move update control into navigation sidebar
+- fix(chat): keep new mobile messages clear of floating controls
+- fix(web): open source control without entering editor mode
+- fix(gateway): avoid reusing terminals with active background commands
+
 ## [v0.1.885](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.885) — 2026-09-28
 - test(web): align sidebar assertions with account menu — 58aa2b88
 

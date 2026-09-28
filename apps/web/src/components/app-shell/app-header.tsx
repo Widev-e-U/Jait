@@ -1,7 +1,6 @@
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
-  ArrowUpCircle,
   BarChart3,
   Brain,
   Calendar,
@@ -20,9 +19,7 @@ import {
   Settings,
   Sun,
   Wifi,
-  Loader2 as SpinnerIcon,
 } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { ManagerActiveThreadsMenu } from '@/components/manager/manager-thread-ui'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
@@ -41,7 +38,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
-import { PatchNotesTooltip } from '@/components/settings/PatchNotesTooltip'
+import { UpdateButton } from '@/components/app-shell/update-button'
 import { UsageModal } from '@/components/app-shell/usage-modal'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
@@ -301,53 +298,7 @@ export function AppHeader(props: AppHeaderProps) {
 
             </div>
 
-            {updateInfo?.hasUpdate && (
-              <PatchNotesTooltip
-                targetVersion={updateInfo.latestVersion}
-                notes={releases}
-                align="right"
-              >
-                <Button
-                  onClick={async () => {
-                      if (appPlatform === 'web') {
-                        if (!updateApplying && !updateAwaitingRestart) {
-                          await handleApplyUpdate()
-                        }
-                      } else if (appPlatform === 'desktop') {
-                        const desktop = (window as any).jaitDesktop
-                        toast.info('Downloading update...')
-                        const dl = await desktop.downloadUpdate()
-                        if (dl?.ok) {
-                          toast.success('Update downloaded. Restarting...')
-                          await desktop.installUpdate()
-                        } else {
-                          toast.error('Download failed')
-                        }
-                      } else if (!updateApplying) {
-                        await handleApplyUpdate()
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      (appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
-                      || (appPlatform === 'capacitor' && (updateApplying || !updateInfo.downloadUrl))
-                    }
-                    className="h-8 shrink-0 border-amber-500/30 bg-amber-500/10 px-2 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300"
-                  >
-                    {(appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
-                    || (appPlatform === 'capacitor' && updateApplying)
-                      ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />
-                      : <ArrowUpCircle className="h-3.5 w-3.5" />}
-                    <span className="hidden sm:inline">
-                      {(appPlatform === 'web' && (updateApplying || updateAwaitingRestart))
-                      || (appPlatform === 'capacitor' && updateApplying)
-                        ? 'Updating...'
-                        : `v${updateInfo.latestVersion}`}
-                    </span>
-                  </Button>
-              </PatchNotesTooltip>
-            )}
+            <UpdateButton appPlatform={appPlatform} updateInfo={updateInfo} releases={releases} updateApplying={updateApplying} updateAwaitingRestart={updateAwaitingRestart} onApplyUpdate={handleApplyUpdate} />
 
             {/* Mobile avatar + menu group */}
             {isMobile ? (

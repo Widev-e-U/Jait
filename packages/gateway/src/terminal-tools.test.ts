@@ -435,6 +435,30 @@ describe("terminal.run tool status reporting", () => {
     backgroundCommandMonitor.clearForTests();
   });
 
+  it("starts a new terminal when the default terminal has a timed-out command", async () => {
+    backgroundCommandMonitor.clearForTests();
+    const registry = new SurfaceRegistry();
+    registry.register(new TerminalSurfaceFactory());
+    const tool = createTerminalRunTool(registry);
+
+    const waiting = await tool.execute(
+      { command: "sleep 2", timeout: 20 },
+      makeContext(),
+    );
+    expect(waiting.data).toMatchObject({ timedOut: true, watched: true });
+    const busyTerminalId = (waiting.data as any).terminalId as string;
+    expect(backgroundCommandMonitor.hasWatcherForTerminal(busyTerminalId)).toBe(true);
+
+    const next = await tool.execute(
+      { command: "printf available", timeout: 1000 },
+      makeContext(),
+    );
+    expect(next.ok).toBe(true);
+    expect((next.data as any).terminalId).not.toBe(busyTerminalId);
+
+    backgroundCommandMonitor.clearForTests();
+  });
+
   it("does not write a second command into an explicitly requested watched terminal", async () => {
     backgroundCommandMonitor.clearForTests();
     const listeners = new Set<(data: string) => void>();

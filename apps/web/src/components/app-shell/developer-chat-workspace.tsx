@@ -621,6 +621,7 @@ export function DeveloperChatWorkspace({
                 onLatestContentViewed={onLatestContentViewed}
                 className={getChatTranscriptBoundaryClassName()}
                 compact={showDesktopProject}
+                mobile={isMobile}
                 loading={isLoadingHistory}
                 loadingLabel="Loading chat"
                 messageContents={messageContents}
