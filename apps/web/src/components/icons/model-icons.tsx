@@ -4,7 +4,7 @@
  * Uses deep imports to avoid pulling in @lobehub/ui features
  */
 
-function JaitIcon({ size = 20, className }: { size?: number; className?: string }) {
+export function JaitIcon({ size = 20, className }: { size?: number; className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -189,4 +189,4 @@ export function getModelDisplayName(model: string): string {
   return formatModelDisplayLabel(formatted)
 }
 
-export { OpenAI, Anthropic, Ollama, Claude, Qwen, Meta as Llama, Mistral, DeepSeek, Gemini, Grok, JaitIcon, formatModelDisplayLabel }
+export { OpenAI, Anthropic, Ollama, Claude, Qwen, Meta as Llama, Mistral, DeepSeek, Gemini, Grok, formatModelDisplayLabel }

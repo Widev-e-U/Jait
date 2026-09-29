@@ -3646,8 +3646,8 @@ function App() {
     token,
   })
 
-  // Open the project tree with the source-control (Git) tab focused. Triggered
-  // from the git-diff indicator in the chat region's top-left corner.
+  // Open the project tree with the source-control (Git) tab focused (fallback
+  // for the git-diff indicator when the session has no tracked changes).
   const handleOpenSourceControl = useCallback(() => {
     setCurrentView('chat')
     if (isMobile) {
@@ -3692,6 +3692,19 @@ function App() {
     setShowProject,
     showProjectRef
   ])
+
+  // Open the review diff for the file changed in this session (the changed-files
+  // list's first entry), falling back to the project tree when there is nothing
+  // to review. Triggered from the git-diff indicator in the chat region's
+  // top-left corner.
+  const handleOpenChangedFiles = useCallback(() => {
+    const first = changedFiles[0]?.path
+    if (first) {
+      void handleChangedFileClick(first)
+      return
+    }
+    handleOpenSourceControl()
+  }, [changedFiles, handleChangedFileClick, handleOpenSourceControl])
 
   const preparePromptSubmission = useCallback(async (
     rawValue: string,
@@ -5579,7 +5592,7 @@ function App() {
                           setFolderPickerOpen(true)
                         }}
                         onOpenMessagePath={handleOpenMessagePath}
-                        onOpenSourceControl={handleOpenSourceControl}
+                        onOpenChangedFiles={handleOpenChangedFiles}
                         onOpenTerminalFromToolCall={handleOpenTerminalFromToolCall}
                         onHidePanel={() => setPrimaryChatPanelHidden(true)}
                         onApprovalResponse={respondToApproval}
