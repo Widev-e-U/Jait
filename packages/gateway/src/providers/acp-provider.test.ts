@@ -931,6 +931,45 @@ describe("omnirouteAcpEnv", () => {
     }
   });
 
+  it("launches built-in Codex ACP without npm cache resolution", () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "registry Codex adapter",
+      command: "npx",
+      args: ["-y", "@agentclientprotocol/codex-acp@1.3.0"],
+    });
+    const config = (provider as unknown as { config: { command: string; args: string[] } }).config;
+    expect(config.command).toBe(process.execPath);
+    expect(config.args[0]).toContain("@agentclientprotocol/codex-acp/dist/index.js");
+  });
+
+  it("launches bundled Claude ACP and preserves adapter arguments", () => {
+    const provider = new AcpProvider({
+      id: "claude-code",
+      name: "Claude Code",
+      description: "registry Claude adapter",
+      command: "npx",
+      args: ["-y", "@agentclientprotocol/claude-agent-acp", "--example"],
+    });
+    const config = (provider as unknown as { config: { command: string; args: string[] } }).config;
+    expect(config.command).toBe(process.execPath);
+    expect(config.args[0]).toContain("@agentclientprotocol/claude-agent-acp/dist/index.js");
+    expect(config.args[1]).toBe("--example");
+  });
+
+  it("keeps custom ACP adapter commands unchanged", () => {
+    const provider = new AcpProvider({
+      id: "custom",
+      name: "Custom",
+      description: "custom adapter",
+      command: "npx",
+      args: ["-y", "custom-acp"],
+    });
+    const config = (provider as unknown as { config: { command: string; args: string[] } }).config;
+    expect(config).toMatchObject({ command: "npx", args: ["-y", "custom-acp"] });
+  });
+
   it("keeps CODEX_CONFIG alongside the OmniRoute overlay", () => {
     process.env.JAIT_ACP_VIA_OMNIROUTE = "1";
     try {

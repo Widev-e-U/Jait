@@ -774,6 +774,9 @@ export function registerProviderRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     resetModelFetcherCaches();
+    for (const provider of providerRegistry.list()) {
+      if (providerRegistry.isVisibleTo(provider.id, authUser.id)) provider.resetModels?.();
+    }
     return { ok: true };
   });
 

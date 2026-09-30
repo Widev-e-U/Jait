@@ -9,6 +9,36 @@ import { UserService } from '../services/users.js'
 import { registerProviderRoutes } from './providers.js'
 
 describe('provider model node routing', () => {
+  it('invalidates cached ACP models when refreshing', async () => {
+    const { db, sqlite } = await openDatabase(':memory:')
+    migrateDatabase(sqlite)
+    const config = { ...loadConfig(), jwtSecret: 'provider-model-reset-test', logLevel: 'silent' }
+    const users = new UserService(db)
+    const user = users.createUser('refresh-user', 'password123')
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)
+    const registry = new ProviderRegistry()
+    const resetModels = vi.fn()
+    registry.register({
+      id: 'codex-account',
+      ownerUserId: user.id,
+      info: { id: 'codex-account', name: 'Codex', description: 'Codex ACP', available: true, modes: ['full-access'] },
+      checkAvailability: async () => true,
+      listModels: async () => [],
+      resetModels,
+    } as any)
+    const app = Fastify({ logger: false })
+    registerProviderRoutes(app, config, { providerRegistry: registry, userService: users })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/providers/models/reset',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    expect(response.statusCode).toBe(200)
+    expect(resetModels).toHaveBeenCalledOnce()
+    await app.close()
+    sqlite.close()
+  })
+
   it('loads remote CLI models from the selected node and keeps Jait on the gateway', async () => {
     const { db, sqlite } = await openDatabase(':memory:')
     migrateDatabase(sqlite)

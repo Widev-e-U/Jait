@@ -1,5 +1,6 @@
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
@@ -344,6 +345,23 @@ class JaitAcpClient implements Client {
   }
 }
 
+const requireAcpAdapter = createRequire(import.meta.url);
+
+/** Built-in adapters are installed with the gateway, so a session never runs npm. */
+function resolveBundledAdapter(config: AcpProviderConfig, providerType: string): Pick<AcpProviderConfig, "command" | "args"> | null {
+  const packageName = providerType === "codex"
+    ? "@agentclientprotocol/codex-acp"
+    : providerType === "claude-code"
+      ? "@agentclientprotocol/claude-agent-acp"
+      : null;
+  if (!packageName || !["npx", "npx.cmd"].includes(config.command)) return null;
+  const args = config.args ?? [];
+  const packageSpec = args[0] === "-y" ? args[1] : args[0];
+  if (packageSpec !== packageName && !packageSpec?.startsWith(`${packageName}@`)) return null;
+  const adapterEntry = requireAcpAdapter.resolve(`${packageName}/dist/index.js`);
+  return { command: process.execPath, args: [adapterEntry, ...args.slice(args[0] === "-y" ? 2 : 1)] };
+}
+
 export class AcpProvider implements CliProviderAdapter {
   readonly id: ProviderId;
   readonly providerType: ProviderId;
@@ -384,10 +402,12 @@ export class AcpProvider implements CliProviderAdapter {
     this.ownerUserId = config.ownerUserId;
     this.executionNodeId = config.executionNodeId;
     this.authKind = config.auth === false ? null : "acp";
+    const bundledAdapter = resolveBundledAdapter(config, providerType);
     this.config = {
       ...config,
+      ...bundledAdapter,
       env,
-      args: config.args ?? [],
+      args: bundledAdapter?.args ?? config.args ?? [],
       modes: config.modes ?? ["full-access", "supervised"],
       auth: config.auth ?? false,
     };
@@ -427,8 +447,8 @@ export class AcpProvider implements CliProviderAdapter {
     // Async probe so we never block the event loop (this runs for every
     // provider on each /api/providers refresh). A non-zero exit still counts
     // as "available" — only a failure to spawn the required binary (ENOENT)
-    // means it's missing. Registry packages resolve on demand through npx,
-    // while wrappers can name the host CLI they require.
+    // means it's missing. Bundled adapters resolve locally; other registry
+    // packages use their configured command, and wrappers can name a host CLI.
     try {
       await execFileAsync(command, ["--version"], {
         timeout: AVAILABILITY_PROBE_TIMEOUT_MS,
@@ -446,6 +466,10 @@ export class AcpProvider implements CliProviderAdapter {
     this.info.available = true;
     this.info.unavailableReason = undefined;
     return true;
+  }
+
+  resetModels(): void {
+    this.cachedModels = null;
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {

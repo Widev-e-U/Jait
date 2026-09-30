@@ -95,6 +95,9 @@ export interface CliProviderAdapter {
    */
   listModels?(): Promise<ProviderModelInfo[]>;
 
+  /** Clear any cached model catalogue before a user-requested refresh. */
+  resetModels?(): void;
+
   /**
    * Return current auth state plus supported auth actions.
    */
