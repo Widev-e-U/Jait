@@ -77,25 +77,33 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
 
   return (
     <aside aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
-      <div className="mb-3 flex items-center px-1">
+      <div className={`mb-3 flex ${collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between'} px-1`}>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCollapsed(false)} aria-label="Expand sidebar">
+                <PanelLeftOpen className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Expand sidebar</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCollapsed(true)} aria-label="Collapse sidebar">
+                <PanelLeftClose className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Collapse sidebar</TooltipContent>
+          </Tooltip>
+        )}
         <JaitIcon size={22} className="shrink-0" />
       </div>
       {header && <div className={collapsed ? 'flex flex-col items-center gap-1 pb-3' : 'px-1 pb-3'}>{header(collapsed)}</div>}
       {navigationItems.length > 0 && <nav aria-label="Main navigation" className="flex flex-col gap-1 border-b pb-3">{navigationItems.map(renderItem)}</nav>}
       <nav aria-label="Workspace tools" className="flex min-h-0 flex-col gap-1 overflow-y-auto py-3">{items.map(renderItem)}</nav>
       <div className="flex-1" />
-      <div className="flex flex-col gap-1 border-b pb-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="sm" className={`${collapsed ? 'h-9 w-full justify-center px-0' : 'h-9 w-full justify-start gap-3 px-3'}`} onClick={() => setCollapsed((value) => !value)} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              {!collapsed && <span className="min-w-0 truncate">Collapse sidebar</span>}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{collapsed ? 'Expand sidebar' : 'Collapse sidebar'}</TooltipContent>
-        </Tooltip>
-      </div>
-      <div className="flex flex-col gap-1 pt-2">
+      <div className="flex flex-col gap-1 border-t pt-2">
         {account?.updateControl?.(collapsed)}
         {bottomItems.map(renderItem)}
         {account && (account.loading ? (

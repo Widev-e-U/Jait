@@ -33,10 +33,11 @@ describe('ManagerMode', () => {
     expect(markup).not.toContain('>Jait</span>')
     const logoIndex = markup.indexOf('viewBox="0 0 1024 1024"')
     expect(logoIndex).toBeGreaterThan(-1)
-    expect(logoIndex).toBeLessThan(markup.indexOf('aria-label="Collapse sidebar"'))
+    // The collapse control is swapped with the brand: it sits left of the logo.
+    expect(markup.indexOf('aria-label="Collapse sidebar"')).toBeLessThan(logoIndex)
   })
 
-  it('shows icon controls and places expand above the account when collapsed', () => {
+  it('shows icon controls and keeps the expand control in the collapsed header', () => {
     vi.stubGlobal('window', { localStorage: { getItem: () => 'true' } })
     try {
       const markup = renderToStaticMarkup(
@@ -49,11 +50,11 @@ describe('ManagerMode', () => {
       expect(markup).not.toContain('Collapse sidebar')
       expect(markup).toContain('aria-label="Account menu"')
       expect(markup).not.toContain('>Jakob</span>')
-      // The expand control lives at the bottom of the sidebar (above the
-      // account section), after the collapsed header label.
+      // The expand control lives in the sidebar header (swapped with the
+      // brand), above the mode toggle and the account section.
       const expandIndex = markup.indexOf('aria-label="Expand sidebar"')
-      expect(expandIndex).toBeGreaterThan(markup.indexOf('manager mode'))
-      expect(expandIndex).toBeLessThan(markup.indexOf('aria-label="Account menu"'))
+      expect(expandIndex).toBeGreaterThan(markup.indexOf('aria-label="Workspace sidebar"'))
+      expect(expandIndex).toBeLessThan(markup.indexOf('manager mode'))
       expect(markup).not.toContain('>Repositories</span>')
     } finally {
       vi.unstubAllGlobals()
