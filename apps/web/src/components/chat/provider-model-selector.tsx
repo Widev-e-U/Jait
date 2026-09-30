@@ -1066,7 +1066,7 @@ export function ProviderModelSelector({
                       )}
                       {providerActionBusy?.provider === entry.value && !updating && <Loader2 aria-label="Provider action in progress" className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
                     </div>
-                    {updating && <div role="status" className="text-2xs text-primary">Updating to {entry.update?.latestVersion}…</div>}
+                    {updating && <div role="status" className="text-2xs text-primary">Installing {entry.label} CLI {entry.update?.latestVersion}…</div>}
                   </div>
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
@@ -1074,7 +1074,7 @@ export function ProviderModelSelector({
                 {showUpdateAction && (
                   <TooltipHint side="left" content={updating
                     ? `Updating ${entry.label} to ${entry.update?.latestVersion}…`
-                    : `Update ${entry.label} from ${entry.update?.currentVersion} to ${entry.update?.latestVersion}`}>
+                    : `Update ${entry.label} CLI from ${entry.update?.currentVersion} to ${entry.update?.latestVersion}`}>
                   <button
                     type="button"
                     aria-label={updating ? `Updating ${entry.label}` : `Update ${entry.label} to ${entry.update?.latestVersion}`}
@@ -1090,13 +1090,9 @@ export function ProviderModelSelector({
                       !updating && 'disabled:opacity-50',
                     )}
                   >
-                    {updating && (
-                      <svg aria-hidden="true" viewBox="0 0 28 28" className="absolute inset-0 h-7 w-7 -rotate-90 animate-spin motion-reduce:animate-none">
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
-                        <circle cx="14" cy="14" r="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="24 70" />
-                      </svg>
-                    )}
-                    <Download className="h-3.5 w-3.5" />
+                    {updating
+                      ? <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
+                      : <Download className="h-3.5 w-3.5" />}
                   </button>
                   </TooltipHint>
                 )}
