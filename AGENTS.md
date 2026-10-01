@@ -87,3 +87,9 @@ To deploy to a server after publish: `npm install -g @jait/gateway@<version>` an
 - If multiple local web targets exist, prefer the one that renders the main user-facing app. If the choice is ambiguous, report the discovered targets and attach to the most likely frontend while noting the assumption.
 - Do not attach preview to a backend-only service just because it responds successfully. A healthy API is not the same thing as a usable frontend preview.
 - When a project has no web frontend, say that explicitly instead of forcing a preview target.
+
+## Container Build Ownership
+- On Linux, containers writing to project or worktree bind mounts must use the invoking host user's UID/GID (for example, Docker's --user flag) and a writable HOME.
+- If an image needs root for setup, do setup in the image or in container-owned storage. Keep project mounts read-only during root commands, then export results as the host user.
+- Do not run root containers against writable project mounts for Rust/Tauri cross-compilation or dependency installs.
+- Managed worktree copies must respect Git ignore rules, including nested ignored paths. Do not copy dependency caches, build outputs, or scratch mirrors into every delivery worktree.

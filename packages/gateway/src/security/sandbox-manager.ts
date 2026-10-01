@@ -43,6 +43,24 @@ function containerBinary(): string {
   return _containerBinary;
 }
 
+/**
+ * Keep Linux command-sandbox output deletable by the gateway's host user.
+ * Root-created directories on writable bind mounts can block recursive removal.
+ * HOME must also be writable for npm and other package managers.
+ * Read-only/unmounted projects and non-Linux hosts keep their image defaults.
+ * JAIT_SANDBOX_HOST_USER=0 (or false) explicitly disables this protection.
+ */
+function hostUserArgs(): string[] {
+  if (process.platform !== "linux") return [];
+  const flag = process.env["JAIT_SANDBOX_HOST_USER"];
+  if (flag === "0" || flag === "false") return [];
+  const uid = process.getuid?.();
+  const gid = process.getgid?.();
+  if (typeof uid !== "number" || typeof gid !== "number" || uid === 0) return [];
+  const home = process.env["JAIT_SANDBOX_HOME"] ?? "/tmp";
+  return ["--user", `${uid}:${gid}`, "-e", `HOME=${home}`];
+}
+
 export type SandboxMountMode = "none" | "read-only" | "read-write";
 
 export interface SandboxRunOptions {
@@ -248,6 +266,7 @@ export class SandboxManager {
       ...memoryArgs,
       ...cpuArgs,
       ...mountArgs,
+      ...(mountMode === "read-write" ? hostUserArgs() : []),
       "-w",
       "/project",
       "jait/sandbox:latest",
@@ -287,6 +306,7 @@ export class SandboxManager {
       ...memoryArgs,
       ...cpuArgs,
       ...mountArgs,
+      ...(mountMode === "read-write" ? hostUserArgs() : []),
       "-w",
       "/project",
       "jait/sandbox:latest",
