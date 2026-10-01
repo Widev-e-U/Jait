@@ -536,6 +536,7 @@ export function Conversation({ children, className, mobile = false, loading, loa
   const awaitingInitialTranscriptRef = useRef(childItems.length === 0)
   const pendingTopAlignIdRef = useRef<string | null>(null)
   const heldNewTurnSpaceRef = useRef(false)
+  const alignedTurnSizeRef = useRef<number | null>(null)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const touchStartYRef = useRef<number | null>(null)
@@ -1160,6 +1161,9 @@ export function Conversation({ children, className, mobile = false, loading, loa
   useLayoutEffect(() => {
     const target = scrollToMessageId ?? null
     if (target == null || target === prevScrollTargetRef.current) return
+    // Do not consume a target before its row has arrived (optimistic sends can
+    // update the target before the transcript), or while the scroll view is absent.
+    if (!scrollRef.current || findConversationItemIndex(childItems, target) < 0) return
     prevScrollTargetRef.current = target
 
     // A chat that just finished loading opens at the bottom (the
@@ -1176,35 +1180,70 @@ export function Conversation({ children, className, mobile = false, loading, loa
     setStickToBottom(true)
     setIsAtBottom(true)
     heldNewTurnSpaceRef.current = false
+    alignedTurnSizeRef.current = null
+    userScrollingRef.current = false
+    clearTimeout(userScrollTimerRef.current)
+    if (bottomSettleFrameRef.current !== null) {
+      cancelAnimationFrame(bottomSettleFrameRef.current)
+      bottomSettleFrameRef.current = null
+    }
     pendingTopAlignIdRef.current = target
     setTopAnchoredMessageId(target)
-  }, [scrollToMessageId, childItems.length])
+  }, [scrollToMessageId, childItems.length, loading])
 
   useLayoutEffect(() => {
     const target = topAnchoredMessageId
-    if (target == null || pendingTopAlignIdRef.current !== target) return
-    if (topAnchoredMessageIndex < 0 || !topAnchoredMeasurement) return
-    // The reserved tail padding is what makes the top of the list reachable at
-    // all: without it the last message's top is below the maximum scroll
-    // offset, and `scrollToIndex` silently clamps back to the end of the
-    // transcript. Wait for the render that actually holds the space.
-    if (newTurnTailPadding <= 0) return
-    pendingTopAlignIdRef.current = null
-    // A restarted earlier turn may be far from the current viewport. Place it
-    // immediately so the transcript does not animate through every message.
-    virtualizerRef.current.scrollToIndex(topAnchoredMessageIndex, { align: 'start', behavior: 'auto' })
-  }, [topAnchoredMessageId, topAnchoredMessageIndex, topAnchoredMeasurement, newTurnTailPadding])
+    if (target == null || !topAnchoredMeasurement || topAnchoredMessageIndex < 0) return
+    const pending = pendingTopAlignIdRef.current === target
+    if (!pending && (detachedRef.current || newTurnTailPadding <= 0)) return
+    const el = scrollRef.current
+    const sizer = sizerRef.current
+    if (!el || !sizer) return
+
+    // Align in scroll-content coordinates, including the transcript's padding
+    // and load-earlier row. Keep the mobile controls clear even as the keyboard
+    // resizes the viewport or virtual rows get their real measurements.
+    const align = () => {
+      const sizerTop = sizer.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop
+      el.scrollTop = Math.max(0, sizerTop + topAnchoredMeasurement.start - (mobile ? MOBILE_TURN_TOP_INSET_PX : 0))
+    }
+    align()
+    if (!pending) return
+
+    // A full reply needs no reserved space, but it still needs this alignment.
+    // Let newly revealed virtual rows finish measuring before handing scroll
+    // ownership back; their first resize must not immediately jump to the end.
+    let frame = 0
+    let remainingFrames = BOTTOM_SETTLE_STABLE_FRAMES
+    const settle = () => {
+      if (detachedRef.current) {
+        pendingTopAlignIdRef.current = null
+        return
+      }
+      if (pendingTopAlignIdRef.current !== target) return
+      align()
+      if (--remainingFrames > 0) {
+        frame = requestAnimationFrame(settle)
+      } else {
+        alignedTurnSizeRef.current = committedSize
+        heldNewTurnSpaceRef.current = newTurnTailPadding > 0
+        pendingTopAlignIdRef.current = null
+      }
+    }
+    frame = requestAnimationFrame(settle)
+    return () => cancelAnimationFrame(frame)
+  }, [topAnchoredMessageId, topAnchoredMessageIndex, topAnchoredMeasurement, newTurnTailPadding, conversationViewportHeight, committedSize, mobile])
 
   useLayoutEffect(() => {
-    if (topAnchoredMessageId == null || newTurnTailPadding > 0 || !heldNewTurnSpaceRef.current) return
+    if (topAnchoredMessageId == null || newTurnTailPadding > 0 || pendingTopAlignIdRef.current != null) return
+    const alignedSize = alignedTurnSizeRef.current
+    if (alignedSize == null || committedSize <= alignedSize) return
     heldNewTurnSpaceRef.current = false
-    pendingTopAlignIdRef.current = null
+    alignedTurnSizeRef.current = null
     setTopAnchoredMessageId(null)
-    // The reply now fills the viewport on its own, so hand back to the normal
-    // follow-the-stream behavior — unless the user scrolled away mid-turn, in
-    // which case yanking them to the bottom is exactly what detaching forbids.
+    // Follow subsequent reply growth once the reserved space is used up.
     if (stickToBottomRef.current) scrollToBottom('auto')
-  }, [newTurnTailPadding, scrollToBottom, topAnchoredMessageId])
+  }, [newTurnTailPadding, committedSize, scrollToBottom, topAnchoredMessageId])
 
   useLayoutEffect(() => {
     updateBottomState()
@@ -1271,16 +1310,16 @@ export function Conversation({ children, className, mobile = false, loading, loa
     // While a new turn holds reserved space below it, "not at the bottom" is
     // the intended state — the reserve is exactly the gap this poll would
     // otherwise close, dragging the fresh prompt back off the top of the view.
-    if (newTurnTailPadding > 0) return
+    if (topAnchoredMessageId != null) return
     const el = scrollRef.current
     if (!el) return
     const id = setInterval(() => {
-      if (!stickToBottomRef.current || suppressAutoScrollRef.current) return
+      if (!stickToBottomRef.current || suppressAutoScrollRef.current || pendingTopAlignIdRef.current != null) return
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
       if (dist > BOTTOM_SYNC_DELTA_PX) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
     }, BOTTOM_SYNC_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [stickToBottom, loading, newTurnTailPadding])
+  }, [stickToBottom, loading, topAnchoredMessageId])
 
   // Observe the virtual sizer for immediate stick-to-bottom response
   // when virtualizer recalculates total height.
@@ -1289,7 +1328,7 @@ export function Conversation({ children, className, mobile = false, loading, loa
     if (!sizerEl || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(() => {
-      if (newTurnTailPadding > 0) return
+      if (pendingTopAlignIdRef.current != null || (topAnchoredMessageId != null && !detachedRef.current)) return
       // The height change is a tool card the user just toggled, and that card
       // is already pinning its own edge frame by frame. Anything written here
       // would be undone on its next frame and read as judder.
@@ -1315,7 +1354,7 @@ export function Conversation({ children, className, mobile = false, loading, loa
 
     observer.observe(sizerEl)
     return () => observer.disconnect()
-  }, [newTurnTailPadding, restoreScrollAnchor, scrollToBottom, updateBottomState])
+  }, [topAnchoredMessageId, restoreScrollAnchor, scrollToBottom, updateBottomState])
 
   // Track how far the virtual sizer sits below the top of the scroll *content*.
   // The minimap's document spans are in sizer coordinates, so this offset is
@@ -1452,6 +1491,10 @@ export function Conversation({ children, className, mobile = false, loading, loa
             detachedRef.current = false
             setStickToBottom(true)
             stickToBottomRef.current = true
+            pendingTopAlignIdRef.current = null
+            heldNewTurnSpaceRef.current = false
+            alignedTurnSizeRef.current = null
+            setTopAnchoredMessageId(null)
             scrollToBottom('smooth', true)
           }}
         />
