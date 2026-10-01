@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.893](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.893) — 2026-10-01
+- fix(web): open source control directly from the git-diff pill — 5c69481a
+- feat(web): unify Q&A and secure prompt cards above the chat input — 80f0a7d7
+- fix(web): keep follow-up messages below mobile header controls — ad1eea8d
+- fix(gateway): skip ignored paths in stacked worktree copies — 6d2134b4
+- fix(gateway): report disk-janitor reap failures and permission errors — 92abb1b3
+- fix(gateway): run writable-mount sandboxes as the host user — b90beffe
+
 ## [v0.1.892](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.892) — 2026-09-30
 - fix(web): keep Mermaid JSON-RPC resolution compatible with ACP — 396c22cd
 
