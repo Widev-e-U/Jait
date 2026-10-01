@@ -77,7 +77,7 @@ interface ThreadsPageProps {
   onSubmit: () => void
   onUpdateManagerQueueItem: (threadId: string, itemId: string, content: string) => void
   onVoiceInput: () => void
-  renderInlineSecretPrompt: (call: ToolCallInfo) => React.ReactNode
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => React.ReactNode
   inlinePrompts?: ReactNode
 }
 

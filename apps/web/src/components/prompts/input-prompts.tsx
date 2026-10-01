@@ -1,11 +1,14 @@
 import { chatNotificationLink } from '@jait/shared'
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ArrowUpRight, Eye, EyeOff, KeyRound, X } from 'lucide-react'
+import { ArrowUpRight, Check, ChevronLeft, Eye, EyeOff, KeyRound, Loader2, MessageCircleQuestion } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { attentionKey } from '@jait/shared'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,22 +19,52 @@ import {
   getBackgroundSecretRequest,
   getSecretRequestCommand,
   getSessionSecretRequest,
-  shouldRenderSecretRequestDialog,
-  shouldRenderSecretRequestInline,
   type SecretInputRequest,
 } from '@/lib/secret-input'
 const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
 
-export function InlineSecretMounted({ requestId, onMount, children }: {
-  requestId: string
-  onMount: (requestId: string) => void
+/** Shared shell for decisions and private inputs beside the composer. */
+export function InputPromptCard({ title, kind, children, testId, urgent = false }: {
+  title: string
+  kind: 'question' | 'secret'
   children: ReactNode
+  testId?: string
+  urgent?: boolean
 }) {
-  useEffect(() => {
-    onMount(requestId)
-  }, [requestId, onMount])
-  return <>{children}</>
+  const Icon = kind === 'secret' ? KeyRound : MessageCircleQuestion
+  return (
+    <Card data-testid={testId} className="min-w-0 overflow-hidden rounded-xl shadow-sm">
+      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <h3 className="min-w-0 flex-1 text-xs font-medium leading-5">{title}</h3>
+        {kind === 'secret' && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Private</Badge>}
+        {urgent && <Badge variant="warning" className="px-1.5 py-0 text-[10px]">Urgent</Badge>}
+      </div>
+      {children}
+    </Card>
+  )
+}
+
+function PromptActions({ submitting, disabled, onCancel, children, submitLabel = 'Submit' }: {
+  submitting: boolean
+  disabled: boolean
+  onCancel: () => Promise<void>
+  children?: ReactNode
+  submitLabel?: string
+}) {
+  return (
+    <div className="flex items-center gap-2 border-t border-border/60 bg-muted/20 px-3 py-2">
+      {children}
+      <div className="ml-auto flex gap-1.5">
+        <Button type="button" variant="ghost" size="sm" className="h-9 px-3 text-xs" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
+        <Button type="submit" size="sm" className="h-9 gap-1.5 px-3 text-xs" disabled={submitting || disabled}>
+          {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+          {submitLabel}
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 export function useSecretInputPrompt({
@@ -48,13 +81,6 @@ export function useSecretInputPrompt({
   const [showPassword, setShowPassword] = useState(false)
   const activeRequest = getSessionSecretRequest(requests, sessionId)
   const backgroundRequest = getBackgroundSecretRequest(requests, sessionId)
-  const renderInline = shouldRenderSecretRequestInline(activeRequest)
-
-  const markInlineMounted = useCallback((requestId: string) => {
-    // Inline secret prompts are now rendered in a composer-adjacent card,
-    // so the per-tool-card mount tracking is no longer required.
-    void requestId
-  }, [])
 
   const authHeaders = useCallback((contentType = false) => {
     const headers: Record<string, string> = {}
@@ -180,46 +206,20 @@ export function useSecretInputPrompt({
       onRememberChange={setRemember}
       onSubmit={submitSecret}
       onCancel={cancelSecret}
-      showTitle={renderInline}
     />
   ) : null
 
-  const isDialogRequest = Boolean(activeRequest) && shouldRenderSecretRequestDialog(activeRequest)
-  // Fallback to an inline card for requests that would previously open a dialog.
-  // The "inline" tool-attached variant is rendered inside the matching tool card
-  // by the consumer via `renderInlineSecretPrompt`; for non-inline requests we
-  // render a composer-adjacent card instead of a blocking modal.
-  const inlinePrompt = activeRequest && isDialogRequest ? (
-    <div
-      data-testid="inline-secret-prompt"
-      className="rounded-lg border border-yellow-500/20 bg-yellow-500/[0.04] px-3.5 py-2.5 shadow-sm"
-    >
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium leading-4 text-foreground">{activeRequest.title}</p>
-          <p className="text-[11px] leading-4 text-muted-foreground">Enter the secret to continue.</p>
-        </div>
-        <button
-          type="button"
-          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60"
-          onClick={() => void cancelSecret()}
-          aria-label="Cancel secret prompt"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
+  const inlinePrompt = activeRequest ? (
+    <InputPromptCard title={activeRequest.title} kind="secret" testId="inline-secret-prompt">
       {form}
-    </div>
+    </InputPromptCard>
   ) : null
 
   return {
     activeRequest,
     backgroundRequest,
     submitting,
-    renderInline,
-    form,
     inlinePrompt,
-    markInlineMounted,
     submitSecretRequest,
     cancelSecretRequest,
   }
@@ -252,10 +252,10 @@ export function BackgroundSecretPrompt({
     <div
       role="alert"
       data-testid="background-secret-prompt"
-      className="fixed bottom-3 right-3 z-[100] w-[min(26rem,calc(100vw-1.5rem))] rounded-xl border border-yellow-500/30 bg-background/95 p-3.5 shadow-2xl backdrop-blur"
+      className="fixed bottom-3 right-3 z-[100] w-[min(26rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border bg-card shadow-xl"
     >
-      <div className="mb-2.5 flex items-start gap-2.5">
-        <div className="mt-0.5 rounded-md bg-yellow-500/10 p-1.5 text-yellow-600 dark:text-yellow-400">
+      <div className="flex items-start gap-2.5 border-b border-border/60 p-3">
+        <div className="mt-0.5 text-muted-foreground">
           <KeyRound className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -272,12 +272,6 @@ export function BackgroundSecretPrompt({
           Open chat
           <ArrowUpRight className="h-3.5 w-3.5" />
         </Button>
-      </div>
-      <div className="mb-2.5 rounded-md border border-border/70 bg-muted/40 px-2.5 py-2">
-        <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Command</p>
-        <code className="block max-h-20 overflow-auto whitespace-pre-wrap break-all text-xs text-foreground">
-          {getSecretRequestCommand(request)}
-        </code>
       </div>
       <SecretInputForm
         request={request}
@@ -296,19 +290,9 @@ export function BackgroundSecretPrompt({
   )
 }
 
-function SecretInputForm({
-  request,
-  value,
-  onValueChange,
-  submitting,
-  showPassword,
-  onShowPasswordChange,
-  remember,
-  onRememberChange,
-  onSubmit,
-  onCancel,
-  showTitle = false,
-  autoFocus = true,
+export function SecretInputForm({
+  request, value, onValueChange, submitting, showPassword, onShowPasswordChange,
+  remember, onRememberChange, onSubmit, onCancel, autoFocus = true,
 }: {
   request: SecretInputRequest
   value: string
@@ -320,67 +304,47 @@ function SecretInputForm({
   onRememberChange: (value: boolean) => void
   onSubmit: () => Promise<void>
   onCancel: () => Promise<void>
-  showTitle?: boolean
   autoFocus?: boolean
 }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    // Avoid opening the mobile keyboard and moving the chat as a prompt arrives.
+    if (autoFocus && window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus({ preventScroll: true })
+  }, [autoFocus, request.id])
+
   return (
-    <div className="space-y-2.5">
-      {showTitle && (
-        <div className="space-y-0.5">
-          <p className="text-[13px] font-medium leading-4 text-foreground">{request.title}</p>
-          <p className="text-[11px] leading-4 text-muted-foreground">This prompt is attached to the running tool call.</p>
+    <form onSubmit={(event) => {
+      event.preventDefault()
+      if (value && !submitting) void onSubmit()
+    }}>
+      <div className="max-h-[min(32dvh,20rem)] space-y-2.5 overflow-y-auto overscroll-contain p-3">
+        <p className="text-xs leading-5 text-muted-foreground">{request.prompt || 'Enter your password to continue.'}</p>
+        {(request.command || request.requestedBy) && <details className="rounded-md bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
+          <summary className="cursor-pointer">View command</summary>
+          <code className="mt-1.5 block whitespace-pre-wrap break-all text-foreground">{getSecretRequestCommand(request)}</code>
+        </details>}
+        <div className="space-y-1.5">
+          <Label className="sr-only" htmlFor={`secret-input-${request.id}`}>Secret</Label>
+          <div className="relative">
+            <Input ref={inputRef} id={`secret-input-${request.id}`} type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password" placeholder="Password" value={value} disabled={submitting}
+              onChange={(event) => onValueChange(event.target.value)} className="h-10 pr-10 text-base sm:text-sm" />
+            <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-10 w-10 text-muted-foreground"
+              aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} disabled={submitting}
+              onMouseDown={(event) => event.preventDefault()} onClick={() => onShowPasswordChange((prev) => !prev)}>
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="text-[11px] leading-4 text-muted-foreground">Private input · not sent to the model</p>
         </div>
-      )}
-      <div>
-        <p className="text-xs leading-5 text-muted-foreground">
-          {request.prompt ?? 'Enter the secret to continue.'} <span className="hidden sm:inline">The value goes directly to the local gateway and is not sent to the model.</span>
-        </p>
+        {request.rememberable && <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input type="checkbox" className="h-4 w-4 shrink-0 accent-primary" checked={remember} disabled={submitting}
+            onChange={(event) => onRememberChange(event.target.checked)} />
+          <span>Remember for {request.rememberLabel || request.prompt || request.title}</span>
+        </label>}
       </div>
-      <div className="space-y-1">
-        <Label className="text-xs" htmlFor={`secret-input-${request.id}`}>Secret</Label>
-        <div className="relative">
-          <Input
-            id={`secret-input-${request.id}`}
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            placeholder="Password"
-            value={value}
-            onChange={(event) => onValueChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void onSubmit()
-            }}
-            className="h-9 pr-10 text-sm"
-            autoFocus={autoFocus}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onShowPasswordChange((prev) => !prev)}
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-      {request.rememberable && (
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-border/70 px-2.5 py-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            className="h-4 w-4 accent-primary"
-            checked={remember}
-            onChange={(event) => onRememberChange(event.target.checked)}
-          />
-          <span className="min-w-0 flex-1">
-            Remember for {request.rememberLabel || request.prompt || request.title}
-          </span>
-        </label>
-      )}
-      <div className="flex justify-end gap-1.5">
-        <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
-        <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>
-      </div>
-    </div>
+      <PromptActions submitting={submitting} disabled={!value} onCancel={onCancel} />
+    </form>
   )
 }
 
@@ -701,33 +665,11 @@ export function useUserQuestionPrompt({
   }, [])
 
   const inlinePrompt = activeRequest ? (
-    <div
-      data-testid="inline-user-question-prompt"
-      className="rounded-lg border border-blue-500/20 bg-blue-500/[0.04] px-3.5 py-3 shadow-sm"
-    >
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium leading-4 text-foreground">{activeRequest.title}</p>
-          <p className="text-[11px] leading-4 text-muted-foreground">Jait needs your input to continue.</p>
-        </div>
-        <button
-          type="button"
-          className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/60"
-          onClick={() => void cancelRequest()}
-          aria-label="Cancel question prompt"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <UserQuestionForm
-        request={activeRequest}
-        answers={answers}
-        submitting={submitting}
-        onAnswerChange={setAnswer}
-        onSubmit={submitAnswers}
-        onCancel={cancelRequest}
-      />
-    </div>
+    <InputPromptCard title={activeRequest.title} kind="question" urgent={activeRequest.attention === 'urgent'} testId="inline-user-question-prompt">
+      <UserQuestionForm key={activeRequest.id}
+        request={activeRequest} answers={answers} submitting={submitting}
+        onAnswerChange={setAnswer} onSubmit={submitAnswers} onCancel={cancelRequest} />
+    </InputPromptCard>
   ) : null
 
   return { activeRequest, inlinePrompt }
@@ -756,71 +698,73 @@ export function UserQuestionForm({
   onSubmit: () => Promise<void>
   onCancel: () => Promise<void>
 }) {
-  // Every question must be answered before the submit button is enabled. Using `.every()`
-  // (instead of `.some()`) guarantees the full `answers` map is sent to the backend so the
-  // agent actually recognizes a complete answer on mobile-web as well as desktop.
-  const canSubmit =
-    request.questions.length > 0 &&
-    request.questions.every((question) => {
-      const answer = answers[question.id]
-      return Boolean(answer?.freeText?.trim()) || (answer?.selected.length ?? 0) > 0
-    })
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [freeformOpen, setFreeformOpen] = useState<Record<string, boolean>>({})
+  const question = request.questions[Math.min(activeIndex, request.questions.length - 1)]
+  const answer = question ? answers[question.id] ?? { selected: [], freeText: null, skipped: false } : null
+  const isAnswered = (id: string) => Boolean(answers[id]?.freeText?.trim()) || (answers[id]?.selected.length ?? 0) > 0
+  const canSubmit = request.questions.length > 0 && request.questions.every(item => isAnswered(item.id))
+  const lastQuestion = activeIndex >= request.questions.length - 1
 
   return (
-    <div className="space-y-4">
-      {request.questions.map((question) => {
-        const answer = answers[question.id] ?? { selected: [], freeText: null, skipped: false }
-        return (
-          <div key={question.id} className="space-y-2">
-            <div className="space-y-0.5">
-              <p className="text-sm font-medium leading-5 text-foreground"><QuestionText>{question.header}</QuestionText></p>
-              <div className="text-xs leading-5 text-muted-foreground"><QuestionText>{question.question}</QuestionText></div>
-            </div>
-            {question.options?.length ? (
-              <div className="space-y-1">
-                {question.options.map((option) => {
-                  const checked = answer.selected.includes(option.label)
-                  return (
-                    <label key={option.label} className="flex cursor-pointer items-start gap-2 rounded-md border border-border/70 px-2.5 py-2 text-xs">
-                      <input
-                        type={question.multiSelect ? 'checkbox' : 'radio'}
-                        name={`user-question-${request.id}-${question.id}`}
-                        className="mt-0.5 h-4 w-4 accent-primary"
-                        checked={checked}
-                        onChange={(event) => {
-                          const selected = question.multiSelect
-                            ? event.target.checked
-                              ? [...answer.selected, option.label]
-                              : answer.selected.filter((item) => item !== option.label)
-                            : [option.label]
-                          onAnswerChange(question.id, { selected, skipped: false })
-                        }}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="font-medium text-foreground"><QuestionText>{option.label}</QuestionText></span>
-                        {option.recommended && <span className="ml-1 text-primary">Recommended</span>}
-                        {option.description && <span className="block text-muted-foreground"><QuestionText>{option.description}</QuestionText></span>}
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
-            ) : null}
-            {question.allowFreeformInput !== false && (
-              <Textarea
-                value={answer.freeText ?? ''}
-                placeholder="Type an answer..."
-                className="min-h-20 text-sm"
-                onChange={(event) => onAnswerChange(question.id, { freeText: event.target.value, skipped: false })}
-              />
-            )}
-          </div>
-        )
-      })}
-      <div className="sticky bottom-0 z-10 -mx-1 flex justify-end gap-1.5 bg-background/95 px-1 pb-1 pt-2 backdrop-blur-sm">
-        <Button className="h-8 px-3 text-xs" variant="ghost" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
-        <Button className="h-8 px-3 text-xs" onClick={() => void onSubmit()} disabled={submitting || !canSubmit}>Submit</Button>
-      </div>
-    </div>
+    <form onSubmit={(event) => {
+      event.preventDefault()
+      if (submitting) return
+      if (!lastQuestion && question && isAnswered(question.id)) setActiveIndex(activeIndex + 1)
+      else if (canSubmit) void onSubmit()
+    }}>
+      {request.questions.length > 1 && <div className="flex gap-1 overflow-x-auto border-b border-border/60 px-3 py-2" aria-label="Questions">
+        {request.questions.map((item, index) => <Button key={item.id} type="button" size="sm" variant={index === activeIndex ? 'secondary' : 'ghost'}
+          className="h-8 shrink-0 gap-1.5 px-2.5 text-xs" aria-current={index === activeIndex ? 'step' : undefined}
+          disabled={submitting} onClick={() => setActiveIndex(index)}>
+          {isAnswered(item.id) ? <Check className="h-3 w-3 text-primary" /> : <span className="text-muted-foreground">{index + 1}</span>}
+          {item.header}
+        </Button>)}
+      </div>}
+      {question && answer && <div key={question.id} className="max-h-[min(32dvh,20rem)] space-y-2.5 overflow-y-auto overscroll-contain p-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium leading-5 text-foreground"><QuestionText>{question.header}</QuestionText></p>
+          <div className="text-xs leading-5 text-muted-foreground"><QuestionText>{question.question}</QuestionText></div>
+        </div>
+        {question.options?.length ? <div className="space-y-1.5">
+          {question.options.map((option) => {
+            const checked = answer.selected.includes(option.label)
+            return <label key={option.label} className={cn('flex min-h-10 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-ring/50',
+              checked ? 'border-primary/50 bg-primary/[0.06]' : 'border-border bg-background hover:bg-muted/50', submitting && 'pointer-events-none opacity-60')}>
+              <input type={question.multiSelect ? 'checkbox' : 'radio'} name={`user-question-${request.id}-${question.id}`}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-primary" checked={checked} disabled={submitting}
+                onChange={(event) => {
+                  const selected = question.multiSelect
+                    ? event.target.checked ? [...answer.selected, option.label] : answer.selected.filter(item => item !== option.label)
+                    : [option.label]
+                  onAnswerChange(question.id, { selected, skipped: false })
+                }} />
+              <span className="min-w-0 flex-1 space-y-0.5">
+                <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <span className="font-medium text-foreground"><QuestionText>{option.label}</QuestionText></span>
+                  {option.recommended && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Recommended</Badge>}
+                </span>
+                {option.description && <span className="block leading-4 text-muted-foreground"><QuestionText>{option.description}</QuestionText></span>}
+              </span>
+            </label>
+          })}
+        </div> : null}
+        {question.allowFreeformInput !== false && (
+          !question.options?.length || freeformOpen[question.id] || answer.freeText
+            ? <Textarea aria-label={`Answer: ${question.header}`} value={answer.freeText ?? ''} rows={2}
+                placeholder={question.options?.length ? 'Or write your own answer…' : 'Type your answer…'}
+                disabled={submitting} className="min-h-14 resize-y text-base sm:text-sm"
+                onChange={(event) => onAnswerChange(question.id, { freeText: event.target.value, skipped: false })} />
+            : <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground"
+                disabled={submitting} onClick={() => setFreeformOpen(prev => ({ ...prev, [question.id]: true }))}>Write another answer</Button>
+        )}
+      </div>}
+      <PromptActions submitting={submitting} disabled={lastQuestion ? !canSubmit : !question || !isAnswered(question.id)}
+        onCancel={onCancel} submitLabel={lastQuestion ? 'Submit' : 'Next'}>
+        {activeIndex > 0 && <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs"
+          disabled={submitting} onClick={() => setActiveIndex(activeIndex - 1)}><ChevronLeft className="h-3.5 w-3.5" />Back</Button>}
+        {request.questions.length > 1 && <span className="text-[11px] text-muted-foreground">{activeIndex + 1}/{request.questions.length}</span>}
+      </PromptActions>
+    </form>
   )
 }

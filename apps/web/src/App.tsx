@@ -1,6 +1,6 @@
 import { safeNotificationLink } from '@jait/shared'
 import { openNotification, subscribeNotificationNavigation, retryNotificationNavigation, androidNotificationBridge } from '@/lib/notification-navigation'
-import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { AuthOverlays } from '@/components/auth/auth-overlays'
 import { useHotkeyActions } from '@/components/hotkeys'
@@ -8,7 +8,7 @@ import { ErrorBoundary } from '@/components/error-boundary'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 import { SessionSelector } from '@/components/chat'
-import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem, ToolCallInfo } from '@/components/chat'
+import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem } from '@/components/chat'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
@@ -144,7 +144,6 @@ import {
   getMemoryFeedbackSuccessMessage,
   type MemoryFeedbackKind
 } from '@/lib/memory-feedback'
-import { secretRequestMatchesTool } from '@/lib/secret-input'
 import { appendUploadedAttachmentPromptBlock, getUploadedAttachmentDisplayLabel } from '@/lib/uploaded-attachment-prompt'
 import { mergeHydratedTodoState, normalizeTodoStateValue } from '@/lib/todo-state'
 import {
@@ -167,7 +166,6 @@ import {
 } from '@/lib/user-message-segments'
 import {
   BackgroundSecretPrompt,
-  InlineSecretMounted,
   useSecretInputPrompt,
   useUserQuestionPrompt
 } from '@/components/prompts/input-prompts'
@@ -642,16 +640,6 @@ function App() {
 
   const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId, })
   const userQuestionInput = useUserQuestionPrompt({ token, sessionId: activeSessionId, })
-  const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
-    if (!secretInput.renderInline || !secretInput.form || !secretInput.activeRequest) return null
-    if (call.status !== 'running' && call.status !== 'pending') return null
-    if (!secretRequestMatchesTool(secretInput.activeRequest, call.tool, call.args)) return null
-    return (
-      <InlineSecretMounted requestId={secretInput.activeRequest.id} onMount={secretInput.markInlineMounted}>
-        {secretInput.form}
-      </InlineSecretMounted>
-    )
-  }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline, secretInput.markInlineMounted],)
 
   const activeProjectRecord = useMemo(
     () => projects.find((project) => project.id === activeProjectId) ?? null,
@@ -5230,7 +5218,6 @@ function App() {
                       onSubmit={handleThreadSubmit}
                       onUpdateManagerQueueItem={updateManagerQueueItem}
                       onVoiceInput={handleVoiceInput}
-                      renderInlineSecretPrompt={renderInlineSecretPrompt}
                       inlinePrompts={inlinePrompts}
                     />
                 ) : (
@@ -5619,7 +5606,6 @@ function App() {
                         onToggleHoldQueueItem={toggleHoldQueueItem}
                         onUpdateQueueItem={updateQueueItem}
                         onVoiceInput={handleVoiceInput}
-                        renderInlineSecretPrompt={renderInlineSecretPrompt}
                       />
                       {parallelChats.map((parallelChat, panelIndex) => {
                         const panelProject = projects.find((project) => project.id === parallelChat.session.projectId)

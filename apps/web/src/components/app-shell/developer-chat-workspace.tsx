@@ -155,7 +155,7 @@ interface DeveloperChatWorkspaceProps {
   onToggleHoldQueueItem: (id: string) => void
   onUpdateQueueItem: (...args: any[]) => void
   onVoiceInput: () => void
-  renderInlineSecretPrompt: (call: any) => ReactNode
+  renderInlineSecretPrompt?: (call: any) => ReactNode
 }
 
 export function DeveloperChatWorkspace({
@@ -708,8 +708,8 @@ export function DeveloperChatWorkspace({
                   />
                 )}
                 <ConsentQueue compact merged sessionId={activeSessionId} onApproveAllEnabled={() => onSetApproveAllInSession(true)} />
-                {inlinePrompts}
               </div>
+              {inlinePrompts && <div className="border-b border-border p-2">{inlinePrompts}</div>}
               <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
                 <PromptInput
                   ref={promptInputRef}
