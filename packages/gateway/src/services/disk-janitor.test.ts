@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, utimesSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, utimesSync, chmodSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -73,6 +73,8 @@ describe("DiskJanitor", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   });
@@ -110,6 +112,66 @@ describe("DiskJanitor", () => {
       );
     return thread.id;
   }
+
+
+  it.each([false, true])("logs periodic reap errors when successful cleanup is %s", async (withSuccess) => {
+    const blocked = join(worktreeRoot, "repo", "jait-blocked");
+    makeAgedDir(blocked, 10 * DAY_MS, 4096);
+    gitStub.cleanupWorktreeWithOptions = async () => {
+      throw new Error("EACCES: permission denied " + blocked);
+    };
+    if (withSuccess) makeAgedDir(join(tempRoot, "jait-success"), 10 * DAY_MS, 2048);
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const instance = new DiskJanitor(sqlite, policy(), logger, gitStub as never, {
+      worktrees: worktreeRoot, temp: tempRoot, sandboxStorage: sandboxRoot,
+    });
+    const run = instance.run.bind(instance);
+    let pass: ReturnType<typeof run> | undefined;
+    vi.spyOn(instance, "run").mockImplementation((options) => {
+      pass = run(options);
+      return pass;
+    });
+    vi.useFakeTimers();
+    instance.start();
+    try {
+      await vi.advanceTimersByTimeAsync(10);
+      const report = await pass!;
+      expect(report.errors).toHaveLength(1);
+      expect(report.bytesReclaimed).toBe(withSuccess ? 2048 : 0);
+      expect(existsSync(blocked)).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(blocked));
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("permission"));
+      expect(logger.info).toHaveBeenCalledTimes(withSuccess ? 1 : 0);
+      await vi.advanceTimersByTimeAsync(1000);
+      await pass!;
+      expect(logger.warn).toHaveBeenCalledTimes(2);
+    } finally {
+      instance.stop();
+    }
+  });
+
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "reports a real filesystem permission failure and retries after permissions recover",
+    async () => {
+      const blocked = join(tempRoot, "jait-permission");
+      makeAgedDir(blocked, 10 * DAY_MS, 4096);
+      chmodSync(blocked, 0o555);
+      const instance = janitor();
+      try {
+        const failed = await instance.run({ now: NOW });
+        expect(failed.errors.join(" ")).toMatch(/EACCES|EPERM/);
+        expect(failed.bytesReclaimed).toBe(0);
+        expect(failed.tempScratch).toHaveLength(0);
+        expect(existsSync(blocked)).toBe(true);
+      } finally {
+        chmodSync(blocked, 0o755);
+      }
+      const recovered = await instance.run({ now: NOW });
+      expect(recovered.errors).toEqual([]);
+      expect(recovered.bytesReclaimed).toBe(4096);
+      expect(existsSync(blocked)).toBe(false);
+    },
+  );
 
   it("reaps a worktree whose thread finished outside the grace period", async () => {
     const path = join(worktreeRoot, "repo", "jait-aaa");

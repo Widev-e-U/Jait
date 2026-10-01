@@ -229,6 +229,9 @@ export class DiskJanitor {
             report.worktrees.length + report.tempScratch.length + report.sandboxStorage.length;
           this.logger.info(`[disk-janitor] reclaimed ${mb} MB across ${count} entrie(s)`);
         }
+        if (report.errors.length > 0) {
+          this.logReapErrors(report.errors);
+        }
       } catch (err) {
         this.logger.error(`[disk-janitor] run failed: ${String(err)}`);
       }
@@ -238,6 +241,22 @@ export class DiskJanitor {
     };
     this.timer = setTimeout(() => void tick(), this.policy.initialDelayMs);
     this.timer.unref?.();
+  }
+
+  /** Report failures even when a pass reclaims zero bytes. */
+  private logReapErrors(errors: string[]): void {
+    this.logger.warn(
+      "[disk-janitor] " + errors.length + " reap failure(s): " + errors.slice(0, 5).join("; "),
+    );
+    const permission = errors.filter((e) => /EACCES|EPERM|permission denied/i.test(e));
+    if (permission.length > 0) {
+      this.logger.error(
+        "[disk-janitor] " + permission.length + "/" + errors.length + " failure(s) are permission errors. " +
+          "First permission failure: " + permission[0] + ". " +
+          "Check ownership and directory permissions at the affected path. " +
+          "Writable sandbox mounts should use the host uid/gid so cleanup can succeed.",
+      );
+    }
   }
 
   stop(): void {
