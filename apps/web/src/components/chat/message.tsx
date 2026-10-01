@@ -1,3 +1,4 @@
+import { AttachmentList, collectAttachments } from './attachment-list'
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
 import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import { AssistantMarkdown } from './assistant-markdown'
@@ -9,7 +10,6 @@ import {
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DropdownMenu,
@@ -47,7 +47,6 @@ import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
   formatLineRange,
-  normalizeUserMessageSegments,
   parseLegacyReferencedFilesBlock,
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
@@ -285,27 +284,8 @@ function MessageInner({
   const [optimisticUserDisplaySegments, setOptimisticUserDisplaySegments] = useState<UserMessageSegment[] | null>(null)
   const userAttachments = useMemo(() => {
     if (!isUser) return []
-    const fromSegments = normalizeUserMessageSegments(optimisticUserDisplaySegments ?? userDisplaySegments)
-      .flatMap((segment) => (
-        segment.type === 'image' || segment.type === 'attachment'
-          ? [{
-              name: segment.name,
-              mimeType: segment.mimeType,
-              data: segment.data,
-              ...(segment.type === 'image' ? { preview: `data:${segment.mimeType};base64,${segment.data}` } : {}),
-            }]
-          : []
-      ))
-    return fromSegments.length > 0 ? fromSegments : (attachmentsProp ?? [])
+    return collectAttachments(attachmentsProp, optimisticUserDisplaySegments ?? userDisplaySegments)
   }, [attachmentsProp, isUser, optimisticUserDisplaySegments, userDisplaySegments])
-  const userImageAttachments = useMemo(
-    () => userAttachments.filter((attachment) => attachment.mimeType.startsWith('image/')),
-    [userAttachments],
-  )
-  const userFileAttachments = useMemo(
-    () => userAttachments.filter((attachment) => !attachment.mimeType.startsWith('image/')),
-    [userAttachments],
-  )
   const hasUserRenderableContent = isUser && hasRenderableUserMessageContent({
     content,
     userDisplayText: optimisticUserDisplayText ?? userDisplayText,
@@ -776,8 +756,8 @@ function MessageInner({
   // rendered as a small right-aligned gray line, not a full message bubble.
   if (kind === 'system-notice') {
     return (
-      <div className="flex w-full justify-end px-3 py-1">
-        <span className="select-text text-[11px] leading-relaxed text-muted-foreground/70">
+      <div className="flex w-full justify-end py-1">
+        <span className="min-w-0 max-w-[85%] select-text break-words text-right text-[11px] leading-relaxed text-muted-foreground/70 [overflow-wrap:anywhere]">
           {content}
         </span>
       </div>
@@ -1011,63 +991,7 @@ function MessageInner({
                               )
                             : (optimisticUserDisplayText ?? userDisplayText)}
                         </div>
-                        {userImageAttachments.length > 0 && (
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            {userImageAttachments.map((attachment, index) => {
-                              const src = attachment.preview ?? `data:${attachment.mimeType};base64,${attachment.data}`
-                              return (
-                                <Dialog key={`${attachment.name}-${index}`}>
-                                  <DialogTrigger asChild>
-                                    <button
-                                      type="button"
-                                      data-no-message-edit
-                                      onClick={(event) => {
-                                        // Expanding the image must never fall through to
-                                        // the bubble's "click to edit" handler. Do not
-                                        // preventDefault here: Radix composes event
-                                        // handlers and skips its own open handler as soon
-                                        // as the event's default is prevented.
-                                        event.stopPropagation()
-                                      }}
-                                      className="group block overflow-hidden rounded-lg border border-primary/10 bg-background/65 text-left transition-colors hover:border-primary/25 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-                                      aria-label={`Expand image ${attachment.name}`}
-                                    >
-                                      <span className="relative block">
-                                        <img src={src} alt={attachment.name} className="max-h-72 w-full object-cover transition-opacity group-hover:opacity-85" />
-                                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                                          <span className="rounded-full bg-black/65 px-3 py-1.5 text-xs font-medium text-white">Click to expand</span>
-                                        </span>
-                                      </span>
-                                      <span className="block truncate border-t border-border/60 px-2 py-1 text-xs text-muted-foreground">
-                                        {attachment.name}
-                                      </span>
-                                    </button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-h-[92vh] max-w-[96vw] gap-2 overflow-hidden p-2" showCloseButton>
-                                    <DialogTitle className="mr-8 truncate px-1 text-sm font-medium">
-                                      {attachment.name}
-                                    </DialogTitle>
-                                    <img src={src} alt={attachment.name} className="max-h-[82vh] w-full object-contain" />
-                                  </DialogContent>
-                                </Dialog>
-                              )
-                            })}
-                          </div>
-                        )}
-                        {userFileAttachments.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {userFileAttachments.map((attachment, index) => (
-                              <TooltipHint key={`${attachment.name}-${index}`} content={attachment.mimeType}>
-                              <span
-                                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
-                              >
-                                <FileIcon filename={attachment.name} className="h-3.5 w-3.5 shrink-0" />
-                                <span className="max-w-[180px] truncate">{attachment.name}</span>
-                              </span>
-                              </TooltipHint>
-                            ))}
-                          </div>
-                        )}
+                        <AttachmentList attachments={userAttachments} />
                       </div>
                     </AIMessageContent>
                     </TooltipHint>

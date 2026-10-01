@@ -1,3 +1,6 @@
+import { AttachmentList, collectAttachments } from './attachment-list'
+import type { ChatAttachment } from '@/hooks/useChat'
+import type { UserMessageSegment } from '@/lib/user-message-segments'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Lock, LockOpen, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -7,6 +10,8 @@ export interface QueuedMessage {
   id: string
   content: string
   displayContent?: string
+  attachments?: ChatAttachment[] | string[]
+  displaySegments?: UserMessageSegment[]
   /** timestamp when queued */
   queuedAt: number
   /** When true, the queue drain skips this message until the user unlocks it. */
@@ -89,6 +94,7 @@ function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number 
           </span>
         )}
         <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
+        <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mt-1.5" />
       </div>
     </div>
   )
@@ -152,11 +158,11 @@ function QueueItem({
   const commitEdit = useCallback(() => {
     const trimmed = draft.trim()
     const displayed = item.displayContent ?? item.content
-    if (trimmed && trimmed !== displayed) {
+    if ((trimmed || collectAttachments(item.attachments, item.displaySegments).length) && trimmed !== displayed) {
       onEdit?.(item.id, trimmed)
     }
     setEditing(false)
-  }, [draft, item.content, item.displayContent, item.id, onEdit])
+  }, [draft, item, onEdit])
 
   const cancelEdit = useCallback(() => {
     setDraft(item.displayContent ?? item.content)
@@ -259,6 +265,7 @@ function QueueItem({
         ) : (
           <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
         )}
+        <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mt-1.5" />
       </div>
 
       {/* Action buttons */}

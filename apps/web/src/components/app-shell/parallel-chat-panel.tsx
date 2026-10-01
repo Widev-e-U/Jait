@@ -1,3 +1,4 @@
+import { collectAttachments } from '@/components/chat/attachment-list'
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ResponseStyle } from '@jait/shared'
 
@@ -303,6 +304,14 @@ function ParallelChatPanelImpl({
   ) => {
     if (!isLoading) return
     const content = draft.trim()
+    const uploads = collectAttachments(attachments, displaySegments)
+    if (uploads.length) {
+      enqueueMessage({ content, attachments: uploads, displaySegments: mergeAttachmentsIntoSegments(displaySegments, uploads), referencedFiles })
+      setDraft('')
+      setInputVersion((version) => version + 1)
+      toast.info('Attachments queued for the next message')
+      return
+    }
     if (!content) return
     const chipFiles = referencedFiles?.map(({ path, name }) => ({ path, name })) ?? []
     const nextDisplaySegments = mergeAttachmentsIntoSegments(displaySegments, attachments)
@@ -341,12 +350,13 @@ function ParallelChatPanelImpl({
   ) => {
     if (!isLoading) return
     const content = draft.trim()
-    if ((!content && !attachments?.length) || !content) return
+    const uploads = collectAttachments(attachments, displaySegments)
+    if (!content && !uploads.length) return
     enqueueMessage({
       content,
       referencedFiles: referencedFiles?.map(({ path, name }) => ({ path, name })),
-      displaySegments,
-      attachments,
+      displaySegments: mergeAttachmentsIntoSegments(displaySegments, uploads),
+      attachments: uploads,
     })
     setDraft('')
     setInputVersion((version) => version + 1)

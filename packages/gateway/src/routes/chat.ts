@@ -1005,6 +1005,26 @@ function parseDisplayLineRange(record: Record<string, unknown>): UserDisplayLine
   return { startLine, endLine };
 }
 
+function parseChatAttachments(raw: unknown, segments?: ReturnType<typeof parseUserDisplaySegments>): NonNullable<QueuedChatMessage["attachments"]> {
+  const explicit = Array.isArray(raw) ? raw : [];
+  const fromSegments = (segments ?? []).filter((segment) => segment.type === "image" || segment.type === "attachment");
+  const result: NonNullable<QueuedChatMessage["attachments"]> = [];
+  for (const candidate of [...explicit, ...fromSegments]) {
+    if (!candidate || typeof candidate !== "object" || typeof candidate.name !== "string" || typeof candidate.data !== "string" || !candidate.data) continue;
+    const attachment = { name: candidate.name, data: candidate.data, mimeType: typeof candidate.mimeType === "string" ? candidate.mimeType : typeof candidate.type === "string" ? candidate.type : "application/octet-stream" };
+    if (!result.some((item) => item.name === attachment.name && item.mimeType === attachment.mimeType && item.data === attachment.data)) result.push(attachment);
+  }
+  return result;
+}
+
+function sameChatAttachments(left: QueuedChatMessage["attachments"], right: QueuedChatMessage["attachments"]): boolean {
+  const a = left ?? [], b = right ?? [];
+  return a.length === b.length && a.every((item, index) => {
+    const other = b[index];
+    return other !== undefined && item.name === other.name && item.mimeType === other.mimeType && item.data === other.data;
+  });
+}
+
 function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
   if (!Array.isArray(raw)) return [];
   const queue: QueuedChatMessage[] = [];
@@ -1012,13 +1032,15 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const record = entry as Record<string, unknown>;
-    if (typeof record.content !== "string" || !record.content.trim()) continue;
+    if (typeof record.content !== "string") continue;
     const id = typeof record.id === "string" ? record.id : undefined;
     if (id) {
       if (seenIds.has(id)) continue;
       seenIds.add(id);
     }
     const displaySegments = parseUserDisplaySegments(record.displaySegments);
+    const attachments = parseChatAttachments(record.attachments, displaySegments);
+    if (!record.content.trim() && attachments.length === 0) continue;
     queue.push({
       id,
       content: record.content,
@@ -1038,18 +1060,7 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
             : null }
         : {}),
       responseStyle: isResponseStyle(record.responseStyle) ? record.responseStyle : undefined,
-      attachments: Array.isArray(record.attachments)
-        ? record.attachments.flatMap((attachment) => {
-            if (!attachment || typeof attachment !== "object") return [];
-            const candidate = attachment as Record<string, unknown>;
-            if (typeof candidate.name !== "string" || typeof candidate.data !== "string") return [];
-            return [{
-              name: candidate.name,
-              mimeType: typeof candidate.mimeType === "string" ? candidate.mimeType : "application/octet-stream",
-              data: candidate.data,
-            }];
-          })
-        : undefined,
+      attachments: attachments.length ? attachments : undefined,
       displaySegments,
     });
   }
@@ -1664,7 +1675,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
-  | { type: "request"; content: string; provider: string; model?: string; mode: string; runtimeMode?: string }
+  | { type: "request"; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -2797,17 +2808,18 @@ export function registerChatRoutes(
   // WebSocket drop). Tracking the ids here also means a stale client re-push of
   // the same id (after a WS reconnect) is filtered out by the drain rather than
   // re-sent.
-  const removeQueuedMessageByContent = (sessionId: string, content: string): void => {
+  const removeQueuedMessageByContent = (sessionId: string, content: string, attachments: QueuedChatMessage["attachments"] = []): void => {
     if (!sessionStateService) return;
     // `content` is typed as string, but a malformed request payload or a stale
     // persisted queue entry could hold a non-string at runtime; never throw.
     const normalized = safeTrim(content);
-    if (!normalized) return;
+    if (!normalized && !attachments?.length) return;
     const state = sessionStateService.get(sessionId, ["queued_messages"]);
     const queue = parseQueuedChatMessages(state["queued_messages"]);
     if (queue.length === 0) return;
-    const removed = queue.filter((entry) => safeTrim(entry.content) === normalized);
-    const filtered = queue.filter((entry) => safeTrim(entry.content) !== normalized);
+    const matches = (entry: QueuedChatMessage) => safeTrim(entry.content) === normalized && sameChatAttachments(entry.attachments, attachments);
+    const removed = queue.filter(matches);
+    const filtered = queue.filter((entry) => !matches(entry));
     if (removed.length === 0) return; // nothing matched
     let tracked = consumedQueuedMessageIds.get(sessionId);
     if (!tracked) {
@@ -2895,6 +2907,7 @@ export function registerChatRoutes(
             ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
             ...(nextMessage.attachments?.length ? { attachments: nextMessage.attachments } : {}),
             _queuedDrain: true,
+            _queuedMessageId: nextMessage.id,
           },
         });
 
@@ -3370,8 +3383,15 @@ export function registerChatRoutes(
       requestProvider = "jait";
     }
     const requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
-    const displaySegments = parseUserDisplaySegments(body["displaySegments"]);
-    const displaySegmentsJson = displaySegments ? JSON.stringify(displaySegments) : undefined;
+    const parsedDisplaySegments = parseUserDisplaySegments(body["displaySegments"]);
+    const attachments = parseChatAttachments(body["attachments"], parsedDisplaySegments);
+    const displaySegments = [...(parsedDisplaySegments ?? (attachments.length && content ? [{ type: "text" as const, text: content }] : []))];
+    for (const attachment of attachments) {
+      if (!displaySegments.some((segment) => (segment.type === "image" || segment.type === "attachment") && segment.name === attachment.name && segment.data === attachment.data && segment.mimeType === attachment.mimeType)) {
+        displaySegments.push({ type: attachment.mimeType.startsWith("image/") ? "image" : "attachment", ...attachment });
+      }
+    }
+    const displaySegmentsJson = displaySegments.length ? JSON.stringify(displaySegments) : undefined;
     const isQueuedDrainRequest = body["_queuedDrain"] === true;
     // Internal-only: a hidden system message that starts an agent turn without a
     // visible user bubble (used to re-trigger the agent when a background
@@ -3388,16 +3408,6 @@ export function registerChatRoutes(
     const recoveryAttempts = typeof body["_recoveryAttempts"] === "number"
       ? Math.max(0, Math.floor(body["_recoveryAttempts"] as number))
       : 0;
-
-    // Parse file attachments (images / files sent as base64 from the client)
-    const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
-    const attachments = rawAttachments
-      .filter((a) => typeof a["name"] === "string" && typeof a["data"] === "string")
-      .map((a) => ({
-        name: String(a["name"]),
-        mimeType: String(a["mimeType"] ?? a["type"] ?? "application/octet-stream"),
-        data: String(a["data"]),
-      }));
 
     if (!content.trim() && attachments.length === 0 && !systemNotification) {
       return reply
@@ -3425,14 +3435,14 @@ export function registerChatRoutes(
       }
       const existingState = sessionStateService.get(sessionId, ["queued_messages"]);
       const queue = parseQueuedChatMessages(existingState["queued_messages"]);
-      // Dedupe by normalized content: if an equivalent message is already
+      // Dedupe by normalized content and uploads: if an equivalent message is already
       // queued (the server-side drain may already be processing the same
       // content the client just re-sent), reuse the existing entry instead
       // of appending a duplicate. This is the server-side guard against the
       // client/server drain race that multiplied queued messages.
       const normalizedContent = safeTrim(content);
       const existing = queue.find(
-        (entry) => safeTrim(entry.content) === normalizedContent,
+        (entry) => safeTrim(entry.content) === normalizedContent && sameChatAttachments(entry.attachments, attachments),
       );
       let queuedMessage: QueuedChatMessage;
       if (existing) {
@@ -3484,7 +3494,7 @@ export function registerChatRoutes(
     // before the turn starts. This is the single invariant that prevents the
     // end-of-turn drain from re-sending it ("already sent but still queued").
     if (!isQueuedDrainRequest && !systemNotification) {
-      removeQueuedMessageByContent(sessionId, content);
+      removeQueuedMessageByContent(sessionId, content, attachments);
     }
 
     const userSettings = userService?.getSettings(authUser.id);
@@ -3856,6 +3866,9 @@ export function registerChatRoutes(
     const requestEvent: StreamEvent = {
       type: "request",
       content,
+      ...(typeof body["_queuedMessageId"] === "string" ? { queuedMessageId: body["_queuedMessageId"] } : {}),
+      ...(displaySegments.length ? { displaySegments } : {}),
+      attachmentCount: attachments.length,
       provider: requestProvider ?? "jait",
       ...(requestBodyModel ? { model: requestBodyModel } : {}),
       mode: chatMode,

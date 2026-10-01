@@ -293,6 +293,64 @@ describe("server-side queued chat processing", () => {
     ]);
   });
 
+  it.each(["attachments", "segments"])("drains attachment-only queued messages from %s without losing their contents", async (source) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queued Session" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    sessionState.set(session.id, {
+      queued_messages: [
+        { id: "attachment-only", content: "", ...(source === "attachments" ? { attachments: [{ name: "invoice.txt", mimeType: "text/plain", data: Buffer.from("invoice total 42").toString("base64") }] } : {}), displaySegments: [{ type: "attachment", name: "invoice.txt", mimeType: "text/plain", data: Buffer.from("invoice total 42").toString("base64") }] },
+      ],
+    });
+
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+    await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+
+    expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { messages: Array<{ role: string; content: string; segments?: string }> };
+    const users = body.messages.filter((message) => message.role === "user");
+    expect(users).toHaveLength(1);
+    expect(users[0].content).toContain("invoice.txt");
+    expect(body.messages.find((message) => message.role === "assistant")?.content).toContain("invoice total 42");
+    expect(JSON.stringify(users[0].segments)).toContain("invoice.txt");
+  });
+
   it("skips a held (locked) queued message and everything after it until unlocked", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -589,6 +647,96 @@ describe("server-side queued chat processing", () => {
     expect(userMessages).toEqual([
       "slow first",
       "duplicate queued message",
+    ]);
+  });
+
+  it("keeps queued messages with identical text and different uploads separate", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const config = {
+      ...loadConfig(),
+      port: 0,
+      wsPort: 0,
+      logLevel: "silent" as const,
+      nodeEnv: "test",
+      llmProvider: "ollama" as const,
+      ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-multiply-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Queue Multiply" });
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const slowStarted = new Promise<void>((resolve) => { slowOllamaStarted = resolve; });
+    const firstResponse = app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "slow first" },
+    });
+
+    await slowStarted;
+
+    // Identical text with different files represents two distinct messages.
+    const secondResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "review queued files", attachments: [{ name: "a.txt", mimeType: "text/plain", data: Buffer.from("file A").toString("base64") }] },
+    });
+    const thirdResponse = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { sessionId: session.id, content: "review queued files", attachments: [{ name: "b.txt", mimeType: "text/plain", data: Buffer.from("file B").toString("base64") }] },
+    });
+
+    expect(secondResponse.statusCode).toBe(202);
+    expect(thirdResponse.statusCode).toBe(202);
+    const persisted = sessionState.get(session.id, ["queued_messages"])[
+      "queued_messages"
+    ] as Array<{ content: string }>;
+    expect(persisted).toHaveLength(2);
+    expect(persisted.map((m) => m.content)).toEqual(["review queued files", "review queued files"]);
+
+    releaseSlowOllama?.();
+    await firstResponse;
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
+
+    // Drain both messages and retain each uploaded file.
+    const serverWithQueueDrain = app as typeof app & {
+      drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    };
+    let userMessages: string[] = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+      const messagesResponse = await app.inject({
+        method: "GET",
+        url: `/api/sessions/${session.id}/messages`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const body = messagesResponse.json() as { messages: Array<{ role: string; content: string }> };
+      userMessages = body.messages.filter((message) => message.role === "user").map((message) => message.content);
+      if (userMessages.filter((message) => message.includes(" [attached:")).length >= 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(userMessages.filter((message) => message.includes(" [attached:"))).toEqual([
+      "review queued files [attached: a.txt]",
+      "review queued files [attached: b.txt]",
     ]);
   });
 });

@@ -1,3 +1,4 @@
+import { createUserMessageEditSubmission } from '@/components/chat/message-edit'
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { TodoItem } from '@/components/chat/todo-list'
@@ -216,15 +217,41 @@ function safeTrim(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+export function editQueuedChatMessage(item: QueuedChatMessage, content: string): QueuedChatMessage {
+  const trimmed = safeTrim(content)
+  const attachments = mergeChatAttachments(item.attachments, attachmentsFromSegments(item.displaySegments))
+  if (!trimmed && !attachments?.length) return item
+  const edited = createUserMessageEditSubmission(trimmed, undefined, item.displaySegments, attachments)
+  return {
+    ...item,
+    content: trimmed,
+    displayContent: trimmed,
+    attachments,
+    displaySegments: edited?.displaySegments ?? item.displaySegments?.filter((segment) => segment.type !== 'text'),
+    referencedFiles: edited?.referencedFiles ?? item.referencedFiles,
+  }
+}
+
 export function reconcileQueuedMessagesAtTurnStart(
   queue: QueuedChatMessage[],
   startedContent: unknown,
+  queuedMessageId?: string | null,
+  startedAttachments?: ChatAttachment[],
 ): QueuedChatMessage[] {
+  if (queuedMessageId) return queue.filter((item) => item.id !== queuedMessageId)
   if (typeof startedContent !== 'string') return queue
   const normalizedContent = startedContent.trim()
-  if (!normalizedContent) return queue
+  if (!normalizedContent && !startedAttachments?.length) return queue
 
-  const nextQueue = queue.filter((item) => safeTrim(item.content) !== normalizedContent)
+  const nextQueue = queue.filter((item) => {
+    if (safeTrim(item.content) !== normalizedContent) return true
+    if (startedAttachments === undefined) return false
+    const attachments = mergeChatAttachments(item.attachments, attachmentsFromSegments(item.displaySegments)) ?? []
+    return attachments.length !== startedAttachments.length || attachments.some((attachment, index) => {
+      const other = startedAttachments[index]
+      return !other || attachment.name !== other.name || attachment.mimeType !== other.mimeType || attachment.data !== other.data
+    })
+  })
   return nextQueue.length === queue.length ? queue : nextQueue
 }
 
@@ -706,6 +733,8 @@ export function useChat(
   } | null>(null)
   const cacheWriteReadySessionRef = useRef<string | null>(null)
   const messageQueueSessionRef = useRef<string | null>(null)
+  const startedTurnAttachmentsRef = useRef<ChatAttachment[] | undefined>(undefined)
+  const startedTurnQueuedIdRef = useRef<string | null>(null)
   const startedTurnContentRef = useRef<string | null>(null)
   /**
    * The optimistic assistant bubble `sendMessage` rendered for a turn that has
@@ -808,6 +837,8 @@ export function useChat(
       updateQueue([])
       messageQueueSessionRef.current = null
       startedTurnContentRef.current = null
+      startedTurnQueuedIdRef.current = null
+      startedTurnAttachmentsRef.current = undefined
       setContextUsage(null)
       setSessionInfo(null)
       return
@@ -979,8 +1010,10 @@ export function useChat(
         // Reconcile from the request marker too: a running message must never
         // remain visible as queued, regardless of cross-transport ordering.
         startedTurnContentRef.current = typeof data.content === 'string'
-          ? data.content.trim() || null
+          ? data.content.trim()
           : null
+        startedTurnQueuedIdRef.current = typeof data.queuedMessageId === 'string' ? data.queuedMessageId : null
+        startedTurnAttachmentsRef.current = data.displaySegments === undefined ? (data.attachmentCount === 0 ? [] : undefined) : attachmentsFromSegments(parseUserMessageSegments(data.displaySegments)) ?? []
 
         // A queued message drained by the gateway never went through
         // `sendMessage`, so its user bubble only exists if we synthesize it
@@ -999,7 +1032,7 @@ export function useChat(
 
         const queueBefore = messageQueueRef.current
         const drainedItem = startedContent !== null
-          ? queueBefore.find((item) => safeTrim(item.content) === startedContent)
+          ? queueBefore.find((item) => startedTurnQueuedIdRef.current ? item.id === startedTurnQueuedIdRef.current : safeTrim(item.content) === startedContent)
           : undefined
 
         if (!isReplay && !wasLocallySent && startedContent !== null) {
@@ -1020,11 +1053,13 @@ export function useChat(
                 content: data.content as string,
                 displayContent: data.content as string,
                 optimistic: true,
+                displaySegments: parseUserMessageSegments(data.displaySegments),
+                attachments: attachmentsFromSegments(parseUserMessageSegments(data.displaySegments)),
               }
           setState(prev => ({ ...prev, messages: [...prev.messages, userBubble] }))
         }
 
-        updateQueue(prev => reconcileQueuedMessagesAtTurnStart(prev, data.content))
+        updateQueue(prev => reconcileQueuedMessagesAtTurnStart(prev, data.content, startedTurnQueuedIdRef.current, startedTurnAttachmentsRef.current))
         beginTurn()
       } else if (data.type === 'token') {
         if (!ensureStreamingAssistant()) return
@@ -1834,17 +1869,7 @@ export function useChat(
   const updateQueueItem = useCallback((id: string, content: string) => {
     // Guard: a stale queue entry or malformed edit payload could hold a
     // non-string at runtime; safeTrim never throws.
-    const trimmed = safeTrim(content)
-    if (!trimmed) return
-    updateQueue(prev => prev.map(q => q.id === id
-      ? {
-        ...q,
-        content: trimmed,
-        displayContent: trimmed,
-        referencedFiles: undefined,
-        displaySegments: undefined,
-      }
-      : q))
+    updateQueue(prev => prev.map(q => q.id === id ? editQueuedChatMessage(q, content) : q))
   }, [updateQueue])
 
   const reorderQueueItem = useCallback((sourceId: string, targetId: string | null, placement: 'before' | 'after') => {
@@ -1874,9 +1899,13 @@ export function useChat(
 
   const setMessageQueueState = useCallback((items: QueuedChatMessage[]) => {
     const startedContent = startedTurnContentRef.current
-    const nextItems = reconcileQueuedMessagesAtTurnStart(items, startedContent)
+    const nextItems = reconcileQueuedMessagesAtTurnStart(items, startedContent, startedTurnQueuedIdRef.current, startedTurnAttachmentsRef.current)
     updateQueue(nextItems)
-    if (items.length === 0) startedTurnContentRef.current = null
+    if (items.length === 0) {
+      startedTurnContentRef.current = null
+      startedTurnQueuedIdRef.current = null
+      startedTurnAttachmentsRef.current = undefined
+    }
   }, [updateQueue])
 
   // ── Wake / reconnect nudges ──

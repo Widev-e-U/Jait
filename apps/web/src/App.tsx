@@ -186,6 +186,7 @@ type ManagerQueuedMessage = QueuedChatMessage & {
 }
 
 type SavedQueuedMessage = QueuedChatMessage & {
+  attachments?: ChatAttachment[]
   mode?: ChatMode
   provider?: string
   runtimeMode?: RuntimeMode
@@ -3821,6 +3822,11 @@ function App() {
         }
         setInputValue('')
         setInputSegments(undefined)
+        if (attachments?.length || nextDisplaySegments?.some((segment) => segment.type === 'image' || segment.type === 'attachment')) {
+          queueAsFallback()
+          toast.info('Attachments queued for the next message')
+          return
+        }
         if (!isLoading || !activeSessionId) {
           queueAsFallback()
           return
@@ -4123,6 +4129,10 @@ function App() {
       }
       const item = messageQueue.find((queued) => queued.id === id)
       if (!item || !activeSessionId) return
+      if (item.attachments?.length || item.displaySegments?.some((segment) => segment.type === 'image' || segment.type === 'attachment')) {
+        toast.info('Attachments will be sent when this queued message runs')
+        return
+      }
       if (!isLoading) {
         toast.info('Steering is only available while the agent is running.')
         return

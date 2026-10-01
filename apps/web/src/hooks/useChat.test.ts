@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
+  editQueuedChatMessage,
   buildReasoningEffortRequestField,
   formatChatHttpError,
   getChatWakeRecoveryAction,
@@ -464,6 +465,20 @@ describe('gateway-drained queue messages', () => {
 })
 
 describe('reconcileQueuedMessagesAtTurnStart', () => {
+  it('keeps messages with the same text but different uploads queued', () => {
+    const a = { name: 'a.txt', mimeType: 'text/plain', data: 'QQ==' }
+    const b = { name: 'b.txt', mimeType: 'text/plain', data: 'Qg==' }
+    const queue = [{ id: 'q-a', content: 'review', attachments: [a], queuedAt: 1 }, { id: 'q-b', content: 'review', attachments: [b], queuedAt: 2 }]
+    expect(reconcileQueuedMessagesAtTurnStart(queue, 'review', null, [a])).toEqual([queue[1]])
+    expect(reconcileQueuedMessagesAtTurnStart(queue, 'review', null, [])).toEqual(queue)
+  })
+
+  it('uses the queued id for attachment-only messages and leaves other uploads queued', () => {
+    const queue = [{ id: 'q-photo', content: '', queuedAt: 1 }, { id: 'q-document', content: '', queuedAt: 2 }]
+    expect(reconcileQueuedMessagesAtTurnStart(queue, '', 'q-photo')).toEqual([queue[1]])
+    expect(reconcileQueuedMessagesAtTurnStart(queue, '', 'unrelated')).toEqual(queue)
+  })
+
   it('removes a queued row once that same message has started running', () => {
     const queue = [
       { id: 'q-1', content: 'send this next', queuedAt: 1 },
@@ -503,5 +518,21 @@ describe('parseQueuedChatResponse', () => {
     expect(parseQueuedChatResponse('')).toBeNull()
     // A truncated line must not throw — the WS broadcast is authoritative anyway.
     expect(parseQueuedChatResponse('data: {"type":"que')).toBeNull()
+  })
+})
+
+
+describe('editing queued uploads', () => {
+  it('preserves uploads held only in display segments, including after clearing the text', () => {
+    const segment = { type: 'attachment' as const, name: 'invoice.txt', mimeType: 'text/plain', data: 'QQ==' }
+    const original = { id: 'q-file', content: 'review', queuedAt: 1, displaySegments: [{ type: 'text' as const, text: 'review' }, segment] }
+    const edited = editQueuedChatMessage(original, 'review invoice')
+    expect(edited.content).toBe('review invoice')
+    expect(edited.attachments).toEqual([{ name: segment.name, mimeType: segment.mimeType, data: segment.data }])
+    expect(edited.displaySegments).toContainEqual(segment)
+    const cleared = editQueuedChatMessage(edited, '')
+    expect(cleared.content).toBe('')
+    expect(cleared.displaySegments).toEqual([segment])
+    expect(cleared.attachments).toEqual(edited.attachments)
   })
 })

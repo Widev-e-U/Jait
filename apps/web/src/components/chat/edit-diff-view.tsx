@@ -3,6 +3,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { projectLanguageForPath } from '@/components/project/project-panel'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 interface EditDiffViewProps {
   /** File path that was edited */
@@ -26,6 +27,7 @@ export function EditDiffView({
   isNewFile,
   className,
 }: EditDiffViewProps) {
+  const isMobile = useIsMobile()
   const fileName = filePath.split('/').pop() ?? filePath
   const language = projectLanguageForPath(filePath)
 
@@ -60,6 +62,11 @@ export function EditDiffView({
           renderSideBySide: false,
           lineNumbers: 'on',
           wordWrap: 'on',
+          // Keep the tool-card gutter compact on narrow screens.
+          lineNumbersMinChars: isMobile ? 2 : 5,
+          lineDecorationsWidth: isMobile ? 4 : 10,
+          folding: !isMobile,
+          renderGutterMenu: !isMobile,
         }}
       />
     </div>
