@@ -127,8 +127,8 @@ interface DeveloperChatWorkspaceProps {
   onMoveRepoToGateway?: (...args: any[]) => void
   onOpenAddProject: () => void
   onOpenMessagePath: (path: string) => void
-  /** Opens the changed-file review diff (source-control panel as fallback). Triggered by the git-diff pill. */
-  onOpenChangedFiles: () => void
+  /** Opens the source-control panel. Triggered by the git-diff pill. */
+  onOpenSourceControl: () => void
   onOpenTerminalFromToolCall: (...args: any[]) => void
   onHidePanel: () => void
   onApprovalResponse: (requestId: string, approved: boolean) => Promise<void> | void
@@ -245,7 +245,7 @@ export function DeveloperChatWorkspace({
   onMoveRepoToGateway,
   onOpenAddProject,
   onOpenMessagePath,
-  onOpenChangedFiles,
+  onOpenSourceControl,
   onOpenTerminalFromToolCall,
   onHidePanel,
   onApprovalResponse,
@@ -596,7 +596,7 @@ export function DeveloperChatWorkspace({
               <GitDiffIndicator
                 projectRoot={activeProjectRoot}
                 nodeId={activeProject?.nodeId}
-                onOpen={onOpenChangedFiles}
+                onOpen={onOpenSourceControl}
                 compact={isMobile}
               />
             </div>

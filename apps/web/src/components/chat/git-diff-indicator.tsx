@@ -10,7 +10,7 @@ interface GitDiffIndicatorProps {
   nodeId?: string | null
   /** Bumping this value forces a refetch (e.g. after a source-control refresh). */
   refreshSignal?: number
-  /** Opens the review diff for the changed files (source-control panel as fallback). */
+  /** Opens the source-control panel without selecting a file. */
   onOpen: () => void
   /** Compact (mobile) sizing so the chat header stays uncluttered. */
   compact?: boolean
@@ -25,8 +25,7 @@ interface GitDiffIndicatorProps {
  * (toolbar, bottom nav, project panel tab). Switching projects swaps the
  * store key, so the pill resets to the newly selected project's totals
  * as soon as they arrive — no stale numbers from the previous project.
- * Clicking opens the review diff for the changed files, falling back to
- * the source-control panel when the session has no tracked changes.
+ * Clicking opens the source-control panel without selecting a file.
  */
 export function GitDiffIndicator({ projectRoot, nodeId, refreshSignal, onOpen, compact }: GitDiffIndicatorProps) {
   const counts = useGitChangeCounts(nodeId, projectRoot, refreshSignal ?? 0)
@@ -37,11 +36,11 @@ export function GitDiffIndicator({ projectRoot, nodeId, refreshSignal, onOpen, c
   const hasChanges = insertions > 0 || deletions > 0
 
   return (
-    <TooltipHint content={`${fileCount} changed file${fileCount === 1 ? '' : 's'} — review changes`}>
+    <TooltipHint content={`${fileCount} changed file${fileCount === 1 ? '' : 's'} — open source control`}>
     <button
       type="button"
       onClick={onOpen}
-      aria-label={`${fileCount} changed file${fileCount === 1 ? '' : 's'}. Review changes.`}
+      aria-label={`${fileCount} changed file${fileCount === 1 ? '' : 's'}. Open source control.`}
       className={cn(
         'flex items-center gap-1 rounded-md hover:bg-muted/50 cursor-pointer transition-colors',
         compact ? 'px-1 py-0.5' : 'px-1.5 py-1',
