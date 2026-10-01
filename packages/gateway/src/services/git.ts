@@ -8,8 +8,8 @@ import { getStateDirectory } from "../state-directory.js";
  */
 
 import { exec as execCb, spawn } from "node:child_process";
-import { readFile, writeFile, unlink, mkdir, rm, readdir, stat, lstat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { readFile, writeFile, unlink, mkdir, rm, readdir, stat, lstat, cp } from "node:fs/promises";
+import { existsSync, constants } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 function exec(cmd: string, opts?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
@@ -2001,10 +2001,10 @@ export class GitService {
    *
    * Uses `git worktree add --no-checkout` (skips the slow file checkout) and
    * then populates the working tree with a copy-on-write clone of the main
-   * working tree (`cp -c` on macOS APFS, `cp --reflink=auto` on Linux
-   * Btrfs/XFS). CoW makes the copy near-instant and disk-cheap even for huge
-   * repos, and the files are already materialized so the agent can start
-   * immediately. Falls back to a plain checkout if the copy fails.
+   * working tree. Only tracked and non-ignored untracked paths are copied:
+   * ignored dependencies, build outputs and scratch mirrors must not multiply
+   * across scheduled jobs. Uses CoW where supported, falling back to normal
+   * copies of this bounded set. Falls back to checkout if the copy fails.
    */
   private async createWorktreeFast(
     cwd: string,
@@ -2021,9 +2021,8 @@ export class GitService {
     // Leave the worktree's .git pointer file in place. The CoW copy excludes
     // the source repository's .git entry so a partial or failed copy cannot
     // replace that pointer with a directory and corrupt the worktree.
-    const copyCmd = this.pickCopyCommand(cwd, worktreePath);
     try {
-      await exec(copyCmd, { cwd });
+      await this.copyWorktreeContents(cwd, worktreePath);
     } catch {
       // Fall through to reset, which performs a normal checkout when the
       // opportunistic CoW copy is unavailable or interrupted.
@@ -2032,23 +2031,34 @@ export class GitService {
     // Align the working tree with the branch tip. When the CoW copy
     // succeeded this is a no-op for matching files; when it failed it acts
     // as a full checkout so the worktree is still usable.
-    await gitExec(worktreePath, "reset --hard HEAD", 60_000).catch(() => {});
+    await gitExec(worktreePath, "reset --hard HEAD", 60_000);
   }
 
-  /** Pick a copy-on-write capable recursive copy command for this platform. */
-  private pickCopyCommand(src: string, dst: string): string {
-    const s = escapeShellArg(src);
-    const d = escapeShellArg(dst);
-    if (process.platform === "darwin") {
-      // macOS APFS: `cp -c` uses clonefile(2) — copy-on-write, near-instant.
-      return `find "${s}" -mindepth 1 -maxdepth 1 ! -name .git -exec cp -c -R {} "${d}/" \\;`;
+  /** Copy project files while respecting Git's ignore rules at every depth. */
+  private async copyWorktreeContents(src: string, dst: string): Promise<void> {
+    const { stdout } = await exec("git ls-files -z --cached --others --exclude-standard", {
+      cwd: src, timeout: 60_000, maxBuffer: 64 * 1024 * 1024,
+    });
+    const included = new Set<string>();
+    for (const path of stdout.split("\0")) {
+      if (!path || path === ".git" || path.startsWith(".git/")) continue;
+      included.add(resolve(src, path));
+      // Include parent directories so cp can traverse to selected files,
+      // but never descend into ignored trees or follow symlinks.
+      let parent = path.lastIndexOf("/");
+      while (parent > 0) {
+        included.add(resolve(src, path.slice(0, parent)));
+        parent = path.lastIndexOf("/", parent - 1);
+      }
     }
-    if (process.platform === "linux") {
-      // Linux Btrfs/XFS: `cp --reflink=auto` uses reflink when available and
-      // falls back to a plain copy otherwise.
-      return `find "${s}" -mindepth 1 -maxdepth 1 ! -name .git -exec cp --reflink=auto -R -- {} "${d}/" \\;`;
-    }
-    return `find "${s}" -mindepth 1 -maxdepth 1 ! -name .git -exec cp -R {} "${d}/" \\;`;
+    const sourceRoot = resolve(src);
+    await cp(src, dst, {
+      recursive: true,
+      dereference: false,
+      verbatimSymlinks: true,
+      mode: constants.COPYFILE_FICLONE,
+      filter: (path) => resolve(path) === sourceRoot || included.has(resolve(path)),
+    });
   }
 
   /** Remove a git worktree. */

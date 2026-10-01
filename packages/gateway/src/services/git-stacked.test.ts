@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, readFile, rm, chmod, mkdir, lstat } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, chmod, mkdir, lstat, symlink, readlink } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { homedir, platform, tmpdir } from "node:os";
@@ -206,15 +206,44 @@ describe("runStackedAction – unstage on commit failure", () => {
 });
 
 describe("GitService worktree cleanup", () => {
-  it("excludes repository metadata when copying contents into a worktree", () => {
-    const service = new GitService() as unknown as {
-      pickCopyCommand(source: string, destination: string): string;
-    };
 
-    const command = service.pickCopyCommand("/source-repo", "/target-worktree");
-    expect(command).toContain('find "/source-repo"');
-    expect(command).toContain("! -name .git");
-    expect(command).toContain('"/target-worktree/"');
+  it("does not multiply ignored dependencies or build mirrors into fast worktrees", { timeout: 15_000 }, async () => {
+    const repoDir = await mkdtemp(join(tmpdir(), "git-disk-growth-test-"));
+    const worktreeDir = `${repoDir}-worktree`;
+    try {
+      git(repoDir, "init");
+      git(repoDir, "config user.email test@test.com");
+      git(repoDir, "config user.name Test");
+      await writeFile(join(repoDir, ".gitignore"), "node_modules/\njait-win/\ntarget/\n*.local\n");
+      await writeFile(join(repoDir, "tracked.local"), "tracked despite ignore");
+      await writeFile(join(repoDir, "untracked.txt"), "keep");
+      await writeFile(join(repoDir, "file with spaces.txt"), "keep spaces");
+      await symlink("jait-win", join(repoDir, "build-link"));
+      await mkdir(join(repoDir, "nested", "target"), { recursive: true });
+      await mkdir(join(repoDir, "node_modules"));
+      await mkdir(join(repoDir, "jait-win"));
+      await writeFile(join(repoDir, "nested", "target", "build.bin"), Buffer.alloc(1024 * 1024));
+      await writeFile(join(repoDir, "node_modules", "dep.js"), "dependency");
+      await writeFile(join(repoDir, "jait-win", "disk.bin"), Buffer.alloc(1024 * 1024));
+      await writeFile(join(repoDir, "secret.local"), "excluded");
+      git(repoDir, "add .gitignore");
+      git(repoDir, "add -f tracked.local");
+      git(repoDir, "commit -m initial");
+      await new GitService().createWorktree(repoDir, git(repoDir, "branch --show-current"),
+        "jait/disk-growth", worktreeDir, { fastPath: true });
+      for (const path of ["node_modules", "jait-win", "nested/target", "secret.local"]) {
+        await expect(lstat(join(worktreeDir, path))).rejects.toMatchObject({ code: "ENOENT" });
+      }
+      expect(await readFile(join(worktreeDir, "tracked.local"), "utf8")).toBe("tracked despite ignore");
+      expect(await readFile(join(worktreeDir, "untracked.txt"), "utf8")).toBe("keep");
+      expect(await readFile(join(worktreeDir, "file with spaces.txt"), "utf8")).toBe("keep spaces");
+      expect((await lstat(join(worktreeDir, "build-link"))).isSymbolicLink()).toBe(true);
+      expect(await readlink(join(worktreeDir, "build-link"))).toBe("jait-win");
+      expect((await lstat(join(worktreeDir, ".git"))).isFile()).toBe(true);
+    } finally {
+      await rm(worktreeDir, { recursive: true, force: true });
+      await rm(repoDir, { recursive: true, force: true });
+    }
   });
 
   it("keeps the git pointer intact when creating a fast worktree", { timeout: 15_000 }, async () => {
