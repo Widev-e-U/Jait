@@ -85,6 +85,7 @@ import { SessionSqlService } from "./services/session-sql.js";
 import { ChatTracesService } from "./services/chat-traces.js";
 import { DatabaseRetentionService } from "./services/database-retention.js";
 import { DiskJanitor } from "./services/disk-janitor.js";
+import { DiskSpaceWatchdog } from "./services/disk-space-watchdog.js";
 
 
 /**
@@ -674,8 +675,10 @@ async function main() {
     return executor.execute(toolName, input, context, options);
   };
 
+  let diskSpaceWatchdog: DiskSpaceWatchdog | undefined;
   const scheduler = new SchedulerService({
     db,
+    beforeTick: () => diskSpaceWatchdog?.check() ?? Promise.resolve(),
     executeTool: async (execution) => {
       const userApiKeys = execution.userId ? userService.getSettings(execution.userId).apiKeys : undefined;
       const context = {
@@ -698,6 +701,8 @@ async function main() {
       });
     },
   });
+
+  diskSpaceWatchdog = new DiskSpaceWatchdog(scheduler, notifications);
 
   // Rebuild tool registry with Sprint 7 scheduler + gateway status tools.
   // shutdown ref is assigned after server.listen — use late-bound wrapper

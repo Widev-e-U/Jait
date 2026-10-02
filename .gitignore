@@ -94,3 +94,6 @@ apps/desktop/dist/
 
 # desktop shell test harness artifacts
 apps/desktop/src-tauri/tests/harness/out/
+
+# Private source recovery archives from managed worktree cleanup
+.jait/worktree-recovery/

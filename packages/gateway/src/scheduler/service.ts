@@ -40,6 +40,8 @@ interface SchedulerOptions {
   db: JaitDB;
   executeTool: (execution: SchedulerToolExecution) => Promise<ToolResult>;
   onExecuted?: (result: SchedulerExecutionResult) => void;
+  /** Check storage before selecting runnable jobs. */
+  beforeTick?: () => Promise<void>;
 }
 
 const MINUTE_MS = 60_000;
@@ -274,7 +276,9 @@ export class SchedulerService {
   start(pollMs = MINUTE_MS) {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      void this.tick();
+      void this.tick().catch((err) => {
+        console.error("Scheduler preflight failed:", err);
+      });
     }, pollMs);
   }
 
@@ -491,6 +495,7 @@ export class SchedulerService {
   }
 
   async tick(now = new Date()): Promise<void> {
+    await this.options.beforeTick?.();
     const jobs = this.list().filter((job) =>
       job.enabled
       && !this.runningJobIds.has(job.id)
