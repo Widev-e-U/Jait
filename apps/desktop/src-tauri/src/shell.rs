@@ -35,7 +35,7 @@ use crate::updater::{self, desktop_update_check, desktop_update_download, deskto
 pub mod login_item;
 
 /// Glue host shared between the setup hook (sink installation) and commands.
-pub struct GlueHost(pub Arc<Mutex<HostState>>);
+pub struct GlueHost(pub Arc<HostState>);
 #[derive(Default)]
 struct PendingNotification(Mutex<Option<Value>>);
 fn receive_notification_args(app: &AppHandle, args: &[String]) -> bool {
@@ -148,14 +148,13 @@ fn tray_icon() -> tauri::Result<tauri::image::Image<'static>> {
 /// `screenshare-start|stop` window events, the names the shim subscribes to) /
 /// revoke remembered computer-control approval / Quit. Left-click shows the
 /// window, right-click opens the menu (`tray.on("click")` + setContextMenu).
-fn create_tray(app: &AppHandle, glue: &Arc<Mutex<HostState>>) -> tauri::Result<()> {
-    fn revoke_computer_control(glue: &Arc<Mutex<HostState>>) {
+fn create_tray(app: &AppHandle, glue: &Arc<HostState>) -> tauri::Result<()> {
+    fn revoke_computer_control(glue: &Arc<HostState>) {
         // Legacy shell: if (getSetting("computerControl.trustedUntil", 0) > now)
         // setSetting("computerControl.trustedUntil", 0); computerControl.stop().
         // The Tauri glue has no computer-control server yet, so only the
         // setting is cleared (gap noted in the parity report).
         let trusted_until = glue
-            .lock()
             .dispatch(
                 "desktop:get-setting",
                 &[json!("computerControl.trustedUntil")],
@@ -164,7 +163,7 @@ fn create_tray(app: &AppHandle, glue: &Arc<Mutex<HostState>>) -> tauri::Result<(
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
         if trusted_until > 0 {
-            let _ = glue.lock().dispatch(
+            let _ = glue.dispatch(
                 "desktop:set-setting",
                 &[json!("computerControl.trustedUntil"), json!(0)],
             );
@@ -270,7 +269,7 @@ pub async fn desktop_ipc(
         return Err(format!("unknown desktop channel: {channel}"));
     }
     let host = glue.0.clone();
-    tauri::async_runtime::spawn_blocking(move || host.lock().dispatch(&channel, &args))
+    tauri::async_runtime::spawn_blocking(move || host.dispatch(&channel, &args))
         .await
         .map_err(|e| format!("desktop ipc join error: {e}"))?
 }
@@ -461,11 +460,10 @@ fn boot_script(
     gateway: &str,
     gateway_configured: bool,
     version: &str,
-    glue: &Arc<Mutex<HostState>>,
+    glue: &Arc<HostState>,
     open_folder: Option<&std::path::Path>,
 ) -> String {
     let device_id = glue
-        .lock()
         .dispatch("desktop:host-info", &[json!("device-id")])
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
@@ -505,7 +503,7 @@ pub fn run() {
     // Launch flags shared with the legacy shell: --hidden (start minimized to the
     // tray) and --open-folder / bare absolute path (pre-load a folder).
     let opts = crate::launch_options_from_argv(&std::env::args().collect::<Vec<String>>());
-    let glue = Arc::new(Mutex::new(HostState::new()));
+    let glue = Arc::new(HostState::new());
     tauri::Builder::default()
         // Legacy shell `requestSingleInstanceLock` parity. Must be registered
         // first (plugin docs) so a second launch is rejected before any
@@ -546,7 +544,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(GlueHost(glue.clone()))
         .setup(move |app| {
-            glue.lock().add_sink(install_sink(app.handle()));
+            glue.add_sink(install_sink(app.handle()));
             receive_notification_args(app.handle(), &std::env::args().collect::<Vec<_>>());
 
             // First-launch login-item takeover: re-adopt the OS autostart

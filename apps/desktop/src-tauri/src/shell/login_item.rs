@@ -27,7 +27,6 @@
 //! anything so they never repoint the production registration at
 //! `target/debug/…`.
 
-use parking_lot::Mutex;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -91,7 +90,7 @@ fn already_registered(app: &AppHandle) -> bool {
 /// Called from the Tauri `setup` hook, before the main window builds, so the
 /// decision is applied (and persisted) regardless of how the app was
 /// launched — by hand, by the old autostart entry, or by the OS at boot.
-pub fn sync_login_item(app: &AppHandle, glue: &Arc<Mutex<HostState>>) {
+pub fn sync_login_item(app: &AppHandle, glue: &Arc<HostState>) {
     // Dev builds run from target/debug — never let them rewrite the
     // production registration (or the user's settings file intent).
     if cfg!(debug_assertions) {
@@ -99,7 +98,6 @@ pub fn sync_login_item(app: &AppHandle, glue: &Arc<Mutex<HostState>>) {
     }
 
     let persisted = glue
-        .lock()
         .dispatch("desktop:get-setting", &[json!(LAUNCH_AT_LOGIN_KEY)])
         .ok()
         .and_then(|v| v.as_bool());
@@ -128,7 +126,7 @@ pub fn sync_login_item(app: &AppHandle, glue: &Arc<Mutex<HostState>>) {
     // Adopt the intent so it survives an the legacy shell uninstall (whose
     // uninstaller deletes the shared Run value) — the next start
     // re-registers from this setting.
-    let _ = glue.lock().dispatch(
+    let _ = glue.dispatch(
         "desktop:set-setting",
         &[json!(LAUNCH_AT_LOGIN_KEY), json!(true)],
     );

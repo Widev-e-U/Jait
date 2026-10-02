@@ -120,7 +120,7 @@ pub struct HostState {
     /// Live runner handles keyed by session id (handles come out of
     /// `runner::start`; the registry only tracks bookkeeping state).
     handles: Mutex<HashMap<String, core::runner::RunnerHandle>>,
-    resolver: Mutex<Box<dyn core::runner::CommandResolver>>,
+    resolver: Mutex<Arc<dyn core::runner::CommandResolver>>,
     provider_login_processes: Mutex<HashMap<String, Child>>,
     sinks: Mutex<Vec<HostSink>>,
     /// Overrides default keyring-backed credentials for tests / hosts without
@@ -159,7 +159,7 @@ impl HostState {
             backgrounds: Arc::new(core::tools::BackgroundRegistry::new()),
             runners: core::runner::RunnerRegistry::new(),
             handles: Mutex::new(HashMap::new()),
-            resolver: Mutex::new(Box::new(core::runner::PathCommandResolver)),
+            resolver: Mutex::new(Arc::new(core::runner::PathCommandResolver)),
             provider_login_processes: Mutex::new(HashMap::new()),
             sinks: Mutex::new(Vec::new()),
             credential_backend: Mutex::new(CredentialBackend::Keyring),
@@ -173,7 +173,7 @@ impl HostState {
     }
 
     pub fn set_resolver(&self, resolver: Box<dyn core::runner::CommandResolver>) {
-        *self.resolver.lock() = resolver;
+        *self.resolver.lock() = Arc::from(resolver);
     }
 
     pub fn add_sink(&self, sink: HostSink) {
@@ -715,8 +715,8 @@ impl HostState {
                             .unwrap_or_default()
                             .to_string();
                         let handle = self.runner_handle(&session_id)?;
-                        let resolver = self.resolver.lock();
-                        handle.send_turn(&**resolver, &message)?;
+                        let resolver = self.resolver.lock().clone();
+                        handle.send_turn(&*resolver, &message)?;
                         Ok(json!({ "ok": true }))
                     }
                     "stop" => {
@@ -1176,7 +1176,7 @@ impl HostState {
         let account_home = self.data_dir.join("provider-accounts").join(provider_id);
         std::fs::create_dir_all(&account_home).map_err(|error| error.to_string())?;
         let home = account_home.to_string_lossy().into_owned();
-        let mut env: HashMap<String, String> = std::env::vars().collect();
+        let mut env: HashMap<String, String> = HashMap::new();
         env.insert("HOME".into(), home.clone());
         env.insert("USERPROFILE".into(), home.clone());
         env.insert(
@@ -1514,7 +1514,8 @@ impl HostState {
                 };
                 let path = path.canonicalize().unwrap_or(path);
                 let normalized = path.to_string_lossy().replace('\\', "/").to_lowercase();
-                normalized.contains("/.local/share/claude/") || normalized.contains("/.claude/local/")
+                normalized.contains("/.local/share/claude/")
+                    || normalized.contains("/.claude/local/")
             });
         let mut command = if native_claude {
             let cli = resolved.as_ref().expect("native Claude CLI was resolved");
@@ -1532,7 +1533,11 @@ impl HostState {
             .map_err(|error| format!("Failed to update {provider_type}: {error}"))?;
         if !output.status.success() {
             let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            let detail = if detail.is_empty() { String::from_utf8_lossy(&output.stdout).trim().to_string() } else { detail };
+            let detail = if detail.is_empty() {
+                String::from_utf8_lossy(&output.stdout).trim().to_string()
+            } else {
+                detail
+            };
             return Err(if detail.is_empty() {
                 format!("Failed to update {provider_type}")
             } else {
@@ -1562,8 +1567,8 @@ impl HostState {
             ));
         }
         let env = self.provider_account_env(&provider_id, &provider_type)?;
-        let resolver = self.resolver.lock();
-        core::runner::list_codex_models(&**resolver, env)
+        let resolver = self.resolver.lock().clone();
+        core::runner::list_codex_models(&*resolver, env)
     }
 
     fn provider_start(&self, params: &Value) -> Result<Value, String> {
@@ -1600,7 +1605,7 @@ impl HostState {
                 .and_then(Value::as_u64)
                 .map(|v| v as u32),
         };
-        let env: std::collections::HashMap<String, String> = params
+        let mut env: std::collections::HashMap<String, String> = params
             .get("env")
             .and_then(Value::as_object)
             .map(|m| {
@@ -1609,6 +1614,11 @@ impl HostState {
                     .collect()
             })
             .unwrap_or_default();
+        // Login, discovery, and turns must share this device's account home.
+        // Gateway paths and inherited default CLI credentials cannot select it.
+        if let Some(provider_id) = params.get("providerId").and_then(Value::as_str) {
+            env.extend(self.provider_account_env(provider_id, &provider)?);
+        }
         let spec = core::providers::to_runner_spec(&session_id, &req, &cwd, &mode, env);
         let id_sink: HostSink = {
             let sinks = self.sinks.lock().clone();
@@ -1618,8 +1628,8 @@ impl HostState {
                 }
             })
         };
-        let resolver = self.resolver.lock();
-        let handle = core::runner::start(&self.runners, &**resolver, spec, move |event| {
+        let resolver = self.resolver.lock().clone();
+        let handle = core::runner::start(&self.runners, &*resolver, spec, move |event| {
             let mut v = serde_json::to_value(&event).unwrap_or(Value::Null);
             // Legacy shell parity: the renderer consumes flat
             // Keep compatibility with any older core build that emitted
@@ -2732,6 +2742,86 @@ exit 2
     }
 
     #[test]
+    fn model_discovery_does_not_wait_for_a_running_turn() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_codex(&dir);
+        let source = std::fs::read_to_string(&script).unwrap();
+        std::fs::write(
+            &script,
+            source.replace(
+                "echo \"FAKE-CODEX-NOTICE\"",
+                "echo \"FAKE-CODEX-NOTICE\"\nsleep 2",
+            ),
+        )
+        .unwrap();
+        let st = Arc::new(HostState::new_with_dir(dir.clone()));
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+        let (sink, events) = recording_sink();
+        st.add_sink(sink);
+        st.dispatch(
+            "desktop:provider-op",
+            &[
+                json!("start-session"),
+                json!({
+                    "providerId": "codex-work", "providerType": "codex", "sessionId": "slow-turn",
+                    "workingDirectory": dir.to_string_lossy()
+                }),
+            ],
+        )
+        .unwrap();
+        let worker = st.clone();
+        let turn = std::thread::spawn(move || {
+            worker.dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("send-turn"),
+                    json!({"sessionId": "slow-turn", "message": "hello"}),
+                ],
+            )
+        });
+        let snapshot = wait_for(
+            &events,
+            |(_, p)| {
+                p["line"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("FAKE-CODEX-NOTICE")
+            },
+            Duration::from_secs(5),
+        );
+        assert!(snapshot.iter().any(|(_, p)| p["line"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("FAKE-CODEX-NOTICE")));
+        let started = Instant::now();
+        let models = st.dispatch(
+            "desktop:provider-op",
+            &[
+                json!("list-models"),
+                json!({
+                    "providerId": "codex-work", "providerType": "codex"
+                }),
+            ],
+        );
+        let elapsed = started.elapsed();
+        turn.join().unwrap().unwrap();
+        st.dispatch(
+            "desktop:provider-op",
+            &[json!("stop"), json!({"sessionId": "slow-turn"})],
+        )
+        .unwrap();
+        assert!(models.is_ok(), "{models:?}");
+        assert!(
+            elapsed < Duration::from_millis(750),
+            "model discovery blocked behind the running turn for {elapsed:?}"
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn provider_list_models_uses_the_selected_codex_account() {
         if !bash_available() {
             return;
@@ -2811,6 +2901,33 @@ exit 2
             ],
         )
         .expect("logout stops the login process");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn provider_turn_uses_the_same_account_home_as_login_and_model_discovery() {
+        let dir = temp_dir();
+        let st = HostState::new_with_dir(dir.clone());
+        st.dispatch("desktop:provider-op", &[json!("start-session"), json!({
+            "providerId": "codex-work", "providerType": "codex", "sessionId": "account-turn",
+            "workingDirectory": dir.to_string_lossy(),
+            "env": {"CODEX_HOME": "/gateway/account", "JAIT_TEST_EXTRA": "preserved"}
+        })]).unwrap();
+        let session = st.runners.get("account-turn").unwrap();
+        let expected = dir
+            .join("provider-accounts/codex-work")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(session.spec.env.get("CODEX_HOME"), Some(&expected));
+        assert_eq!(session.spec.env.get("USERPROFILE"), Some(&expected));
+        assert_eq!(
+            session.spec.env.get("JAIT_TEST_EXTRA").map(String::as_str),
+            Some("preserved")
+        );
+        assert_eq!(
+            session.spec.env.get("OPENAI_API_KEY").map(String::as_str),
+            Some("")
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
