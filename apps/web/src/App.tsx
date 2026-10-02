@@ -3654,6 +3654,8 @@ function App() {
         nodeId: project.nodeId,
       }
       setSavedProject(state)
+      setSidebarView('git')
+      setShowSidebar(true)
       setMobileTreeTab('git')
       return
     }
@@ -3662,6 +3664,8 @@ function App() {
       void reopenPersistedProject(record.rootPath, record.nodeId ?? 'gateway', activeSessionIdRef.current)
         .then(() => {
           applyProjectLayout({ tree: true, editor: false }, { immediateSync: true })
+          setSidebarView('git')
+          setShowSidebar(true)
           setMobileTreeTab('git')
         })
         .catch(() => {})
@@ -3677,6 +3681,8 @@ function App() {
     setCurrentView,
     setMobileTreeTab,
     setSavedProject,
+    setSidebarView,
+    setShowSidebar,
     setShowProject,
     showProjectRef
   ])
