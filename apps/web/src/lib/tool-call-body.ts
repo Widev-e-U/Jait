@@ -11,6 +11,7 @@ export interface ToolCallBodyInput {
 export type ToolCallBodyKind =
   | 'pending'
   | 'terminal'
+  | 'browserActivity'
   | 'browserSnapshot'
   | 'browserScreenshot'
   | 'imageView'
@@ -564,7 +565,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
 
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'
-  if (normalizedTool === 'browser.snapshot' && input.snapshotText) return 'browserSnapshot'
+  if (['browser.navigate', 'browser.snapshot', 'browser.inspect', 'browser.click', 'browser.type', 'browser.scroll', 'browser.select', 'browser.wait', 'browser.screenshot'].includes(normalizedTool)) return 'browserActivity'
   if (input.screenshotPath) return 'browserScreenshot'
   if (normalizedTool === 'image.view' && input.imageDataUri) return 'imageView'
   if (isAgentToolName(normalizedTool)) return 'subagent'

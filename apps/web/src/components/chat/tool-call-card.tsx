@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
+import { BrowserActivityView } from '@/components/chat/browser-activity-view'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
@@ -2622,33 +2623,34 @@ function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
   return (
     <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
       {trimmedPath && (
-        <div className="text-xs text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
+        <div className="text-xs text-muted-foreground">Captured page</div>
       )}
       {src && (
-        <div className="group relative overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
+        <button type="button" aria-label="Expand browser screenshot" onClick={() => loaded && setExpanded(true)} className="group relative block w-full overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
           <img
             src={src}
             alt="Browser screenshot"
             className="max-h-80 w-full cursor-pointer object-contain transition-opacity group-hover:opacity-80"
             onLoad={() => { setLoaded(true); setFailed(false) }}
             onError={() => { setLoaded(false); setFailed(true) }}
-            onClick={() => loaded && setExpanded(true)}
           />
           {loaded && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
               <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white">Click to expand</span>
             </div>
           )}
-        </div>
+        </button>
       )}
       {(!src || failed) && (
         <div className="rounded bg-background p-2 text-muted-foreground">
-          Preview unavailable in browser. Open the screenshot path directly from the host environment.
+          Screenshot unavailable. Capture a new screenshot to try again.
         </div>
       )}
       {src && expanded && (
         <Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
           <DialogContent className="max-w-[90vw] max-h-[90vh] p-2" showCloseButton>
+            <DialogTitle className="sr-only">Browser screenshot</DialogTitle>
+            <DialogDescription className="sr-only">Captured browser page at full size.</DialogDescription>
             <img src={src} alt="Browser screenshot" className="max-h-[85vh] w-full object-contain" />
           </DialogContent>
         </Dialog>
@@ -3401,7 +3403,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'browserScreenshot' || bodyKind === 'imageView'
+  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -4305,6 +4307,10 @@ function ToolCallCardInner({
       )}
     </pre>
     )
+  ) : bodyKind === 'browserActivity' ? (
+    <BrowserActivityView tool={displayTool} args={normalizedArgs} data={resultData} status={call.status} output={displayOutput}>
+      {screenshotPath ? <BrowserScreenshotView key={screenshotPath} path={screenshotPath} /> : null}
+    </BrowserActivityView>
   ) : bodyKind === 'browserSnapshot' && snapshotText ? (
     <BrowserSnapshotView snapshot={snapshotText} />
   ) : bodyKind === 'browserScreenshot' && screenshotPath ? (
@@ -4764,7 +4770,7 @@ function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTe
   const completedCalls = topLevelCalls.filter(c => c.status !== 'running' && c.status !== 'pending')
   const allDone = activeCalls.length === 0 && completedCalls.length > 0
   const hasInlineSecretPrompt = hasInlineSecretPromptForCalls(calls, renderInlineSecretPrompt)
-  const shouldCollapseGroup = collapsible && !hasInlineSecretPrompt && allDone && completedCalls.length >= MIN_CALLS_TO_COLLAPSE
+  const shouldCollapseGroup = !hasInlineSecretPrompt && shouldInitiallyCollapseToolCallGroup(topLevelCalls, collapsible)
 
   useEffect(() => {
     if (hasInlineSecretPrompt) {
@@ -4925,7 +4931,7 @@ interface AgentToolCallWrapperProps {
 }
 
 export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[], isStreaming?: boolean): boolean {
-  if (isStreaming) return false
+  if (isStreaming || calls.some(isInlineToolCall)) return false
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
@@ -4968,6 +4974,8 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
   const hiddenSuccessCount = needsInnerCollapse ? completedCalls.slice(0, hiddenCount).filter(c => c.status === 'success').length : 0
   const hiddenErrorCount = hiddenCount - hiddenSuccessCount
 
+  const hasInlineActivity = calls.some(isInlineToolCall)
+
   // Auto-collapse when the agent finishes
   useEffect(() => {
     if (hasInlineSecretPrompt) {
@@ -4975,7 +4983,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
       prevActiveRef.current = isActive
       return
     }
-    if (prevActiveRef.current && !isActive && calls.length > 0) {
+    if (prevActiveRef.current && !isActive && calls.length > 0 && !hasInlineActivity) {
       // Same as the single-card completion effect: the wrapper collapses itself
       // when the agent finishes, without a click, so no anchorToggle() — its
       // toggle event used to detach the streaming follower mid-run and surface
@@ -4986,7 +4994,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, th
       setOpen(false)
     }
     prevActiveRef.current = isActive
-  }, [hasInlineSecretPrompt, isActive, calls.length])
+  }, [hasInlineSecretPrompt, hasInlineActivity, isActive, calls.length])
 
   // Tick the elapsed timer while active
   useEffect(() => {

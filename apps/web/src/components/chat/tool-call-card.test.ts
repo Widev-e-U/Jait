@@ -1,3 +1,4 @@
+import type { ToolCallInfo } from './tool-call-card'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
@@ -1160,6 +1161,14 @@ describe('isInlineToolCall', () => {
 })
 
 describe('AgentToolCallWrapper', () => {
+  it('keeps completed browser actions visible inside either group wrapper', () => {
+    const calls: ToolCallInfo[] = ['browser.navigate', 'browser.click', 'browser.snapshot'].map((tool, index) => ({
+      callId: String(index), tool, args: {}, status: 'success', startedAt: 1, completedAt: 2,
+    }))
+    expect(shouldInitiallyCollapseAgentToolCallWrapper(calls, false)).toBe(false)
+    expect(shouldInitiallyCollapseToolCallGroup(calls, true)).toBe(false)
+  })
+
   it('starts collapsed when the first render already contains only completed calls', () => {
     expect(shouldInitiallyCollapseAgentToolCallWrapper(
       [
@@ -1389,7 +1398,7 @@ describe('tool-card auto-collapse scroll contract', () => {
   it('closes the finished agent wrapper without announcing a toggle', () => {
     const effect = codeLines(sliceBetween(
       'Same as the single-card completion effect: the wrapper collapses itself',
-      '[hasInlineSecretPrompt, isActive, calls.length])',
+      '[hasInlineSecretPrompt, hasInlineActivity, isActive, calls.length])',
     ))
     expect(effect.join('\n')).toContain('setOpen(false)')
     expect(effect.join('\n')).not.toContain('anchorToggle()')
