@@ -5054,15 +5054,16 @@ function App() {
         )}
         {!requiresAuthGate && (
           <>
+            {/* Overlay the top edge so content fills the window and header buttons stay clickable. */}
             {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
               <div
-                className="h-10 shrink-0"
+                className="absolute inset-x-0 top-0 z-40 h-2 bg-transparent"
                 data-tauri-drag-region
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
               />
             )}
             {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
-              <div className="absolute right-0 top-0 z-50 bg-background/90" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+              <div className="absolute right-0 top-0 z-50 bg-transparent" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
                 {desktopPlatform === 'win32' ? <WinCaptionButtons isMaximized={isMaximized} /> : <LinuxWindowControls isMaximized={isMaximized} />}
               </div>
             )}
