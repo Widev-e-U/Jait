@@ -2002,6 +2002,16 @@ export function registerThreadRoutes(
   // ── Activity log ─────────────────────────────────────────────────
 
   /** Get activities for a thread */
+  app.get("/api/threads/:id/runtime", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
+    const running = thread.status === "running";
+    return { running, startedAt: running ? threadService.getRunStartedAt(id) : null } satisfies import("@jait/shared").AgentRuntime;
+  });
+
   app.get("/api/threads/:id/activities", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

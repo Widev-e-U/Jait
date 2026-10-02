@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { Avatar, Style } from '@dicebear/core'
-import bottts from '@dicebear/styles/bottts.json' with { type: 'json' }
 import { ArrowLeft, Clock3, ExternalLink, ListChecks, Maximize2, MessageSquare, Minimize2, Plus, Settings2, Sparkles, Trash2, UsersRound, Wrench } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Conversation, Message, PromptInput } from '@/components/chat'
 import type { PromptSkill, ReferencedFile } from '@/components/chat'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
+import { AgentAvatar } from './agent-avatar'
+import { AgentRow } from './agent-row'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { agentsApi, type AgentThread, type ThreadActivity } from '@/lib/agents-api'
@@ -38,16 +38,6 @@ interface AgentsPageProps {
   onOpenSettings: (tab: 'skills' | 'tools') => void
   onRefreshSkills: () => void
 }
-
-const avatarStyle = new Style(bottts)
-const avatarSources = new Map(PERSONA_AVATARS.map((seed) => [seed, new Avatar(avatarStyle, {
-  seed, size: 128, borderRadius: 50,
-  backgroundColor: ['#dbeafe', '#e9d5ff', '#cffafe', '#fce7f3', '#dcfce7'],
-}).toDataUri()]))
-function AgentAvatar({ avatar, className = 'h-16 w-16' }: { avatar: string; className?: string }) {
-  return <img alt="" src={avatarSources.get(normalizePersonaAvatar(avatar))} className={`${className} shrink-0 rounded-full object-cover`} />
-}
-
 
 function SkillsTable({ skills, selectedIds, onChange, onOpenStore }: {
   skills: AgentsPageProps['availableSkills']; selectedIds: string[];
@@ -360,15 +350,14 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
         <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">Agents</h1><p className="mt-1 text-sm text-muted-foreground">People you can ask, assign work to, and schedule.</p></div><Button size="sm" onClick={() => setCreating({ ...newPersonaAgentDraft(), skillIds: availableSkills.map((skill) => skill.id), usesAllSkills: true })}><Plus className="mr-1 h-4 w-4" /> New agent</Button></div>
         {loading && <p className="mt-8 text-center text-sm text-muted-foreground">Loading agents…</p>}
         {!loading && agents.length === 0 && <p className="mt-12 text-center text-sm text-muted-foreground">Create an agent to start a conversation or schedule work.</p>}
-        {agents.length > 0 && <div className="mt-8"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization</div><div className="space-y-1 rounded-lg border p-2 sm:p-3">{organizationEntries(agents).map(({ agent, depth }) => {
-          const latest = threads.filter((thread) => thread.personaAgentId === agent.id).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
-          return <button key={agent.id} type="button" onClick={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" style={{ paddingLeft: `${Math.min(depth, 8) * 22 + 8}px` }}><AgentAvatar avatar={agent.avatar} className="h-10 w-10" /><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{agent.name || 'Untitled agent'}</strong><span className="block truncate text-xs text-muted-foreground">{agent.role || (depth === 0 ? 'Top level agent' : 'Agent')} · {agent.providerId}</span></span><span className="shrink-0 text-xs text-muted-foreground">{latest?.status === 'running' ? 'Working' : latest?.status === 'error' ? 'Needs attention' : 'Ready'}</span></button>
+        {agents.length > 0 && <div className="mt-8"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization</div><div className="space-y-1">{organizationEntries(agents).map(({ agent, depth }) => {
+          return <AgentRow key={agent.id} agent={agent} depth={depth} threads={threads} onOpen={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} onChooseTask={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('runs') }} onRefresh={onRefreshThreads} />
         })}</div></div>}
       </div>
     </div> : <>
       <div className="shrink-0 px-4 pt-4 sm:px-6">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-2"><Button variant="ghost" size="sm" onClick={() => { setChatFullscreen(false); setCreating(null); setSelectedId(null); setConversationThreadId(null) }}><ArrowLeft className="mr-1 h-4 w-4" /> All agents</Button><div className="flex items-center gap-1">{selected && tab === 'chat' && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setChatFullscreen((value) => !value)} aria-label={chatFullscreen ? 'Exit full screen' : 'Full screen chat'} title={chatFullscreen ? 'Exit full screen' : 'Full screen chat'}>{chatFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</Button>}{selected && <Button variant="ghost" size="icon" className="h-8 w-8" disabled={busy} onClick={() => { setDeleteName(''); setDeleteOpen(true) }} aria-label="Delete agent"><Trash2 className="h-4 w-4" /></Button>}</div></div>
-        <div className="mx-auto mt-3 flex max-w-5xl items-center gap-3"><AgentAvatar avatar={current.avatar} className="h-12 w-12" /><div className="min-w-0"><h1 className="truncate text-lg font-semibold">{creating ? 'Create agent' : current.name}</h1><p className="truncate text-sm text-muted-foreground">{creating ? 'Set up your agent' : current.persona || 'Ask about their work or assign a task'}</p></div></div>
+        <div className="mx-auto mt-3 flex max-w-5xl items-center gap-3"><AgentAvatar avatar={current.avatar} running={activeChatStatus === 'running'} className="h-12 w-12" /><div className="min-w-0"><h1 className="truncate text-lg font-semibold">{creating ? 'Create agent' : current.name}</h1><p className="truncate text-sm text-muted-foreground">{creating ? 'Set up your agent' : current.persona || 'Ask about their work or assign a task'}</p></div></div>
       </div>
       {creating ? <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"><div className="mx-auto max-w-2xl space-y-5">
         <label className="block text-sm font-medium">Name<input value={current.name} onChange={(event) => change({ name: event.target.value })} placeholder="Research assistant" className="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label>

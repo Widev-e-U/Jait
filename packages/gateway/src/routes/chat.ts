@@ -5479,6 +5479,20 @@ export function registerChatRoutes(
     return { sessionIds: getStreamingSessionIds(authUser.id) };
   });
 
+  // Lightweight agent overview polling, without loading conversation history.
+  app.get("/api/sessions/:sessionId/runtime", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService && !sessionService.getById(sessionId, authUser.id)) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+    }
+    const running = activeStreams.has(sessionId);
+    const state = sessionStateService?.get(sessionId, [ACTIVE_TURN_STATE_KEY]);
+    const turn = parseDurableActiveTurn(state?.[ACTIVE_TURN_STATE_KEY]);
+    return { running, startedAt: running ? turn?.startedAt ?? null : null } satisfies import("@jait/shared").AgentRuntime;
+  });
+
   // List messages in a session
   app.get("/api/sessions/:sessionId/messages", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

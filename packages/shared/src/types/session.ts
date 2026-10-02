@@ -16,3 +16,9 @@ export interface SessionCreateParams {
   name?: string;
   projectPath?: string;
 }
+
+/** Lightweight activity snapshot; startedAt comes from durable turn state. */
+export interface AgentRuntime {
+  running: boolean;
+  startedAt: string | null;
+}

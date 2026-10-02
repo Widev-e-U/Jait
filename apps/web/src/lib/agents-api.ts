@@ -544,6 +544,17 @@ export class AgentsApi {
 
   // ── Activities ─────────────────────────────────────────────────
 
+  async getAgentRuntime(kind: 'sessions' | 'threads', id: string): Promise<import('@jait/shared').AgentRuntime> {
+    const res = await fetch(`${API_URL}/api/${kind}/${encodeURIComponent(id)}/runtime`, { headers: this.getHeaders() })
+    if (!res.ok) throw new Error('Could not load agent activity')
+    return res.json() as Promise<import('@jait/shared').AgentRuntime>
+  }
+
+  async cancelAgentSession(id: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(id)}/cancel`, { method: 'POST', headers: this.getHeaders() })
+    if (!res.ok) throw new Error('Could not stop agent chat')
+  }
+
   async getActivities(threadId: string, limit?: number): Promise<ThreadActivity[]> {
     const params = typeof limit === 'number' ? `?limit=${limit}` : ''
     const res = await fetch(`${API_URL}/api/threads/${threadId}/activities${params}`, {

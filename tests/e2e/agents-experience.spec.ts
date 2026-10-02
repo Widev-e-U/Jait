@@ -1,4 +1,4 @@
-import { test, expect, type Page, type APIRequestContext } from '@playwright/test'
+import { test, expect, type Page, type APIRequestContext, type WebSocketRoute } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 
@@ -14,7 +14,10 @@ async function openAgents(page: Page, request: APIRequestContext) {
     localStorage.setItem('token', token)
     localStorage.setItem('jait-gateway-url', api)
   }, { token, api: API_URL })
-  await page.goto('/agents')
+  await page.addLocatorHandler(page.getByText('A node needs your permission', { exact: true }), async () => {
+    await page.getByRole('button', { name: 'Dismiss', exact: true }).click()
+  })
+  await page.goto('/agents', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('button', { name: 'New agent' })).toBeVisible()
   return token as string
 }
@@ -83,4 +86,108 @@ test('agent chat creates a regular session and starts with all enabled skills', 
   expect((await profileUpdated).ok()).toBeTruthy()
   expect(session.id).toBeTruthy()
   expect(threadCreates).toBe(0)
+})
+
+test('agent overview uses creatures and play opens task selection independently', async ({ page, request }) => {
+  await openAgents(page, request)
+  await createAgent(page)
+  await page.getByRole('button', { name: 'All agents' }).click()
+  const row = page.getByTestId('agent-row')
+  await expect(row.locator('svg.agent-creature')).toBeVisible()
+  await expect(row.getByText('Ready', { exact: true })).toHaveCount(0)
+  await row.getByRole('button', { name: 'Choose task for Researcher' }).click()
+  await expect(page.getByRole('heading', { name: 'Tasks & runs', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'All agents' }).click()
+  await row.getByRole('button', { name: 'Open Researcher' }).click()
+  await expect(page.getByTestId('chat-composer')).toBeVisible()
+})
+
+test('agent overview restores elapsed time on reload and flips stop to play', async ({ page, request }) => {
+  const token = await openAgents(page, request)
+  const agent = await createAgent(page)
+  const headers = { Authorization: `Bearer ${token}` }
+  const response = await request.post(`${API_URL}/api/sessions`, { headers, data: { name: 'Agent runtime test' } })
+  expect(response.ok()).toBeTruthy()
+  const session = await response.json() as { id: string }
+  expect((await request.put(`${API_URL}/api/persona-agents/${agent.id}`, { headers, data: { ...agent, chatSessionId: session.id } })).ok()).toBeTruthy()
+  let running = true
+  let stopped = false
+  const startedAt = new Date(Date.now() - 125_000).toISOString()
+  await page.route(`**/api/sessions/${session.id}/runtime`, (route) => route.fulfill({ json: { running, startedAt: running ? startedAt : null } }))
+  await page.route(`**/api/sessions/${session.id}/cancel`, async (route) => {
+    stopped = true
+    running = false
+    await route.fulfill({ json: { ok: true, cancelled: true } })
+  })
+  await page.getByRole('button', { name: 'All agents' }).click()
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const row = page.getByTestId('agent-row')
+  await expect(row.getByRole('button', { name: 'Stop Researcher' })).toBeEnabled()
+  await expect(row.getByLabel('Running time')).toHaveText(/^2:\d{2}$/)
+  await expect(row.locator('svg.agent-creature')).toHaveClass(/agent-creature-working/)
+  await page.screenshot({ path: '../../.jait/agents-overview.png', fullPage: true })
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(row.getByLabel('Running time')).toHaveText(/^2:\d{2}$/)
+  await row.getByRole('button', { name: 'Stop Researcher' }).click()
+  await expect.poll(() => stopped).toBe(true)
+  await expect(row.getByRole('button', { name: 'Choose task for Researcher' })).toBeEnabled()
+  await expect(row.getByLabel('Running time')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await row.locator('.agent-creature-eyes').evaluate((eyes) => getComputedStyle(eyes).animationName)).toBe('none')
+})
+
+test('stopped task resumes from its row and active tasks stop independently of latest task', async ({ page, request }) => {
+  const token = await openAgents(page, request)
+  const agent = await createAgent(page)
+  const response = await request.post(`${API_URL}/api/threads`, { headers: { Authorization: `Bearer ${token}` }, data: { title: 'Write report', providerId: 'jait', personaAgentId: agent.id } })
+  expect(response.ok()).toBeTruthy()
+  const thread = await response.json()
+  let status = 'interrupted'
+  let resumed = false
+  let stopped = false
+  const startedAt = new Date(Date.now() - 65_000).toISOString()
+  const sockets: WebSocketRoute[] = []
+  const sendSnapshot = (socket: WebSocketRoute) => socket.send(JSON.stringify({
+    type: 'thread.updated', sessionId: '', timestamp: new Date().toISOString(),
+    payload: { threads: [
+      { ...thread, status, updatedAt: startedAt },
+      // A newer completed task must not hide an older active task.
+      ...(status === 'running' ? [{ ...thread, id: 'newer-completed-task', status: 'completed', title: 'Completed task', updatedAt: new Date().toISOString() }] : []),
+    ], hasMore: false, serverTime: new Date().toISOString() },
+  }))
+  await page.routeWebSocket(() => true, (socket) => {
+    sockets.push(socket)
+    const server = socket.connectToServer()
+    server.onMessage((message) => {
+      const event = JSON.parse(String(message))
+      if (event.type?.startsWith('thread.')) sendSnapshot(socket)
+      else socket.send(message)
+    })
+  })
+  await page.route(`**/api/threads/${thread.id}/runtime`, (route) => route.fulfill({ json: { running: status === 'running', startedAt } }))
+  await page.route(`**/api/threads/${thread.id}/start`, async (route) => {
+    resumed = route.request().postDataJSON().message.includes('Continue the stopped task')
+    status = 'running'
+    sockets.forEach(sendSnapshot)
+    await route.fulfill({ json: { ...thread, status } })
+  })
+  await page.route(`**/api/threads/${thread.id}/stop`, async (route) => {
+    stopped = true
+    status = 'interrupted'
+    sockets.forEach(sendSnapshot)
+    await route.fulfill({ json: { ok: true } })
+  })
+  await page.getByRole('button', { name: 'All agents' }).click()
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const row = page.getByTestId('agent-row')
+  await row.getByRole('button', { name: 'Resume Researcher' }).click()
+  await expect.poll(() => resumed).toBe(true)
+  await expect(row.getByRole('button', { name: 'Stop Researcher' })).toBeEnabled()
+  await expect(row.getByLabel('Running time')).toHaveText(/^1:\d{2}$/)
+  await expect(row.getByText('Write report', { exact: true })).toBeVisible()
+  await row.getByRole('button', { name: 'Stop Researcher' }).click()
+  await expect.poll(() => stopped).toBe(true)
+  await expect(row.getByRole('button', { name: 'Resume Researcher' })).toBeEnabled()
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
 })

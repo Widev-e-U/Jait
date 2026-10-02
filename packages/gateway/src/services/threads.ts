@@ -6,7 +6,7 @@
  * status, configuration, and activity log in SQLite via Drizzle.
  */
 
-import { and, eq, desc, gt } from "drizzle-orm";
+import { and, eq, desc, gt, sql } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { agentThreads, agentThreadActivities, personaAgents } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -337,6 +337,18 @@ export class ThreadService {
       })
       .run();
     return { id, threadId, kind, summary: persistedSummary, payload, createdAt: now };
+  }
+
+  getRunStartedAt(threadId: string): string | null {
+    // A new user activity marks each turn, including resumed turns. Avoid
+    // updatedAt: metadata and provider events can change it during a run.
+    const activity = this.db.select({ createdAt: agentThreadActivities.createdAt })
+      .from(agentThreadActivities)
+      .where(and(eq(agentThreadActivities.threadId, threadId),
+        eq(agentThreadActivities.kind, "message"),
+        sql`json_extract(${agentThreadActivities.payload}, '$.role') = 'user'`))
+      .orderBy(desc(agentThreadActivities.createdAt)).limit(1).get();
+    return activity?.createdAt ?? null;
   }
 
   getActivities(
