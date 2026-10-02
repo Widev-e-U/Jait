@@ -93,8 +93,8 @@ function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number 
             Queued #{index + 1}
           </span>
         )}
+        <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mb-1.5" />
         <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
-        <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mt-1.5" />
       </div>
     </div>
   )
@@ -250,6 +250,7 @@ function QueueItem({
             )}
           </span>
         )}
+        <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mb-1.5" />
         {editing ? (
           <textarea
             ref={inputRef}
@@ -265,7 +266,6 @@ function QueueItem({
         ) : (
           <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
         )}
-        <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mt-1.5" />
       </div>
 
       {/* Action buttons */}

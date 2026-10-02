@@ -937,6 +937,7 @@ function MessageInner({
                       onClick={handleUserBubbleClick}
                     >
                       <div className="min-w-0 space-y-3">
+                        <AttachmentList attachments={userAttachments} />
                         <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                           {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
                             ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
@@ -991,7 +992,6 @@ function MessageInner({
                               )
                             : (optimisticUserDisplayText ?? userDisplayText)}
                         </div>
-                        <AttachmentList attachments={userAttachments} />
                       </div>
                     </AIMessageContent>
                     </TooltipHint>
