@@ -547,6 +547,29 @@ describe("AcpProvider thinking forwarding", () => {
     });
   });
 
+  it.each([false, true])("preserves thinking chunk whitespace (wrapped=%s)", (wrapped) => {
+    const provider = new AcpProvider({
+      id: "codex", name: "Codex", description: "Codex via ACP",
+      command: process.execPath, args: ["-e", fakeAcpAgentScript],
+    });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+    const chunks = ["Let", " me", " inspect", " ", "the", " handler", ".", "\n\n", "Check", "ing", " next. "];
+    for (const text of chunks) {
+      const content = { type: "text", text };
+      provider.handleSessionUpdate("provider-session-1", {
+        update: {
+          sessionUpdate: "agent_thought_chunk",
+          content: wrapped ? { type: "content", content } : content,
+        },
+      } as any);
+    }
+    unsubscribe();
+    const thinking = events.filter((event) => event.type === "thinking");
+    expect(thinking.map((event) => event.content).join("")).toBe("Let me inspect the handler.\n\nChecking next. ");
+    expect(thinking.map((event) => event.content)).toEqual(chunks);
+  });
+
   it("unwraps nested content blocks from agent_thought_chunk", () => {
     const provider = new AcpProvider({
       id: "claude-code",

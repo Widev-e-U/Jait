@@ -1553,7 +1553,9 @@ function getAcpContentText(content: unknown): string {
   const record = content as Record<string, unknown>;
   const type = record["type"];
   if (type === "text" && typeof record["text"] === "string") {
-    return record["text"].trim();
+    // Stream chunks may contain only whitespace or split a word across updates.
+    // Preserve them verbatim so concatenation reconstructs the original text.
+    return record["text"];
   }
   if (type === "content" && record["content"]) {
     return getAcpContentText(record["content"]);
