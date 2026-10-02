@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.897](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.897) — 2026-10-02
+- feat(web): live browser tool activity in tool call card — 9e66a066
+- fix(web): render attachments above message text — 469985d2
+- fix(web): overlay tauri drag region so header buttons stay clickable — 82b6e02c
+- fix(desktop): keep model discovery responsive during turns — eec279dc
+
 ## [v0.1.896](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.896) — 2026-10-02
 - feat(agents): add animated creatures, run controls, and durable timers — 0372b78f
 - fix(web): reveal source control when clicking chat changes — 1b52ece5
