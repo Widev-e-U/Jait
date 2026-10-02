@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.895](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.895) — 2026-10-02
+- feat(gateway): pause scheduled agents before disk exhaustion — 9088d77f
+
+## [v0.1.894](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.894) — 2026-10-01
+- chore(release): bump gateway to v0.1.894, web to 0.1.422 — 9b2c0508
+
 ## [v0.1.893](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.893) — 2026-10-01
 - fix(web): open source control directly from the git-diff pill — 5c69481a
 - feat(web): unify Q&A and secure prompt cards above the chat input — 80f0a7d7
