@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.898](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.898) — 2026-10-03
+- docs: define the network security workbench direction — 81ae5baa
+- fix(desktop): preserve titlebar drag and window controls — 391a4a64
+- feat(web): show thread start times in manager lists — 403d9061
+- feat(web): add persistent todo creation-date sorting — b576f890
+- fix(web): expand queued messages without dragging or shifting the chat — 6c093330
+- fix(security): enforce account ownership for gateway controls and previews — 85e75f46
+
 ## [v0.1.897](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.897) — 2026-10-02
 - feat(web): live browser tool activity in tool call card — 9e66a066
 - fix(web): render attachments above message text — 469985d2
