@@ -164,7 +164,7 @@ function measureToolCardBox(card: HTMLElement, container: HTMLElement): ToolCard
  * any user action; the conversation's sizer observer already absorbs
  * automatic height changes on its own.
  */
-export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>() {
+export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>(anchorEdge?: ToolCardAnchorEdge) {
   const cardRef = useRef<T | null>(null)
   const frameRef = useRef<number | null>(null)
   const detachListenersRef = useRef<(() => void) | null>(null)
@@ -189,7 +189,7 @@ export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>(
 
     const before = measureToolCardBox(card, container)
     const viewportHeight = container.clientHeight
-    const edge = pickToolCardAnchorEdge(before, viewportHeight)
+    const edge = anchorEdge ?? pickToolCardAnchorEdge(before, viewportHeight)
     const headerWasVisible = before.top >= 0 && before.top <= viewportHeight
 
     // The conversation follows the end of the stream and re-pins its own scroll
@@ -227,7 +227,7 @@ export function useToolCardToggleAnchor<T extends HTMLElement = HTMLDivElement>(
     }
 
     frameRef.current = requestAnimationFrame(step)
-  }, [stop])
+  }, [stop, anchorEdge])
 
   return { cardRef, anchorToggle }
 }

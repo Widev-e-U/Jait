@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Lock, LockOpen, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TooltipHint } from '@/components/ui/tooltip'
+import { useToolCardToggleAnchor } from './tool-card-anchor'
 
 export interface QueuedMessage {
   id: string
@@ -131,13 +132,18 @@ function QueueItem({
   dragActive?: boolean
   dropBefore?: boolean
   dropAfter?: boolean
-  onDragStart?: (id: string, event: React.PointerEvent<HTMLDivElement>) => void
+  onDragStart?: (id: string, event: React.PointerEvent<HTMLElement>) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [collapsed, setCollapsed] = useState(true)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const showActions = editing || !dragActive
+  const { cardRef, anchorToggle } = useToolCardToggleAnchor('top')
+  const toggleCollapsed = () => {
+    anchorToggle()
+    setCollapsed(prev => !prev)
+  }
 
   // Focus the textarea when entering edit mode
   useEffect(() => {
@@ -186,18 +192,13 @@ function QueueItem({
         </div>
       )}
       <div
+      ref={cardRef}
       data-queue-id={item.id}
       className={cn(
-        'group flex cursor-grab touch-none items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70 active:cursor-grabbing',
+        'group flex items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70',
         iconOnly && 'relative gap-1 pl-2 pr-1 py-2',
         dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
       )}
-      onPointerDown={(event) => {
-        if (editing || !onReorder) return
-        const target = event.target as HTMLElement
-        if (target.closest('button, textarea, input, a, [data-no-drag="true"]')) return
-        onDragStart?.(item.id, event)
-      }}
     >
       {/* Position indicator */}
       <TooltipHint content={collapsed ? 'Expand queued message' : 'Collapse queued message'}>
@@ -205,7 +206,8 @@ function QueueItem({
         type="button"
         data-no-drag="true"
         className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
-        onClick={() => setCollapsed((prev) => !prev)}
+        onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
         aria-label={collapsed ? 'Expand queued message' : 'Collapse queued message'}
       >
         {collapsed ? (
@@ -218,14 +220,16 @@ function QueueItem({
       </button>
       </TooltipHint>
 
-      {onReorder && !editing && !iconOnly && (
+      {onReorder && !editing && (
         <TooltipHint content="Drag to reorder">
-        <div
+        <button
+          type="button"
+          onPointerDown={event => onDragStart?.(item.id, event)}
           className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
           aria-label="Drag to reorder"
         >
           <GripVertical className="h-3.5 w-3.5" />
-        </div>
+        </button>
         </TooltipHint>
       )}
 
@@ -262,9 +266,9 @@ function QueueItem({
             className="w-full resize-none rounded border border-primary/30 bg-background px-2 py-1 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
           />
         ) : collapsed ? (
-          <span className={cn('block text-foreground', iconOnly ? 'line-clamp-2 break-words' : 'truncate')}>{item.displayContent ?? item.content}</span>
+          <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} className="block w-full min-w-0 text-left text-foreground"><span className={cn('block', iconOnly ? 'line-clamp-2 break-words' : 'truncate')}>{item.displayContent ?? item.content}</span></button>
         ) : (
-          <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
+          <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} className="block w-full text-left whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</button>
         )}
       </div>
 
@@ -305,7 +309,7 @@ function QueueItem({
                 type="button"
                 data-no-drag="true"
                 className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
-                onClick={() => setEditing(true)} aria-label="Edit message"
+                onClick={() => { anchorToggle(); setEditing(true) }} aria-label="Edit message"
               >
                 <Pencil className="h-3 w-3" />
               </button>
@@ -497,7 +501,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSe
     }
   }, [dragPreview, dragSourceId, dropTarget, onReorder])
 
-  const handleDragStart = useCallback((id: string, event: React.PointerEvent<HTMLDivElement>) => {
+  const handleDragStart = useCallback((id: string, event: React.PointerEvent<HTMLElement>) => {
     if (!onReorder) return
     if (event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') return
     event.preventDefault()
@@ -542,7 +546,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSteer, onSe
           index={i}
           onRemove={onRemove}
           onEdit={onEdit}
-          onReorder={onReorder}
+          onReorder={items.length > 1 ? onReorder : undefined}
           onSteer={onSteer}
           onSendToParallelThread={onSendToParallelThread}
           parallelActionLabel={parallelActionLabel}
