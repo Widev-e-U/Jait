@@ -7,7 +7,8 @@ Public project documentation for Jait lives primarily in the repository root and
 - [README.md](../README.md)
 - [vision.md](vision.md)
 - [channel-assistant.md](channel-assistant.md) — Jait over a messenger: continuity, reminders, model fallback
-- [site/index.html](site/index.html)
+- [security-roadmap.md](security-roadmap.md) — security tools, implementation plan, and owned-network pilot
+- [jait.dev](https://jait.dev) — website (maintained in its own repository)
 - [CONTRIBUTING.md](../CONTRIBUTING.md)
 - [SECURITY.md](../SECURITY.md)
 

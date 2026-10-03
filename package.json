@@ -3,7 +3,7 @@
   "version": "0.1.82",
   "private": true,
   "type": "module",
-  "description": "Just Another Intelligent Tool — for Developers",
+  "description": "Just Another Intelligent Tool — AI-assisted network and cybersecurity",
   "license": "MIT",
   "author": "JakobWl",
   "homepage": "https://jait.dev",
@@ -14,10 +14,10 @@
   "keywords": [
     "ai",
     "agent",
-    "developer-tools",
+    "cybersecurity",
     "local-first",
     "terminal",
-    "coding-agent"
+    "network-security"
   ],
   "workspaces": [
     "packages/*",

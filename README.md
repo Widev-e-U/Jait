@@ -4,11 +4,15 @@
 
 # Jait
 
-**Your AI coding agent, everywhere you work.**
+**AI-assisted network and cybersecurity, under your control.**
 
-Jait is a local-first agent gateway: it runs on your machine (or a server), gives your agents a real toolbox — terminal, filesystem, browser, screen, email, calendar, smart home — and lets you pick up any conversation on any device. Phone, watch, laptop, desktop app: same session, same memory, live.
+Jait — Just Another Intelligent Tool — is a local-first security workbench for networks you own or are authorized to assess. The direction is clear: discover assets, understand exposure, investigate weaknesses, prioritize fixes, and verify improvements with evidence.
 
-> This is a passion project. I build it because it makes building fun again. It's new and it breaks — open issues, tell me what fails, and let's make it good together 🙏
+Today, Jait supplies the foundation: network discovery, SSH, live terminals, filesystem and browser tools, local state, scheduling, consent controls, and sessions across web, desktop, and mobile. Dedicated scanner adapters, enforceable assessment scope, unified findings, and remediation verification are planned. The existing network scan is discovery, not a comprehensive vulnerability assessment.
+
+The first proving ground is the maintainer's own home network and homelab. See the [vision](docs/vision.md) and [security roadmap](docs/security-roadmap.md) for proposed tools and a staged pilot.
+
+> This is an early open-source project. Help us build repeatable assessments with clear evidence and honest coverage limits.
 
 <p align="center">
   <a href="https://github.com/Widev-e-U/Jait/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/Widev-e-U/Jait/ci.yml?branch=main&label=typecheck&style=for-the-badge" alt="Typecheck"></a>
@@ -22,11 +26,12 @@ Jait is a local-first agent gateway: it runs on your machine (or a server), give
 
 ## Why Jait
 
-Most AI agents are trapped in one window. Jait flips that:
+Jait brings security investigation and practical action into one visible workflow:
 
-- **Engine swapping** — run Jait's toolbox on top of your favorite CLI coding agent. Jait speaks the [Agent Client Protocol](https://agentclientprotocol.com) and drives engines like **Claude Code**, **Codex**, **Gemini CLI**, **OpenCode**, or **Copilot CLI** — or bring your own via OpenAI-compatible APIs, Ollama, or OpenRouter. Swap engines without losing your history.
-- **Device hopping** — start a task on your desktop, approve a terminal command from your phone, check on it from your watch. Sessions, memory, and scheduled jobs live on the gateway, not the client.
-- **Agents, not chat** — spawn sub-agents and swarm managers that work in parallel, remember what matters, and wake up on a schedule. Approve/reject controls keep sensitive actions in your hands.
+- **Work in your environment** — discover local hosts, inspect services over SSH, and run tools through your own gateway and trusted nodes.
+- **Use the model you choose** — CLI engines or API/local providers help plan and explain investigations. Cloud providers receive the context sent to them; use a local provider when that context must stay local.
+- **Keep operator control** — live tool output, consent controls, durable sessions, and scheduled work support review and follow-through across devices.
+- **Build toward verified improvement** — the roadmap adds bounded Nmap scans, protocol and configuration checks, evidence-backed findings, curated Nuclei/Trivy integrations, and before/after verification. Coding tools remain available to prepare and validate fixes.
 
 ---
 
@@ -183,7 +188,7 @@ The `daemon` commands use systemd and are Linux-only.
 
 ---
 
-## What can Jait do?
+## Current capabilities
 
 **120+ built-in tools**, grouped by what they give the agent:
 

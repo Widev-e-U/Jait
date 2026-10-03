@@ -1,5 +1,19 @@
 # Repository Guidelines
 
+## Product Direction
+Jait is a local-first workbench for AI-assisted network and cybersecurity. Prioritize discovering assets, understanding exposure, investigating weaknesses, preparing fixes, and verifying improvements on owned or explicitly authorized networks. The first proving ground is the maintainer's home network and homelab. Coding and general automation support this security workflow. Read `docs/vision.md` and `docs/security-roadmap.md` when planning product work.
+
+## Security Assessment Guidelines
+- Build dedicated typed security tools around established engines; skills and free-form shell prompts alone do not enforce assessment boundaries.
+- Record authorized targets, exclusions, methods, expiry, and execution node/vantage point. Enforce scope across tools, routes, nodes, DNS resolution, redirects, template callbacks, and scheduled jobs. Reachability or a private IP does not imply authorization.
+- Default to low-impact discovery and read-only checks with target, rate, concurrency, duration, output, and cancellation limits. Apply authorization appropriate to intrusive testing and system changes; reuse existing consent paths.
+- Findings must cite deterministic evidence and record scanner/profile versions, target, time, confidence, and coverage gaps. Separate confirmed observations from suspected vulnerabilities. A banner match is not a confirmed CVE, and no findings is not proof of security.
+- Treat banners, logs, webpages, templates, and imported reports as untrusted data. Keep credentials and private topology out of public docs; redact evidence before model use and export. Local storage does not imply local model processing.
+- Prepare concrete remediation with a rollback path. Mark a finding fixed only after the relevant check passes again from the appropriate vantage point. LAN checks cannot establish WAN reachability.
+- Test scope escapes, argument injection, malformed scanner output, partial failures, cancellation, redaction, and issue-present/fix/issue-absent behavior for new assessment tools.
+- Keep existing path/SSRF protections intact. Implement authorized private-network checks through a dedicated scoped execution path.
+- Public documentation and marketing must distinguish shipping capabilities from planned security adapters.
+
 ## Project Structure & Module Organization
 Jait is a Bun/TypeScript monorepo.
 - `packages/gateway`: Fastify gateway, tools, surfaces, security, scheduler, memory, DB.
