@@ -20,7 +20,7 @@ import { readFile, writeFile, mkdir, readdir, stat as fsStat, access } from "nod
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir, hostname, platform } from "node:os";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { NODE_PROTOCOL_VERSION } from "@jait/shared";
@@ -268,6 +268,17 @@ export class PrimaryLink {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly terminalSessions = new Map<string, TerminalSurface>();
   private readonly nodeId = getNodeId();
+  private get credentialPath(): string {
+    const key = createHash("sha256").update(this.opts.primaryGateway).digest("hex").slice(0, 24);
+    return join(getStateDirectory(), "node-pairings", key + ".json");
+  }
+  private pairedToken(): string | undefined {
+    try {
+      const saved = JSON.parse(readFileSync(this.credentialPath, "utf8"));
+      if (saved.nodeId === this.nodeId && typeof saved.credential === "string") return saved.credential;
+    } catch { /* initial pairing */ }
+    return this.opts.primaryToken;
+  }
 
   constructor(private readonly opts: PrimaryLinkOptions) {}
 
@@ -288,7 +299,7 @@ export class PrimaryLink {
   }
 
   private connect(): void {
-    const url = toWsUrl(this.opts.primaryGateway, this.opts.primaryToken);
+    const url = toWsUrl(this.opts.primaryGateway, this.pairedToken());
     const display = url.replace(/token=[^&]+/, "token=***");
     console.log(`[primary-link] connecting to primary gateway ${display} as node ${this.nodeId}`);
 
@@ -315,6 +326,7 @@ export class PrimaryLink {
           name: nodeName,
           platform,
           role: "remote",
+          pairCredential: true,
           protocolVersion: NODE_PROTOCOL_VERSION,
           capabilities: {
             providers,
@@ -342,6 +354,12 @@ export class PrimaryLink {
       try {
         msg = JSON.parse(raw.toString());
       } catch {
+        return;
+      }
+      if (msg.type === "node.credential" && msg.payload?.nodeId === this.nodeId && typeof msg.payload.credential === "string") {
+        void mkdir(dirname(this.credentialPath), { recursive: true, mode: 0o700 }).then(() => {
+          writeFileSync(this.credentialPath, JSON.stringify(msg.payload), { mode: 0o600 });
+        }).catch(() => console.error("[primary-link] Could not persist paired credential"));
         return;
       }
       void this.handleMessage(msg);

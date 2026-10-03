@@ -730,9 +730,11 @@ async function ensureSessionTerminal(
 
     const remoteSurface = new RemoteTerminalSurface(preferredId, ws, remoteNodeId, { reuseOnly: true });
     registry.registerInstance(preferredId, remoteSurface);
+    if (context.userId) registry.setOwner(preferredId, context.userId);
     try {
       await remoteSurface.start({
         sessionId: context.sessionId,
+        userId: context.userId,
         projectRoot: context.projectRoot,
         nodeId: remoteNodeId,
       });
@@ -806,9 +808,11 @@ async function ensureSessionTerminal(
     if (!ws) throw new Error("Remote terminal execution requires the WebSocket control plane");
     const remoteSurface = new RemoteTerminalSurface(terminalId, ws, remoteNodeId);
     registry.registerInstance(terminalId, remoteSurface);
+    if (context.userId) registry.setOwner(terminalId, context.userId);
     try {
       await remoteSurface.start({
         sessionId: context.sessionId,
+        userId: context.userId,
         projectRoot: context.projectRoot,
         nodeId: remoteNodeId,
       });
@@ -821,6 +825,7 @@ async function ensureSessionTerminal(
   } else {
     surface = (await registry.startSurface("terminal", terminalId, {
       sessionId: context.sessionId,
+        userId: context.userId,
       projectRoot: context.projectRoot,
     })) as TerminalSurface;
   }
@@ -1624,6 +1629,7 @@ export function createTerminalStreamTool(registry: SurfaceRegistry): ToolDefinit
 
       const surface = await registry.startSurface("terminal", termId, {
         sessionId: input.sessionId || context.sessionId,
+        userId: context.userId,
         projectRoot,
       });
 

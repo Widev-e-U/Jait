@@ -52,6 +52,7 @@ interface JaitDesktop {
   windowMinimize: () => Promise<void>
   windowMaximize: () => Promise<void>
   windowClose: () => Promise<void>
+  windowStartDrag: () => Promise<void>
   windowIsMaximized: () => Promise<boolean>
   onMaximizedChange: (callback: (event: unknown, maximized: boolean) => void) => () => void
   setTitleBarOverlay: (opts: { color?: string; symbolColor?: string; height?: number }) => Promise<void>

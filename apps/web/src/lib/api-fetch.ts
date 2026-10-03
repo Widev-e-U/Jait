@@ -10,6 +10,7 @@
  */
 
 import { Capacitor } from '@capacitor/core'
+import { getApiUrl } from './gateway-url'
 import { getAuthToken } from './auth-token'
 
 function isNativeApp(): boolean {
@@ -32,7 +33,7 @@ function isCrossOriginDev(): boolean {
  * running in cross-origin dev mode.
  */
 export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const headers = new Headers(init?.headers)
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
   const merged: RequestInit = { ...init, headers }
 
   if (isNativeApp()) {
@@ -47,4 +48,23 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
   }
 
   return fetch(input, merged)
+}
+
+
+let installed = false
+export function installGatewayFetchAuth(): void {
+  if (installed || typeof window === 'undefined') return
+  installed = true
+  const original = window.fetch.bind(window)
+  window.fetch = (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), window.location.href)
+    const gateway = new URL(getApiUrl() || window.location.origin, window.location.href)
+    if (url.origin !== gateway.origin || !url.pathname.startsWith('/api/')) return original(input, init)
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    if (isNativeApp() && !headers.has('authorization')) {
+      const token = getAuthToken()
+      if (token) headers.set('authorization', 'Bearer ' + token)
+    }
+    return original(input, { ...init, headers, credentials: init?.credentials ?? 'include' })
+  }
 }

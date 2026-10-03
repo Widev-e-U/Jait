@@ -76,6 +76,8 @@ export class NodeStateManager {
     return removed;
   }
 
+  getClientId(id: string): string | null { return this.records.get(id)?.clientId ?? null; }
+
   getNode(id: string): NodeState | null {
     return this.records.get(id)?.state ?? null;
   }

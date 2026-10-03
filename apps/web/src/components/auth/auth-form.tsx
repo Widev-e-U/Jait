@@ -44,6 +44,8 @@ export interface AuthFormProps {
   showLoginPassword: boolean
   setShowLoginPassword: (value: boolean) => void
 
+  registerInvitation?: string
+  setRegisterInvitation?: (value: string) => void
   registerUsername: string
   setRegisterUsername: (value: string) => void
   registerPassword: string
@@ -82,6 +84,8 @@ export function AuthForm(props: AuthFormProps) {
     setLoginPassword,
     showLoginPassword,
     setShowLoginPassword,
+    registerInvitation,
+    setRegisterInvitation,
     registerUsername,
     setRegisterUsername,
     registerPassword,
@@ -240,6 +244,11 @@ export function AuthForm(props: AuthFormProps) {
         </TabsContent>
         <TabsContent value="register" className="pt-4">
           <form className="space-y-4" onSubmit={handleRegister}>
+            <div className="space-y-1.5">
+              <Label htmlFor="register-invitation">Invitation code</Label>
+              <Input id="register-invitation" value={registerInvitation ?? ''} onChange={(event) => setRegisterInvitation?.(event.target.value)} autoComplete="off" />
+              <p className="text-xs text-muted-foreground">Required for additional accounts. Leave blank when setting up your first account.</p>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="register-username">Username</Label>
               <Input

@@ -1,3 +1,4 @@
+import { AccountInvitations } from "./AccountInvitations"
 import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -1664,6 +1665,7 @@ const providerAccountsCard = (
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
+          <AccountInvitations token={token} />
           {showUpdateSection && (
             <Card className="space-y-4 p-5">
               <div>

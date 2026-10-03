@@ -123,10 +123,10 @@ describe("session trajectory endpoint", () => {
     migrateDatabase(sqlite);
     const sessionService = new SessionService(db);
     const userService = new UserService(db);
-    userService.createUser("traj-user", "password123");
+    const user = userService.createUser("traj-user", "password123");
 
     app = await createServer(testConfig, { db, sqlite, sessionService, userService });
-    const token = await signAuthToken({ id: "traj-user", username: "traj-user" }, testConfig.jwtSecret);
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
 
     const res = await app.inject({
       method: "GET",

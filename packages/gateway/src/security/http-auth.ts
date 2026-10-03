@@ -38,10 +38,10 @@ export async function verifyAuthToken(
   jwtSecret: string,
 ): Promise<AuthUser | null> {
   try {
-    const { payload } = await jose.jwtVerify(token, getJwtSecret(jwtSecret));
+    const { payload } = await jose.jwtVerify(token, getJwtSecret(jwtSecret), { algorithms: ["HS256"] });
     const id = typeof payload.sub === "string" ? payload.sub : "";
     const username = typeof payload.username === "string" ? payload.username : "";
-    if (!id || !username) return null;
+    if (!id || !username || payload.purpose) return null;
     return { id, username };
   } catch {
     return null;

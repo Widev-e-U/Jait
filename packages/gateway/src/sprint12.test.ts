@@ -1,3 +1,4 @@
+import { signAuthToken } from "./security/http-auth.js";
 import { describe, expect, it } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
@@ -20,13 +21,14 @@ describe("Sprint 12 — mobile gateway flows", () => {
     const deviceRegistry = new DeviceRegistry();
     const app = await createServer(testConfig, { consentManager, deviceRegistry });
 
-    const discovery = await app.inject({ method: "GET", url: "/api/mobile/discovery" });
+    const headers = { authorization: "Bearer " + await signAuthToken({ id: "mobile-owner", username: "owner" }, testConfig.jwtSecret) };
+    const discovery = await app.inject({ headers, method: "GET", url: "/api/mobile/discovery" });
     expect(discovery.statusCode).toBe(200);
     const discoveryBody = discovery.json() as { name: string; wsUrl: string };
     expect(discoveryBody.name).toBe("jait-gateway");
     expect(discoveryBody.wsUrl).toContain("/ws");
 
-    const register = await app.inject({
+    const register = await app.inject({ headers,
       method: "POST",
       url: "/api/mobile/devices/register",
       payload: {
@@ -38,7 +40,7 @@ describe("Sprint 12 — mobile gateway flows", () => {
     });
     expect(register.statusCode).toBe(200);
 
-    const devices = await app.inject({ method: "GET", url: "/api/mobile/devices" });
+    const devices = await app.inject({ headers, method: "GET", url: "/api/mobile/devices" });
     expect(devices.statusCode).toBe(200);
     const devicesBody = devices.json() as { devices: Array<{ id: string; lastSeen: string }> };
     expect(devicesBody.devices).toHaveLength(1);
@@ -46,7 +48,7 @@ describe("Sprint 12 — mobile gateway flows", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    const heartbeat = await app.inject({
+    const heartbeat = await app.inject({ headers,
       method: "POST",
       url: "/api/mobile/devices/device-mobile-1/heartbeat",
     });
@@ -54,7 +56,7 @@ describe("Sprint 12 — mobile gateway flows", () => {
     const heartbeatBody = heartbeat.json() as { device: { lastSeen: string } };
     expect(heartbeatBody.device.lastSeen > lastSeenBefore).toBe(true);
 
-    const health = await app.inject({ method: "GET", url: "/health" });
+    const health = await app.inject({ headers, method: "GET", url: "/health" });
     const healthBody = health.json() as { devices: number };
     expect(healthBody.devices).toBe(1);
 
@@ -65,7 +67,7 @@ describe("Sprint 12 — mobile gateway flows", () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     const sessionService = new SessionService(db);
-    sessionService.create({ name: "Mobile Control Session" });
+    sessionService.create({ name: "Mobile Control Session", userId: "mobile-owner" });
 
     const app = await createServer(testConfig, {
       consentManager: new ConsentManager(),
@@ -73,7 +75,8 @@ describe("Sprint 12 — mobile gateway flows", () => {
       sessionService,
     });
 
-    const response = await app.inject({ method: "GET", url: "/api/mobile/os-tool/sessions" });
+    const headers = { authorization: "Bearer " + await signAuthToken({ id: "mobile-owner", username: "owner" }, testConfig.jwtSecret) };
+    const response = await app.inject({ headers, method: "GET", url: "/api/mobile/os-tool/sessions" });
     expect(response.statusCode).toBe(200);
     const body = response.json() as { sessions: Array<{ id: string; name: string }> };
     expect(body.sessions.length).toBe(1);

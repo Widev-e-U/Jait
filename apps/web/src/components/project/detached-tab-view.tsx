@@ -1,3 +1,4 @@
+import { usePreviewAccess } from '@/hooks/use-preview-access'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import { Boxes, ExternalLink, Globe, Loader2, Save, X } from 'lucide-react'
@@ -53,7 +54,9 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
     setFileContent(payload?.tab.content ?? '')
   }, [payload?.tab.content])
 
-  const previewSrc = useMemo(() => resolveDetachedPreviewSrc(payload?.tab.previewSrc), [payload?.tab.previewSrc])
+  const resolvedPreviewSrc = useMemo(() => resolveDetachedPreviewSrc(payload?.tab.previewSrc), [payload?.tab.previewSrc])
+
+  const previewSrc = usePreviewAccess(resolvedPreviewSrc)
 
   const handleClose = useCallback(() => {
     clearDetachedProjectTab(detachedTabId)

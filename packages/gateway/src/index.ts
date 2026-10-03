@@ -4,6 +4,7 @@ import "./crypto-polyfill.js";
 
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
+import { ControlAccess } from "./security/control-access.js";
 import { WsControlPlane } from "./ws.js";
 import { PrimaryLink } from "./services/primary-link.js";
 import { openDatabase, migrateDatabase, sqliteBackend } from "./db/index.js";
@@ -302,9 +303,9 @@ async function main() {
       payload: { session },
     });
   });
-  ws.getSurfaceSnapshot = (): SurfaceRegistrySnapshot => ({
+  ws.getSurfaceSnapshot = (userId): SurfaceRegistrySnapshot => ({
     serverTime: new Date().toISOString(),
-    surfaces: surfaceRegistry.listSnapshots(),
+    surfaces: surfaceRegistry.listSnapshots().filter((surface) => new ControlAccess(sessionService, surfaceRegistry).surface(surface.id, userId ?? null)),
   });
 
   // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)

@@ -1,3 +1,6 @@
+import { loadConfig } from "../config.js";
+import { signAuthToken } from "../security/http-auth.js";
+import { ControlAccess } from "../security/control-access.js";
 import Fastify from "fastify";
 import { expect, it, vi } from "vitest";
 import { registerTerminalRoutes } from "./terminals.js";
@@ -19,9 +22,12 @@ it("routes terminal creation through the session's remote filesystem when nodeId
   await remote.start({ sessionId: "tankstelle", projectRoot: root, nodeId: "windows-node" });
   registry.registerInstance(remote.id, remote);
   const app = Fastify();
-  registerTerminalRoutes(app, registry, new ToolRegistry(), { write: vi.fn() } as unknown as AuditWriter, undefined, ws);
+  const config = { ...loadConfig(), jwtSecret: "project-routing-test-secret" };
+  const token = await signAuthToken({ id: "owner", username: "owner" }, config.jwtSecret);
+  const access = new ControlAccess({ getById: () => ({ userId: "owner" }) } as any, registry);
+  registerTerminalRoutes(app, registry, new ToolRegistry(), { write: vi.fn() } as unknown as AuditWriter, undefined, ws, { config, access });
   try {
-    const response = await app.inject({ method: "POST", url: "/api/terminals", payload: { sessionId: "tankstelle", projectRoot: root } });
+    const response = await app.inject({ method: "POST", url: "/api/terminals", headers: { authorization: "Bearer " + token }, payload: { sessionId: "tankstelle", projectRoot: root } });
     expect(response.statusCode).toBe(201);
     expect(response.json().metadata).toMatchObject({ remote: true, nodeId: "windows-node", cwd: root });
     expect(ws.proxyTerminalOp).toHaveBeenCalledWith("windows-node", "start", expect.objectContaining({ projectRoot: root }), 15_000);

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
+import { ControlAccess } from "../security/control-access.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { SchedulerService } from "../scheduler/service.js";
 import type { ConsentManager } from "../security/consent-manager.js";
@@ -19,6 +20,7 @@ interface MobileRouteDeps {
 }
 
 export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps) {
+  const access = new ControlAccess(deps.sessionService, undefined, deps.consentManager);
   app.get("/api/mobile/discovery", async (request) => {
     const host = request.hostname;
     const protocol = request.protocol;
@@ -158,17 +160,24 @@ export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps
     return { routine };
   });
 
-  app.get("/api/mobile/os-tool/sessions", async () => {
-    const sessions = deps.sessionService ? deps.sessionService.list() : [];
+  app.get("/api/mobile/os-tool/sessions", async (request, reply) => {
+    const user = await requireAuth(request, reply, deps.config.jwtSecret);
+    if (!user) return;
+    const sessions = deps.sessionService ? deps.sessionService.list("active", user.id) : [];
     return { sessions };
   });
 
-  app.get("/api/mobile/consent/pending", async () => ({
-    requests: deps.consentManager.listPending(),
-  }));
+  app.get("/api/mobile/consent/pending", async (request, reply) => {
+    const user = await requireAuth(request, reply, deps.config.jwtSecret);
+    if (!user) return;
+    return { requests: deps.consentManager.listPending().filter((entry) => access.session(entry.sessionId, user.id)) };
+  });
 
   app.post("/api/mobile/consent/:id/approve", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = await requireAuth(request, reply, deps.config.jwtSecret);
+    if (!user) return;
+    if (!access.consentRequest(id, user.id)) return reply.code(404).send({ error: "Consent request not found" });
     const ok = deps.consentManager.approve(id, "click", "mobile.approve");
     if (!ok) {
       return reply.code(404).send({ error: "Consent request not found" });
@@ -178,6 +187,9 @@ export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps
 
   app.post("/api/mobile/consent/:id/reject", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = await requireAuth(request, reply, deps.config.jwtSecret);
+    if (!user) return;
+    if (!access.consentRequest(id, user.id)) return reply.code(404).send({ error: "Consent request not found" });
     const ok = deps.consentManager.reject(id, "click", "mobile.reject");
     if (!ok) {
       return reply.code(404).send({ error: "Consent request not found" });

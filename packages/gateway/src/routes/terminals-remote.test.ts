@@ -95,6 +95,7 @@ describe("POST /api/terminals with remote nodeId", () => {
   let surfaceRegistry: SurfaceRegistry;
   let plane: WsControlPlane;
   let token: string;
+  let remoteSessionId: string;
   let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 
   beforeAll(async () => {
@@ -177,7 +178,11 @@ describe("POST /api/terminals with remote nodeId", () => {
     // Attach the WS control plane to the same HTTP server (shared port).
     plane.start(app.server);
 
-    token = await createToken("remote-terminal-test-user");
+    const user = users.createUser("remote-terminal-test-user", "test-password-only");
+    token = await new jose.SignJWT({ username: user.username }).setSubject(user.id)
+      .setProtectedHeader({ alg: "HS256" }).setExpirationTime("1h").sign(new TextEncoder().encode(TEST_SECRET));
+    const session = sessions.create({ userId: user.id, name: "remote terminal" });
+    remoteSessionId = session.id;
   }, 60_000);
 
   afterAll(async () => {
@@ -253,7 +258,7 @@ describe("POST /api/terminals with remote nodeId", () => {
     const createRes = await fetch(`http://127.0.0.1:${httpPort}/api/terminals`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ sessionId: "remote-term-session", projectRoot: "/tmp", nodeId: REMOTE_NODE_ID }),
+      body: JSON.stringify({ sessionId: remoteSessionId, projectRoot: "/tmp", nodeId: REMOTE_NODE_ID }),
     });
 
     await startHandled;

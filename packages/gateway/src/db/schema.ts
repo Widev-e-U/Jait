@@ -642,6 +642,7 @@ export const nodes = sqliteTable(
   "nodes",
   {
     nodeId: text("node_id").primaryKey(),
+    userId: text("user_id"),
     name: text("name"),
     platform: text("platform"),
     role: text("role"),
@@ -800,4 +801,18 @@ export const plugins = sqliteTable("plugins", {
   error: text("error"),
   installedAt: text("installed_at").notNull(),
   updatedAt: text("updated_at").notNull(),
+});
+
+
+// Per-node credentials contain hashes only and never confer account authority.
+export const nodeCredentials = sqliteTable("node_credentials", {
+  tokenHash: text("token_hash").primaryKey(),
+  nodeId: text("node_id").notNull(),
+  userId: text("user_id").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+export const accountInvitations = sqliteTable("account_invitations", {
+  tokenHash: text("token_hash").primaryKey(),
+  createdBy: text("created_by").notNull(),
+  expiresAt: text("expires_at").notNull(),
 });

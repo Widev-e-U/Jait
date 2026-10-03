@@ -167,6 +167,8 @@ describe("WsControlPlane", () => {
     db = opened.db;
     migrateDatabase(opened.sqlite);
     plane = new WsControlPlane(config, db);
+    plane.canAccessTerminal = (_id, user) => Boolean(user);
+    plane.canAccessConsent = (_id, user) => Boolean(user);
     plane.start();
     const addr = (plane as any).wss?.address();
     port = typeof addr === "object" ? addr.port : 0;
@@ -271,7 +273,7 @@ describe("WsControlPlane", () => {
       expect(ws.readyState).toBe(WebSocket.CLOSED);
     });
 
-    it("allows unauthenticated connection in dev mode", async () => {
+    it("keeps development connections unauthenticated until login", async () => {
       plane.stop();
       const devConfig = makeConfig({ nodeEnv: "development", wsPort: 0 });
       plane = new WsControlPlane(devConfig);
@@ -284,7 +286,7 @@ describe("WsControlPlane", () => {
 
       const msg = await collector.next();
       expect(msg.type).toBe("session.created");
-      expect(msg.payload.authenticated).toBe(true);
+      expect(msg.payload.authenticated).toBe(false);
       ws.close();
     });
   });

@@ -3,6 +3,9 @@ import type { Surface, SurfaceFactory, SurfaceSnapshot, SurfaceStartInput } from
 export class SurfaceRegistry {
   private readonly factories = new Map<string, SurfaceFactory>();
   private readonly surfaces = new Map<string, Surface>();
+  private readonly owners = new Map<string, string>();
+  setOwner(id: string, userId: string): void { this.owners.set(id, userId); }
+  getOwner(id: string): string | undefined { return this.owners.get(id); }
 
   /** Called after every surface is started (regardless of creation path) */
   onSurfaceStarted?: (id: string, surface: Surface) => void;
@@ -26,6 +29,7 @@ export class SurfaceRegistry {
 
     const instance = factory.create(id);
     this.surfaces.set(id, instance);
+    if (typeof input.userId === "string") this.setOwner(id, input.userId);
     await instance.start(input);
     this.onSurfaceStarted?.(id, instance);
     return instance;
@@ -39,6 +43,7 @@ export class SurfaceRegistry {
     await surface.stop({ reason });
     this.onSurfaceStopped?.(id, { ...surface, snapshot: () => snap } as Surface, { reason });
     this.surfaces.delete(id);
+    this.owners.delete(id);
     return true;
   }
 
@@ -60,6 +65,7 @@ export class SurfaceRegistry {
   }
 
   unregister(id: string): boolean {
+    this.owners.delete(id);
     return this.surfaces.delete(id);
   }
 

@@ -1,3 +1,4 @@
+import { usePreviewAccess } from '@/hooks/use-preview-access'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Info } from 'lucide-react'
 import { buildNoVncViewerUrl, isNoVncViewerUrl, isWebSocketUrl, type NoVncResizeMode, type NoVncSessionOptions } from '@/lib/no-vnc'
@@ -68,7 +69,7 @@ export function NoVncSessionView({
   overlay,
   onLoad,
 }: NoVncSessionViewProps) {
-  const src = resolveNoVncSessionUrl(source, {
+  const resolvedSource = resolveNoVncSessionUrl(source, {
     viewerUrl,
     websocketUrl,
     viewOnly,
@@ -81,6 +82,8 @@ export function NoVncSessionView({
     compression,
     bell,
   })
+
+  const src = usePreviewAccess(resolvedSource)
 
   if (!src) {
     return (

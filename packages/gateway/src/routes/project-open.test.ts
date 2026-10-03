@@ -1,3 +1,4 @@
+import { signAuthToken } from "../security/http-auth.js";
 /**
  * Integration test: POST /api/project/open
  *
@@ -28,7 +29,14 @@ import { tmpdir } from "node:os";
 describe("POST /api/project/open", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let address: string;
-  const sessionId = "test-session-" + Date.now();
+  let authToken: string;
+  let ownerId: string;
+  const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+  let sessionId = "test-session-" + Date.now();
   let sessionState: SessionStateService;
   let surfaceRegistry: SurfaceRegistry;
   let sessions: SessionService;
@@ -49,6 +57,10 @@ describe("POST /api/project/open", () => {
     sessions = new SessionService(db);
     sessionState = new SessionStateService(db);
     users = new UserService(db);
+    const owner = users.createUser("project-owner", "password123");
+    ownerId = owner.id;
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
     projects = new ProjectService(db);
     projectState = new ProjectStateService(db);
     surfaceRegistry = new SurfaceRegistry();
@@ -111,7 +123,7 @@ describe("POST /api/project/open", () => {
   });
 
   it("should create a filesystem surface and return surfaceId", async () => {
-    const res = await fetch(`${address}/api/project/open`, {
+    const res = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
@@ -125,7 +137,7 @@ describe("POST /api/project/open", () => {
 
   it("should make files browsable via GET /api/project/list", async () => {
     // First open the project
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
@@ -133,7 +145,7 @@ describe("POST /api/project/open", () => {
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
     // Now list the directory
-    const listRes = await fetch(
+    const listRes = await authedFetch(
       `${address}/api/project/list?path=${encodeURIComponent(writableTestRoot)}&surfaceId=${surfaceId}`,
     );
 
@@ -146,7 +158,7 @@ describe("POST /api/project/open", () => {
   });
 
   it("should persist project state to session_state DB", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // Editor mode is opt-in, so the panel state only opens when requested.
@@ -188,7 +200,7 @@ describe("POST /api/project/open", () => {
       },
     });
 
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId: session.id }),
@@ -230,7 +242,7 @@ describe("POST /api/project/open", () => {
       },
     });
 
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId: session.id, openPanel: true }),
@@ -246,7 +258,7 @@ describe("POST /api/project/open", () => {
   });
 
   it("should reject non-existent paths", async () => {
-    const res = await fetch(`${address}/api/project/open`, {
+    const res = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: "/nonexistent/path/12345", sessionId }),
@@ -259,14 +271,14 @@ describe("POST /api/project/open", () => {
   });
 
   it("should reject path traversal in POST /api/project/apply-diff", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
-    const applyRes = await fetch(`${address}/api/project/apply-diff`, {
+    const applyRes = await authedFetch(`${address}/api/project/apply-diff`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: "../outside.txt", content: "blocked", surfaceId }),
@@ -278,14 +290,14 @@ describe("POST /api/project/open", () => {
   });
 
   it("should write files via POST /api/project/write", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
-    const writeRes = await fetch(`${address}/api/project/write`, {
+    const writeRes = await authedFetch(`${address}/api/project/write`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestFile, content: "after", surfaceId }),
@@ -296,11 +308,11 @@ describe("POST /api/project/open", () => {
   });
 
   it("should keep a personal chat project-less when opening a filesystem surface", async () => {
-    const user = users.createUser(`open-user-${Date.now()}`, "password123");
+    const user = users.findById(ownerId)!;
     const session = sessions.create({ userId: user.id, name: "No project yet" });
     expect(session.projectId).toBeNull();
 
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId: session.id }),
@@ -321,12 +333,13 @@ describe("POST /api/project/open", () => {
     const searchFile = join(writableTestRoot, "nested", "unique-search-target.ts");
     await writeFile(searchFile, "const UNIQUE_SEARCH_TOKEN = 'project-search-regression';\n", "utf-8");
 
-    const authResponse = await fetch(`${address}/api/auth/register`, {
+    const authResponse = await authedFetch(`${address}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: `project-search-${Date.now()}`,
         password: "password123",
+        invitation: users.createInvitation(ownerId),
       }),
     });
     const { access_token: accessToken, user } = (await authResponse.json()) as {
@@ -336,9 +349,9 @@ describe("POST /api/project/open", () => {
     const searchHeaders = { Authorization: `Bearer ${accessToken}` };
     const searchSession = sessions.create({ userId: user.id, name: "Project search" });
 
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...searchHeaders },
       body: JSON.stringify({ path: writableTestRoot, sessionId: searchSession.id }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
@@ -348,7 +361,7 @@ describe("POST /api/project/open", () => {
     );
     expect(unauthorizedSearch.status).toBe(401);
 
-    const fileSearchRes = await fetch(
+    const fileSearchRes = await authedFetch(
       `${address}/api/project/search?query=${encodeURIComponent("unique-search-target")}&mode=files&surfaceId=${encodeURIComponent(surfaceId)}`,
       { headers: searchHeaders },
     );
@@ -359,7 +372,7 @@ describe("POST /api/project/open", () => {
       name: "unique-search-target.ts",
     });
 
-    const contentSearchRes = await fetch(
+    const contentSearchRes = await authedFetch(
       `${address}/api/project/search?query=${encodeURIComponent("project-search-regression")}&mode=content&surfaceId=${encodeURIComponent(surfaceId)}`,
       { headers: searchHeaders },
     );
@@ -373,14 +386,14 @@ describe("POST /api/project/open", () => {
   });
 
   it("should reject path traversal in POST /api/project/write", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
-    const writeRes = await fetch(`${address}/api/project/write`, {
+    const writeRes = await authedFetch(`${address}/api/project/write`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: "../outside.txt", content: "blocked", surfaceId }),
@@ -393,7 +406,7 @@ describe("POST /api/project/open", () => {
 
   it("should replace existing filesystem surface for the session", async () => {
     // Open first project
-    const res1 = await fetch(`${address}/api/project/open`, {
+    const res1 = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
@@ -403,7 +416,7 @@ describe("POST /api/project/open", () => {
     // Open a different project (same session)
     const secondProjectRoot = join(writableTestRoot, "second-project");
     await mkdir(secondProjectRoot, { recursive: true });
-    const res2 = await fetch(`${address}/api/project/open`, {
+    const res2 = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: secondProjectRoot, sessionId }),
@@ -419,7 +432,7 @@ describe("POST /api/project/open", () => {
   });
 
   it("should preserve project state during shutdown for restart restore", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId, openPanel: true }),
@@ -452,7 +465,7 @@ describe("POST /api/project/open", () => {
       name: "Current chat",
     });
 
-    const res = await fetch(`${address}/api/project/open`, {
+    const res = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId: session.id }),
@@ -474,20 +487,20 @@ describe("POST /api/project/open", () => {
     await writeFile(secondFile, "project instructions", "utf-8");
 
     try {
-      const firstOpen = await fetch(`${address}/api/project/open`, {
+      const firstOpen = await authedFetch(`${address}/api/project/open`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: firstRoot, sessionId: `first-${Date.now()}` }),
       });
       const { surfaceId: staleSurfaceId } = (await firstOpen.json()) as { surfaceId: string };
 
-      await fetch(`${address}/api/project/open`, {
+      await authedFetch(`${address}/api/project/open`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: secondRoot, sessionId: `second-${Date.now()}` }),
       });
 
-      const readRes = await fetch(
+      const readRes = await authedFetch(
         `${address}/api/project/read?path=${encodeURIComponent(secondFile)}&surfaceId=${encodeURIComponent(staleSurfaceId)}`,
       );
 

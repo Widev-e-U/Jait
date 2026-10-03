@@ -70,6 +70,12 @@ export function registerAuthRoutes(
       return reply.status(409).send({ detail: "username already exists" });
     }
 
+    if (users.countUsers() > 0) {
+      const invitation = typeof body.invitation === "string" ? body.invitation.trim() : "";
+      if (!invitation || !users.consumeInvitation(invitation)) {
+        return reply.status(403).send({ detail: "An invitation from the gateway owner is required" });
+      }
+    }
     const created = users.createUser(username, password);
     const token = await signAuthToken({ id: created.id, username: created.username }, config.jwtSecret);
     setAuthCookie(reply, token);
@@ -80,6 +86,14 @@ export function registerAuthRoutes(
         username: created.username,
       },
     });
+  });
+
+  app.post("/api/auth/invitations", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const invitation = users.createInvitation(user.id);
+    if (!invitation) return reply.status(403).send({ detail: "Only the gateway owner can invite accounts" });
+    return { invitation, expiresInHours: 24 };
   });
 
   app.post("/api/auth/login", async (request, reply) => {

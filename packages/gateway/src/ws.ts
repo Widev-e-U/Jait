@@ -16,6 +16,8 @@ import type {
 import type { AppConfig } from "./config.js";
 import { nanoid } from "nanoid";
 import * as jose from "jose";
+import { NodeCredentialsService } from "./services/node-credentials.js";
+import { isAllowedRequestOrigin } from "./security/request-origin.js";
 import type { Server as HttpServer } from "node:http";
 import { NODE_PROTOCOL_VERSION } from "@jait/shared";
 import { NodeStateManager } from "./services/node-state-manager.js";
@@ -69,6 +71,9 @@ interface ConnectedClient {
   userId: string | null;
   surface: ClientSurface;
   authenticated: boolean;
+  expiresAt?: number;
+  pairedNodeId?: string;
+  nodeCredential?: string;
   connectedAt: Date;
   /** Terminal IDs this client is subscribed to for output streaming */
   terminalSubscriptions: Set<string>;
@@ -181,6 +186,7 @@ export class WsControlPlane {
     startedAt: number;
     timer: ReturnType<typeof setTimeout>;
   }>();
+  readonly nodeCredentials: NodeCredentialsService;
   private nodeStates = new NodeStateManager();
   private terminalStreamState = new Map<string, { nextSeq: number; streamId: string }>();
   private providerStreamState = new Map<string, { nextSeq: number; streamId: string }>();
@@ -192,13 +198,15 @@ export class WsControlPlane {
   }>();
   getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[]; hasMore?: boolean };
   getStreamingSessionIds?: (userId: string) => string[];
-  getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
+  getSurfaceSnapshot?: (userId?: string | null) => { serverTime: string; surfaces: unknown[] };
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
 
   constructor(private config: AppConfig, db?: JaitDB) {
     if (!config.jwtSecret.trim()) throw new Error("JWT secret is not configured");
     this.jwtSecret = new TextEncoder().encode(config.jwtSecret);
     this.nodePermissions = new NodePermissionsService(db ?? null);
+    this.nodeCredentials = new NodeCredentialsService(db ?? null);
+    this.canAccessNode = (id, userId) => Boolean(userId && this.nodeCredentials.owner(id) === userId);
   }
 
   /**
@@ -211,8 +219,12 @@ export class WsControlPlane {
       console.log("WebSocket control plane attached to HTTP server (shared port)");
       httpServer.on("upgrade", (req, socket, head) => {
         const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-        if (url.pathname.startsWith("/api/live-view/")) return;
+        if (url.pathname.startsWith("/api/live-view/") || url.pathname.startsWith("/preview/")) return;
         if (url.pathname.startsWith("/ws/voice-assistant")) return;
+        if (!isAllowedRequestOrigin(req.headers, this.config)) {
+          socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+          return;
+        }
         this.wss?.handleUpgrade(req, socket, head, (ws) => {
           this.wss?.emit("connection", ws, req);
         });
@@ -263,10 +275,6 @@ export class WsControlPlane {
 
       if (token) {
         await this.authenticateClient(client, token);
-      } else if (this.config.nodeEnv === "development") {
-        // In development mode, allow unauthenticated connections
-        client.authenticated = true;
-        client.userId = "dev-user";
       }
 
       this.send(ws, {
@@ -276,6 +284,7 @@ export class WsControlPlane {
         payload: { clientId, authenticated: client.authenticated },
       });
 
+      let messageQueue = Promise.resolve();
       ws.on("message", (raw) => {
         try {
           const msg = JSON.parse(raw.toString()) as {
@@ -285,7 +294,9 @@ export class WsControlPlane {
             deviceId?: string;
             payload?: unknown;
           };
-          this.handleMessage(client, msg);
+          messageQueue = messageQueue.then(() => this.handleMessage(client, msg)).catch(() => {
+            this.denyControl(client, "BAD_REQUEST");
+          });
         } catch {
           this.send(ws, {
             type: "error",
@@ -327,17 +338,33 @@ export class WsControlPlane {
 
   private async authenticateClient(client: ConnectedClient, token: string): Promise<boolean> {
     try {
-      const { payload } = await jose.jwtVerify(token, this.jwtSecret);
-      client.authenticated = true;
-      client.userId = (payload.sub as string) ?? null;
-      return true;
-    } catch {
-      // In dev mode, still allow connection but mark as unauthenticated
-      if (this.config.nodeEnv === "development") {
+      if (token.startsWith("jait-node-")) {
+        const paired = this.nodeCredentials.resolve(token);
+        if (!paired) throw new Error("Revoked node credential");
         client.authenticated = true;
-        client.userId = "dev-user";
+        client.userId = paired.userId;
+        client.pairedNodeId = paired.nodeId;
+        client.nodeCredential = token;
         return true;
       }
+      const { payload } = await jose.jwtVerify(token, this.jwtSecret, { algorithms: ["HS256"] });
+      if (typeof payload.sub !== "string" || !payload.sub || typeof payload.exp !== "number"
+          || payload.purpose || (this.isValidUser && !this.isValidUser(payload.sub))) throw new Error("Invalid account token");
+      // Re-authentication may change identity: drop all prior subscriptions.
+      client.terminalSubscriptions.clear();
+      client.sessionId = null;
+      client.deviceId = null;
+      client.pairedNodeId = undefined;
+      client.nodeCredential = undefined;
+      client.authenticated = true;
+      client.expiresAt = payload.exp * 1000;
+      client.userId = payload.sub;
+      return true;
+    } catch {
+      client.authenticated = false;
+      client.userId = null;
+      client.sessionId = null;
+      client.terminalSubscriptions.clear();
       this.send(client.ws, {
         type: "error",
         sessionId: "",
@@ -353,6 +380,42 @@ export class WsControlPlane {
     client: ConnectedClient,
     msg: { type: string; token?: string; sessionId?: string; deviceId?: string; payload?: unknown },
   ) {
+    if (msg.type !== "authenticate" && !this.hasAuthority(client)) {
+      this.denyControl(client, "UNAUTHORIZED");
+      return;
+    }
+    if (["terminal.subscribe", "terminal.input", "terminal.resize"].includes(msg.type)) {
+      const id = (msg as { terminalId?: string }).terminalId;
+      if (!id || !this.canAccessTerminal?.(id, client.userId)) {
+        this.denyControl(client, "TERMINAL_FORBIDDEN");
+        return;
+      }
+    }
+    if (["consent.approve", "consent.reject"].includes(msg.type)) {
+      const id = (msg as { requestId?: string }).requestId;
+      if (!id || !this.canAccessConsent?.(id, client.userId)) {
+        this.denyControl(client, "CONSENT_FORBIDDEN");
+        return;
+      }
+    }
+    // A paired headless node can only identify itself and answer node operations.
+    if (client.pairedNodeId && !new Set(["authenticate", "node.hello", "fs.register-node", "fs.browse-response", "fs.roots-response", "fs.op-response",
+        "tool.op-response", "terminal.op-response", "terminal.output", "terminal.exit", "provider.op-response", "provider.event",
+        "tool.background-complete", "tool.op-output", "ping"]).has(msg.type)) {
+      this.denyControl(client, "NODE_SCOPE_FORBIDDEN");
+      return;
+    }
+    if (msg.type === "node.hello" || msg.type === "fs.register-node") {
+      const id = (msg.payload as { id?: string } | undefined)?.id;
+      const owner = id ? this.nodeCredentials.owner(id) : null;
+      if (!id || (client.pairedNodeId && id !== client.pairedNodeId) || (owner && owner !== client.userId)) {
+        this.denyControl(client, "NODE_FORBIDDEN"); return;
+      }
+    }
+    if (["nodes.update-permissions", "nodes.forget"].includes(msg.type)) {
+      const id = ((msg.payload ?? msg) as { nodeId?: string }).nodeId;
+      if (!id || !this.canAccessNode?.(id, client.userId)) { this.denyControl(client, "NODE_FORBIDDEN"); return; }
+    }
     switch (msg.type) {
       case "authenticate": {
         // Allow late authentication via message
@@ -475,7 +538,7 @@ export class WsControlPlane {
             type: "surface.registry",
             sessionId: "",
             timestamp: new Date().toISOString(),
-            payload: this.getSurfaceSnapshot(),
+            payload: this.getSurfaceSnapshot(client.userId),
           });
           return;
         }
@@ -541,6 +604,17 @@ export class WsControlPlane {
         });
         // Persist node identity + deny-all default grants on first-seen.
         this.nodePermissions.ensureNodeSeen(payload);
+        this.nodeCredentials.bind(payload.id, client.userId!);
+        if (!client.pairedNodeId && (msg.payload as { pairCredential?: boolean }).pairCredential) {
+          const credential = this.nodeCredentials.issue(payload.id, client.userId!);
+          if (credential) {
+            this.send(client.ws, { type: "node.credential" as any, sessionId: "",
+              timestamp: new Date().toISOString(), payload: { credential, nodeId: payload.id } });
+            client.pairedNodeId = payload.id;
+            client.nodeCredential = credential;
+            client.expiresAt = undefined;
+          }
+        }
         this.broadcastNodeUpdate(node);
         this.broadcastNodePermissions();
         break;
@@ -886,6 +960,8 @@ export class WsControlPlane {
             providerStatuses: Array.isArray(p.providerStatuses) ? p.providerStatuses : undefined,
             registeredAt: new Date().toISOString(),
           };
+          this.nodePermissions.ensureNodeSeen({ id: node.id, name: node.name, platform: node.platform } as NodeHelloPayload);
+          if (!this.nodeCredentials.bind(node.id, client.userId!)) { this.denyControl(client, "NODE_FORBIDDEN"); return; }
           this.fsNodes.set(node.id, node);
           // `node.hello` arrives immediately before `fs.register-node` from the
           // same client and already assigned the authoritative role ("desktop"
@@ -1082,14 +1158,16 @@ export class WsControlPlane {
       case "terminal.output": {
         const out = msg.payload as { terminalId?: string; data?: string } | undefined;
         if (out?.terminalId && out.data && this.onRemoteTerminalOutput) {
-          this.onRemoteTerminalOutput(out.terminalId, out.data, client.deviceId ?? undefined);
+          const node = this.nodeStates.listNodes().find((n) => this.nodeStates.getClientId(n.id) === client.id && this.nodeCredentials.owner(n.id) === client.userId);
+          if (node) this.onRemoteTerminalOutput(out.terminalId, out.data, node.id);
         }
         break;
       }
       case "terminal.exit": {
         const out = msg.payload as { terminalId?: string; exitCode?: number | null; signal?: number | string | null } | undefined;
         if (out?.terminalId && this.onRemoteTerminalExit) {
-          this.onRemoteTerminalExit(out.terminalId, out.exitCode ?? null, out.signal ?? null, client.deviceId ?? undefined);
+          const node = this.nodeStates.listNodes().find((n) => this.nodeStates.getClientId(n.id) === client.id && this.nodeCredentials.owner(n.id) === client.userId);
+          if (node) this.onRemoteTerminalExit(out.terminalId, out.exitCode ?? null, out.signal ?? null, node.id);
         }
         break;
       }
@@ -1138,7 +1216,7 @@ export class WsControlPlane {
   /** Broadcast an event to all clients subscribed to a session */
   broadcast(sessionId: string, event: WsEvent) {
     for (const client of this.clients.values()) {
-      if (client.sessionId === sessionId && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && client.sessionId === sessionId && client.ws.readyState === 1) {
         this.send(client.ws, event);
       }
     }
@@ -1147,7 +1225,8 @@ export class WsControlPlane {
   /** Broadcast to all connected clients */
   broadcastAll(event: WsEvent) {
     for (const client of this.clients.values()) {
-      if (client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && !client.pairedNodeId && client.ws.readyState === 1
+          && (!event.sessionId || !this.canAccessSession || this.canAccessSession(event.sessionId, client.userId))) {
         this.send(client.ws, event);
       }
     }
@@ -1161,7 +1240,7 @@ export class WsControlPlane {
    */
   broadcastToUser(userId: string, event: WsEvent) {
     for (const client of this.clients.values()) {
-      if (client.userId === userId && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && client.userId === userId && client.ws.readyState === 1) {
         this.send(client.ws, event);
       }
     }
@@ -1227,7 +1306,7 @@ export class WsControlPlane {
   broadcastExcluding(sessionId: string, excludeClientId: string, event: WsEvent) {
     for (const client of this.clients.values()) {
       if (client.id === excludeClientId) continue;
-      if (client.sessionId === sessionId && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && client.sessionId === sessionId && client.ws.readyState === 1) {
         this.send(client.ws, event);
       }
     }
@@ -1254,7 +1333,7 @@ export class WsControlPlane {
       payload,
     };
     for (const client of this.clients.values()) {
-      if (client.ws.readyState !== 1) continue;
+      if (!this.hasAuthority(client) || client.ws.readyState !== 1) continue;
       if (client.sessionId !== sessionId && !(userId && client.userId === userId)) continue;
       this.send(client.ws, event);
     }
@@ -1264,7 +1343,8 @@ export class WsControlPlane {
   broadcastTerminalOutput(terminalId: string, data: string, outputOffset?: number) {
     const stream = this.nextTerminalStreamEvent(terminalId);
     for (const client of this.clients.values()) {
-      if (client.terminalSubscriptions.has(terminalId) && client.ws.readyState === 1) {
+      if (this.hasAuthority(client) && this.canAccessTerminal?.(terminalId, client.userId)
+          && client.terminalSubscriptions.has(terminalId) && client.ws.readyState === 1) {
         this.send(client.ws, {
           type: "surface.connected", // reuse event type
           sessionId: client.sessionId ?? "",
@@ -1273,6 +1353,34 @@ export class WsControlPlane {
         });
       }
     }
+  }
+
+  isValidUser?: (userId: string) => boolean;
+  canAccessTerminal?: (terminalId: string, userId: string | null) => boolean;
+  canAccessConsent?: (requestId: string, userId: string | null) => boolean;
+  canAccessNode?: (nodeId: string, userId: string | null) => boolean;
+
+  revokeNodeCredentials(nodeId: string, userId: string): boolean {
+    if (!this.nodeCredentials.revoke(nodeId, userId)) return false;
+    for (const client of this.clients.values()) {
+      if (client.pairedNodeId === nodeId) {
+        client.authenticated = false;
+        client.ws.close(4001, "Node credential revoked");
+      }
+    }
+    return true;
+  }
+
+  private hasAuthority(client: ConnectedClient): boolean {
+    return Boolean(client.authenticated && client.userId
+      && (client.expiresAt === undefined || client.expiresAt > Date.now())
+      && (!this.isValidUser || this.isValidUser(client.userId))
+      && (!client.nodeCredential || Boolean(this.nodeCredentials.resolve(client.nodeCredential))));
+  }
+
+  private denyControl(client: ConnectedClient, code: string): void {
+    this.send(client.ws, { type: "error", sessionId: client.sessionId ?? "",
+      timestamp: new Date().toISOString(), payload: { code, message: "Authentication or access required" } });
   }
 
   /** Callback for terminal input from WS clients */
@@ -1478,7 +1586,7 @@ export class WsControlPlane {
     if (!node) return Promise.reject(new Error(`Unknown filesystem node: ${nodeId}`));
     if (node.isGateway) return Promise.reject(new Error("Use local browse for gateway node"));
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
     const requestId = nanoid();
@@ -1507,7 +1615,7 @@ export class WsControlPlane {
     const denied = this.permissionDeniedError(nodeId, "filesystem");
     if (denied) return Promise.reject(denied);
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
     const requestId = nanoid();
@@ -1543,7 +1651,7 @@ export class WsControlPlane {
     const denied = this.permissionDeniedError(nodeId, "filesystem");
     if (denied) return Promise.reject(denied);
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
     const requestId = nanoid();
@@ -1621,7 +1729,7 @@ export class WsControlPlane {
     const denied = this.permissionDeniedError(nodeId, "terminal");
     if (denied) return Promise.reject(denied);
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
     // Fast-fail interactive terminal ops on nodes that don't claim support.
@@ -1665,7 +1773,7 @@ export class WsControlPlane {
     const denied = this.permissionDeniedError(nodeId, "terminal");
     if (denied) throw denied;
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       throw new Error(`Node ${nodeId} is not connected`);
     }
     this.send(client.ws, {
@@ -1703,7 +1811,7 @@ export class WsControlPlane {
       if (denied) return Promise.reject(denied);
     }
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
     const requestId = nanoid();
@@ -1821,7 +1929,7 @@ export class WsControlPlane {
       if (denied) return Promise.reject(denied);
     }
     const client = this.clients.get(node.clientId);
-    if (!client || client.ws.readyState !== 1) {
+    if (!client || !this.hasAuthority(client) || client.ws.readyState !== 1) {
       return Promise.reject(new Error(`Node ${nodeId} is not connected`));
     }
     const requestId = nanoid();

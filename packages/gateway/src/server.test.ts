@@ -26,6 +26,16 @@ async function createAuthedServer() {
   return { app, headers };
 }
 
+async function createRegisteredPreviewServer(port = 4321) {
+  const app = await createServer(testConfig, {
+    projectService: { list: () => [{ rootPath: process.cwd() }] } as any,
+    sessionService: { getById: (_id: string, userId: string) => userId === "test-user" ? { userId } : null } as any,
+    previewService: { list: () => [{ sessionId: "preview", status: "ready", port }] } as any,
+  });
+  const token = await signAuthToken({ id: "test-user", username: "tester" }, testConfig.jwtSecret);
+  return { app, headers: { authorization: "Bearer " + token } };
+}
+
 describe("production asset cache", () => {
   it("serves a cached small fingerprinted asset without another disk read", async () => {
     const webDir = mkdtempSync(join("/tmp", "jait-web-cache-"));
@@ -161,7 +171,7 @@ describe("@jait/gateway health", () => {
   });
 
   it("GET /api/dev-file serves project html previews with rewritten asset paths", async () => {
-    const app = await createServer(testConfig);
+    const { app, headers } = await createRegisteredPreviewServer();
     // Encode relative path from cwd — avoids platform-specific absolute path issues
     const relPath = relative(process.cwd(), devFileHtml);
     const encodedPath = Buffer.from(relPath, "utf8")
@@ -173,6 +183,7 @@ describe("@jait/gateway health", () => {
     const response = await app.inject({
       method: "GET",
       url: `/api/dev-file/${encodedPath}`,
+      headers,
     });
 
     expect(response.statusCode, `dev-file response: ${response.body}`).toBe(200);
@@ -183,6 +194,7 @@ describe("@jait/gateway health", () => {
     const assetResponse = await app.inject({
       method: "GET",
       url: `/api/dev-file/${encodedPath}/icon.svg`,
+      headers,
     });
 
     expect(assetResponse.statusCode).toBe(200);
@@ -191,7 +203,7 @@ describe("@jait/gateway health", () => {
   });
 
   it("GET /api/dev-file accepts relative project html paths", async () => {
-    const app = await createServer(testConfig);
+    const { app, headers } = await createRegisteredPreviewServer();
     const relPath = relative(process.cwd(), devFileHtml);
     const encodedPath = Buffer.from(relPath, "utf8")
       .toString("base64")
@@ -202,6 +214,7 @@ describe("@jait/gateway health", () => {
     const response = await app.inject({
       method: "GET",
       url: `/api/dev-file/${encodedPath}`,
+      headers,
     });
 
     expect(response.statusCode, `dev-file response: ${response.body}`).toBe(200);
@@ -233,10 +246,11 @@ describe("@jait/gateway health", () => {
       throw new Error("Expected TCP address for upstream test server");
     }
 
-    const app = await createServer(testConfig);
+    const { app, headers } = await createRegisteredPreviewServer(address.port);
     const response = await app.inject({
       method: "GET",
       url: `/api/dev-proxy/${address.port}/src/main.tsx`,
+      headers,
     });
 
     expect(response.statusCode).toBe(200);
@@ -247,6 +261,7 @@ describe("@jait/gateway health", () => {
     const htmlResponse = await app.inject({
       method: "GET",
       url: `/api/dev-proxy/${address.port}/`,
+      headers,
     });
 
     expect(htmlResponse.statusCode).toBe(200);
@@ -282,10 +297,11 @@ describe("@jait/gateway health", () => {
       throw new Error("Expected TCP address for upstream test server");
     }
 
-    const app = await createServer(testConfig);
+    const { app, headers } = await createRegisteredPreviewServer(address.port);
     const response = await app.inject({
       method: "GET",
       url: `/api/dev-proxy/${address.port}/node_modules/.vite/deps/react.js?v=1`,
+      headers,
     });
 
     expect(response.statusCode).toBe(200);
@@ -320,11 +336,12 @@ describe("@jait/gateway health", () => {
       throw new Error("Expected TCP address for upstream test server");
     }
 
-    const app = await createServer(testConfig);
+    const { app, headers } = await createRegisteredPreviewServer(address.port);
 
     const htmlResponse = await app.inject({
       method: "GET",
       url: `/api/dev-proxy/${address.port}/`,
+      headers,
     });
 
     expect(htmlResponse.statusCode).toBe(200);
@@ -333,6 +350,7 @@ describe("@jait/gateway health", () => {
     const moduleResponse = await app.inject({
       method: "GET",
       url: `/api/dev-proxy/${address.port}/src/main.tsx`,
+      headers,
     });
 
     expect(moduleResponse.statusCode).toBe(200);
@@ -360,10 +378,11 @@ describe("@jait/gateway health", () => {
       throw new Error("Expected TCP address for upstream test server");
     }
 
-    const app = await createServer(testConfig);
+    const { app, headers } = await createRegisteredPreviewServer(address.port);
     const response = await app.inject({
       method: "GET",
       url: `/api/dev-proxy/${address.port}/src/main.tsx`,
+      headers,
     });
 
     expect(response.statusCode).toBe(502);

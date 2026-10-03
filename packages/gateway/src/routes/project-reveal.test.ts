@@ -1,3 +1,4 @@
+import { signAuthToken } from "../security/http-auth.js";
 /**
  * Integration test: POST /api/project/reveal
  *
@@ -29,7 +30,14 @@ import { tmpdir } from "node:os";
 describe("POST /api/project/reveal", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let address: string;
-  const sessionId = "reveal-session-" + Date.now();
+  let authToken: string;
+  let ownerId: string;
+  const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+  let sessionId = "reveal-session-" + Date.now();
   let surfaceRegistry: SurfaceRegistry;
   let writableTestRoot: string;
   let nestedFile: string;
@@ -45,6 +53,10 @@ describe("POST /api/project/reveal", () => {
     const sessions = new SessionService(db);
     const sessionState = new SessionStateService(db);
     const users = new UserService(db);
+    const owner = users.createUser("reveal-owner", "password123");
+    ownerId = owner.id;
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
     const projects = new ProjectService(db);
     const projectState = new ProjectStateService(db);
     surfaceRegistry = new SurfaceRegistry();
@@ -93,7 +105,7 @@ describe("POST /api/project/reveal", () => {
   });
 
   it("rejects a request without a path", async () => {
-    const res = await fetch(`${address}/api/project/reveal`, {
+    const res = await authedFetch(`${address}/api/project/reveal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ surfaceId: "none" }),
@@ -104,7 +116,7 @@ describe("POST /api/project/reveal", () => {
   });
 
   it("returns 404 when no filesystem surface is running", async () => {
-    const res = await fetch(`${address}/api/project/reveal`, {
+    const res = await authedFetch(`${address}/api/project/reveal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: "/tmp", surfaceId: "no-such-surface" }),
@@ -115,14 +127,14 @@ describe("POST /api/project/reveal", () => {
   });
 
   it("reveals a file inside an open local project surface", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
 
-    const res = await fetch(`${address}/api/project/reveal`, {
+    const res = await authedFetch(`${address}/api/project/reveal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: nestedFile, surfaceId }),
@@ -141,7 +153,7 @@ describe("POST /api/project/reveal", () => {
   });
 
   it("accepts a project-relative path and resolves it against the project root", async () => {
-    const openRes = await fetch(`${address}/api/project/open`, {
+    const openRes = await authedFetch(`${address}/api/project/open`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: writableTestRoot, sessionId: `rel-${sessionId}` }),
@@ -150,7 +162,7 @@ describe("POST /api/project/reveal", () => {
 
     // Pass a relative path (no leading project root) — the route should still
     // resolve it under the project root and attempt the reveal.
-    const res = await fetch(`${address}/api/project/reveal`, {
+    const res = await authedFetch(`${address}/api/project/reveal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: "nested/editable.txt", surfaceId }),

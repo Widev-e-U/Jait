@@ -4544,6 +4544,8 @@ function App() {
     setLoginPassword: authForm.setLoginPassword,
     showLoginPassword: authForm.showLoginPassword,
     setShowLoginPassword: authForm.setShowLoginPassword,
+    registerInvitation: authForm.registerInvitation,
+    setRegisterInvitation: authForm.setRegisterInvitation,
     registerUsername: authForm.registerUsername,
     setRegisterUsername: authForm.setRegisterUsername,
     registerPassword: authForm.registerPassword,
@@ -5057,8 +5059,19 @@ function App() {
             {/* Overlay the top edge so content fills the window and header buttons stay clickable. */}
             {!isMobile && desktopRuntime === 'tauri' && desktopPlatform !== null && desktopPlatform !== 'linux' && (
               <div
-                className="absolute inset-x-0 top-0 z-40 h-2 bg-transparent"
+                className="absolute inset-x-0 top-0 z-40 h-4 select-none bg-transparent"
                 data-tauri-drag-region
+                onMouseDown={(event) => {
+                  if (event.button !== 0) return
+                  // Use our injected bridge directly; CSS app-region and the
+                  // attribute alone do not initiate dragging in this webview.
+                  // Stop bubbling to avoid also invoking Tauri's document handler.
+                  event.preventDefault()
+                  event.stopPropagation()
+                  void window.jaitDesktop?.windowStartDrag().catch((error: unknown) => {
+                    console.error('Failed to start window drag', error)
+                  })
+                }}
                 style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
               />
             )}

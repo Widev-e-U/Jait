@@ -158,12 +158,12 @@ function useAuthState() {
     return data
   }, [persistAuth])
 
-  const register = useCallback(async (username: string, password: string) => {
+  const register = useCallback(async (username: string, password: string, invitation?: string) => {
     const response = await fetch(`${API_URL}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, invitation }),
     })
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Registration failed' }))

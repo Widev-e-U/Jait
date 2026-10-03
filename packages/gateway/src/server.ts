@@ -6,7 +6,7 @@ import { registerStaticAssetCache } from "./services/static-asset-cache.js";
 import { WebSocket, WebSocketServer } from "ws";
 import { existsSync } from "node:fs";
 import { join, dirname, extname, relative, resolve, sep } from "node:path";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import type { AppConfig } from "./config.js";
@@ -21,6 +21,10 @@ import { registerChatRoutes } from "./routes/chat.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { signPreviewToken, verifyPreviewToken } from "./security/preview-token.js";
+import { ControlAccess } from "./security/control-access.js";
+import { requireAuth, extractBearerToken, resolveAuth } from "./security/http-auth.js";
+import { isAllowedRequestOrigin } from "./security/request-origin.js";
 import { registerTerminalRoutes } from "./routes/terminals.js";
 import { registerConsentRoutes } from "./routes/consent.js";
 import { registerTrustRoutes } from "./routes/trust.js";
@@ -186,10 +190,55 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   await app.register(fastifyCookie);
 
   await app.register(cors, {
-    origin: true, // allow any origin — auth is JWT-based, not origin-based
+    origin: true, // Cookie authority is protected by the request origin check below; native clients send Bearer tokens.
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
+
+  const access = new ControlAccess(deps.sessionService, deps.surfaceRegistry, deps.consentManager);
+  app.addHook("onRequest", async (request, reply) => {
+    const path = request.url.split("?")[0] ?? "";
+    if (path.startsWith("/preview/")) return; // Dedicated handlers verify a resource-scoped grant.
+    if (!isAllowedRequestOrigin(request.headers, config) && !extractBearerToken(request.headers.authorization)) {
+      return reply.status(403).send({ error: "ORIGIN_FORBIDDEN" });
+    }
+    if (!path.startsWith("/api/") || ["/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/mobile/discovery", "/api/email/oauth/callback", "/api/calendar/oauth/callback"].includes(path)) return;
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    if (deps.userService && !deps.userService.findById(user.id)) return reply.status(401).send({ detail: "login_required" });
+  });
+  app.addHook("preHandler", async (request, reply) => {
+    if (!request.url.startsWith("/api/") || !deps.ws?.canAccessNode) return;
+    const nodeId = ((request.body ?? {}) as { nodeId?: string }).nodeId
+      ?? ((request.query ?? {}) as { nodeId?: string }).nodeId;
+    if (!nodeId || nodeId === "gateway") return;
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (user && !deps.ws.canAccessNode(nodeId, user.id)) return reply.status(404).send({ error: "Node not found" });
+  });
+  if (deps.ws) {
+    if (deps.userService) deps.ws.isValidUser = (userId) => Boolean(deps.userService?.findById(userId));
+    deps.ws.canAccessTerminal = (id, userId) => access.surface(id, userId);
+    deps.ws.canAccessConsent = (id, userId) => access.consentRequest(id, userId);
+    deps.ws.canAccessSession = (id, userId) => access.session(id, userId);
+  }
+
+  if (deps.ws) {
+    app.post("/api/nodes/:id/credential", async (request, reply) => {
+      const user = await requireAuth(request, reply, config.jwtSecret);
+      if (!user) return;
+      const { id } = request.params as { id: string };
+      const credential = deps.ws!.nodeCredentials.issue(id, user.id);
+      if (!credential) return reply.status(404).send({ error: "Node not found" });
+      return { credential };
+    });
+    app.delete("/api/nodes/:id/credential", async (request, reply) => {
+      const user = await requireAuth(request, reply, config.jwtSecret);
+      if (!user) return;
+      const { id } = request.params as { id: string };
+      if (!deps.ws!.revokeNodeCredentials(id, user.id)) return reply.status(404).send({ error: "Node not found" });
+      return { ok: true };
+    });
+  }
 
   registerHealthRoutes(app, config, {
     getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
@@ -243,11 +292,12 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
-    registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.toolExecutor, deps.ws);
+    registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.toolExecutor, deps.ws, { config, access });
   }
 
   if (deps.consentManager && deps.audit) {
     registerConsentRoutes(app, deps.consentManager, deps.audit, {
+      config, access,
       activeProfileName: deps.activeToolProfileName,
       permissions: deps.toolPermissions,
     });
@@ -306,9 +356,42 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   registerFilesystemRoutes(app, deps.ws);
   registerBrowserAssetRoutes(app);
-  registerProjectPreviewRoutes(app);
-  registerDevProxyRoutes(app);
-  registerLiveViewProxyRoutes(app);
+  app.post("/api/preview/access", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const source = (request.body as { source?: string } | null)?.source;
+    if (!source) return reply.status(400).send({ error: "Preview source required" });
+    const origin = "http://" + request.headers.host;
+    const url = new URL(source, origin);
+    if (url.host !== new URL(origin).host || !["http:", "https:"].includes(url.protocol)) return reply.status(400).send({ error: "Preview must belong to this gateway" });
+    let resource: string, urlPath: string;
+    const proxy = url.pathname.match(/^\/api\/dev-proxy\/(\d+)(\/.*)?$/);
+    const file = url.pathname.match(/^\/api\/dev-file\/([^/]+)(\/.*)?$/);
+    const live = (url.searchParams.get("path") ?? new URLSearchParams(url.hash.slice(1)).get("path") ?? "").match(/^\/?api\/live-view\/(\d+)\/websockify$/);
+    if (proxy) {
+      if (!canAccessPreviewPort(Number(proxy[1]), user.id, deps, access)) return reply.status(404).send({ error: "Preview not found" });
+      resource = "proxy:" + proxy[1]; urlPath = "/proxy/" + proxy[1] + (proxy[2] ?? "/") + url.search;
+    } else if (file) {
+      // File handler validates canonical project paths and assets before reading.
+      resource = "file:" + file[1]; urlPath = "/file/" + file[1] + (file[2] ?? "") + url.search;
+    } else if (live && url.pathname.startsWith("/noVNC/")) {
+      if (!canAccessPreviewPort(Number(live[1]), user.id, deps, access, true)) return reply.status(404).send({ error: "Preview not found" });
+      resource = "live:" + live[1]; urlPath = "/live/" + live[1] + "/websockify";
+    } else return reply.status(400).send({ error: "Unsupported preview source" });
+    const token = await signPreviewToken(user.id, resource, config.jwtSecret);
+    const path = "/preview/" + token + urlPath;
+    if (live) {
+      const query = new URLSearchParams(url.search);
+      const hash = new URLSearchParams(url.hash.slice(1));
+      if (query.has("path")) query.set("path", path.slice(1));
+      else hash.set("path", path.slice(1));
+      return { url: url.origin + url.pathname + "?" + query + (hash.size ? "#" + hash : "") };
+    }
+    return { url: url.origin + path };
+  });
+  registerProjectPreviewRoutes(app, config, deps, access);
+  registerDevProxyRoutes(app, config, deps, access);
+  registerLiveViewProxyRoutes(app, config, deps, access);
   if (deps.previewService) {
     registerPreviewRoutes(app, config, {
       previewService: deps.previewService,
@@ -520,7 +603,7 @@ function registerBrowserAssetRoutes(app: FastifyInstance): void {
     }
 
     const resolvedPath = resolve(path);
-    if (!isPathWithin(resolve(process.cwd()), resolvedPath)) {
+    if (!isPathWithin(await realpath(process.cwd()), await realpath(resolvedPath).catch(() => resolvedPath))) {
       return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Screenshot path must stay within the gateway project" });
     }
 
@@ -557,18 +640,36 @@ function registerBrowserAssetRoutes(app: FastifyInstance): void {
   });
 }
 
-function registerProjectPreviewRoutes(app: FastifyInstance): void {
+async function previewUser(request: any, reply: any, config: AppConfig, deps: ServerDeps, resource: string) {
+  const token = request.params?.previewToken;
+  if (!token) return requireAuth(request, reply, config.jwtSecret);
+  const id = await verifyPreviewToken(token, resource, config.jwtSecret);
+  if (!id || (deps.userService && !deps.userService.findById(id))) {
+    reply.status(401).send({ detail: "preview_access_required" }); return null;
+  }
+  return { id, username: "preview" };
+}
+
+function registerProjectPreviewRoutes(app: FastifyInstance, config: AppConfig, deps: ServerDeps, access: ControlAccess): void {
   const handler = async (request: any, reply: any) => {
-    const params = request.params as { encodedPath?: string; "*"?: string };
+    const params = request.params as { previewToken?: string; encodedPath?: string; "*"?: string };
     const rootPath = decodePreviewFilePath(params.encodedPath);
     if (!rootPath) {
       return reply.status(400).send({ error: "INVALID_PATH", message: "A valid HTML file path is required" });
     }
 
-    const projectRoot = resolve(process.cwd());
+    const user = await previewUser(request, reply, config, deps, "file:" + params.encodedPath);
+    if (!user) return;
+    const roots = [
+      ...(deps.surfaceRegistry?.listSurfaces() ?? []).filter((surface) => surface.type === "filesystem" && access.surface(surface.id, user.id)).map((surface) => surface.snapshot().metadata.projectRoot),
+      ...(deps.projectService?.list(undefined, user.id) ?? []).map((project) => project.rootPath),
+      ...(deps.previewService?.list() ?? []).filter((preview) => access.session(preview.sessionId, user.id)).map((preview) => preview.projectRoot),
+    ].filter((root): root is string => Boolean(root));
     const resolvedRoot = resolve(rootPath);
-    if (!isPathWithin(projectRoot, resolvedRoot)) {
-      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Preview path must stay within the gateway project" });
+    const canonicalRoot = await realpath(resolvedRoot).catch(() => resolvedRoot);
+    const allowed = await Promise.all(roots.map(async (root) => isPathWithin(await realpath(root).catch(() => resolve(root)), canonicalRoot)));
+    if (!allowed.some(Boolean)) {
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Preview path must stay within an authorized project" });
     }
 
     const rootExtension = extname(resolvedRoot).toLowerCase();
@@ -591,14 +692,23 @@ function registerProjectPreviewRoutes(app: FastifyInstance): void {
         return reply.status(404).send({ error: "NOT_FOUND", message: "Preview file not found" });
       }
 
+      const canonicalTarget = await realpath(targetPath);
+      if (!isPathWithin(await realpath(dirname(resolvedRoot)), canonicalTarget)) {
+        return reply.status(403).send({ error: "PATH_FORBIDDEN" });
+      }
       const extension = extname(targetPath).toLowerCase();
+      if (!new Set([".html", ".htm", ".js", ".mjs", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".map", ".json", ".txt", ".wasm", ".mp4", ".webm"]).has(extension)
+          || /(?:^|[/\\])(?:\.env(?:\.|$)|\.git|\.ssh|\.aws)(?:[/\\]|$)/i.test(targetPath)) {
+        return reply.status(403).send({ error: "PATH_FORBIDDEN" });
+      }
       const contentType = getPreviewContentType(extension);
       const data = await readFile(targetPath);
       reply.header("Cache-Control", "no-store");
 
       if (HTML_EXTENSIONS.has(extension)) {
         const html = data.toString("utf8");
-        const prefix = `/api/dev-file/${params.encodedPath}`;
+        const prefix = params.previewToken ? `/preview/${params.previewToken}/file/${params.encodedPath}` : `/api/dev-file/${params.encodedPath}`;
+        if (params.previewToken) reply.header("Content-Security-Policy", "sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads");
         return reply.type("text/html; charset=utf-8").send(rewritePreviewHtml(html, prefix));
       }
 
@@ -613,15 +723,21 @@ function registerProjectPreviewRoutes(app: FastifyInstance): void {
 
   app.get("/api/dev-file/:encodedPath", handler);
   app.get("/api/dev-file/:encodedPath/*", handler);
+  app.get("/preview/:previewToken/file/:encodedPath", handler);
+  app.get("/preview/:previewToken/file/:encodedPath/*", handler);
 }
 
-function registerDevProxyRoutes(app: FastifyInstance): void {
+function registerDevProxyRoutes(app: FastifyInstance, config: AppConfig, deps: ServerDeps, access: ControlAccess): void {
   const handler = async (request: any, reply: any) => {
-    const params = request.params as { port?: string; "*"?: string };
+    const params = request.params as { previewToken?: string; port?: string; "*"?: string };
     const port = normalizeProxyPort(params.port);
     if (!port) {
       return reply.status(400).send({ error: "INVALID_PORT", message: "A valid localhost port is required" });
     }
+
+    const user = await previewUser(request, reply, config, deps, "proxy:" + params.port);
+    if (!user) return;
+    if (!canAccessPreviewPort(port, user.id, deps, access)) return reply.status(403).send({ error: "PREVIEW_NOT_REGISTERED" });
 
     const proxiedPath = params["*"] ? `/${params["*"]}` : "/";
     const targetUrl = new URL(`http://127.0.0.1:${port}${proxiedPath}`);
@@ -634,19 +750,21 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
       }
     }
 
-    return proxyPreviewRequest(request, reply, targetUrl, `/api/dev-proxy/${port}`, proxiedPath);
+    return proxyPreviewRequest(request, reply, targetUrl, params.previewToken ? `/preview/${params.previewToken}/proxy/${port}` : `/api/dev-proxy/${port}`, proxiedPath);
   };
 
   app.all("/api/dev-proxy/:port", handler);
   app.all("/api/dev-proxy/:port/*", handler);
+  app.all("/preview/:previewToken/proxy/:port", handler);
+  app.all("/preview/:previewToken/proxy/:port/*", handler);
 }
 
-function registerLiveViewProxyRoutes(app: FastifyInstance): void {
+function registerLiveViewProxyRoutes(app: FastifyInstance, config: AppConfig, deps: ServerDeps, access: ControlAccess): void {
   const liveViewWss = new WebSocketServer({ noServer: true });
 
   liveViewWss.on("connection", (client, request) => {
     const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-    const match = requestUrl.pathname.match(/^\/api\/live-view\/(\d+)\/websockify$/);
+    const match = requestUrl.pathname.match(/^\/api\/live-view\/(\d+)\/websockify$/) ?? requestUrl.pathname.match(/^\/preview\/[^/]+\/live\/(\d+)\/websockify$/);
     const port = match?.[1];
     if (!port) {
       client.close(1008, "Invalid live-view target");
@@ -661,11 +779,12 @@ function registerLiveViewProxyRoutes(app: FastifyInstance): void {
       code?: number,
       reason?: Buffer | string,
     ) => {
+      const safeCode = code && ((code >= 1000 && code <= 1014 && ![1004, 1005, 1006].includes(code)) || (code >= 3000 && code <= 4999)) ? code : 1000;
       if (target.readyState === WebSocket.OPEN || target.readyState === WebSocket.CONNECTING) {
-        target.close(code, typeof reason === "string" ? reason : reason?.toString());
+        target.close(safeCode, typeof reason === "string" ? reason : reason?.toString());
       }
       if (source.readyState === WebSocket.OPEN || source.readyState === WebSocket.CONNECTING) {
-        source.close(code, typeof reason === "string" ? reason : reason?.toString());
+        source.close(safeCode, typeof reason === "string" ? reason : reason?.toString());
       }
     };
 
@@ -683,13 +802,45 @@ function registerLiveViewProxyRoutes(app: FastifyInstance): void {
     upstream.on("error", () => closePeer(upstream, client, 1011, "Live-view upstream websocket error"));
   });
 
-  app.server.on("upgrade", (request, socket, head) => {
+  app.server.on("upgrade", async (request, socket, head) => {
     const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-    if (!/^\/api\/live-view\/\d+\/websockify$/.test(requestUrl.pathname)) return;
+    if (!/^\/api\/live-view\/\d+\/websockify$/.test(requestUrl.pathname) && !/^\/preview\/[^/]+\/live\/\d+\/websockify$/.test(requestUrl.pathname)) return;
+    const user = await resolveAuth({ headers: request.headers, cookies: Object.fromEntries((request.headers.cookie ?? "").split(";").map((part) => {
+      const i = part.indexOf("=");
+      return [part.slice(0, i).trim(), part.slice(i + 1)];
+    })) } as any, config.jwtSecret);
+    const parts = requestUrl.pathname.split("/");
+    const port = Number(parts[1] === "preview" ? parts[4] : parts[3]);
+    const grantUser = parts[1] === "preview" ? await verifyPreviewToken(parts[2]!, "live:" + port, config.jwtSecret) : null;
+    const userId = grantUser ?? user?.id;
+    if ((!grantUser && !isAllowedRequestOrigin(request.headers, config)) || !userId
+        || (deps.userService && !deps.userService.findById(userId)) || !canAccessPreviewPort(port, userId, deps, access, true)) {
+      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+      return;
+    }
     liveViewWss.handleUpgrade(request, socket, head, (ws) => {
       liveViewWss.emit("connection", ws, request);
     });
   });
+}
+
+function canAccessPreviewPort(port: number, userId: string, deps: ServerDeps, access: ControlAccess, liveView = false): boolean {
+  for (const preview of deps.previewService?.list() ?? []) {
+    if (!["starting", "ready"].includes(preview.status) || !access.session(preview.sessionId, userId)) continue;
+    if (liveView && preview.remoteBrowser?.novncPort === port) return true;
+    if (!liveView) {
+      if (preview.port === port) return true;
+      try { if (preview.target && Number(new URL(preview.target).port) === port) return true; } catch { /* not a URL */ }
+    }
+  }
+  if (liveView) {
+    for (const surface of deps.surfaceRegistry?.listSurfaces() ?? []) {
+      if (surface.type !== "browser" || !access.surface(surface.id, userId)) continue;
+      const browser = surface as unknown as { getLiveViewInfo?: () => { websockifyPort: number } | null };
+      if (browser.getLiveViewInfo?.()?.websockifyPort === port) return true;
+    }
+  }
+  return false;
 }
 
 async function proxyPreviewRequest(
@@ -706,12 +857,18 @@ async function proxyPreviewRequest(
     const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
     for (const [key, value] of upstream.headers.entries()) {
       const lower = key.toLowerCase();
-      if (lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
+      if (lower === "set-cookie" || lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
         continue;
       }
-      reply.header(key, value);
+      if (lower === "location") {
+        const redirect = new URL(value, targetUrl);
+        reply.header(key, redirect.origin === targetUrl.origin ? rewritePrefix + redirect.pathname + redirect.search + redirect.hash : value);
+      } else reply.header(key, value);
     }
     reply.header("Cache-Control", "no-store");
+    if (request.params?.previewToken && contentType.includes("text/html")) {
+      reply.header("Content-Security-Policy", "sandbox allow-scripts allow-forms allow-modals allow-popups allow-downloads");
+    }
 
     if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
       return reply
@@ -743,7 +900,7 @@ async function fetchDevProxyUpstream(targetUrl: URL, request: any, proxiedPath: 
     method: request.method,
     headers: buildProxyRequestHeaders(request.headers),
     body: buildProxyRequestBody(request.method, request.body),
-    redirect: "follow",
+    redirect: "manual",
   });
 
   let upstream = await doFetch();
@@ -766,7 +923,7 @@ function buildProxyRequestHeaders(input: Record<string, unknown>): Record<string
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(input)) {
     const lower = key.toLowerCase();
-    if (lower === "host" || lower === "connection" || lower === "content-length" || lower === "accept-encoding" || lower === "origin" || lower === "referer") {
+    if (lower === "authorization" || lower === "cookie" || lower === "host" || lower === "connection" || lower === "content-length" || lower === "accept-encoding" || lower === "origin" || lower === "referer") {
       continue;
     }
     if (Array.isArray(value)) {

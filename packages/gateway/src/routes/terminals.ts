@@ -5,6 +5,10 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../config.js";
+import { loadConfig } from "../config.js";
+import { requireAuth } from "../security/http-auth.js";
+import { ControlAccess } from "../security/control-access.js";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
@@ -102,7 +106,23 @@ export function registerTerminalRoutes(
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => Promise<ToolResult>,
   ws?: WsControlPlane,
+  security: { config: AppConfig; access: ControlAccess } = { config: loadConfig(), access: new ControlAccess(undefined, surfaceRegistry) },
 ) {
+  // Guard every route in this module, including generic tool execution.
+  app.addHook("preHandler", async (request, reply) => {
+    if (!/^\/api\/(terminals|tools|surfaces)(?:\/|$)/.test(request.url)) return;
+    const user = await requireAuth(request, reply, security.config.jwtSecret);
+    if (!user) return;
+    const params = request.params as { id?: string };
+    const body = (request.body ?? {}) as { sessionId?: string };
+    if (params.id && !security.access.surface(params.id, user.id)) {
+      return reply.status(404).send({ error: "NOT_FOUND" });
+    }
+    if (request.method === "POST" && !params.id && body.sessionId && body.sessionId !== "default"
+        && !security.access.session(body.sessionId, user.id)) {
+      return reply.status(404).send({ error: "Session not found" });
+    }
+  });
   // POST /api/terminals — create a new terminal
   app.post("/api/terminals", async (request, reply) => {
     const body = (request.body as Record<string, unknown>) ?? {};
@@ -120,7 +140,13 @@ export function registerTerminalRoutes(
     const resolvedNodeId = nodeId || (typeof ownerNodeId === "string" ? ownerNodeId : "");
     const remoteNodeId = resolvedNodeId && resolvedNodeId !== "gateway" ? resolvedNodeId : "";
 
+    const authUser = await requireAuth(request, reply, security.config.jwtSecret);
+    if (!authUser) return;
+    if (resolvedNodeId && resolvedNodeId !== "gateway" && ws?.canAccessNode && !ws.canAccessNode(resolvedNodeId, authUser.id)) {
+      return reply.status(404).send({ error: "Node not found" });
+    }
     const termId = `term-${uuidv7()}`;
+    surfaceRegistry.setOwner(termId, authUser.id);
 
     try {
       let surface: TerminalSurface | RemoteTerminalSurface;
@@ -175,10 +201,12 @@ export function registerTerminalRoutes(
   });
 
   // GET /api/terminals — list terminals
-  app.get("/api/terminals", async () => {
+  app.get("/api/terminals", async (request, reply) => {
+    const user = await requireAuth(request, reply, security.config.jwtSecret);
+    if (!user) return;
     const terminals = surfaceRegistry
       .listSurfaces()
-      .filter((s) => s.type === "terminal")
+      .filter((s) => s.type === "terminal" && security.access.surface(s.id, user.id))
       .map((s) => {
         const snapshot = s.snapshot();
         const toolExecution = getManagedTerminalExecution(snapshot.id);
@@ -479,7 +507,7 @@ export function registerTerminalRoutes(
     const body = (request.body as Record<string, unknown>) ?? {};
     const toolName = typeof body["tool"] === "string" ? body["tool"] : "";
     const input = body["input"] ?? {};
-    const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";
+    let sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";
     const projectRoot = typeof body["projectRoot"] === "string" ? body["projectRoot"] : process.cwd();
     const nodeId = typeof body["nodeId"] === "string" ? body["nodeId"].trim() : "";
     const dryRun = body["dryRun"] === true;
@@ -489,7 +517,19 @@ export function registerTerminalRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "tool name is required" });
     }
 
+    const user = await requireAuth(request, reply, security.config.jwtSecret);
+    if (!user) return;
+    if (nodeId && nodeId !== "gateway" && ws?.canAccessNode && !ws.canAccessNode(nodeId, user.id)) {
+      return reply.status(404).send({ error: "Node not found" });
+    }
+    const terminalInput = (input && typeof input === "object" ? input : {}) as { terminalId?: string; sessionId?: string };
+    if ((terminalInput.terminalId && !security.access.surface(terminalInput.terminalId, user.id))
+        || (terminalInput.sessionId && terminalInput.sessionId !== "default" && !security.access.session(terminalInput.sessionId, user.id))) {
+      return reply.status(404).send({ error: "Resource not found" });
+    }
+    sessionId = security.access.executionSession(sessionId, user.id, projectRoot);
     const context = {
+      userId: user.id,
       sessionId,
       actionId: uuidv7(),
       projectRoot,
@@ -539,9 +579,11 @@ export function registerTerminalRoutes(
   });
 
   // GET /api/surfaces — list all surfaces
-  app.get("/api/surfaces", async () => {
+  app.get("/api/surfaces", async (request, reply) => {
+    const user = await requireAuth(request, reply, security.config.jwtSecret);
+    if (!user) return;
     return {
-      surfaces: surfaceRegistry.listSnapshots(),
+      surfaces: surfaceRegistry.listSnapshots().filter((s) => security.access.surface(s.id, user.id)),
       registeredTypes: surfaceRegistry.registeredTypes,
     };
   });

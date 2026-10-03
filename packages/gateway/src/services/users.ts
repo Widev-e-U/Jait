@@ -1,8 +1,8 @@
-import { and, eq, sql } from "drizzle-orm";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { and, eq, sql, asc, gt } from "drizzle-orm";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { JaitBackend } from "@jait/shared/types";
 import type { JaitDB } from "../db/connection.js";
-import { messages, sessions, userSettings, users } from "../db/schema.js";
+import { accountInvitations, messages, sessions, userSettings, users } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
@@ -99,6 +99,29 @@ function verifyPasswordHash(password: string, encoded: string): boolean {
 
 export class UserService {
   constructor(private readonly db: JaitDB) {}
+
+  isOwner(userId: string): boolean {
+    return this.db.select({ id: users.id }).from(users).orderBy(asc(users.createdAt), asc(users.id)).get()?.id === userId;
+  }
+
+  createInvitation(userId: string): string | null {
+    if (!this.isOwner(userId)) return null;
+    const invitation = randomBytes(24).toString("base64url");
+    this.db.insert(accountInvitations).values({
+      tokenHash: createHash("sha256").update(invitation).digest("hex"),
+      createdBy: userId,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }).run();
+    return invitation;
+  }
+
+  consumeInvitation(invitation: string): boolean {
+    const hash = createHash("sha256").update(invitation).digest("hex");
+    const consumed = this.db.delete(accountInvitations).where(and(
+      eq(accountInvitations.tokenHash, hash), gt(accountInvitations.expiresAt, new Date().toISOString()),
+    )).returning().get();
+    return Boolean(consumed);
+  }
 
   countUsers(): number {
     const row = this.db.select({ n: sql<number>`count(*)` }).from(users).get();

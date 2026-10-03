@@ -1,3 +1,4 @@
+import { signAuthToken } from "./security/http-auth.js";
 /**
  * Sprint 3 Tests — Terminal Surface, File System, Path Guards, Tools, Routes
  */
@@ -367,10 +368,12 @@ import { TerminalSurfaceFactory } from "./surfaces/terminal.js";
 
 describe("Terminal & Tool routes", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
+  let headers: { authorization: string };
   let surfaceRegistry: SurfaceRegistry;
   let toolRegistry: ReturnType<typeof createToolRegistry>;
 
   beforeEach(async () => {
+    headers = { authorization: "Bearer " + await signAuthToken({ id: "test-owner", username: "owner" }, loadConfig().jwtSecret) };
     const audit = {
       write: () => "audit-test-id",
       hasAction: () => false,
@@ -384,6 +387,7 @@ describe("Terminal & Tool routes", () => {
 
     const config = { ...loadConfig(), logLevel: "silent" };
     app = await createServer(config, {
+      sessionService: { getById: (_id: string, userId: string) => userId === "test-owner" ? { userId } : null } as any,
       audit: audit as unknown as import("./services/audit.js").AuditWriter,
       surfaceRegistry,
       toolRegistry,
@@ -391,14 +395,14 @@ describe("Terminal & Tool routes", () => {
   });
 
   it("GET /api/terminals returns empty list", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/terminals" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/terminals" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { terminals: unknown[] };
     expect(body.terminals).toEqual([]);
   });
 
   it("GET /api/tools lists all registered tools", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/tools" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/tools" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { tools: { name: string; description: string }[] };
     expect(body.tools.length).toBeGreaterThanOrEqual(12);
@@ -408,7 +412,7 @@ describe("Terminal & Tool routes", () => {
   });
 
   it("GET /api/surfaces returns empty + registered types", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/surfaces" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/surfaces" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { surfaces: unknown[]; registeredTypes: string[] };
     expect(body.surfaces).toEqual([]);
@@ -417,7 +421,7 @@ describe("Terminal & Tool routes", () => {
   });
 
   it("POST /api/tools/execute surfaces.list returns data", async () => {
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: "/api/tools/execute",
       payload: { tool: "surfaces.list", input: {}, sessionId: "s1" },
@@ -429,7 +433,7 @@ describe("Terminal & Tool routes", () => {
   });
 
   it("POST /api/tools/execute returns error for unknown tool", async () => {
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: "/api/tools/execute",
       payload: { tool: "nope", input: {} },
@@ -441,7 +445,7 @@ describe("Terminal & Tool routes", () => {
   });
 
   it("POST /api/tools/execute os.query info returns system data", async () => {
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: "/api/tools/execute",
       payload: { tool: "os.query", input: { query: "info" }, sessionId: "s1" },
@@ -460,6 +464,7 @@ describe("Terminal & Tool routes", () => {
     };
     const config = { ...loadConfig(), logLevel: "silent" };
     const remoteApp = await createServer(config, {
+      sessionService: { getById: (_id: string, userId: string) => userId === "test-owner" ? { userId } : null } as any,
       audit: {
         write: () => "audit-test-id",
         hasAction: () => false,
@@ -471,7 +476,7 @@ describe("Terminal & Tool routes", () => {
       ws: ws as unknown as import("./ws.js").WsControlPlane,
     });
 
-    const res = await remoteApp.inject({
+    const res = await remoteApp.inject({ headers,
       method: "POST",
       url: "/api/tools/execute",
       payload: {

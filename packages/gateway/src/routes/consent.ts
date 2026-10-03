@@ -5,6 +5,9 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { requireAuth } from "../security/http-auth.js";
+import { loadConfig, type AppConfig } from "../config.js";
+import { ControlAccess } from "../security/control-access.js";
 import type { ConsentManager } from "../security/consent-manager.js";
 import type { ToolPermission } from "../security/tool-permissions.js";
 import type { ProfileName } from "../security/tool-profiles.js";
@@ -16,10 +19,23 @@ export function registerConsentRoutes(
   consentManager: ConsentManager,
   audit: AuditWriter,
   options: {
+    config?: AppConfig;
+    access?: ControlAccess;
     activeProfileName?: ProfileName;
     permissions?: Map<string, ToolPermission>;
   } = {},
 ) {
+  const config = options.config ?? loadConfig();
+  const access = options.access ?? new ControlAccess(undefined, undefined, consentManager);
+  app.addHook("preHandler", async (request, reply) => {
+    if (!request.url.startsWith("/api/consent")) return;
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { id, sessionId } = request.params as { id?: string; sessionId?: string };
+    if ((id && !access.consentRequest(id, user.id)) || (sessionId && !access.session(sessionId, user.id))) {
+      return reply.status(404).send({ error: "NOT_FOUND" });
+    }
+  });
   app.get("/api/consent/policy", async () => {
     const permissions = options.permissions ? [...options.permissions.values()] : [];
     return {
@@ -31,8 +47,10 @@ export function registerConsentRoutes(
   });
 
   // GET /api/consent/pending — list all pending consent requests
-  app.get("/api/consent/pending", async (_request, _reply) => {
-    const requests = consentManager.listPending();
+  app.get("/api/consent/pending", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const requests = consentManager.listPending().filter((r) => access.session(r.sessionId, user.id));
     return { requests };
   });
 
@@ -158,8 +176,10 @@ export function registerConsentRoutes(
   });
 
   // GET /api/consent/count — pending count
-  app.get("/api/consent/count", async () => {
-    return { count: consentManager.pendingCount };
+  app.get("/api/consent/count", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    return { count: consentManager.listPending().filter((r) => access.session(r.sessionId, user.id)).length };
   });
 
   // GET /api/trust — list all trust levels

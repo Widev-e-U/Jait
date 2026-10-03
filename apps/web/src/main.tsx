@@ -1,3 +1,4 @@
+import { installGatewayFetchAuth } from '@/lib/api-fetch'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Toaster } from 'sonner'
@@ -12,6 +13,7 @@ import './index.css'
 
 // Auto-reload when a new bundle is deployed, so a long-lived tab never keeps
 // running stale code (e.g. an old bundle that surfaced React #185).
+installGatewayFetchAuth()
 installVersionWatchdog()
 
 function ThemeAwareToaster() {

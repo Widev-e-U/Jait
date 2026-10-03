@@ -1644,4 +1644,16 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 66,
+    name: "control_identity_and_invitations",
+    run(db) {
+      try { db.exec("ALTER TABLE nodes ADD COLUMN user_id TEXT"); } catch { /* exists */ }
+      // Older nodes belonged to the original gateway owner. Retain their grants.
+      db.exec("UPDATE nodes SET user_id = (SELECT id FROM users ORDER BY created_at, id LIMIT 1) WHERE user_id IS NULL");
+      db.exec("CREATE TABLE IF NOT EXISTS node_credentials (token_hash TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL, created_at TEXT NOT NULL)");
+      db.exec("CREATE TABLE IF NOT EXISTS account_invitations (token_hash TEXT PRIMARY KEY, created_by TEXT NOT NULL, expires_at TEXT NOT NULL)");
+    },
+  },
+
 ];

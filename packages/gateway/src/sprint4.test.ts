@@ -1,3 +1,4 @@
+import { signAuthToken } from "./security/http-auth.js";
 /**
  * Sprint 4 Tests — Consent Manager & Tool Permissions
  *
@@ -703,10 +704,12 @@ import { loadConfig } from "./config.js";
 
 describe("Consent & Trust Routes", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
+  let headers: { authorization: string };
   let consentManager: ConsentManager;
   let trustEngine: TrustEngine;
 
   beforeEach(async () => {
+    headers = { authorization: "Bearer " + await signAuthToken({ id: "test-owner", username: "owner" }, loadConfig().jwtSecret) };
     const audit = {
       write: vi.fn(),
       hasAction: vi.fn(() => false),
@@ -718,6 +721,7 @@ describe("Consent & Trust Routes", () => {
     trustEngine = new TrustEngine();
 
     app = await createServer(loadConfig(), {
+      sessionService: { getById: (_id: string, userId: string) => userId === "test-owner" ? { userId } : null } as any,
       audit: audit as unknown as import("./services/audit.js").AuditWriter,
       consentManager,
       trustEngine,
@@ -725,14 +729,14 @@ describe("Consent & Trust Routes", () => {
   });
 
   it("GET /api/consent/pending returns empty initially", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/consent/pending" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/consent/pending" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { requests: unknown[] };
     expect(body.requests).toHaveLength(0);
   });
 
   it("GET /api/consent/policy returns active policy metadata", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/consent/policy" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/consent/policy" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
       activeProfileName: string | null;
@@ -758,7 +762,7 @@ describe("Consent & Trust Routes", () => {
       sessionId: "s1",
     });
 
-    const res = await app.inject({ method: "GET", url: "/api/consent/pending" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/consent/pending" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { requests: { id: string; toolName: string }[] };
     expect(body.requests).toHaveLength(1);
@@ -781,7 +785,7 @@ describe("Consent & Trust Routes", () => {
 
     const req = consentManager.listPending()[0]!;
 
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: `/api/consent/${req.id}/approve`,
     });
@@ -805,7 +809,7 @@ describe("Consent & Trust Routes", () => {
 
     const req = consentManager.listPending()[0]!;
 
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: `/api/consent/${req.id}/reject`,
       payload: { reason: "Not needed" },
@@ -818,7 +822,7 @@ describe("Consent & Trust Routes", () => {
   });
 
   it("POST /api/consent/:id/approve returns 404 for unknown", async () => {
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: "/api/consent/nonexistent/approve",
     });
@@ -836,7 +840,7 @@ describe("Consent & Trust Routes", () => {
       sessionId: "s1",
     });
 
-    const res = await app.inject({ method: "GET", url: "/api/consent/count" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/consent/count" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ count: 1 });
 
@@ -872,7 +876,7 @@ describe("Consent & Trust Routes", () => {
       sessionId: "s2",
     });
 
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: "/api/consent/pending/s1/approve-all",
     });
@@ -894,32 +898,32 @@ describe("Consent & Trust Routes", () => {
   });
 
   it("GET/DELETE /api/consent/pending/:sessionId/approve-all reflects and clears mode", async () => {
-    const before = await app.inject({
+    const before = await app.inject({ headers,
       method: "GET",
       url: "/api/consent/pending/s3/approve-all",
     });
     expect(before.statusCode).toBe(200);
     expect((before.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(false);
 
-    await app.inject({
+    await app.inject({ headers,
       method: "POST",
       url: "/api/consent/pending/s3/approve-all",
     });
 
-    const afterEnable = await app.inject({
+    const afterEnable = await app.inject({ headers,
       method: "GET",
       url: "/api/consent/pending/s3/approve-all",
     });
     expect((afterEnable.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(true);
 
-    const cleared = await app.inject({
+    const cleared = await app.inject({ headers,
       method: "DELETE",
       url: "/api/consent/pending/s3/approve-all",
     });
     expect(cleared.statusCode).toBe(200);
     expect((cleared.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(false);
 
-    const afterClear = await app.inject({
+    const afterClear = await app.inject({ headers,
       method: "GET",
       url: "/api/consent/pending/s3/approve-all",
     });
@@ -927,7 +931,7 @@ describe("Consent & Trust Routes", () => {
   });
 
   it("GET /api/trust/levels returns empty initially", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/trust/levels" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/trust/levels" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { levels: unknown[] };
     expect(body.levels).toHaveLength(0);
@@ -939,7 +943,7 @@ describe("Consent & Trust Routes", () => {
     trustEngine.recordApproval("terminal.run");
     trustEngine.recordApproval("terminal.run");
 
-    const res = await app.inject({ method: "GET", url: "/api/trust/levels/terminal.run" });
+    const res = await app.inject({ headers, method: "GET", url: "/api/trust/levels/terminal.run" });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { currentLevel: number; approvedCount: number };
     expect(body.currentLevel).toBe(1);
@@ -951,7 +955,7 @@ describe("Consent & Trust Routes", () => {
     trustEngine.recordApproval("terminal.run");
     trustEngine.recordApproval("terminal.run");
 
-    const res = await app.inject({
+    const res = await app.inject({ headers,
       method: "POST",
       url: "/api/trust/levels/terminal.run/reset",
     });

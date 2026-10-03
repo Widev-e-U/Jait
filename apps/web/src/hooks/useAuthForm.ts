@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 
 export interface UseAuthFormOptions {
   login: (username: string, password: string) => Promise<unknown>
-  register: (username: string, password: string) => Promise<unknown>
+  register: (username: string, password: string, invitation?: string) => Promise<unknown>
   /** Side effects to run after a successful login/register (e.g. close dialog, switch view). */
   onSuccess: () => void
 }
@@ -17,6 +17,7 @@ export interface UseAuthFormOptions {
 export function useAuthForm({ login, register, onSuccess }: UseAuthFormOptions) {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
+  const [registerInvitation, setRegisterInvitation] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
@@ -57,7 +58,7 @@ export function useAuthForm({ login, register, onSuccess }: UseAuthFormOptions) 
     }
     setAuthSubmitting(true)
     try {
-      await register(registerUsername, registerPassword)
+      await register(registerUsername, registerPassword, registerInvitation.trim() || undefined)
       setRegisterPassword('')
       setRegisterPasswordConfirm('')
       onSuccess()
@@ -73,6 +74,8 @@ export function useAuthForm({ login, register, onSuccess }: UseAuthFormOptions) 
     setLoginUsername,
     loginPassword,
     setLoginPassword,
+    registerInvitation,
+    setRegisterInvitation,
     registerUsername,
     setRegisterUsername,
     registerPassword,
