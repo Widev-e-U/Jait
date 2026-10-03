@@ -96,11 +96,23 @@ const watcher = requireGateway('@parcel/watcher');
   assert.equal((await once(duplicate, 'exit'))[0], 1, 'rejects a second owner of the same state');
   const base = `http://127.0.0.1:${port}`;
   assert.equal((await fetch(`${base}/health`)).status, 200);
-  // Exercise the HTTP execution path before enabling authentication. In particular,
+  const anonymousTerminal = await fetch(`${base}/api/terminals`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectRoot: temporary }),
+  });
+  assert.equal(anonymousTerminal.status, 401, 'anonymous terminal creation is blocked');
+  const credentials = { username: 'desktop-smoke', password: 'smoke-test-password-123' };
+  const registered = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials) });
+  assert.equal(registered.status, 200, 'account creation on packaged SQLite');
+  const { access_token: token } = await registered.json();
+  assert.equal(typeof token, 'string', 'registration returns an auth token');
+  assert.ok(token.length > 0, 'registration returns a nonempty auth token');
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+  // Exercise the authenticated HTTP execution path. In particular,
   // a silent failure must preserve the shell exit code instead of guessing zero.
   const terminalResponse = await fetch(`${base}/api/terminals`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: 'desktop-smoke', projectRoot: temporary }),
+    method: 'POST', headers,
+    body: JSON.stringify({ projectRoot: temporary }),
   });
   assert.equal(terminalResponse.status, 201, 'create packaged terminal');
   const terminal = await terminalResponse.json();
@@ -110,7 +122,7 @@ const watcher = requireGateway('@parcel/watcher');
       : [['echo JAIT_TERM_OK', 0, 'JAIT_TERM_OK'], ['false', 1, null], ['echo $((6*7))', 0, '42']];
     for (const [command, exitCode, expectedOutput] of cases) {
       const response = await fetch(`${base}/api/terminals/${terminal.id}/execute`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers,
         body: JSON.stringify({ command, timeout: 10000 }),
         signal: AbortSignal.timeout(15000),
       });
@@ -121,19 +133,21 @@ const watcher = requireGateway('@parcel/watcher');
       if (expectedOutput) assert.ok(result.output.includes(expectedOutput), command);
     }
   } finally {
-    await fetch(`${base}/api/terminals/${terminal.id}`, { method: 'DELETE' });
+    const deleted = await fetch(`${base}/api/terminals/${terminal.id}`, { method: 'DELETE', headers: { Authorization: headers.Authorization } });
+    assert.equal(deleted.status, 200, 'delete authenticated packaged terminal');
   }
-  const credentials = { username: 'desktop-smoke', password: 'smoke-test-password-123' };
-  const registered = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials) });
-  assert.equal(registered.status, 200, 'account creation on packaged SQLite');
   const secrets = readFileSync(join(temporary, 'host-secrets.json'), 'utf8');
   await stop();
   await start();
   assert.equal(readFileSync(join(temporary, 'host-secrets.json'), 'utf8'), secrets, 'stable signing secrets');
   const login = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(credentials) });
   assert.equal(login.status, 200, 'account persists across restart');
+  const { access_token: loginToken } = await login.json();
+  const account = await fetch(`${base}/api/auth/me`, { headers: { Authorization: `Bearer ${loginToken}` } });
+  assert.equal(account.status, 200, 'persisted account token authenticates after restart');
+  assert.equal((await account.json()).username, credentials.username, 'persisted account identity');
   await stop(true);
-  console.log('Packaged gateway smoke passed: PTY, watcher, shell integration (OSC 633), HTTP terminal execution and exit codes, SQLite account persistence, stable secrets, exclusive state ownership, stop and parent-pipe closure.');
+  console.log('Packaged gateway smoke passed: PTY, watcher, shell integration (OSC 633), anonymous terminal rejection, authenticated HTTP terminal execution and exit codes, SQLite account persistence, stable secrets, exclusive state ownership, stop and parent-pipe closure.');
 } finally {
   if (child?.exitCode === null) { child.kill(); await once(child, 'exit'); }
   rmSync(temporary, { recursive: true, force: true });
