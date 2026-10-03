@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Filter, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Search, Tags, Trash2, X } from 'lucide-react'
+import { AlertCircle, ArrowUpDown, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, CircleDashed, Filter, Flag, GripVertical, History, ListChecks, Loader2, Mic, MicOff, Play, Plus, RefreshCw, Search, Tags, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -15,6 +15,8 @@ import { buildTodoThreadRequest, buildTodoThreadStartOptions } from '@/lib/todo-
 import { appendTranscript } from '@/lib/transcript-merge'
 import { VoiceLevelMeter } from '@/components/chat/prompt-input'
 import { cn } from '@/lib/utils'
+
+type TodoSort = 'manual' | 'newest' | 'oldest'
 
 type TodoMode = 'list' | 'calendar'
 type TodoStatus = JaitTodo['status']
@@ -48,6 +50,7 @@ interface DragPreviewState {
 }
 
 interface TodoFilterState {
+  sort: TodoSort
   search: string
 }
 
@@ -176,7 +179,7 @@ function applyStoredTodoOrder(repoId: string, items: JaitTodo[]): JaitTodo[] {
 }
 
 function emptyTodoFilterState(): TodoFilterState {
-  return { search: '' }
+  return { search: '', sort: 'manual' }
 }
 
 function readTodoFilterMap(): Record<string, TodoFilterState> {
@@ -189,6 +192,7 @@ function readTodoFilterMap(): Record<string, TodoFilterState> {
       const record = value as Record<string, unknown>
       return [[repoId, {
         search: typeof record.search === 'string' ? record.search : '',
+        sort: record.sort === 'newest' || record.sort === 'oldest' ? record.sort : 'manual',
       }]]
     })
     return Object.fromEntries(entries)
@@ -207,6 +211,7 @@ function persistTodoFilterState(repoId: string, state: TodoFilterState): void {
     const filterMap = readTodoFilterMap()
     filterMap[repoId] = {
       search: state.search,
+      sort: state.sort,
     }
     window.localStorage.setItem(TODO_FILTER_STORAGE_KEY, JSON.stringify(filterMap))
   } catch {
@@ -705,6 +710,7 @@ export function TodoPage({
   const [mode, setMode] = useState<TodoMode>('list')
   const [statusFilter, setStatusFilter] = useState<TodoStatus | 'all'>('all')
   const [metadataSearch, setMetadataSearch] = useState('')
+  const [sort, setSort] = useState<TodoSort>('manual')
   const [hydratedFilterRepoId, setHydratedFilterRepoId] = useState<string | null>(null)
   const [month, setMonth] = useState(() => new Date())
   const [newMessage, setNewMessage] = useState('')
@@ -772,12 +778,14 @@ export function TodoPage({
   useEffect(() => {
     if (!repoId) {
       setMetadataSearch('')
+      setSort('manual')
       setHydratedFilterRepoId(null)
       setSelectedTodoIds(new Set())
       return
     }
     const filterState = readTodoFilterState(repoId)
     setMetadataSearch(filterState.search)
+    setSort(filterState.sort)
     setHydratedFilterRepoId(repoId)
     setSelectedTodoIds(new Set())
   }, [repoId])
@@ -786,14 +794,22 @@ export function TodoPage({
     if (!repoId || hydratedFilterRepoId !== repoId) return
     persistTodoFilterState(repoId, {
       search: metadataSearch,
+      sort,
     })
-  }, [hydratedFilterRepoId, metadataSearch, repoId])
+  }, [hydratedFilterRepoId, metadataSearch, repoId, sort])
 
-  const filteredTodos = useMemo(() => sortPendingTodosFirst(todos.filter((todo) => {
-    if (statusFilter !== 'all' && todo.status !== statusFilter) return false
-    if (!matchesMetadataSearch(todo, metadataSearch)) return false
-    return true
-  })), [metadataSearch, statusFilter, todos])
+  const filteredTodos = useMemo(() => {
+    const filtered = todos.filter((todo) => {
+      if (statusFilter !== 'all' && todo.status !== statusFilter) return false
+      if (!matchesMetadataSearch(todo, metadataSearch)) return false
+      return true
+    })
+    if (sort === 'manual') return sortPendingTodosFirst(filtered)
+    return filtered.sort((a, b) => {
+      const difference = Date.parse(a.createdAt) - Date.parse(b.createdAt)
+      return sort === 'oldest' ? difference : -difference
+    })
+  }, [metadataSearch, statusFilter, todos, sort])
 
   const counts = useMemo(() => ({
     open: todos.filter((todo) => todo.status === 'open').length,
@@ -1154,6 +1170,7 @@ export function TodoPage({
   }, [dragPreview, dragSourceId, dropTarget, repoId])
 
   const handleDragStart = useCallback((id: string, event: React.PointerEvent<HTMLDivElement>) => {
+    if (sort !== 'manual') return
     if (event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') return
     event.preventDefault()
     const row = event.currentTarget.closest<HTMLElement>('[data-todo-id]')
@@ -1173,7 +1190,7 @@ export function TodoPage({
       width: rect.width,
       height: rect.height,
     })
-  }, [])
+  }, [sort])
 
   const displayTodos = dragSourceId && dropTarget && (dropTarget.targetId !== dragSourceId || dropTarget.placement === 'after')
     ? moveItemByPlacement(filteredTodos, dragSourceId, dropTarget.targetId, dropTarget.placement)
@@ -1351,7 +1368,7 @@ export function TodoPage({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
         <div className="relative min-w-0 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -1383,6 +1400,18 @@ export function TodoPage({
           <CalendarDays className="h-4 w-4" />
         </Button>
         </TooltipHint>
+        <OptionSelect
+          value={sort}
+          onChange={setSort}
+          options={[
+            { value: 'manual', label: 'Manual order' },
+            { value: 'newest', label: 'Newest first' },
+            { value: 'oldest', label: 'Oldest first' },
+          ]}
+          triggerLabel="Sort"
+          triggerIcon={<ArrowUpDown className="h-4 w-4" />}
+          className={cn('h-10 w-auto shrink-0 gap-1 px-2.5', sort !== 'manual' && 'border-primary text-primary')}
+        />
         <OptionSelect
           value={statusFilter}
           onChange={setStatusFilter}
@@ -1568,7 +1597,7 @@ export function TodoPage({
                       onChange={(event) => toggleTodoSelection(todo.id, event.target.checked)}
                       aria-label="Select todo"
                     />
-                    <TooltipHint content="Drag to reorder">
+                    {sort === 'manual' && <TooltipHint content="Drag to reorder">
                     <div
                       className="shrink-0 cursor-grab touch-none rounded p-0.5 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
                       aria-label="Drag to reorder"
@@ -1576,7 +1605,7 @@ export function TodoPage({
                     >
                       <GripVertical className="h-4 w-4" />
                     </div>
-                    </TooltipHint>
+                    </TooltipHint>}
                     <button className="h-6 w-6 shrink-0 rounded text-muted-foreground hover:text-foreground" onClick={() => void updateTodoStatus(todo, todo.status === 'done' ? 'open' : 'done')} aria-label="Toggle todo status">
                       <TodoStatusIcon status={todo.status} />
                     </button>
