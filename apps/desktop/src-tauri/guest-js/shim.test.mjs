@@ -71,9 +71,12 @@ function loadShim({ boot = {}, responder = null } = {}) {
     __respond(cmd, args) {
       return resolver(cmd, args, log);
     },
-    transformCallback: (fn) => {
+    transformCallback: (fn, once = false) => {
       const id = internCounter++;
-      callbacks.set(id, fn);
+      callbacks.set(id, (event) => {
+        if (once) callbacks.delete(id);
+        return fn(event);
+      });
       return id;
     },
   };
@@ -333,6 +336,17 @@ test('gateway events fan out to all listeners and remove clears them', async () 
 
   const unlisten = log.filter((l) => l.cmd === 'plugin:event|unlisten');
   assert.equal(unlisten.length, 1, 'shell listener should be torn down');
+});
+
+test('gateway provider stream keeps its callback after the first event', async () => {
+  const { window, emit } = loadShim();
+  const seen = [];
+  window.jaitDesktop.onGatewayEvent((_ev, data) => seen.push(data.type));
+  await new Promise((r) => setTimeout(r, 0));
+  emit('gateway:event', { type: 'provider.event-from-child' });
+  emit('gateway:event', { type: 'provider.event-from-child' });
+  emit('gateway:event', { type: 'provider.event-from-child' });
+  assert.equal(seen.length, 3, 'all provider events must survive Tauri callback dispatch');
 });
 
 test('listeners registered before the bridge becomes pending and flush', async () => {

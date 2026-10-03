@@ -31,6 +31,7 @@ test('Tauri titlebar overlays content without a gap and preserves window control
         windowMinimize: () => calls.push('minimize'),
         windowMaximize: () => calls.push('maximize'),
         windowClose: () => calls.push('close'),
+        windowStartDrag: async () => { calls.push('drag') },
       },
     })
   }, { token, api: API_URL })
@@ -44,10 +45,18 @@ test('Tauri titlebar overlays content without a gap and preserves window control
   const drag = page.locator('[data-tauri-drag-region]').first()
   expect(await drag.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe('rgba(0, 0, 0, 0)')
   expect(await page.evaluate(() => document.elementFromPoint(200, 4)?.hasAttribute('data-tauri-drag-region'))).toBe(true)
+  await page.mouse.click(200, 4, { button: 'right' })
+  expect(await page.evaluate(() => (window as any).__windowCalls)).toEqual([])
+  await page.mouse.move(200, 4)
+  await page.mouse.down()
+  await page.mouse.move(260, 50)
+  await page.mouse.up()
+  expect(await page.evaluate(() => (window as any).__windowCalls)).toEqual(['drag'])
+  expect((await drag.boundingBox())?.height).toBeGreaterThanOrEqual(16)
   for (const name of ['Minimize', 'Maximize', 'Close']) {
     await page.getByRole('button', { name, exact: true }).click()
   }
-  expect(await page.evaluate(() => (window as any).__windowCalls)).toEqual(['minimize', 'maximize', 'close'])
+  expect(await page.evaluate(() => (window as any).__windowCalls)).toEqual(['drag', 'minimize', 'maximize', 'close'])
   await page.getByRole('button', { name: 'New agent', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toBeVisible()
 })

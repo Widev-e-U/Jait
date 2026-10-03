@@ -106,7 +106,9 @@
         catch (e) { /* listener errors must not break the pump */ }
       }
     };
-    var callbackId = window.__TAURI_INTERNALS__.transformCallback(handler, true);
+    // Event listeners persist across the entire stream; once=true deletes
+    // the JavaScript callback after the first Rust event.
+    var callbackId = window.__TAURI_INTERNALS__.transformCallback(handler, false);
     invoke('plugin:event|listen', {
       event: 'gateway:event',
       target: { kind: 'Any' },
@@ -161,7 +163,7 @@
         var payload = evt && evt.payload !== undefined ? evt.payload : evt;
         try { callback({ sender: 'tauri', event: eventId }, payload); } catch (e) {}
       };
-      var callbackId = internals.transformCallback(handler, true);
+      var callbackId = internals.transformCallback(handler, false);
       invoke('plugin:event|listen', {
         event: eventId,
         target: { kind: 'Any' },
