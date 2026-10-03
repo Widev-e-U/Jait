@@ -369,6 +369,29 @@ export function ManagerRepositoryPanel({
   )
 }
 
+function ThreadExecutionTime({ createdAt }: { createdAt: string }) {
+  const startedAt = new Date(createdAt)
+  if (Number.isNaN(startedAt.getTime())) return null
+
+  return (
+    <>
+      <span className="shrink-0" aria-hidden="true">·</span>
+      <time
+        dateTime={createdAt}
+        title={`Started ${startedAt.toLocaleString()}`}
+        className="shrink-0 whitespace-nowrap tabular-nums"
+      >
+        {startedAt.toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </time>
+    </>
+  )
+}
+
 function formatThreadDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000)
   if (totalSec < 60) return `${totalSec}s`
@@ -499,6 +522,7 @@ export function ManagerThreadListItem({
         </div>
         <div className="flex min-w-0 flex-nowrap items-center gap-x-1.5 overflow-hidden pl-[calc(0.75rem+6px)] text-xs leading-tight text-muted-foreground sm:gap-x-1 sm:text-xs">
           <span className="min-w-0 truncate">{repoName}</span>
+          <ThreadExecutionTime createdAt={thread.createdAt} />
           {showKindBadge && <ThreadKindBadge kind={thread.kind} />}
           {thread.kind === 'delegation' && (
             <span className="hidden shrink-0 text-amber-700 dark:text-amber-300 sm:inline">Helper thread</span>
@@ -671,6 +695,7 @@ export function ManagerActiveThreadsMenu({
                   </div>
                   <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     <span className="truncate">{repoName}</span>
+                    <ThreadExecutionTime createdAt={thread.createdAt} />
                     {thread.branch && (
                       <Badge variant="outline" className="h-4 px-1 py-0 font-mono text-2xs">
                         {thread.branch}
