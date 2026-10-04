@@ -202,6 +202,7 @@ fn spec(provider: &str, dir: &std::path::Path) -> RunnerSpec {
         model: Some("fake-model".into()),
         reasoning_effort: Some("medium".into()),
         env: HashMap::new(),
+        mcp_servers: Vec::new(),
     }
 }
 
@@ -259,6 +260,7 @@ fn registry_evicts_beyond_cap() {
                 model: None,
                 reasoning_effort: None,
                 env: HashMap::new(),
+                mcp_servers: Vec::new(),
             },
             |_| {},
         )
@@ -694,7 +696,11 @@ fn codex_failed_turn_completed_settles_as_error() {
     );
     // A failure must NOT masquerade as a completed turn.
     let events = sink.wait_for(
-        |events| events.iter().any(|e| matches!(e, ProviderEvent::Error { .. })),
+        |events| {
+            events
+                .iter()
+                .any(|e| matches!(e, ProviderEvent::Error { .. }))
+        },
         Duration::from_secs(10),
     );
     assert!(
@@ -752,4 +758,42 @@ fn provider_event_serializes_camel_case_for_renderer() {
     assert!(json.get("session_id").is_none());
     let back: ProviderEvent = serde_json::from_value(json).unwrap();
     assert_eq!(back, event);
+}
+
+#[test]
+fn mcp_configs_preserve_stdio_arguments_and_http_headers() {
+    let mut spec = spec("codex", &std::env::temp_dir());
+    assert!(codex_thread_body(&spec).get("config").is_none());
+    assert!(!claude_argv(&spec).contains(&"--mcp-config".to_string()));
+    spec.mcp_servers = serde_json::from_value(json!([
+        { "name": "jait_core", "transport": "http", "url": "https://gateway.test/mcp?toolSet=core",
+          "headers": { "Authorization": "Bearer test-only" } },
+        { "name": "local", "transport": "stdio", "command": "C:\\Program Files\\node.exe",
+          "args": ["server.js", "$(literal)", "quoted \"arg\""], "env": { "TEST": "value" } }
+    ]))
+    .unwrap();
+    let codex = codex_thread_body(&spec);
+    assert_eq!(
+        codex["config"]["mcp_servers"]["local"],
+        json!({
+            "command": "C:\\Program Files\\node.exe", "args": ["server.js", "$(literal)", "quoted \"arg\""],
+            "env": { "TEST": "value" }
+        })
+    );
+    assert_eq!(
+        codex["config"]["mcp_servers"]["jait_core"]["http_headers"]["Authorization"],
+        "Bearer test-only"
+    );
+    let argv = claude_argv(&spec);
+    let index = argv.iter().position(|arg| arg == "--mcp-config").unwrap();
+    let claude: Value = serde_json::from_str(&argv[index + 1]).unwrap();
+    assert_eq!(claude["mcpServers"]["jait_core"]["type"], "http");
+    assert_eq!(
+        claude["mcpServers"]["jait_core"]["headers"]["Authorization"],
+        "Bearer test-only"
+    );
+    assert_eq!(
+        claude["mcpServers"]["local"]["args"],
+        codex["config"]["mcp_servers"]["local"]["args"]
+    );
 }

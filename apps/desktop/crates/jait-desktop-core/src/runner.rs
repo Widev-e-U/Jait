@@ -36,6 +36,63 @@ const STDERR_TAIL_CAP: usize = 8 * 1024;
 
 // ── Spec ────────────────────────────────────────────────────────────────────
 
+/// MCP references supplied by the gateway for this session.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct McpServerRef {
+    pub name: String,
+    #[serde(flatten)]
+    pub transport: McpTransport,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "transport", rename_all = "lowercase")]
+pub enum McpTransport {
+    Http {
+        url: String,
+        #[serde(default)]
+        headers: HashMap<String, String>,
+    },
+    Stdio {
+        command: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        env: HashMap<String, String>,
+    },
+}
+
+fn codex_mcp_servers(servers: &[McpServerRef]) -> Value {
+    let mut configs = serde_json::Map::new();
+    for server in servers {
+        let config = match &server.transport {
+            McpTransport::Http { url, headers } => json!({
+                "url": url, "http_headers": headers,
+            }),
+            McpTransport::Stdio { command, args, env } => json!({
+                "command": command, "args": args, "env": env,
+            }),
+        };
+        configs.insert(server.name.clone(), config);
+    }
+    Value::Object(configs)
+}
+
+fn claude_mcp_servers(servers: &[McpServerRef]) -> Value {
+    let mut configs = serde_json::Map::new();
+    for server in servers {
+        let config = match &server.transport {
+            McpTransport::Http { url, headers } => json!({
+                "type": "http", "url": url, "headers": headers,
+            }),
+            McpTransport::Stdio { command, args, env } => json!({
+                "type": "stdio", "command": command, "args": args, "env": env,
+            }),
+        };
+        configs.insert(server.name.clone(), config);
+    }
+    json!({ "mcpServers": configs })
+}
+
 /// Spawn spec for one provider session (mirrors the `start-session` params).
 #[derive(Debug, Clone)]
 pub struct RunnerSpec {
@@ -53,6 +110,7 @@ pub struct RunnerSpec {
     pub reasoning_effort: Option<String>,
     /// Extra env layered over the inherited parent env.
     pub env: HashMap<String, String>,
+    pub mcp_servers: Vec<McpServerRef>,
 }
 
 impl RunnerSpec {
@@ -330,6 +388,10 @@ fn claude_argv(spec: &RunnerSpec) -> Vec<String> {
         argv.push("--effort".into());
         argv.push(effort.clone());
     }
+    if !spec.mcp_servers.is_empty() {
+        argv.push("--mcp-config".into());
+        argv.push(claude_mcp_servers(&spec.mcp_servers).to_string());
+    }
     argv
 }
 
@@ -346,13 +408,18 @@ fn codex_handshake_body() -> Value {
 
 fn codex_thread_body(spec: &RunnerSpec) -> Value {
     // Mirrors resolveRemoteCodexThreadConfig(mode).
-    json!({
+    let mut body = json!({
         "model": spec.model,
         "cwd": spec.working_directory,
         "approvalPolicy": if spec.full_access() { "never" } else { "on-request" },
         "sandbox": if spec.full_access() { "danger-full-access" } else { "workspace-write" },
         "experimentalRawEvents": false,
-    })
+    });
+    if !spec.mcp_servers.is_empty() {
+        // Per-thread overrides keep session URLs and headers out of account files.
+        body["config"] = json!({ "mcp_servers": codex_mcp_servers(&spec.mcp_servers) });
+    }
+    body
 }
 
 fn send_rpc(
@@ -410,6 +477,7 @@ pub fn list_codex_models(
         mode: "default".into(),
         model: None,
         reasoning_effort: None,
+        mcp_servers: Vec::new(),
         env,
     };
     let mut child = spawn_cli(&resolved, &codex_app_server_argv(), &spec)?;
@@ -491,7 +559,10 @@ fn extract_error_message(msg: &Value) -> String {
         .and_then(|t| t.get("error"))
         .and_then(message_of);
     let top_level = msg.get("error").and_then(message_of);
-    let plain = msg.get("message").and_then(Value::as_str).map(str::to_string);
+    let plain = msg
+        .get("message")
+        .and_then(Value::as_str)
+        .map(str::to_string);
     from_error
         .or(from_turn)
         .or(top_level)

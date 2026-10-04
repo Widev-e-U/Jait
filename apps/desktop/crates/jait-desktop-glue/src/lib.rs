@@ -1619,7 +1619,14 @@ impl HostState {
         if let Some(provider_id) = params.get("providerId").and_then(Value::as_str) {
             env.extend(self.provider_account_env(provider_id, &provider)?);
         }
-        let spec = core::providers::to_runner_spec(&session_id, &req, &cwd, &mode, env);
+        let mut spec = core::providers::to_runner_spec(&session_id, &req, &cwd, &mode, env);
+        spec.mcp_servers = serde_json::from_value(
+            params
+                .get("mcpServers")
+                .cloned()
+                .unwrap_or_else(|| json!([])),
+        )
+        .map_err(|e| format!("Invalid provider MCP server configuration: {e}"))?;
         let id_sink: HostSink = {
             let sinks = self.sinks.lock().clone();
             Arc::new(move |_channel, payload| {
@@ -2632,6 +2639,90 @@ exit 2
     }
 
     // ── provider bridge over the real runner + fake CLI ─────────────────────
+
+    #[test]
+    fn provider_start_rejects_malformed_mcp_configuration() {
+        let st = state();
+        let error = st
+            .dispatch(
+                "desktop:provider-op",
+                &[
+                    json!("start-session"),
+                    json!({
+                        "providerType": "codex", "sessionId": "invalid-mcp",
+                        "mcpServers": [{ "name": "jait", "transport": "http" }]
+                    }),
+                ],
+            )
+            .unwrap_err();
+        assert!(
+            error.contains("Invalid provider MCP server configuration"),
+            "{error}"
+        );
+        assert!(st.runners.get("invalid-mcp").is_none());
+    }
+
+    #[test]
+    fn provider_start_forwards_mcp_servers_to_codex_thread() {
+        if !bash_available() {
+            return;
+        }
+        let dir = temp_dir();
+        let script = write_fake_codex(&dir);
+        let capture = dir.join("thread-start.json");
+        let source = std::fs::read_to_string(&script).unwrap();
+        std::fs::write(
+            &script,
+            source.replace(
+                "thread/start)",
+                "thread/start)\n      printf '%s' \"$line\" > \"$MCP_CAPTURE\"",
+            ),
+        )
+        .unwrap();
+        let st = state();
+        st.set_resolver(Box::new(fake_codex_resolver(&script)));
+        let url = "https://gateway.test/mcp?sessionId=chat-1&projectRoot=C%3A%5Cwork&toolSet=core";
+        st.dispatch("desktop:provider-op", &[
+            json!("start-session"), json!({
+                "providerType": "codex", "sessionId": "mcp-session",
+                "workingDirectory": dir.to_string_lossy(),
+                "env": { "MCP_CAPTURE": capture.to_string_lossy() },
+                "mcpServers": [
+                    { "name": "jait_core", "transport": "http", "url": url,
+                      "headers": { "X-Test": "quoted \"value\"" } },
+                    { "name": "jait", "transport": "http", "url": "https://gateway.test/mcp?toolSet=deferred" }
+                ]
+            }),
+        ]).unwrap();
+        st.dispatch(
+            "desktop:provider-op",
+            &[
+                json!("send-turn"),
+                json!({ "sessionId": "mcp-session", "message": "hello" }),
+            ],
+        )
+        .unwrap();
+        st.dispatch(
+            "desktop:provider-op",
+            &[json!("stop"), json!({ "sessionId": "mcp-session" })],
+        )
+        .unwrap();
+        let request: Value =
+            serde_json::from_str(&std::fs::read_to_string(capture).unwrap()).unwrap();
+        assert_eq!(
+            request["params"]["config"]["mcp_servers"]["jait_core"]["url"],
+            url
+        );
+        assert_eq!(
+            request["params"]["config"]["mcp_servers"]["jait_core"]["http_headers"]["X-Test"],
+            "quoted \"value\""
+        );
+        assert_eq!(
+            request["params"]["config"]["mcp_servers"]["jait"]["url"],
+            "https://gateway.test/mcp?toolSet=deferred"
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn provider_start_send_and_events_over_fake_codex_cli() {

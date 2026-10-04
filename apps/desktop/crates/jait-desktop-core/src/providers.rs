@@ -289,6 +289,7 @@ pub fn to_runner_spec(
         mode: mode.to_string(),
         model: req.model.clone(),
         reasoning_effort: None,
+        mcp_servers: Vec::new(),
         env,
     }
 }
