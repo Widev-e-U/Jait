@@ -583,10 +583,21 @@ export class TerminalSurface implements Surface {
     }
 
     this._setState("stopping");
+    const pty = this._pty;
+    // node-pty's Windows native thread is released by its exit callback.
+    // Returning immediately lets gateway shutdown enter process.exit while
+    // that thread still waits on the shell, blocking all JS shutdown timers.
+    let finish!: () => void;
+    const exited = new Promise<void>((resolve) => { finish = resolve; });
+    pty.onExit(() => finish());
+    const timer = setTimeout(finish, 6000);
     try {
-      this._pty.kill();
+      pty.kill();
+      await exited;
     } catch {
       // already dead
+    } finally {
+      clearTimeout(timer);
     }
     this._pty = null;
     this._pid = null;
