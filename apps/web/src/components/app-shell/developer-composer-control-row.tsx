@@ -80,7 +80,7 @@ export function DeveloperComposerControlRow({
       <button
         type="button"
         onClick={onClearApproveAll}
-        className={`inline-flex h-7 shrink-0 items-center rounded-md text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400 ${compact ? 'w-7 justify-center rounded-full bg-green-500/10 p-0 hover:bg-green-500/20' : 'gap-1.5 px-1'}`}
+        className={`inline-flex h-7 shrink-0 items-center rounded-md text-green-600 transition-colors hover:bg-green-500/10 dark:text-green-400 ${compact ? 'w-7 justify-center rounded-full bg-green-500/10 p-0 hover:bg-green-500/20' : 'gap-1.5 px-1 text-xs'}`}
         aria-label="Auto-approved. Clear approve all"
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -109,7 +109,7 @@ export function DeveloperComposerControlRow({
                 triggerLabel="History"
               />
             )}
-            {compact && approvalButton}
+            {approvalButton}
           </div>
           {!compact && (
             <div className="justify-self-center">
@@ -164,12 +164,9 @@ export function DeveloperComposerControlRow({
         </div>
       </div>
       </ChatComposerSurface>
-      {!compact && (approvalButton || remainingPrompts !== null) && (
+      {!compact && remainingPrompts !== null && (
         <div className="flex items-center justify-between px-2 text-xs text-muted-foreground">
-          {approvalButton}
-          {remainingPrompts !== null && (
-            <span className="ml-auto">{remainingPrompts} remaining</span>
-          )}
+          <span className="ml-auto">{remainingPrompts} remaining</span>
         </div>
       )}
     </>
