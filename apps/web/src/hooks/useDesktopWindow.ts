@@ -16,13 +16,34 @@ export function useDesktopWindow() {
   const [desktopRuntime, setDesktopRuntime] = useState<'tauri' | null>(null)
 
   useEffect(() => {
-    const desktop = (window as any).jaitDesktop
+    const desktop = window.jaitDesktop
     if (!desktop) return
+    let disposed = false
+    let cleanup: (() => void) | undefined
     setDesktopRuntime('tauri')
-    desktop.getInfo?.().then((info: any) => setDesktopPlatform(info.platform))
-    desktop.windowIsMaximized?.().then((max: boolean) => setIsMaximized(max))
-    const cleanup = desktop.onMaximizedChange?.((_: unknown, maximized: boolean) => setIsMaximized(maximized))
-    return () => { cleanup?.() }
+    desktop.getInfo?.().then((info) => {
+      if (!disposed) setDesktopPlatform(info.platform)
+    })
+    desktop.windowIsMaximized?.().then((max) => {
+      if (!disposed) setIsMaximized(max)
+    })
+    const subscription = desktop.onMaximizedChange?.((_, maximized) => {
+      if (!disposed) setIsMaximized(maximized)
+    })
+    // Installed Tauri shims return a Promise; older bridges return the
+    // unsubscribe function directly. Dispose even if it resolves after unmount.
+    if (typeof subscription === 'function') {
+      cleanup = subscription
+    } else {
+      void Promise.resolve(subscription).then((stop) => {
+        if (disposed) stop?.()
+        else cleanup = stop
+      }).catch((error) => console.warn('Desktop window listener failed', error))
+    }
+    return () => {
+      disposed = true
+      cleanup?.()
+    }
   }, [])
 
   return { desktopPlatform, isMaximized, desktopRuntime }
