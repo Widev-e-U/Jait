@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.899](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.899) — 2026-10-04
+- fix(desktop): await window listener cleanup to prevent startup crash — 9699d502
+- fix(desktop): authenticate packaged gateway smoke checks — e7bdf5d4
+
 ## [v0.1.898](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.898) — 2026-10-03
 - docs: define the network security workbench direction — 81ae5baa
 - fix(desktop): preserve titlebar drag and window controls — 391a4a64
