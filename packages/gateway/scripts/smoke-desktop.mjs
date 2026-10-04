@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { hasExited, terminateChild } from './smoke-process.mjs';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -20,7 +21,7 @@ await new Promise(resolve => socket.close(resolve));
 let child;
 let output = '';
 async function stop(eof = false) {
-  if (!child || child.exitCode !== null) return;
+  if (hasExited(child)) return;
   const exited = once(child, 'exit');
   if (!eof) child.stdin.write('stop\n');
   child.stdin.end();
@@ -40,7 +41,7 @@ async function start() {
   child.stderr.on('data', data => { output = (output + data).slice(-40000); });
   const deadline = Date.now() + 90000;
   while (!output.includes(`JAIT_DESKTOP_READY ${port}`)) {
-    if (child.exitCode !== null || Date.now() > deadline) throw new Error(`Packaged gateway startup failed:\n${output}`);
+    if (hasExited(child) || Date.now() > deadline) throw new Error(`Packaged gateway startup failed:\n${output}`);
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 }
@@ -148,7 +149,11 @@ const watcher = requireGateway('@parcel/watcher');
   assert.equal((await account.json()).username, credentials.username, 'persisted account identity');
   await stop(true);
   console.log('Packaged gateway smoke passed: PTY, watcher, shell integration (OSC 633), anonymous terminal rejection, authenticated HTTP terminal execution and exit codes, SQLite account persistence, stable secrets, exclusive state ownership, stop and parent-pipe closure.');
+} catch (error) {
+  console.error('Packaged gateway smoke failed:', error);
+  console.error('Gateway output:', output);
+  throw error;
 } finally {
-  if (child?.exitCode === null) { child.kill(); await once(child, 'exit'); }
+  await terminateChild(child);
   rmSync(temporary, { recursive: true, force: true });
 }
