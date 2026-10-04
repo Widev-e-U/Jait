@@ -4,6 +4,13 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.902](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.902) — 2026-10-04
+- fix(web): restore auto-approval beside chat history — 6ceab4fb
+
+## [v0.1.901](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.901) — 2026-10-04
+- chore(release): bump gateway to v0.1.901 — 8e6494a0
+- fix(desktop): forward gateway mcpServers to codex and claude thread starts — 12466ef5
+
 ## [v0.1.900](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.900) — 2026-10-04
 - fix(terminal): await PTY exit before completing stop — da140246
 - fix(desktop): handle signalled smoke processes without missing exit — 2571e2cc
