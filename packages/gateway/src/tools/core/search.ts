@@ -173,27 +173,9 @@ export function createSearchTool(
 
         const initialMode = input.isRegexp ?? false;
         let retriedAs: "regex" | "literal" | null = null;
-        /** Set when regex was requested but only literal matching could run. */
-        let degradedFromRegex = false;
-        let result;
-        try {
-          result = await runContentSearch(initialMode);
-        } catch (error) {
-          if (
-            !initialMode
-            || !(error instanceof ProjectSearchUnavailableError)
-            || error.reason !== "regexp_requires_rg"
-          ) throw error;
-          // Regex needs ripgrep, which is missing. Run the pattern as literal
-          // text rather than failing: an empty regex result and an empty
-          // literal result mean different things, so this is reported either
-          // way instead of being passed off as a regex search that found
-          // nothing.
-          result = await runContentSearch(false);
-          degradedFromRegex = true;
-        }
+        let result = await runContentSearch(initialMode);
 
-        if (result.matches.length === 0 && !degradedFromRegex) {
+        if (result.matches.length === 0) {
           // A pattern the caller labelled literal is often a regex and vice
           // versa, so an empty result is worth one attempt the other way. This
           // is opportunistic: if the opposite interpretation cannot run, keep
@@ -212,22 +194,18 @@ export function createSearchTool(
 
         const matches = result.matches.map(({ file, line, content }) => ({ file, line, content }));
         const retrySuffix = retriedAs ? ` (retried as ${retriedAs})` : "";
-        const degradedSuffix = degradedFromRegex
-          ? " — searched as literal text because regex needs ripgrep, which is not installed."
-            + " Install ripgrep for regex, or use a literal pattern; repeating this call will not change the result."
-          : "";
         return {
           ok: true,
           message:
             contentResultMessage(input.pattern, matches.length, limit, result.limited)
-            + retrySuffix
-            + degradedSuffix,
+            + retrySuffix,
           data: { pattern: input.pattern, matches },
         };
       } catch (error) {
         return {
           ok: false,
           message: error instanceof Error ? error.message : "Search failed",
+          ...(error instanceof ProjectSearchUnavailableError ? { data: { reason: error.reason } } : {}),
         };
       }
     },

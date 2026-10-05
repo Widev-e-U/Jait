@@ -36,7 +36,7 @@ export function createEditTool(registry: SurfaceRegistry): ToolDefinition<EditIn
       "Create, overwrite, or patch a file. " +
       "Create/overwrite: provide path + content. " +
       "Patch: provide path + search (exact literal text) + replace. " +
-      "search must match exactly one location including whitespace/indentation. Read the file before patching.",
+      "search must match exactly one location including whitespace/indentation. Read the file before patching. Content and replacement whitespace are preserved exactly; include an explicit \\n when a trailing newline is required.",
     tier: "core",
     category: "filesystem",
     source: "builtin",
@@ -53,7 +53,7 @@ export function createEditTool(registry: SurfaceRegistry): ToolDefinition<EditIn
         },
         content: {
           type: "string",
-          description: "Full file content (create/overwrite mode).",
+          description: "Full file content (create/overwrite mode). Whitespace is preserved exactly, including trailing newlines.",
         },
         search: {
           type: "string",
@@ -74,6 +74,9 @@ export function createEditTool(registry: SurfaceRegistry): ToolDefinition<EditIn
         if (input.search != null) {
           if (input.replace == null) {
             return { ok: false, message: "Patch mode requires both `search` and `replace`." };
+          }
+          if (input.search === input.replace) {
+            return { ok: false, message: "Search and replacement are identical; no change was made. Include the actual changed whitespace or newline in `replace`." };
           }
           const result = await fs.patch(input.path, input.search, input.replace);
           if (!result.matched) {
@@ -101,10 +104,12 @@ export function createEditTool(registry: SurfaceRegistry): ToolDefinition<EditIn
         }
 
         await fs.write(input.path, input.content);
+        const size = Buffer.byteLength(input.content, "utf8");
+        const trailingNewline = input.content.endsWith("\n");
         return {
           ok: true,
-          message: `Wrote ${input.path} (${input.content.length} bytes): ${input.explanation}`,
-          data: { path: input.path, mode: "write", size: input.content.length, explanation: input.explanation },
+          message: `Wrote ${input.path} (${size} bytes; trailing newline: ${trailingNewline ? "yes" : "no"}): ${input.explanation}`,
+          data: { path: input.path, mode: "write", size, trailingNewline, explanation: input.explanation },
         };
       } catch (err) {
         return {

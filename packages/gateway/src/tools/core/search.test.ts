@@ -25,8 +25,7 @@ async function createTempProject(fileName: string, content: string): Promise<str
  * local dev boxes and self-hosted CI runners that run these tests do not have
  * it), but the "regex with metacharacters" retry test needs the empty-regex →
  * literal retry path to be exercised. Without rg installed the gateway instead
- * degrades the regex to a literal search up front, which is a different code
- * path and fails the old assertion.
+ * reports regex as unavailable, which exercises a different code path.
  *
  * The fake mimics the behaviour the test relies on: regex invocations (no
  * `--fixed-strings` in argv) return no matches so the tool retries as literal,
@@ -62,6 +61,15 @@ function createRegistryStub() {
 }
 
 describe("search core tool retry behavior", () => {
+  it("reports unavailable regex as a failure instead of a literal no-match", async () => {
+    const projectRoot = await createTempProject("sample.txt", "sumPositive\n");
+    const tool = createSearchTool(createRegistryStub() as any, { rgCommand: "jait-missing-rg" });
+    const result = await tool.execute({ pattern: "sumPositive|other", isRegexp: true }, searchContext("regex", projectRoot));
+    expect(result.ok).toBe(false);
+    expect(result.data).toEqual({ reason: "regexp_requires_rg" });
+    expect(result.message).toContain("literal-text search");
+  });
+
   it("keeps a literal no-match successful when optional regex retry is unavailable", async () => {
     const projectRoot = await createTempProject("sample.txt", "foo\n");
     const tool = createSearchTool(createRegistryStub() as any, { rgCommand: "jait-missing-rg" });

@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as projectSearch from "./project-search.js";
 import {
   runPrimaryProjectSearch,
   runPrimarySearchTool,
@@ -11,6 +12,7 @@ import {
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
   );
@@ -34,6 +36,15 @@ async function writeProjectFile(
 }
 
 describe("PrimaryLink ranked project search", () => {
+  it("reports unavailable regex without attempting literal matching", async () => {
+    const search = vi.spyOn(projectSearch, "searchProject").mockRejectedValueOnce(
+      new projectSearch.ProjectSearchUnavailableError("regexp_requires_rg", "Regex needs ripgrep; use literal-text search."),
+    );
+    const result = await runPrimarySearchTool({ pattern: "sumPositive|other", isRegexp: true }, await createProject());
+    expect(result.ok).toBe(false);
+    expect(result.data).toEqual({ reason: "regexp_requires_rg" });
+    expect(search).toHaveBeenCalledTimes(1);
+  });
   it("passes shell metacharacters literally without executing them", async () => {
     const root = await createProject();
     const sentinel = join(root, "search-command-was-executed");

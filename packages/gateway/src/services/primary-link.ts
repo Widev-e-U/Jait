@@ -210,23 +210,9 @@ export async function runPrimarySearchTool(
     });
     const initialMode = args["isRegexp"] === true;
     let retriedAs: "regex" | "literal" | null = null;
-    let degradedFromRegex = false;
-    let result;
-    try {
-      result = await runContentSearch(initialMode);
-    } catch (error) {
-      if (
-        !initialMode
-        || !(error instanceof ProjectSearchUnavailableError)
-        || error.reason !== "regexp_requires_rg"
-      ) throw error;
-      // Regex needs ripgrep, which is missing; run the pattern as literal text
-      // and say so rather than failing the call.
-      result = await runContentSearch(false);
-      degradedFromRegex = true;
-    }
+    let result = await runContentSearch(initialMode);
     if (result.mode !== "content") throw new Error("Unexpected project search mode");
-    if (result.matches.length === 0 && !degradedFromRegex) {
+    if (result.matches.length === 0) {
       // Opportunistic retry with the opposite interpretation; if the pattern is
       // not valid the other way, keep the original empty result.
       try {
@@ -249,14 +235,15 @@ export async function runPrimarySearchTool(
       ok: true,
       message: (matches.length === 0
         ? `No matches for "${pattern}"`
-        : `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}"${limitSuffix}${retrySuffix}`)
-        + (degradedFromRegex
-          ? " — searched as literal text because regex needs ripgrep, which is not installed."
-          : ""),
+        : `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}"${limitSuffix}${retrySuffix}`),
       data: { pattern, matches },
     };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : "Search failed" };
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Search failed",
+      ...(error instanceof ProjectSearchUnavailableError ? { data: { reason: error.reason } } : {}),
+    };
   }
 }
 

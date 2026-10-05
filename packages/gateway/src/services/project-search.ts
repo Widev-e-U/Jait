@@ -788,8 +788,7 @@ async function fallbackContentSearch(
   // would block the gateway's event loop outright. ripgrep's automaton has no
   // such failure mode, so regex stays gated on it.
   //
-  // The caller turns this into an automatic literal search, so it is a routed
-  // detour rather than a dead end.
+  // Report the unavailable capability without changing the requested semantics.
   if (isRegexp) {
     throw new ProjectSearchUnavailableError(
       "regexp_requires_rg",
