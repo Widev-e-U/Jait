@@ -9,9 +9,14 @@ vi.mock('react', () => ({
 }))
 import { useDesktopWindow } from './useDesktopWindow'
 
+function DesktopWindowHarness() {
+  useDesktopWindow()
+  return null
+}
+
 function mount(desktop: unknown) {
   vi.stubGlobal('window', { jaitDesktop: desktop })
-  useDesktopWindow()
+  DesktopWindowHarness()
   return lifecycle.effect!() as (() => void) | undefined
 }
 
