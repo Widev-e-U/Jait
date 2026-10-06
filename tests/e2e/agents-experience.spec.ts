@@ -203,7 +203,16 @@ test('agent list edits persist and graph shows real runtime and reporting links'
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(row.getByRole('button', { name: 'Change provider and model for Researcher' })).toHaveAttribute('title', profile.providerId + ' · ' + (profile.model || 'Default model'))
   await page.getByRole('button', { name: 'Graph', exact: true }).click()
-  await expect(page.getByLabel('Agent reporting graph').locator('canvas').first()).toBeVisible()
+  const canvas = page.getByLabel('Agent reporting graph').locator('canvas').first()
+  await expect(canvas).toBeVisible()
+  // Verify the saved Nova creature is painted, rather than an initial fallback.
+  await expect.poll(async () => canvas.evaluate(element => {
+    const canvas = element as HTMLCanvasElement
+    const context = canvas.getContext('2d')!
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+    for (let i = 0; i < pixels.length; i += 4) if (pixels[i] === 167 && pixels[i + 1] === 139 && pixels[i + 2] === 250 && pixels[i + 3] > 0) return true
+    return false
+  })).toBe(true)
   await page.getByLabel('Choose an agent in the graph').getByRole('button', { name: 'Researcher' }).click()
   await expect(page.getByText(/0 active tasks · idle/).last()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Change provider and model for Researcher' })).toBeVisible()

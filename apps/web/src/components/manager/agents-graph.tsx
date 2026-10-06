@@ -40,7 +40,7 @@ export function AgentsGraph({ agents, onSave, onOpen }: {
         const img = new Image()
         img.onload = () => resolve([key, img])
         img.onerror = () => resolve([key, img])
-        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/<svg\b[^>]*>/, tag => tag.replace(/\s(width|height)="[^"]*"/g, '').replace('<svg', '<svg width="100" height="100"')).replaceAll('currentColor', '#7c8fa8'))
+        img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace(/<svg\b[^>]*>/, tag => tag.replace(/\s(width|height|xmlns)="[^"]*"/g, '').replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"')).replaceAll('currentColor', '#7c8fa8'))
       }))
     })).then(items => { if (!cancelled) setImages(new Map(items)) })
     return () => { cancelled = true }
@@ -51,7 +51,7 @@ export function AgentsGraph({ agents, onSave, onOpen }: {
   const summary = (agent: PersonaAgentDraft) => `${agent.model || 'Default model'} · ${agent.activeTasks == null ? 'Activity unavailable' : `${agent.activeTasks} active tasks · ${agent.liveState || 'Unknown'}`}`
   return <div className="space-y-3">
     <div ref={container} className="relative overflow-hidden rounded-xl border bg-muted/10" aria-label="Agent reporting graph">
-      <ForceGraph2D<GraphNode> width={width} height={380} graphData={graph} nodeId="id" linkColor={() => '#8090a0'} cooldownTicks={100} d3VelocityDecay={0.3} minZoom={0.5} maxZoom={6}
+      <ForceGraph2D<GraphNode> width={width} height={380} graphData={graph} nodeId="id" linkColor={() => '#8090a0'} cooldownTicks={100} d3VelocityDecay={0.3} minZoom={0.5} maxZoom={2}
         nodeCanvasObject={(node, ctx, scale) => {
           const agent = byId.get(node.id)
           if (!agent) return
