@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.904](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.904) — 2026-10-06
+- fix(tools): stabilize harness paths and gate low-relevance ranks — 63586d88
+
 ## [v0.1.903](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.903) — 2026-10-05
 - feat(evaluation): add ten progressive provider tasks and trace judges — 23158e10
 - fix(tools): expose unavailable regex and no-op edits — 6d2f17be
