@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.907](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.907) — 2026-10-07
+- feat: add persistent team rooms, agent handoffs, and Jait link cards
+
 ## [v0.1.906](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.906) — 2026-10-06
 - feat: add capability catalog, agent tooling, security workbench, and fixes — 2fb7cdab
 
