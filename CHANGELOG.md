@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.906](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.906) — 2026-10-06
+- feat: add capability catalog, agent tooling, security workbench, and fixes — 2fb7cdab
+
 ## [v0.1.905](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.905) — 2026-10-06
 - fix(ci): synchronize lockfile with gateway dependencies — 96cbe6ca
 - test(gateway): remove timing and system ripgrep assumptions — 30546174
