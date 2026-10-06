@@ -5,7 +5,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
-import { CatalogToolResult, ToolPageLinks } from '@/components/chat/catalog-tool-result'
+import { JaitLinkResult } from '@/components/chat/jait-link-result'
+import { CatalogToolResult } from '@/components/chat/catalog-tool-result'
 import { SecurityToolResult } from '@/components/chat/security-tool-result'
 import { SECURITY_TOOL_LABELS, getSecurityResultSummary, isSecurityToolName } from '@/lib/security-tool-results'
 import { BrowserActivityView } from '@/components/chat/browser-activity-view'
@@ -145,6 +146,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'delete':          { icon: FileText,  label: 'Delete',      color: 'text-red-500' },
   'move':            { icon: FileText,  label: 'Move',        color: 'text-blue-500' },
   'think':           { icon: Zap,       label: 'Think',       color: 'text-purple-500' },
+  'jait.link':        { icon: ExternalLink, label: 'Jait link', color: 'text-primary' },
   'other':           { icon: Terminal,  label: 'Tool',        color: 'text-muted-foreground' },
   'fetch':           { icon: Globe,     label: 'Fetch',       color: 'text-cyan-500' },
   'web':             { icon: Globe,     label: 'Web',         color: 'text-cyan-500' },
@@ -3412,7 +3414,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security'
+  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -4367,6 +4369,8 @@ function ToolCallCardInner({
       writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && normalizedArgs.content != null) ? String(normalizedArgs.content ?? '') : undefined}
       isNewFile={normalizedTool === 'file.write'}
     />
+  ) : bodyKind === 'jaitLink' && call.result?.ok ? (
+    <JaitLinkResult data={call.result.data ?? call.result.message} />
   ) : displayTool === 'jait.catalog' && call.result?.ok ? (
     <CatalogToolResult data={call.result.data ?? call.result.message} />
   ) : bodyKind === 'security' ? (
@@ -4518,9 +4522,6 @@ function ToolCallCardInner({
         <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
           {bodyContent}
         </div>
-      )}
-      {call.result && (
-        <div className="ml-8 mr-3 mb-2"><ToolPageLinks tool={displayTool} data={call.result.data} /></div>
       )}
       {isApprovalPending && (
         <div className="ml-6 mr-1.5 mb-2 rounded-md bg-amber-500/[0.045] px-2.5 py-2 ring-1 ring-amber-500/20 sm:ml-8 sm:mr-3 sm:px-3">

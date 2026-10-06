@@ -1,3 +1,6 @@
+import type { TeamRoom } from '@jait/shared'
+import { teamChatApi } from '@/lib/team-chat-api'
+import { TeamRoomView } from './team-room'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { ArrowLeft, Clock3, ExternalLink, ListChecks, Maximize2, MessageSquare, Minimize2, Plus, Settings2, Sparkles, Trash2, UsersRound, Wrench } from 'lucide-react'
@@ -67,6 +70,20 @@ function SkillsTable({ skills, selectedIds, onChange, onOpenStore }: {
 
 export function AgentsPage({ token, repositories, availableSkills, threads, onOpenThread, onRefreshThreads, onOpenSettings, onRefreshSkills }: AgentsPageProps) {
   const [agents, setAgents] = useState<PersonaAgentDraft[]>([])
+  const [teamRoomId, setTeamRoomId] = useState<string | null>(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teamRoom'))
+  const [teamRooms, setTeamRooms] = useState<TeamRoom[]>([])
+  const openTeamRoom = (id: string | null) => {
+    setTeamRoomId(id)
+    const url = new URL(window.location.href)
+    if (id) url.searchParams.set('teamRoom', id)
+    else url.searchParams.delete('teamRoom')
+    window.history.replaceState(window.history.state, '', url)
+  }
+  useEffect(() => {
+    let active = true
+    teamChatApi.list().then(result => { if (active) setTeamRooms(result.rooms) }).catch(() => {})
+    return () => { active = false }
+  }, [agents])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
@@ -344,12 +361,15 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
     finally { setBusy(false) }
   }
 
+  if (teamRoomId) return <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"><TeamRoomView roomId={teamRoomId} onBack={() => openTeamRoom(null)} /></section>
+
   return <section className={`${chatFullscreen && selected && tab === 'chat' ? 'fixed inset-0 z-50' : 'min-h-0 flex-1'} flex min-w-0 flex-col overflow-hidden bg-background`}>
     {!current ? <div className="h-full overflow-y-auto px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-5xl">
         <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">Agents</h1><p className="mt-1 text-sm text-muted-foreground">People you can ask, assign work to, and schedule.</p></div><Button size="sm" onClick={() => setCreating({ ...newPersonaAgentDraft(), skillIds: availableSkills.map((skill) => skill.id), usesAllSkills: true })}><Plus className="mr-1 h-4 w-4" /> New agent</Button></div>
         {loading && <p className="mt-8 text-center text-sm text-muted-foreground">Loading agents…</p>}
         {!loading && agents.length === 0 && <p className="mt-12 text-center text-sm text-muted-foreground">Create an agent to start a conversation or schedule work.</p>}
+        {teamRooms.length > 0 && <div className="mt-6"><h2 className="mb-2 text-sm font-medium">Team conversations</h2><div className="space-y-1">{teamRooms.map(room => <Button key={room.id} variant="outline" className="w-full justify-start" onClick={() => openTeamRoom(room.id)}><UsersRound className="mr-2 h-4 w-4" />{room.name}{room.goal && <span className="ml-auto text-xs text-muted-foreground">{room.goal.status}</span>}</Button>)}</div></div>}
         {agents.length > 0 && <div className="mt-8"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization</div><div className="space-y-1">{organizationEntries(agents).map(({ agent, depth }) => {
           return <AgentRow key={agent.id} agent={agent} depth={depth} threads={threads} onOpen={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} onChooseTask={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('runs') }} onRefresh={onRefreshThreads} />
         })}</div></div>}

@@ -118,16 +118,19 @@ See [`.env.example`](.env.example) for the full list, including:
 ```bash
 npm install -g @jait/gateway
 
-jait start                  # start in background
+jait start                  # install/start the supervised service (Linux systemd)
 jait status                 # check health
 jait stop                   # stop
 ```
 
-Logs are written to `~/.jait/gateway.log`.
+View service logs with `jait daemon logs`. For development, containers, Windows,
+or macOS, use `jait start --foreground` and keep the process running.
 
 ### Linux server (systemd)
 
-For auto-start on boot, use the systemd integration:
+On Linux, `jait start` uses systemd and installs the user service on first start.
+It enables auto-start on boot and automatic restart after exit. You can also
+configure the service explicitly:
 
 ```bash
 npm install -g @jait/gateway
@@ -167,7 +170,8 @@ This installs the latest gateway and automatically restarts gateways managed by 
 
 ```
 jait                       Start the gateway (default port 8000)
-jait start                 Start the gateway in the background
+jait start                 Install/start the supervised service (Linux systemd)
+jait start --foreground    Run directly for development or containers
 jait stop                  Stop the background gateway
 jait status                Check if the gateway is running
 jait doctor                Run local diagnostics
@@ -183,8 +187,12 @@ jait daemon install        Install systemd user service (Linux only)
 jait daemon start|stop|restart|status|logs|uninstall
 ```
 
-The `start`, `stop`, `status`, and `doctor` commands work on **all platforms** (Windows, macOS, Linux).
-The `daemon` commands use systemd and are Linux-only.
+The `stop`, `status`, `doctor`, and `start --foreground` commands work on **all platforms**
+(Windows, macOS, Linux). Plain `start` and the `daemon` commands require Linux systemd.
+If the systemd user manager is unavailable, `start` reports an error and directs you
+to `start --foreground`; it never silently starts an unsupervised background process.
+An existing service keeps its configuration. To change its port, host, or env file,
+run `jait daemon install` with the desired flags, then `jait daemon restart`.
 
 ---
 

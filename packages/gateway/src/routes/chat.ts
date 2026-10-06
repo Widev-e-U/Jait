@@ -1,3 +1,4 @@
+import type { TeamChatService } from "../services/team-chat.js";
 import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
 import { chatNotificationLink, notificationPreview } from "@jait/shared";
 import { Buffer } from "node:buffer";
@@ -2577,6 +2578,7 @@ export const __chatTestUtils = {
 };
 
 export interface ChatRouteDeps {
+  teamChat?: TeamChatService;
   db?: JaitDB;
   sessionService?: SessionService;
   userService?: UserService;
@@ -2621,6 +2623,7 @@ export function registerChatRoutes(
   let providerRegistry: ProviderRegistry | undefined;
   let skillRegistry: SkillRegistry | undefined;
   let architectureDiagrams: ArchitectureDiagramService | undefined;
+  let teamChat: TeamChatService | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -2639,6 +2642,7 @@ export function registerChatRoutes(
     providerRegistry = deps.providerRegistry;
     skillRegistry = deps.skillRegistry;
     architectureDiagrams = deps.architectureDiagrams;
+    teamChat = deps.teamChat;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -3369,7 +3373,7 @@ export function registerChatRoutes(
     let chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     let isQuestionBranch = false;
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
-    const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
+    let requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
     const hasRequestReasoningEffort = Object.prototype.hasOwnProperty.call(body, "reasoningEffort");
     const rawReasoningEffort = typeof body["reasoningEffort"] === "string"
       ? (body["reasoningEffort"] as string).trim()
@@ -3391,7 +3395,7 @@ export function registerChatRoutes(
     if (swarmWorkerProvider) {
       requestProvider = "jait";
     }
-    const requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
+    let requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
     const parsedDisplaySegments = parseUserDisplaySegments(body["displaySegments"]);
     const attachments = parseChatAttachments(body["attachments"], parsedDisplaySegments);
     const displaySegments = [...(parsedDisplaySegments ?? (attachments.length && content ? [{ type: "text" as const, text: content }] : []))];
@@ -3428,6 +3432,12 @@ export function registerChatRoutes(
       const session = sessionService.getById(sessionId, authUser.id);
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+      const teamProfile = teamChat?.profileForSession(authUser.id, sessionId);
+      if (teamProfile) {
+        requestProvider = teamProfile.providerId as ProviderId;
+        if (teamProfile.requiresApproval) requestRuntimeMode = "supervised";
+        requestBodyModel = teamProfile.model?.trim() ?? "";
       }
       isQuestionBranch = isQuestionBranchMetadata(session.metadata);
       if (isQuestionBranch) chatMode = "ask";
@@ -3599,13 +3609,16 @@ export function registerChatRoutes(
       ? ws?.findNodeByDeviceId(projectRecord.nodeId)
       : undefined;
     const projectPlatform = projectNode?.platform ?? process.platform;
+    const teamInstructions = teamChat?.context(authUser.id, sessionId);
+    const personaProfile = teamChat?.profileForSession(authUser.id, sessionId);
+    const availableSkills = (skillRegistry?.listEnabled() ?? []).filter(skill => !personaProfile || personaProfile.usesAllSkills || personaProfile.skillIds.includes(skill.id));
     const promptCtx: PromptContext = {
       systemOne: systemOneEnabled(userApiKeys) && !userSettings?.disabledTools?.includes("decision.evaluate"),
       projectRoot: wsRoot,
-      skills: await rankSystemOne(userApiKeys, content, skillRegistry?.listEnabled() ?? [], skill => `${skill.name}: ${skill.description}`, "skill for the system prompt"),
+      skills: await rankSystemOne(userApiKeys, content, availableSkills, skill => `${skill.name}: ${skill.description}`, "skill for the system prompt"),
       architectureGraph,
       responseStyle,
-      ...(projectInstructions ? { projectInstructions } : {}),
+      ...((projectInstructions || teamInstructions) ? { projectInstructions: [projectInstructions, teamInstructions].filter(Boolean).join("\n\n") } : {}),
       backend: llmRuntime.backend,
       platform: /^(win32|windows)$/.test(projectPlatform) ? "Windows" : /^(darwin|macos)$/.test(projectPlatform) ? "macOS" : "Linux",
       shell: /^(win32|windows)$/.test(projectPlatform) ? "PowerShell" : projectNode ? "bash" : process.env.SHELL?.split("/").pop() ?? "bash",

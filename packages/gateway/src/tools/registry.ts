@@ -61,6 +61,7 @@ export const MCP_EXPOSED_CORE_TOOL_NAMES = new Set([
   "tools.list",
   "tools.search",
   "jait.catalog",
+  "jait.link",
 ]);
 
 const SEARCH_STOP_WORDS = new Set([

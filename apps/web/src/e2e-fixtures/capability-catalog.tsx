@@ -21,6 +21,8 @@ function Fixture() {
     <section data-testid="catalog"><ToolCallCard call={call('catalog', 'jait.catalog', data)} /></section>
     <section data-testid="profile"><ToolCallCard call={call('profile', 'mcp__jait__agent_profiles', { agent: { id: 'worker', name: 'Developer' } })} /></section>
     <section data-testid="external-catalog"><ToolCallCard call={call('external', 'functions.mcp__jait_core__jait_catalog', { content: [{ type: 'text', text: 'Catalog\n' + JSON.stringify(data) }] })} /></section>
+    <section data-testid="explicit-link"><ToolCallCard call={call('link', 'jait.link', { kind: 'jait-link', href: '/agents', label: 'View the updated team' })} /></section>
+    <section data-testid="external-link"><ToolCallCard call={call('wrapped-link', 'functions.mcp__jait_core__jait_link', { content: [{ type: 'text', text: 'Link\\n' + JSON.stringify({ kind: 'jait-link', href: '/jobs', label: 'View the new job' }) }] })} /></section>
     <section data-testid="job"><ToolCallCard call={call('job', 'cron.add', { id: 'job' })} /></section>
   </main>
 }

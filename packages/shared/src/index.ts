@@ -18,3 +18,6 @@ export * from "./persona-agent.js";
 export * from "./security-assessment.js";
 
 export * from "./security-workbench.js";
+export * from "./jait-link.js";
+
+export * from "./team-chat.js";

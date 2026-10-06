@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test'
 
-test('catalog and persistent agent cards navigate to the correct Jait pages', async ({ page }) => {
+test('tool cards omit page shortcuts and still display catalog results', async ({ page }) => {
   await page.goto('/capability-catalog.html')
-  await expect(page.getByTestId('profile').getByRole('link', { name: 'Open Agents' })).toBeVisible()
-  await page.getByTestId('profile').getByRole('link', { name: 'Open Agents' }).click()
-  await expect(page.getByTestId('destination')).toHaveText('/agents')
-  await page.getByTestId('job').getByRole('link', { name: 'Open Jobs' }).click()
-  await expect(page.getByTestId('destination')).toHaveText('/jobs')
+  await expect(page.getByTestId('profile')).toBeVisible()
+  await expect(page.getByTestId('job')).toBeVisible()
+  await expect(page.getByTestId('tool-page-links')).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /^Open / })).toHaveCount(0)
+  await expect(page.getByTestId('profile').getByRole('link')).toHaveCount(0)
+  await expect(page.getByTestId('job').getByRole('link')).toHaveCount(0)
   const catalog = page.getByTestId('catalog')
   await catalog.getByRole('button').first().click()
   await expect(catalog.getByTestId('jait-catalog-result')).toBeVisible()
@@ -14,8 +15,20 @@ test('catalog and persistent agent cards navigate to the correct Jait pages', as
   const external = page.getByTestId('external-catalog')
   await external.getByRole('button').first().click()
   await expect(external.getByTestId('jait-catalog-result')).toBeVisible()
-  await external.getByRole('link', { name: 'Open Agents' }).click()
+  await expect(page.getByTestId('tool-page-links')).toHaveCount(0)
+})
+
+test('agents explicitly render Jait change links that navigate on click', async ({ page }) => {
+  await page.goto('/capability-catalog.html')
+  const link = page.getByTestId('explicit-link').getByRole('link', { name: 'View the updated team' })
+  await expect(link).toBeVisible()
+  await expect(page.getByTestId('destination')).toBeEmpty()
+  await link.click()
   await expect(page.getByTestId('destination')).toHaveText('/agents')
+  const wrapped = page.getByTestId('external-link').getByRole('link', { name: 'View the new job' })
+  await expect(wrapped).toBeVisible()
+  await wrapped.click()
+  await expect(page.getByTestId('destination')).toHaveText('/jobs')
 })
 
 test('live gateway exposes the catalog and page navigation preserves destination views', async ({ page, request }) => {

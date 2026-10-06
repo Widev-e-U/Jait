@@ -816,3 +816,25 @@ export const accountInvitations = sqliteTable("account_invitations", {
   createdBy: text("created_by").notNull(),
   expiresAt: text("expires_at").notNull(),
 });
+
+export const teamRooms = sqliteTable("team_rooms", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  rootAgentId: text("root_agent_id").notNull(),
+  data: text("data").notNull(),
+}, table => [uniqueIndex("idx_team_room_root").on(table.userId, table.rootAgentId)]);
+export const teamMessages = sqliteTable("team_room_messages", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  clientKey: text("client_key").notNull(),
+  data: text("data").notNull(),
+}, table => [uniqueIndex("idx_team_message_key").on(table.roomId, table.clientKey)]);
+export const teamDeliveries = sqliteTable("team_room_deliveries", {
+  id: text("id").primaryKey(),
+  roomId: text("room_id").notNull(),
+  messageId: text("message_id").notNull(),
+  agentId: text("agent_id").notNull(),
+  sessionId: text("session_id").notNull(),
+  status: text("status").notNull(),
+  error: text("error"),
+}, table => [index("idx_team_delivery_status").on(table.status)]);

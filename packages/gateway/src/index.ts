@@ -1,6 +1,7 @@
 import { getStateDirectory } from "./state-directory.js";
 // Must be the very first import — patches globalThis.crypto before jose loads
 import "./crypto-polyfill.js";
+import { readTeamWork } from "./services/team-chat.js";
 
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
@@ -667,6 +668,17 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     context: import("./tools/contracts.js").ToolContext,
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => {
+    if (context.userId) {
+      const work = readTeamWork(sessionService.getById(context.sessionId, context.userId)?.metadata);
+      const profile = work ? threadService.getPersonaAgent(work.agentId, context.userId) : threadService.listPersonaAgents(context.userId).find(agent => agent.chatSessionId === context.sessionId);
+      if (profile) {
+        if (profile.requiresApproval) context = { ...context, runtimeMode: "supervised" };
+        const allowed = Array.isArray(profile.allowedTools) ? profile.allowedTools as string[] : [];
+        if (allowed.length && !allowed.includes(toolName) && !["team.chat", "todo", "tools.search", "jait.catalog"].includes(toolName)) {
+          return { ok: false, message: "This agent's profile does not allow tool " + toolName + "." };
+        }
+      }
+    }
     const executor = new ConsentAwareExecutor({
       toolRegistry,
       consentManager,

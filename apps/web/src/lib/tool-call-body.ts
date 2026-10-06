@@ -23,6 +23,7 @@ export type ToolCallBodyKind =
   | 'todoList'
   | 'output'
   | 'security'
+  | 'jaitLink'
   | 'runningHint'
   | 'none'
 
@@ -569,6 +570,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
 
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'
+  if (normalizedTool === 'jait.link' && input.status === 'success') return 'jaitLink'
   if (isSecurityToolName(normalizedTool) && input.displayOutput) return 'security'
   if (['browser.navigate', 'browser.snapshot', 'browser.inspect', 'browser.click', 'browser.type', 'browser.scroll', 'browser.select', 'browser.wait', 'browser.screenshot'].includes(normalizedTool)) return 'browserActivity'
   if (input.screenshotPath) return 'browserScreenshot'

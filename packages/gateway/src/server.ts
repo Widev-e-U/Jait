@@ -1,3 +1,6 @@
+import { TeamChatService } from "./services/team-chat.js";
+import { registerTeamChatRoutes } from "./routes/team-chat.js";
+import { createTeamChatTool } from "./tools/team-chat-tools.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import fastifyCookie from "@fastify/cookie";
@@ -252,7 +255,17 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);
   }
+  const teamChat = deps.db && deps.sessionService && deps.threadService && deps.userService
+    ? new TeamChatService(deps.db, deps.sessionService, deps.threadService, (userId, agent) => {
+      const repository = agent.repositoryIds.map(id => deps.repoService?.getById(id)).find(repo => repo?.userId === userId);
+      return repository?.localPath;
+    }) : undefined;
+  if (teamChat && deps.db && deps.userService && deps.sessionService) {
+    registerTeamChatRoutes(app, config, teamChat, deps.db, deps.userService);
+    deps.toolRegistry?.register(createTeamChatTool(teamChat, deps.sessionService, deps.userService));
+  }
   registerChatRoutes(app, config, {
+    teamChat,
     db: deps.db,
     sessionService: deps.sessionService,
     toolRegistry: deps.toolRegistry,

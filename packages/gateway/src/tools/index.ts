@@ -224,6 +224,7 @@ import { createAgentSpawnTool } from "./agent-tools.js";
 import { createAgentMessageTool } from "./agent-message-tool.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createPersonaAgentTool, createPersonaAgentInspectTool } from "./persona-agent-tools.js";
+import { jaitLinkTool } from "./link-tools.js";
 import { createJaitCatalogTool } from "./catalog-tools.js";
 import { createSecurityWorkbenchTools } from "./security-workbench-tools.js";
 import { createSecurityTools } from "./security-tools.js";
@@ -558,6 +559,7 @@ export function createToolRegistry(
 
   // Meta-tools (tool discovery — always core tier)
   tools.register(createJaitCatalogTool(tools));
+  tools.register(jaitLinkTool);
   tools.register(createToolsListTool(tools));
   tools.register(createToolsSearchTool(tools));
   tools.register(createDecisionEvaluateTool());

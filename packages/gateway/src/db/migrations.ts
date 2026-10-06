@@ -1676,4 +1676,15 @@ export const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_security_finding_owner ON security_findings(operator_id, updated_at)");
     },
   },
+  {
+    id: 69, name: "persistent_team_rooms",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS team_rooms (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, root_agent_id TEXT NOT NULL, data TEXT NOT NULL)");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_team_room_root ON team_rooms(user_id, root_agent_id)");
+      db.exec("CREATE TABLE IF NOT EXISTS team_room_messages (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, client_key TEXT NOT NULL, data TEXT NOT NULL)");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_team_message_key ON team_room_messages(room_id, client_key)");
+      db.exec("CREATE TABLE IF NOT EXISTS team_room_deliveries (id TEXT PRIMARY KEY, room_id TEXT NOT NULL, message_id TEXT NOT NULL, agent_id TEXT NOT NULL, session_id TEXT NOT NULL, status TEXT NOT NULL, error TEXT)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_team_delivery_status ON team_room_deliveries(status)");
+    },
+  },
 ];

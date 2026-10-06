@@ -75,7 +75,7 @@ function printHelp() {
        jait <command> [options]
 
 Commands:
-  start              Start the gateway in the background
+  start              Start the supervised daemon (Linux systemd)
   stop               Stop the background gateway
   status             Check if the gateway is running
   doctor             Run local diagnostics
@@ -84,6 +84,7 @@ Commands:
   daemon <cmd>       Manage systemd service (Linux only)
 
 Options:
+  start --foreground Run without a daemon (development/containers)
   --port <number>    Port to listen on            (default: 8000, env: PORT)
   --host <address>   Address to bind to           (default: 0.0.0.0, env: HOST)
   --env  <path>      Path to .env file            (auto-detected)
@@ -762,6 +763,7 @@ function buildUnit({ port, host, envPath } = {}) {
 Description=Jait AI Gateway
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 ExecStart=${execStart}
@@ -770,7 +772,8 @@ Environment=JAIT_UNIT=${SERVICE_NAME}
 Restart=always
 RestartSec=5
 KillMode=mixed
-TimeoutStopSec=45
+TimeoutStopSec=15
+SendSIGKILL=yes
 MemoryHigh=2G
 MemoryMax=4G
 StandardOutput=journal
@@ -833,6 +836,32 @@ function daemonStart() {
   ensureLinux();
   run(`systemctl --user start ${SERVICE_NAME}`);
   console.log(`  ${SERVICE_NAME} started`);
+}
+
+function startManagedGateway(cliFlags) {
+  if (platform() !== "linux") {
+    throw new Error("The supervised daemon requires Linux systemd. Use 'jait start --foreground' on this platform.");
+  }
+  try {
+    execFileSync("systemctl", ["--user", "show-environment"], {
+      stdio: "ignore", timeout: 5_000, windowsHide: true,
+    });
+  } catch {
+    throw new Error("The systemd user manager is unavailable. Use 'jait start --foreground' for containers or development.");
+  }
+
+  const tracked = getTrackedProcess();
+  if (tracked) {
+    throw new Error(`An unsupervised gateway is still running (PID ${tracked.pid}). Run 'jait stop', wait for it to exit, then run 'jait start' again.`);
+  }
+
+  if (!existsSync(systemdUnitPath())) {
+    daemonInstall(cliFlags);
+  } else if (Object.keys(cliFlags).length > 0) {
+    throw new Error("The daemon is already installed. Configure its flags with 'jait daemon install --port/--host/--env ...', then run 'jait daemon restart'.");
+  }
+  daemonStart();
+  console.log("  Jait is supervised by systemd. Use 'jait daemon logs' or 'jait status' to inspect it.");
 }
 
 function daemonStop() {
@@ -919,9 +948,33 @@ if (args[0] === "status") {
 }
 
 if (args[0] === "start") {
-  parseSubcommandFlags(1);
-  await cmdStart(flags);
-  process.exit(0);
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log("Usage: jait start [--port <number>] [--host <address>] [--env <path>] [--foreground]");
+    console.log("Starts the systemd user daemon on Linux, installing it if needed.");
+    console.log("Use --foreground for development, containers, or platforms without systemd.");
+    process.exit(0);
+  }
+  for (let i = 1; i < args.length; i++) {
+    if (["--port", "--host", "--env"].includes(args[i]) && args[i + 1] && !args[i + 1].startsWith("-")) {
+      i++;
+    } else if (args[i] !== "--foreground") {
+      console.error(`Invalid start option: ${args[i]}`);
+      process.exit(1);
+    }
+  }
+  if (args.includes("--foreground")) {
+    args.splice(args.indexOf("--foreground"), 1);
+    args.shift();
+  } else {
+    parseSubcommandFlags(1);
+    try {
+      startManagedGateway(flags);
+    } catch (error) {
+      console.error(`Start failed: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
 }
 
 if (args[0] === "stop") {
