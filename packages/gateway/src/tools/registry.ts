@@ -314,7 +314,7 @@ export class ToolRegistry {
       let score = tool.discovery?.priority ?? 0;
 
       for (const originalTerm of originalTerms) {
-        const expandedTerms = [originalTerm, ...(SEARCH_SYNONYMS[originalTerm] ?? [])];
+        const expandedTerms = [originalTerm, ...(Object.hasOwn(SEARCH_SYNONYMS, originalTerm) ? SEARCH_SYNONYMS[originalTerm]! : [])];
         let termScore = 0;
         for (let index = 0; index < expandedTerms.length; index++) {
           const term = expandedTerms[index]!;

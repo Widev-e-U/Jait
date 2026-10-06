@@ -268,3 +268,13 @@ describe("search core tool path resolution", () => {
     expect(result.message).not.toMatch(/ripgrep is unavailable/);
   });
 });
+
+it("honors filename regex and glob filters instead of reporting a false empty result", async () => {
+  const root = await createTempProject("active.json", "{}");
+  await mkdir(join(root, "config")); await writeFile(join(root, "config/service.json"), "{}");
+  await writeFile(join(root, "notes.txt"), "{}");
+  const tool = createSearchTool(createRegistryStub() as any);
+  const result = await tool.execute({ pattern: "service|active", isRegexp: true, mode: "files", include: "*.json" }, searchContext("file-regex", root));
+  expect(result.ok).toBe(true);
+  expect((result.data as any).files.sort()).toEqual([join(root, "active.json"), join(root, "config/service.json")].sort());
+});

@@ -178,13 +178,14 @@ export async function evaluateDecision(
   }
 }
 
-/** Reorders only already-authorized candidates; failures preserve the exact input. */
+/** Ranks already-authorized candidates, optionally filtering low relevance. Failures preserve the input. */
 export async function rankSystemOne<T>(
   apiKeys: Record<string, string> | undefined, query: string, candidates: T[],
   describe: (item: T) => string, purpose: string, signal?: AbortSignal,
   onScore?: (item: T, score: number) => void,
+  minimumRelevance?: number,
 ): Promise<T[]> {
-  if (!systemOneEnabled(apiKeys) || candidates.length < 2 || !query.trim()) return candidates;
+  if (!systemOneEnabled(apiKeys) || (minimumRelevance == null ? candidates.length < 2 : candidates.length === 0) || !query.trim()) return candidates;
   const shortlist = candidates.slice(0, 48);
   const questions = Object.fromEntries(shortlist.map((item, i) => [`item${i}`, {
     type: "noul" as const,
@@ -194,6 +195,8 @@ export async function rankSystemOne<T>(
     const result = await evaluateDecision(apiKeys, query.slice(0, 8000), questions, signal);
     shortlist.forEach((item, i) => onScore?.(item, result.answers[`item${i}`]!.noul!));
     return shortlist.map((item, i) => ({ item, score: result.answers[`item${i}`]!.noul!, i }))
-      .sort((a, b) => b.score - a.score || a.i - b.i).map(({ item }) => item).concat(candidates.slice(48));
+      .filter(({ score }) => minimumRelevance == null || score >= minimumRelevance)
+      .sort((a, b) => b.score - a.score || a.i - b.i).map(({ item }) => item)
+      .concat(minimumRelevance == null ? candidates.slice(48) : []);
   } catch { return candidates; }
 }

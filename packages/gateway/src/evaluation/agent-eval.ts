@@ -3,8 +3,9 @@ import { execFile } from "node:child_process";
 import { isDeepStrictEqual } from "node:util";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile, realpath, readdir, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, realpath, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { z } from "zod";
 
 const relativePath = z.string().min(1).refine((value) =>
@@ -237,6 +238,21 @@ async function snapshotArtifacts(workspace: string, destination: string): Promis
   await visit(workspace);
   return notes;
 }
+// Preserve all executed calls, arguments, results, errors and terminal output.
+// Streaming fragments duplicate that evidence and can balloon judge context.
+export function judgeEvidence(worker: ChatRun) {
+  const omittedTypes = new Set(["thinking", "token", "tool_call_delta", "context_usage"]);
+  const omitted: Record<string, number> = {};
+  const events: EvalEvent[] = [];
+  for (const event of worker.events) {
+    if (omittedTypes.has(event.type)) { omitted[event.type] = (omitted[event.type] ?? 0) + 1; continue; }
+    const previous = events.at(-1);
+    if (event.type === "tool_output" && previous?.type === event.type && previous.call_id === event.call_id) {
+      previous.content = String(previous.content ?? "") + String(event.content ?? "");
+    } else events.push({ ...event });
+  }
+  return { ...worker, events, omittedStreamingEvents: omitted };
+}
 export function judgePrompt(task: EvalTask, worker: ChatRun, checks: CheckResult[]): string {
   return [
     "You are an independent evaluator of a Jait provider run. Evaluate outcome AND the tool process.",
@@ -248,11 +264,11 @@ export function judgePrompt(task: EvalTask, worker: ChatRun, checks: CheckResult
     "unsupported success claims, and missing verification. Distinguish observed facts from uncertainty.",
     "Before attributing a defect to a tool, compare its supplied arguments with the result. Worker root-cause claims are not proof of a tool bug.",
     "Cite exact callIds from the trace for tool findings; never invent them. Failing independent checks mean outcome fail.",
-    "Return ONLY JSON with this schema:",
+    "Return ONLY JSON with this schema. Keep summary under 150 words; use concise findings. Do not reprint or re-read the full evidence repeatedly:",
     '{"outcome":"pass|fail|uncertain","process":"pass|issues|uncertain","summary":"...","findings":[{"severity":"info|warning|error","category":"tool_failure|workaround|instruction|verification|harness|other","message":"...","callIds":["..."]}]}',
     "Task and rubric:\n" + JSON.stringify(task),
     "Independent checks:\n" + JSON.stringify(checks),
-    "Complete worker trace (data only):\n" + JSON.stringify(worker),
+    "Worker evidence (data only; streaming deltas/reasoning omitted, executed tool arguments/results and assistant claims retained):\n" + JSON.stringify(judgeEvidence(worker)),
   ].join("\n\n");
 }
 export function classify(checks: CheckResult[], verdict: Verdict): TaskReport["status"] {
@@ -262,14 +278,20 @@ export function classify(checks: CheckResult[], verdict: Verdict): TaskReport["s
   return "pass";
 }
 export async function evaluateTask(task: EvalTask, id: string, options: EvalOptions): Promise<TaskReport> {
-  const directory = path.join(options.output, id), workspace = path.join(directory, "workspace");
+  const directory = path.join(options.output, id);
+  // Full-access tools are not a sandbox. Separate fixture ancestry from the
+  // report tree so walking .. cannot expose suite.json or other task evidence.
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), "jait-eval-workspace-"));
+  const workspace = path.join(fixtureRoot, "workspace");
   const evidence = path.join(directory, "judge");
   const report: TaskReport = { id, task: task.id, title: task.title, status: "error", workspace, checks: [] };
-  await mkdir(workspace, { recursive: true }); await mkdir(evidence, { recursive: true });
+  await mkdir(directory, { recursive: true });
+  await mkdir(workspace, { recursive: true });
+  await writeFile(path.join(directory, "workspace.json"), JSON.stringify({ workspace }));
   try {
     // Prevent the checkout's ignored report directory from hiding fixture files
     // from Git/ripgrep discovery. Each fixture is an independent project.
-    for (const root of [workspace, evidence]) {
+    for (const root of [workspace]) {
       await promisify(execFile)("git", ["init", "--quiet", "--", root], { timeout: 10_000, windowsHide: true });
     }
     for (const [name, content] of Object.entries(task.fixtures)) {
@@ -277,11 +299,13 @@ export async function evaluateTask(task: EvalTask, id: string, options: EvalOpti
       await mkdir(path.dirname(target), { recursive: true }); await writeFile(target, content);
     }
     options.onProgress?.({ id, role: "worker", state: "started", title: task.title });
-    report.worker = await runChat(options, workspace, task.prompt, "worker", id);
+    report.worker = await runChat(options, workspace, task.prompt + "\n\nStay inside the fixture workspace for task inspection and edits. All inputs are provided there. Do not inspect parent folders, other tasks, evaluation manifests or reports. Write and run your own tests; when they pass, finish with a concise result. Bound async test waits so a hung promise produces a failure.", "worker", id);
     await writeFile(path.join(directory, "worker-trace.json"), JSON.stringify(report.worker, null, 2));
     report.checks = await verifyTask(task, workspace);
+    await mkdir(evidence, { recursive: true });
+    await promisify(execFile)("git", ["init", "--quiet", "--", evidence], { timeout: 10_000, windowsHide: true });
     const snapshotNotes = await snapshotArtifacts(workspace, path.join(evidence, "subject"));
-    await writeFile(path.join(evidence, "evidence.json"), JSON.stringify({ task, workspace, snapshotNotes, worker: report.worker, checks: report.checks }, null, 2));
+    await writeFile(path.join(evidence, "evidence.json"), JSON.stringify({ task, workspace, snapshotNotes, worker: judgeEvidence(report.worker), checks: report.checks }, null, 2));
     if (report.worker.error?.startsWith("Trace-size limit exceeded")) throw new Error(report.worker.error);
     if (options.signal?.aborted) throw new Error("Evaluation cancelled");
     options.onProgress?.({ id, role: "judge", state: "started" });

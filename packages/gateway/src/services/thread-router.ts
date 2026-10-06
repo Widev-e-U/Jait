@@ -142,6 +142,19 @@ export function matchExplicitSkillInvocations(message: string, skills: Skill[]):
   return matched;
 }
 
+// Generic operations are shared by many unrelated app skills; they are not
+// evidence that the user wants that application. Count distinct whole tokens.
+const SKILL_GENERIC_WORDS = new Set([
+  "the", "and", "for", "with", "from", "when", "use", "using", "via", "this", "that", "into", "your", "own",
+  "read", "write", "create", "edit", "delete", "search", "find", "file", "files", "tool", "tools",
+  "cli", "api", "local", "content", "result", "results", "manage", "list", "show", "view", "move",
+  "notes", "data", "input", "output", "code", "task", "tasks", "run", "check", "inspect", "verify",
+]);
+function skillWords(text: string): Set<string> {
+  return new Set((text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
+    .map(word => word.length > 4 && word.endsWith("s") ? word.slice(0, -1) : word)
+    .filter(word => word.length > 2 && !SKILL_GENERIC_WORDS.has(word)));
+}
 const MIN_AUTO_SKILL_SCORE = 2;
 const MAX_AUTO_SKILLS = 2;
 
@@ -151,22 +164,17 @@ export function matchSkills(message: string, skills: Skill[]): string[] {
   // Explicit `/skill-id` invocations always win and come first.
   const explicit = matchExplicitSkillInvocations(message, skills);
 
-  const messageLower = message.toLowerCase();
+  // A directory such as notes/ or a source filename is not a skill request.
+  const words = skillWords(message.replace(/\S*[\/\\]\S+|\b\S+\.(?:txt|json|jsonl|ts|js|mjs|md)\b/g, " "));
   const matched: { id: string; score: number }[] = [];
 
   for (const skill of skills) {
-    if (explicit.includes(skill.id)) continue; // already forced in
-    // Score based on keyword overlap between task and skill description
-    const descWords = skill.description.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
-    const nameWords = skill.name.toLowerCase().split(/[\s\-_]+/).filter((w) => w.length > 2);
+    if (explicit.includes(skill.id)) continue;
+    const descWords = skillWords(skill.description);
+    const nameWords = skillWords(skill.name);
     let score = 0;
-
-    for (const word of descWords) {
-      if (messageLower.includes(word)) score += 1;
-    }
-    for (const word of nameWords) {
-      if (messageLower.includes(word)) score += 2; // Name matches are stronger
-    }
+    for (const word of descWords) if (words.has(word) && !nameWords.has(word)) score++;
+    for (const word of nameWords) if (words.has(word)) score += 2;
 
     if (score >= MIN_AUTO_SKILL_SCORE) {
       matched.push({ id: skill.id, score });

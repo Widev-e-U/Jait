@@ -29,3 +29,13 @@ it("preserves newline and Unicode bytes and reports exact write metadata", async
     expect(result.data).toMatchObject({ size: Buffer.byteLength(content), trailingNewline: content.endsWith("\n") });
   }
 });
+
+it("rejects mixed write and patch arguments without modifying the file", async () => {
+  const { root, tool, context } = await fixture();
+  await writeFile(join(root, "result.txt"), "original");
+  for (const args of [{ content: "whole file", replace: "fragment" }, { content: "whole file", search: "original", replace: "fragment" }]) {
+    const result = await tool.execute({ path: "result.txt", explanation: "Ambiguous edit", ...args }, context);
+    expect(result.ok).toBe(false);
+    expect(await readFile(join(root, "result.txt"), "utf8")).toBe("original");
+  }
+});

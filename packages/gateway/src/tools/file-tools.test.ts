@@ -4,12 +4,12 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurfaceFactory } from "../surfaces/filesystem.js";
-import { createImageViewTool } from "./file-tools.js";
+import { createImageViewTool, createFileReadTool, createFileWriteTool } from "./file-tools.js";
 import type { ToolContext } from "./contracts.js";
 
 describe("image.view tool", () => {
@@ -36,6 +36,17 @@ describe("image.view tool", () => {
 
   afterEach(() => {
     rmSync(project, { recursive: true, force: true });
+  });
+
+  it("preserves exact CRLF and Unicode bytes and reports UTF-8 size", async () => {
+    const content = "Grüße 🌍\r\n\tvalue = 7  \r\n\r\n";
+    const write = await createFileWriteTool(registry).execute({ path: "result.txt", content }, toolContext);
+    expect(write.ok).toBe(true);
+    expect(readFileSync(join(project, "result.txt"))).toEqual(Buffer.from(content));
+    expect(write.data).toMatchObject({ size: 30 });
+    expect(write.message).toContain("30 bytes");
+    const read = await createFileReadTool(registry).execute({ path: "result.txt" }, toolContext);
+    expect(read.data).toMatchObject({ content, size: 30 });
   });
 
   it("returns a base64 data URI for a PNG image", async () => {

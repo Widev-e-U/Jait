@@ -58,7 +58,7 @@ describe('matchSkills', () => {
     const matched = matchSkills('/deep-research review this broken security auth error for bugs', skills)
     expect(matched[0]).toBe('deep-research')
     expect(matched).toHaveLength(3)
-    expect(matched.slice(1)).toEqual(['review', 'security'])
+    expect(matched.slice(1).sort()).toEqual(['review', 'security'])
   })
 
   it('matches the named skill when the prompt references it directly', () => {
@@ -70,3 +70,24 @@ describe('matchSkills', () => {
     expect(matchSkills('Use the Debugging skill to inspect this error', skills)).toContain('debugging')
   })
 })
+
+it('does not select app skills from file paths or generic operations', () => {
+  const skills = [
+    { id: 'bear-notes', name: 'bear-notes', description: 'Create, search, and manage Bear notes via grizzly CLI.' },
+    { id: 'apple-notes', name: 'apple-notes', description: 'Create, view, edit, delete, search, move, or export Apple Notes via memo CLI on macOS.' },
+    { id: 'slack', name: 'slack', description: 'Slack message tool ops: send/read/edit/delete, react, poll, pin, thread, search, presence.' },
+    { id: 'gifgrep', name: 'gifgrep', description: 'Search GIF providers, download results, and extract stills.' },
+  ];
+  expect(matchSkills('Read notes/service.txt using Jait file tools. Write result.json and verify values from the file.', skills)).toEqual([]);
+  expect(matchSkills('Discover file metadata size modified date and write result.json.', skills)).toEqual([]);
+  expect(matchSkills('Search source and create the result file.', skills)).toEqual([]);
+  expect(matchSkills('Search Apple Notes for my meeting notes', skills)).toContain('apple-notes');
+});
+it('ignores generic possessives in fixture boundary instructions', () => {
+  const skills = [{ id: 'session-logs', name: 'session-logs', description: 'Search and analyze your own session logs (older/parent conversations) using jq.' }];
+  expect(matchSkills('Stay inside the fixture workspace. Do not inspect parent folders or other tasks. Write and run your own tests.', skills)).toEqual([]);
+  expect(matchSkills('Analyze my older session logs', skills)).toContain('session-logs');
+});
+it('does not count repeated description words or substrings as distinct evidence', () => {
+  expect(matchSkills('inspect original config', [{ id: 'pin', name: 'pin', description: 'pin pin pin' }])).toEqual([]);
+});

@@ -56,6 +56,18 @@ const solutions: Record<string, Record<string, string>> = {
     "result.json": '{"endpoints":[{"host":"fixture-a","port":80},{"host":"fixture-a","port":8080},{"host":"fixture-b","port":443}],"counts":{"invalid":4,"excluded":2,"duplicates":1}}',
   },
 };
+it("accepts synchronous RangeError validation for the async-map contract", async () => {
+  const suite = suiteSchema.parse(JSON.parse(await readFile(new URL("../../../../evaluations/basic.json", import.meta.url), "utf8")));
+  const task = suite.tasks.find(task => task.id === "bounded-async-map")!;
+  const root = await mkdtemp(path.join(tmpdir(), "jait-suite-")); roots.push(root);
+  const implementation = solutions[task.id]!["queue.mjs"]!.replace("export async function mapConcurrent", "async function run");
+  await writeFile(path.join(root, "queue.mjs"), implementation + `
+    export function mapConcurrent(items, concurrency, worker) {
+      if (!Number.isInteger(concurrency) || concurrency < 1) throw new RangeError('concurrency');
+      return run(items, concurrency, worker);
+    }`);
+  expect((await verifyTask(task, root)).every(check => check.passed)).toBe(true);
+});
 it("defines ten verifiable tasks whose broken baseline fails and correct artifacts pass", async () => {
   const suite = suiteSchema.parse(JSON.parse(await readFile(new URL("../../../../evaluations/basic.json", import.meta.url), "utf8")));
   expect(suite.tasks).toHaveLength(10);

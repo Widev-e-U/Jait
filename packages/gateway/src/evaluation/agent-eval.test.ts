@@ -7,7 +7,7 @@ import { mkdtemp, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  EventParser, suiteSchema, parseVerdict, classify, verifyTask, evaluateTask, runChat, runEvaluation,
+  judgePrompt, EventParser, suiteSchema, parseVerdict, classify, verifyTask, evaluateTask, runChat, runEvaluation,
   type EvalOptions, type EvalTask,
 } from "./agent-eval.js";
 
@@ -42,7 +42,10 @@ function gateway(judging: unknown = verdict) {
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {};
     bodies.push(body);
     if (url.pathname.endsWith("/cancel")) { cancelled++; return Response.json({ ok: true }); }
-    if (url.pathname === "/api/sessions") return Response.json({ id: crypto.randomUUID() });
+    if (url.pathname === "/api/sessions") {
+      if (typeof body.projectPath === "string" && body.projectPath.includes("jait-eval-workspace-")) temporary.push(path.dirname(body.projectPath));
+      return Response.json({ id: crypto.randomUUID() });
+    }
     if (url.pathname === "/api/chat") {
       active++; maximum = Math.max(maximum, active);
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -159,7 +162,9 @@ describe("manual agent evaluations (offline)", () => {
     expect(chats.map((body) => [body.mode, body.model])).toEqual([["agent", "pinned-model"], ["ask", "pinned-judge"]]);
     expect(chats[1]?.content).toContain('"call_id":"read-1"');
     const evidence = JSON.parse(await readFile(path.join(output, "read-evidence-1/judge/evidence.json"), "utf8"));
-    expect(evidence.worker.events).toHaveLength(4);
+    expect(evidence.worker.events).toHaveLength(3);
+    expect(evidence.worker.content).toBe("Verified the fixture.");
+    expect(JSON.parse(await readFile(path.join(output, "read-evidence-1/worker-trace.json"), "utf8")).events).toHaveLength(4);
     expect(await readFile(path.join(output, "read-evidence-1/judge/subject/fixture.json"), "utf8")).toBe('{"port":8080}');
     expect(JSON.parse(await readFile(path.join(output, "read-evidence-1/report.json"), "utf8")).status).toBe("pass");
   });
@@ -247,4 +252,28 @@ describe("manual agent evaluations (offline)", () => {
     expect(aggregate.model).toBe("pinned-model"); expect(aggregate.reports).toHaveLength(3);
     expect(JSON.stringify(aggregate)).not.toContain("fixture-token");
   });
+});
+
+it("sends judges complete tool evidence without streaming or reasoning duplication", () => {
+  const events = [
+    ...Array.from({ length: 1000 }, () => ({ type: "thinking", content: "private reasoning fragment" })),
+    { type: "tool_call_delta", call_id: "c", args_delta: "fragment" },
+    { type: "tool_start", call_id: "c", tool: "file.write", args: { content: "é\r\n" } },
+    { type: "tool_result", call_id: "c", tool: "file.write", ok: false, message: "exact failure" },
+    { type: "token", content: "Verified." }, { type: "done" },
+  ];
+  const prompt = judgePrompt(task(), { sessionId: "s", events, content: "Verified.", durationMs: 1 }, []);
+  expect(prompt).not.toContain("private reasoning fragment");
+  expect(prompt).not.toContain('"type":"tool_call_delta"');
+  expect(prompt).toContain("exact failure");
+  expect(prompt).toContain(JSON.stringify({ content: "é\r\n" }));
+  expect(prompt.length).toBeLessThan(10000);
+});
+it("keeps reports and verification manifests outside worker workspace ancestry", async () => {
+  const output = await directory(), mock = gateway();
+  await writeFile(path.join(output, "suite.json"), "hidden-verifier");
+  const report = await evaluateTask(task(), "read-evidence-1", options(output, mock.fetchImpl));
+  temporary.push(path.dirname(report.workspace));
+  expect(report.workspace.startsWith(output + path.sep)).toBe(false);
+  expect(mock.bodies.find(body => body.mode === "agent")?.content).toContain("Stay inside");
 });

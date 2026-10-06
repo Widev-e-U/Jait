@@ -60,7 +60,7 @@ export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<Fi
         return {
           ok: true,
           message: `Read ${input.path}`,
-          data: { path: input.path, content, size: content.length },
+          data: { path: input.path, content, size: Buffer.byteLength(content, "utf8") },
         };
       } catch (err) {
         return {
@@ -75,7 +75,7 @@ export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<Fi
 export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<FileWriteInput> {
   return {
     name: "file.write",
-    description: "Write content to a file within the project (creates parent directories)",
+    description: "Write UTF-8 content to a file (creates parent directories). Whitespace is preserved exactly as supplied. JSON newline escapes must decode to actual newline characters; literal backslash sequences are not decoded again.",
     tier: "standard",
     category: "filesystem",
     source: "builtin",
@@ -83,7 +83,7 @@ export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<F
       type: "object",
       properties: {
         path: { type: "string", description: "Relative or absolute path to the file" },
-        content: { type: "string", description: "File content to write" },
+        content: { type: "string", description: "Exact file content, including required trailing newlines and CRLF. Copy the raw read content, not line-numbered display text." },
       },
       required: ["path", "content"],
     },
@@ -93,8 +93,8 @@ export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<F
         await fs.write(input.path, input.content);
         return {
           ok: true,
-          message: `Wrote ${input.path} (${input.content.length} bytes)`,
-          data: { path: input.path, size: input.content.length },
+          message: `Wrote ${input.path} (${Buffer.byteLength(input.content, "utf8")} bytes)`,
+          data: { path: input.path, size: Buffer.byteLength(input.content, "utf8") },
         };
       } catch (err) {
         return {

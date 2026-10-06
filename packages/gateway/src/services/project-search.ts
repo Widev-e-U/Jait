@@ -228,6 +228,7 @@ export function rankProjectFilePaths(
   paths: readonly string[],
   query: string,
   limit: number,
+  alreadyMatched = false,
 ): Array<{ relativePath: string; score: number }> {
   const needle = cleanedFileQuery(query);
   if (!needle) return [];
@@ -237,7 +238,7 @@ export function rankProjectFilePaths(
       score: scorePath(relativePath, needle),
       index,
     }))
-    .filter((candidate) => candidate.relativePath.toLowerCase().includes(needle))
+    .filter((candidate) => alreadyMatched || candidate.relativePath.toLowerCase().includes(needle))
     .sort(
       (left, right) =>
         right.score - left.score
@@ -305,9 +306,13 @@ function matchesInclude(relativePath: string, include: string | undefined): bool
  * genuinely missing binary — but a sync throw must still not escape as an
  * unhandled exception.
  */
-function spawnSearchChild(command: string, args: string[], cwd: string) {
+function spawnSearchChild(command: string, args: string[], cwd: string, input?: string) {
   try {
-    return { child: spawn(command, args, { cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] as const }) };
+    const child = spawn(command, args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] as const });
+    // A bounded search may stop reading early; EPIPE must not crash the gateway.
+    child.stdin.on("error", () => {});
+    if (input == null) child.stdin.end();
+    return { child };
   } catch (error) {
     return { error: error as NodeJS.ErrnoException };
   }
@@ -319,9 +324,10 @@ function runCommandLines(
   cwd: string,
   limit: number,
   keep?: (line: string) => boolean,
+  input?: string,
 ): Promise<CommandResult> {
   return new Promise((resolveResult, reject) => {
-    const spawned = spawnSearchChild(command, args, cwd);
+    const spawned = spawnSearchChild(command, args, cwd, input);
     if (spawned.error) {
       resolveResult({
         lines: [],
@@ -403,6 +409,9 @@ function runCommandLines(
       reject(error);
     });
     child.on("close", (code) => finish(false, code));
+    if (input != null) {
+      child.stdin.end(input);
+    }
   });
 }
 
@@ -901,6 +910,7 @@ export async function searchProject(
     const needle = cleanedFileQuery(query);
     if (!needle) return { query: options.query, mode, files: [], limited: false };
     const rgArgs = ["--files"];
+    if (options.include) rgArgs.push("--glob", options.include);
     if (options.includeIgnoredFiles) {
       rgArgs.push("--no-ignore", "--hidden", "--glob", "!.git/**");
     }
@@ -910,7 +920,9 @@ export async function searchProject(
       rgArgs,
       root,
       maxCandidates,
-      (line) => normalizeRelativePath(root, line).toLowerCase().includes(needle),
+      (line) => options.isRegexp
+        ? matchesInclude(normalizeRelativePath(root, line), options.include)
+        : normalizeRelativePath(root, line).toLowerCase().includes(needle) && matchesInclude(normalizeRelativePath(root, line), options.include),
     );
     if (!run.missing) assertCommandSucceeded(rgCommand, run);
     const enumeration = run.missing
@@ -926,11 +938,21 @@ export async function searchProject(
             .filter((value) => value && insideRoot(value)),
           limited: run.limited,
         };
-    const matchingCandidates = enumeration.files.filter(
-      (path) => path.toLowerCase().includes(needle),
+    let matchingCandidates = enumeration.files.filter(
+      (file) => matchesInclude(file, options.include) && (options.isRegexp || file.toLowerCase().includes(needle)),
     );
+    if (options.isRegexp) {
+      // Never evaluate arbitrary model regex on the gateway event loop.
+      const filtered = await runCommandLines(rgCommand,
+        ["--no-heading", "--color", "never", "--ignore-case", "--", query, "-"],
+        root, maxCandidates, undefined, matchingCandidates.join("\n") + "\n");
+      if (filtered.missing) throw new ProjectSearchUnavailableError("regexp_requires_rg", "Filename regex requires ripgrep. Use a literal filename/path query or content search.");
+      assertCommandSucceeded(rgCommand, filtered);
+      matchingCandidates = filtered.lines.filter(file => file && insideRoot(file));
+      enumeration.limited ||= filtered.limited;
+    }
     const candidates = matchingCandidates.slice(0, maxCandidates);
-    const ranked = rankProjectFilePaths(candidates, query, limit);
+    const ranked = rankProjectFilePaths(candidates, query, limit, options.isRegexp);
     return {
       query: options.query,
       mode,

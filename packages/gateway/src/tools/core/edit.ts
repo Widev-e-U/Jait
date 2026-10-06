@@ -36,7 +36,7 @@ export function createEditTool(registry: SurfaceRegistry): ToolDefinition<EditIn
       "Create, overwrite, or patch a file. " +
       "Create/overwrite: provide path + content. " +
       "Patch: provide path + search (exact literal text) + replace. " +
-      "search must match exactly one location including whitespace/indentation. Read the file before patching. Content and replacement whitespace are preserved exactly; include an explicit \\n when a trailing newline is required.",
+      "search must match exactly one location including whitespace/indentation. Read the file before patching. Content and replacement whitespace are preserved exactly; supply actual newline characters when needed. JSON escapes are decoded once; literal backslash sequences are preserved, not decoded again. Use only one mode per call.",
     tier: "core",
     category: "filesystem",
     source: "builtin",
@@ -68,6 +68,9 @@ export function createEditTool(registry: SurfaceRegistry): ToolDefinition<EditIn
     },
     async execute(input: EditInput, context: ToolContext): Promise<ToolResult> {
       try {
+        if (input.content != null && (input.search != null || input.replace != null)) {
+          return { ok: false, message: "Choose one edit mode: `content` for write, or `search` + `replace` for patch. Mixed modes are rejected without modifying the file." };
+        }
         const fs = await getFs(registry, context, input.path);
 
         // ── Patch mode: search + replace ─────────────────────────

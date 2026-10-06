@@ -656,7 +656,7 @@ async function retrieveRelevantMemoryContext(
     }
   }
 
-  const ranked = await rankSystemOne(apiKeys, query, [...byId.values()], entry => entry.content, "memory");
+  const ranked = await rankSystemOne(apiKeys, query, [...byId.values()], entry => entry.content, "memory", undefined, undefined, 0.5);
   const entries = ranked.slice(0, 5);
   if (entries.length === 0) {
     return {

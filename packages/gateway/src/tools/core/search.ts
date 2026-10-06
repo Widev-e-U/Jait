@@ -140,6 +140,8 @@ export function createSearchTool(
               root: resolvedRoot,
               query: input.pattern,
               mode: "files",
+              isRegexp: input.isRegexp,
+              include,
               limit,
               includeIgnoredFiles: input.includeIgnoredFiles,
             },

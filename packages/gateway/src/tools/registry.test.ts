@@ -244,3 +244,10 @@ describe("ToolRegistry discovery ranking", () => {
     ]);
   });
 });
+
+it("ranks a query containing constructor without reading inherited synonyms", () => {
+  const registry = new ToolRegistry();
+  registerDiscoveryTool(registry, "file.read", "Read constructor source files");
+  expect(() => registry.rankSearch("inspect constructor source")).not.toThrow();
+  expect(registry.search("constructor")[0]?.name).toBe("file.read");
+});

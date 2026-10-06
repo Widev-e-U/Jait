@@ -144,3 +144,8 @@ describe("System One Model", () => {
     expect(JSON.parse(init.body).messages[0].role).toBe("system");
   });
 });
+
+it("excludes semantically irrelevant automatic memories instead of only reordering them", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({ item0: { type: "noul", noul: 0.1 }, item1: { type: "noul", noul: 0.9 } })));
+  expect(await rankSystemOne(keys(), "fixture file", ["network notes", "fixture instructions"], x => x, "memory", undefined, undefined, 0.5)).toEqual(["fixture instructions"]);
+});
