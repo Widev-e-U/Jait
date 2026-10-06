@@ -66,7 +66,7 @@ export interface ToolParametersSchema {
 
 /** JSON Schema for a single tool parameter property */
 export interface ToolPropertySchema {
-  type: string;
+  type: string | string[];
   description?: string;
   enum?: string[];
   /** For type: "array" — describes the shape of each array element */
@@ -155,6 +155,8 @@ export type ToolSourceMetadata =
 
 export interface ToolDefinition<TInput = unknown> {
   name: string;
+  /** Product page owning this capability; optional for external tools. */
+  page?: import("@jait/shared").JaitPageId;
   /** Human-friendly title advertised to MCP clients and used by tool UIs. */
   displayName?: string;
   description: string;

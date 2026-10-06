@@ -1,3 +1,5 @@
+import { personaAgentProfileSchema } from "@jait/shared";
+
 /**
  * Agent Thread REST + WS routes.
  *
@@ -761,28 +763,13 @@ export function registerThreadRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown> | null;
-    const stringArray = (value: unknown) => Array.isArray(value) && value.length <= 100
-      && value.every((item) => typeof item === "string" && item.length <= 200);
-    if (!id || id.length > 100 || !body || Array.isArray(body)
-      || typeof body.name !== "string" || body.name.length > 200
-      || typeof body.persona !== "string" || body.persona.length > 10_000
-      || typeof body.avatar !== "string" || body.avatar.length > 40
-      || (body.role !== undefined && (typeof body.role !== "string" || body.role.length > 200))
-      || (body.reportsToId !== undefined && body.reportsToId !== null
-        && (typeof body.reportsToId !== "string" || body.reportsToId.length > 100))
-      || typeof body.providerId !== "string" || body.providerId.length > 100
-      || !(providerRegistry.getForUser(body.providerId, authUser.id)
-        || ws?.getFsNodes().some((node) => node.providers?.includes(body.providerId as string)))
-      || !stringArray(body.repositoryIds) || !stringArray(body.skillIds)
-      || !stringArray(body.allowedTools) || !stringArray(body.notificationChannels)
-      || !stringArray(body.notificationEvents)
-      || typeof body.requiresApproval !== "boolean" || typeof body.paused !== "boolean"
-      || !body.schedule || typeof body.schedule !== "object"
-      || JSON.stringify(body).length > 30_000) {
+    const parsed = personaAgentProfileSchema.safeParse(body && !Array.isArray(body) ? { ...body, id } : null);
+    if (!parsed.success || !(providerRegistry.getForUser(parsed.data.providerId, authUser.id)
+      || ws?.getFsNodes().some((node) => node.providers?.includes(parsed.data.providerId)))) {
       return reply.status(400).send({ error: "Invalid agent profile" });
     }
     try {
-      return threadService.savePersonaAgent(authUser.id, { ...body, id });
+      return threadService.savePersonaAgent(authUser.id, parsed.data);
     } catch (error) {
       if (error instanceof Error && error.message === "Invalid reporting line") {
         return reply.status(400).send({ error: error.message });

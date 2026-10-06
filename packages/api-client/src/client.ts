@@ -1,4 +1,9 @@
 import type {
+  SecurityCheckInput, SecurityCheckRun, SecurityWorkbenchHistory, SecurityEngineStatus, SecurityRemediationPlan, SecurityVerificationResult, SecurityFinding,
+  SecurityAssessmentHistory,
+  SecurityAssessmentRun,
+  SecurityScope,
+  SecurityScopeInput,
   GatewayStatus,
   ChatMessage,
   WsEvent,
@@ -34,6 +39,47 @@ export class JaitClient {
   }
 
   // --- REST API ---
+
+  private async assessmentRequest<T>(path: string, body?: unknown, method?: "DELETE"): Promise<T> {
+    const res = await fetch(this.config.baseUrl + path, {
+      headers: this.headers, credentials: "include",
+      method: method ?? (body === undefined ? "GET" : "POST"),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    const data = await res.json() as T & { error?: string };
+    if (!res.ok) throw new Error(data.error ?? "Assessment request failed");
+    return data;
+  }
+
+  compareSecurityChecks(beforeRunId: string, afterRunId: string): Promise<import("@jait/shared").SecurityBaselineComparison> { return this.assessmentRequest("/api/security/comparisons", {beforeRunId, afterRunId}); }
+  securityWorkbench(): Promise<SecurityWorkbenchHistory> { return this.assessmentRequest("/api/security/workbench"); }
+  securityEngineStatus(): Promise<SecurityEngineStatus[]> { return this.assessmentRequest("/api/security/engines"); }
+  startSecurityCheck(input: SecurityCheckInput): Promise<SecurityCheckRun> { return this.assessmentRequest("/api/security/checks", input); }
+  getSecurityCheck(id: string): Promise<SecurityCheckRun> { return this.assessmentRequest("/api/security/checks/" + encodeURIComponent(id)); }
+  cancelSecurityCheck(id: string): Promise<{ok: boolean}> { return this.assessmentRequest("/api/security/checks/" + encodeURIComponent(id) + "/cancel", {}); }
+  deleteSecurityCheck(id: string): Promise<{ok: boolean}> { return this.assessmentRequest("/api/security/checks/" + encodeURIComponent(id), undefined, "DELETE"); }
+  exportSecurityReport(id: string): Promise<Record<string, unknown>> { return this.assessmentRequest("/api/security/checks/" + encodeURIComponent(id) + "/report"); }
+  getSecurityRemediationPlan(id: string): Promise<SecurityRemediationPlan> { return this.assessmentRequest("/api/security/findings/" + encodeURIComponent(id) + "/plan"); }
+  verifySecurityFinding(id: string): Promise<SecurityVerificationResult> { return this.assessmentRequest("/api/security/findings/" + encodeURIComponent(id) + "/verify", {}); }
+  decideSecurityFinding(id: string, disposition: "open" | "accepted-risk" | "false-positive"): Promise<SecurityFinding> { return this.assessmentRequest("/api/security/findings/" + encodeURIComponent(id) + "/decision", {disposition}); }
+  scheduleSecurityMonitor(input: SecurityCheckInput & {minutes: number}): Promise<{jobId: string; expiresAt: string}> { return this.assessmentRequest("/api/security/monitors", input); }
+
+  securityAssessments(): Promise<SecurityAssessmentHistory> {
+    return this.assessmentRequest("/api/security/assessments");
+  }
+  createSecurityScope(input: SecurityScopeInput & { sessionId?: string }): Promise<SecurityScope> {
+    return this.assessmentRequest("/api/security/scopes", input);
+  }
+  startSecurityAssessment(scopeId: string): Promise<SecurityAssessmentRun> {
+    return this.assessmentRequest("/api/security/assessments", { scopeId });
+  }
+  getSecurityAssessment(id: string): Promise<SecurityAssessmentRun> {
+    return this.assessmentRequest("/api/security/assessments/" + encodeURIComponent(id));
+  }
+  cancelSecurityAssessment(id: string): Promise<{ ok: boolean }> {
+    return this.assessmentRequest("/api/security/assessments/" + encodeURIComponent(id) + "/cancel", {});
+  }
+
 
   async health(): Promise<GatewayStatus> {
     const res = await fetch(`${this.config.baseUrl}/health`, {

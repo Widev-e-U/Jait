@@ -4,6 +4,14 @@ import { test, expect } from '@playwright/test'
 const API_URL = process.env.API_URL || 'http://localhost:8000'
 
 test.describe('provider selector actions', () => {
+  let apiToken: string
+  test.beforeAll(async ({ request }) => {
+    const registration = await request.post(`${API_URL}/api/auth/register`, {
+      data: { username: `provider-actions-${Date.now()}`, password: 'e2e-password-123' },
+    })
+    expect(registration.ok()).toBeTruthy()
+    apiToken = (await registration.json()).access_token
+  })
   for (const mobile of [false, true]) {
     test(`${mobile ? 'touch hold' : 'right click'} refreshes models and logs out the targeted account`, async ({ page, request }) => {
       test.setTimeout(90_000)
@@ -11,6 +19,9 @@ test.describe('provider selector actions', () => {
       let loggedIn = true
       let refreshed = false
       let logoutCount = 0
+      let updated = false
+      let finishUpdate!: () => void
+      const updatePending = new Promise<void>((resolve) => { finishUpdate = resolve })
       await page.route('**/api/providers*', async (route) => {
         const url = new URL(route.request().url())
         if (url.pathname !== '/api/providers') return route.fallback()
@@ -18,6 +29,7 @@ test.describe('provider selector actions', () => {
           { id: 'jait', name: 'Jait', available: true, modes: ['full-access'], nodeId: 'gateway' },
           { id: 'codex-test', providerType: 'codex', name: 'Test Codex', available: loggedIn, modes: ['full-access'], nodeId: 'gateway',
             unavailableReason: loggedIn ? undefined : 'Not authenticated',
+            update: { currentVersion: updated ? '2.0.0' : '1.0.0', latestVersion: '2.0.0', updateAvailable: !updated, checkedAt: new Date().toISOString() },
             auth: { authenticated: loggedIn, login: true, logout: true, deviceCode: true } },
         ], remoteProviders: [] } })
       })
@@ -28,17 +40,21 @@ test.describe('provider selector actions', () => {
         refreshed = true
         await route.fulfill({ json: { ok: true } })
       })
+      await page.route('**/api/providers/codex-test/update', async (route) => {
+        await updatePending
+        if (mobile) {
+          await route.fulfill({ status: 500, json: { error: 'Test Codex update failed.' } })
+        } else {
+          updated = true
+          await route.fulfill({ json: { ok: true, message: 'Test Codex updated.', currentVersion: '2.0.0', latestVersion: '2.0.0', updateAvailable: false, checkedAt: new Date().toISOString() } })
+        }
+      })
       await page.route('**/api/providers/codex-test/auth/logout', async (route) => {
         loggedIn = false
         logoutCount += 1
         await route.fulfill({ json: { message: 'Test Codex logged out.' } })
       })
 
-      const registration = await request.post(`${API_URL}/api/auth/register`, {
-        data: { username: `provider-actions-${Date.now()}-${mobile}`, password: 'e2e-password-123' },
-      })
-      expect(registration.ok()).toBeTruthy()
-      const { access_token: apiToken } = await registration.json()
       const headers = { Authorization: `Bearer ${apiToken}` }
       const projectResponse = await request.post(`${API_URL}/api/projects`, {
         headers, data: { rootPath: path.resolve(process.cwd(), '../..'), nodeId: 'gateway', title: 'Provider action test' },
@@ -65,11 +81,27 @@ test.describe('provider selector actions', () => {
         await page.keyboard.press('Escape')
       }
       await providerSelector.click({ timeout: 30_000 })
-      const account = page.getByRole('option', { name: /Test Codex/ })
+      const providers = page.getByRole('listbox', { name: 'Providers' })
+      await providers.getByRole('option', { name: 'Jait', exact: true }).click()
+      const account = providers.getByRole('option', { name: /Test Codex/ })
       // The green "Ready to use" checkmark was removed from provider rows —
       // availability is now communicated only by the disabled state + reason text.
       await expect(account.getByRole('img', { name: 'Ready to use' })).toHaveCount(0)
       await expect(account).not.toContainText('signed in')
+
+      await page.getByRole('button', { name: 'Update Test Codex to 2.0.0' }).click()
+      const updateButton = page.getByRole('button', { name: 'Updating Test Codex', exact: true })
+      await expect(updateButton).toHaveAttribute('aria-busy', 'true')
+      await expect(updateButton.locator('svg')).toHaveClass(/animate-spin/)
+      await expect(page.getByRole('listbox', { name: 'Providers' })).not.toContainText('Installing')
+      const notification = page.locator('[data-sonner-toast]').filter({ hasText: 'Installing Test Codex CLI 2.0.0' })
+      await expect(notification).toBeVisible()
+      const notificationId = await notification.getAttribute('data-index')
+      finishUpdate()
+      const completedNotification = page.locator('[data-sonner-toast]').filter({ hasText: mobile ? 'Test Codex update failed.' : 'Test Codex updated.' })
+      await expect(completedNotification).toBeVisible()
+      expect(await completedNotification.getAttribute('data-index')).toBe(notificationId)
+      await expect(page.getByRole('button', { name: 'Updating Test Codex', exact: true })).toHaveCount(0)
 
       const openMenu = async () => {
         if (mobile) {

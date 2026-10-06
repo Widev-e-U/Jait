@@ -482,6 +482,9 @@ export function ProviderModelSelector({
     if (providerActionRef.current || authBusyProvider) return
     providerActionRef.current = true
     setProviderActionBusy({ provider: entry.value, action })
+    const updateToastId = action === 'update'
+      ? toast.loading(`Installing ${entry.label} CLI ${entry.update?.latestVersion ?? 'update'}…`)
+      : undefined
     try {
       if (action === 'refresh') {
         await agentsApi.refreshProviderModels(entry.value, entry.nodeId)
@@ -491,7 +494,7 @@ export function ProviderModelSelector({
         const result = await agentsApi.updateProvider(entry.value)
         await refreshProviders({ fresh: true, force: true })
         setModelReloadVersion((version) => version + 1)
-        toast.success(result.message || `${entry.label} updated.`)
+        toast.success(result.message || `${entry.label} updated.`, { id: updateToastId })
       } else {
         const result = await agentsApi.logoutProvider(entry.value)
         agentsApi.resetProviderModels()
@@ -501,7 +504,7 @@ export function ProviderModelSelector({
       }
     } catch (error) {
       const verb = action === 'refresh' ? 'refresh models' : action === 'update' ? 'update' : 'log out'
-      toast.error(error instanceof Error ? error.message : `Failed to ${verb} for ${entry.label}.`)
+      toast.error(error instanceof Error ? error.message : `Failed to ${verb} for ${entry.label}.`, { id: updateToastId })
     } finally {
       providerActionRef.current = false
       setProviderActionBusy(null)
@@ -1066,7 +1069,6 @@ export function ProviderModelSelector({
                       )}
                       {providerActionBusy?.provider === entry.value && !updating && <Loader2 aria-label="Provider action in progress" className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />}
                     </div>
-                    {updating && <div role="status" className="text-2xs text-primary">Installing {entry.label} CLI {entry.update?.latestVersion}…</div>}
                   </div>
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>

@@ -68,6 +68,8 @@ import {
   CONSENT_ATTENTION_ACTIONS,
 } from "./services/attention.js";
 import { PreviewService } from "./services/preview.js";
+import { setSecurityWorkbenchDb } from "./security/workbench.js";
+import { setAssessmentDb } from "./security/assessment.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
 import { CodeGraphService } from "./services/code-graph/code-graphs.js";
@@ -149,7 +151,7 @@ async function listenWithRetryOnConflict(
   }
 }
 
-async function main() {
+async function main(options: { evaluation?: boolean; onReady?: (port: number) => void } = {}) {
   const config = loadConfig();
 
   if (config.nodeOnly) {
@@ -178,6 +180,8 @@ async function main() {
   const { db, sqlite } = await openDatabase();
   migrateDatabase(sqlite);
   setNetworkScanDb(sqlite);
+  setAssessmentDb(sqlite);
+  setSecurityWorkbenchDb(sqlite);
   console.log(`Database initialized at ~/.jait/data/jait.db (${sqliteBackend})`);
 
   // Services
@@ -766,8 +770,10 @@ async function main() {
     console.error("Project repo auto-assignment failed:", err);
   }
 
-  scheduler.start(30_000);
-  threadReviewSync.start();
+  if (!options.evaluation) {
+    scheduler.start(30_000);
+    threadReviewSync.start();
+  }
 
   // Seed built-in "Network Scan" job if it doesn't already exist
   {
@@ -1396,6 +1402,8 @@ async function main() {
   // Start Fastify first, then attach WS to its HTTP server (shared port)
   await listenWithRetryOnConflict(server, { port: config.port, host: config.host });
   ws.start(server.server); // shares port with Fastify
+  const boundAddress = server.server.address();
+  if (boundAddress && typeof boundAddress === "object") options.onReady?.(boundAddress.port);
 
   // Attach voice-assistant WebSocket upgrade to the HTTP server
   const httpServer = server.server;
@@ -1411,14 +1419,16 @@ async function main() {
   console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
   // Python environment creation and package downloads can take many seconds on
   // first run. Keep HTTP/WS available while the optional code graph runtime sets up.
-  void ensureGraphifyRuntime({
+  if (!options.evaluation) void ensureGraphifyRuntime({
     onProgress: (message) => console.log(`[graphify] ${message}`),
   }).catch((error) => console.warn("[graphify] Setup unavailable:", error instanceof Error ? error.message : error));
-  databaseRetention.start();
-  diskJanitor.start();
+  if (!options.evaluation) {
+    databaseRetention.start();
+    diskJanitor.start();
+  }
 
   // Docker discovery and cleanup can wait until the gateway is responsive.
-  void browserSandboxManager.cleanupBrowserSandboxes().then((removed) => {
+  if (!options.evaluation) void browserSandboxManager.cleanupBrowserSandboxes().then((removed) => {
     if (removed.length > 0) {
       console.log(`[browser] Removed ${removed.length} stale browser sandbox container(s) from previous runs.`);
     }
@@ -1427,7 +1437,7 @@ async function main() {
   });
 
   // Auto-start channels (e.g. WhatsApp) that were previously enabled.
-  void channelManager.startEnabled().catch((err) => console.error("Channel auto-start failed:", err));
+  if (!options.evaluation) void channelManager.startEnabled().catch((err) => console.error("Channel auto-start failed:", err));
 
   // ── Primary-link — register this gateway as a filesystem node on an upstream
   //    gateway so it shows up (browseable/openable) in the primary's picker. ──

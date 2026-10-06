@@ -499,7 +499,6 @@ function App() {
   } = useUpdateChecker({ token, isDesktop, appPlatform, apiUrl: API_URL })
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
-    setWsConnected(connected)
     if (connected) {
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
@@ -807,11 +806,6 @@ function App() {
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
   const [sourceControlRefreshSignal, setSourceControlRefreshSignal] = useState(0)
   const [allowQueuedMessageAfterInterruptedExit, setAllowQueuedMessageAfterInterruptedExit] = useState(false)
-  // Whether the gateway WebSocket is currently connected. The server-side
-  // `drainQueuedChatMessages` is the authoritative chat-queue consumer; when
-  // connected, the client must NOT also auto-drain or the two race and every
-  // queued message multiplies (client re-queues with a fresh server id).
-  const [wsConnected, setWsConnected] = useState(false)
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
   const terminalShells = useAvailableShells(token)
@@ -4041,15 +4035,6 @@ function App() {
         allowQueuedMessageAfterInterruptedExit,
         isProcessing: chatQueueProcessingRef.current,
         nextItemHeld: messageQueue[0]?.held ?? false,
-        // While the gateway WS is connected the server-side
-        // `drainQueuedChatMessages` is the authoritative queue consumer
-        // (it runs on every turn's `done` and on every `queued_messages`
-        // state-sync). Letting the client auto-drain too made the two race:
-        // the losing client re-queued the message with a fresh server id and
-        // it got sent twice — the "queued messages multiply" bug. The client
-        // only takes over when the user explicitly approved after an
-        // interrupted exit, or when there is no server connection to drain.
-        deferToServerDrain: wsConnected,
       })
     )
       return
@@ -4081,14 +4066,21 @@ function App() {
         // `queued_messages` state via WS; re-adding locally with a new server id
         // was the other half of the multiplication race.
         queued: true,
+        queuedMessageId: nextItem.id,
         ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
         ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
         ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
         ...(nextItem.displaySegments?.length ? { displaySegments: nextItem.displaySegments } : {}),
       }),
     )
+      .then((outcome) => {
+        if (outcome === 'retry') throw new Error('Failed to send queued message')
+      })
       .catch((err) => {
+        setAllowQueuedMessageAfterInterruptedExit(false)
         enqueueMessage({
+          id: nextItem.id,
+          queuedAt: nextItem.queuedAt,
           content: nextItem.content,
           displayContent: nextItem.displayContent,
           mode: nextItem.mode,
@@ -4106,7 +4098,7 @@ function App() {
       .finally(() => {
         chatQueueProcessingRef.current = false
       })
-  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, hitMaxRounds, isLoading, isLoadingHistory, messageQueue, sendMessage, sendTarget, token, wsConnected])
+  }, [activeSessionId, dequeueMessage, enqueueMessage, allowQueuedMessageAfterInterruptedExit, hitMaxRounds, isLoading, isLoadingHistory, messageQueue, sendMessage, sendTarget, token])
 
   const handleContinueChat = useCallback(
     (options: { token: string | null; sessionId: string | null }) => {

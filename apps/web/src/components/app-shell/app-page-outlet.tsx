@@ -175,7 +175,10 @@ export function AppPageOutlet({
     )
   }
 
-  if (currentView !== 'settings') return null
+  if (currentView === 'chat' || currentView === 'agents' || currentView === 'threads') return null
+  // Exhaustive routing: a new page must be implemented here and described in JAIT_PAGES.
+  const settingsView: 'settings' = currentView
+  void settingsView
 
   return (
     <PageFrame isMobile={isMobile}>

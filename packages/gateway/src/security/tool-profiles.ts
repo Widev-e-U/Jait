@@ -26,6 +26,9 @@ function perm(
 // Read-only. No terminal, no installs, no writes.
 
 const MINIMAL: ToolPermission[] = [
+  perm("jait.catalog", "none", "low", "Inspect Jait pages and available capabilities."),
+  perm("agent.profiles.inspect", "none", "low", "Inspect saved agent profiles owned by the user."),
+  perm("agent.profiles", "dangerous", "medium", "Create, update, or delete persistent Jait agents."),
   perm("file.read", "none", "low", "Read a file from the project."),
   perm("file.list", "none", "low", "List files and directories in the project."),
   perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
@@ -44,6 +47,7 @@ const MINIMAL: ToolPermission[] = [
   perm("surfaces.stop", "always", "medium", "Stop a running surface instance."),
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("session.search", "none", "low", "Search prior chat messages and agent activity."),
+  perm("security.results.show", "none", "low", "Display saved assessment evidence owned by the current operator without running checks."),
   perm("channel.send", "always", "medium", "Send a message into a paired messaging chat."),
   perm("channel.remind", "always", "medium", "Schedule a reminder delivered to a paired messaging chat."),
   perm("thread.control", "dangerous", "high", "Create, run, or modify agent threads."),
@@ -57,6 +61,9 @@ const MINIMAL: ToolPermission[] = [
 // File read/write/patch auto, terminal requires consent.
 
 const CODING: ToolPermission[] = [
+  perm("jait.catalog", "none", "low", "Inspect Jait pages and available capabilities."),
+  perm("agent.profiles.inspect", "none", "low", "Inspect saved agent profiles owned by the user."),
+  perm("agent.profiles", "once", "medium", "Create, update, or delete persistent Jait agents."),
   perm("file.read", "none", "low", "Read a file from the project."),
   perm("file.list", "none", "low", "List files and directories in the project."),
   perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
@@ -87,6 +94,7 @@ const CODING: ToolPermission[] = [
   perm("surfaces.stop", "once", "low", "Stop a running surface instance."),
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("session.search", "none", "low", "Search prior chat messages and agent activity."),
+  perm("security.results.show", "none", "low", "Display saved assessment evidence owned by the current operator without running checks."),
   perm("channel.send", "once", "low", "Send a message into a paired messaging chat."),
   perm("channel.remind", "once", "low", "Schedule a reminder delivered to a paired messaging chat."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
@@ -100,6 +108,9 @@ const CODING: ToolPermission[] = [
 // Maximum capability. Dangerous ops still require consent.
 
 const FULL: ToolPermission[] = [
+  perm("jait.catalog", "none", "low", "Inspect Jait pages and available capabilities."),
+  perm("agent.profiles.inspect", "none", "low", "Inspect saved agent profiles owned by the user."),
+  perm("agent.profiles", "once", "medium", "Create, update, or delete persistent Jait agents."),
   perm("file.read", "none", "low", "Read a file from the project."),
   perm("file.list", "none", "low", "List files and directories in the project."),
   perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
@@ -129,6 +140,7 @@ const FULL: ToolPermission[] = [
   perm("surfaces.stop", "none", "low", "Stop a running surface instance."),
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("session.search", "none", "low", "Search prior chat messages and agent activity."),
+  perm("security.results.show", "none", "low", "Display saved assessment evidence owned by the current operator without running checks."),
   perm("channel.send", "none", "low", "Send a message into a paired messaging chat."),
   perm("channel.remind", "none", "low", "Schedule a reminder delivered to a paired messaging chat."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),

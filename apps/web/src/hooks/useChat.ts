@@ -636,6 +636,8 @@ interface SendMessageOptions {
   attachments?: ChatAttachment[]
   /** True when the message originates from the local queue and should roll back on send failure. */
   queued?: boolean
+  /** Stable identity for explicit queue sends and retries. */
+  queuedMessageId?: string
   /**
    * Raw content of the message being restarted-from, as currently rendered.
    * Lets the server cross-check that the index/id it resolved actually
@@ -1692,6 +1694,7 @@ export function useChat(
       const requestBody = {
         content,
         sessionId: requestSessionId,
+        ...(options.queuedMessageId ? { queuedMessageId: options.queuedMessageId } : {}),
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
         ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}),
         ...(options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
@@ -1827,13 +1830,13 @@ export function useChat(
   }, [authToken, onLoginRequired, resumeSessionStream, sessionId])
 
   // --- Message queue (queueing & steering) ---
-  const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'>) => {
+  const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'> & Partial<Pick<QueuedChatMessage, 'id' | 'queuedAt'>>) => {
     const queueItem: QueuedChatMessage = {
-      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       ...item,
-      queuedAt: Date.now(),
+      id: item.id ?? `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      queuedAt: item.queuedAt ?? Date.now(),
     }
-    updateQueue(prev => [...prev, queueItem])
+    updateQueue(prev => prev.some(entry => entry.id === queueItem.id) ? prev : [...prev, queueItem])
   }, [updateQueue])
 
   const dequeueMessage = useCallback((id: string) => {

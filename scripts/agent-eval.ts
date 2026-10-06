@@ -28,7 +28,7 @@ function integer(name: string, value: string, min: number, max: number): number 
 }
 async function main() {
   if (values.help) {
-    emit({ state: "help", message: "Use --list (free) or --run --model MODEL. JAIT_EVAL_TOKEN supplies a Jait login token. Optional: --judge-model, --tasks id,id, --concurrency 3, --repeat 1, --timeout 300, --output PATH, --reasoning-effort. Run on the gateway host or use --shared-workspace only with the same mounted absolute path. See docs/agent-evaluations.md." });
+    emit({ state: "help", message: "Use --list (free) or --run --model MODEL. JAIT_EVAL_TOKEN supplies a token to read backend settings; runs always use a fresh private gateway/database. Optional: --judge-model, --tasks id,id, --concurrency 3, --repeat 1, --timeout 300, --output PATH, --reasoning-effort. Run on the gateway host or use --shared-workspace only with the same mounted absolute path. See docs/agent-evaluations.md." });
     return;
   }
   if (values.report) {

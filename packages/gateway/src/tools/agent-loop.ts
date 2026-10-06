@@ -4370,7 +4370,7 @@ export async function runAgentLoop(
       // If any tool call was tools.search/tools.list, check if the result
       // contains new tool schemas that should be injected for subsequent rounds.
       for (const exec of executedToolCalls) {
-        if (exec.tool === "tools.search" && exec.ok && exec.data) {
+        if ((exec.tool === "tools.search" || exec.tool === "jait.catalog") && exec.ok && exec.data) {
           const data = exec.data as { matches?: Array<{ name?: string; description?: string; parameters?: unknown }> };
           if (Array.isArray(data.matches)) {
             for (const match of data.matches) {

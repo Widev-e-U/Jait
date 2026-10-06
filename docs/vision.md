@@ -14,7 +14,7 @@ AI helps plan investigations and explain evidence. Established security tools pe
 
 Today Jait has a Bun/TypeScript gateway, web/desktop/mobile clients, local SQLite state, network discovery with a small set of port probes, SSH execution, terminal and filesystem tools, scheduling, memory, and consent controls.
 
-Dedicated security assessment adapters, a unified findings model, enforceable assessment scope, exposure comparisons, and remediation verification are planned. The existing network scan primarily discovers machines and Jait nodes; it is not a comprehensive vulnerability assessment.
+The dedicated assessment workbench now provides explicit IPv4 scopes, bounded TCP inventory, native TLS/HTTP/SSH checks, read-only host audits, fixed Nmap and reviewed Nuclei profiles, offline Trivy snapshots, and Wazuh/Suricata alert-file import. Network → Security checks exposes evidence, findings, remediation and rollback plans, repeated verification, redacted export, and expiring scheduled network checks. Scanner binaries and the optional Trivy vulnerability database are operator-provided dependencies. These are conservative first profiles, not exhaustive engine integrations. The existing network scan primarily discovers machines and Jait nodes; it is not a comprehensive vulnerability assessment.
 
 Coding and general automation remain supporting capabilities: they help investigate software, inspect configuration, prepare fixes, and run checks. New product investment centers on network and cybersecurity outcomes.
 

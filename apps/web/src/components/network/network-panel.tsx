@@ -18,6 +18,7 @@ import {
   Terminal,
   Rocket,
 } from 'lucide-react'
+import { SecurityWorkbench } from './security-workbench'
 import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
@@ -579,6 +580,7 @@ interface NetworkPanelProps {
 }
 
 export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
+  const [showServiceChecks, setShowServiceChecks] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
@@ -859,6 +861,14 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
     ? 1 + topology.devices.length + topology.meshNodes.length + topology.hosts.length
     : 0
 
+  if (showServiceChecks) return <div className="h-full flex flex-col">
+    <div className="flex items-center justify-between border-b px-4 py-3 shrink-0">
+      <h2 className="text-sm font-semibold">Network · Security assessments</h2>
+      <Button size="sm" variant="outline" onClick={() => setShowServiceChecks(false)}>Back to network</Button>
+    </div>
+    <SecurityWorkbench token={token ?? null} sessionId={sessionId} />
+  </div>
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -878,6 +888,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => setShowServiceChecks(true)}>Security checks</Button>
           <Button size="sm" variant="outline" className="h-7 px-2 text-xs sm:px-2.5" onClick={() => void fetchTopology()}>
             <RefreshCw className="h-3 w-3 sm:mr-1" />
             <span className="hidden sm:inline">Refresh</span>

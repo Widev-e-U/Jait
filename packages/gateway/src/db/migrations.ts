@@ -1656,4 +1656,24 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 67,
+    name: "security_tcp_assessment_records",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS security_scopes (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL)");
+      db.exec("CREATE TABLE IF NOT EXISTS security_assessment_runs (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, started_at TEXT NOT NULL, data TEXT NOT NULL)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_security_scopes_operator ON security_scopes(operator_id, created_at)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_security_runs_operator ON security_assessment_runs(operator_id, started_at)");
+    },
+  },
+  {
+    id: 68, name: "security_workbench_evidence_findings",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS security_check_runs (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, scope_id TEXT NOT NULL, started_at TEXT NOT NULL, data TEXT NOT NULL)");
+      db.exec("CREATE TABLE IF NOT EXISTS security_findings (id TEXT PRIMARY KEY, operator_id TEXT NOT NULL, scope_id TEXT NOT NULL, updated_at TEXT NOT NULL, data TEXT NOT NULL)");
+      db.exec("CREATE TABLE IF NOT EXISTS security_artifacts (id TEXT PRIMARY KEY, run_id TEXT NOT NULL, operator_id TEXT NOT NULL, sha256 TEXT NOT NULL, content_type TEXT NOT NULL, raw TEXT NOT NULL)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_security_check_owner ON security_check_runs(operator_id, started_at)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_security_finding_owner ON security_findings(operator_id, updated_at)");
+    },
+  },
 ];

@@ -574,6 +574,10 @@ export function registerTerminalRoutes(
     const tools = toolRegistry.list().map((t) => ({
       name: t.name,
       description: t.description,
+      page: t.page,
+      category: t.category,
+      risk: t.risk,
+      source: t.source,
     }));
     return { tools };
   });

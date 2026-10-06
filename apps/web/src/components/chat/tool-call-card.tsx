@@ -1,13 +1,18 @@
+import { ImageViewerContent } from './image-viewer'
 import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type UIEvent } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
+import { Shield, Terminal, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
+import { CatalogToolResult, ToolPageLinks } from '@/components/chat/catalog-tool-result'
+import { SecurityToolResult } from '@/components/chat/security-tool-result'
+import { SECURITY_TOOL_LABELS, getSecurityResultSummary, isSecurityToolName } from '@/lib/security-tool-results'
 import { BrowserActivityView } from '@/components/chat/browser-activity-view'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
+import { useGatewayImage } from '@/hooks/useGatewayImage'
 import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
@@ -207,6 +212,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
 
 function getToolMeta(tool: string) {
   const normalized = normalizeTool(tool)
+  if (isSecurityToolName(normalized)) return { icon: Shield, label: SECURITY_TOOL_LABELS[normalized], color: 'text-sky-500' }
   return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
 }
 
@@ -232,6 +238,7 @@ export function getToolInvocationLabels(
     ? resultData as Record<string, unknown>
     : undefined
   const normalizedArgs = normalizeToolArgs(normalized, getJaitMcpToolArgs(args), resultRecord)
+  if (isSecurityToolName(normalized)) return { running: 'Running ' + SECURITY_TOOL_LABELS[normalized], done: SECURITY_TOOL_LABELS[normalized] }
   const fileName = (() => {
     const p = getToolFilePath(normalized, normalizedArgs, resultData, resultMessage)
       ?? displayStr(normalizedArgs.path ?? normalizedArgs.file)
@@ -1081,6 +1088,7 @@ export function getCallSummary(
     ? resultData as Record<string, unknown>
     : undefined
   const normalizedArgs = normalizeToolArgs(normalized, getJaitMcpToolArgs(args), resultRecord)
+  if (isSecurityToolName(normalized)) return getSecurityResultSummary(normalized, resultData, resultMessage) || displayStr(normalizedArgs.target ?? normalizedArgs.runId ?? normalizedArgs.findingId ?? normalizedArgs.scopeId)
   const filePath = getToolFilePath(normalized, normalizedArgs, resultData, resultMessage)
   // ── Core tools ──────────────────────────────────────────
   if (normalized === 'read' || normalized === 'file.read') {
@@ -2616,9 +2624,16 @@ function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
   const [failed, setFailed] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const trimmedPath = typeof path === 'string' ? path.trim() : ''
-  const src = trimmedPath
+  const source = trimmedPath
     ? resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
     : null
+  const { src, failed: fetchFailed } = useGatewayImage(source)
+
+  useEffect(() => {
+    setLoaded(false)
+    setFailed(false)
+    setExpanded(false)
+  }, [src])
 
   return (
     <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
@@ -2641,18 +2656,14 @@ function BrowserScreenshotView({ path }: { path: string | null | undefined }) {
           )}
         </button>
       )}
-      {(!src || failed) && (
+      {(!source || fetchFailed || failed) && (
         <div className="rounded bg-background p-2 text-muted-foreground">
           Screenshot unavailable. Capture a new screenshot to try again.
         </div>
       )}
       {src && expanded && (
         <Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
-          <DialogContent className="max-w-[90vw] max-h-[90vh] p-2" showCloseButton>
-            <DialogTitle className="sr-only">Browser screenshot</DialogTitle>
-            <DialogDescription className="sr-only">Captured browser page at full size.</DialogDescription>
-            <img src={src} alt="Browser screenshot" className="max-h-[85vh] w-full object-contain" />
-          </DialogContent>
+          <ImageViewerContent src={src} alt="Browser screenshot" />
         </Dialog>
       )}
     </div>
@@ -2692,9 +2703,7 @@ function ImageView({ src, alt, caption }: { src: string | null | undefined; alt:
       ) : null}
       {trimmedSrc && expanded && (
         <Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
-          <DialogContent className="max-w-[90vw] max-h-[90vh] p-2" showCloseButton>
-            <img src={trimmedSrc} alt={alt} className="max-h-[85vh] w-full object-contain" />
-          </DialogContent>
+          <ImageViewerContent src={trimmedSrc} alt={alt} />
         </Dialog>
       )}
     </div>
@@ -3403,7 +3412,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView'
+  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -3411,15 +3420,16 @@ export function isInlineToolCall(call: ToolCallInfo): boolean {
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
     : undefined
-  const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
-  const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
-  const imageDataUri = getToolImageDataUri(normalizedTool, normalizedArgs, resultData)
+  const displayTool = getJaitMcpToolName(normalizedTool, undefined, call.args) ?? normalizedTool
+  const normalizedArgs = normalizeToolArgs(displayTool, getJaitMcpToolArgs(call.args), resultData)
+  const screenshotPath = getToolImagePath(displayTool, normalizedArgs, resultData, call.result?.message)
+  const imageDataUri = getToolImageDataUri(displayTool, normalizedArgs, resultData)
 
   return isInlineToolBodyKind(getToolCallBodyKind({
-    tool: normalizedTool,
+    tool: displayTool,
     args: normalizedArgs,
     status: call.status,
-    displayOutput: formatOutput(call.result, normalizedTool) || call.streamingOutput || '',
+    displayOutput: formatOutput(call.result, displayTool) || call.streamingOutput || '',
     snapshotText: typeof resultData?.snapshot === 'string' ? resultData.snapshot : null,
     screenshotPath,
     imageDataUri,
@@ -4357,6 +4367,10 @@ function ToolCallCardInner({
       writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && normalizedArgs.content != null) ? String(normalizedArgs.content ?? '') : undefined}
       isNewFile={normalizedTool === 'file.write'}
     />
+  ) : displayTool === 'jait.catalog' && call.result?.ok ? (
+    <CatalogToolResult data={call.result.data ?? call.result.message} />
+  ) : bodyKind === 'security' ? (
+    <SecurityToolResult tool={displayTool} data={call.result?.data} message={call.result?.message} ok={call.result?.ok} />
   ) : bodyKind === 'output' ? (
     searchEntries.length > 0 && normalizedTool === 'search' ? (
       <SearchResultsView entries={searchEntries} message={call.result?.message} />
@@ -4504,6 +4518,9 @@ function ToolCallCardInner({
         <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
           {bodyContent}
         </div>
+      )}
+      {call.result && (
+        <div className="ml-8 mr-3 mb-2"><ToolPageLinks tool={displayTool} data={call.result.data} /></div>
       )}
       {isApprovalPending && (
         <div className="ml-6 mr-1.5 mb-2 rounded-md bg-amber-500/[0.045] px-2.5 py-2 ring-1 ring-amber-500/20 sm:ml-8 sm:mr-3 sm:px-3">

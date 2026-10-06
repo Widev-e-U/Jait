@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
@@ -151,6 +151,78 @@ describe("server-side queued chat processing", () => {
 
     expect(await readUserMessages()).toEqual(["already drained message"]);
     expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+  });
+
+  it("does not resend an already-drained queue id through the client fallback, including after restart", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = {
+      ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("queue-fallback-retry", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Fallback retry" });
+    const services = { db, sqlite, sessionService, sessionState, userService };
+    app = await createServer(config, services);
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const message = { id: "q-delivered-fallback", content: "send exactly once" };
+    const drain = async () => {
+      await (app as NonNullable<typeof app> & {
+        drainQueuedChatMessages: (id: string) => Promise<void>;
+      }).drainQueuedChatMessages(session.id);
+    };
+    const users = async () => {
+      const response = await app!.inject({ method: "GET",
+        url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+      return (response.json() as { messages: Array<{ role: string; content: string }> })
+        .messages.filter((entry) => entry.role === "user").map((entry) => entry.content);
+    };
+    sessionState.set(session.id, { queued_messages: [message] });
+    await drain();
+    expect(await users()).toEqual([message.content]);
+    // A stale browser queue survives a lost WS removal packet.
+    const retry = () => app!.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content: message.content, queuedMessageId: message.id } });
+    await retry();
+    expect(await users()).toEqual([message.content]);
+
+    await app.close();
+    app = await createServer(config, services);
+    // Persisted receipts must reject both stale snapshots and HTTP retries.
+    sessionState.set(session.id, { queued_messages: [message] });
+    await drain();
+    await retry();
+    expect(await users()).toEqual([message.content]);
+    expect(sessionState.get(session.id, ["queued_messages"]).queued_messages).toBeUndefined();
+
+    // A new user request may deliberately contain the same text.
+    await app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content: message.content } });
+    expect(await users()).toEqual([message.content, message.content]);
+
+    // Two clients explicitly sending the same new queue id must claim it once.
+    const explicit = () => app!.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content: message.content, queuedMessageId: "q-explicit" } });
+    await Promise.all([explicit(), explicit()]);
+    await vi.waitFor(async () => expect(await users()).toEqual([message.content, message.content, message.content]));
+
+    // A retry while another turn is active must not acquire a fresh queue id.
+    const started = new Promise<void>((resolve) => { slowOllamaStarted = resolve; });
+    const active = app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content: "slow first" } });
+    await started;
+    const busyRetry = await retry();
+    expect(busyRetry.statusCode).toBe(202);
+    expect(busyRetry.json()).toMatchObject({ skipped: "queue-already-consumed" });
+    expect(sessionState.get(session.id, ["queued_messages"]).queued_messages).toBeUndefined();
+    releaseSlowOllama?.();
+    await active;
+    expect(await users()).toEqual([message.content, message.content, message.content, "slow first"]);
   });
 
   it("removes a stale queued entry at direct-send time and ignores a later stale re-push (client direct-send during a WS drop)", async () => {

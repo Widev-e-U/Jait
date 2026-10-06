@@ -23,6 +23,7 @@ import type { PluginDescriptor, PluginToolDeclaration } from "../plugins/contrac
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { validateToolInput } from "./validate.js";
+import { getToolPageId, jaitPageLink } from "@jait/shared";
 
 /** Summary of a tool for the settings UI and discovery endpoints */
 export interface ToolInfo {
@@ -59,6 +60,7 @@ export const MCP_EXPOSED_CORE_TOOL_NAMES = new Set([
   "user.ask",
   "tools.list",
   "tools.search",
+  "jait.catalog",
 ]);
 
 const SEARCH_STOP_WORDS = new Set([
@@ -226,6 +228,7 @@ function inferRisk(tool: Pick<ToolDefinition, "name" | "category" | "source" | "
 function normalizeToolDefinition(tool: ToolDefinition): ToolDefinition {
   const normalized: ToolDefinition = {
     ...tool,
+    page: tool.page ?? getToolPageId(tool.name, tool.category ?? "external"),
     tier: tool.tier ?? "standard",
     category: tool.category ?? "external",
     source: tool.source ?? "builtin",
@@ -480,6 +483,11 @@ export class ToolRegistry {
 
     try {
       const result = await tool.execute(input, { ...context, actionId });
+      const pageId = tool.page ?? getToolPageId(tool.name);
+      if (pageId && (result.data === undefined || (result.data && typeof result.data === "object" && !Array.isArray(result.data)))) {
+        const data = (result.data ?? {}) as Record<string, unknown>;
+        if (!Array.isArray(data.pageLinks)) result.data = { ...data, pageLinks: [jaitPageLink(pageId)] };
+      }
 
       // Log result
       audit?.write({

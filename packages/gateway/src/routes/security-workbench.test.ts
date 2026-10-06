@@ -1,0 +1,41 @@
+import Fastify from "fastify";
+import { afterEach, expect, it } from "vitest";
+import { createServer } from "node:http";
+import { registerSecurityWorkbenchRoutes } from "./security-workbench.js";
+import { loadConfig } from "../config.js";
+import { signAuthToken } from "../security/http-auth.js";
+import { getAssessmentService } from "../security/assessment.js";
+import { getSecurityWorkbench } from "../security/workbench.js";
+const cleanup:Array<()=>Promise<unknown>>=[];
+afterEach(async()=>{await Promise.all(cleanup.splice(0).map(fn=>fn()))});
+it("authenticates all workflow routes and protects checks, findings and reports by owner",async()=>{
+ const app=Fastify();cleanup.push(()=>app.close());
+ const config={...loadConfig(),jwtSecret:"security-workbench-test"};
+ registerSecurityWorkbenchRoutes(app,config);
+ const owner={authorization:"Bearer "+await signAuthToken({id:"workbench-route",username:"owner"},config.jwtSecret)};
+ const other={authorization:"Bearer "+await signAuthToken({id:"other-route",username:"other"},config.jwtSecret)};
+ for(const url of ["/api/security/workbench","/api/security/engines","/api/security/checks/unknown","/api/security/checks/unknown/report","/api/security/findings/unknown/plan"])
+  expect((await app.inject({url})).statusCode).toBe(401);
+ const server=createServer((_req,res)=>res.end("secret discarded"));
+ await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));cleanup.push(()=>new Promise<void>(resolve=>server.close(()=>resolve())));
+ const address=server.address();if(!address||typeof address==="string")throw new Error("port");
+ const scope=getAssessmentService().createScope({targets:["127.0.0.1"],exclusions:[],ports:[address.port],methods:["http"],authorized:true,expiresAt:new Date(Date.now()+60_000).toISOString()},"workbench-route");
+ const payload={scopeId:scope.id,profile:"http",target:"127.0.0.1",port:address.port};
+ expect((await app.inject({method:"POST",url:"/api/security/checks",headers:other,payload})).statusCode).toBe(400);
+ const result=await app.inject({method:"POST",url:"/api/security/checks",headers:owner,payload});
+ expect(result.statusCode).toBe(202);
+ const run=await getSecurityWorkbench().wait(result.json().id,"workbench-route");expect(run.status).toBe("completed");
+ for(const url of ["/api/security/checks/"+run.id,"/api/security/checks/"+run.id+"/report","/api/security/findings/"+run.findingIds[0]+"/plan"])
+  expect((await app.inject({url,headers:other})).statusCode).toBe(404);
+ expect((await app.inject({url:"/api/security/workbench",headers:other})).json()).toEqual({runs:[],findings:[]});
+ expect((await app.inject({method:"POST",url:"/api/security/comparisons",headers:other,payload:{beforeRunId:run.id,afterRunId:run.id}})).statusCode).toBe(404);
+ expect((await app.inject({method:"POST",url:"/api/security/comparisons",headers:owner,payload:{beforeRunId:run.id,afterRunId:run.id}})).json().comparable).toBe(true);
+ const report=await app.inject({url:"/api/security/checks/"+run.id+"/report",headers:owner});
+ expect(report.statusCode).toBe(200);expect(report.body).not.toContain("127.0.0.1");expect(report.body).not.toContain("secret discarded");
+ const finding=run.findingIds[0];
+ expect((await app.inject({method:"POST",url:"/api/security/findings/"+finding+"/decision",headers:owner,payload:{disposition:"verified-absent"}})).statusCode).toBe(400);
+ expect((await app.inject({method:"POST",url:"/api/security/findings/"+finding+"/decision",headers:owner,payload:{disposition:"accepted-risk"}})).json().disposition).toBe("accepted-risk");
+ expect((await app.inject({method:"DELETE",url:"/api/security/checks/"+run.id,headers:other})).statusCode).toBe(400);
+ expect((await app.inject({method:"DELETE",url:"/api/security/checks/"+run.id,headers:owner})).statusCode).toBe(200);
+ expect((await app.inject({url:"/api/security/checks/"+run.id,headers:owner})).statusCode).toBe(404);
+});

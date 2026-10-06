@@ -31,6 +31,8 @@ import { registerTrustRoutes } from "./routes/trust.js";
 import { registerHookRoutes } from "./routes/hooks.js";
 import { registerJobRoutes } from "./routes/jobs.js";
 import { registerMobileRoutes } from "./routes/mobile.js";
+import { registerSecurityWorkbenchRoutes } from "./routes/security-workbench.js";
+import { registerSecurityAssessmentRoutes } from "./routes/security-assessments.js";
 import { registerNetworkRoutes } from "./routes/network.js";
 import { registerEnvironmentRoutes } from "./routes/environment.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
@@ -348,6 +350,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
 
+  registerSecurityAssessmentRoutes(app, config, deps.sqlite);
+  registerSecurityWorkbenchRoutes(app, config, deps.scheduler);
   registerNetworkRoutes(app, deps.ws, deps.sqlite, deps.providerRegistry, deps.secretInputService, deps.surfaceRegistry);
 
   if (deps.screenShare && deps.ws) {

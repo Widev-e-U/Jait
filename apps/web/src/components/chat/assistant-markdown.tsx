@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo, useDeferredValue } from 'react'
+import { useEffect, useMemo, useState, memo, useDeferredValue, type ComponentProps } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { FileIcon } from '@/components/icons/file-icons'
 import { parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
+import { useGatewayImage } from '@/hooks/useGatewayImage'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 /**
@@ -22,6 +23,20 @@ import { TooltipHint } from '@/components/ui/tooltip'
  * tool-call surface (e.g. sub-agent output) that should render markdown
  * identically to a normal assistant reply.
  */
+
+function ChatMarkdownImage({ src, alt, ...props }: ComponentProps<'img'>) {
+  const source = typeof src === 'string' ? resolveChatImageUrl(src) : null
+  const { src: displaySrc, failed } = useGatewayImage(source)
+  if (!source || failed) {
+    return <span className="inline-flex rounded-md border border-dashed border-border/70 px-2 py-1 text-xs text-muted-foreground">image unavailable</span>
+  }
+  if (!displaySrc) return <span className="text-xs text-muted-foreground">Loading image…</span>
+  return (
+    <a href={displaySrc} target="_blank" rel="noreferrer" className="not-prose block overflow-hidden rounded-xl border border-border/60 bg-muted/20 no-underline">
+      <img src={displaySrc} alt={alt ?? 'Chat image'} loading="lazy" className="max-h-[28rem] w-full object-contain bg-background/80" {...props} />
+    </a>
+  )
+}
 
 export type OnOpenPath = (path: string, line?: number, column?: number) => Promise<void> | void
 
@@ -290,33 +305,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
         </table>
       </div>
     ),
-    img: ({ src, alt, ref: _ref, ...props }) => {
-      const resolvedSrc = typeof src === 'string' ? resolveChatImageUrl(src) : null
-      if (!resolvedSrc) {
-        return (
-          <span className="inline-flex rounded-md border border-dashed border-border/70 px-2 py-1 text-xs text-muted-foreground">
-            image unavailable
-          </span>
-        )
-      }
-
-      return (
-        <a
-          href={resolvedSrc}
-          target="_blank"
-          rel="noreferrer"
-          className="not-prose block overflow-hidden rounded-xl border border-border/60 bg-muted/20 no-underline"
-        >
-          <img
-            src={resolvedSrc}
-            alt={alt ?? 'Chat image'}
-            loading="lazy"
-            className="max-h-[28rem] w-full object-contain bg-background/80"
-            {...props}
-          />
-        </a>
-      )
-    },
+    img: ({ node: _node, ref: _ref, ...props }) => <ChatMarkdownImage {...props} />,
   }
 }
 

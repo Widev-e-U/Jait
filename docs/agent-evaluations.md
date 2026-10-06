@@ -4,7 +4,7 @@ This is an opt-in, paid task benchmark, separate from the normal test suite. It 
 
 ## Run it
 
-Use a source checkout with dependencies installed, Bun and Git available. The gateway must be running with your chosen Jait LLM backend configured. Run on the **gateway host** so the runner and Jait see the same absolute fixture paths. PowerShell 7 works on Windows and Linux.
+Use a source checkout with dependencies installed, Bun and Git available. Your normal gateway must be running with your chosen Jait LLM backend configured. Every live run reads its account settings, then starts a private local gateway with a fresh temporary SQLite database, a new evaluation account, and an ephemeral loopback port. It never sends eval sessions or chat requests to the normal gateway. The private process and database are removed when the run finishes, including errors and cancellation. Run on the **gateway host** so the runner and Jait see the same absolute fixture paths. PowerShell 7 works on Windows and Linux.
 
 First list tasks, without any model requests:
 
@@ -12,7 +12,7 @@ First list tasks, without any model requests:
 ./scripts/agent-eval.ps1 -List
 ```
 
-Set `JAIT_EVAL_TOKEN` to a Jait login/access token for the account whose backend and tool permissions you want to evaluate. It is sent only to the gateway; model credentials stay in Jait. The script does not print or store this token. Use an evaluation account if you want separate permissions and history. Port defaults to 8000; pass `-Gateway` if your gateway differs.
+Set `JAIT_EVAL_TOKEN` to a Jait login/access token for the account whose backend and tool permissions you want to evaluate. It is sent only to the normal gateway to read backend settings. Backend credentials and disabled-tool settings are copied into the private database, never printed or saved in reports. The script does not print or store this token. Use an evaluation account if you want separate permissions and history. Port defaults to 8000; pass `-Gateway` if your gateway differs.
 
 Run explicitly with a model identifier supported by that account's Jait backend:
 
@@ -21,7 +21,7 @@ Run explicitly with a model identifier supported by that account's Jait backend:
 ./scripts/agent-eval.ps1 -Run -Model 'your-model-id' -JudgeModel 'your-judge-model-id' -Tasks patch-and-verify,discover-file-tool -Repeat 3
 ```
 
-The same judge model is used by default. Pin `-ReasoningEffort` too when your backend supports it. Without this option, Jait's account default applies. Backend/account configuration, tool permissions, skills, memory and gateway version also affect comparisons; hold these constant. Requested models are recorded; the runner does not assert that an upstream router used that exact model.
+The same judge model is used by default. Pin `-ReasoningEffort` too when your backend supports it. Without this option, Jait's account default applies. Backend/account configuration, tool permissions, skills and gateway version also affect comparisons; hold these constant. The private database starts without saved memories, prior chats or projects. Requested models are recorded; the runner does not assert that an upstream router used that exact model.
 
 Review a saved aggregate report through the same UI, without model calls:
 
@@ -68,15 +68,15 @@ Outcome and process are separate:
 
 A valid alternative approach is allowed unless the task explicitly requires a particular tool. For example, `discover-file-tool` requires discovery and `file.stat`; a shell workaround is a process failure. A missing-file error in `recover-missing-file` is intentional. The judge is an LLM and may misjudge; inspect cited call IDs and calibrate its rubric against your review. Independent checks cannot be overridden by a judge saying “pass.”
 
-Full worker and judge event traces, workspace references, per-task reports, the suite snapshot and aggregate `report.json` are saved under `evaluations/runs/<timestamp>/`. A timestamped directory is never reused. Reports retain session IDs so you can inspect the corresponding chats in Jait. Treat these local reports like chat history: tool output may contain private data. They are not automatically published. Jait sessions/projects are retained for review; remove them through Jait when finished.
+Full worker and judge event traces, workspace references, per-task reports, the suite snapshot and aggregate `report.json` are saved under `evaluations/runs/<timestamp>/`. A timestamped directory is never reused. Reports retain session IDs for correlation with saved traces. Treat these local reports like chat history: tool output may contain private data. They are not automatically published. Eval sessions/projects exist only in the private database, which is removed after shutdown. Review saved traces and artifacts; their session IDs do not refer to chats in your normal gateway.
 
 The judge can inspect `evidence.json` and a subject artifact snapshot, but ask mode prevents it from editing the result. Trace evidence is marked untrusted; fabricated tool-call citations produce ERROR. Artifact snapshots omit symlinks, dependency folders, and files beyond 200 entries or 256 KB, with omissions recorded in evidence.json. Complete traces are used, with a size ceiling rather than silently clipping evidence. Large tasks may require a larger-context judge and adjusted `--max-trace-bytes`.
 
 ## Limits and cancellation
 
-Each worker and judge has a default five-minute timeout and 60 tool-call limit. Concurrency defaults to three concurrent task pipelines, each with one active worker or judge. The suite can be repeated up to 20 times. `-TimeoutSeconds` and `-MaxToolCalls` adjust the limits. Ctrl+C requests cancellation of active gateway sessions. Cancellation failures are reported, so inspect any affected session before rerunning.
+Each worker and judge has a default five-minute timeout and 60 tool-call limit. Concurrency defaults to three concurrent task pipelines, each with one active worker or judge. The suite can be repeated up to 20 times. `-TimeoutSeconds` and `-MaxToolCalls` adjust the limits. Ctrl+C requests cancellation of active gateway sessions. Cancellation failures are reported; the private gateway is still stopped and its database removed before the runner exits.
 
-Existing consent rules still apply. The runner does not auto-approve tools. Approval or user-input requests stop an evaluation rather than hanging indefinitely; inspect the Jait session and configure the intended evaluation permissions before rerunning. These limits bound execution, not exact currency spend: model pricing and token usage differ. The script makes a separate paid judge run per attempted task. A malformed JSON verdict gets at most one additional judge request, with the same per-request timeout and tool-call limits. Both original and retry traces are retained; `judgeFormatError` records the first failure, and `judgeRetry` records the retry. The CLI reports this as a format retry. Provider failures and fabricated citations remain errors without retry. It records streamed metrics but does not invent dollar estimates.
+Existing consent rules still apply. The runner does not auto-approve tools. The fresh evaluation account uses the gateway’s normal consent defaults plus the source account’s disabled-tool settings; existing consent history is not copied. Approval or user-input requests stop an evaluation rather than hanging indefinitely; review the saved trace and configure the intended evaluation permissions before rerunning. These limits bound execution, not exact currency spend: model pricing and token usage differ. The script makes a separate paid judge run per attempted task. A malformed JSON verdict gets at most one additional judge request, with the same per-request timeout and tool-call limits. Both original and retry traces are retained; `judgeFormatError` records the first failure, and `judgeRetry` records the retry. The CLI reports this as a format retry. Provider failures and fabricated citations remain errors without retry. It records streamed metrics but does not invent dollar estimates.
 
 Worker fixtures are created in separate temporary directories, away from suite manifests and report ancestry. `workspace.json` and each report retain the absolute workspace path; the judge receives an artifact snapshot after the worker stops. Fixtures are retained for review. The worker is instructed to stay within its fixture, but full-access tools do not enforce an OS sandbox.
 

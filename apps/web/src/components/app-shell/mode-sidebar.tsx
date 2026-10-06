@@ -1,4 +1,4 @@
-import { BarChart3, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, type LucideIcon } from 'lucide-react'
+import { BarChart3, LogIn, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Settings, Sun, Network, type LucideIcon } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { UsageModal } from '@/components/app-shell/usage-modal'
+import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
 import { JaitIcon } from '@/components/icons/model-icons'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -42,6 +43,7 @@ interface ModeSidebarProps {
 
 export function ModeSidebar({ items, navigationItems = [], bottomItems = [], header, account, onOpenSettings }: ModeSidebarProps) {
   const [usageModalOpen, setUsageModalOpen] = useState(false)
+  const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.localStorage.getItem('jait.navigationSidebarCollapsed') === 'true')
 
   useEffect(() => {
@@ -124,6 +126,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
             <DropdownMenuContent side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} sideOffset={8} className={`w-52 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-150 ease-out motion-reduce:animate-none ${collapsed ? "origin-left data-[state=open]:slide-in-from-left-2" : "origin-bottom data-[state=open]:slide-in-from-bottom-2"}`}>
               <DropdownMenuItem onSelect={onOpenSettings}><Settings className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}><BarChart3 className="mr-2 h-4 w-4" />Usage</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setCatalogueModalOpen(true)}><Network className="mr-2 h-4 w-4" />Catalogue</DropdownMenuItem>
               <DropdownMenuSeparator />
               <div className="px-2 py-1.5">
                 <span className="text-xs text-muted-foreground">Theme</span>
@@ -147,6 +150,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
         ))}
       </div>
       <UsageModal open={usageModalOpen} onOpenChange={setUsageModalOpen} />
+      <CatalogueModal open={catalogueModalOpen} onOpenChange={setCatalogueModalOpen} />
     </aside>
   )
 }

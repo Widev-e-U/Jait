@@ -13,3 +13,8 @@ export type { DesktopGatewayConfig, DesktopGatewayStatus } from "./desktop-gatew
 export type { OllamaUsageSetup } from "./ollama-usage.js";
 
 export * from "./notifications.js";
+export * from "./capability-catalog.js";
+export * from "./persona-agent.js";
+export * from "./security-assessment.js";
+
+export * from "./security-workbench.js";

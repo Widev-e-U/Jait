@@ -1,6 +1,6 @@
 # Network and Cybersecurity Roadmap
 
-Research and implementation proposal, 2026-10-03. All tool names below are proposals unless explicitly marked existing. This change defines direction; it does not ship scanner adapters or run a network assessment.
+Research and implementation proposal, 2026-10-03; implementation status updated 2026-10-05. The typed workbench described below is implemented in source with conservative first profiles. The later design sections describe richer coverage that remains planned. Implementation and loopback testing alone make no claim about the maintainer's network.
 
 ## Goal and Evidence
 
@@ -9,6 +9,35 @@ Make Jait a practical security workbench for owned or explicitly authorized netw
 Inventory, configuration review, and vulnerability management form a coherent starting point in the [CIS Controls](https://www.cisecurity.org/controls/cis-controls-navigator). Nmap and Wazuh offer complementary external service observations and authenticated software inventory. This supports starting with inventory and evidence rather than promising complete coverage from a port scan.
 
 Confidence is high in the tool capabilities documented below; integration effort and network-specific coverage require prototypes. No current claim about the security of the maintainer's network is made.
+
+## Initial TCP Baseline (implemented 2026-10-05)
+
+Network → Security checks → Service inventory provides explicit authorized IPv4 targets, exclusions, selected TCP ports, a one-hour scope expiry, cancellation, evidence and repeat comparisons. Typed tools: `security.scope.create`, `security.services.scan`, `security.assessments.list/get` and `security.assessments.cancel`. The native Node TCP connection engine is intentionally small: no DNS resolution, HTTP requests, redirects, credentials or banner collection. Nmap is not required for this native profile; a separate Nmap adapter is now available.
+
+The gateway enforces up to 16 targets and 16 ports, one active run, one connection at a time, at most five starts/second, 750 ms per connection and a 60-second run deadline. Checks retain scope/operator, gateway hostname, engine/runtime version, timestamps, evidence IDs, and incomplete coverage. Scheduled tool calls use the same expiry and operator checks. Remote execution nodes are rejected. Existing discovery and generic web-fetch behavior are unchanged; these scopes authorize only the new assessment path.
+
+Reachable, refused, timed-out and network-error observations remain distinct. Repeat comparisons use the same scope and gateway; a timeout cannot establish a fix. SQLite migration 67 adds two tables for scopes and runs; there are no new environment variables or scanner binary installs. User history is limited to the latest 50 entries per list; automatic retention remains future work. The expanded workbench supports redacted export and explicit deletion of expanded check/artifact records; native TCP run deletion is not yet exposed.
+
+See [the service-check workflow](security-service-checks.md) for usecases and limits.
+
+## Expanded Workbench (implemented 2026-10-05)
+
+All proposed tool families have an initial implementation, with deliberately bounded coverage:
+
+| Implemented tool family | Shipping source profile | Still planned |
+| --- | --- | --- |
+| Scope and asset discovery | Literal IPv4 allowlist/exclusions, ports/methods, authorized SNI/SSH names, project paths, operator, gateway, expiry; explicit-target TCP responsiveness | CIDRs, DNS/URLs, IPv6, distributed nodes, durable asset identity |
+| Services | Native TCP and fixed unprivileged Nmap TCP XML inventory | UDP, active version detection, full topology |
+| TLS / HTTP(S) / SSH | Certificate dates/trust/identity, root response header policy, read-only identification | Exhaustive cipher checks, crawling, authenticated application checks |
+| Host audit | Gateway OS and selected SSH file directives; fixed authenticated SSH audit with existing keys and strict known hosts | Effective policy resolution, full packages/listeners/firewall and per-platform profiles |
+| Web scan | One hash-pinned Nuclei GET / nosniff template, independent HTTP response coverage | Broader reviewed templates, ZAP |
+| Software | Bounded Linux filesystem Dockerfile/Kubernetes checks; optional package CVE correlation with an already-prepared local Trivy database | Images, SBOM workflow, database preparation UI and broader configuration engines |
+| Findings / reports / fixes | Evidence references, confidence, disposition, immutable per-run findings, default address aliases, backup/rollback plan and compatible repeat verification | Automated remediation and broader applicability validation |
+| Monitoring / telemetry | Exact saved network check every 15/30/60 minutes until scope expiry; bounded Wazuh/Suricata JSONL imports | Live connectors, notifications, SIEM/EDR operations |
+
+SQLite migration 68 adds check, finding and raw scanner artifact tables. Raw scanner output is retained separately from normalized tool/model responses and public report export. Reports alias addresses and operator/vantage identities by default; review before sharing. Explicit deletion removes a check and its raw artifact but retains the finding ledger. One execution lease covers native TCP and every adapter, across operators. Each run has a 60-second ceiling and expires with its scope.
+
+No scanner is downloaded during a check. Source validation used private pinned engine fixtures; the running installed gateway is a separate activation step. No LAN pilot or system remediation has been completed.
 
 ## Existing Jait Capabilities and Gaps
 
@@ -29,9 +58,9 @@ The present scan infers IPv4 subnet prefixes and supports /24 discovery. It must
 2. Typed adapters around established security tools: recommended. Reuses proven engines while giving Jait consistent policy, provenance, reports, and verification.
 3. Build an enterprise SIEM/EDR first: broad coverage but large infrastructure and maintenance cost. Integrate with existing systems later.
 
-## Dedicated Tools to Build
+## Original Tool Design and Remaining Coverage
 
-| Proposed tool | Purpose and engine | Priority / limits |
+| Tool design | Purpose and engine | Priority / limits |
 | --- | --- | --- |
 | `security.scope.create/get` | Authorized CIDRs, IPs, hosts/URLs, exclusions, operator, allowed profiles, expiry, node/vantage point | First; scope enforced by execution code |
 | `security.assets.discover` | Existing discovery, then Nmap host discovery; asset identity and scan snapshots | First; bounded target count and rate |

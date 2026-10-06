@@ -1127,8 +1127,8 @@ function parseDurableActiveTurn(value: unknown): DurableActiveTurn | null {
 // leaving it both in the chat (already sent) and in the queue (the "queued but
 // also already sent" reload bug). Filtering re-introductions out here keeps the
 // drain idempotent. Bounded per session to avoid unbounded growth.
-const consumedQueuedMessageIds = new Map<string, Set<string>>();
 const MAX_TRACKED_CONSUMED_IDS = 100;
+const CONSUMED_QUEUE_IDS_STATE_KEY = "chat.consumedQueueIds";
 
 /**
  * Live streaming accumulator — holds the current assistant message's partial
@@ -2790,6 +2790,23 @@ export function registerChatRoutes(
 
   const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
 
+  // Scoped to this server instance; hydrate durable delivery receipts on restart.
+  const consumedQueuedMessageIds = new Map<string, Set<string>>();
+  const getConsumedQueueIds = (sessionId: string): Set<string> => {
+    let tracked = consumedQueuedMessageIds.get(sessionId);
+    if (!tracked) {
+      const saved = sessionStateService?.get(sessionId, [CONSUMED_QUEUE_IDS_STATE_KEY])[CONSUMED_QUEUE_IDS_STATE_KEY];
+      tracked = new Set(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === "string").slice(-MAX_TRACKED_CONSUMED_IDS) : []);
+      consumedQueuedMessageIds.set(sessionId, tracked);
+    }
+    return tracked;
+  };
+  const persistConsumedQueueIds = (sessionId: string): void => {
+    const tracked = getConsumedQueueIds(sessionId);
+    while (tracked.size > MAX_TRACKED_CONSUMED_IDS) tracked.delete(tracked.values().next().value!);
+    sessionStateService?.set(sessionId, { [CONSUMED_QUEUE_IDS_STATE_KEY]: [...tracked] });
+  };
+
   const broadcastQueuedMessagesState = (sessionId: string, value: QueuedChatMessage[] | null) => {
     if (!ws) return;
     ws.broadcast(sessionId, {
@@ -2821,11 +2838,7 @@ export function registerChatRoutes(
     const removed = queue.filter(matches);
     const filtered = queue.filter((entry) => !matches(entry));
     if (removed.length === 0) return; // nothing matched
-    let tracked = consumedQueuedMessageIds.get(sessionId);
-    if (!tracked) {
-      tracked = new Set();
-      consumedQueuedMessageIds.set(sessionId, tracked);
-    }
+    const tracked = getConsumedQueueIds(sessionId);
     for (const entry of removed) {
       if (entry.id) tracked.add(entry.id);
     }
@@ -2853,11 +2866,7 @@ export function registerChatRoutes(
         // is still tracked here); re-sending it would produce the "queued but
         // also already sent" reload bug. This is the id-based guarantee that the
         // same queued message is never sent twice.
-        let tracked = consumedQueuedMessageIds.get(sessionId);
-        if (!tracked) {
-          tracked = new Set();
-          consumedQueuedMessageIds.set(sessionId, tracked);
-        }
+        const tracked = getConsumedQueueIds(sessionId);
         const freshQueue = queue.filter((message) => !message.id || !tracked.has(message.id));
         if (freshQueue.length === 0) {
           // The persisted queue only held already-consumed duplicates — drop
@@ -3393,6 +3402,7 @@ export function registerChatRoutes(
     }
     const displaySegmentsJson = displaySegments.length ? JSON.stringify(displaySegments) : undefined;
     const isQueuedDrainRequest = body["_queuedDrain"] === true;
+    const queuedMessageId = firstNonEmptyString(body["queuedMessageId"], body["_queuedMessageId"]);
     // Internal-only: a hidden system message that starts an agent turn without a
     // visible user bubble (used to re-trigger the agent when a background
     // command finishes). Only ever set by the gateway's own app.inject calls.
@@ -3423,6 +3433,12 @@ export function registerChatRoutes(
       if (isQuestionBranch) chatMode = "ask";
     }
 
+    // Queue identity belongs to the gateway, including explicit client sends.
+    // Check before the busy-session branch so a retry cannot create a new id.
+    if (!isQueuedDrainRequest && queuedMessageId && getConsumedQueueIds(sessionId).has(queuedMessageId)) {
+      return reply.status(202).send({ ok: true, skipped: "queue-already-consumed", queuedMessageId });
+    }
+
     if (systemNotification && activeStreams.has(sessionId)) {
       // A turn is already running — it will pick up the steer. Don't start a
       // duplicate turn for the background-command notification.
@@ -3449,7 +3465,7 @@ export function registerChatRoutes(
         queuedMessage = existing;
       } else {
         queuedMessage = {
-          id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: queuedMessageId ?? `q-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           content,
           queuedAt: Date.now(),
           mode: chatMode,
@@ -3487,16 +3503,6 @@ export function registerChatRoutes(
       return;
     }
 
-    // This message is being sent directly now (not a queued-drain, not a system
-    // notification), so it must not also remain in the persisted queue. If a
-    // stale copy is still queued — e.g. the client delivered it directly while
-    // the WebSocket was down but the server still had it queued — remove it
-    // before the turn starts. This is the single invariant that prevents the
-    // end-of-turn drain from re-sending it ("already sent but still queued").
-    if (!isQueuedDrainRequest && !systemNotification) {
-      removeQueuedMessageByContent(sessionId, content, attachments);
-    }
-
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
     // When the request targets a CLI/ACP provider (Claude Code, Codex, …),
@@ -3532,6 +3538,14 @@ export function registerChatRoutes(
         });
       }
       throw error;
+    }
+
+    // A direct send must leave the queue before it starts. Wait until request
+    // configuration is valid so a rejected request does not consume its item.
+    if (!isQueuedDrainRequest && !systemNotification) {
+      // Claim synchronously before prompt ranking can yield to a competing retry.
+      if (queuedMessageId) getConsumedQueueIds(sessionId).add(queuedMessageId);
+      removeQueuedMessageByContent(sessionId, content, attachments);
     }
 
     // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
@@ -3661,6 +3675,10 @@ export function registerChatRoutes(
     } else {
       history.push({ role: "user", content, segments: displaySegments });
       persistMessage(sessionId, "user", content, undefined, displaySegmentsJson);
+    }
+    if (!systemNotification && getConsumedQueueIds(sessionId).size > 0) {
+      // Only save the receipt once the user turn has been recorded.
+      persistConsumedQueueIds(sessionId);
     }
     try {
       sessionService?.touch(sessionId);
@@ -3866,7 +3884,7 @@ export function registerChatRoutes(
     const requestEvent: StreamEvent = {
       type: "request",
       content,
-      ...(typeof body["_queuedMessageId"] === "string" ? { queuedMessageId: body["_queuedMessageId"] } : {}),
+      ...(queuedMessageId ? { queuedMessageId } : {}),
       ...(displaySegments.length ? { displaySegments } : {}),
       attachmentCount: attachments.length,
       provider: requestProvider ?? "jait",

@@ -223,6 +223,10 @@ import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
 import { createAgentMessageTool } from "./agent-message-tool.js";
 import { createThreadControlTool } from "./thread-tools.js";
+import { createPersonaAgentTool, createPersonaAgentInspectTool } from "./persona-agent-tools.js";
+import { createJaitCatalogTool } from "./catalog-tools.js";
+import { createSecurityWorkbenchTools } from "./security-workbench-tools.js";
+import { createSecurityTools } from "./security-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createEmailTools } from "./email-tools.js";
 import { createCalendarTools } from "./calendar-tools.js";
@@ -502,6 +506,16 @@ export function createToolRegistry(
   }
 
   if (deps.threadService && deps.providerRegistry) {
+    tools.register(createPersonaAgentInspectTool({
+      threadService: deps.threadService,
+      providerAvailable: (providerId, userId) => Boolean(deps.providerRegistry!.getForUser(providerId, userId)
+        || deps.ws?.getFsNodes().some((node) => node.providers?.includes(providerId))),
+    }));
+    tools.register(createPersonaAgentTool({
+      threadService: deps.threadService,
+      providerAvailable: (providerId, userId) => Boolean(deps.providerRegistry!.getForUser(providerId, userId)
+        || deps.ws?.getFsNodes().some((node) => node.providers?.includes(providerId))),
+    }));
     tools.register(
       createThreadControlTool({
         threadService: deps.threadService,
@@ -543,6 +557,7 @@ export function createToolRegistry(
   }
 
   // Meta-tools (tool discovery — always core tier)
+  tools.register(createJaitCatalogTool(tools));
   tools.register(createToolsListTool(tools));
   tools.register(createToolsSearchTool(tools));
   tools.register(createDecisionEvaluateTool());
@@ -600,6 +615,8 @@ export function createToolRegistry(
 
   // Network tools
   tools.register(createNetworkScanTool());
+  for (const tool of createSecurityTools()) tools.register(tool);
+  for (const tool of createSecurityWorkbenchTools(deps.scheduler)) tools.register(tool);
   tools.register(createElevatedRunTool(deps.secretInputService));
   tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 

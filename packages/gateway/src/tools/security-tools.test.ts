@@ -1,0 +1,31 @@
+import { it, expect } from "vitest";
+import { createSecurityTools } from "./security-tools.js";
+import type { ToolContext } from "./contracts.js";
+
+const context: ToolContext = { userId: "tool-owner", requestedBy: "agent", sessionId: "fixture", actionId: "fixture-action", projectRoot: "/fixture" };
+it("uses authenticated ownership and keeps assessment execution bound to the gateway", async () => {
+  const tools = createSecurityTools();
+  const create = tools.find(t => t.name === "security.scope.create")!;
+  expect(create.defaultConsentLevel).toBe("always");
+  const input = { targets: ["127.0.0.1"], exclusions: [], ports: [1], authorized: true, expiresAt: new Date(Date.now() + 60_000).toISOString() };
+  expect((await create.execute(input, { ...context, executionNodeId: "remote" })).ok).toBe(false);
+  const scope = await create.execute(input, context);
+  expect(scope.ok).toBe(true);
+  const data = scope.data as { id: string; operatorId: string };
+  expect(data.operatorId).toBe("tool-owner");
+  const scan = tools.find(t => t.name === "security.services.scan")!;
+  expect((await scan.execute({ scopeId: data.id }, { ...context, executionNodeId: "remote" })).ok).toBe(false);
+  expect((await scan.execute({ scopeId: data.id }, { ...context, userId: "other" })).ok).toBe(false);
+  const result = await scan.execute({ scopeId: data.id }, context);
+  expect(result.ok).toBe(true);
+  const run = result.data as {id: string};
+  const get = tools.find(t => t.name === "security.assessments.get")!;
+  expect((await get.execute({ runId: run.id }, context)).ok).toBe(true);
+  expect((await get.execute({ runId: run.id }, { ...context, userId: "other" })).ok).toBe(false);
+  const list = tools.find(t => t.name === "security.assessments.list")!;
+  const summary = await list.execute({}, context);
+  const runs = (summary.data as {runs: Record<string, unknown>[]}).runs;
+  expect(runs).toHaveLength(1);
+  expect(runs[0].performedChecks).toBe(1);
+  expect(runs[0].observations).toBeUndefined();
+});

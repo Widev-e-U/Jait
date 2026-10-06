@@ -97,3 +97,14 @@ apps/desktop/src-tauri/tests/harness/out/
 
 # Private source recovery archives from managed worktree cleanup
 .jait/worktree-recovery/
+
+# Private downloaded scanner binaries and advisory database used for validation
+.jait/security-engine-lab/
+
+# Private local activation snapshots
+.jait/security-runtime-*/
+
+# Local scratch / validation artifacts (screenshots, patches, ad-hoc scripts,
+# download stashes, investigation dirs). Keep only the tracked architecture map.
+.jait/*
+!.jait/architecture.mmd

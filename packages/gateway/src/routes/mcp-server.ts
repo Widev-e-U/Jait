@@ -621,7 +621,7 @@ export async function handleMcpRequest(
             name: "jait-gateway",
             version: "1.0.0",
           },
-          instructions: "Prefer Jait tools whenever they directly match the user request. The todo and user_ask tools are always available for multi-step tracking and real user decisions. Use tools_search with one broad natural-language query to find additional relevant Jait tools before claiming a capability is unavailable.",
+          instructions: "Prefer Jait tools whenever they directly match the user request. The todo and user_ask tools are always available for multi-step tracking and real user decisions. For requests about the Jait harness, pages, configuration, or persistent people and teams, call jait_catalog first to inspect the live feature tree and exact tool references. Use tools_search with one broad natural-language query to find additional relevant Jait tools before claiming a capability is unavailable.",
         },
       };
 

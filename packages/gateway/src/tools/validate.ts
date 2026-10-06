@@ -19,6 +19,7 @@ export interface ValidationResult {
 }
 
 const TYPE_CHECKS: Record<string, (v: unknown) => boolean> = {
+  null: (v) => v === null,
   string: (v) => typeof v === "string",
   number: (v) => typeof v === "number" && Number.isFinite(v),
   integer: (v) => typeof v === "number" && Number.isInteger(v),
@@ -65,7 +66,9 @@ function validateSchemaValue(
   path: string,
   errors: string[],
 ): unknown {
-  const expectedType = schema.type;
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  if (value === null && types.includes("null")) return null;
+  const expectedType = types.find((type) => TYPE_CHECKS[type]?.(value)) ?? types.find((type) => type !== "null") ?? "null";
   const checker = TYPE_CHECKS[expectedType];
   let current = value;
 

@@ -1,3 +1,5 @@
+import { JAIT_PAGES, JAIT_PAGE_IDS } from "./capability-catalog.js";
+
 /** Transport-independent notification metadata. IDs identify events; replaceId identifies a card. */
 export interface NotificationContext {
   link?: string;
@@ -24,7 +26,8 @@ export function safeNotificationLink(value: unknown): string | null {
   try {
     const url = new URL(value, "https://jait.invalid");
     if (url.origin !== "https://jait.invalid") return null;
-    if (!/^\/(?:chat|pulls|pull-requests|todo|email|emails|calendar|memory|jobs|network|settings)?$/.test(url.pathname)) return null;
+    const paths: readonly string[] = JAIT_PAGE_IDS.map((id) => JAIT_PAGES[id].path);
+    if (!paths.includes(url.pathname) && !["/chat", "/email", "/pull-requests"].includes(url.pathname)) return null;
     return url.pathname + url.search;
   } catch { return null; }
 }

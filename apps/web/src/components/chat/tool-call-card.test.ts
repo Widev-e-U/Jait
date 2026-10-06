@@ -1429,3 +1429,36 @@ describe('terminal wait outcome', () => {
     } })?.label).toBe('timeout')
   })
 })
+
+describe('security tool-card integration', () => {
+  const result = { id: 'run-card', status: 'partial', engine: 'native-http', engineVersion: 'v1',
+    input: { profile: 'http', target: '127.0.0.1', port: 8080 }, scope: { targets: ['127.0.0.1'], vantagePoint: 'fixture-node' },
+    findings: [], evidence: [], coverageGaps: ['Timed out before coverage was complete'] }
+  const call = (tool: string, args: Record<string, unknown> = {}): ToolCallInfo => ({
+    callId: tool, tool, args, status: 'success', startedAt: 1, completedAt: 2,
+    result: { ok: true, message: 'Saved result', data: result },
+  })
+  it('uses security labels and visible cards for native, provider aliases and Jait MCP wrappers', () => {
+    for (const tool of ['security.http.check', 'security_http_check', 'mcp__jait__security_http_check', 'functions.mcp__jait_core__security_http_check']) {
+      expect(getToolInvocationLabels(tool, {}, result).done).toBe('HTTP header check')
+      expect(getCallSummary(tool, {}, result)).toContain('Incomplete coverage')
+      expect(isInlineToolCall(call(tool))).toBe(true)
+    }
+    const wrapped = call('mcp.call', { server: 'jait', tool: 'security_http_check', arguments: {} })
+    expect(isInlineToolCall(wrapped)).toBe(true)
+    expect(getToolInvocationLabels(wrapped.tool, wrapped.args, result).done).toBe('HTTP header check')
+    expect(isInlineToolCall(call('mcp__external__security_http_check'))).toBe(false)
+  })
+  it('renders actual completed tool cards with the evidence body visible', () => {
+    const html = renderToStaticMarkup(createElement(ToolCallCard, { call: call('mcp__jait__security_http_check') }))
+    expect(html).toContain('data-testid="security-tool-result"')
+    expect(html).toContain('Incomplete coverage')
+    expect(html).toContain('fixture-node')
+    expect(html).toContain('Timed out before coverage was complete')
+    expect(html).not.toContain('&quot;engineVersion&quot;')
+  })
+  it('keeps result groups visible while retaining pending approval behavior', () => {
+    expect(shouldInitiallyCollapseToolCallGroup(Array.from({ length: 4 }, (_, i) => ({ ...call('security.http.check'), callId: String(i) })), true)).toBe(false)
+    expect(isInlineToolCall({ ...call('security.http.check'), status: 'pending', result: undefined, approvalRequestId: 'approve-scope' })).toBe(false)
+  })
+})

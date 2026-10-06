@@ -16,7 +16,7 @@ describe('chat queue decision helpers', () => {
     expect(shouldProcessQueuedMessage({ ...params, isProcessing: false })).toBe(false)
   })
 
-  it('sends queued messages normally after a finished response', () => {
+  it('keeps automatic delivery at the gateway after a finished response', () => {
     const params = {
       hasInterruptedExit: false,
       isLoading: false,
@@ -26,7 +26,7 @@ describe('chat queue decision helpers', () => {
     }
 
     expect(shouldPromptBeforeProcessingQueuedMessage(params)).toBe(false)
-    expect(shouldProcessQueuedMessage({ ...params, isProcessing: false })).toBe(true)
+    expect(shouldProcessQueuedMessage({ ...params, isProcessing: false })).toBe(false)
   })
 
   it('sends queued messages after the user explicitly chooses that path', () => {
@@ -58,7 +58,7 @@ describe('chat queue decision helpers', () => {
     expect(shouldProcessQueuedMessage({ ...base, queuedCount: 0 })).toBe(false)
   })
 
-  it('defers to the authoritative server drain while connected', () => {
+  it('does not take ownership when the UI connection drops', () => {
     const base = {
       hasInterruptedExit: false,
       isLoading: false,
@@ -68,11 +68,8 @@ describe('chat queue decision helpers', () => {
       isProcessing: false,
     }
 
-    // Connected: the server drain owns the queue, so the client must not
-    // auto-send (would race + multiply the message).
-    expect(shouldProcessQueuedMessage({ ...base, deferToServerDrain: true })).toBe(false)
-    // Offline fallback: no server to drain, so the client sends.
-    expect(shouldProcessQueuedMessage({ ...base, deferToServerDrain: false })).toBe(true)
+    // Transport liveness cannot transfer queue ownership to the browser.
+    expect(shouldProcessQueuedMessage(base)).toBe(false)
   })
 
   it('still sends after an explicit user approval even while connected', () => {
@@ -83,7 +80,6 @@ describe('chat queue decision helpers', () => {
       queuedCount: 1,
       allowQueuedMessageAfterInterruptedExit: true,
       isProcessing: false,
-      deferToServerDrain: true,
     }
 
     expect(shouldProcessQueuedMessage(params)).toBe(true)
@@ -97,12 +93,11 @@ describe('chat queue decision helpers', () => {
       queuedCount: 1,
       allowQueuedMessageAfterInterruptedExit: false,
       isProcessing: false,
-      deferToServerDrain: false,
     }
 
     // A held next message blocks the queue even in the offline fallback path.
     expect(shouldProcessQueuedMessage({ ...base, nextItemHeld: true })).toBe(false)
-    // Once unlocked, it processes normally.
-    expect(shouldProcessQueuedMessage({ ...base, nextItemHeld: false })).toBe(true)
+    // Unlocking still leaves automatic delivery to the gateway.
+    expect(shouldProcessQueuedMessage({ ...base, nextItemHeld: false })).toBe(false)
   })
 })

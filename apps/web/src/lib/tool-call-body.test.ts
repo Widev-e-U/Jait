@@ -478,3 +478,13 @@ describe('tool call body helpers', () => {
     ).toBe('none')
   })
 })
+
+it('routes security aliases to their own result body and keeps pending/running states honest', () => {
+  const base = { args: {}, displayOutput: 'result', snapshotText: null, screenshotPath: null }
+  expect(normalizeToolName('security_results_show')).toBe('security.results.show')
+  expect(getToolCallBodyKind({ ...base, tool: 'security_http_check', status: 'success' })).toBe('security')
+  expect(getToolCallBodyKind({ ...base, tool: 'security.http.check', status: 'error' })).toBe('security')
+  expect(getToolCallBodyKind({ ...base, tool: 'security.scope.create', status: 'pending' })).toBe('pending')
+  expect(getToolCallBodyKind({ ...base, displayOutput: '', tool: 'security.http.check', status: 'running' })).toBe('runningHint')
+  expect(getToolCallBodyKind({ ...base, tool: 'security.unknown', status: 'success' })).toBe('output')
+})

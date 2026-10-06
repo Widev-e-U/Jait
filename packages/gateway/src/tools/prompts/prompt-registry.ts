@@ -18,7 +18,7 @@ import { homedir } from "os";
 import { join, resolve } from "path";
 
 import type { ChatMode } from "../chat-modes.js";
-import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS, TOOL_DISCOVERY_INSTRUCTIONS } from "./shared-sections.js";
+import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS, TOOL_DISCOVERY_INSTRUCTIONS, JAIT_CATALOG_INSTRUCTIONS } from "./shared-sections.js";
 
 // ── Interfaces ───────────────────────────────────────────────────────
 
@@ -211,6 +211,8 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
     }
 
   }
+
+  if (!prompt.includes("jait.catalog")) prompt += `\n\n<jaitCapabilities>\n${JAIT_CATALOG_INSTRUCTIONS}\n</jaitCapabilities>`;
 
   if (!prompt.includes("tools.search")) {
     prompt += `\n\n<toolDiscovery>\n${TOOL_DISCOVERY_INSTRUCTIONS}\n</toolDiscovery>`;

@@ -2,6 +2,7 @@ import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import {
   BarChart3,
+  Network,
   Brain,
   Calendar,
   CalendarDays,
@@ -40,6 +41,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import { UpdateButton } from '@/components/app-shell/update-button'
 import { UsageModal } from '@/components/app-shell/usage-modal'
+import { CatalogueModal } from '@/components/app-shell/catalogue-modal'
 import { VoiceMicButtonMobile, VoiceActiveControls, VoiceWakeWordPill } from '@/components/voice/voice-header-controls'
 import type { ThemeMode } from '@/hooks/useAuth'
 
@@ -135,6 +137,7 @@ export function AppHeader(props: AppHeaderProps) {
 
   // Provider usage modal (avatar dropdown → "Usage")
   const [usageModalOpen, setUsageModalOpen] = useState(false)
+  const [catalogueModalOpen, setCatalogueModalOpen] = useState(false)
 
   const sidebarOwnsNavigation = !isMobile
   const hasCentered = !voiceOverlayOpen && !sidebarOwnsNavigation
@@ -308,7 +311,7 @@ export function AppHeader(props: AppHeaderProps) {
                 ) : isAuthenticated ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                      <button aria-label="Account menu" className="rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="text-sm font-medium">{userInitial}</AvatarFallback>
                         </Avatar>
@@ -335,6 +338,10 @@ export function AppHeader(props: AppHeaderProps) {
                       <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}>
                         <BarChart3 className="h-4 w-4 mr-2" />
                         Usage
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setCatalogueModalOpen(true)}>
+                        <Network className="h-4 w-4 mr-2" />
+                        Catalogue
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <div className="px-2 py-1.5">
@@ -382,7 +389,7 @@ export function AppHeader(props: AppHeaderProps) {
             ) : isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className={`rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isDesktop ? 'mr-4' : ''}`}>
+                  <button aria-label="Account menu" className={`rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${isDesktop ? 'mr-4' : ''}`}>
                     <Avatar className="h-7 w-7">
                       <AvatarFallback className="text-xs">{userInitial}</AvatarFallback>
                     </Avatar>
@@ -409,6 +416,10 @@ export function AppHeader(props: AppHeaderProps) {
                   <DropdownMenuItem onSelect={() => setUsageModalOpen(true)}>
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Usage
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCatalogueModalOpen(true)}>
+                    <Network className="h-4 w-4 mr-2" />
+                    Catalogue
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <div className="px-2 py-1.5">
@@ -460,6 +471,7 @@ export function AppHeader(props: AppHeaderProps) {
           </div>
             </header>
             <UsageModal open={usageModalOpen} onOpenChange={setUsageModalOpen} />
+            <CatalogueModal open={catalogueModalOpen} onOpenChange={setCatalogueModalOpen} />
             </>
   )
 }

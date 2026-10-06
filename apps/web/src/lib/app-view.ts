@@ -1,6 +1,8 @@
-export type AppView = 'chat' | 'pulls' | 'todo' | 'email' | 'calendar' | 'memory' | 'jobs' | 'network' | 'settings' | 'threads' | 'agents'
+import { JAIT_PAGES, JAIT_PAGE_IDS, type JaitPageId } from '@jait/shared'
 
-export const APP_VIEWS: readonly AppView[] = ['chat', 'pulls', 'todo', 'email', 'calendar', 'memory', 'jobs', 'network', 'settings', 'agents', 'threads']
+export type AppView = JaitPageId
+
+export const APP_VIEWS: readonly AppView[] = JAIT_PAGE_IDS
 
 /**
  * Normalize a raw path/host segment into an {@link AppView}.
@@ -16,8 +18,7 @@ export function parseAppView(raw: string): AppView | null {
 
 /** The history path for a view (`chat` lives at the root). */
 export function appViewToPath(view: AppView): string {
-  if (view === 'email') return '/emails'
-  return view === 'chat' ? '/' : `/${view}`
+  return JAIT_PAGES[view].path
 }
 
 export type ManagerPage = Extract<AppView, 'threads' | 'agents'>

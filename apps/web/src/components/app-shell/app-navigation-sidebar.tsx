@@ -1,4 +1,5 @@
-import { Brain, Calendar, CalendarDays, Cast, Code, GitPullRequest, ListChecks, Mail, MessageSquare, MessagesSquare, UsersRound, Wifi, Workflow } from 'lucide-react'
+import { JAIT_PAGES, JAIT_PAGE_IDS } from '@jait/shared'
+import { Brain, Calendar, CalendarDays, Cast, Code, GitPullRequest, ListChecks, Mail, MessageSquare, MessagesSquare, UsersRound, Wifi, Workflow, Settings, type LucideIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -31,20 +32,20 @@ export function AppNavigationSidebar({
   onOpenSettings,
   onToggleScreenShare,
 }: AppNavigationSidebarProps) {
-  const navigationItems: ModeSidebarItem[] = viewMode === 'manager' ? [
-    { id: 'agents', label: 'Agents', icon: UsersRound, active: currentView === 'agents', onSelect: () => onNavigate('agents') },
-    { id: 'threads', label: 'Threads', icon: MessagesSquare, active: currentView === 'threads', onSelect: () => onNavigate('threads') },
-  ] : [
-    { id: 'chat', label: 'Chat', icon: MessageSquare, active: currentView === 'chat', onSelect: () => onNavigate('chat') },
-    { id: 'pulls', label: 'Pull Requests', icon: GitPullRequest, active: currentView === 'pulls', onSelect: () => onNavigate('pulls') },
-    { id: 'todo', label: 'Todo', icon: ListChecks, active: currentView === 'todo', onSelect: () => onNavigate('todo') },
-    { id: 'email', label: 'Email', icon: Mail, active: currentView === 'email', onSelect: () => onNavigate('email') },
-    { id: 'calendar', label: 'Calendar', icon: CalendarDays, active: currentView === 'calendar', onSelect: () => onNavigate('calendar') },
-    { id: 'memory', label: 'Memory', icon: Brain, active: currentView === 'memory', onSelect: () => onNavigate('memory') },
-    { id: 'jobs', label: 'Jobs', icon: Calendar, active: currentView === 'jobs', onSelect: () => onNavigate('jobs') },
-    { id: 'network', label: 'Network', icon: Wifi, active: currentView === 'network', onSelect: () => onNavigate('network') },
-    ...(onToggleScreenShare ? [{ id: 'screenShare', label: 'Screen Share', icon: Cast, active: screenShareActive, onSelect: onToggleScreenShare }] : []),
-  ]
+  // The catalog is also the navigation registry. Adding a routable page requires
+  // its explanation and an icon; missing page metadata cannot silently ship.
+  const icons: Record<AppView, LucideIcon> = {
+    chat: MessageSquare, agents: UsersRound, threads: MessagesSquare, pulls: GitPullRequest,
+    todo: ListChecks, email: Mail, calendar: CalendarDays, memory: Brain, jobs: Calendar,
+    network: Wifi, settings: Settings,
+  }
+  const navigationItems: ModeSidebarItem[] = JAIT_PAGE_IDS
+    .filter((id) => id !== 'settings' && JAIT_PAGES[id].mode === viewMode)
+    .map((id) => ({ id, label: JAIT_PAGES[id].title, icon: icons[id],
+      active: currentView === id, onSelect: () => onNavigate(id) }))
+  if (viewMode === 'developer' && onToggleScreenShare) navigationItems.push({
+    id: 'screenShare', label: 'Screen Share', icon: Cast, active: screenShareActive, onSelect: onToggleScreenShare,
+  })
 
   return (
     <ModeSidebar

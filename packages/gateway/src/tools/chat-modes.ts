@@ -63,6 +63,8 @@ export const ASK_MODE_TOOLS = new Set([
   "computer.targets",
   "tools.list",
   "tools.search",
+  "jait.catalog",
+  "agent.profiles.inspect",
   // Jait with read-only actions
   "jait",
 ]);
@@ -74,6 +76,7 @@ export const ASK_MODE_TOOLS = new Set([
  * the plan proposal rather than executed immediately.
  */
 export const MUTATING_TOOLS = new Set([
+  "agent.profiles",
   // Core tools
   "edit",
   "execute",
@@ -154,6 +157,7 @@ export const SWARM_ORCHESTRATION_TOOLS = new Set([
   "cron.list",
   "tools.list",
   "tools.search",
+  "jait.catalog",
 ]);
 
 // ── Swarm teams ──────────────────────────────────────────────────────

@@ -95,6 +95,8 @@ export interface TaskReport {
   workspace: string; worker?: ChatRun; judge?: ChatRun; judgeRetry?: ChatRun; judgeFormatError?: string;
   checks: CheckResult[]; verdict?: Verdict; error?: string;
 }
+// Only this module can authorize a live run against its freshly booted gateway.
+const isolatedOptions = new WeakSet<EvalOptions>();
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -113,6 +115,7 @@ export async function runChat(
   options: EvalOptions, workspace: string, prompt: string,
   role: "worker" | "judge", id: string,
 ): Promise<ChatRun> {
+  if (!options.fetch && !isolatedOptions.has(options)) throw new Error("Live evaluation requires an isolated database; use runEvaluation");
   const start = Date.now();
   const events: EvalEvent[] = [];
   let sessionId = "", content = "", reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -342,6 +345,16 @@ export async function runEvaluation(tasks: EvalTask[], options: EvalOptions): Pr
     || !Number.isInteger(options.repeat) || options.repeat < 1 || options.repeat > 20) {
     throw new Error("Invalid concurrency or repeat count");
   }
+  if (!options.fetch && !isolatedOptions.has(options)) {
+    const { startIsolatedEvaluationGateway } = await import("./isolated-gateway.js");
+    const isolated = await startIsolatedEvaluationGateway(options);
+    options.onProgress?.({ state: "isolated", message: "Evaluation uses a private gateway and temporary database." });
+    try {
+      const privateOptions = { ...options, gateway: isolated.gateway, token: isolated.token };
+      isolatedOptions.add(privateOptions);
+      return await runEvaluation(tasks, privateOptions);
+    } finally { await isolated.stop(); }
+  }
   const jobs = tasks.flatMap((task) => Array.from({ length: options.repeat }, (_, index) => ({ task, id: task.id + "-" + (index + 1) })));
   options.onProgress?.({ state: "plan", jobs: jobs.map((job) => ({ id: job.id, title: job.task.title })) });
   const results: (TaskReport | undefined)[] = Array.from({ length: jobs.length }, () => undefined);
@@ -363,6 +376,7 @@ export async function runEvaluation(tasks: EvalTask[], options: EvalOptions): Pr
     runId: randomUUID(), createdAt: new Date().toISOString(),
     model: options.model, judgeModel: options.judgeModel, provider: "jait",
     reasoningEffort: options.reasoningEffort ?? "gateway default", gateway: options.gateway,
+    databaseIsolation: isolatedOptions.has(options) ? "temporary" : "test-transport",
     limits: { concurrency: options.concurrency, timeoutSeconds: options.timeoutSeconds, maxToolCalls: options.maxToolCalls },
     cancelled: options.signal?.aborted ?? false, requestedRuns: jobs.length, completedRuns: reports.length,
     reports,

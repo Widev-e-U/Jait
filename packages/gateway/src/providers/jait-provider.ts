@@ -58,7 +58,7 @@ function rememberActivatedToolNames(activeNames: Set<string>, toolNames: Iterabl
 function discoveredToolNames(result: { executedToolCalls: Array<{ tool: string; ok: boolean; data?: unknown }> }): string[] {
   const names: string[] = [];
   for (const call of result.executedToolCalls) {
-    if (call.tool !== "tools.search" || !call.ok || !call.data || typeof call.data !== "object") continue;
+    if ((call.tool !== "tools.search" && call.tool !== "jait.catalog") || !call.ok || !call.data || typeof call.data !== "object") continue;
     const matches = (call.data as { matches?: Array<{ name?: unknown }> }).matches;
     if (!Array.isArray(matches)) continue;
     for (const match of matches) {

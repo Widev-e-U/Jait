@@ -1,3 +1,5 @@
+import { isSecurityToolName } from './security-tool-results'
+
 export interface ToolCallBodyInput {
   tool: string
   args: Record<string, unknown>
@@ -20,6 +22,7 @@ export type ToolCallBodyKind =
   | 'threadList'
   | 'todoList'
   | 'output'
+  | 'security'
   | 'runningHint'
   | 'none'
 
@@ -400,13 +403,14 @@ export function normalizeToolName(name: string): string {
   if (raw === 'ssh_session_start') return 'ssh.session.start'
   if (raw === 'ssh_session_run') return 'ssh.session.run'
   if (raw === 'ssh_session_close') return 'ssh.session.close'
+  if (raw.startsWith('security_')) return raw.replace(/_/g, '.')
   const idx = raw.indexOf('_')
   return idx === -1 ? raw : raw.slice(0, idx) + '.' + raw.slice(idx + 1)
 }
 
 export function isAgentToolName(tool: string): boolean {
   const normalized = normalizeToolName(tool)
-  return normalized === 'agent' || normalized.startsWith('agent.')
+  return normalized === 'agent' || (normalized.startsWith('agent.') && !normalized.startsWith('agent.profiles'))
 }
 
 export function normalizeToolArgs(
@@ -565,6 +569,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
 
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'
+  if (isSecurityToolName(normalizedTool) && input.displayOutput) return 'security'
   if (['browser.navigate', 'browser.snapshot', 'browser.inspect', 'browser.click', 'browser.type', 'browser.scroll', 'browser.select', 'browser.wait', 'browser.screenshot'].includes(normalizedTool)) return 'browserActivity'
   if (input.screenshotPath) return 'browserScreenshot'
   if (normalizedTool === 'image.view' && input.imageDataUri) return 'imageView'

@@ -1,6 +1,7 @@
+import { ImageViewerContent } from './image-viewer'
 import { X } from 'lucide-react'
 import { FileIcon } from '@/components/icons/file-icons'
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogTrigger } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
@@ -36,10 +37,7 @@ export function AttachmentList({ attachments, onRemove, className }: {
         return <div key={`${attachment.name}-${index}`} className="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded border border-border/70 bg-muted/30 text-xs text-foreground" title={attachment.name}>
           {isImage ? <Dialog>
             <DialogTrigger asChild><button type="button" className={chipClass} aria-label={`Expand image ${attachment.name}`}>{label}</button></DialogTrigger>
-            <DialogContent className="max-h-[92vh] max-w-[96vw] gap-2 overflow-hidden p-2" showCloseButton>
-              <DialogTitle className="mr-8 truncate px-1 text-sm">{attachment.name}</DialogTitle>
-              <img src={src} alt={attachment.name} className="max-h-[82vh] w-full object-contain" />
-            </DialogContent>
+            <ImageViewerContent src={src} alt={attachment.name} />
           </Dialog> : attachment.pastedText ? <Popover>
             <PopoverTrigger asChild><button type="button" className={chipClass} aria-label={`Review ${attachment.name}`}>{label}</button></PopoverTrigger>
             <PopoverContent className="w-[min(600px,90vw)]" align="start"><p className="mb-2 text-sm font-medium">{attachment.name}</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{attachment.pastedText.text}</pre></PopoverContent>
