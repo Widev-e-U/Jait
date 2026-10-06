@@ -20,7 +20,7 @@ const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 const HTML_EXTENSIONS = new Set([".html", ".htm"]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-import { registerChatRoutes } from "./routes/chat.js";
+import { registerChatRoutes, getPersonaChatRuntime } from "./routes/chat.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -437,6 +437,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   // Agent threads + provider routes
   if (deps.threadService && deps.providerRegistry) {
     registerThreadRoutes(app, config, {
+      personaChatRuntime: getPersonaChatRuntime,
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,

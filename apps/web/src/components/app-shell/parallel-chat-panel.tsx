@@ -429,6 +429,7 @@ function ParallelChatPanelImpl({
             messageIndex={index}
             messageFromEnd={messages.length - 1 - index}
             role={message.role}
+            persona={message.persona}
             kind={message.kind}
             content={message.content}
             steered={message.steered}

@@ -2,7 +2,7 @@ import type { TeamChatService } from "../services/team-chat.js";
 import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
 import { chatNotificationLink, notificationPreview } from "@jait/shared";
 import { Buffer } from "node:buffer";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { inferContextWindow, type AppConfig } from "../config.js";
@@ -68,9 +68,22 @@ import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, getModeInstructions, getRespo
 import { formatSkillsForPrompt, type Skill, type SkillRegistry } from "../skills/index.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 
+import type { ChatPersona } from "@jait/shared";
+type PersonaChatSnapshot = ChatPersona;
+
+function readPersonaSnapshot(json: string | null | undefined): PersonaChatSnapshot | undefined {
+  if (!json) return undefined;
+  try {
+    const value = JSON.parse(json);
+    if (typeof value?.id === "string" && typeof value.name === "string" && typeof value.avatar === "string" && typeof value.providerId === "string") return value;
+  } catch { /* malformed historical metadata */ }
+  return undefined;
+}
+
 // ── Types ────────────────────────────────────────────────────────────
 
 interface ChatMessage {
+  persona?: PersonaChatSnapshot;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   tool_calls?: OpenAIToolCall[];
@@ -834,6 +847,7 @@ function emitSyntheticToolResult(
 }
 
 interface QueuedChatMessage {
+  personaAgentId?: string | null;
   id?: string;
   content: string;
   queuedAt?: number;
@@ -1047,6 +1061,7 @@ function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
       content: record.content,
       queuedAt: typeof record.queuedAt === "number" ? record.queuedAt : undefined,
       held: record.held === true,
+      ...(record.personaAgentId === null || typeof record.personaAgentId === "string" ? { personaAgentId: record.personaAgentId } : {}),
       mode: isValidChatMode(record.mode) ? record.mode : undefined,
       provider: typeof record.provider === "string" && record.provider.trim()
         ? record.provider
@@ -1083,6 +1098,7 @@ const MAX_AUTOMATIC_RECOVERY_ATTEMPTS = 3;
 const INTERRUPTED_TURN_RECOVERY_CONCURRENCY = 2;
 
 interface DurableActiveTurn {
+  personaAgentId?: string | null;
   turnId: string;
   startedAt: string;
   mode: ChatMode;
@@ -1099,6 +1115,7 @@ function parseDurableActiveTurn(value: unknown): DurableActiveTurn | null {
   const record = value as Record<string, unknown>;
   if (typeof record["turnId"] !== "string" || typeof record["startedAt"] !== "string") return null;
   return {
+    ...(record["personaAgentId"] === null || typeof record["personaAgentId"] === "string" ? { personaAgentId: record["personaAgentId"] } : {}),
     turnId: record["turnId"],
     startedAt: record["startedAt"],
     mode: isValidChatMode(record["mode"]) ? record["mode"] : "agent",
@@ -1140,6 +1157,7 @@ const CONSUMED_QUEUE_IDS_STATE_KEY = "chat.consumedQueueIds";
  * assistant message for reconnecting clients.
  */
 interface StreamingAccumulator {
+  persona?: PersonaChatSnapshot;
   content: string;
   toolCalls: PersistedToolCall[];
   segments: Array<
@@ -1152,6 +1170,17 @@ interface StreamingAccumulator {
   thinking: string;
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
+const activePersonaOwners = new Map<string, string>();
+
+export function getAgentSessionRuntime(sessionId: string): { running: boolean } {
+  return { running: activeStreams.has(sessionId) };
+}
+
+export function getPersonaChatRuntime(userId: string, personaId: string): { count: number; state: "running" | "waiting" | "idle" } {
+  const active = [...activeStreams].filter(id => activePersonaOwners.get(id) === userId && sessionStreamingState.get(id)?.persona?.id === personaId);
+  const waiting = active.some(id => sessionStreamingState.get(id)?.toolCalls.some(call => call.approvalState === "pending"));
+  return { count: active.length, state: waiting ? "waiting" : active.length ? "running" : "idle" };
+}
 const sessionStreamSeq = new Map<string, number>();
 
 function firstObject(...values: unknown[]): Record<string, unknown> | undefined {
@@ -1530,6 +1559,7 @@ const activeCliSessions = new Map<string, {
   runtimeMode: RuntimeMode;
   model?: string;
   reasoningEffort?: string | null;
+  personaFingerprint?: string;
   providerSessionId: string;
   provider: CliProviderAdapter;
   /**
@@ -1676,7 +1706,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
-  | { type: "request"; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
+  | { type: "request"; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -1696,6 +1726,7 @@ const DEFAULT_UI_MESSAGE_LIMIT = 5;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {
+  persona?: PersonaChatSnapshot;
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
@@ -2068,7 +2099,7 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
 
 type PersistedUIMessageRow = Pick<
   typeof messagesTable.$inferSelect,
-  "role" | "content" | "toolCalls" | "segments" | "thinking"
+  "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona"
 > & {
   contextMetadataId: string | null;
   hasMemoryProvenance: boolean | null;
@@ -2089,6 +2120,7 @@ function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex:
   const msg: UIMsg = {
     id: `${sessionId}-${visibleIndex}`,
     role: row.role as "user" | "assistant",
+    persona: readPersonaSnapshot(row.persona),
     content,
   };
   if (row.toolCalls) {
@@ -2178,6 +2210,7 @@ function persistedMessageWindow(
         toolCalls: messagesTable.toolCalls,
         segments: messagesTable.segments,
         thinking: messagesTable.thinking,
+        persona: messagesTable.persona,
         contextMetadataId: messageContextMetadataTable.messageId,
         hasMemoryProvenance: messageContextMetadataTable.hasMemoryProvenance,
       })
@@ -2342,6 +2375,7 @@ function buildVisibleHistoryEntries(
       id: `${sessionId}-${visibleIndex}`,
       role: m.role as "user" | "assistant",
       content: m.content,
+      persona: m.persona,
       toolCalls: uiToolCalls,
       segments: m.segments,
       contextFlow: m.contextFlow,
@@ -2358,7 +2392,8 @@ function buildVisibleHistoryMessages(
   history: ChatMessage[],
   options?: { includePendingAssistantToolCalls?: boolean },
 ): UIMsg[] {
-  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, systemNotice, toolCalls, segments, contextFlow, thinking }) => ({
+  const msgs: UIMsg[] = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, persona, systemNotice, toolCalls, segments, contextFlow, thinking }) => ({
+    persona,
     id,
     role,
     content,
@@ -2389,11 +2424,13 @@ function buildVisibleHistoryMessages(
       last.toolCalls = acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined;
       last.segments = acc.segments.length > 0 ? acc.segments : undefined;
       last.thinking = acc.thinking || undefined;
+      last.persona = acc.persona;
     } else {
       msgs.push({
         id: `${sessionId}-streaming`,
         role: "assistant",
         content: acc.content,
+        persona: acc.persona,
         toolCalls: acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined,
         segments: acc.segments.length > 0 ? acc.segments : undefined,
         thinking: acc.thinking || undefined,
@@ -2470,12 +2507,14 @@ function upsertAssistantCheckpoint(
   segments?: string,
   contextFlow?: string,
   thinking?: string,
+  persona?: PersonaChatSnapshot,
 ): string {
   try {
     if (existingId) {
       db.update(messagesTable)
         .set({
           content,
+          persona: persona ? JSON.stringify(persona) : null,
           toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
           ...(segments ? { segments } : { segments: null }),
           ...(contextFlow ? { contextFlow } : {}),
@@ -2496,6 +2535,7 @@ function upsertAssistantCheckpoint(
         id: messageId,
         sessionId,
         role: "assistant",
+        persona: persona ? JSON.stringify(persona) : null,
         content,
         toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
         segments: segments ?? null,
@@ -2732,6 +2772,7 @@ export function registerChatRoutes(
           ...continuation,
           mode: marker.mode,
           responseStyle: marker.responseStyle,
+          ...(marker.personaAgentId !== undefined ? { personaAgentId: marker.personaAgentId } : {}),
           ...(marker.provider ? { provider: marker.provider } : {}),
           ...(marker.runtimeMode ? { runtimeMode: marker.runtimeMode } : {}),
           ...(marker.model ? { model: marker.model } : {}),
@@ -2829,7 +2870,7 @@ export function registerChatRoutes(
   // WebSocket drop). Tracking the ids here also means a stale client re-push of
   // the same id (after a WS reconnect) is filtered out by the drain rather than
   // re-sent.
-  const removeQueuedMessageByContent = (sessionId: string, content: string, attachments: QueuedChatMessage["attachments"] = []): void => {
+  const removeQueuedMessageByContent = (sessionId: string, content: string, attachments: QueuedChatMessage["attachments"] = [], personaAgentId: string | null = null): void => {
     if (!sessionStateService) return;
     // `content` is typed as string, but a malformed request payload or a stale
     // persisted queue entry could hold a non-string at runtime; never throw.
@@ -2838,7 +2879,7 @@ export function registerChatRoutes(
     const state = sessionStateService.get(sessionId, ["queued_messages"]);
     const queue = parseQueuedChatMessages(state["queued_messages"]);
     if (queue.length === 0) return;
-    const matches = (entry: QueuedChatMessage) => safeTrim(entry.content) === normalized && sameChatAttachments(entry.attachments, attachments);
+    const matches = (entry: QueuedChatMessage) => safeTrim(entry.content) === normalized && (entry.personaAgentId ?? null) === personaAgentId && sameChatAttachments(entry.attachments, attachments);
     const removed = queue.filter(matches);
     const filtered = queue.filter((entry) => !matches(entry));
     if (removed.length === 0) return; // nothing matched
@@ -2911,6 +2952,7 @@ export function registerChatRoutes(
             sessionId,
             ...(nextMessage.mode ? { mode: nextMessage.mode } : {}),
             ...(nextMessage.provider ? { provider: nextMessage.provider } : {}),
+            ...(nextMessage.personaAgentId !== undefined ? { personaAgentId: nextMessage.personaAgentId } : {}),
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
             ...(nextMessage.responseStyle ? { responseStyle: nextMessage.responseStyle } : {}),
             ...(nextMessage.model ? { model: nextMessage.model } : {}),
@@ -3095,13 +3137,14 @@ export function registerChatRoutes(
             segments,
             contextFlow,
             thinking: r.thinking ?? undefined,
+            persona: readPersonaSnapshot(r.persona),
           };
         }),
       ]);
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot): void {
     if (!db) return;
     try {
       const messageId = randomUUID();
@@ -3112,6 +3155,7 @@ export function registerChatRoutes(
           sessionId,
           role,
           content,
+          persona: persona ? JSON.stringify(persona) : null,
           toolCalls: serializePersistedToolCalls(stripSubAgentPayloads(toolCalls)),
           segments: segments ?? null,
           contextFlow: contextFlow ?? null,
@@ -3423,6 +3467,25 @@ export function registerChatRoutes(
       ? Math.max(0, Math.floor(body["_recoveryAttempts"] as number))
       : 0;
 
+    const hasPersonaSelection = Object.prototype.hasOwnProperty.call(body, "personaAgentId");
+    if (hasPersonaSelection && body["personaAgentId"] !== null && (typeof body["personaAgentId"] !== "string" || !body["personaAgentId"].trim())) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Invalid personaAgentId" });
+    }
+    const requestedPersonaId = typeof body["personaAgentId"] === "string" ? body["personaAgentId"].trim() : null;
+    const personaProfile = hasPersonaSelection
+      ? (requestedPersonaId ? teamChat?.profileById(authUser.id, requestedPersonaId) : undefined)
+      : teamChat?.profileForSession(authUser.id, sessionId);
+    if (requestedPersonaId && !personaProfile) return reply.status(404).send({ error: "NOT_FOUND", details: "Agent profile not found" });
+    if (personaProfile?.paused) return reply.status(409).send({ error: "AGENT_PAUSED", details: "Agent is paused" });
+    const persona: PersonaChatSnapshot | undefined = personaProfile ? {
+      id: personaProfile.id, name: personaProfile.name, avatar: personaProfile.avatar, role: personaProfile.role,
+      providerId: personaProfile.providerId, ...(personaProfile.model ? { model: personaProfile.model } : {}),
+    } : undefined;
+    const personaFingerprint = personaProfile ? createHash("sha256").update(JSON.stringify({
+      id: personaProfile.id, persona: personaProfile.persona, name: personaProfile.name, role: personaProfile.role,
+      skillIds: personaProfile.skillIds, usesAllSkills: personaProfile.usesAllSkills, requiresApproval: personaProfile.requiresApproval,
+    })).digest("hex") : undefined;
+
     if (!content.trim() && attachments.length === 0 && !systemNotification) {
       return reply
         .status(400)
@@ -3433,7 +3496,13 @@ export function registerChatRoutes(
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
-      const teamProfile = teamChat?.profileForSession(authUser.id, sessionId);
+      const boundProfile = teamChat?.profileForSession(authUser.id, sessionId);
+      let hasTeamWork = false;
+      try { hasTeamWork = !!JSON.parse(session.metadata ?? "{}").teamWork; } catch { /* malformed historical metadata */ }
+      if (hasTeamWork && hasPersonaSelection && requestedPersonaId !== boundProfile?.id) {
+        return reply.status(409).send({ error: "PERSONA_CONFLICT", details: "Team work retains its assigned agent" });
+      }
+      const teamProfile = personaProfile;
       if (teamProfile) {
         requestProvider = teamProfile.providerId as ProviderId;
         if (teamProfile.requiresApproval) requestRuntimeMode = "supervised";
@@ -3468,7 +3537,7 @@ export function registerChatRoutes(
       // client/server drain race that multiplied queued messages.
       const normalizedContent = safeTrim(content);
       const existing = queue.find(
-        (entry) => safeTrim(entry.content) === normalizedContent && sameChatAttachments(entry.attachments, attachments),
+        (entry) => safeTrim(entry.content) === normalizedContent && (entry.personaAgentId ?? null) === (personaProfile?.id ?? null) && sameChatAttachments(entry.attachments, attachments),
       );
       let queuedMessage: QueuedChatMessage;
       if (existing) {
@@ -3479,6 +3548,7 @@ export function registerChatRoutes(
           content,
           queuedAt: Date.now(),
           mode: chatMode,
+          personaAgentId: personaProfile?.id ?? null,
           ...(requestProvider ? { provider: requestProvider } : {}),
           ...(requestRuntimeMode ? { runtimeMode: requestRuntimeMode } : {}),
           ...(responseStyle !== "normal" ? { responseStyle } : {}),
@@ -3555,7 +3625,7 @@ export function registerChatRoutes(
     if (!isQueuedDrainRequest && !systemNotification) {
       // Claim synchronously before prompt ranking can yield to a competing retry.
       if (queuedMessageId) getConsumedQueueIds(sessionId).add(queuedMessageId);
-      removeQueuedMessageByContent(sessionId, content, attachments);
+      removeQueuedMessageByContent(sessionId, content, attachments, personaProfile?.id ?? null);
     }
 
     // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
@@ -3609,8 +3679,12 @@ export function registerChatRoutes(
       ? ws?.findNodeByDeviceId(projectRecord.nodeId)
       : undefined;
     const projectPlatform = projectNode?.platform ?? process.platform;
-    const teamInstructions = teamChat?.context(authUser.id, sessionId);
-    const personaProfile = teamChat?.profileForSession(authUser.id, sessionId);
+    if (hasPersonaSelection && sessionService && sessionRecord) {
+      let metadata: Record<string, unknown> = {};
+      try { metadata = JSON.parse(sessionRecord.metadata ?? "{}"); } catch { /* malformed historical metadata */ }
+      sessionService.update(sessionId, { metadata: { ...metadata, chatPersonaAgentId: requestedPersonaId } }, authUser.id);
+    }
+    const teamInstructions = personaProfile ? teamChat?.context(authUser.id, sessionId, personaProfile) : undefined;
     const availableSkills = (skillRegistry?.listEnabled() ?? []).filter(skill => !personaProfile || personaProfile.usesAllSkills || personaProfile.skillIds.includes(skill.id));
     const promptCtx: PromptContext = {
       systemOne: systemOneEnabled(userApiKeys) && !userSettings?.disabledTools?.includes("decision.evaluate"),
@@ -3644,6 +3718,7 @@ export function registerChatRoutes(
     // interrupted run from a normally completed chat and resume it.
     if (sessionStateService) {
       const activeTurn: DurableActiveTurn = {
+        personaAgentId: personaProfile?.id ?? null,
         turnId: randomUUID(),
         startedAt: new Date().toISOString(),
         mode: chatMode,
@@ -3683,11 +3758,11 @@ export function registerChatRoutes(
           contentParts.push({ type: "text", text: `[File: ${att.name}]\n${decoded}` });
         }
       }
-      history.push({ role: "user", content: contentParts as unknown as string, segments: displaySegments });
-      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson);
+      history.push({ role: "user", content: contentParts as unknown as string, segments: displaySegments, persona });
+      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona);
     } else {
-      history.push({ role: "user", content, segments: displaySegments });
-      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson);
+      history.push({ role: "user", content, segments: displaySegments, persona });
+      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona);
     }
     if (!systemNotification && getConsumedQueueIds(sessionId).size > 0) {
       // Only save the receipt once the user turn has been recorded.
@@ -3754,6 +3829,7 @@ export function registerChatRoutes(
         segments,
         contextFlowJson,
         thinking,
+        persona,
       );
       if (id) {
         assistantCheckpointId = id;
@@ -3831,6 +3907,8 @@ export function registerChatRoutes(
       cliEventUnsubscribe?.();
       cliEventUnsubscribe = null;
     };
+    getOrCreateAccumulator(sessionId).persona = persona;
+    activePersonaOwners.set(sessionId, authUser.id);
     activeStreams.add(sessionId);
     ws?.broadcastToUser(authUser.id, {
       type: "session.streaming",
@@ -3896,6 +3974,7 @@ export function registerChatRoutes(
     // `request` push — the gateway is the single source for turn boundaries.
     const requestEvent: StreamEvent = {
       type: "request",
+      ...(persona ? { persona } : {}),
       content,
       ...(queuedMessageId ? { queuedMessageId } : {}),
       ...(displaySegments.length ? { displaySegments } : {}),
@@ -4009,6 +4088,7 @@ export function registerChatRoutes(
         if (!available) {
           // Provider is offline or not installed — fall back to Jait
           const reason = cliProvider.info.unavailableReason ?? "CLI not found";
+          if (personaProfile) throw new Error(`Agent provider unavailable: ${reason}`);
           console.log(`[chat/cli] Provider ${requestProvider} unavailable (${reason}), falling back to jait`);
           const fallbackEvent = { type: "provider_fallback", from: requestProvider, to: "jait", reason } as unknown as StreamEvent;
           safeWrite(`data: ${JSON.stringify(fallbackEvent)}\n\n`);
@@ -4073,6 +4153,7 @@ export function registerChatRoutes(
 
         if (
           cachedCliSession
+          && (cachedCliSession.awaitingFirstTurn || cachedCliSession.personaFingerprint === personaFingerprint)
           && cachedCliSession.providerId === requestProvider
           && cachedCliSession.runtimeMode === runtimeMode
           && cachedCliSession.model === (requestBodyModel || undefined)
@@ -4087,7 +4168,7 @@ export function registerChatRoutes(
           // message is still its first turn and must carry Jait's system prompt.
           if (cachedCliSession.awaitingFirstTurn) {
             isNewCliSession = true;
-            activeCliSessions.set(sessionId, { ...cachedCliSession, awaitingFirstTurn: false });
+            activeCliSessions.set(sessionId, { ...cachedCliSession, awaitingFirstTurn: false, personaFingerprint });
           }
           console.log(`[chat/cli] Reusing ${requestProvider}/${runtimeMode}${isNewCliSession ? " (pre-warmed)" : ""} session ${providerSessionId} for ${sessionId}`);
         } else {
@@ -4123,6 +4204,7 @@ export function registerChatRoutes(
           isNewCliSession = true;
           activeCliSessions.set(sessionId, {
             providerId: requestProvider,
+            personaFingerprint,
             runtimeMode,
             model: requestBodyModel || undefined,
             reasoningEffort: requestReasoningEffort,
@@ -4498,6 +4580,7 @@ export function registerChatRoutes(
           providerSessionId = freshSessionResult.id;
           activeCliSessions.set(sessionId, {
             providerId: requestProvider,
+            personaFingerprint,
             runtimeMode,
             model: requestBodyModel || undefined,
             reasoningEffort: requestReasoningEffort,
@@ -4680,6 +4763,7 @@ export function registerChatRoutes(
           const persistedToolCalls = hasPartialOutput && cliToolCalls.length > 0 ? cliToolCalls : undefined;
           history.push({
             role: "assistant",
+            persona,
             content: persistedContent,
             uiToolCalls: persistedToolCalls,
             segments: persistedSegments,
@@ -4696,6 +4780,7 @@ export function registerChatRoutes(
         } else {
           history.push({
             role: "assistant",
+            persona,
             content: fullContent,
             uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
             segments: finalCliSegments.length > 0 ? finalCliSegments : undefined,
@@ -5005,6 +5090,7 @@ export function registerChatRoutes(
           );
           history.push({
             role: "assistant",
+            persona,
             content: streamedContent || errorMessage,
             ...(streamedToolCalls.length > 0
               ? { uiToolCalls: streamedToolCalls.map((call) => ({ ...call })) }
@@ -5022,6 +5108,7 @@ export function registerChatRoutes(
           );
           history.push({
             role: "assistant",
+            persona,
             content: errMsg2,
             segments: errorSegments,
           });
@@ -5124,6 +5211,7 @@ export function registerChatRoutes(
     }
 
     activeStreams.delete(sessionId);
+    activePersonaOwners.delete(sessionId);
     activeAssistantCheckpointIds.delete(sessionId);
     activeCliTurns.delete(sessionId);
     cleanupCliListeners();
@@ -5470,6 +5558,7 @@ export function registerChatRoutes(
           ) ?? undefined,
           segments: accumulator.segments.length > 0 ? JSON.stringify(accumulator.segments) : undefined,
           thinking: accumulator.thinking || undefined,
+          persona: accumulator.persona ? JSON.stringify(accumulator.persona) : undefined,
         }
       : undefined;
     const branch = sessionService.fork(sessionId, {

@@ -2,6 +2,7 @@ import type { ThreadActivity, ThreadService } from "./threads.js";
 
 const MAX_REPLAY_MESSAGES = 24;
 const MAX_REPLAY_CHARS = 12_000;
+const MAX_MESSAGE_CHARS = 4_000;
 
 function sortActivitiesAsc(activities: ThreadActivity[]): ThreadActivity[] {
   return [...activities].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -38,7 +39,11 @@ export function buildThreadHistoryReplayPrompt(
 
   for (let i = tail.length - 1; i >= 0; i--) {
     const message = tail[i]!;
-    const line = `${message.role === "user" ? "User" : "Assistant"}: ${message.content}`;
+    // A large partial response must not crowd out the task or discard history entirely.
+    const content = message.content.length > MAX_MESSAGE_CHARS
+      ? `${message.content.slice(0, MAX_MESSAGE_CHARS / 2)}\n[Middle of message omitted]\n${message.content.slice(-MAX_MESSAGE_CHARS / 2)}`
+      : message.content;
+    const line = `${message.role === "user" ? "User" : "Assistant"}: ${content}`;
     if (usedChars + line.length > MAX_REPLAY_CHARS) break;
     lines.unshift(line);
     usedChars += line.length;

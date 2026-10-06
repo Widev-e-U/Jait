@@ -1,3 +1,4 @@
+import { parseChatPersona, type ChatPersona } from '@/lib/chat-persona'
 import { createUserMessageEditSubmission } from '@/components/chat/message-edit'
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from 'react'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
@@ -375,6 +376,7 @@ export interface LlmContextFlow {
 }
 
 export interface ChatMessage {
+  persona?: ChatPersona
   id: string
   role: 'user' | 'assistant'
   content: string
@@ -413,6 +415,7 @@ export interface ChatMessage {
 }
 
 type RawSnapshotMessage = {
+  persona?: ChatPersona
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
@@ -443,7 +446,7 @@ type RawSnapshotMessage = {
 }
 
 /** Shared by the live resume-stream loop and the one-shot snapshot fetch (see loadedMessagesSessionRef). */
-function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStreaming: boolean): ChatMessage[] {
+export function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStreaming: boolean): ChatMessage[] {
   return rawMsgs.map(m => {
     const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
     // Visible system notices (e.g. background terminal commands) are
@@ -451,7 +454,7 @@ function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStreaming: b
     if (m.role === 'system') {
       return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
     }
-    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
+    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona) }
     if (m.hasContextFlow) msg.hasContextFlow = true
     if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
     if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
@@ -613,6 +616,7 @@ export function buildReasoningEffortRequestField(
 }
 
 interface SendMessageOptions {
+  personaAgentId?: string
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
   sessionIdPromise?: Promise<string | null>
@@ -648,6 +652,7 @@ interface SendMessageOptions {
 }
 
 interface QueuedChatMessage extends QueuedMessage {
+  personaAgentId?: string
   provider?: string
   runtimeMode?: RuntimeMode
   responseStyle?: ResponseStyle
@@ -944,19 +949,21 @@ export function useChat(
     // first token, or a queued/remote turn this tab never sent. Without a
     // target every token would be dropped and the answer would only appear on
     // the next reload.
+    let turnPersona: ChatPersona | undefined
     const ensureStreamingAssistant = (): string | null => {
       if (assistantId) return assistantId
       if (!isCurrent()) return null
       const adopted = consumePendingPlaceholder()
       if (adopted) {
         assistantId = adopted
+        setState(prev => ({ ...prev, messages: prev.messages.map(m => m.id === adopted ? { ...m, persona: turnPersona } : m) }))
         return assistantId
       }
       const id = createOptimisticMessageId('assistant')
       assistantId = id
       setState(prev => ({
         ...prev,
-        messages: [...prev.messages, { id, role: 'assistant', content: '' }],
+        messages: [...prev.messages, { id, role: 'assistant', content: '', persona: turnPersona }],
       }))
       return id
     }
@@ -1063,6 +1070,7 @@ export function useChat(
 
         updateQueue(prev => reconcileQueuedMessagesAtTurnStart(prev, data.content, startedTurnQueuedIdRef.current, startedTurnAttachmentsRef.current))
         beginTurn()
+        turnPersona = parseChatPersona(data.persona)
       } else if (data.type === 'token') {
         if (!ensureStreamingAssistant()) return
         stream.pushText(data.content as string)
@@ -1508,6 +1516,7 @@ export function useChat(
       if (!res.ok) return
       const data = await res.json() as {
         messages: Array<{
+          persona?: ChatPersona;
           id: string;
           role: 'user' | 'assistant';
           content: string;
@@ -1537,7 +1546,7 @@ export function useChat(
       }
       const olderMsgs: ChatMessage[] = data.messages.map(m => {
         const safeContent = typeof m.content === 'string' ? m.content : String(m.content ?? '')
-        const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking }
+        const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona) }
         if (m.hasContextFlow) msg.hasContextFlow = true
         if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
         if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
@@ -1694,6 +1703,7 @@ export function useChat(
       const requestBody = {
         content,
         sessionId: requestSessionId,
+        ...(options.personaAgentId ? { personaAgentId: options.personaAgentId } : {}),
         ...(options.queuedMessageId ? { queuedMessageId: options.queuedMessageId } : {}),
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
         ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}),

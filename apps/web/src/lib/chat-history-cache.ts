@@ -231,6 +231,7 @@ function chatMessageContentEqual(a: ChatMessage, b: ChatMessage): boolean {
     && a.hasContextFlow === b.hasContextFlow
     && a.hasMemoryProvenance === b.hasMemoryProvenance
     && a.optimistic === b.optimistic
+    && JSON.stringify(a.persona) === JSON.stringify(b.persona)
     && JSON.stringify(a.toolCalls) === JSON.stringify(b.toolCalls)
     && JSON.stringify(a.segments) === JSON.stringify(b.segments)
     && JSON.stringify(a.displaySegments) === JSON.stringify(b.displaySegments)

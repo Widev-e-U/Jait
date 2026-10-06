@@ -31,6 +31,8 @@ export interface PersonaAgentDraft {
   notificationChannels: string[]
   notificationEvents: Array<'task_done' | 'blocked' | 'question'>
   paused: boolean
+  activeTasks?: number | null
+  liveState?: "idle" | "running" | "waiting" | null
   updatedAt: string
 }
 

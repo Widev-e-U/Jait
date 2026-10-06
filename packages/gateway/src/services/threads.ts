@@ -8,7 +8,7 @@
 
 import { and, eq, desc, gt, sql } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
-import { agentThreads, agentThreadActivities, personaAgents } from "../db/schema.js";
+import { agentThreads, agentThreadActivities, personaAgents, threadRecovery } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { limitUtf8, serializeBoundedJson } from "../lib/bounded-json.js";
 import type { ProviderEvent } from "../providers/contracts.js";
@@ -104,6 +104,9 @@ export class ThreadService {
   }
 
   savePersonaAgent(userId: string, agent: Record<string, unknown>): Record<string, unknown> {
+    // Runtime view fields are computed on reads, never persisted from clients.
+    const { activeTasks: _activeTasks, liveState: _liveState, ...profile } = agent;
+    agent = profile;
     const id = agent.id as string;
     const existing = this.db.select().from(personaAgents).where(eq(personaAgents.id, id)).get();
     if (existing && existing.userId !== userId) throw new Error("Agent profile not found");
@@ -216,6 +219,46 @@ export class ThreadService {
       .map((row) => hydrateThreadRow(row)!);
   }
 
+  /** Capture only work that was running at startup; manual interruptions stay stopped. */
+  queueRestartRecovery(): void {
+    const threads = new Map(this.listRunning().map((thread) => [thread.id, thread]));
+    // A crash can happen after claiming recovery but before the provider starts.
+    for (const entry of this.db.select().from(threadRecovery).all()) {
+      const thread = this.getById(entry.threadId);
+      if (thread?.status === "interrupted") threads.set(thread.id, thread);
+    }
+    for (const thread of threads.values()) {
+      this.db.transaction(() => {
+        const session = thread.providerSessionId;
+        this.db.insert(threadRecovery).values({ threadId: thread.id, pending: true, staleProviderSessionId: session })
+          .onConflictDoUpdate({ target: threadRecovery.threadId, set: { pending: true,
+            ...(session ? { staleProviderSessionId: session } : {}) } }).run();
+        this.update(thread.id, { status: "interrupted", providerSessionId: null,
+          error: "Gateway restarted — automatically continuing saved work." });
+        this.addActivity(thread.id, "session", "Gateway restarted — continuation queued");
+      });
+    }
+  }
+
+  listPendingRecovery() {
+    return this.db.select().from(threadRecovery).where(eq(threadRecovery.pending, true)).all();
+  }
+
+  claimRecovery(id: string): boolean {
+    const claimed = this.db.update(threadRecovery).set({ pending: false, attempts: sql`${threadRecovery.attempts} + 1` })
+      .where(and(eq(threadRecovery.threadId, id), eq(threadRecovery.pending, true)))
+      .returning().all();
+    return claimed.length > 0;
+  }
+
+  getRecovery(id: string) {
+    return this.db.select().from(threadRecovery).where(eq(threadRecovery.threadId, id)).get();
+  }
+
+  clearRecovery(id: string): void {
+    this.db.delete(threadRecovery).where(eq(threadRecovery.threadId, id)).run();
+  }
+
   update(id: string, params: UpdateThreadParams): ThreadRow | undefined {
     const now = new Date().toISOString();
     const updates: Partial<typeof agentThreads.$inferInsert> & { updatedAt: string } = { updatedAt: now };
@@ -253,6 +296,7 @@ export class ThreadService {
   }
 
   delete(id: string): void {
+    this.clearRecovery(id);
     this.pendingContextFlows.delete(id);
     // Delete activities first, then the thread
     this.db
@@ -274,6 +318,7 @@ export class ThreadService {
   }
 
   markCompleted(id: string): ThreadRow | undefined {
+    this.clearRecovery(id);
     return this.update(id, {
       status: "completed",
       // Keep providerSessionId alive so the thread can be resumed
@@ -284,6 +329,7 @@ export class ThreadService {
   }
 
   markCompletedAndClearSession(id: string): ThreadRow | undefined {
+    this.clearRecovery(id);
     return this.update(id, {
       status: "completed",
       providerSessionId: null,
@@ -300,6 +346,7 @@ export class ThreadService {
   }
 
   markError(id: string, error: string): ThreadRow | undefined {
+    this.clearRecovery(id);
     return this.update(id, {
       status: "error",
       providerSessionId: null,
@@ -308,6 +355,7 @@ export class ThreadService {
   }
 
   markInterrupted(id: string): ThreadRow | undefined {
+    this.clearRecovery(id);
     return this.update(id, {
       status: "interrupted",
       providerSessionId: null,
@@ -337,6 +385,19 @@ export class ThreadService {
       })
       .run();
     return { id, threadId, kind, summary: persistedSummary, payload, createdAt: now };
+  }
+
+  updateAssistantCheckpoint(threadId: string, activityId: string, content: string, partial: boolean): ThreadActivity | undefined {
+    const row = this.db.update(agentThreadActivities).set({
+      summary: limitUtf8(content.trim().slice(0, 500), MAX_ACTIVITY_SUMMARY_BYTES),
+      payload: serializeBoundedJson({ role: "assistant", content, partial }, MAX_ACTIVITY_PAYLOAD_BYTES),
+    }).where(and(eq(agentThreadActivities.id, activityId), eq(agentThreadActivities.threadId, threadId))).returning().get();
+    return row ? { ...row, payload: row.payload ? JSON.parse(row.payload) : undefined } : undefined;
+  }
+
+  deleteActivity(threadId: string, activityId: string): void {
+    this.db.delete(agentThreadActivities)
+      .where(and(eq(agentThreadActivities.id, activityId), eq(agentThreadActivities.threadId, threadId))).run();
   }
 
   getRunStartedAt(threadId: string): string | null {

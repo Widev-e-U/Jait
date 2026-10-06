@@ -346,6 +346,7 @@ export const messages = sqliteTable(
     content: text("content").notNull(),
     toolCalls: text("tool_calls"), // JSON array of executed tool calls (nullable)
     segments: text("segments"), // JSON array of MessageSegment for interleaved rendering (nullable)
+    persona: text("persona"), // JSON server-owned identity snapshot for this turn
     contextFlow: text("context_flow"), // JSON snapshot of outbound LLM context for this assistant response
     thinking: text("thinking"), // Chain-of-thought / reasoning content (nullable)
     createdAt: text("created_at").notNull(),
@@ -528,6 +529,14 @@ export const agentThreads = sqliteTable(
     index("idx_agent_threads_updated").on(table.updatedAt),
   ],
 );
+
+// Internal restart queue; retained while a recovered turn runs to bound crash loops.
+export const threadRecovery = sqliteTable("thread_recovery", {
+  threadId: text("thread_id").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  staleProviderSessionId: text("stale_provider_session_id"),
+  pending: integer("pending", { mode: "boolean" }).notNull().default(true),
+});
 
 // ─── Agent Thread Activities ─────────────────────────────────────────
 export const agentThreadActivities = sqliteTable(

@@ -30,3 +30,13 @@ export const personaAgentProfileSchema = z.object({
 }).passthrough().refine((profile) => JSON.stringify(profile).length <= 30_000, "Agent profile is too large");
 
 export type PersonaAgentProfile = z.infer<typeof personaAgentProfileSchema>;
+
+/** Server-owned identity captured for a chat turn, retained after profile edits. */
+export interface ChatPersona {
+  id: string;
+  name: string;
+  avatar: string;
+  role?: string;
+  providerId: string;
+  model?: string | null;
+}

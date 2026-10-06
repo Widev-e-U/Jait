@@ -198,25 +198,12 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
 
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
+  threadService.queueRestartRecovery();
   const sessionSearchService = new SessionSearchService(sqlite);
   const sessionSqlService = new SessionSqlService(sqlite);
   const chatTracesService = new ChatTracesService(sqlite);
   const databaseRetention = new DatabaseRetentionService(sqlite);
   const diskJanitor = new DiskJanitor(sqlite);
-
-  // ── Recover threads stuck in "running" from a previous crash/restart ──
-  const staleThreads = threadService.listRunning();
-  if (staleThreads.length > 0) {
-    for (const t of staleThreads) {
-      threadService.update(t.id, {
-        status: "interrupted",
-        providerSessionId: null,
-        error: "Gateway restarted — session was lost. You can restart this thread.",
-      });
-      threadService.addActivity(t.id, "session", "Gateway restarted — agent session was lost");
-    }
-    console.log(`Recovered ${staleThreads.length} stale thread(s) from previous run`);
-  }
 
   const repoService = new RepositoryService(db);
   const gitService = new GitService();

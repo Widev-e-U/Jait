@@ -1687,4 +1687,16 @@ export const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_team_delivery_status ON team_room_deliveries(status)");
     },
   },
+  {
+    id: 70, name: "thread_restart_recovery",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS thread_recovery (thread_id TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 1, stale_provider_session_id TEXT)");
+    },
+  },
+  {
+    id: 71, name: "chat_persona_attribution",
+    run(db) {
+      try { db.exec("ALTER TABLE messages ADD COLUMN persona TEXT"); } catch { /* exists */ }
+    },
+  },
 ];

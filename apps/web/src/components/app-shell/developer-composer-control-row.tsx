@@ -1,3 +1,4 @@
+import { PersonaRecipientPicker } from '@/components/chat/persona-recipient-picker'
 import { CheckCircle2, ExternalLink, MessageSquarePlus, PanelRightOpen } from 'lucide-react'
 
 import { ManagerRepoPicker } from '@/components/manager/manager-thread-ui'
@@ -11,6 +12,9 @@ import type { AutomationRepository, RepositoryRuntimeInfo } from '@/lib/automati
 import { TooltipHint } from '@/components/ui/tooltip'
 
 interface DeveloperComposerControlRowProps {
+  chatPersonaAgentId?: string
+  onChatPersonaAgentChange?: (id: string | undefined) => void
+  authToken?: string | null
   activeProjectId: string | null
   activeProjectSessions: ProjectSession[]
   activeProjectTitle: string | null
@@ -37,6 +41,9 @@ interface DeveloperComposerControlRowProps {
 }
 
 export function DeveloperComposerControlRow({
+  chatPersonaAgentId,
+  onChatPersonaAgentChange,
+  authToken,
   activeProjectId,
   activeProjectSessions,
   activeProjectTitle,
@@ -109,6 +116,7 @@ export function DeveloperComposerControlRow({
                 triggerLabel="History"
               />
             )}
+            {sendTarget === 'agent' && onChatPersonaAgentChange && <PersonaRecipientPicker value={chatPersonaAgentId} onChange={onChatPersonaAgentChange} authToken={authToken ?? null} />}
             {approvalButton}
           </div>
           {!compact && (

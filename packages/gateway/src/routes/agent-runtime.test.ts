@@ -37,6 +37,8 @@ describe("agent runtime snapshots", () => {
     const app = await createServer(config, { db, sqlite, userService, sessionService, sessionState, threadService, providerRegistry: new ProviderRegistry() });
     const headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     const otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: other.id, username: other.username }, config.jwtSecret)}` };
+    threadService.savePersonaAgent(user.id, { id: "profile", name: "Runtime agent", chatSessionId: session.id, chatThreadId: thread.id, activeTasks: 900, liveState: "running" });
+    expect(threadService.getPersonaAgent("profile", user.id)).not.toHaveProperty("activeTasks");
     __chatTestUtils.activeStreams.add(session.id);
     try {
       for (const url of [`/api/sessions/${session.id}/runtime`, `/api/threads/${thread.id}/runtime`]) {
@@ -46,10 +48,22 @@ describe("agent runtime snapshots", () => {
         expect(response.statusCode).toBe(200);
         expect(response.json()).toEqual({ running: true, startedAt });
       }
+      // A bound session streaming without this persona must not count toward it.
+      const readProfiles = async () => (await app.inject({ method: "GET", url: "/api/persona-agents", headers })).json().agents;
+      expect(await readProfiles()).toEqual([expect.objectContaining({ id: "profile", activeTasks: 1, liveState: "running" })]);
+      expect((await app.inject({ method: "GET", url: "/api/persona-agents", headers: otherHeaders })).json().agents).toEqual([]);
+      threadService.addActivity(thread.id, "tool.approval", "Approval required", { requestId: "approval-one", tool: "terminal.run" });
+      expect(await readProfiles()).toEqual([expect.objectContaining({ activeTasks: 1, liveState: "waiting" })]);
+      // An unrelated result cannot clear this approval.
+      threadService.addActivity(thread.id, "tool.result", "Other tool finished", { tool: "file.read" });
+      expect(await readProfiles()).toEqual([expect.objectContaining({ liveState: "waiting" })]);
+      threadService.addActivity(thread.id, "tool.approval-response", "Tool approved", { requestId: "approval-one", approved: true });
+      expect(await readProfiles()).toEqual([expect.objectContaining({ liveState: "running" })]);
       __chatTestUtils.activeStreams.delete(session.id);
       // A stale durable marker alone must not show a stopped chat as working.
       expect((await app.inject({ method: "GET", url: `/api/sessions/${session.id}/runtime`, headers })).json()).toEqual({ running: false, startedAt: null });
       threadService.markInterrupted(thread.id);
+      expect(await readProfiles()).toEqual([expect.objectContaining({ activeTasks: 0, liveState: "idle" })]);
       expect((await app.inject({ method: "GET", url: `/api/threads/${thread.id}/runtime`, headers })).json()).toEqual({ running: false, startedAt: null });
     } finally {
       __chatTestUtils.activeStreams.delete(session.id);

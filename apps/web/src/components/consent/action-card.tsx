@@ -48,6 +48,14 @@ export interface ConsentDecisionInfo {
   reason?: string
 }
 
+// Consent calls use the same bearer identity as chat, including token-only clients.
+function consentFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers)
+  const token = getAuthToken()
+  if (token) headers.set('Authorization', 'Bearer ' + token)
+  return fetch(url, { ...init, headers })
+}
+
 // ── useConsentQueue hook ─────────────────────────────────────────────
 
 export function useConsentQueue(sessionId?: string | null) {
@@ -62,9 +70,10 @@ export function useConsentQueue(sessionId?: string | null) {
       const url = sessionId
         ? `${GATEWAY}/api/consent/pending/${sessionId}`
         : `${GATEWAY}/api/consent/pending`
-      const res = await fetch(url)
+      const res = await consentFetch(url)
+      if (!res.ok) return
       const data = (await res.json()) as { requests: ConsentRequestInfo[] }
-      setQueue(data.requests)
+      if (Array.isArray(data.requests)) setQueue(data.requests)
     } catch {
       // gateway down
     }
@@ -147,7 +156,7 @@ export function useConsentQueue(sessionId?: string | null) {
 
   const approve = useCallback(async (requestId: string) => {
     try {
-      await fetch(`${GATEWAY}/api/consent/${requestId}/approve`, { method: 'POST' })
+      await consentFetch(`${GATEWAY}/api/consent/${requestId}/approve`, { method: 'POST' })
       setQueue((prev) => prev.filter((r) => r.id !== requestId))
     } catch {
       // retry or show error
@@ -156,7 +165,7 @@ export function useConsentQueue(sessionId?: string | null) {
 
   const reject = useCallback(async (requestId: string, reason?: string) => {
     try {
-      await fetch(`${GATEWAY}/api/consent/${requestId}/reject`, {
+      await consentFetch(`${GATEWAY}/api/consent/${requestId}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
@@ -169,7 +178,7 @@ export function useConsentQueue(sessionId?: string | null) {
 
   const approveAllForSession = useCallback(async (targetSessionId: string, reason?: string) => {
     try {
-      const res = await fetch(`${GATEWAY}/api/consent/pending/${targetSessionId}/approve-all`, {
+      const res = await consentFetch(`${GATEWAY}/api/consent/pending/${targetSessionId}/approve-all`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
@@ -196,7 +205,7 @@ export function useConsentPolicy() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${GATEWAY}/api/consent/policy`)
+      const res = await consentFetch(`${GATEWAY}/api/consent/policy`)
       const data = (await res.json()) as ConsentPolicyInfo
       setPolicy(data)
     } catch {

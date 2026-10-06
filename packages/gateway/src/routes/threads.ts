@@ -20,7 +20,7 @@ import { personaAgentProfileSchema } from "@jait/shared";
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { ThreadService } from "../services/threads.js";
+import type { ThreadService, ThreadActivity } from "../services/threads.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
@@ -33,6 +33,7 @@ import { normalizeReasoningEffort, resolveThreadSelectionDefaults } from "../ser
 import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
 import { assertOwnership } from "../security/ownership.js";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import type { Skill, SkillRegistry } from "../skills/index.js";
 import { formatSkillsForPrompt } from "../skills/index.js";
@@ -102,6 +103,7 @@ function resolveThreadProviderId(
 }
 
 export interface ThreadRouteDeps {
+  personaChatRuntime?: (userId: string, personaId: string, chatSessionId?: string) => { count: number; state: "running" | "waiting" | "idle" };
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
   userService?: UserService;
@@ -206,6 +208,81 @@ export function registerThreadRoutes(
   const { threadService, providerRegistry, ws } = deps;
   const gitService = deps.gitService ?? new GitService();
   const repoService = deps.repoService;
+
+  const recoveryToken = randomUUID();
+  let recoveryRunning = false;
+  let recoveryClosed = false;
+
+  const recoverInterruptedThreadTurns = async (): Promise<number> => {
+    if (recoveryRunning || recoveryClosed || !deps.userService) return 0;
+    recoveryRunning = true;
+    let recovered = 0;
+    const pending = threadService.listPendingRecovery();
+    let index = 0;
+    try {
+      await Promise.all(Array.from({ length: Math.min(4, pending.length) }, async () => {
+        while (index < pending.length && !recoveryClosed) {
+          const entry = pending[index++]!;
+          const thread = threadService.getById(entry.threadId);
+          const user = thread?.userId ? deps.userService!.findById(thread.userId) : null;
+          if (!thread || thread.status !== "interrupted" || !user) {
+            threadService.clearRecovery(entry.threadId);
+            continue;
+          }
+          if (entry.attempts >= 3) {
+            const error = "Automatic recovery stopped after repeated gateway failures. Resume this thread manually.";
+            threadService.markError(thread.id, error);
+            threadService.addActivity(thread.id, "error", error);
+            broadcastThreadStatus(thread.id, "error", error);
+            continue;
+          }
+          try {
+            const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+            const response = await app.inject({
+              method: "POST", url: `/api/threads/${thread.id}/start`,
+              headers: { authorization: `Bearer ${token}`, "x-jait-thread-recovery": recoveryToken,
+                host: `127.0.0.1:${config.port}` },
+              payload: { message: "The gateway process terminated during the previous turn. Continue the unfinished task from the saved thread conversation, activity log, and current workspace state. Treat partial output and completed tool calls as progress; verify side effects before repeating actions. Check ongoing commands and existing helper threads before launching replacements. Finish the original task with a user-visible response." },
+            });
+            if (response.statusCode < 400) {
+              recovered++;
+            } else if (response.statusCode === 503 || response.statusCode === 422) {
+              // No session started: keep the durable queue until its provider/node returns.
+              const current = threadService.getById(thread.id);
+              if (current?.status === "interrupted" && threadService.getRecovery(thread.id)?.pending) {
+                const error = "Waiting to continue after gateway restart: " + (response.json().error ?? "execution node unavailable");
+                threadService.update(thread.id, { error });
+                broadcastThreadStatus(thread.id, "interrupted", error);
+              }
+            } else if (response.statusCode !== 409) {
+              const error = `Automatic continuation failed (${response.statusCode}). Resume this thread manually.`;
+              threadService.markError(thread.id, error);
+              threadService.addActivity(thread.id, "error", error);
+              broadcastThreadStatus(thread.id, "error", error);
+            }
+          } catch (error) {
+            app.log.error({ error, threadId: thread.id }, "Thread restart recovery failed");
+          }
+        }
+      }));
+    } finally {
+      recoveryRunning = false;
+    }
+    return recovered;
+  };
+  app.decorate("recoverInterruptedThreadTurns", recoverInterruptedThreadTurns);
+  // Wait for all routes to be registered; sweep again for nodes reconnecting later.
+  const recoveryTimer = config.nodeEnv !== "test" ? setInterval(() => {
+    void recoverInterruptedThreadTurns().catch((error) => app.log.error({ error }, "Thread recovery failed"));
+  }, 15_000) : null;
+  recoveryTimer?.unref();
+  if (config.nodeEnv !== "test") {
+    setTimeout(() => { void recoverInterruptedThreadTurns().catch((error) => app.log.error({ error }, "Thread recovery failed")); }, 0);
+  }
+  app.addHook("onClose", async () => {
+    recoveryClosed = true;
+    if (recoveryTimer) clearInterval(recoveryTimer);
+  });
 
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
@@ -503,19 +580,23 @@ export function registerThreadRoutes(
     options?: { suppressTitleTurnEvents?: () => number; decrementSuppressedTurn?: () => void },
   ): (event: ProviderEvent) => void {
     let pendingAssistantContent = "";
+    let checkpointId: string | null = null;
+    let checkpointAt = 0;
 
     const flushPendingAssistantContent = (): void => {
       if (!pendingAssistantContent.trim()) {
         pendingAssistantContent = "";
+        if (checkpointId) threadService.deleteActivity(threadId, checkpointId);
+        checkpointId = null;
         return;
       }
 
       const content = pendingAssistantContent;
       pendingAssistantContent = "";
-      const activity = threadService.addActivity(threadId, "message", content.trim().slice(0, 500), {
-        role: "assistant",
-        content,
-      });
+      const activity = checkpointId
+        ? threadService.updateAssistantCheckpoint(threadId, checkpointId, content, false)
+        : threadService.addActivity(threadId, "message", content.trim().slice(0, 500), { role: "assistant", content });
+      checkpointId = null;
       broadcastThreadEvent(threadId, "activity", {
         event: { type: "message", sessionId: providerSessionId, role: "assistant", content } satisfies ProviderEvent,
         activity,
@@ -544,12 +625,25 @@ export function registerThreadRoutes(
 
       if (event.type === "token") {
         pendingAssistantContent += event.content;
+        // Persist streamed progress before the turn ends, as chat recovery does.
+        if (!checkpointId) {
+          checkpointId = threadService.addActivity(threadId, "message", pendingAssistantContent.trim().slice(0, 500), {
+            role: "assistant", content: pendingAssistantContent, partial: true,
+          }).id;
+          checkpointAt = Date.now();
+        } else if (Date.now() - checkpointAt >= 1000) {
+          threadService.updateAssistantCheckpoint(threadId, checkpointId, pendingAssistantContent, true);
+          checkpointAt = Date.now();
+        }
         return;
       }
 
+      let completedCheckpoint: ThreadActivity | undefined;
       if (event.type === "message" && event.role === "assistant" && pendingAssistantContent) {
         if (event.content === pendingAssistantContent || event.content.startsWith(pendingAssistantContent)) {
           pendingAssistantContent = "";
+          if (checkpointId) completedCheckpoint = threadService.updateAssistantCheckpoint(threadId, checkpointId, event.content, false);
+          checkpointId = null;
         } else {
           flushPendingAssistantContent();
         }
@@ -557,7 +651,7 @@ export function registerThreadRoutes(
         flushPendingAssistantContent();
       }
 
-      const activity = threadService.logProviderEvent(threadId, event);
+      const activity = completedCheckpoint ?? threadService.logProviderEvent(threadId, event);
       if (activity) {
         broadcastThreadEvent(threadId, "activity", { event, activity });
       }
@@ -602,7 +696,7 @@ export function registerThreadRoutes(
         void flushPendingInterventionMessage(threadId, providerSessionId, providerId)
           .then((resumed) => {
             if (resumed) return;
-            threadService.update(threadId, { status: "completed", error: null, completedAt: new Date().toISOString() });
+            threadService.markCompleted(threadId);
             broadcastThreadStatus(threadId, "completed");
             void drainQueuedThreadMessages();
             void persistThreadDiffStats(threadId);
@@ -755,7 +849,27 @@ export function registerThreadRoutes(
   app.get("/api/persona-agents", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    return { agents: threadService.listPersonaAgents(authUser.id) };
+    const threads = threadService.list(authUser.id);
+    return { agents: threadService.listPersonaAgents(authUser.id).map(agent => {
+      const runs = threads.filter(thread => thread.status === "running" && (thread.personaAgentId === agent.id || thread.id === agent.chatThreadId));
+      const chat = deps.personaChatRuntime?.(authUser.id, String(agent.id), typeof agent.chatSessionId === "string" ? agent.chatSessionId : undefined);
+      const waiting = runs.some(thread => {
+        const events = threadService.getActivities(thread.id, 100);
+        const approvals = events.filter(event => event.kind === "tool.approval");
+        return approvals.some(approval => {
+          const payload = (approval.payload ?? {}) as { requestId?: string; tool?: string };
+          return !events.some(event => {
+            const result = (event.payload ?? {}) as { requestId?: string; tool?: string };
+            return event.createdAt >= approval.createdAt && (
+              event.kind === "tool.approval-response" && result.requestId === payload.requestId ||
+              (event.kind === "tool.result" || event.kind === "tool.error") && result.tool === payload.tool);
+          });
+        });
+      });
+      return { ...agent, activeTasks: chat ? runs.length + chat.count : null,
+        liveState: !chat ? null : waiting || chat.state === "waiting" ? "waiting" : runs.length + chat.count > 0 ? "running" : "idle" };
+    }) };
+
   });
 
   app.put("/api/persona-agents/:id", async (request, reply) => {
@@ -1037,6 +1151,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "Thread already has an active session" });
     }
 
+    const recovering = request.headers["x-jait-thread-recovery"] === recoveryToken;
     const providerId = thread.providerId as ProviderId;
     // Resolve working directory — the stored path may come from a
     // different device/OS (e.g. Windows path on a Linux gateway).
@@ -1044,7 +1159,8 @@ export function registerThreadRoutes(
     const pathExistsLocally = existsSync(workingDirectory);
 
     const matchingRepository = resolveThreadRepositoryForUser(authUser.id, workingDirectory);
-    const projectDeviceId = matchingRepository?.deviceId ?? null;
+    const projectDeviceId = recovering && thread.executionNodeId && thread.executionNodeId !== "gateway"
+      ? thread.executionNodeId : matchingRepository?.deviceId ?? null;
     const mustRunRemotely = providerId !== "jait" && !!projectDeviceId;
 
     let provider = mustRunRemotely
@@ -1137,6 +1253,29 @@ export function registerThreadRoutes(
       });
     }
 
+    // A remote CLI may have survived the gateway outage. Stop its old session
+    // on the original node before starting a replacement to avoid duplicate work.
+    if (recovering && isRemote && executionNode && ws) {
+      const staleSession = threadService.getRecovery(id)?.staleProviderSessionId;
+      if (staleSession) {
+        try {
+          await ws.proxyProviderOp(executionNode.id, "stop-session", { sessionId: staleSession }, 15_000);
+        } catch {
+          return reply.status(503).send({ error: "Waiting for the previous remote session to stop" });
+        }
+      }
+    }
+
+    // Recovery can be cancelled while provider/node availability is being checked.
+    if (recovering) {
+      const current = threadService.getById(id);
+      if (recoveryClosed || current?.status !== "interrupted" || !threadService.claimRecovery(id)) {
+        return reply.status(409).send({ error: "Thread recovery cancelled" });
+      }
+    } else {
+      threadService.clearRecovery(id);
+    }
+
     // Build MCP server references so CLI agents can call Jait's tools
     const mcpServers = providerRegistry.buildJaitMcpServerRefs(config, getRequestBaseUrl(request), {
       sessionId: id,
@@ -1157,6 +1296,11 @@ export function registerThreadRoutes(
         reasoningEffort: thread.reasoningEffort ?? undefined,
         mcpServers,
       });
+
+      if (recovering && (recoveryClosed || threadService.getById(id)?.status !== "interrupted" || !threadService.getRecovery(id))) {
+        await provider.stopSession(session.id);
+        return reply.status(409).send({ error: "Thread recovery cancelled" });
+      }
 
       // Clean up any previous listener for this thread (e.g. stop → start cycle)
       const prevUnsub = threadUnsubs.get(id);
@@ -1325,7 +1469,7 @@ export function registerThreadRoutes(
       void (async () => {
         try {
           // ── Title generation ──────────────────────────────
-          if (titleTask.trim()) {
+          if (!recovering && titleTask.trim()) {
             suppressTitleTurnEvents = 1;
             const titleActivity = threadService.addActivity(id, "activity", "Generating title…", {
               action: "title_generation_start",
@@ -1678,6 +1822,17 @@ export function registerThreadRoutes(
       remoteProviders.delete(id);
     }
 
+    // A queued restart has cleared the local session handle, but its remote
+    // worker may still exist. Cancel that worker too when its node is connected.
+    const staleSession = threadService.getRecovery(id)?.staleProviderSessionId;
+    if (!thread.providerSessionId && staleSession && thread.executionNodeId && ws?.findNodeByDeviceId(thread.executionNodeId)) {
+      try {
+        await ws.proxyProviderOp(thread.executionNodeId, "stop-session", { sessionId: staleSession }, 15_000);
+      } catch (error) {
+        return reply.status(502).send({ error: "STOP_FAILED", details: error instanceof Error ? error.message : "Failed to stop previous remote session" });
+      }
+    }
+
     const unsubscribe = threadUnsubs.get(id);
     if (unsubscribe) {
       unsubscribe();
@@ -1727,6 +1882,7 @@ export function registerThreadRoutes(
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     await provider.respondToApproval(thread.providerSessionId, requestId, approved);
+    threadService.addActivity(id, "tool.approval-response", approved ? "Tool approved" : "Tool denied", { requestId, approved });
     return reply.status(200).send({ ok: true });
   });
 

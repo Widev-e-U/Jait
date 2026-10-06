@@ -107,6 +107,226 @@ describe("thread routes", () => {
     interventionRunResumeRegistry.clearForTests();
   });
 
+  it("automatically continues a running thread after a gateway restart with saved context", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("restart-owner", "password123");
+    const thread = threadService.create({ title: "Fix the bug", providerId: "codex", userId: user.id,
+      workingDirectory: process.cwd(), runtimeMode: "supervised", model: "test-model", kind: "delegation" });
+    threadService.addActivity(thread.id, "message", "Fix the bug", { role: "user", content: "Fix the bug" });
+    threadService.addActivity(thread.id, "message", "Patched parser", { role: "assistant", content: "Patched parser; still need validation." + "x".repeat(16000) + "Remaining: run tests." });
+    threadService.markRunning(thread.id, "lost-session");
+    const provider = new MockThreadProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const, jwtSecret: "recovery-test-secret" };
+    threadService.queueRestartRecovery();
+    registerThreadRoutes(app, config, { threadService, providerRegistry, userService });
+    const recover = (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns;
+    await recover();
+    await waitFor(() => provider.sendTurn.mock.calls.length > 0);
+    expect(provider.startSessionCalls).toHaveLength(1);
+    expect(provider.startSessionCalls[0]).toMatchObject({ threadId: thread.id, mode: "supervised", model: "test-model", workingDirectory: process.cwd() });
+    const sent = (provider.sendTurn.mock.calls as unknown as Array<[string, string]>)[0]![1];
+    expect(sent).toContain("Fix the bug");
+    expect(sent).toContain("Patched parser; still need validation.");
+    expect(sent).toContain("Remaining: run tests.");
+    expect(sent).toContain("verify side effects before repeating actions");
+    expect(threadService.getById(thread.id)?.status).toBe("running");
+    await recover();
+    expect(provider.startSessionCalls).toHaveLength(1);
+    await app.close();
+    sqlite.close();
+  });
+
+  it("leaves idle, completed, manually interrupted and ownerless threads stopped", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("stopped-owner", "password123");
+    const provider = new MockThreadProvider();
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    for (const status of ["idle", "completed", "interrupted"] as const) {
+      const thread = service.create({ title: status, providerId: "codex", userId: user.id });
+      service.update(thread.id, { status });
+    }
+    const orphan = service.create({ title: "ownerless", providerId: "codex" });
+    service.markRunning(orphan.id, "lost");
+    const app = Fastify();
+    service.queueRestartRecovery();
+    registerThreadRoutes(app, { ...loadConfig(), nodeEnv: "test" }, { threadService: service, providerRegistry: registry, userService: users });
+    await (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
+    expect(provider.startSessionCalls).toHaveLength(0);
+    expect(service.listPendingRecovery()).toHaveLength(0);
+    await app.close();
+    sqlite.close();
+  });
+
+  it("keeps recovery durable while a provider is offline without exhausting crash attempts", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("offline-owner", "password123");
+    const thread = service.create({ title: "Work", providerId: "codex", userId: user.id, workingDirectory: process.cwd() });
+    service.markRunning(thread.id, "lost");
+    const provider = new MockThreadProvider();
+    const available = vi.spyOn(provider, "checkAvailability").mockResolvedValue(false);
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const config = { ...loadConfig(), nodeEnv: "test" as const };
+    let app = Fastify();
+    service.queueRestartRecovery();
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry, userService: users });
+    for (let i = 0; i < 4; i++) await (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
+    expect(service.getRecovery(thread.id)).toMatchObject({ pending: true, attempts: 0 });
+    expect(provider.startSessionCalls).toHaveLength(0);
+    await app.close();
+    app = Fastify();
+    const restored = new ThreadService(db);
+    restored.queueRestartRecovery();
+    registerThreadRoutes(app, config, { threadService: restored, providerRegistry: registry, userService: users });
+    available.mockResolvedValue(true);
+    await (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
+    await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+    expect(restored.getById(thread.id)?.status).toBe("running");
+    expect(restored.getRecovery(thread.id)).toMatchObject({ attempts: 1, pending: false });
+    provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+    await waitFor(() => restored.getById(thread.id)?.status === "completed");
+    expect(restored.getRecovery(thread.id)).toBeUndefined();
+    await app.close();
+    sqlite.close();
+  });
+
+  it("bounds repeated gateway crashes and recovers a crash between claim and start", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("loop-owner", "password123");
+    const thread = service.create({ title: "Work", providerId: "codex", userId: user.id, workingDirectory: process.cwd() });
+    service.markRunning(thread.id, "lost");
+    service.queueRestartRecovery();
+    expect(service.claimRecovery(thread.id)).toBe(true); // simulate process dying before startSession
+    const config = { ...loadConfig(), nodeEnv: "test" as const };
+    for (let i = 0; i < 3; i++) {
+      const app = Fastify();
+      const provider = new MockThreadProvider();
+      const registry = new ProviderRegistry();
+      registry.register(provider);
+      const restored = new ThreadService(db);
+      restored.queueRestartRecovery();
+      registerThreadRoutes(app, config, { threadService: restored, providerRegistry: registry, userService: users });
+      await (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
+      if (i < 2) {
+        await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+        expect(restored.getById(thread.id)?.status).toBe("running");
+      } else {
+        expect(provider.startSessionCalls).toHaveLength(0);
+        expect(restored.getById(thread.id)).toMatchObject({ status: "error", error: expect.stringContaining("repeated gateway failures") });
+      }
+      await app.close();
+    }
+    sqlite.close();
+  });
+
+  it("cancels recovery when the user stops it during session startup", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("cancel-owner", "password123");
+    const thread = service.create({ title: "Work", providerId: "codex", userId: user.id, workingDirectory: process.cwd() });
+    service.markRunning(thread.id, "lost");
+    const provider = new MockThreadProvider();
+    const start = provider.startSession.bind(provider);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const starting = vi.spyOn(provider, "startSession").mockImplementation(async (options) => { await gate; return start(options); });
+    const stopping = vi.spyOn(provider, "stopSession");
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const };
+    service.queueRestartRecovery();
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry, userService: users });
+    const recovering = (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
+    await waitFor(() => starting.mock.calls.length === 1);
+    const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/stop`, headers: await authHeader(config.jwtSecret, user.id) });
+    expect(response.statusCode).toBe(200);
+    release();
+    await recovering;
+    expect(stopping).toHaveBeenCalledWith("mock-session-1");
+    expect(provider.sendTurn).not.toHaveBeenCalled();
+    expect(service.getById(thread.id)?.status).toBe("interrupted");
+    expect(service.getRecovery(thread.id)).toBeUndefined();
+    await app.close();
+    sqlite.close();
+  });
+
+  it("checkpoints partial streamed progress and replaces it with the final assistant message", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const provider = new MockThreadProvider();
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const };
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry });
+    const thread = service.create({ title: "Work", providerId: "codex", userId: "stream-owner", workingDirectory: process.cwd() });
+    await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`, headers: await authHeader(config.jwtSecret, "stream-owner"), payload: {} });
+    provider.emit({ type: "token", sessionId: "mock-session-1", content: "Partial progress" });
+    expect(new ThreadService(db).getActivities(thread.id).some((activity) => activity.payload && (activity.payload as { content?: string }).content === "Partial progress")).toBe(true);
+    provider.emit({ type: "message", sessionId: "mock-session-1", role: "assistant", content: "Partial progress finished." });
+    const messages = service.getActivities(thread.id).filter((activity) => activity.kind === "message");
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.payload).toMatchObject({ content: "Partial progress finished." });
+    await app.close();
+    sqlite.close();
+  });
+
+  it("waits for the original remote node and stops its surviving session before replacing it", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("remote-restart-owner", "password123");
+    const thread = service.create({ title: "Remote work", providerId: "codex", userId: user.id, workingDirectory: process.cwd() });
+    service.markRunning(thread.id, "old-remote-session");
+    service.update(thread.id, { executionNodeId: "original-node", executionNodeName: "Original node" });
+    const localProvider = new MockThreadProvider();
+    const registry = new ProviderRegistry();
+    registry.register(localProvider);
+    let connected = false;
+    const node = { id: "original-node", name: "Original node", providers: ["codex"] };
+    const proxy = vi.fn(async (_nodeId: string, op: string) => op === "send-turn" ? { completed: true } : { ok: true, stopped: false });
+    const ws = { getFsNodes: () => connected ? [node] : [], findNodeByDeviceId: () => connected ? node : null,
+      proxyProviderOp: proxy, broadcastAll: vi.fn() } as unknown as WsControlPlane;
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const };
+    service.queueRestartRecovery();
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry, userService: users, ws });
+    const recover = (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns;
+    await recover();
+    expect(localProvider.startSessionCalls).toHaveLength(0);
+    expect(service.getRecovery(thread.id)).toMatchObject({ pending: true, attempts: 0 });
+    connected = true;
+    await recover();
+    await waitFor(() => proxy.mock.calls.some(([, op]) => op === "send-turn"));
+    expect(proxy.mock.calls.slice(0, 2).map(([, op]) => op)).toEqual(["stop-session", "start-session"]);
+    expect(proxy).toHaveBeenCalledWith("original-node", "stop-session", { sessionId: "old-remote-session" }, 15_000);
+    expect(localProvider.startSessionCalls).toHaveLength(0);
+    await waitFor(() => service.getById(thread.id)?.status === "completed");
+    await app.close();
+    sqlite.close();
+  });
+
   it("creates threads in idle state until a provider session actually starts", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

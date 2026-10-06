@@ -11,6 +11,7 @@ import type { PromptSkill, ReferencedFile } from '@/components/chat'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { AgentAvatar } from './agent-avatar'
 import { AgentRow } from './agent-row'
+import { AgentsGraph } from './agents-graph'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { agentsApi, type AgentThread, type ThreadActivity } from '@/lib/agents-api'
@@ -70,6 +71,11 @@ function SkillsTable({ skills, selectedIds, onChange, onOpenStore }: {
 
 export function AgentsPage({ token, repositories, availableSkills, threads, onOpenThread, onRefreshThreads, onOpenSettings, onRefreshSkills }: AgentsPageProps) {
   const [agents, setAgents] = useState<PersonaAgentDraft[]>([])
+  const providerSaveRevision = useRef(0)
+  const providerSavePending = useRef(0)
+  const agentsRef = useRef(agents)
+  agentsRef.current = agents
+  const [organizationView, setOrganizationView] = useState<'list' | 'graph'>('list')
   const [teamRoomId, setTeamRoomId] = useState<string | null>(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('teamRoom'))
   const [teamRooms, setTeamRooms] = useState<TeamRoom[]>([])
   const openTeamRoom = (id: string | null) => {
@@ -83,7 +89,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
     let active = true
     teamChatApi.list().then(result => { if (active) setTeamRooms(result.rooms) }).catch(() => {})
     return () => { active = false }
-  }, [agents])
+  }, [agents.map(agent => agent.id).join(",")])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
@@ -178,6 +184,47 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
       .then((data) => setAvailableTools(data.tools))
       .catch((error) => toast.error(error instanceof Error ? error.message : 'Could not load tools'))
   }, [tab, selected?.id])
+
+  useEffect(() => {
+    if (!token || loading || current) return
+    let active = true
+    const timer = window.setInterval(() => {
+      if (providerSavePending.current) return
+      const revision = providerSaveRevision.current
+      void agentsApi.listPersonaAgents().then(saved => {
+        if (active && revision === providerSaveRevision.current && !providerSavePending.current) setAgents(saved.map(agent => ({ ...agent, avatar: normalizePersonaAvatar(agent.avatar), tasks: agent.tasks ?? [] })))
+      }).catch(() => {
+        if (active && revision === providerSaveRevision.current && !providerSavePending.current) setAgents(existing => existing.map(agent => ({ ...agent, activeTasks: null, liveState: null })))
+      })
+    }, 3000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [token, loading, current?.id])
+
+  const saveProvider = (id: string, provider: string, model: string | null): Promise<void> => {
+    providerSavePending.current += 1
+    providerSaveRevision.current += 1
+    const operation = saveQueue.current.catch(() => {}).then(async () => {
+      // Read after prior saves finish, so editing a row does not overwrite newer profile fields.
+      const agent = agentsRef.current.find(item => item.id === id)
+      if (!agent) throw new Error('Agent no longer exists')
+      const saved = await agentsApi.savePersonaAgent({ ...agent, providerId: provider, model, updatedAt: new Date().toISOString() })
+      agentsRef.current = agentsRef.current.map(item => item.id === id ? saved : item)
+      setAgents(agentsRef.current)
+      try {
+        for (const task of saved.tasks ?? []) {
+          if (!task.jobId) continue
+          await jobsApi.updateJob(task.jobId, {
+            name: `${saved.name}: ${task.name}`, prompt: `Task: ${task.name}\n\n${agentTaskPrompt(saved, task.prompt, agentsRef.current)}`,
+            provider: saved.providerId, model: saved.model ?? null,
+            payload: { personaAgentId: saved.id, skillIds: skillIdsFor(saved), runtimeMode: saved.requiresApproval ? 'supervised' : 'full-access' },
+          })
+        }
+      } catch (error) { throw new Error('Agent saved, but scheduled tasks could not be updated: ' + (error instanceof Error ? error.message : 'Try again')) }
+    })
+    void operation.finally(() => { providerSavePending.current -= 1; providerSaveRevision.current += 1 }).catch(() => {})
+    saveQueue.current = operation.catch(() => {})
+    return operation
+  }
 
   const save = (agent: PersonaAgentDraft) => {
     setAgents((existing) => existing.map((item) => item.id === agent.id ? agent : item))
@@ -370,9 +417,9 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
         {loading && <p className="mt-8 text-center text-sm text-muted-foreground">Loading agents…</p>}
         {!loading && agents.length === 0 && <p className="mt-12 text-center text-sm text-muted-foreground">Create an agent to start a conversation or schedule work.</p>}
         {teamRooms.length > 0 && <div className="mt-6"><h2 className="mb-2 text-sm font-medium">Team conversations</h2><div className="space-y-1">{teamRooms.map(room => <Button key={room.id} variant="outline" className="w-full justify-start" onClick={() => openTeamRoom(room.id)}><UsersRound className="mr-2 h-4 w-4" />{room.name}{room.goal && <span className="ml-auto text-xs text-muted-foreground">{room.goal.status}</span>}</Button>)}</div></div>}
-        {agents.length > 0 && <div className="mt-8"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization</div><div className="space-y-1">{organizationEntries(agents).map(({ agent, depth }) => {
-          return <AgentRow key={agent.id} agent={agent} depth={depth} threads={threads} onOpen={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} onChooseTask={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('runs') }} onRefresh={onRefreshThreads} />
-        })}</div></div>}
+        {agents.length > 0 && <div className="mt-8"><div className="mb-3 flex items-center gap-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization <div className="ml-auto flex gap-1"><Button size="sm" variant={organizationView === 'list' ? 'secondary' : 'ghost'} aria-pressed={organizationView === 'list'} onClick={() => setOrganizationView('list')}>List</Button><Button size="sm" variant={organizationView === 'graph' ? 'secondary' : 'ghost'} aria-pressed={organizationView === 'graph'} onClick={() => setOrganizationView('graph')}>Graph</Button></div></div>{organizationView === 'graph' ? <AgentsGraph agents={agents} onSave={saveProvider} onOpen={id => { setSelectedId(id); setConversationThreadId(null); setTab('chat') }} /> : <div className="space-y-1">{organizationEntries(agents).map(({ agent, depth }) => {
+          return <AgentRow key={agent.id} agent={agent} depth={depth} threads={threads} onSaveProvider={(provider, model) => saveProvider(agent.id, provider, model)} onOpen={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} onChooseTask={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('runs') }} onRefresh={onRefreshThreads} />
+        })}</div>}</div>}
       </div>
     </div> : <>
       <div className="shrink-0 px-4 pt-4 sm:px-6">

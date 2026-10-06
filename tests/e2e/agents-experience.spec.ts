@@ -1,13 +1,11 @@
 import { test, expect, type Page, type APIRequestContext, type WebSocketRoute } from '@playwright/test'
 
+import { registerAgentTestUser } from './helpers/agent-user'
+
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 
 async function openAgents(page: Page, request: APIRequestContext) {
-  const registration = await request.post(`${API_URL}/api/auth/register`, {
-    data: { username: `agents-ui-${Date.now()}-${Math.random().toString(36).slice(2)}`, password: 'agents-ui-test-password' },
-  })
-  expect(registration.ok()).toBeTruthy()
-  const { access_token: token } = await registration.json()
+  const token = await registerAgentTestUser(request, API_URL, `agents-ui-${Date.now()}-${Math.random().toString(36).slice(2)}`, 'agents-ui-test-password')
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)
@@ -190,4 +188,38 @@ test('stopped task resumes from its row and active tasks stop independently of l
   await expect.poll(() => stopped).toBe(true)
   await expect(row.getByRole('button', { name: 'Resume Researcher' })).toBeEnabled()
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible()
+})
+
+test('agent list edits persist and graph shows real runtime and reporting links', async ({ page, request }) => {
+  await openAgents(page, request)
+  await createAgent(page)
+  await page.getByRole('button', { name: 'All agents' }).click()
+  const row = page.getByTestId('agent-row')
+  await row.getByRole('button', { name: 'Change provider and model for Researcher' }).click()
+  await expect(row.getByRole('button', { name: 'Save', exact: true })).toBeVisible()
+  const saved = page.waitForResponse(response => response.url().includes('/api/persona-agents/') && response.request().method() === 'PUT' && response.ok())
+  await row.getByRole('button', { name: 'Save', exact: true }).click()
+  const profile = await (await saved).json()
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect(row.getByRole('button', { name: 'Change provider and model for Researcher' })).toHaveAttribute('title', profile.providerId + ' · ' + (profile.model || 'Default model'))
+  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await expect(page.getByLabel('Agent reporting graph').locator('canvas').first()).toBeVisible()
+  await page.getByLabel('Choose an agent in the graph').getByRole('button', { name: 'Researcher' }).click()
+  await expect(page.getByText(/0 active tasks · idle/).last()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Change provider and model for Researcher' })).toBeVisible()
+  await page.screenshot({ path: 'test-results/agents-graph.png', fullPage: true })
+  await page.getByRole('button', { name: 'List', exact: true }).click()
+  await expect(row.getByRole('button', { name: 'Open Researcher' })).toBeVisible()
+})
+
+test('agent list shows save failure without claiming a persisted model', async ({ page, request }) => {
+  await openAgents(page, request)
+  await createAgent(page)
+  await page.getByRole('button', { name: 'All agents' }).click()
+  await page.route('**/api/persona-agents/*', route => route.request().method() === 'PUT' ? route.fulfill({ status: 500, json: { error: 'Save failed' } }) : route.continue())
+  const row = page.getByTestId('agent-row')
+  await row.getByRole('button', { name: 'Change provider and model for Researcher' }).click()
+  await row.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(row.getByRole('alert')).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Save', exact: true })).toBeEnabled()
 })

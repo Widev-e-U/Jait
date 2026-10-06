@@ -15,6 +15,7 @@ export interface CreateSessionParams {
 }
 
 export interface SessionForkLiveSnapshot {
+  persona?: string;
   content: string;
   toolCalls?: string;
   segments?: string;
@@ -115,6 +116,7 @@ export class SessionService {
           segments: row.segments,
           contextFlow: row.contextFlow,
           thinking: row.thinking,
+          persona: row.persona,
           createdAt: row.createdAt,
         }).run();
         if (row.contextFlow) {
@@ -150,6 +152,7 @@ export class SessionService {
             toolCalls: params.liveSnapshot.toolCalls ?? null,
             segments: params.liveSnapshot.segments ?? null,
             thinking: params.liveSnapshot.thinking ?? null,
+            persona: params.liveSnapshot.persona ?? null,
             createdAt: new Date(Date.parse(forkedAt) + 1).toISOString(),
           }).run();
         }

@@ -1,3 +1,5 @@
+import { AgentAvatar } from '@/components/manager/agent-avatar'
+import type { ChatPersona } from '@/lib/chat-persona'
 import { AttachmentList, collectAttachments } from './attachment-list'
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
 import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
@@ -57,6 +59,7 @@ import {
 import { TooltipHint } from '@/components/ui/tooltip'
 
 interface MessageProps {
+  persona?: ChatPersona
   messageId?: string
   messageIndex?: number
   messageFromEnd?: number
@@ -161,6 +164,7 @@ function ThinkingDots() {
 }
 
 function MessageInner({
+  persona,
   messageId,
   messageIndex,
   messageFromEnd,
@@ -184,7 +188,7 @@ function MessageInner({
   isStreaming,
   compact,
   preferLlmUi,
-  provider,
+  provider: requestedProvider,
   threadControlThreads,
   onOpenTerminal,
   renderInlineSecretPrompt,
@@ -198,6 +202,7 @@ function MessageInner({
   onOpenMemorySource,
   onMemoryFeedback,
 }: MessageProps) {
+  const provider = (persona?.providerId as ProviderId | undefined) ?? requestedProvider
   const isUser = role === 'user'
   const confirm = useConfirmDialog()
 
@@ -773,6 +778,11 @@ function MessageInner({
         hasSteeringSegment ? 'w-full max-w-full' : 'max-w-[85%]',
         isUser && 'order-1',
       )}>
+        {!isUser && persona && <div data-persona-agent-id={persona.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+          <AgentAvatar avatar={persona.avatar} className="h-8 w-8" />
+          <span className="font-medium text-foreground">{persona.name}</span>
+          <span>{persona.providerId} · {persona.model ?? 'Default model'}</span>
+        </div>}
         {!isUser && thinking && !hasThinkingSegment && (
           <Reasoning
             content={thinking}

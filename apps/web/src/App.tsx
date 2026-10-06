@@ -186,6 +186,7 @@ type ManagerQueuedMessage = QueuedChatMessage & {
 }
 
 type SavedQueuedMessage = QueuedChatMessage & {
+  personaAgentId?: string
   attachments?: ChatAttachment[]
   mode?: ChatMode
   provider?: string
@@ -306,6 +307,7 @@ function App() {
   const [chatMode, setChatMode] = useState<ChatMode>('agent')
   const [chatResponseStyle, setChatResponseStyle] = useState<ResponseStyle>('normal')
   const [sendTarget, setSendTarget] = useState<SendTarget>('agent')
+  const [chatPersonaAgentId, setChatPersonaAgentId] = useState<string | undefined>()
   const [providerSelection, setProviderSelection] = useState<ModeProviderSelection>({
     developer: 'jait',
     manager: 'jait',
@@ -645,6 +647,7 @@ function App() {
     () => projects.find((project) => project.id === activeProjectId) ?? null,
     [projects, activeProjectId]
   )
+  useEffect(() => { setChatPersonaAgentId(undefined) }, [token])
   const tokenRef = useRef(token)
   tokenRef.current = token
   const { skills: availableSkills, refresh: refreshSkills } = useSkills(token)
@@ -3937,6 +3940,7 @@ function App() {
     if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
         content: promptText,
+        personaAgentId: sendTarget === 'agent' ? chatPersonaAgentId : undefined,
         displayContent: prepared?.displayContent || promptText,
         mode: outboundMode,
         provider: chatProvider,
@@ -3955,6 +3959,7 @@ function App() {
 
     sendMessage(promptText, {
       token,
+      personaAgentId: sendTarget === 'agent' ? chatPersonaAgentId : undefined,
       sessionId: sid,
       sessionIdPromise,
       mode: outboundMode,
@@ -4055,6 +4060,7 @@ function App() {
         sessionId: activeSessionId,
         mode: nextItem.mode,
         provider: nextItem.provider,
+        personaAgentId: nextItem.personaAgentId,
         runtimeMode: nextItem.runtimeMode,
         responseStyle: nextItem.responseStyle,
         model: nextItem.model,
@@ -4085,6 +4091,7 @@ function App() {
           displayContent: nextItem.displayContent,
           mode: nextItem.mode,
           provider: nextItem.provider,
+          personaAgentId: nextItem.personaAgentId,
           runtimeMode: nextItem.runtimeMode,
           responseStyle: nextItem.responseStyle,
           model: nextItem.model,
@@ -4894,6 +4901,9 @@ function App() {
     () =>
       viewMode === 'developer' ? (
         <DeveloperComposerControlRow
+          chatPersonaAgentId={chatPersonaAgentId}
+          onChatPersonaAgentChange={setChatPersonaAgentId}
+          authToken={token}
           activeProjectId={activeProjectId}
           activeProjectSessions={activeProjectSessions}
           activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
@@ -4923,6 +4933,8 @@ function App() {
       ) : null,
     [
       viewMode,
+      chatPersonaAgentId,
+      token,
       activeProjectId,
       activeProjectSessions,
       activeProjectRecord?.title,

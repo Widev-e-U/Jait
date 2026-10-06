@@ -38,6 +38,7 @@ export class TeamChatService {
       return parsed.success ? [parsed.data] : [];
     });
   }
+  profileById(userId: string, id: string) { return this.agent(id, userId); }
   private agent(id: string, userId: string) { return this.agents(userId).find(profile => profile.id === id); }
   owner(roomId: string): string {
     const row = this.db.select().from(teamRooms).where(eq(teamRooms.id, roomId)).get();
@@ -91,8 +92,7 @@ export class TeamChatService {
     if (!session) throw new Error("Source chat not found.");
     const work = readTeamWork(session.metadata);
     // Also recognize the agent's existing ordinary conversation.
-    const agent = work ? this.agent(work.agentId, userId)
-      : this.agents(userId).find(profile => profile.chatSessionId === sessionId);
+    const agent = this.profileForSession(userId, sessionId);
     if (work && work.roomId !== roomId) throw new Error("Work chat belongs to another team room.");
     if (agent) {
       if (!this.members(userId, this.get(userId, roomId).rootAgentId).some(member => member.id === agent.id)) throw new Error("Agent is not a member of this team.");
@@ -164,12 +164,17 @@ export class TeamChatService {
   }
   profileForSession(userId: string, sessionId: string) {
     const work = readTeamWork(this.sessions.getById(sessionId, userId)?.metadata);
-    return work ? this.agent(work.agentId, userId) : this.agents(userId).find(profile => profile.chatSessionId === sessionId);
+    if (work) return this.agent(work.agentId, userId);
+    const metadata = this.sessions.getById(sessionId, userId)?.metadata;
+    let selected: unknown;
+    try { selected = metadata ? JSON.parse(metadata).chatPersonaAgentId : undefined; } catch { /* legacy malformed metadata */ }
+    if (selected === null) return undefined;
+    if (typeof selected === "string") return this.agent(selected, userId);
+    return this.agents(userId).find(profile => profile.chatSessionId === sessionId);
   }
-  context(userId: string, sessionId: string): string | undefined {
+  context(userId: string, sessionId: string, selectedAgent?: PersonaAgentProfile): string | undefined {
     const work = readTeamWork(this.sessions.getById(sessionId, userId)?.metadata);
-    const agent = work ? this.agent(work.agentId, userId)
-      : this.agents(userId).find(profile => profile.chatSessionId === sessionId);
+    const agent = selectedAgent ?? this.profileForSession(userId, sessionId);
     if (!agent) return undefined;
     const room = work ? this.get(userId, work.roomId) : this.ensureRoom(userId, agent.id, sessionId);
     const members = this.members(userId, room.rootAgentId).map(member => ({ id: member.id, name: member.name, role: member.role }));

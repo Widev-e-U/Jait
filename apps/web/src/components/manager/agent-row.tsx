@@ -6,12 +6,14 @@ import { Button } from '@/components/ui/button'
 import { agentsApi, type AgentThread } from '@/lib/agents-api'
 import type { PersonaAgentDraft } from '@/lib/persona-agents'
 import { earliestAgentStart, formatAgentElapsed } from '@/lib/agent-runtime'
+import { AgentProviderEditor } from './agent-provider-editor'
 import { AgentAvatar } from './agent-avatar'
 
 interface RuntimeSource { kind: 'sessions' | 'threads'; id: string }
 interface ActiveSource extends RuntimeSource { runtime: AgentRuntime }
-export function AgentRow({ agent, depth, threads, onOpen, onChooseTask, onRefresh }: {
+export function AgentRow({ agent, depth, threads, onOpen, onChooseTask, onRefresh, onSaveProvider }: {
   agent: PersonaAgentDraft; depth: number; threads: AgentThread[]
+  onSaveProvider: (provider: string, model: string | null) => Promise<void>
   onOpen: () => void; onChooseTask: () => void; onRefresh: () => void
 }) {
   const ownThreads = threads.filter((thread) => thread.personaAgentId === agent.id || thread.id === agent.chatThreadId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -75,6 +77,7 @@ export function AgentRow({ agent, depth, threads, onOpen, onChooseTask, onRefres
         <span className="mt-1 block truncate text-xs text-muted-foreground">{!available ? 'Checking activity…' : running ? active.length > 1 ? `${active.length} active runs · ${latest?.title ?? 'Agent chat'}` : active[0].kind === 'sessions' ? 'Working in chat' : ownThreads.find((thread) => thread.id === active[0].id)?.title ?? 'Working' : latest?.status === 'error' ? 'Needs attention' : latest?.status === 'interrupted' ? `Stopped · ${latest.title}` : latest ? `Last task: ${latest.title}` : agent.role || 'Assign a task to get started'}</span>
       </span>
     </button>
+    <AgentProviderEditor agent={agent} onSave={onSaveProvider} />
     {running && <span title="Elapsed time for the earliest active run" aria-label="Running time" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatAgentElapsed(earliestAgentStart(active.map((source) => source.runtime)), now)}</span>}
     <Button variant={running ? 'secondary' : 'ghost'} size="icon" className="h-9 w-9 shrink-0 rounded-full" disabled={busy || !available} title={`${action} ${agent.name}`} aria-label={`${action} ${agent.name}`} onClick={() => void toggle()}>
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : running ? <Square className="h-3.5 w-3.5" fill="currentColor" /> : <Play className="h-4 w-4" fill="currentColor" />}

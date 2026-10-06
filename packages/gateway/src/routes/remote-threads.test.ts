@@ -607,6 +607,7 @@ describe("remote provider e2e flow", () => {
 
     await app.close();
     app = Fastify({ logger: false });
+    threadService.queueRestartRecovery();
     registerThreadRoutes(app, config, {
       threadService,
       providerRegistry: new ProviderRegistry(),

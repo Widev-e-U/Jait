@@ -506,6 +506,7 @@ export function DeveloperChatWorkspace({
         messages.length - 1 - idx,
         msg.role,
         msg.kind,
+        msg.persona,
         msg.content,
         msg.steered,
         msg.contextFlow,
@@ -534,6 +535,7 @@ export function DeveloperChatWorkspace({
           messageFromEnd={messages.length - 1 - idx}
           role={msg.role}
           kind={msg.kind}
+          persona={msg.persona}
           content={msg.content}
           steered={msg.steered}
           contextFlow={msg.contextFlow}
