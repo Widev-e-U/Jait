@@ -2,9 +2,11 @@ import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { ThreadService } from "./threads.js";
 import { SessionService } from "./sessions.js";
-import { TeamChatService, readTeamWork } from "./team-chat.js";
+import { TeamChatService, readTeamWork, rankTeamRecipients } from "./team-chat.js";
 import { createTeamChatTool } from "../tools/team-chat-tools.js";
 import { personaAgentProfileSchema, type TeamSender, type TeamRoom } from "@jait/shared";
+
+import * as systemOne from "./system-one.js";
 
 const owner = "owner";
 const profile = (id: string, reportsToId: string | null = null) => personaAgentProfileSchema.parse({
@@ -20,7 +22,9 @@ describe("persistent team coordination", () => {
   let sessions: SessionService;
   let service: TeamChatService;
   let room: TeamRoom;
+  let databaseClosed = false;
   beforeEach(async () => {
+    databaseClosed = false;
     opened = await openDatabase(":memory:"); migrateDatabase(opened.sqlite);
     profiles = new ThreadService(opened.db); sessions = new SessionService(opened.db);
     profiles.savePersonaAgent(owner, profile("Scrum"));
@@ -30,8 +34,62 @@ describe("persistent team coordination", () => {
     service = new TeamChatService(opened.db, sessions, profiles);
     room = service.ensureRoom(owner, "Developer");
   });
-  afterEach(() => { service.close(); opened.sqlite.close(); });
+  afterEach(() => { service.close(); if (!databaseClosed) opened.sqlite.close(); });
   const post = (content: string, key: string, recipientIds?: string[]) => service.post(owner, room.id, { content, clientKey: key, sender: human, recipientIds });
+
+  it("ranks expertise and explicit names, excluding paused members", () => {
+    const members = service.members(owner, room.rootAgentId);
+    expect(rankTeamRecipients("Implement a bug fix", members, room.rootAgentId)[0]?.id).toBe("Developer");
+    expect(rankTeamRecipients("QA, retest acceptance criteria", members, room.rootAgentId)[0]?.id).toBe("QA");
+    expect(rankTeamRecipients("What next?", members, room.rootAgentId, "Developer")[0]?.id).toBe("Developer");
+    expect(rankTeamRecipients("QA retest", members.map(member => ({ ...member, paused: member.id === "QA" })), room.rootAgentId).some(item => item.id === "QA")).toBe(false);
+  });
+
+  it("routes user messages, persists the chosen recipient and deduplicates retries", async () => {
+    const input = { content: "Developer, implement the fix", clientKey: "auto", sender: human,
+      attachments: [{ name: "evidence.txt", mimeType: "text/plain", data: "ZXZpZGVuY2U=" }] };
+    const first = await service.postRouted(owner, room.id, input);
+    expect(first.recipientIds).toEqual(["Developer"]);
+    expect(first.attachments).toEqual(input.attachments);
+    expect((await service.postRouted(owner, room.id, input)).id).toBe(first.id);
+    expect(service.deliveries(owner, room.id)).toHaveLength(1);
+    const sessionId = service.deliveries(owner, room.id)[0]!.sessionId;
+    const context = service.context(owner, sessionId)!;
+    expect(context).toContain("Your manager: Scrum");
+    expect(context).toContain('"reportsToId":"Scrum"');
+    expect(context).toContain("Escalate blockers");
+    expect(context).toContain("evidence.txt");
+    expect(context).not.toContain("ZXZpZGVuY2U=");
+    expect((await service.postRouted(owner, room.id, { ...input, clientKey: "passive", sender: sender("Developer"), recipientIds: [] })).recipientIds).toEqual([]);
+  });
+
+  it("uses configured System One and falls back on failure or invalid recipients", async () => {
+    service.setDecisionKeys(() => ({ SYSTEM_ONE_BASE_URL: "http://localhost:9999" }));
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision");
+    try {
+      evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "QA" } } });
+      expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "system", sender: human })).recipientIds).toEqual(["QA"]);
+      expect(evaluate).toHaveBeenCalledOnce();
+      evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "Research" } } });
+      expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "invalid", sender: human })).recipientIds).toEqual(["Developer"]);
+      evaluate.mockRejectedValue(new Error("offline"));
+      expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "offline", sender: human })).recipientIds).toEqual(["Developer"]);
+      expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "explicit", sender: human, recipientIds: ["Scrum"] })).recipientIds).toEqual(["Scrum"]);
+      expect(evaluate).toHaveBeenCalledTimes(3);
+    } finally { evaluate.mockRestore(); }
+  });
+
+  it("does not write to a closed database when an in-flight delivery finishes", async () => {
+    let finish!: () => void;
+    service.setDispatcher(async () => { await new Promise<void>(resolve => { finish = resolve; }); return { content: "Done" }; });
+    post("Work", "closing", ["Developer"]);
+    service.close();
+    opened.sqlite.close();
+    databaseClosed = true;
+    finish();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    // A late database write would reject unhandled and fail this regression.
+  });
 
   it("reuses one room for the connected hierarchy and follows membership changes", () => {
     expect(service.ensureRoom(owner, "QA").id).toBe(room.id);

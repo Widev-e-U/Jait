@@ -26,6 +26,7 @@ export interface TeamRoomMessage {
   roomId: string;
   sender: TeamSender;
   content: string;
+  attachments?: Array<{ name: string; mimeType: string; data: string }>;
   kind: TeamMessageKind;
   recipientIds: string[];
   createdAt: string;

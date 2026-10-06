@@ -76,6 +76,14 @@ describe("team room routes and work chat integration", () => {
   afterEach(async () => { await app.close(); opened.sqlite.close(); });
   const snapshot = async () => (await app.inject({ method: "GET", url: "/api/team-rooms/" + roomId, headers })).json();
 
+  it("automatically addresses role-matched team messages with shared-composer attachments", async () => {
+    const response = await app.inject({ method: "POST", url: "/api/team-rooms/" + roomId + "/messages", headers,
+      payload: { content: "Developer, implement the fix", clientKey: "automatic", attachments: [{ name: "notes.txt", mimeType: "text/plain", data: "bm90ZXM=" }] } });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().message.recipientIds).toEqual(["Developer"]);
+    expect(response.json().message.attachments[0].name).toBe("notes.txt");
+  });
+
   it("selects an owned persona per ordinary-chat turn and snapshots attribution across edits and switches", async () => {
     const session = sessions.create({ userId: user.id, name: "Mixed identities" });
     const send = (id: string) => app.inject({ method: "POST", url: "/api/chat", headers,

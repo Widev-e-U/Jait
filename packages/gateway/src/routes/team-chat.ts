@@ -10,12 +10,14 @@ import { eq, desc } from "drizzle-orm";
 
 const postSchema = z.object({
   content: z.string().trim().min(1).max(20_000),
+  attachments: z.array(z.object({ name: z.string().max(500), mimeType: z.string().max(200), data: z.string().max(8_000_000) })).max(10).optional(),
   clientKey: z.string().min(1).max(200),
   recipientIds: z.array(z.string()).max(10).optional(),
   targetSessionId: z.string().optional(),
   kind: z.enum(["discussion", "assignment", "question", "review", "result", "verification", "blocked", "relay"]).optional(),
 });
 export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, service: TeamChatService, db: JaitDB, users: UserService) {
+  service.setDecisionKeys(userId => users.getSettings(userId).apiKeys);
   service.setDispatcher(async (delivery, agent, prompt) => {
     const user = users.findById(service.owner(delivery.roomId));
     if (!user) throw new Error("Room owner unavailable.");
@@ -32,7 +34,7 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
     const session = await app.inject({
       method: "POST", url: "/api/chat", headers,
       payload: { sessionId: delivery.sessionId, content: prompt, mode: "agent", provider: agent.providerId, model: agent.model ?? undefined,
-        runtimeMode: agent.requiresApproval ? "supervised" : "full-access", queuedMessageId: delivery.id },
+        attachments: message.attachments, runtimeMode: agent.requiresApproval ? "supervised" : "full-access", queuedMessageId: delivery.id },
     });
     if (session.statusCode >= 400) throw new Error("Work chat failed (" + session.statusCode + "): " + session.body.slice(0, 500));
     if (session.statusCode === 202) return { content: "", delivered: true };
@@ -63,7 +65,7 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
     const body = postSchema.safeParse(request.body);
     if (!body.success) return reply.status(400).send({ error: "Invalid team message." });
     try {
-      const message = service.post(user.id, request.params.id, { ...body.data, sender: { kind: "user", id: user.id, name: user.username, avatar: null } });
+      const message = await service.postRouted(user.id, request.params.id, { ...body.data, sender: { kind: "user", id: user.id, name: user.username, avatar: null } });
       return reply.status(201).send({ message });
     } catch (error) { return reply.status(400).send({ error: error instanceof Error ? error.message : "Unable to post." }); }
   });

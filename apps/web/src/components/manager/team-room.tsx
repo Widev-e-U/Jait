@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TeamRoomMessage } from '@jait/shared'
-import { ArrowLeft, ExternalLink, Send, UsersRound } from 'lucide-react'
+import { ArrowLeft, ExternalLink, UsersRound } from 'lucide-react'
 import { teamChatApi, type TeamRoomSnapshot } from '@/lib/team-chat-api'
 import { Button } from '@/components/ui/button'
+import { PromptInput, type PromptInputHandle } from '@/components/chat/prompt-input'
+import type { ChatAttachment } from '@/hooks/useChat'
 import { AgentAvatar } from './agent-avatar'
 
 export function TeamMessageAvatar({ message }: { message: TeamRoomMessage }) {
@@ -13,13 +15,12 @@ export function TeamMessageAvatar({ message }: { message: TeamRoomMessage }) {
 export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () => void }) {
   const [snapshot, setSnapshot] = useState<TeamRoomSnapshot | null>(null)
   const [input, setInput] = useState('')
-  const [targetSessionId, setTargetSessionId] = useState('')
-  const [recipient, setRecipient] = useState('')
+  const composer = useRef<PromptInputHandle>(null)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
-  const retryKey = useRef<{ content: string; recipient: string; targetSessionId: string; key: string } | null>(null)
+  const retryKey = useRef<{ content: string; signature: string; key: string } | null>(null)
 
   useEffect(() => {
     let active = true
@@ -30,24 +31,25 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
       finally { if (active) timer = setTimeout(() => { void refresh() }, 2000) }
     }
     setSnapshot(null)
-    setRecipient(''); setTargetSessionId(''); setInput(''); setError(null); retryKey.current = null
+    setInput(''); setError(null); retryKey.current = null
     void refresh()
     return () => { active = false; clearTimeout(timer) }
   }, [roomId])
   const count = snapshot?.messages.length ?? 0
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [count])
-  const send = async () => {
-    if (!input.trim() || sending) return
-    const content = input.trim()
+  const send = async (attachments: ChatAttachment[] = []) => {
+    if ((!input.trim() && !attachments.length) || sending) return
+    const content = input.trim() || 'Please review the attached files.'
+    const signature = JSON.stringify(attachments)
     const previous = retryKey.current
-    const key = previous?.content === content && previous.recipient === recipient && previous.targetSessionId === targetSessionId ? previous.key : crypto.randomUUID()
-    retryKey.current = { content, recipient, targetSessionId, key }
+    const key = previous?.content === content && previous.signature === signature ? previous.key : crypto.randomUUID()
+    retryKey.current = { content, signature, key }
     setSending(true); setError(null)
     try {
-      await teamChatApi.post(roomId, { content, clientKey: key, ...(targetSessionId ? { targetSessionId } : {}), ...(recipient ? { recipientIds: [recipient] } : {}) })
+      await teamChatApi.post(roomId, { content, attachments, clientKey: key })
       retryKey.current = null; setInput('')
       setSnapshot(await teamChatApi.get(roomId))
-    } catch (error) { setError(error instanceof Error ? error.message : 'Could not send message') }
+    } catch (error) { setInput(content); attachments.forEach(attachment => composer.current?.addAttachment(attachment)); setError(error instanceof Error ? error.message : 'Could not send message') }
     finally { setSending(false) }
   }
   return <div className="flex min-h-0 flex-1 flex-col">
@@ -63,7 +65,7 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
     </div>}
     <div className="min-h-0 flex-1 overflow-y-auto p-4" aria-label="Team conversation" role="log" aria-live="polite">
       {listError && <p role="alert" className="text-sm text-destructive">{listError}</p>}
-      {snapshot && snapshot.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Tell the team what you want to accomplish. The coordinator will organize the work here.</p>}
+      {snapshot && snapshot.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Tell the team what you want to accomplish. The team will route your message to the right agent.</p>}
       <div className="mx-auto max-w-3xl space-y-5">{snapshot?.messages.map(message => {
         const deliveries = snapshot.deliveries.filter(delivery => delivery.messageId === message.id)
         return <article key={message.id} className="flex items-start gap-3" data-testid="team-message">
@@ -74,6 +76,7 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
               {message.kind !== 'discussion' && <span className="text-[10px] text-muted-foreground">{message.kind}</span>}
             </div>
             <p className="mt-1 whitespace-pre-wrap break-words text-sm">{message.content}</p>
+            {message.attachments?.map((attachment, index) => <p key={index} className="mt-1 text-xs text-muted-foreground">📎 {attachment.name}</p>)}
             {message.recipientIds.length > 0 && <p className="mt-2 text-xs text-muted-foreground">To: {message.recipientIds.map(id => snapshot.members.find(member => member.id === id)?.name ?? id).join(', ')}</p>}
             {message.sender.kind === 'chat' && message.sender.sourceSessionId && <a href={'/?sessionId=' + encodeURIComponent(message.sender.sourceSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Source chat <ExternalLink className="h-3 w-3" /></a>}
             {message.workSessionId && <a href={'/?sessionId=' + encodeURIComponent(message.workSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Work conversation <ExternalLink className="h-3 w-3" /></a>}
@@ -86,18 +89,13 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
         </article>
       })}</div><div ref={bottom} />
     </div>
-    <form className="shrink-0 border-t p-4" onSubmit={event => { event.preventDefault(); void send() }}>
+    <div className="shrink-0 border-t p-4">
       <div className="mx-auto max-w-3xl space-y-2">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">Send to
-          <select aria-label="Message recipient" value={recipient} onChange={event => { setRecipient(event.target.value); setTargetSessionId('') }} className="rounded border bg-background px-2 py-1">
-            <option value="">Team coordinator</option>{snapshot?.members.map(member => <option key={member.id} value={member.id}>{member.name}{member.paused ? ' (paused)' : ''}</option>)}
-          </select>
-        </label>
-        {recipient && snapshot?.deliveries.some(delivery => delivery.agentId === recipient) && <label className="flex items-center gap-2 text-xs text-muted-foreground">Conversation<select aria-label="Work conversation" value={targetSessionId} onChange={event => setTargetSessionId(event.target.value)} className="max-w-xs rounded border bg-background px-2 py-1"><option value="">New work conversation</option>{snapshot.deliveries.filter(delivery => delivery.agentId === recipient).filter((delivery, index, all) => all.findIndex(item => item.sessionId === delivery.sessionId) === index).map(delivery => <option key={delivery.sessionId} value={delivery.sessionId}>{snapshot.messages.find(message => message.id === delivery.messageId)?.content.slice(0, 60)} · {delivery.status}</option>)}</select></label>}
-        <div className="flex items-end gap-2"><textarea aria-label="Message the team" placeholder="Message the team…" value={input} onChange={event => setInput(event.target.value)} className="min-h-20 min-w-0 flex-1 resize-y rounded-lg border bg-background p-3 text-sm" maxLength={20000} />
-          <Button type="submit" disabled={sending || !snapshot || !input.trim()} aria-label="Send team message"><Send className="h-4 w-4" /></Button></div>
+        <PromptInput key={roomId} ref={composer} value={input} onChange={setInput} onSubmit={(_files, attachments) => { void send(attachments) }}
+          disabled={!snapshot || sending} submitLoading={sending} placeholder="Message the team…" showSendTargetSelector={false} />
+        <p className="text-xs text-muted-foreground">The team chooses who responds based on roles and conversation context.</p>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </div>
-    </form>
+    </div>
   </div>
 }

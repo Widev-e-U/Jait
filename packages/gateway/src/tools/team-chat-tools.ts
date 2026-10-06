@@ -26,7 +26,7 @@ export function createTeamChatTool(service: TeamChatService, sessions: SessionSe
     parameters: { type: "object", properties: {
       action: { type: "string", enum: ["list", "get", "send", "goal", "complete"] },
       roomId: { type: "string" }, agentId: { type: "string", description: "A member of the hierarchy, used to find/create its persistent room." },
-      content: { type: "string" }, recipientIds: { type: "array", items: { type: "string" }, description: "Addressed members to wake. Omit on normal-chat relays to address the coordinator; use [] for a passive update." },
+      content: { type: "string" }, recipientIds: { type: "array", items: { type: "string" }, description: "Addressed members to wake. Omit on user relays to choose the best member automatically; use [] for a passive update." },
       kind: { type: "string", enum: ["discussion", "assignment", "question", "review", "result", "verification", "blocked", "relay"] },
       targetSessionId: { type: "string", description: "Steer this existing work chat instead of creating a new one. Recipient must own that chat in this room." },
       clientKey: { type: "string", description: "Retain this key on retries to avoid duplicate messages and handoffs." },
@@ -49,7 +49,7 @@ export function createTeamChatTool(service: TeamChatService, sessions: SessionSe
         if (input.action !== "send") return { ok: false, message: "Unknown team chat action." };
         if (!input.content?.trim()) return { ok: false, message: "Message content is required." };
         if (sender.kind === "chat") service.ensureRoom(userId, room.rootAgentId, context.sessionId);
-        const message = service.post(userId, roomId, {
+        const message = await service.postRouted(userId, roomId, {
           sender, content: sender.kind === "chat" ? username + " said: " + (input.content ?? "") : (input.content ?? ""),
           kind: sender.kind === "chat" ? "relay" : input.kind,
           recipientIds: input.recipientIds, targetSessionId: input.targetSessionId, clientKey: input.clientKey ?? context.actionId ?? uuidv7(), parentMessageId: work?.messageId,
