@@ -273,7 +273,22 @@ it("honors filename regex and glob filters instead of reporting a false empty re
   const root = await createTempProject("active.json", "{}");
   await mkdir(join(root, "config")); await writeFile(join(root, "config/service.json"), "{}");
   await writeFile(join(root, "notes.txt"), "{}");
-  const tool = createSearchTool(createRegistryStub() as any);
+  // Use a bounded test executable so this case also runs without system rg.
+  const rgPath = join(root, "filename-rg.cjs");
+  await writeFile(rgPath, [
+    `#!${process.execPath}`,
+    'const fs = require("node:fs");',
+    'const args = process.argv.slice(2);',
+    'if (args[0] === "--files") {',
+    '  process.stdout.write("active.json\\nconfig/service.json\\nother.json\\nnotes.txt\\n");',
+    '} else {',
+    '  const pattern = args[args.indexOf("--") + 1];',
+    '  const matches = fs.readFileSync(0, "utf8").split("\\n").filter(line => new RegExp(pattern, "i").test(line));',
+    '  process.stdout.write(matches.join("\\n") + "\\n");',
+    '}',
+    '',
+  ].join("\n"), { mode: 0o755 });
+  const tool = createSearchTool(createRegistryStub() as any, { rgCommand: rgPath });
   const result = await tool.execute({ pattern: "service|active", isRegexp: true, mode: "files", include: "*.json" }, searchContext("file-regex", root));
   expect(result.ok).toBe(true);
   expect((result.data as any).files.sort()).toEqual([join(root, "active.json"), join(root, "config/service.json")].sort());

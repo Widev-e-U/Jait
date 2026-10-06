@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { searchProject } from "../services/project-search.js";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -32,9 +32,11 @@ function stream(events: unknown[]): Response {
   return new Response(events.map((event) => "data: " + JSON.stringify(event) + "\n\n").join(""),
     { headers: { "content-type": "text/event-stream" } });
 }
-function gateway(judging: unknown = verdict) {
+function gateway(judging: unknown = verdict, parallelWorkers = 1) {
   const bodies: Record<string, unknown>[] = [];
-  let active = 0, maximum = 0, cancelled = 0;
+  let active = 0, maximum = 0, cancelled = 0, workers = 0;
+  let releaseWorkers!: () => void;
+  const workersReady = new Promise<void>((resolve) => { releaseWorkers = resolve; });
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = new URL(String(input));
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer fixture-token");
@@ -48,7 +50,17 @@ function gateway(judging: unknown = verdict) {
     }
     if (url.pathname === "/api/chat") {
       active++; maximum = Math.max(maximum, active);
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      // Hold the first worker requests until the configured batch has arrived.
+      // Filesystem setup speed must not decide whether requests overlap.
+      if (body.mode === "agent" && ++workers <= parallelWorkers) {
+        if (workers === parallelWorkers) releaseWorkers();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([workersReady, new Promise<void>((_, reject) => {
+            timer = setTimeout(() => reject(new Error("Worker concurrency barrier timed out")), 10_000);
+          })]);
+        } finally { clearTimeout(timer); }
+      }
       active--;
       if (body.mode === "ask") return stream([{ type: "token", content: JSON.stringify(judging) }, { type: "done" }]);
       return stream([
@@ -215,6 +227,8 @@ describe("manual agent evaluations (offline)", () => {
   });
   it("handles actual HTTP SSE and timeout cancellation without any model calls", async () => {
     let cancelled = false;
+    const timeout = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout").mockReturnValueOnce(timeout.signal);
     const server = createServer((request, response) => {
       if (request.url === "/api/sessions") {
         response.writeHead(201, { "content-type": "application/json" });
@@ -234,18 +248,27 @@ describe("manual agent evaluations (offline)", () => {
     try {
       const settings = options(await directory(), globalThis.fetch);
       settings.gateway = "http://127.0.0.1:" + address.port;
-      settings.timeoutSeconds = 0.05;
+      // Expire the timeout only after an SSE token is received, so the test
+      // exercises stream cancellation instead of racing session creation.
+      settings.onProgress = (progress) => {
+        if (progress.event?.type === "token") timeout.abort(new DOMException("Test timeout", "TimeoutError"));
+      };
       const result = await runChat(settings, "/fixture", "task", "worker", "case");
-      expect(result.error).toBeDefined(); expect(cancelled).toBe(true);
+      expect(timeoutSpy).toHaveBeenNthCalledWith(1, 5_000);
+      expect(result.error).toContain("Test timeout"); expect(cancelled).toBe(true);
       expect(result.content).toBe("waiting");
-    } finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+    } finally {
+      timeoutSpy.mockRestore();
+      server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   it("runs repetitions in isolated directories with bounded concurrency and an aggregate report", async () => {
-    const mock = gateway(), settings = options(await directory(), mock.fetchImpl);
+    const mock = gateway(verdict, 2), settings = options(await directory(), mock.fetchImpl);
     settings.repeat = 3;
     const reports = await runEvaluation([task()], settings);
     expect(reports).toHaveLength(3);
+    expect(reports.map((report) => report.status)).toEqual(["pass", "pass", "pass"]);
     expect(new Set(reports.map((report) => report.workspace)).size).toBe(3);
     expect(mock.maximum).toBe(2);
     const aggregate = JSON.parse(await readFile(path.join(settings.output, "report.json"), "utf8"));
