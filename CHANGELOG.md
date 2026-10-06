@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.909](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.909) — 2026-10-06
+- feat(agents): route team messages automatically with shared chat composer — d54eded4
+
 ## [v0.1.908](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.908) — 2026-10-06
 - fix(web): render saved graph avatars and keep labels visible — 3d39a871
 - feat(agents): finish persona chat, reporting graph and outage recovery — 0837cd9f
