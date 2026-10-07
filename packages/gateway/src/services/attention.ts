@@ -24,7 +24,7 @@ export { attentionKey };
 export type { AttentionKind };
 
 /** How a client should react when the user activates this action. */
-export type AttentionActionKind = "approve" | "reject" | "select" | "reply";
+export type AttentionActionKind = "approve" | "reject" | "approve-all" | "select" | "reply";
 
 export interface AttentionAction {
   /** Stable within the item; echoed back verbatim when the user activates it. */
@@ -112,10 +112,11 @@ export interface AttentionServiceOptions {
   resolveUserId?: (sessionId: string) => string | null;
 }
 
-/** Consent prompts are always the same binary choice. */
+/** Consent actions fit the three-button Android notification row. */
 export const CONSENT_ATTENTION_ACTIONS: AttentionAction[] = [
   { id: "approve", label: "Approve", kind: "approve" },
   { id: "reject", label: "Reject", kind: "reject" },
+  { id: "approve-all", label: "Approve all", kind: "approve-all" },
 ];
 
 /**

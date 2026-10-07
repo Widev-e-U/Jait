@@ -25,6 +25,7 @@ final class AttentionApi {
     /** Action kinds carried by an attention item, mirroring the gateway's AttentionActionKind. */
     static final String ACTION_APPROVE = "approve";
     static final String ACTION_REJECT = "reject";
+    static final String ACTION_APPROVE_ALL = "approve-all";
     static final String ACTION_SELECT = "select";
     static final String ACTION_REPLY = "reply";
 
@@ -48,8 +49,8 @@ final class AttentionApi {
         Context appContext = context.getApplicationContext();
         new Thread(() -> {
             if (KIND_CONSENT.equals(kind)) {
-                String decision = ACTION_APPROVE.equals(actionKind) ? "approve" : "reject";
-                post(appContext, "/api/mobile/consent/" + requestId + "/" + decision, null);
+                String path = consentPath(requestId, actionKind);
+                if (path != null) post(appContext, path, null);
                 return;
             }
             JSONObject answers = questionAnswers(actionKind, actionId, freeText);
@@ -59,6 +60,17 @@ final class AttentionApi {
             }
             post(appContext, "/api/user-questions/requests/" + requestId + "/submit", answers);
         }, "jait-attention-resolve").start();
+    }
+
+    /** Unknown actions must never silently reject or broaden consent. */
+    static String consentPath(String requestId, String actionKind) {
+        if (requestId == null || requestId.isEmpty()) return null;
+        String encodedId = android.net.Uri.encode(requestId);
+        if (ACTION_APPROVE_ALL.equals(actionKind)) return "/api/consent/" + encodedId + "/approve-all";
+        if (ACTION_APPROVE.equals(actionKind) || ACTION_REJECT.equals(actionKind)) {
+            return "/api/mobile/consent/" + encodedId + "/" + actionKind;
+        }
+        return null;
     }
 
     /**

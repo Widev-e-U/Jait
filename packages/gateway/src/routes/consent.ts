@@ -113,6 +113,31 @@ export function registerConsentRoutes(
     return { ok: true, decision: "rejected" };
   });
 
+  // Notification bulk approval applies only to currently pending requests in this chat.
+  // The preHandler validates ownership of the originating request before any mutation.
+  app.post("/api/consent/:id/approve-all", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const pending = consentManager.getRequest(id);
+    if (!pending || pending.status !== "pending") {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Consent request not found or already resolved" });
+    }
+    const sessionId = pending.sessionId;
+    const approvedRequestIds: string[] = [];
+    for (const entry of consentManager.listPending(sessionId)) {
+      if (consentManager.approve(entry.id, "click", "notification.approve-all")) {
+        approvedRequestIds.push(entry.id);
+        audit.write({
+          sessionId,
+          actionId: uuidv7(),
+          actionType: "consent.approve",
+          status: "executed",
+          inputs: { requestId: entry.id, reason: "notification.approve-all", bulk: true },
+        });
+      }
+    }
+    return { ok: true, sessionId, approvedCount: approvedRequestIds.length, requestIds: approvedRequestIds };
+  });
+
   // POST /api/consent/pending/:sessionId/approve-all — approve all pending for a session
   app.post("/api/consent/pending/:sessionId/approve-all", async (request) => {
     const { sessionId } = request.params as { sessionId: string };
