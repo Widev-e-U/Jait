@@ -261,7 +261,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       return repository?.localPath;
     }) : undefined;
   if (teamChat && deps.db && deps.userService && deps.sessionService) {
-    registerTeamChatRoutes(app, config, teamChat, deps.db, deps.userService);
+    registerTeamChatRoutes(app, config, teamChat, deps.db, deps.userService, deps.threadService!);
     deps.toolRegistry?.register(createTeamChatTool(teamChat, deps.sessionService, deps.userService));
   }
   registerChatRoutes(app, config, {

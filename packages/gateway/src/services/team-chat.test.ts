@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { ThreadService } from "./threads.js";
 import { SessionService } from "./sessions.js";
-import { TeamChatService, readTeamWork, rankTeamRecipients } from "./team-chat.js";
+import { TeamChatService, rankTeamRecipients } from "./team-chat.js";
 import { createTeamChatTool } from "../tools/team-chat-tools.js";
 import { personaAgentProfileSchema, type TeamSender, type TeamRoom } from "@jait/shared";
 
@@ -36,6 +36,23 @@ describe("persistent team coordination", () => {
   });
   afterEach(() => { service.close(); if (!databaseClosed) opened.sqlite.close(); });
   const post = (content: string, key: string, recipientIds?: string[]) => service.post(owner, room.id, { content, clientKey: key, sender: human, recipientIds });
+
+  it("runs assignments in persona threads without creating ordinary chats", () => {
+    post("Implement ticket", "thread-first", ["Developer"]);
+    const delivery = service.deliveries(owner, room.id)[0]!;
+    const thread = profiles.getById(delivery.sessionId)!;
+    expect(thread).toMatchObject({ personaAgentId: "Developer", providerId: "codex", runtimeMode: "supervised" });
+    expect(sessions.getById(delivery.sessionId)).toBeUndefined();
+    expect(service.sender(owner, thread.id, room.id)).toMatchObject({ kind: "agent", id: "Developer" });
+    expect(service.context(owner, thread.id)).toContain("Handle Developer work.");
+  });
+
+  it("keeps addressed agent status updates passive", () => {
+    service.post(owner, room.id, { content: "Acknowledged", clientKey: "ack",
+      sender: sender("Developer"), kind: "discussion", recipientIds: ["Scrum"] });
+    expect(service.deliveries(owner, room.id)).toHaveLength(0);
+    expect(service.history(owner, room.id)[0]!.recipientIds).toEqual(["Scrum"]);
+  });
 
   it("ranks expertise and explicit names, excluding paused members", () => {
     const members = service.members(owner, room.rootAgentId);
@@ -118,17 +135,17 @@ describe("persistent team coordination", () => {
     expect(reloaded.sender(owner, agentSession, room.id)).toMatchObject({ kind: "agent", id: "Scrum" });
   });
 
-  it("opens independent chats even when the same agent already has running work", async () => {
+  it("queues independent threads for the same agent without simultaneous duplicate execution", async () => {
     let finish!: () => void;
     const wait = new Promise<void>(resolve => { finish = resolve; });
     const dispatcher = vi.fn(async () => { await wait; return { content: "Implemented and ready for review." }; });
     service.setDispatcher(dispatcher);
     post("Ticket one", "one", ["Developer"]);
     post("Ticket two", "two", ["Developer"]);
-    expect(dispatcher).toHaveBeenCalledTimes(2);
+    expect(dispatcher).toHaveBeenCalledTimes(1);
     const deliveries = service.deliveries(owner, room.id);
     expect(new Set(deliveries.map(delivery => delivery.sessionId)).size).toBe(2);
-    for (const delivery of deliveries) expect(readTeamWork(sessions.getById(delivery.sessionId)?.metadata)).toMatchObject({ roomId: room.id, agentId: "Developer" });
+    for (const delivery of deliveries) expect(service.workForSession(owner, delivery.sessionId)).toMatchObject({ roomId: room.id, agentId: "Developer" });
     finish();
     await vi.waitFor(() => expect(service.deliveries(owner, room.id).every(delivery => delivery.status === "completed")).toBe(true));
     expect(service.history(owner, room.id).filter(message => message.kind === "result")).toHaveLength(2);
@@ -171,7 +188,7 @@ describe("persistent team coordination", () => {
   it("bounds handoff loops and makes paused-recipient failures visible", () => {
     let parent = post("Start", "start", []);
     for (let depth = 1; depth <= 33; depth++) parent = service.post(owner, room.id, { content: "Round " + depth, clientKey: String(depth), sender: sender("Developer"), recipientIds: [], parentMessageId: parent.id });
-    expect(() => service.post(owner, room.id, { content: "Loop", clientKey: "loop", sender: sender("Developer"), recipientIds: ["QA"], parentMessageId: parent.id })).toThrow("Handoff limit");
+    expect(() => service.post(owner, room.id, { content: "Loop", clientKey: "loop", sender: sender("Developer"), kind: "assignment", recipientIds: ["QA"], parentMessageId: parent.id })).toThrow("Handoff limit");
     profiles.savePersonaAgent(owner, { ...profile("QA", "Scrum"), paused: true });
     post("Review", "paused", ["QA"]);
     expect(service.deliveries(owner, room.id).at(-1)).toMatchObject({ status: "failed", error: "Agent is paused." });

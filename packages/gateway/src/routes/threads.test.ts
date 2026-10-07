@@ -107,6 +107,63 @@ describe("thread routes", () => {
     interventionRunResumeRegistry.clearForTests();
   });
 
+
+  it("resumes quota-failed work with the saved agent's new provider and default model", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    threadService.savePersonaAgent("user-1", { id: "agent-1", name: "Builder", providerId: "claude-code", model: null, requiresApproval: true });
+    const thread = threadService.create({ userId: "user-1", personaAgentId: "agent-1", title: "Fix parser", providerId: "codex", model: "old-model", workingDirectory: process.cwd(), branch: "fix/parser" });
+    threadService.addActivity(thread.id, "message", "Fix parser", { role: "user", content: "Fix parser without changing the public API." });
+    threadService.addActivity(thread.id, "message", "Progress", { role: "assistant", content: "Parser patched. Remaining: test the fix." });
+    threadService.markError(thread.id, "Usage limit reached");
+    const provider = new MockThreadProvider("claude-code");
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const, jwtSecret: "resume-secret" };
+    registerThreadRoutes(app, config, { threadService, providerRegistry: registry });
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const foreign = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/resume`, headers: await authHeader(config.jwtSecret, "other-owner") });
+    expect(foreign.statusCode).toBe(404);
+    const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/resume`, headers });
+    expect(response.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+    expect(provider.startSessionCalls[0]).toMatchObject({ threadId: thread.id, model: undefined, mode: "supervised", workingDirectory: process.cwd() });
+    const sent = (provider.sendTurn.mock.calls as unknown as Array<[string, string]>)[0]![1];
+    expect(sent).toContain("Fix parser without changing the public API.");
+    expect(sent).toContain("Remaining: test the fix.");
+    expect(sent).toContain("verify side effects before repeating actions");
+    expect(threadService.getById(thread.id)).toMatchObject({ providerId: "claude-code", model: null, branch: "fix/parser", status: "running", title: "Fix parser" });
+    const duplicate = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/resume`, headers });
+    expect(duplicate.statusCode).toBe(409);
+    const otherWork = threadService.create({ userId: "user-1", personaAgentId: "agent-1", title: "Older task", providerId: "codex" });
+    threadService.markError(otherWork.id, "Quota exhausted");
+    const busyAgent = await app.inject({ method: "POST", url: `/api/threads/${otherWork.id}/resume`, headers });
+    expect(busyAgent.statusCode).toBe(409);
+    expect(threadService.getById(otherWork.id)?.status).toBe("error");
+    expect(provider.startSessionCalls).toHaveLength(1);
+    await app.close();
+    sqlite.close();
+  });
+
+  it("keeps failed work stopped when the newly selected provider is unavailable", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    service.savePersonaAgent("user-1", { id: "agent-1", name: "Builder", providerId: "claude-code", model: "new-model" });
+    const thread = service.create({ userId: "user-1", personaAgentId: "agent-1", title: "Fix", providerId: "codex" });
+    service.markError(thread.id, "Quota exhausted");
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const, jwtSecret: "resume-secret" };
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: new ProviderRegistry() });
+    const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/resume`, headers: await authHeader(config.jwtSecret, "user-1") });
+    expect(response.statusCode).toBe(400);
+    expect(service.getById(thread.id)).toMatchObject({ status: "error", error: "Quota exhausted", providerId: "codex" });
+    await app.close();
+    sqlite.close();
+  });
+
   it("automatically continues a running thread after a gateway restart with saved context", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

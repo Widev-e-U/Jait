@@ -1042,7 +1042,7 @@ export function registerThreadRoutes(
       title: typeof body["title"] === "string" ? body["title"] : undefined,
       personaAgentId: typeof body["personaAgentId"] === "string" ? body["personaAgentId"] : body["personaAgentId"] === null ? null : undefined,
       providerId,
-      model: typeof body["model"] === "string" ? body["model"] : undefined,
+      model: typeof body["model"] === "string" ? body["model"] : body["model"] === null ? null : undefined,
       reasoningEffort: body["reasoningEffort"] === null ? null : normalizeReasoningEffort(body["reasoningEffort"]),
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : body["runtimeMode"] === "full-access" ? "full-access" : undefined,
       kind: body["kind"] === "delegation" ? "delegation" : body["kind"] === "delivery" ? "delivery" : undefined,
@@ -1140,6 +1140,67 @@ export function registerThreadRoutes(
   // ── Lifecycle Routes ─────────────────────────────────────────────
 
   /** Start an agent session for this thread */
+  const resumingThreads = new Set<string>();
+  const resumingAgents = new Set<string>();
+  app.post("/api/threads/:id/resume", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
+    if (resumingThreads.has(id) || (thread.status !== "error" && thread.status !== "interrupted")
+      || thread.prState === "merged" || thread.prState === "closed") {
+      return reply.status(409).send({ error: "Only stopped or failed work can be resumed" });
+    }
+    const agent = thread.personaAgentId ? threadService.getPersonaAgent(thread.personaAgentId, authUser.id) : undefined;
+    if (thread.personaAgentId && !agent) return reply.status(404).send({ error: "Agent profile not found" });
+    if (thread.personaAgentId && (resumingAgents.has(thread.personaAgentId)
+      || threadService.list(authUser.id).some(other => other.id !== id && other.personaAgentId === thread.personaAgentId && other.status === "running")
+      || (deps.personaChatRuntime?.(authUser.id, thread.personaAgentId, typeof agent?.chatSessionId === "string" ? agent.chatSessionId : undefined)?.count ?? 0) > 0)) {
+      return reply.status(409).send({ error: "This agent already has running work" });
+    }
+    const providerId = (typeof agent?.providerId === "string" ? agent.providerId : thread.providerId) as ProviderId;
+    const available = providerRegistry.getForUser(providerId, authUser.id)
+      || ws?.getFsNodes().some(node => node.providers?.includes(providerId));
+    if (!available) return reply.status(400).send({ error: `Provider '${providerId}' is not available. Select another provider or model, then press Play.` });
+    resumingThreads.add(id);
+    if (thread.personaAgentId) resumingAgents.add(thread.personaAgentId);
+    try {
+      // Stop any surviving failed session before switching providers. Keep the
+      // thread, worktree, branch and saved activities as the continuation record.
+      if (thread.providerSessionId) {
+        await resolveThreadStopProvider(thread, authUser.id)?.stopSession(thread.providerSessionId);
+      }
+      threadUnsubs.get(id)?.();
+      threadUnsubs.delete(id);
+      remoteProviders.delete(id);
+      unregisterThreadResume(id);
+      threadService.clearRecovery(id);
+      threadService.update(id, {
+        providerSessionId: null, providerId,
+        model: agent ? typeof agent.model === "string" ? agent.model : null : thread.model,
+        runtimeMode: agent ? agent.requiresApproval ? "supervised" : "full-access" : thread.runtimeMode === "supervised" ? "supervised" : "full-access",
+      });
+      const response = await app.inject({
+        method: "POST", url: `/api/threads/${id}/start`,
+        headers: { authorization: request.headers.authorization! },
+        payload: {
+          message: "Continue the interrupted task from the saved history and current workspace. Preserve completed work, verify side effects before repeating actions, and finish the remaining steps.",
+          displayContent: "Continue from where you left off.", titleTask: "",
+        },
+      });
+      if (response.statusCode >= 400) {
+        const error = response.json().error ?? "Could not resume work";
+        threadService.markError(id, error);
+        broadcastThreadStatus(id, "error", error);
+      }
+      return reply.status(response.statusCode).send(response.json());
+    } finally {
+      resumingThreads.delete(id);
+      if (thread.personaAgentId) resumingAgents.delete(thread.personaAgentId);
+    }
+  });
+
   app.post("/api/threads/:id/start", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

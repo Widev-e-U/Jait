@@ -459,6 +459,17 @@ export class AgentsApi {
 
   // ── Lifecycle ──────────────────────────────────────────────────
 
+  async resumeThread(id: string): Promise<AgentThread> {
+    const res = await fetch(`${API_URL}/api/threads/${id}/resume`, {
+      method: 'POST', headers: this.getHeaders(true),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || 'Could not resume agent work')
+    }
+    return res.json() as Promise<AgentThread>
+  }
+
   async startThread(id: string, options?: string | StartThreadOptions): Promise<AgentThread> {
     // Accept plain string (message) for backwards compat, or options object
     const body = typeof options === 'string'

@@ -321,7 +321,7 @@ export interface CreateThreadParams extends CreateThreadRequest {
 export interface UpdateThreadRequest {
   personaAgentId?: string | null;
   title?: string;
-  model?: string;
+  model?: string | null;
   reasoningEffort?: string | null;
   runtimeMode?: RuntimeMode;
   kind?: ThreadKind;

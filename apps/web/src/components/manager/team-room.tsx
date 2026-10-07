@@ -79,9 +79,9 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
             {message.attachments?.map((attachment, index) => <p key={index} className="mt-1 text-xs text-muted-foreground">📎 {attachment.name}</p>)}
             {message.recipientIds.length > 0 && <p className="mt-2 text-xs text-muted-foreground">To: {message.recipientIds.map(id => snapshot.members.find(member => member.id === id)?.name ?? id).join(', ')}</p>}
             {message.sender.kind === 'chat' && message.sender.sourceSessionId && <a href={'/?sessionId=' + encodeURIComponent(message.sender.sourceSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Source chat <ExternalLink className="h-3 w-3" /></a>}
-            {message.workSessionId && <a href={'/?sessionId=' + encodeURIComponent(message.workSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Work conversation <ExternalLink className="h-3 w-3" /></a>}
+            {message.workSessionId && <a href={message.workThreadId ? '/threads?threadId=' + encodeURIComponent(message.workThreadId) : '/?sessionId=' + encodeURIComponent(message.workSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">{message.workThreadId ? 'Work thread' : 'Work conversation'} <ExternalLink className="h-3 w-3" /></a>}
             {deliveries.map(delivery => <div key={delivery.id} className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <a className="text-primary" href={'/?sessionId=' + encodeURIComponent(delivery.sessionId)}>{snapshot.members.find(member => member.id === delivery.agentId)?.name ?? 'Agent'} · Work conversation</a>
+              <a className="text-primary" href={delivery.threadId ? '/threads?threadId=' + encodeURIComponent(delivery.threadId) : '/?sessionId=' + encodeURIComponent(delivery.sessionId)}>{snapshot.members.find(member => member.id === delivery.agentId)?.name ?? 'Agent'} · {delivery.threadId ? 'Work thread' : 'Work conversation'}</a>
               <span className={delivery.status === 'failed' || delivery.status === 'interrupted' ? 'text-destructive' : 'text-muted-foreground'}>{delivery.status}</span>
               {delivery.error && <span className="text-destructive">{delivery.error}</span>}
             </div>)}

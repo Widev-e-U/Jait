@@ -8,9 +8,9 @@ test('team room shows neutral chat relays, agent identity, work links and addres
   const room = { id: 'fixture-room', rootAgentId: 'scrum', name: 'Scrum · Team', goal: null }
   const messages = [
     { id: 'relay', roomId: room.id, sender: { kind: 'chat', id: 'source', name: 'Developer Chat', avatar: null, sourceSessionId: 'source' }, content: 'Jakob said: Please implement ticket notifications.', kind: 'relay', recipientIds: ['developer'], createdAt: '2026-10-06T12:00:00Z', depth: 0 },
-    { id: 'result', roomId: room.id, sender: { kind: 'agent', id: 'developer', name: 'Developer', avatar: 'Atlas' }, content: 'Implementation ready for QA.', kind: 'result', recipientIds: [], createdAt: '2026-10-06T12:01:00Z', depth: 1, workSessionId: 'work-one' },
+    { id: 'result', roomId: room.id, sender: { kind: 'agent', id: 'developer', name: 'Developer', avatar: 'Atlas' }, content: 'Implementation ready for QA.', kind: 'result', recipientIds: [], createdAt: '2026-10-06T12:01:00Z', depth: 1, workSessionId: 'work-one', workThreadId: 'work-one' },
   ]
-  const deliveries = [{ id: 'delivery', roomId: room.id, messageId: 'relay', agentId: 'developer', sessionId: 'work-one', status: 'completed', error: null }]
+  const deliveries = [{ id: 'delivery', roomId: room.id, messageId: 'relay', agentId: 'developer', sessionId: 'work-one', threadId: 'work-one', threadStatus: 'completed', status: 'completed', error: null }]
   let posted: Record<string, unknown> | undefined
   await page.route('**/api/team-rooms/fixture-room', route => route.fulfill({ json: { room, members, messages, deliveries } }))
   await page.route('**/api/team-rooms/fixture-room/messages', async route => {
@@ -24,7 +24,7 @@ test('team room shows neutral chat relays, agent identity, work links and addres
   await expect(relay.getByRole('img', { name: 'Neutral chat persona' })).toHaveClass(/bg-gray-400/)
   await expect(relay).toContainText('Jakob said:')
   await expect(relay.getByRole('link', { name: 'Source chat' })).toHaveAttribute('href', '/?sessionId=source')
-  await expect(page.getByRole('link', { name: 'Work conversation', exact: true })).toHaveAttribute('href', '/?sessionId=work-one')
+  await expect(page.getByRole('link', { name: 'Work thread', exact: true })).toHaveAttribute('href', '/threads?threadId=work-one')
   await expect(page.getByLabel('Message recipient')).toHaveCount(0)
   await page.getByRole('textbox').fill('Retest the acceptance criteria')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
@@ -65,7 +65,7 @@ test('team room preserves direct user messages and work links through reload', a
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect(page.getByTestId('team-message').filter({ hasText: 'Please verify the ticket' })).toBeVisible()
   await expect(page.getByText('Agent is paused.', { exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Coordinator · Work conversation' })).toHaveAttribute('href', /sessionId=/)
+  await expect(page.getByRole('link', { name: 'Coordinator · Work thread' })).toHaveAttribute('href', /threadId=/)
   await page.reload()
   await expect(page.getByTestId('team-message').filter({ hasText: 'Please verify the ticket' })).toBeVisible()
 })

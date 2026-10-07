@@ -7,6 +7,10 @@ import type { UserService } from "../services/users.js";
 import type { JaitDB } from "../db/connection.js";
 import { messages } from "../db/schema.js";
 import { eq, desc } from "drizzle-orm";
+import type { ThreadService } from "../services/threads.js";
+import { GitService } from "../services/git.js";
+import { prepareDeliveryWorktree } from "../tools/thread-tools.js";
+import { setTimeout as delay } from "node:timers/promises";
 
 const postSchema = z.object({
   content: z.string().trim().min(1).max(20_000),
@@ -16,7 +20,7 @@ const postSchema = z.object({
   targetSessionId: z.string().optional(),
   kind: z.enum(["discussion", "assignment", "question", "review", "result", "verification", "blocked", "relay"]).optional(),
 });
-export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, service: TeamChatService, db: JaitDB, users: UserService) {
+export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, service: TeamChatService, db: JaitDB, users: UserService, threads: ThreadService) {
   service.setDecisionKeys(userId => users.getSettings(userId).apiKeys);
   service.setDispatcher(async (delivery, agent, prompt) => {
     const user = users.findById(service.owner(delivery.roomId));
@@ -25,6 +29,49 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
     const headers = { authorization: "Bearer " + await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret),
       host: (connectHost.includes(":") ? "[" + connectHost + "]" : connectHost) + ":" + config.port };
     const message = service.history(user.id, delivery.roomId).find(item => item.id === delivery.messageId)!;
+    let thread = service.threadById(user.id, delivery.sessionId);
+    if (thread) {
+      try {
+        if (!thread.workingDirectory) throw new Error("Assign a project or repository before running team work.");
+        thread = await prepareDeliveryWorktree(thread, threads, new GitService());
+        if (service.isClosed()) return { content: "", delivered: true };
+        const previousActivityIds = new Set(service.threadActivities(user.id, thread.id).map(activity => activity.id));
+        const payload = {
+          titleTask: "", // The addressed message already supplies a meaningful title.
+          message: (service.context(user.id, thread.id) ?? "") + "\n\n" + prompt,
+          displayContent: message.sender.name + ": " + message.content,
+          // Thread routes consume composer segments; preserve attachments without filesystem writes.
+          displaySegments: [{ type: "text", text: message.sender.name + ": " + message.content },
+            ...(message.attachments ?? []).map(file => ({
+              ...file, type: file.mimeType.startsWith("image/") ? "image" : "attachment",
+            }))],
+        };
+        const operation = thread.status === "running" ? "steer" : thread.providerSessionId ? "send" : "start";
+        const response = await app.inject({ method: "POST", url: "/api/threads/" + encodeURIComponent(thread.id) + "/" + operation, headers, payload });
+        if (response.statusCode >= 400) throw new Error("Thread delivery failed (" + response.statusCode + "): " + response.body.slice(0, 500));
+        if (operation === "steer") return { content: "", delivered: true };
+        // /start returns as soon as execution is scheduled. Completion must reflect the real turn.
+        while (!service.isClosed()) {
+          const current = service.threadById(user.id, thread.id);
+          if (!current) throw new Error("Work thread was deleted.");
+          if (current.status === "error" || current.status === "interrupted") throw new Error(current.error ?? "Thread interrupted.");
+          if (current.status === "completed") {
+            const answer = service.threadActivities(user.id, thread.id)
+              .filter(activity => !previousActivityIds.has(activity.id) && activity.kind === "message" &&
+                (activity.payload as { role?: string } | undefined)?.role === "assistant").at(-1);
+            return { content: (answer?.payload as { content?: string } | undefined)?.content ?? "" };
+          }
+          await delay(100);
+        }
+        return { content: "", delivered: true };
+      } catch (error) {
+        if (!service.isClosed() && threads.getById(thread.id)?.status === "idle") {
+          threads.markError(thread.id, error instanceof Error ? error.message : String(error));
+        }
+        throw error;
+      }
+    }
+    // Legacy explicit targets remain chats so already-running work is never duplicated.
     if (message.targetSessionId) {
       const steer = await app.inject({ method: "POST", url: "/api/sessions/" + encodeURIComponent(delivery.sessionId) + "/steer", headers,
         payload: { message: prompt, displayContent: message.sender.name + ": " + message.content } });

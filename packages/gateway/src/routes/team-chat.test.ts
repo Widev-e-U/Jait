@@ -70,7 +70,7 @@ describe("team room routes and work chat integration", () => {
     app = await createServer(config, { db: opened.db, userService: users, sessionService: sessions,
       threadService: profiles, providerRegistry: providers, toolRegistry: registry, sessionState: new SessionStateService(opened.db) });
     await app.ready();
-    const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer" } });
+    const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: sessions.create({ userId: user.id, projectPath: "/tmp" }).id } });
     expect(created.statusCode).toBe(200); roomId = created.json().room.id;
   });
   afterEach(async () => { await app.close(); opened.sqlite.close(); });
@@ -171,7 +171,7 @@ describe("team room routes and work chat integration", () => {
     expect(opened.db.select().from(messages).where(eq(messages.sessionId, session.id)).all().filter(row => row.role === "assistant" && row.persona).map(row => JSON.parse(row.persona!).id)).toEqual(["QA"]);
   });
 
-  it("dispatches through the real chat route with identity, model and supervised settings, and persists results", async () => {
+  it("dispatches through thread routes with identity and supervised settings without creating empty chats", async () => {
     const response = await app.inject({ method: "POST", url: "/api/team-rooms/" + roomId + "/messages", headers,
       payload: { content: "Check this ticket", recipientIds: ["Developer"], clientKey: "ticket" } });
     expect(response.statusCode).toBe(201);
@@ -182,7 +182,9 @@ describe("team room routes and work chat integration", () => {
     const state = await snapshot();
     expect(state.messages.at(-1)).toMatchObject({ kind: "result", content: "Work checked and ready.", sender: { kind: "agent", id: "Developer" } });
     const workId = state.deliveries[0].sessionId;
-    expect(state.messages.at(-1).workSessionId).toBe(workId);
+    expect(state.messages.at(-1).workThreadId).toBe(workId);
+    expect(state.deliveries[0]).toMatchObject({ threadId: workId, threadStatus: "completed" });
+    expect(sessions.getById(workId)).toBeUndefined();
     // Repeating the request creates neither a second message nor work session.
     await app.inject({ method: "POST", url: "/api/team-rooms/" + roomId + "/messages", headers,
       payload: { content: "Check this ticket", recipientIds: ["Developer"], clientKey: "ticket" } });

@@ -35,7 +35,11 @@ export function buildThreadHistoryReplayPrompt(
 
   const tail = messages.slice(-MAX_REPLAY_MESSAGES);
   const lines: string[] = [];
-  let usedChars = 0;
+  // Keep the original task even when frequent continuation turns fill the tail.
+  const originalTask = messages.find(message => message.role === "user");
+  const originalLine = originalTask && !tail.includes(originalTask)
+    ? `Original task: ${originalTask.content.slice(0, MAX_MESSAGE_CHARS)}` : null;
+  let usedChars = originalLine?.length ?? 0;
 
   for (let i = tail.length - 1; i >= 0; i--) {
     const message = tail[i]!;
@@ -58,6 +62,7 @@ export function buildThreadHistoryReplayPrompt(
     "Use the prior conversation below as the thread history and continue from it.",
     truncated ? "Only the most recent portion is included here." : "The previous conversation is included below.",
     "",
+    ...(originalLine ? [originalLine, ""] : []),
     lines.join("\n\n"),
     "</thread-history>",
   ].join("\n");

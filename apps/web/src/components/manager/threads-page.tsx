@@ -1,3 +1,4 @@
+import { ThreadApprovalNotice } from './thread-approval-notice'
 import { AlertTriangle, RefreshCw, Loader2 as SpinnerIcon } from 'lucide-react'
 import { useRef, type ReactNode, type RefObject } from 'react'
 
@@ -433,6 +434,7 @@ export function ThreadsPage({
                     <RefreshCw className={`h-3.5 w-3.5 ${automation.loading ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
+                <div className="px-3 py-1"><ThreadApprovalNotice /></div>
                 {managerThreads.length === 0 ? (
                   <div className="px-4 py-8 text-center text-sm text-muted-foreground sm:py-12">No threads yet</div>
                 ) : (

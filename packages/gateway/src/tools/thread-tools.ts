@@ -145,7 +145,7 @@ const THREAD_WAIT_POLL_MS = 100;
 const THREAD_RESULT_ACTIVITY_LIMIT = 25;
 const THREAD_RESULT_TEXT_LIMIT = 4_000;
 
-interface ThreadControlGit {
+export interface ThreadControlGit {
   runStackedAction(
     cwd: string,
     action: GitStackedAction,
@@ -294,36 +294,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return userId || "system";
   };
 
-  const createManagedDeliveryWorktree = async (thread: ThreadRow): Promise<ThreadRow> => {
-    if (thread.kind !== "delivery") return thread;
-    if (thread.branch) return thread;
-    const cwd = thread.workingDirectory?.trim();
-    if (!cwd) return thread;
-    if (!existsSync(cwd)) return thread;
-    if (!gitService.isRepo || !gitService.createWorktree) return thread;
-
-    const isRepo = await gitService.isRepo(cwd).catch(() => false);
-    if (!isRepo) return thread;
-
-    let remoteUrl: string | null = null;
-    if (gitService.getPreferredRemote && gitService.getRemoteUrl) {
-      const remote = await gitService.getPreferredRemote(cwd).catch(() => null);
-      if (remote) {
-        remoteUrl = await gitService.getRemoteUrl(cwd, remote).catch(() => null);
-      }
-    }
-
-    const defaultBranch = gitService.resolveDefaultBranch
-      ? await gitService.resolveDefaultBranch(cwd, remoteUrl).catch(() => "main")
-      : "main";
-    const branch = `jait/${thread.id.slice(-8)}`;
-    const worktree = await gitService.createWorktree(cwd, defaultBranch, branch, undefined, { fastPath: true });
-    return deps.threadService.update(thread.id, {
-      workingDirectory: worktree.path,
-      branch: worktree.branch,
-      prBaseBranch: defaultBranch,
-    }) ?? thread;
-  };
+  const createManagedDeliveryWorktree = (thread: ThreadRow) => prepareDeliveryWorktree(thread, deps.threadService, gitService);
 
   const resolveSelectedThreadDefaults = (context: ToolContext) => {
     const defaults = resolveThreadSelectionDefaults({
@@ -1436,3 +1407,34 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     },
   };
 }
+
+export async function prepareDeliveryWorktree(thread: ThreadRow, threadService: ThreadService, gitService: ThreadControlGit): Promise<ThreadRow> {
+    if (thread.kind !== "delivery") return thread;
+    if (thread.branch) return thread;
+    const cwd = thread.workingDirectory?.trim();
+    if (!cwd) return thread;
+    if (!existsSync(cwd)) return thread;
+    if (!gitService.isRepo || !gitService.createWorktree) return thread;
+
+    const isRepo = await gitService.isRepo(cwd).catch(() => false);
+    if (!isRepo) return thread;
+
+    let remoteUrl: string | null = null;
+    if (gitService.getPreferredRemote && gitService.getRemoteUrl) {
+      const remote = await gitService.getPreferredRemote(cwd).catch(() => null);
+      if (remote) {
+        remoteUrl = await gitService.getRemoteUrl(cwd, remote).catch(() => null);
+      }
+    }
+
+    const defaultBranch = gitService.resolveDefaultBranch
+      ? await gitService.resolveDefaultBranch(cwd, remoteUrl).catch(() => "main")
+      : "main";
+    const branch = `jait/${thread.id.slice(-8)}`;
+    const worktree = await gitService.createWorktree(cwd, defaultBranch, branch, undefined, { fastPath: true });
+    return threadService.update(thread.id, {
+      workingDirectory: worktree.path,
+      branch: worktree.branch,
+      prBaseBranch: defaultBranch,
+    }) ?? thread;
+  }

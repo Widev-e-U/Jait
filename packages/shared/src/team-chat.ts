@@ -5,6 +5,7 @@ export interface TeamSender {
   name: string;
   avatar: string | null;
   sourceSessionId?: string;
+  sourceThreadId?: string;
 }
 export interface TeamGoal {
   description: string;
@@ -31,6 +32,7 @@ export interface TeamRoomMessage {
   recipientIds: string[];
   createdAt: string;
   workSessionId?: string;
+  workThreadId?: string;
   parentMessageId?: string;
   depth: number;
   targetSessionId?: string;
@@ -40,7 +42,10 @@ export interface TeamDelivery {
   roomId: string;
   messageId: string;
   agentId: string;
+  /** Legacy work chat ID, or the thread ID for thread-backed deliveries. */
   sessionId: string;
+  threadId?: string;
+  threadStatus?: string;
   status: "queued" | "running" | "completed" | "delivered" | "failed" | "interrupted";
   error: string | null;
 }

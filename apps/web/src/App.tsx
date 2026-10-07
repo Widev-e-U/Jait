@@ -4901,9 +4901,6 @@ function App() {
     () =>
       viewMode === 'developer' ? (
         <DeveloperComposerControlRow
-          chatPersonaAgentId={chatPersonaAgentId}
-          onChatPersonaAgentChange={setChatPersonaAgentId}
-          authToken={token}
           activeProjectId={activeProjectId}
           activeProjectSessions={activeProjectSessions}
           activeProjectTitle={activeProjectRecord?.title ?? 'Personal chat'}
