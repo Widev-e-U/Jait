@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.910](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.910) — 2026-10-07
+- feat(agents): run team work in threads and resume interrupted agents — f1e43d5a
+- fix(usage): show Ollama request activity without inventing quota — c91c4c97
+- fix(consent): approve pending chat requests from notifications — 9cdd0259
+
 ## [v0.1.909](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.909) — 2026-10-06
 - feat(agents): route team messages automatically with shared chat composer — d54eded4
 

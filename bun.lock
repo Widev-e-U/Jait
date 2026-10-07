@@ -14,7 +14,7 @@
     },
     "apps/mobile": {
       "name": "@jait/mobile",
-      "version": "0.1.26",
+      "version": "0.1.27",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
         "@capacitor/core": "^6.2.1",
@@ -45,7 +45,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.430",
+      "version": "0.1.432",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
         "@capacitor/core": "^6.2.1",
@@ -142,7 +142,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.908",
+      "version": "0.1.910",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -195,7 +195,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.91",
+      "version": "0.1.93",
       "dependencies": {
         "zod": "^3.25.76",
       },
