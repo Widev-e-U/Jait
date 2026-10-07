@@ -29,7 +29,7 @@ export interface OllamaUsageLimit {
   models: Array<{ name: string; request_count: number }>;
 }
 
-export interface OllamaUsageResponse {
+export interface OllamaQuotaUsageResponse {
   limits: {
     session?: OllamaUsageLimit;
     weekly?: OllamaUsageLimit;
@@ -40,6 +40,19 @@ export interface OllamaUsageResponse {
     period?: { type?: string; starting_at?: string; ending_at?: string };
   };
 }
+
+/** Request activity contains counts, not subscription quota utilization. */
+export interface OllamaRequestUsageResponse {
+  range: string;
+  scope: string;
+  granularity: string;
+  from: string;
+  until: string;
+  totals: { request_count: number };
+  buckets: Array<{ from: string; until: string; request_count: number; partial?: boolean }>;
+}
+
+export type OllamaUsageResponse = OllamaQuotaUsageResponse | OllamaRequestUsageResponse;
 
 /** The signed-in Ollama Cloud account reported by a server's `/api/me`. */
 export interface OllamaCloudAccount {
@@ -163,6 +176,18 @@ function isOllamaUsageLimit(value: unknown): value is OllamaUsageLimit {
 
 export function isOllamaUsageResponse(value: unknown): value is OllamaUsageResponse {
   if (!value || typeof value !== "object") return false;
+  const activity = value as Partial<OllamaRequestUsageResponse>;
+  if ("totals" in activity) {
+    const validDate = (date: unknown): date is string => typeof date === "string" && Number.isFinite(Date.parse(date));
+    const validCount = (count: unknown): count is number => typeof count === "number" && Number.isSafeInteger(count) && count >= 0;
+    return typeof activity.range === "string" && typeof activity.scope === "string" &&
+      typeof activity.granularity === "string" && validDate(activity.from) && validDate(activity.until) &&
+      Date.parse(activity.from) <= Date.parse(activity.until) && validCount(activity.totals?.request_count) &&
+      Array.isArray(activity.buckets) && activity.buckets.every((bucket) =>
+        !!bucket && validDate(bucket.from) && validDate(bucket.until) &&
+        Date.parse(bucket.from) <= Date.parse(bucket.until) && validCount(bucket.request_count) &&
+        (bucket.partial === undefined || typeof bucket.partial === "boolean"));
+  }
   const limits = (value as { limits?: unknown }).limits;
   if (!limits || typeof limits !== "object" || Array.isArray(limits)) return false;
   const record = limits as Record<string, unknown>;

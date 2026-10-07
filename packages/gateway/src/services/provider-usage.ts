@@ -54,6 +54,8 @@ export interface ProviderUsageSnapshot {
   } | null;
   models: Array<{ name: string; requestCount: number }>;
   activityCost: string | null;
+  requestCount?: number | null;
+  usagePeriod?: { from: string; until: string; range: string } | null;
   /** Signed-in provider account behind this snapshot (e.g. an Ollama Cloud email). */
   accountLabel: string | null;
 }
@@ -168,6 +170,21 @@ export class ProviderUsageService {
     planType?: string | null,
     accountLabel?: string | null,
   ): void {
+    if ("totals" in response) {
+      // Clear obsolete quota estimates when the provider only publishes activity.
+      this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.providerType, "ollama"))).run();
+      this.recordSnapshot({
+        accountId, rateLimitType: "request_activity", providerType: "ollama",
+        status: null, utilization: null, resetsAt: null, isUsingOverage: false,
+        raw: {
+          planType: planType ?? null, accountLabel: accountLabel ?? null,
+          requestCount: response.totals.request_count,
+          usagePeriod: { from: response.from, until: response.until, range: response.range },
+        },
+      });
+      return;
+    }
+    this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, "request_activity"))).run();
     const buckets = [
       ["five_hour", response.limits.session, 300],
       ["seven_day", response.limits.weekly, 10_080],
@@ -306,6 +323,8 @@ export class ProviderUsageService {
           resetSource: parseOllamaResetSource(raw.resetSource),
           credits,
           models,
+          requestCount: typeof raw.requestCount === "number" ? raw.requestCount : null,
+          usagePeriod: raw.usagePeriod && typeof raw.usagePeriod === "object" ? raw.usagePeriod as { from: string; until: string; range: string } : null,
           activityCost: typeof raw.activityCost === "string" ? raw.activityCost : null,
           accountLabel: typeof raw.accountLabel === "string" ? raw.accountLabel : null,
         };

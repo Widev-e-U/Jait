@@ -45,3 +45,29 @@ for (const width of [1280, 390]) {
     await expect(input).toHaveCount(0)
   })
 }
+
+for (const width of [1280, 390]) {
+  test(`Ollama request counts display without quota estimates at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await page.route('**/api/provider-usage/summary*', route => route.fulfill({ json: {
+      generatedAt: new Date().toISOString(), profiles: [{
+        id: 'jait-backend:ollama', providerType: 'ollama', providerLabel: 'Ollama', profileLabel: 'Ollama',
+        locationLabel: 'Jait backend', accountLabel: 'test@example.com', planType: 'pro', error: null,
+        quotas: [{ accountId: 'jait-backend:ollama', rateLimitType: 'request_activity', providerType: 'ollama',
+          status: null, utilization: null, resetsAt: null, isUsingOverage: false, updatedAt: new Date().toISOString(),
+          planType: 'pro', windowDurationMins: null, credits: null, models: [], activityCost: null,
+          requestCount: 10388, usagePeriod: { from: '2026-09-30T00:00:00Z', until: '2026-10-07T11:29:42Z', range: '7d' },
+        }],
+      }],
+    } }))
+    await page.goto('/')
+    await page.evaluate(() => import('/src/e2e-fixtures/ollama-usage-setup.tsx'))
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Request activity', { exact: true })).toBeVisible()
+    await expect(dialog.getByText(/10[,. ]388 requests/)).toBeVisible()
+    await expect(dialog.getByText('Ollama reports request counts. Subscription quota remaining is unavailable.')).toBeVisible()
+    await expect(dialog.getByText(/% used|Resets /)).toHaveCount(0)
+    await expect(dialog.getByText('Set up cloud usage', { exact: true })).toHaveCount(0)
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+  })
+}

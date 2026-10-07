@@ -30,6 +30,8 @@ interface UsageQuotaSnapshot {
   } | null
   models: Array<{ name: string; requestCount: number }>
   activityCost: string | null
+  requestCount?: number | null
+  usagePeriod?: { from: string; until: string; range: string } | null
 }
 
 interface UsageProfile {
@@ -62,6 +64,7 @@ const PROVIDER_ICONS: Record<string, React.ComponentType<{ size?: number; classN
 }
 
 const QUOTA_LABELS: Record<string, string> = {
+  request_activity: 'Request activity',
   five_hour: '5-hour limit',
   seven_day: 'Weekly limit',
   seven_day_opus: 'Opus weekly limit',
@@ -102,7 +105,7 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
       <div className="flex items-center justify-between gap-3 text-sm">
         <span>{QUOTA_LABELS[quota.rateLimitType] ?? quota.rateLimitType}</span>
         <span className="shrink-0 tabular-nums font-medium">
-          {percent == null ? (quota.status ?? 'Unavailable') : `${percent}% used`}
+          {quota.requestCount != null ? `${quota.requestCount.toLocaleString()} requests` : percent == null ? (quota.status ?? 'Unavailable') : `${percent}% used`}
         </span>
       </div>
       {percent != null && (
@@ -116,10 +119,12 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
         </div>
       )}
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {quota.usagePeriod && <span>{formatDateTime(quota.usagePeriod.from)} – {formatDateTime(quota.usagePeriod.until)}</span>}
         {reset && <span>{reset}</span>}
         <span>Updated {formatDateTime(quota.updatedAt)}</span>
         {quota.activityCost && <span>Cost {quota.activityCost}</span>}
       </div>
+      {quota.requestCount != null && <p className="text-xs text-muted-foreground">Ollama reports request counts. Subscription quota remaining is unavailable.</p>}
       {quota.models.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-0.5">
           {quota.models.map((model) => (

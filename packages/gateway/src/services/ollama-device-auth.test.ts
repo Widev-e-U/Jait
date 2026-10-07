@@ -70,6 +70,13 @@ describe("Ollama device authentication", () => {
     expect(new URL(fetchMock.mock.calls[2][0]).pathname).toBe("/api/usage");
   });
 
+  it("accepts request activity through the signed-in device fallback", async () => {
+    const activity = { range: "7d", scope: "self", granularity: "day", from: "2026-09-30T00:00:00Z", until: "2026-10-07T11:29:42Z", totals: { request_count: 10388 }, buckets: [] };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("missing", { status: 404 }))
+      .mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(activity)));
+    await expect(fetchSignedInOllamaUsage("http://localhost:11434", account)).resolves.toEqual(activity);
+  });
+
   it("uses an existing daemon usage endpoint without opening credentials", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(usage)));
     await expect(fetchSignedInOllamaUsage("http://localhost:11434", account)).resolves.toEqual(usage);

@@ -26,6 +26,23 @@ describe("provider quota fetchers", () => {
     ).toBe(true);
   });
 
+  it("accepts Ollama request activity without quota limits", async () => {
+    const activity = {
+      range: "7d", scope: "self", granularity: "day",
+      from: "2026-09-30T00:00:00Z", until: "2026-10-07T11:29:42Z",
+      totals: { request_count: 10388 },
+      buckets: [{ from: "2026-09-30T00:00:00Z", until: "2026-10-01T00:00:00Z", request_count: 81 }],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(activity)));
+    await expect(fetchOllamaUsageFrom("https://ollama.com", "test-key")).resolves.toEqual(activity);
+    expect(isOllamaUsageResponse(activity)).toBe(true);
+    for (const count of [-1, "10388", null, Infinity]) {
+      expect(isOllamaUsageResponse({ ...activity, totals: { request_count: count } })).toBe(false);
+    }
+    expect(isOllamaUsageResponse({ ...activity, from: "invalid" })).toBe(false);
+    expect(isOllamaUsageResponse({ ...activity, buckets: [{}] })).toBe(false);
+  });
+
   it("rejects malformed Ollama usage responses", () => {
     expect(isOllamaUsageResponse({ limits: {} })).toBe(false);
     expect(

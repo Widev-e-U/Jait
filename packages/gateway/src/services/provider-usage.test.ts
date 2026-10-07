@@ -25,6 +25,25 @@ function makeNotifications() {
 }
 
 describe("ProviderUsageService", () => {
+  it("stores request activity without invented quota or reset and replaces stale limits", () => {
+    const service = new ProviderUsageService(db);
+    service.recordOllamaUsage("ollama-1", { limits: { weekly: { usage: 0.8, models: [] } } });
+    const activity = {
+      range: "7d", scope: "self", granularity: "day",
+      from: "2026-09-30T00:00:00Z", until: "2026-10-07T11:29:42Z",
+      totals: { request_count: 10388 }, buckets: [],
+    };
+    service.recordOllamaUsage("ollama-1", activity, "pro", "test@example.com");
+    service.recordOllamaUsage("ollama-1", activity, "pro", "test@example.com");
+    expect(service.listForUser(["ollama-1"])).toEqual([expect.objectContaining({
+      rateLimitType: "request_activity", utilization: null, resetsAt: null, status: null,
+      requestCount: 10388, planType: "pro", accountLabel: "test@example.com",
+      usagePeriod: { from: activity.from, until: activity.until, range: "7d" },
+    })]);
+    service.recordOllamaUsage("ollama-1", { limits: { weekly: { usage: 0.2, models: [] } } });
+    expect(service.listForUser(["ollama-1"])).toEqual([expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.2, requestCount: null })]);
+  });
+
   it("inserts a new snapshot and lists it back for the owning account", () => {
     const service = new ProviderUsageService(db);
     service.recordClaudeRateLimit("account-1", "claude", {
