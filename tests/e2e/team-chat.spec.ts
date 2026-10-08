@@ -69,3 +69,41 @@ test('team room preserves direct user messages and work links through reload', a
   await page.reload()
   await expect(page.getByTestId('team-message').filter({ hasText: 'Please verify the ticket' })).toBeVisible()
 })
+
+
+test('team room is at the bottom on its first visible frame when opened or reopened', async ({ page }) => {
+  const room = { id: 'fixture-room', rootAgentId: 'scrum', name: 'Scrum · Team', goal: null }
+  const messages = Array.from({ length: 50 }, (_, index) => ({
+    id: 'message-' + index, roomId: room.id,
+    sender: { kind: 'agent', id: 'scrum', name: 'Scrum', avatar: 'Nova' },
+    content: 'Update ' + index + '\nDetails from the ongoing sprint.', kind: 'discussion', recipientIds: [],
+    createdAt: '2026-10-07T12:00:00Z', depth: 0,
+  }))
+  await page.route('**/api/team-rooms/fixture-room', route => route.fulfill({ json: { room, messages, members: [], deliveries: [] } }))
+  await page.addInitScript(() => {
+    const frames: number[] = []
+    Object.assign(window, { teamOpeningFrames: frames })
+    const observer = new MutationObserver(() => {
+      const log = document.querySelector<HTMLElement>('[role="log"][aria-label="Team conversation"]')
+      if (!log?.querySelector('[data-testid="team-message"]')) return
+      observer.disconnect()
+      const sample = () => {
+        frames.push(log.scrollHeight - log.clientHeight - log.scrollTop)
+        if (frames.length < 3) requestAnimationFrame(sample)
+      }
+      requestAnimationFrame(sample)
+    })
+    observer.observe(document, { childList: true, subtree: true })
+  })
+  for (let visit = 0; visit < 2; visit++) {
+    await page.goto('/team-chat.html')
+    await expect.poll(() => page.evaluate(() => (window as unknown as { teamOpeningFrames: number[] }).teamOpeningFrames.length)).toBe(3)
+    const gaps = await page.evaluate(() => (window as unknown as { teamOpeningFrames: number[] }).teamOpeningFrames)
+    for (const gap of gaps) expect(gap).toBeLessThanOrEqual(1)
+    const log = page.getByRole('log', { name: 'Team conversation' })
+    expect(await log.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(1000)
+    await expect(page.getByTestId('team-message').last()).toBeInViewport()
+    await log.evaluate(element => { element.scrollTop = 0 })
+    await expect(page.getByTestId('team-message').first()).toBeInViewport()
+  }
+})

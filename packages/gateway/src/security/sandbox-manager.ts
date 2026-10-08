@@ -1,3 +1,4 @@
+import { worktreeGitMountArgs } from "./worktree-sandbox.js";
 import { spawn, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { createServer, createConnection } from "node:net";
@@ -306,6 +307,7 @@ export class SandboxManager {
       ...memoryArgs,
       ...cpuArgs,
       ...mountArgs,
+      ...worktreeGitMountArgs(projectRoot),
       ...(mountMode === "read-write" ? hostUserArgs() : []),
       "-w",
       "/project",

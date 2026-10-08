@@ -1,7 +1,6 @@
 import type { TeamMessageKind } from "@jait/shared";
 import { type TeamChatService } from "../services/team-chat.js";
 import type { SessionService } from "../services/sessions.js";
-import type { UserService } from "../services/users.js";
 import type { ToolDefinition } from "./contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
@@ -17,7 +16,7 @@ interface TeamChatInput {
   criteria?: string[];
   evidence?: string[];
 }
-export function createTeamChatTool(service: TeamChatService, _sessions: SessionService, users?: UserService): ToolDefinition<TeamChatInput> {
+export function createTeamChatTool(service: TeamChatService, _sessions: SessionService): ToolDefinition<TeamChatInput> {
   return {
     name: "team.chat", displayName: "Team group chat", page: "agents", tier: "standard", category: "agent", source: "builtin",
     risk: "medium", defaultConsentLevel: "once",
@@ -26,7 +25,7 @@ export function createTeamChatTool(service: TeamChatService, _sessions: SessionS
     parameters: { type: "object", properties: {
       action: { type: "string", enum: ["list", "get", "send", "goal", "complete"] },
       roomId: { type: "string" }, agentId: { type: "string", description: "A member of the hierarchy, used to find/create its persistent room." },
-      content: { type: "string" }, recipientIds: { type: "array", items: { type: "string" }, description: "Addressed members to wake. Omit on user relays to choose the best member automatically; use [] for a passive update." },
+      content: { type: "string", description: "Message body in your own words. Sender and source attribution are stored separately; no username or chat-title prefix is added." }, recipientIds: { type: "array", items: { type: "string" }, description: "Addressed members to wake. Omit on user relays to choose the best member automatically; use [] for a passive update." },
       kind: { type: "string", enum: ["discussion", "assignment", "question", "review", "result", "verification", "blocked", "relay"] },
       targetSessionId: { type: "string", description: "Steer this existing thread or legacy work chat instead of creating new execution. Recipient must own that work in this room." },
       clientKey: { type: "string", description: "Retain this key on retries to avoid duplicate messages and handoffs." },
@@ -42,7 +41,6 @@ export function createTeamChatTool(service: TeamChatService, _sessions: SessionS
         if (!roomId) return { ok: false, message: "Choose a roomId from action=list or provide agentId." };
         const room = service.get(userId, roomId);
         if (input.action === "get") return { ok: true, message: room.name, data: { room, members: service.members(userId, room.rootAgentId), messages: service.history(userId, roomId), deliveries: service.deliveries(userId, roomId) } };
-        const username = users?.findById(userId)?.username ?? "The user";
         const sender = service.sender(userId, context.sessionId, roomId);
         if (input.action === "goal") return { ok: true, message: "Team goal recorded.", data: { room: service.setGoal(userId, roomId, input.content ?? "", input.criteria ?? [], sender) } };
         if (input.action === "complete") return { ok: true, message: "Team goal completed with verification.", data: { room: service.completeGoal(userId, roomId, input.evidence ?? [], sender) } };
@@ -50,7 +48,7 @@ export function createTeamChatTool(service: TeamChatService, _sessions: SessionS
         if (!input.content?.trim()) return { ok: false, message: "Message content is required." };
         if (sender.kind === "chat") service.ensureRoom(userId, room.rootAgentId, context.sessionId);
         const message = await service.postRouted(userId, roomId, {
-          sender, content: sender.kind === "chat" ? username + " said: " + (input.content ?? "") : (input.content ?? ""),
+          sender, content: input.content,
           kind: sender.kind === "chat" ? "relay" : input.kind,
           recipientIds: input.recipientIds, targetSessionId: input.targetSessionId, clientKey: input.clientKey ?? context.actionId ?? uuidv7(), parentMessageId: work?.messageId,
           workSessionId: work ? context.sessionId : undefined,

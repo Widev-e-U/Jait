@@ -7,6 +7,7 @@
  */
 
 import { and, eq, desc, gt, sql } from "drizzle-orm";
+import type { ExecutionCheckpoint } from "./execution-guard.js";
 import type { JaitDB } from "../db/connection.js";
 import { agentThreads, agentThreadActivities, personaAgents, threadRecovery } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -426,7 +427,7 @@ export class ThreadService {
       .select()
       .from(agentThreadActivities)
       .where(filters.length === 1 ? filters[0]! : and(...filters))
-      .orderBy(desc(agentThreadActivities.createdAt));
+      .orderBy(desc(agentThreadActivities.createdAt), sql`rowid DESC`);
 
     const query =
       typeof limit === "number" && Number.isFinite(limit) && limit > 0
@@ -442,6 +443,28 @@ export class ThreadService {
       payload: r.payload ? JSON.parse(r.payload) : undefined,
       createdAt: r.createdAt,
     }));
+  }
+
+  /** Task anchors are queried independently of the bounded activity tail. */
+  getTaskContext(threadId: string): { originalTask?: string; latestInstruction?: string } {
+    const filter = and(eq(agentThreadActivities.threadId, threadId), eq(agentThreadActivities.kind, "message"),
+      sql`json_extract(${agentThreadActivities.payload}, '$.role') = 'user'`,
+      sql`coalesce(json_extract(${agentThreadActivities.payload}, '$.recovery'), 0) = 0`,
+      sql`coalesce(json_extract(${agentThreadActivities.payload}, '$.content'), '') NOT LIKE 'The gateway process terminated%'`);
+    const first = this.db.select().from(agentThreadActivities).where(filter).orderBy(sql`rowid ASC`).limit(1).get();
+    const last = this.db.select().from(agentThreadActivities).where(filter).orderBy(sql`rowid DESC`).limit(1).get();
+    const content = (row: typeof first) => row?.payload ? String(JSON.parse(row.payload).content ?? JSON.parse(row.payload).fullContent ?? "") : undefined;
+    return { originalTask: content(first), latestInstruction: content(last) };
+  }
+
+  getExecutionCheckpoint(threadId: string): ExecutionCheckpoint | undefined {
+    const row = this.db.select().from(agentThreadActivities).where(and(eq(agentThreadActivities.threadId, threadId),
+      eq(agentThreadActivities.kind, "execution.checkpoint"))).orderBy(sql`rowid DESC`).limit(1).get();
+    if (!row?.payload) return undefined;
+    const checkpoint = JSON.parse(row.payload) as ExecutionCheckpoint;
+    if (!Number.isInteger(checkpoint.calls) || checkpoint.calls < 0 || !Array.isArray(checkpoint.evidence)
+      || typeof checkpoint.failures !== "object" || !checkpoint.failures) return undefined;
+    return checkpoint;
   }
 
   // ── Provider event → activity log mapping ───────────────────────

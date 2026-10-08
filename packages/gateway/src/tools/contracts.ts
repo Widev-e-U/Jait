@@ -19,6 +19,8 @@ export type NestedAgentEvent =
 
 export interface ToolContext {
   sessionId: string;
+  /** Durable execution identity, separate from the provider session. */
+  threadId?: string;
   actionId: string;
   projectRoot: string;
   /** Machine that owns the active project and must execute host terminal commands. */

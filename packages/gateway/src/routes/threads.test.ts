@@ -102,6 +102,40 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 
+describe("CLI execution safeguards", () => {
+  it.each(["quota", "environment"])("keeps %s failure terminal despite late provider completion", async failure => {
+    const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    const thread = threadService.create({ userId: "user-1", title: "Fixture", providerId: "codex", workingDirectory: process.cwd() });
+    const provider = new MockThreadProvider(); const registry = new ProviderRegistry(); registry.register(provider);
+    const interrupt = vi.spyOn(provider, "interruptTurn");
+    const app = Fastify(); const config = loadConfig();
+    registerThreadRoutes(app, config, { threadService, providerRegistry: registry });
+    try {
+      await app.ready();
+      const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`,
+        headers: await authHeader(config.jwtSecret, "user-1"), payload: { message: "Implement parser", titleTask: "" } });
+      expect(response.statusCode).toBe(200);
+      await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+      const sessionId = threadService.getById(thread.id)!.providerSessionId!;
+      if (failure === "quota") provider.emit({ type: "session.error", sessionId, error: "Fixture quota exceeded" });
+      else for (let i = 0; i < 3; i++) {
+        const tool = ["execute", "terminal.run", "jait.terminal"][i]!;
+        provider.emit({ type: "tool.start", sessionId, tool, args: { command: `attempt ${i}` }, callId: `call-${i}` });
+        provider.emit({ type: "tool.result", sessionId, tool, ok: true, message: "Command exited",
+          data: { exitCode: 128, output: "fatal: not a git repository" }, callId: `call-${i}` });
+      }
+      provider.emit({ type: "turn.completed", sessionId });
+      provider.emit({ type: "session.completed", sessionId });
+      expect(threadService.getById(thread.id)?.status).toBe("error");
+      if (failure === "environment") {
+        expect(interrupt).toHaveBeenCalledTimes(1);
+        expect(threadService.getExecutionCheckpoint(thread.id)?.calls).toBe(3);
+      }
+    } finally { await app.close(); sqlite.close(); }
+  });
+});
+
 describe("thread routes", () => {
   afterEach(() => {
     interventionRunResumeRegistry.clearForTests();

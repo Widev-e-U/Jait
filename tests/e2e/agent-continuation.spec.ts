@@ -33,8 +33,10 @@ async function fixture(page: Page) {
       thread.error = null
       json = thread
     } else if (path.endsWith('/runtime')) json = { running: false, startedAt: null }
-    else if (path.includes('team-chat')) json = { rooms: [] }
-    else if (path.includes('providers')) json = []
+    else if (path === '/api/auth/me') json = { id: 'fixture-user', username: 'Fixture' }
+    else if (path === '/api/auth/settings') { await route.fulfill({ status: 404, json: {} }); return }
+    else if (path === '/api/team-rooms') json = { rooms: [] }
+    else if (path === '/api/providers') json = { providers: [], remoteProviders: [] }
     else if (path.includes('models')) json = { models: [] }
     else if (path.includes('skills')) json = []
     await route.fulfill({ json })
@@ -65,6 +67,8 @@ test('graph has sparse reactive dots and supports dragging without opening detai
   // Let the force layout settle before testing a manual drag.
   await page.waitForTimeout(2500)
   const before = (await avatar.boundingBox())!
+  const other = (await page.getByRole('button', { name: 'Open Atlas', exact: true }).boundingBox())!
+  expect(Math.hypot(before.x - other.x, before.y - other.y)).toBeLessThan(750)
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2)
   await page.mouse.down()
   await page.mouse.move(before.x + before.width / 2 + 100, before.y + before.height / 2 + 50, { steps: 12 })

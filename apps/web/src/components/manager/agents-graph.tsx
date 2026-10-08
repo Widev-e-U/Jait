@@ -30,7 +30,7 @@ export function AgentsGraph({ agents, threads, selectedId, onSave, onOpen, onCho
     const members = JSON.parse(topology) as [string, string | null][]
     const ids = new Set(members.map(([id]) => id))
     return {
-      nodes: members.map(([id], index) => ({ id, x: Math.cos(index * Math.PI * 2 / members.length) * 220, y: Math.sin(index * Math.PI * 2 / members.length) * 220 }) as GraphNode),
+      nodes: members.map(([id], index) => ({ id, x: Math.cos(index * Math.PI * 2 / members.length) * 170, y: Math.sin(index * Math.PI * 2 / members.length) * 170 }) as GraphNode),
       links: members.flatMap(([id, manager]) => manager && ids.has(manager) && manager !== id ? [{ source: manager, target: id }] : []),
     }
   }, [topology])
@@ -45,8 +45,9 @@ export function AgentsGraph({ agents, threads, selectedId, onSave, onOpen, onCho
   }, [])
   useEffect(() => {
     const instance = graphRef.current
-    instance?.d3Force('charge')?.strength(-1800)
-    instance?.d3Force('link')?.distance(240)
+    // Limit repulsion so agents without reporting links stay grouped.
+    instance?.d3Force('charge')?.strength(-1100).distanceMax(260)
+    instance?.d3Force('link')?.distance(180)
     instance?.d3ReheatSimulation()
   }, [graph, dimensions.width > 0])
   const positionNodes = () => {

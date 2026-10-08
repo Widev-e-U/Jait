@@ -202,7 +202,7 @@ describe("team room routes and work chat integration", () => {
     const context = { userId: user.id, sessionId: source.id, projectRoot: process.cwd(), actionId: "relay" };
     expect((await tool.execute({ action: "send", roomId, content: "Use the board", recipientIds: [] }, context)).ok).toBe(true);
     const state = await snapshot();
-    expect(state.messages[0]).toMatchObject({ content: user.username + " said: Use the board", sender: { kind: "chat", name: "Developer Chat", avatar: null, sourceSessionId: source.id } });
+    expect(state.messages[0]).toMatchObject({ content: "Use the board", sender: { kind: "chat", name: "Developer Chat", avatar: null, sourceSessionId: source.id } });
     expect((await tool.execute({ action: "send", roomId, content: "" }, context)).ok).toBe(false);
     const privateChat = sessions.create({ userId: "another-user" });
     expect((await tool.execute({ action: "send", roomId, content: "Spoof" }, { ...context, sessionId: privateChat.id })).ok).toBe(false);

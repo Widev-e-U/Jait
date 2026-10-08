@@ -308,8 +308,8 @@ export class TeamChatService {
     try {
       if (!agent || agent.paused || !this.members(userId, row.rootAgentId).some(member => member.id === agent.id)) throw new Error("Recipient is unavailable or has left the team.");
       const message = this.history(userId, delivery.roomId).find(item => item.id === delivery.messageId)!;
-      const prompt = "Team message from " + message.sender.name + ":\n" + message.content + "\n\nHandle the addressed request in this thread. Post a concise result with evidence or an actionable blocker using team.chat with recipientIds=[]. Do not send acknowledgement-only handoffs.";
-      const response = await this.dispatch!(delivery, agent, prompt);
+      // Identity and coordination instructions live in context; deliver only the message body.
+      const response = await this.dispatch!(delivery, agent, message.content);
       if (this.closed) return;
       this.db.update(teamDeliveries).set({ status: response.delivered ? "delivered" : "completed", error: null }).where(eq(teamDeliveries.id, delivery.id)).run();
       // Explicit tool posts are preferred. A final answer still becomes visible to the team.
@@ -321,7 +321,17 @@ export class TeamChatService {
       });
     } catch (error) {
       if (this.closed) return;
-      this.db.update(teamDeliveries).set({ status: "failed", error: error instanceof Error ? error.message : "Delivery failed." }).where(eq(teamDeliveries.id, delivery.id)).run();
+      const reason = error instanceof Error ? error.message : "Delivery failed.";
+      this.db.update(teamDeliveries).set({ status: "failed", error: reason }).where(eq(teamDeliveries.id, delivery.id)).run();
+      // Provider failures cannot rely on another model turn to report a blocker.
+      const alreadyBlocked = this.history(userId, delivery.roomId).some(item => item.parentMessageId === delivery.messageId
+        && item.sender.sourceSessionId === delivery.sessionId && item.kind === "blocked");
+      if (agent && !alreadyBlocked) this.post(userId, delivery.roomId, {
+        sender: { kind: "agent", id: agent.id, name: agent.name, avatar: agent.avatar, sourceSessionId: delivery.sessionId },
+        content: reason.slice(0, 2000), kind: "blocked", recipientIds: [], clientKey: delivery.id + ":blocked",
+        parentMessageId: delivery.messageId, workSessionId: delivery.sessionId,
+        ...(this.threadById(userId, delivery.sessionId) ? { workThreadId: delivery.sessionId } : {}),
+      });
     } finally { this.running.delete(delivery.id); void this.pump(); }
   }
 }

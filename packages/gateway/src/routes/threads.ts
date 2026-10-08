@@ -1,3 +1,4 @@
+import { ExecutionGuard } from "../services/execution-guard.js";
 import { personaAgentProfileSchema } from "@jait/shared";
 
 /**
@@ -582,6 +583,25 @@ export function registerThreadRoutes(
     let pendingAssistantContent = "";
     let checkpointId: string | null = null;
     let checkpointAt = 0;
+    const nativeProvider = providerRegistry.get(providerId)?.id === "jait";
+    let executionGuard = new ExecutionGuard(threadService.getRecovery(threadId)
+      ? threadService.getExecutionCheckpoint(threadId) : undefined);
+    let terminalFailure = false;
+    const stopExecution = (reason: string): void => {
+      terminalFailure = true;
+      flushPendingAssistantContent();
+      threadService.markError(threadId, reason);
+      threadService.addActivity(threadId, "error", reason);
+      broadcastThreadStatus(threadId, "error", reason);
+      const adapter = remoteProviders.get(threadId) ?? providerRegistry.get(providerId);
+      void adapter?.interruptTurn?.(providerSessionId)
+        .then(() => adapter.stopSession(providerSessionId))
+        .catch(error => app.log.warn({ error, threadId }, "Could not stop bounded execution"));
+      remoteProviders.delete(threadId);
+      threadUnsubs.get(threadId)?.();
+      threadUnsubs.delete(threadId);
+      unregisterThreadResume(threadId);
+    };
 
     const flushPendingAssistantContent = (): void => {
       if (!pendingAssistantContent.trim()) {
@@ -621,6 +641,20 @@ export function registerThreadRoutes(
         if (event.type === "turn.started" || event.type === "token" || event.type === "message") {
           return;
         }
+      }
+
+      if (terminalFailure) return;
+      if (event.type === "session.error") terminalFailure = true;
+      if (!nativeProvider) {
+        let reason: string | undefined;
+        if (event.type === "tool.start") reason = executionGuard.beforeCall();
+        if (event.type === "tool.result") reason = executionGuard.record(event.tool, { ok: event.ok, message: event.message, data: event.data });
+        if (event.type === "tool.start" || event.type === "tool.result") {
+          const checkpoint = threadService.addActivity(threadId, "execution.checkpoint", reason ?? "Execution limits checkpoint", executionGuard.snapshot());
+          broadcastThreadEvent(threadId, "activity", { activity: checkpoint });
+        }
+        if (reason) { stopExecution(reason); return; }
+        if (event.type === "turn.completed") executionGuard = new ExecutionGuard();
       }
 
       if (event.type === "token") {
@@ -665,7 +699,7 @@ export function registerThreadRoutes(
         broadcastThreadEvent(threadId, "activity", { activity: todoActivity });
       }
 
-      if (event.type === "session.completed") {
+      if (event.type === "session.completed" && threadService.getById(threadId)?.status !== "error") {
         threadService.markCompleted(threadId);
         broadcastThreadStatus(threadId, "completed");
         void drainQueuedThreadMessages();
@@ -684,6 +718,8 @@ export function registerThreadRoutes(
           unsubscribe();
           threadUnsubs.delete(threadId);
         }
+        const adapter = remoteProviders.get(threadId) ?? providerRegistry.get(providerId);
+        void adapter?.stopSession(providerSessionId).catch(error => app.log.warn({ error, threadId }, "Could not clean up failed session"));
         remoteProviders.delete(threadId);
         unregisterThreadResume(threadId);
       } else if (event.type === "turn.started") {
@@ -695,7 +731,7 @@ export function registerThreadRoutes(
       } else if (event.type === "turn.completed") {
         void flushPendingInterventionMessage(threadId, providerSessionId, providerId)
           .then((resumed) => {
-            if (resumed) return;
+            if (resumed || threadService.getById(threadId)?.status !== "running") return;
             threadService.markCompleted(threadId);
             broadcastThreadStatus(threadId, "completed");
             void drainQueuedThreadMessages();
@@ -1517,6 +1553,7 @@ export function registerThreadRoutes(
           role: "user",
           content: displayContent ?? message,
           fullContent: message,
+          recovery: recovering,
           referencedFiles,
           displaySegments,
         });
@@ -1598,8 +1635,11 @@ export function registerThreadRoutes(
               : [];
 
             // Run the thread router — classify intent, auto-select skills, determine topology
+            const routingMessage = recovering
+              ? Object.values(threadService.getTaskContext(id)).filter(Boolean).join("\n\n") || message
+              : message;
             const routingPlan = routeThread({
-              message,
+              message: routingMessage,
               availableSkills,
               pinnedSkillIds: activeThread.skillIds,
               kind: activeThread.kind as "delivery" | "delegation",

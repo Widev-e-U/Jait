@@ -5,7 +5,7 @@ const MAX_REPLAY_CHARS = 12_000;
 const MAX_MESSAGE_CHARS = 4_000;
 
 function sortActivitiesAsc(activities: ThreadActivity[]): ThreadActivity[] {
-  return [...activities].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return [...activities].reverse().sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
 function normalizeMessageActivity(activity: ThreadActivity): { role: "user" | "assistant"; content: string } | null {
@@ -31,7 +31,8 @@ export function buildThreadHistoryReplayPrompt(
     .map(normalizeMessageActivity)
     .filter((message): message is NonNullable<typeof message> => Boolean(message));
 
-  if (messages.length === 0) return null;
+  const task = threadService.getTaskContext?.(threadId);
+  if (messages.length === 0 && !task?.originalTask) return null;
 
   const tail = messages.slice(-MAX_REPLAY_MESSAGES);
   const lines: string[] = [];
@@ -53,10 +54,25 @@ export function buildThreadHistoryReplayPrompt(
     usedChars += line.length;
   }
 
-  if (lines.length === 0) return null;
+  const thread = threadService.getById?.(threadId);
+  const execution = threadService.getExecutionCheckpoint?.(threadId);
+  const outcomes = activities.filter(activity => ["tool.result", "tool.error"].includes(activity.kind)).slice(-6);
+  const todo = activities.filter(activity => activity.kind === "todo").at(-1);
+  const checkpoint = [
+    "<thread-checkpoint>",
+    ...(task?.originalTask ? [`Original task: ${task.originalTask.slice(0, 4000)}`] : []),
+    ...(task?.latestInstruction ? [`Latest instruction: ${task.latestInstruction.slice(0, 4000)}`] : []),
+    `Workspace: ${thread?.workingDirectory ?? "unchanged"}; branch: ${thread?.branch ?? "unchanged"}`,
+    ...(execution ? [`Execution: ${execution.calls} calls; last action: ${execution.lastAction ?? "unknown"}; ${execution.stopReason ?? "limits carry forward"}`] : []),
+    ...outcomes.map(activity => `Recorded tool outcome: ${activity.summary.slice(0, 240)}`),
+    ...(todo ? [`Remaining plan: ${JSON.stringify(todo.payload).slice(0, 1600)}`] : []),
+    "Preserve completed work and the latest instruction. Verify ongoing commands before repeating them.",
+    "</thread-checkpoint>",
+  ];
 
   const truncated = lines.length < messages.length;
   return [
+    ...checkpoint,
     "<thread-history>",
     "This thread is resuming in a fresh provider session.",
     "Use the prior conversation below as the thread history and continue from it.",

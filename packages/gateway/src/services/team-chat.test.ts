@@ -128,11 +128,26 @@ describe("persistent team coordination", () => {
     const reloaded = new TeamChatService(opened.db, sessions, profiles);
     const message = reloaded.history(owner, room.id)[0]!;
     expect(message.sender).toEqual({ kind: "chat", id: session.id, name: "Developer Chat", avatar: null, sourceSessionId: session.id });
-    expect(message.content).toBe("The user said: Use the Scrum board first.");
+    expect(message.content).toBe("Use the Scrum board first.");
     expect(reloaded.deliveries(owner, room.id)).toHaveLength(1);
     expect(reloaded.get(owner, room.id).projectPath).toBe("/tmp/repo");
     const agentSession = reloaded.deliveries(owner, room.id)[0]!.sessionId;
     expect(reloaded.sender(owner, agentSession, room.id)).toMatchObject({ kind: "agent", id: "Scrum" });
+  });
+
+  it("delivers relay bodies without chat-title or username wrappers", async () => {
+    const dispatcher = vi.fn(async () => ({ content: "Reviewed." }));
+    service.setDispatcher(dispatcher);
+    const source = sessions.create({ userId: owner, name: "Long source chat title", projectPath: "/tmp/repo" });
+    const tool = createTeamChatTool(service, sessions);
+    const content = "Continue the unfinished review.\nKeep the existing worktree.";
+    const result = await tool.execute({ action: "send", roomId: room.id, content, recipientIds: ["QA"], clientKey: "plain-relay" },
+      { sessionId: source.id, userId: owner, projectRoot: "/tmp/repo", requestedBy: "agent" });
+    expect(result.ok).toBe(true);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe("completed"));
+    expect(dispatcher).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: "QA" }), content);
+    expect(service.history(owner, room.id)[0]).toMatchObject({ content, kind: "relay",
+      sender: { kind: "chat", name: "Long source chat title", sourceSessionId: source.id } });
   });
 
   it("queues independent threads for the same agent without simultaneous duplicate execution", async () => {

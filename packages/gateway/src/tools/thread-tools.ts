@@ -878,6 +878,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
     async execute(input, context): Promise<ToolResult> {
       const userId = ensureUserId(context);
+      const caller = deps.threadService.getById(context.threadId ?? context.sessionId);
+      if (caller?.personaAgentId && caller.userId === userId && ["create", "create_many"].includes(input.action)) {
+        return { ok: false, message: "Saved-team agents coordinate new work through addressed team.chat assignments. Post results directly; do not create relay/helper threads." };
+      }
 
       try {
         switch (input.action) {

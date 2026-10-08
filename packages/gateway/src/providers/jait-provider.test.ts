@@ -6,9 +6,10 @@ vi.mock("../tools/index.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../tools/index.js")>()),
   runAgentLoop: runAgentLoopMock,
 }));
+import { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext } from "../tools/contracts.js";
 import type { ProviderEvent } from "./contracts.js";
-import { JaitProvider, prepareJaitThreadSandboxToolInput } from "./jait-provider.js";
+import { JaitProvider, prepareJaitThreadSandboxToolInput, prepareThreadFileInput } from "./jait-provider.js";
 
 beforeEach(() => {
   runAgentLoopMock.mockReset();
@@ -205,5 +206,56 @@ describe("JaitProvider command sandboxing", () => {
 
     await provider.stopSession("session-1");
     expect(stops).toEqual(["jait-agent-sb-test"]);
+  });
+});
+
+describe("native thread execution regressions", () => {
+  function setup() {
+    const events: ProviderEvent[] = [];
+    const executor = vi.fn(async (_name: string, _input: unknown, _context: ToolContext) => ({ ok: true, message: "Posted." }));
+    const provider = new JaitProvider({
+      config: { openaiBaseUrl: "http://localhost:11434/v1", openaiModel: "test", ollamaUrl: "http://localhost:11434", ollamaModel: "test", ollamaContextWindow: 0 } as any,
+      userService: { getSettings: () => ({ apiKeys: {}, jaitBackend: "ollama" }) } as any,
+      threadService: { getById: () => ({ userId: "user-1" }) } as any,
+      toolRegistry: new ToolRegistry(),
+      toolExecutor: executor,
+    });
+    provider.onEvent(event => events.push(event));
+    return { provider, events, executor };
+  }
+
+  it("resolves tool callers to the persistent thread, not a transient provider session", async () => {
+    const { provider, executor } = setup();
+    const session = await provider.startSession({ threadId: "persistent-thread", workingDirectory: "/tmp", mode: "supervised" });
+    await (provider as any).executeTool("team.chat", { action: "send" }, session.id, { userId: "user-1" }, undefined, undefined, "/tmp");
+    expect(executor.mock.calls[0]?.[2]).toMatchObject({ sessionId: "persistent-thread", threadId: "persistent-thread" });
+  });
+
+  it("does not emit successful completion after the loop reports quota exhaustion", async () => {
+    runAgentLoopMock.mockImplementationOnce(async (options) => {
+      options.onEvent({ type: "error", message: "Provider quota exhausted", status: 429 });
+      return { content: "", executedToolCalls: [] };
+    });
+    const { provider, events } = setup();
+    const session = await provider.startSession({ threadId: "persistent-thread", workingDirectory: "/tmp", mode: "supervised" });
+    await provider.sendTurn(session.id, "Implement the fix");
+    expect(events.filter(event => event.type === "turn.completed")).toHaveLength(0);
+    expect(events).toContainEqual({ type: "session.error", sessionId: session.id, error: "Provider quota exhausted" });
+  });
+});
+
+
+describe("thread host file paths", () => {
+  it("maps relative and sandbox paths into the active thread worktree", () => {
+    expect(prepareThreadFileInput("file.read", { path: "src/parser.ts", limit: 20 }, "/tmp/delivery"))
+      .toEqual({ path: "/tmp/delivery/src/parser.ts", limit: 20 });
+    expect(prepareThreadFileInput("edit", { path: "/project/src/parser.ts" }, "/tmp/delivery"))
+      .toEqual({ path: "/tmp/delivery/src/parser.ts" });
+    expect(prepareThreadFileInput("file.read", { path: "/home/owner/skills/SKILL.md" }, "/tmp/delivery"))
+      .toEqual({ path: "/home/owner/skills/SKILL.md" });
+  });
+  it("rejects traversal through relative and sandbox aliases", () => {
+    expect(() => prepareThreadFileInput("file.write", { path: "../main/owned.ts" }, "/tmp/delivery")).toThrow("boundary");
+    expect(() => prepareThreadFileInput("file.read", { path: "/project/../../etc/passwd" }, "/tmp/delivery")).toThrow("boundary");
   });
 });

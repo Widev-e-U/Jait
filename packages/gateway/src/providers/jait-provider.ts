@@ -6,6 +6,8 @@
  * It doesn't spawn a child process — it runs in-process.
  */
 
+import { resolve, isAbsolute, sep } from "node:path";
+import { ExecutionGuard } from "../services/execution-guard.js";
 import { EventEmitter } from "node:events";
 import type { AppConfig } from "../config.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -91,6 +93,8 @@ function buildJaitThreadSandboxPrompt(): string {
     "File operations target the thread working directory, which may be a managed git worktree.",
     "Shell-command tools (`execute`, `terminal.run`, `jait.terminal`) are forced through a long-lived Jait Docker sandbox with the working directory mounted at /project.",
     "Use relative paths or /project paths inside shell commands; host absolute project paths are remapped for shell commands.",
+    "Git metadata is mounted read-only for status/diff. Use host-side thread.control create_pr with gitAction=commit for authorized commits; do not repair or rewrite Git metadata in the sandbox.",
+    "Stop and report an actionable blocker after repeated environment failures. Execution enforces two retries per failure, progress every 20 calls, and a 120-call turn limit.",
     "</jaitThreadSandbox>",
   ].join("\n");
 }
@@ -115,6 +119,8 @@ interface JaitSessionState {
   activatedToolNames: Set<string>;
   sandboxContainerName?: string;
   sandboxStart?: Promise<string>;
+  executionGuard?: ExecutionGuard;
+  turnError?: string;
 }
 
 export interface JaitProviderDeps {
@@ -201,6 +207,8 @@ export class JaitProvider implements CliProviderAdapter {
       userId,
       history: [{ role: "system", content: prompt }],
       activatedToolNames: new Set(),
+      executionGuard: new ExecutionGuard(this.deps.threadService.getRecovery?.(options.threadId)
+        ? this.deps.threadService.getExecutionCheckpoint?.(options.threadId) : undefined),
     });
     this.emit({ type: "session.started", sessionId: session.id });
     return session;
@@ -218,6 +226,8 @@ export class JaitProvider implements CliProviderAdapter {
     const abort = new AbortController();
     state.currentTurnAbort = abort;
     state.contextRounds = [];
+    state.turnError = undefined;
+    state.executionGuard ??= new ExecutionGuard();
     state.history.push({ role: "user", content: message });
     this.emit({ type: "turn.started", sessionId });
 
@@ -270,6 +280,7 @@ export class JaitProvider implements CliProviderAdapter {
             disabledTools,
             mode: "agent",
             onEvent: (event) => {
+              if (event.type === "error") state.turnError = event.message;
               if (event.type === "token") {
                 streamedAssistantContent += event.content;
               } else if (event.type === "tool_start") {
@@ -291,6 +302,11 @@ export class JaitProvider implements CliProviderAdapter {
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
         );
 
+        if (state.turnError || state.executionGuard?.stopReason) {
+          throw new Error(state.turnError ?? state.executionGuard!.stopReason);
+        }
+        if (result.aborted) throw new Error("Execution interrupted before completion.");
+        if (result.hitMaxRounds) throw new Error("Execution reached its round limit before completion.");
         rememberActivatedToolNames(state.activatedToolNames, discoveredToolNames(result));
 
         // ── Post-turn history compaction (Codex-style) ──────────────────
@@ -328,6 +344,7 @@ export class JaitProvider implements CliProviderAdapter {
         if (session) {
           session.status = abort.signal.aborted ? "interrupted" : "running";
         }
+        state.executionGuard = undefined;
         this.emit({ type: "turn.completed", sessionId });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -431,20 +448,36 @@ export class JaitProvider implements CliProviderAdapter {
       return { ok: false, message: "Tool registry not available" };
     }
     const state = this.sessions.get(sessionId);
-    const toolInput = prepareJaitThreadSandboxToolInput(toolName, input);
+    const guard = state?.executionGuard;
+    const stopped = guard?.beforeCall();
+    if (stopped || signal?.aborted) {
+      if (stopped) state?.currentTurnAbort?.abort();
+      return { ok: false, message: stopped ?? "Execution interrupted." };
+    }
+    const recordResult = (result: ToolResult): ToolResult => {
+      const reason = guard?.record(toolName, result);
+      if (state && guard) this.emit({ type: "activity", sessionId, kind: "execution.checkpoint",
+        summary: reason ?? `Execution checkpoint: ${guard.snapshot().calls} tool calls`, payload: guard.snapshot() });
+      if (reason) state?.currentTurnAbort?.abort();
+      return result;
+    };
+    let toolInput: unknown;
+    try { toolInput = prepareThreadFileInput(toolName, prepareJaitThreadSandboxToolInput(toolName, input), projectRoot); }
+    catch (error) { return recordResult({ ok: false, message: String(error) }); }
     let sandboxContainerName: string | undefined;
     if (state && shouldUseJaitThreadSandbox(toolName)) {
       try {
         sandboxContainerName = await this.ensureThreadSandbox(state);
       } catch (error) {
-        return {
+        return recordResult({
           ok: false,
           message: error instanceof Error ? error.message : String(error),
-        };
+        });
       }
     }
     const context: ToolContext = {
-      sessionId,
+      sessionId: state?.threadId ?? sessionId,
+      threadId: state?.threadId,
       actionId: uuidv7(),
       projectRoot,
       requestedBy: "agent",
@@ -459,11 +492,12 @@ export class JaitProvider implements CliProviderAdapter {
       signal,
     };
     try {
-      return this.deps.toolExecutor
+      const result = this.deps.toolExecutor
         ? await this.deps.toolExecutor(toolName, toolInput, context)
         : await this.deps.toolRegistry.execute(toolName, toolInput, context);
+      return recordResult(result);
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+      return recordResult({ ok: false, message: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -576,3 +610,16 @@ export const OPENROUTER_MODELS: ProviderModelInfo[] = [
   { id: "mistralai/mistral-large-2411", name: "Mistral Large", description: "Mistral's flagship" },
   { id: "x-ai/grok-3-mini-beta", name: "Grok 3 Mini", description: "xAI's reasoning model", reasoningEffortSupported: true },
 ];
+
+/** File tools run on the host; resolve their paths consistently from the thread root. */
+export function prepareThreadFileInput(tool: string, input: unknown, projectRoot: string): unknown {
+  if (!/^(?:read|edit|search|file\.(?:read|write|patch|list|stat))$/.test(tool) || !input || typeof input !== "object") return input;
+  const args = input as Record<string, unknown>;
+  if (typeof args.path !== "string") return input;
+  const alias = args.path === "/project" || args.path.startsWith("/project/");
+  if (isAbsolute(args.path) && !alias) return input;
+  const root = resolve(projectRoot);
+  const path = resolve(root, alias ? args.path.slice("/project".length).replace(/^\//, "") : args.path);
+  if (path !== root && !path.startsWith(root + sep)) throw new Error("Path escapes thread project boundary.");
+  return { ...args, path };
+}

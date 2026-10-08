@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { TeamRoomMessage } from '@jait/shared'
 import { ArrowLeft, ExternalLink, UsersRound } from 'lucide-react'
 import { teamChatApi, type TeamRoomSnapshot } from '@/lib/team-chat-api'
@@ -20,6 +20,8 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
   const [sending, setSending] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const bottom = useRef<HTMLDivElement>(null)
+  const messageList = useRef<HTMLDivElement>(null)
+  const positionedRoom = useRef<string | null>(null)
   const retryKey = useRef<{ content: string; signature: string; key: string } | null>(null)
 
   useEffect(() => {
@@ -36,7 +38,17 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
     return () => { active = false; clearTimeout(timer) }
   }, [roomId])
   const count = snapshot?.messages.length ?? 0
-  useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }, [count])
+  const loadedRoomId = snapshot?.room.id
+  useLayoutEffect(() => {
+    if (!loadedRoomId || !messageList.current) return
+    if (positionedRoom.current !== loadedRoomId) {
+      // Open history at the latest message before the first paint, without animation.
+      messageList.current.scrollTop = messageList.current.scrollHeight
+      positionedRoom.current = loadedRoomId
+    } else {
+      bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [count, loadedRoomId])
   const send = async (attachments: ChatAttachment[] = []) => {
     if ((!input.trim() && !attachments.length) || sending) return
     const content = input.trim() || 'Please review the attached files.'
@@ -63,7 +75,7 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
       <p><strong>Goal · {snapshot.room.goal.status}</strong> {snapshot.room.goal.description}</p>
       <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">{snapshot.room.goal.criteria.map((criterion, index) => <li key={index}>{criterion}{snapshot.room.goal?.evidence?.[index] && <span> — {snapshot.room.goal.evidence[index]}</span>}</li>)}</ul>
     </div>}
-    <div className="min-h-0 flex-1 overflow-y-auto p-4" aria-label="Team conversation" role="log" aria-live="polite">
+    <div ref={messageList} className="min-h-0 flex-1 overflow-y-auto p-4" aria-label="Team conversation" role="log" aria-live="polite">
       {listError && <p role="alert" className="text-sm text-destructive">{listError}</p>}
       {snapshot && snapshot.messages.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Tell the team what you want to accomplish. The team will route your message to the right agent.</p>}
       <div className="mx-auto max-w-3xl space-y-5">{snapshot?.messages.map(message => {

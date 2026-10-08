@@ -149,6 +149,7 @@ const SKILL_GENERIC_WORDS = new Set([
   "read", "write", "create", "edit", "delete", "search", "find", "file", "files", "tool", "tools",
   "cli", "api", "local", "content", "result", "results", "manage", "list", "show", "view", "move",
   "notes", "data", "input", "output", "code", "task", "tasks", "run", "check", "inspect", "verify",
+  "start", "stop", "continue", "unfinished", "saved", "previous", "process", "terminated", "gateway", "conversation", "activity", "progress", "completed", "partial", "response", "turn", "session", "work", "call", "calls",
 ]);
 function skillWords(text: string): Set<string> {
   return new Set((text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
