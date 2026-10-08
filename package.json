@@ -3,7 +3,7 @@
   "version": "0.1.82",
   "private": true,
   "type": "module",
-  "description": "Just Another Intelligent Tool — AI-assisted network and cybersecurity",
+  "description": "Just Another Intelligent Tool \u2014 AI-assisted network and cybersecurity",
   "license": "MIT",
   "author": "JakobWl",
   "homepage": "https://jait.dev",
@@ -39,8 +39,8 @@
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
   },
   "devDependencies": {
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
