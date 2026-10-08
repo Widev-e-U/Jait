@@ -4,6 +4,10 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.917](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.917) — 2026-10-08
+
+- fix(chat): bypass built-in backend validation for CLI providers — 2b1d0f53
+
 ## [v0.1.916](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.916) — 2026-10-08
 
 Publish `@jait/shared@0.1.96` with the OpenCode Go backend contracts so gateway connection tests recognize `opencode-go`.
