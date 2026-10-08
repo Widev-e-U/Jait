@@ -257,10 +257,28 @@ jobs:
           bun run --filter @jait/shared build
           bun run --filter @jait/api-client build
           bun run --filter @jait/ui-shared build
-          (
-            cd apps/web
-            flock /tmp/jait-vite-build.lock env NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
-          )
+          # Same retry-on-OOM policy as the other self-hosted jobs (v0.1.915):
+          # exit 137/134 are transient kernel kills on the shared host.
+          vite_retry() {
+            for attempt in 1 2 3; do
+              if (
+                cd apps/web &&
+                flock /tmp/jait-vite-build.lock env NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
+              ); then
+                return 0
+              fi
+              status=$?
+              if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
+                echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
+                sleep 120
+              else
+                return "$status"
+              fi
+            done
+            echo "::error::vite build was OOM-killed on all 3 attempts"
+            return 137
+          }
+          vite_retry
           test -s apps/web/dist/index.html
       - uses: actions/download-artifact@v4
         with:
@@ -587,7 +605,24 @@ jobs:
       # apps/web vite build, which needs ~6-8GB heap and gets kernel
       # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
       # The self-hosted runners share a host; only one Vite build can fit.
-      - run: flock /tmp/jait-vite-build.lock bun run build
+      # Same retry-on-OOM policy as the npm-publish job (v0.1.915 evidence).
+      - name: Build packages (retry on host OOM)
+        run: |
+          for attempt in 1 2 3; do
+            if flock /tmp/jait-vite-build.lock bun run build; then
+              exit 0
+            fi
+            status=$?
+            if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
+              echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
+              sleep 120
+            else
+              echo "❌ build failed with non-OOM exit $status — not retrying"
+              exit "$status"
+            fi
+          done
+          echo "::error::build was OOM-killed on all 3 attempts"
+          exit 137
         env:
           NODE_OPTIONS: --max-old-space-size=8192
       - name: Configure Firebase Android client
@@ -678,7 +713,29 @@ jobs:
       # apps/web vite build, which needs ~6-8GB heap and gets kernel
       # OOM-killed (exit 137) without a cap (v0.1.877-v0.1.878).
       # The self-hosted runners share a host; only one Vite build can fit.
-      - run: flock /tmp/jait-vite-build.lock bun run build
+      #
+      # The cap still loses races when unrelated resident processes eat the
+      # headroom: v0.1.915 died with the cap while other host work ran. 137 =
+      # kernel SIGKILL, 134 = node heap OOM abort; both are transient. Retry
+      # with spaced waits — a real build error (type error etc.) fails fast
+      # with a different code and exits immediately.
+      - name: Build packages (retry on host OOM)
+        run: |
+          for attempt in 1 2 3; do
+            if flock /tmp/jait-vite-build.lock bun run build; then
+              exit 0
+            fi
+            status=$?
+            if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
+              echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
+              sleep 120
+            else
+              echo "❌ build failed with non-OOM exit $status — not retrying"
+              exit "$status"
+            fi
+          done
+          echo "::error::build was OOM-killed on all 3 attempts"
+          exit 137
         env:
           NODE_OPTIONS: --max-old-space-size=8192
 

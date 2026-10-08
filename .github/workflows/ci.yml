@@ -39,8 +39,25 @@ jobs:
           # 137) on the memory-tight self-hosted runner (v0.1.877-v0.1.878).
           NODE_OPTIONS: --max-old-space-size=8192
         # All self-hosted Linux runners share one memory-limited host.
-        # Serialize Vite builds across CI and release jobs.
-        run: flock /tmp/jait-vite-build.lock bun run build
+        # Serialize Vite builds across CI and release jobs, and ride out
+        # transient OOM kills (host pressure from off-runner processes) with
+        # the same 3-attempt retry the Release workflow uses.
+        run: |
+          for attempt in 1 2 3; do
+            if flock /tmp/jait-vite-build.lock bun run build; then
+              exit 0
+            fi
+            status=$?
+            if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
+              echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
+              sleep 120
+            else
+              echo "❌ build failed with non-OOM exit $status — not retrying"
+              exit "$status"
+            fi
+          done
+          echo "::error::build was OOM-killed on all 3 attempts"
+          exit 137
 
       - name: Test
         run: bun run test

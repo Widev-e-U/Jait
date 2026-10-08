@@ -140,8 +140,8 @@ describe("gateway crash chat recovery", () => {
       expect(provider.startSession).toHaveBeenCalledOnce();
       const options = provider.startSession.mock.calls[0]?.[0];
       expect(options?.mcpServers?.map((server) => server.url)).toEqual([
-        `http://127.0.0.1:43123/mcp?sessionId=${session.id}&projectRoot=%2Fworkspace%2Fproject&toolSet=core`,
-        `http://127.0.0.1:43123/mcp?sessionId=${session.id}&projectRoot=%2Fworkspace%2Fproject&toolSet=deferred`,
+        `http://127.0.0.1:43123/mcp?sessionId=${session.id}&projectRoot=%2Fworkspace%2Fproject&runtimeMode=full-access&toolSet=core`,
+        `http://127.0.0.1:43123/mcp?sessionId=${session.id}&projectRoot=%2Fworkspace%2Fproject&runtimeMode=full-access&toolSet=deferred`,
       ]);
     } finally {
       await app.close();

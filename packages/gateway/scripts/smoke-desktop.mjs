@@ -25,7 +25,12 @@ async function stop(eof = false) {
   const exited = once(child, 'exit');
   if (!eof) child.stdin.write('stop\n');
   child.stdin.end();
-  const timer = setTimeout(() => child.kill(), 10000);
+  // 10s was too tight on the slower windows-latest CI VM (v0.1.907 and
+  // v0.1.913): the packaged runtime was still mid-shutdown (closing watchers,
+  // finishing migrations) when the kill fired, so the process died with a
+  // non-zero exit and 'graceful shutdown' tripped. Give slow VMs real room;
+  // the kill only fires for a genuinely hung runtime.
+  const timer = setTimeout(() => child.kill(), 30000);
   const [code] = await exited;
   clearTimeout(timer);
   assert.equal(code, 0, 'graceful shutdown');

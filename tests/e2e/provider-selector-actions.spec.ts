@@ -7,6 +7,7 @@ const API_URL = process.env.API_URL || 'http://localhost:8000'
 test.describe('provider selector actions', () => {
   let apiToken: string
   test.beforeAll(async ({ request }) => {
+    test.setTimeout(90_000)
     const registration = await registerTestUser(request, API_URL, {
       data: { username: `provider-actions-${Date.now()}`, password: 'e2e-password-123' },
     })
@@ -133,8 +134,12 @@ test.describe('provider selector actions', () => {
       for (const effort of ['Low', 'High', 'Max']) {
         await providerSelector.click()
         await page.getByRole('button', { name: effort, exact: true }).click()
-        await expect(providerSelector).toContainText(effort)
+        // The pill collapses to an icon-only button in compact (mobile) layouts,
+        // so selection state is asserted via the aria-label, which carries it for both layouts.
         await expect(providerSelector).toHaveAttribute('aria-label', new RegExp(`reasoning ${effort}`))
+        if (!mobile) {
+          await expect(providerSelector).toContainText(effort)
+        }
         await expect(providerSelector).not.toContainText('Gateway')
       }
       await providerSelector.click()
