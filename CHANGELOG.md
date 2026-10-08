@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.916](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.916) — 2026-10-08
+
+Publish `@jait/shared@0.1.96` with the OpenCode Go backend contracts so gateway connection tests recognize `opencode-go`.
+
+- ci: ride out host OOM in release builds; fix Windows smoke shutdown flake — 227ce412
+
 ## [v0.1.915](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.915) — 2026-10-08
 - fix(chat): restore pending approvals after reconnects and keep conversation viewport stable — a036ee65
 - feat(opencode): connect Go backend with credential setup, model discovery and native Claude/GPT formats — ffc9de49
