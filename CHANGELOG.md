@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.919](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.919) — 2026-10-08
+
+- fix(agents): report blockers honestly and recover failed handoffs — 779248f0
+
+Team deliveries now surface the latest completed assistant answer, fail empty completions and explicit blockers, and request a bounded manager review after failed handoffs. Environment recovery stops after six infrastructure failures across changing errors; repeated errors retain the existing two-retry limit. Team instructions require runtime readiness checks and preservation of failing test exit codes.
+
 ## [v0.1.918](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.918) — 2026-10-08
 
 - fix(gateway): omit tool-result name field for OpenCode Go backend — 05bfa562
