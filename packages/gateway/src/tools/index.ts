@@ -243,6 +243,7 @@ import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createMobileAlarmScheduleTool } from "./mobile-tools.js";
+import { createDiagramTool } from "./diagram-tools.js";
 import { createArchitectureTool } from "./architecture-tools.js";
 import { createCodeGraphTools } from "./code-graph-tools.js";
 import {
@@ -623,6 +624,7 @@ export function createToolRegistry(
   tools.register(createSshRunTool(deps.secretInputService, undefined, deps.userSecretService));
 
   // Architecture and code graph tools
+  tools.register(createDiagramTool());
   tools.register(createArchitectureTool(deps.ws, deps.architectureDiagramService));
   if (deps.codeGraphService) {
     for (const tool of createCodeGraphTools(deps.codeGraphService)) {

@@ -1,3 +1,4 @@
+import { MermaidToolResult } from './mermaid-tool-result'
 import { ImageViewerContent } from './image-viewer'
 import { memo, useCallback, useContext, createContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type UIEvent } from 'react'
 import { Shield, Terminal, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Network, Zap, BookOpen, Brain, Circle, HelpCircle } from 'lucide-react'
@@ -146,6 +147,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'delete':          { icon: FileText,  label: 'Delete',      color: 'text-red-500' },
   'move':            { icon: FileText,  label: 'Move',        color: 'text-blue-500' },
   'think':           { icon: Zap,       label: 'Think',       color: 'text-purple-500' },
+  'diagram.render': { icon: Network, label: 'Diagram', color: 'text-primary' },
   'jait.link':        { icon: ExternalLink, label: 'Jait link', color: 'text-primary' },
   'other':           { icon: Terminal,  label: 'Tool',        color: 'text-muted-foreground' },
   'fetch':           { icon: Globe,     label: 'Fetch',       color: 'text-cyan-500' },
@@ -3414,7 +3416,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink'
+  return bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink' || bodyKind === 'mermaidDiagram'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -4369,6 +4371,8 @@ function ToolCallCardInner({
       writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && normalizedArgs.content != null) ? String(normalizedArgs.content ?? '') : undefined}
       isNewFile={normalizedTool === 'file.write'}
     />
+  ) : bodyKind === 'mermaidDiagram' && call.result?.ok ? (
+    <MermaidToolResult data={call.result.data ?? call.result.message} />
   ) : bodyKind === 'jaitLink' && call.result?.ok ? (
     <JaitLinkResult data={call.result.data ?? call.result.message} />
   ) : displayTool === 'jait.catalog' && call.result?.ok ? (

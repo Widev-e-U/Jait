@@ -65,6 +65,7 @@ export const ASK_MODE_TOOLS = new Set([
   "tools.search",
   "jait.catalog",
   "jait.link",
+  "diagram.render",
   "agent.profiles.inspect",
   // Jait with read-only actions
   "jait",
@@ -161,6 +162,7 @@ export const SWARM_ORCHESTRATION_TOOLS = new Set([
   "tools.search",
   "jait.catalog",
   "jait.link",
+  "diagram.render",
 ]);
 
 // ── Swarm teams ──────────────────────────────────────────────────────

@@ -23,6 +23,7 @@ export type ToolCallBodyKind =
   | 'todoList'
   | 'output'
   | 'security'
+  | 'mermaidDiagram'
   | 'jaitLink'
   | 'runningHint'
   | 'none'
@@ -381,6 +382,7 @@ export function getToolImageDataUri(
 
 export function normalizeToolName(name: string): string {
   const raw = name.replace(/^functions[._]/, '')
+  if (/^mcp__.+__diagram_render$/.test(raw)) return 'diagram.render'
   if (raw === 'spawn_agent') return 'agent.spawn'
   if (raw === 'wait_agent') return 'agent.wait'
   if (raw === 'close_agent') return 'agent.close'
@@ -570,6 +572,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
 
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'
+  if (normalizedTool === 'diagram.render' && input.status === 'success') return 'mermaidDiagram'
   if (normalizedTool === 'jait.link' && input.status === 'success') return 'jaitLink'
   if (isSecurityToolName(normalizedTool) && input.displayOutput) return 'security'
   if (['browser.navigate', 'browser.snapshot', 'browser.inspect', 'browser.click', 'browser.type', 'browser.scroll', 'browser.select', 'browser.wait', 'browser.screenshot'].includes(normalizedTool)) return 'browserActivity'

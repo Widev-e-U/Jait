@@ -16,7 +16,7 @@ export function unwrapCatalogData(value: unknown, depth = 0): Record<string, unk
   }
   if (typeof value !== 'object') return {}
   const record = value as Record<string, unknown>
-  if (Array.isArray(record.pages) || Array.isArray(record.pageLinks) || record.kind === 'jait-link') return record
+  if (Array.isArray(record.pages) || Array.isArray(record.pageLinks) || record.kind === 'jait-link' || record.kind === 'mermaid-diagram') return record
   for (const key of ['data', 'result', 'structuredContent', 'content', 'text']) {
     const result = unwrapCatalogData(record[key], depth + 1)
     if (Object.keys(result).length) return result

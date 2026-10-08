@@ -488,3 +488,11 @@ it('routes security aliases to their own result body and keeps pending/running s
   expect(getToolCallBodyKind({ ...base, displayOutput: '', tool: 'security.http.check', status: 'running' })).toBe('runningHint')
   expect(getToolCallBodyKind({ ...base, tool: 'security.unknown', status: 'success' })).toBe('output')
 })
+
+
+describe('Mermaid chat tool names', () => {
+  it.each(['diagram.render', 'diagram_render', 'mcp__jait__diagram_render', 'functions.mcp__jait_core__diagram_render'])('routes %s into inline diagrams', tool => {
+    expect(getToolCallBodyKind({ tool, args: {}, status: 'success', displayOutput: 'result', snapshotText: null, screenshotPath: null })).toBe('mermaidDiagram')
+    expect(getToolCallBodyKind({ tool, args: {}, status: 'error', displayOutput: 'failed', snapshotText: null, screenshotPath: null })).toBe('output')
+  })
+})
