@@ -40,6 +40,7 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
     baseURL: FRONTEND_URL,
+    serviceWorkers: 'block',
 
     /* Keep a trace for local failures even when retries are disabled. */
     trace: 'retain-on-failure',

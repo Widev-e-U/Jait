@@ -1,14 +1,15 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 const PROJECT_ROOT = path.resolve(process.cwd(), '../..')
 
-test('hiding the editor releases its live preview session', async ({ page, request }) => {
+test('closing the preview panel releases its live preview session', async ({ page, request }) => {
   test.setTimeout(90_000)
   const username = `e2e-preview-close-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
-  const registration = await request.post(`${API_URL}/api/auth/register`, { data: { username, password } })
+  const registration = await registerTestUser(request, API_URL, { data: { username, password } })
   expect(registration.ok()).toBeTruthy()
   const { access_token: token } = await registration.json() as { access_token: string }
   const headers = { Authorization: `Bearer ${token}` }
@@ -45,20 +46,18 @@ test('hiding the editor releases its live preview session', async ({ page, reque
     stopCount += 1
     return route.fulfill({ json: { ok: true } })
   })
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(([gatewayUrl, authToken]) => {
     localStorage.setItem('jait-gateway-url', gatewayUrl)
     localStorage.setItem('jait-auth-token', authToken)
   }, [API_URL, token] as const)
-  await page.goto('/')
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  const editorButton = page.getByRole('button', { name: 'Editor', exact: true }).first()
-  await expect(editorButton).toBeVisible({ timeout: 20_000 })
-  const previewButton = page.getByRole('button', { name: 'Open preview' })
-  if (!await previewButton.isVisible()) await editorButton.click()
+  const previewButton = page.getByRole('button', { name: 'Preview', exact: true })
   await expect(previewButton).toBeVisible({ timeout: 20_000 })
   await previewButton.click()
-  await expect(page.getByRole('button', { name: 'Close preview' })).toBeVisible()
-  await page.getByRole('button', { name: 'Editor', exact: true }).first().click()
-  await expect(page.getByRole('button', { name: 'Open preview' })).toHaveCount(0)
+  await expect(previewButton).toHaveAttribute('aria-pressed', 'true')
+  await previewButton.click()
+  await expect(previewButton).toHaveAttribute('aria-pressed', 'false')
   await expect.poll(() => stopCount).toBeGreaterThan(0)
 })

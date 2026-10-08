@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 import { test, expect } from '@playwright/test'
 
@@ -6,7 +7,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '../..')
 
 for (const initiallyOpen of [true, false]) {
   test(`chat changed-files indicator opens source control with sidebar ${initiallyOpen ? 'open' : 'closed'}`, async ({ page, request }) => {
-    const registration = await request.post(`${API_URL}/api/auth/register`, { data: {
+    const registration = await registerTestUser(request, API_URL, { data: {
       username: `source-control-${Date.now()}-${Math.random().toString(36).slice(2)}`, password: 'source-control-test-password',
     } })
     expect(registration.ok()).toBeTruthy()
@@ -28,7 +29,8 @@ for (const initiallyOpen of [true, false]) {
       },
     } })).ok()).toBeTruthy()
     expect((await request.post(`${API_URL}/api/projects/select`, { headers, data: { projectId: project.id, sessionId: session.id } })).ok()).toBeTruthy()
-    await page.addInitScript(({ token, api, open }) => {
+    await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(({ token, api, open }) => {
       localStorage.setItem('jait-auth-token', token)
       sessionStorage.setItem('jait-auth-token', token)
       localStorage.setItem('token', token)

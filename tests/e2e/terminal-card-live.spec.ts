@@ -20,13 +20,11 @@ test('running MCP card mounts the live terminal and receives output before tool 
   await expect(page.locator('.xterm')).toBeVisible()
   await expect.poll(() => subscription).toMatchObject({ terminalId: 'terminal-repro-pty', outputOffset: 12 })
   expect(subscription).not.toHaveProperty('outputEndOffset')
-  terminalSocket!.send(JSON.stringify({ payload: {
-    type: 'terminal.output', terminalId: 'terminal-repro-pty', data: 'LIVE FIRST LINE\r\n',
+  terminalSocket!.send(JSON.stringify({ type: 'terminal.output', payload: { type: 'terminal.output', terminalId: 'terminal-repro-pty', data: 'LIVE FIRST LINE\r\n',
     streamId: 'test-stream', seq: 1, outputOffset: 13,
   } }))
   await expect(page.locator('.xterm-rows')).toContainText('LIVE FIRST LINE')
-  terminalSocket!.send(JSON.stringify({ payload: {
-    type: 'terminal.output', terminalId: 'terminal-repro-pty', data: 'LIVE SECOND LINE\r\n',
+  terminalSocket!.send(JSON.stringify({ type: 'terminal.output', payload: { type: 'terminal.output', terminalId: 'terminal-repro-pty', data: 'LIVE SECOND LINE\r\n',
     streamId: 'test-stream', seq: 2, outputOffset: 14,
   } }))
   await expect(page.locator('.xterm-rows')).toContainText('LIVE SECOND LINE')

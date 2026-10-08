@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 
 import { expect, test } from '@playwright/test'
@@ -9,7 +10,7 @@ const PROJECT_ROOT = process.env.PROJECT_ROOT || path.resolve(process.cwd(), '..
 async function registerUser(request: APIRequestContext) {
   const username = `e2e-personal-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
-  const response = await request.post(`${API_URL}/api/auth/register`, {
+  const response = await registerTestUser(request, API_URL, {
     data: { username, password },
   })
   expect(response.ok()).toBeTruthy()
@@ -42,6 +43,7 @@ async function createSelectedProject(request: APIRequestContext, token: string, 
 }
 
 async function authenticate(page: Page, token: string) {
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(([gatewayUrl, authToken]) => {
     window.localStorage.setItem('jait-gateway-url', gatewayUrl)
     window.localStorage.setItem('jait-auth-token', authToken)
@@ -56,12 +58,12 @@ test('global new chat stays personal after opening a project', async ({ page, re
   const { projectTitle } = await createSelectedProject(request, token)
   await authenticate(page, token)
 
-  await page.getByRole('button', { name: 'Projects and chats', exact: true }).click()
+  await page.getByRole('button', { name: 'Projects & Chats', exact: true }).click()
   const projectRow = page.getByText(projectTitle, { exact: true }).first()
   await expect(projectRow).toBeVisible({ timeout: 15_000 })
   await projectRow.click()
 
-  const newChatButton = page.getByRole('button', { name: 'New chat', exact: true })
+  const newChatButton = page.getByRole('button', { name: 'New personal chat', exact: true })
   await expect(newChatButton).toBeVisible({ timeout: 15_000 })
 
   const createdSession = page.waitForResponse(async (response) => {
@@ -70,7 +72,6 @@ test('global new chat stays personal after opening a project', async ({ page, re
     return url.pathname === '/api/sessions' || /\/api\/projects\/[^/]+\/sessions$/.test(url.pathname)
   })
   await newChatButton.click()
-  await page.getByRole('menuitem', { name: 'Open here', exact: true }).click()
 
   const response = await createdSession
   const session = await response.json() as { id: string; projectId: string | null }
@@ -105,7 +106,7 @@ test('personal to project A to project B preserves every chat assignment', async
   })
   expect(selected.ok()).toBeTruthy()
   await authenticate(page, token)
-  await page.getByRole('button', { name: 'Projects and chats', exact: true }).click()
+  await page.getByRole('button', { name: 'Projects & Chats', exact: true }).click()
 
   for (const target of [first, second, first, second]) {
     const opened = page.waitForResponse(response => {

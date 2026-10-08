@@ -6,8 +6,7 @@ import { cleanupTestJobs, test, expect } from './fixtures'
 
 async function openJobsPage(page: Page): Promise<void> {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Open navigation menu' }).click()
-  await page.getByRole('menuitem', { name: 'Jobs', exact: true }).click()
+  await page.getByRole('button', { name: 'Jobs', exact: true }).click()
 }
 
 test.beforeEach(async ({ apiToken }) => {
@@ -64,7 +63,7 @@ test.describe('Create Job Dialog', () => {
     await expect(authenticatedPage.locator('h2:has-text("Create New Job")')).toBeVisible()
     
     // Click the X close button
-    await authenticatedPage.locator('button:has(svg.lucide-x)').click()
+    await authenticatedPage.getByRole('button', { name: 'Close dialog', exact: true }).click()
     await expect(authenticatedPage.locator('h2:has-text("Create New Job")')).not.toBeVisible()
   })
 
@@ -103,16 +102,15 @@ test.describe('Create Agent Task Job', () => {
   })
 
   test('should create an agent task job', async ({ authenticatedPage }) => {
+    await authenticatedPage.route('**/api/providers', route => route.fulfill({ json: { providers: [{ id: 'jait', name: 'Jait', available: true, modes: ['full-access'], nodeId: 'gateway' }], remoteProviders: [] } }))
+    await authenticatedPage.route('**/api/providers/*/models*', route => route.fulfill({ json: { models: [{ id: 'local-model', name: 'local-model', isDefault: true }] } }))
+    await openJobsPage(authenticatedPage)
     await authenticatedPage.click('button:has-text("New Job")')
-    
-    // Fill in the job name
     await authenticatedPage.fill('input#name', 'Test Daily Summary')
-    
-    await authenticatedPage.getByTestId('provider-select').click()
-    await authenticatedPage.getByRole('option', { name: /Ollama/ }).click()
-    await authenticatedPage.getByTestId('model-select').click()
-    await authenticatedPage.getByRole('option', { name: /local-model/ }).click()
-    
+    await authenticatedPage.getByRole('button', { name: 'Provider Jait (Built-in), model Default', exact: true }).click()
+    await authenticatedPage.getByRole('listbox', { name: 'Providers' }).getByRole('option', { name: 'Jait', exact: true }).click()
+    await authenticatedPage.getByRole('option', { name: /^local-model / }).click()
+
     // Fill in prompt
     await authenticatedPage.fill('textarea#prompt', 'Summarize the daily activities')
     

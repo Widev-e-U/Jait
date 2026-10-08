@@ -1,10 +1,11 @@
+import { registerTestUser } from './helpers/agent-user'
 import { test, expect } from '@playwright/test'
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 let token: string
 test.beforeAll(async ({ request }) => {
   const credentials = { username: 'catalogue-modal-e2e', password: 'catalogue-test-password' }
   let response = await request.post(`${API_URL}/api/auth/login`, { data: credentials })
-  if (!response.ok()) response = await request.post(`${API_URL}/api/auth/register`, { data: credentials })
+  if (!response.ok()) response = await registerTestUser(request, API_URL, { data: credentials })
   expect(response.ok(), await response.text()).toBeTruthy()
   token = (await response.json()).access_token
 })
@@ -13,7 +14,8 @@ for (const mobile of [false, true]) {
   test(`${mobile ? 'mobile' : 'desktop'} account Catalogue opens the graph and routes to pages`, async ({ page }) => {
     test.setTimeout(90_000)
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 })
-    await page.addInitScript(({ token, api }) => {
+    await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(({ token, api }) => {
       localStorage.setItem('jait-auth-token', token)
       sessionStorage.setItem('jait-auth-token', token)
       localStorage.setItem('token', token)

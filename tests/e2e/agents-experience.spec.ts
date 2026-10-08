@@ -6,6 +6,7 @@ const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 
 async function openAgents(page: Page, request: APIRequestContext) {
   const token = await registerAgentTestUser(request, API_URL, `agents-ui-${Date.now()}-${Math.random().toString(36).slice(2)}`, 'agents-ui-test-password')
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)
@@ -168,8 +169,8 @@ test('stopped task resumes from its row and active tasks stop independently of l
     })
   })
   await page.route(`**/api/threads/${thread.id}/runtime`, (route) => route.fulfill({ json: { running: status === 'running', startedAt } }))
-  await page.route(`**/api/threads/${thread.id}/start`, async (route) => {
-    resumed = route.request().postDataJSON().message.includes('Continue the stopped task')
+  await page.route(`**/api/threads/${thread.id}/resume`, async (route) => {
+    resumed = route.request().method() === 'POST'
     status = 'running'
     sockets.forEach(sendSnapshot)
     await route.fulfill({ json: { ...thread, status } })

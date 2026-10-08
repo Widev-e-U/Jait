@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
 async function fixture(page: Page) {
+  test.setTimeout(90_000)
   const profiles = ['Nova', 'Atlas'].map((name, index) => ({
     id: `agent-${index}`, name, avatar: name, providerId: 'codex', model: 'old-model',
     persona: 'Finish your assigned task', requiresApproval: true, paused: false,

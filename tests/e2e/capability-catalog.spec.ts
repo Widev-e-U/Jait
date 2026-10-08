@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import { test, expect } from '@playwright/test'
 
 test('tool cards omit page shortcuts and still display catalog results', async ({ page }) => {
@@ -34,7 +35,7 @@ test('agents explicitly render Jait change links that navigate on click', async 
 test('live gateway exposes the catalog and page navigation preserves destination views', async ({ page, request }) => {
   test.setTimeout(90_000)
   const api = process.env.API_URL || 'http://127.0.0.1:8100'
-  const registration = await request.post(`${api}/api/auth/register`, {
+  const registration = await registerTestUser(request, api, {
     data: { username: `catalog-${Date.now()}`, password: 'catalog-test-password' },
   })
   expect(registration.ok()).toBeTruthy()
@@ -60,6 +61,7 @@ test('live gateway exposes the catalog and page navigation preserves destination
     data: { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'agent_profiles_inspect', arguments: { action: 'list' } } },
   })
   expect((await inspectResponse.json()).result.isError).toBe(false)
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: api, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)

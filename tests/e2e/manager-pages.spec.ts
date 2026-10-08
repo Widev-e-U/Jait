@@ -1,13 +1,15 @@
+import { registerTestUser } from './helpers/agent-user'
 import { test, expect } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 
 test('manager pages have separate routes and keep server saved agents', async ({ page, request }) => {
-  const registration = await request.post(`${API_URL}/api/auth/register`, {
+  const registration = await registerTestUser(request, API_URL, {
     data: { username: `manager-pages-${Date.now()}`, password: 'manager-pages-test-password' },
   })
   expect(registration.ok()).toBeTruthy()
   const { access_token: token } = await registration.json()
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)
@@ -29,6 +31,8 @@ test('manager pages have separate routes and keep server saved agents', async ({
   await expect(page.getByRole('tablist', { name: 'View mode' })).toBeVisible()
   await expect(page.locator('header').getByText('Pull Requests')).toHaveCount(0)
 
+  await page.addLocatorHandler(page.getByRole('heading', { name: 'Set up your first project', exact: true }), async () => { await page.getByRole('button', { name: 'Skip for now', exact: true }).click() })
+  await page.addLocatorHandler(page.getByText('A node needs your permission', { exact: true }), async () => { await page.getByRole('button', { name: 'Dismiss', exact: true }).click() })
   await page.getByRole('button', { name: 'Threads', exact: true }).click()
   await expect(page).toHaveURL(/\/threads$/)
   await page.getByRole('button', { name: 'Agents', exact: true }).click()
@@ -40,8 +44,8 @@ test('manager pages have separate routes and keep server saved agents', async ({
     page.waitForResponse((response) => response.url().includes('/api/persona-agents/') && response.request().method() === 'PUT' && response.ok() && response.request().postData()?.includes('Researcher') === true),
     page.getByRole('button', { name: 'Create agent', exact: true }).click(),
   ])
-  await expect(page.getByRole('heading', { name: 'Ask Researcher' })).toBeVisible()
-  const sections = page.getByRole('complementary', { name: 'Agent sections' })
+  await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toBeVisible()
+  const sections = page.getByRole('navigation', { name: 'Agent sections' })
   await expect(sections.getByRole('button', { name: 'Skills' })).toBeVisible()
   await sections.getByRole('button', { name: 'Tasks & runs' }).click()
   await page.getByRole('textbox', { name: 'Task name' }).fill('Weekly brief')
@@ -53,9 +57,9 @@ test('manager pages have separate routes and keep server saved agents', async ({
   ])
   await expect(page.getByText('Weekly brief', { exact: true })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('button', { name: /Researcher/ })).toBeVisible()
-  await page.getByRole('button', { name: /Researcher/ }).click()
-  await expect(page.getByRole('heading', { name: 'Ask Researcher' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Researcher', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Open Researcher', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toBeVisible()
   await sections.getByRole('button', { name: 'Tasks & runs' }).click()
   await expect(page.getByText('Weekly brief', { exact: true })).toBeVisible()
 

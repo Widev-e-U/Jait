@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import { expect, test, type WebSocketRoute } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
@@ -6,13 +7,14 @@ test('a stale queue item is not sent again when the UI WebSocket disconnects', a
   test.setTimeout(60_000)
   const credentials = { username: 'queue-delivery-e2e', password: 'queue-delivery-test-password' }
   let auth = await request.post(`${API_URL}/api/auth/login`, { data: credentials })
-  if (!auth.ok()) auth = await request.post(`${API_URL}/api/auth/register`, { data: credentials })
+  if (!auth.ok()) auth = await registerTestUser(request, API_URL, { data: credentials })
   expect(auth.ok(), await auth.text()).toBeTruthy()
   const { access_token: token } = await auth.json()
   const headers = { Authorization: `Bearer ${token}` }
   const created = await request.post(`${API_URL}/api/sessions`, { headers, data: { name: 'Stale queued delivery' } })
   expect(created.ok()).toBeTruthy()
   const { id: sessionId } = await created.json()
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)

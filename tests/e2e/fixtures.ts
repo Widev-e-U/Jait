@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 /**
  * E2E test fixtures for authentication and common setup
  */
@@ -19,7 +20,7 @@ interface TestAuthIdentity {
 }
 
 export async function getTestToken(page: Page, identity: TestAuthIdentity): Promise<string> {
-  const registerResponse = await page.request.post(`${API_URL}/api/auth/register`, {
+  const registerResponse = await registerTestUser(page.request, API_URL, {
     data: {
       username: identity.username,
       password: identity.password,
@@ -54,6 +55,8 @@ export async function authenticatePage(page: Page, token: string): Promise<void>
   await page.addInitScript((storedToken) => {
     localStorage.setItem('jait-auth-token', storedToken)
   }, token)
+  await page.addLocatorHandler(page.getByText('A node needs your permission', { exact: true }), async () => { await page.getByRole('button', { name: 'Dismiss', exact: true }).click() })
+  await page.addLocatorHandler(page.getByRole('heading', { name: 'Set up your first project', exact: true }), async () => { await page.getByRole('button', { name: 'Skip for now', exact: true }).click() })
   await page.goto('/')
   await expect(page.getByRole('button', { name: 'Sign in' })).not.toBeVisible({ timeout: 15000 })
 }
@@ -91,7 +94,7 @@ interface JobsFixtures {
 }
 
 export const test = base.extend<JobsFixtures>({
-  authIdentity: async (_fixtures, use, testInfo) => {
+  authIdentity: async ({}, use, testInfo) => {
     const suffix = `${testInfo.parallelIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     await use({
       username: `e2e-${suffix}`,

@@ -13,7 +13,8 @@ test.describe('useChat stream resume lifecycle', () => {
     for (const eventName of ['focus', 'pageshow', 'online', 'visibilitychange'] as const) {
       await page.evaluate((name) => {
         if (name === 'visibilitychange') document.dispatchEvent(new Event(name))
-        else if (name === 'pageshow') window.dispatchEvent(new PageTransitionEvent(name))
+        else if (name === 'pageshow') window.dispatchEvent(new PageTransitionEvent(name, { persisted: true }))
+        else if (name === 'online') { window.dispatchEvent(new Event('offline')); window.dispatchEvent(new Event(name)) }
         else window.dispatchEvent(new Event(name))
       }, eventName)
       await page.waitForTimeout(100)
@@ -21,14 +22,10 @@ test.describe('useChat stream resume lifecycle', () => {
     }
   })
 
-  test('reconnects when the initial resume request never reaches a snapshot', async ({ page }) => {
-    test.setTimeout(10_000)
+  test('retries a failed initial snapshot before opening the durable subscription', async ({ page }) => {
     await page.goto('/use-chat-resume-repro.html?stall-first=1')
-
+    await expect(page.getByTestId('snapshot-fetch-count')).toHaveText('2')
     await expect(page.getByTestId('stream-fetch-count')).toHaveText('1')
-    await expect(page.getByTestId('history-loading')).toHaveText('true')
-
-    await expect(page.getByTestId('stream-fetch-count')).toHaveText('2', { timeout: 5_000 })
     await expect(page.getByTestId('history-loading')).toHaveText('false')
     await expect(page.getByTestId('message-count')).toHaveText('2')
   })
@@ -47,14 +44,7 @@ test.describe('useChat stream resume lifecycle', () => {
     expect(secondDelay).toBeLessThan(800)
   })
 
-  test('reattaches an initial direct stream after session creation without reloading', async ({ page }) => {
-    await page.addInitScript(() => {
-      const originalSetTimeout = window.setTimeout.bind(window)
-      window.setTimeout = ((handler, timeout = 0, ...args) => (
-        originalSetTimeout(handler, timeout === 40_000 ? 100 : timeout, ...args)
-      )) as typeof window.setTimeout
-    })
-
+  test('uses the durable subscription after session creation while the legacy POST body stalls', async ({ page }) => {
     await page.goto('/use-chat-resume-repro.html?stall-initial-direct=1')
 
     await expect(page.getByTestId('direct-fetch-count')).toHaveText('1')
@@ -63,7 +53,7 @@ test.describe('useChat stream resume lifecycle', () => {
     await expect(page.getByTestId('loading')).toHaveText('false')
   })
 
-  test('reconnects when an established streaming response stops receiving heartbeats', async ({ page }) => {
+  test('recovers a stale event subscription when the tab wakes', async ({ page }) => {
     test.setTimeout(60_000)
     await page.goto('/use-chat-resume-repro.html?stall-after-snapshot=1')
 
@@ -71,7 +61,12 @@ test.describe('useChat stream resume lifecycle', () => {
     await expect(page.getByTestId('history-loading')).toHaveText('false')
     await expect(page.getByTestId('message-count')).toHaveText('2')
 
-    await page.waitForTimeout(41_000)
+    await page.evaluate(() => {
+      const now = Date.now
+      Date.now = () => now() + 60_000
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await expect(page.getByTestId('stream-fetch-count')).toHaveText('2')
 
     expect(await page.evaluate(() => Reflect.get(window, '__resumeStreamFetchCount'))).toBe(2)
     await expect(page.getByTestId('history-loading')).toHaveText('false')

@@ -4,195 +4,91 @@ import { useChat } from '@/hooks/useChat'
 import '@/index.css'
 
 const encoder = new TextEncoder()
-
-type ReproWindow = Window & {
-  __resumeStreamFetchCount?: number
-  __resumeStreamFetchTimes?: number[]
-  __resumeStreamControllers?: ReadableStreamDefaultController<Uint8Array>[]
-  __directStreamFetchCount?: number
-}
-
-const reproWindow = window as ReproWindow
-reproWindow.__resumeStreamFetchCount = 0
-reproWindow.__resumeStreamFetchTimes = []
-reproWindow.__resumeStreamControllers = []
-reproWindow.__directStreamFetchCount = 0
-
-const originalFetch = window.fetch.bind(window)
-const searchParams = new URLSearchParams(window.location.search)
-const stallFirstStream = searchParams.has('stall-first')
-const stallAfterSnapshot = searchParams.has('stall-after-snapshot')
-const failFirstTwoStreams = searchParams.has('fail-first-two')
-const stallInitialDirectStream = searchParams.has('stall-initial-direct')
+const search = new URLSearchParams(window.location.search)
+const failFirstSnapshot = search.has('stall-first')
+const failFirstTwoStreams = search.has('fail-first-two')
+const stallAfterSnapshot = search.has('stall-after-snapshot')
+const initialDirect = search.has('stall-initial-direct')
+const counters = { streams: 0, snapshots: 0, direct: 0, times: [] as number[] }
+Object.assign(window, { __resumeStreamFetchTimes: counters.times })
 if (failFirstTwoStreams) Math.random = () => 0
+const originalFetch = window.fetch.bind(window)
 
+// The client takes a JSON snapshot then listens to the durable /events wire.
+// The POST response body is intentionally independent of that subscription.
 window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-  const url = typeof input === 'string'
-    ? input
-    : input instanceof URL
-      ? input.toString()
-      : input.url
-
-  if (stallInitialDirectStream && url.includes('/api/chat')) {
-    reproWindow.__directStreamFetchCount = (reproWindow.__directStreamFetchCount ?? 0) + 1
-    const stream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-          type: 'token',
-          content: 'partial before disconnect',
-        })}\n\n`))
-
-        init?.signal?.addEventListener('abort', () => {
-          try {
-            controller.error(new DOMException('The operation was aborted.', 'AbortError'))
-          } catch {
-            // The stream may already have reached a terminal event.
-          }
-        }, { once: true })
-      },
-    })
-
-    return Promise.resolve(new Response(stream, {
-      status: 200,
-      headers: { 'Content-Type': 'text/event-stream' },
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  if (url.includes('/api/sessions/') && url.includes('/messages')) {
+    counters.snapshots += 1
+    if (failFirstSnapshot && counters.snapshots === 1) return Promise.resolve(new Response('unavailable', { status: 503 }))
+    return Promise.resolve(Response.json({
+      streaming: !initialDirect, seq: 0, total: 2, hasMore: false,
+      messages: [
+        { id: 'user-1', role: 'user', content: 'run a command' },
+        { id: 'assistant-1', role: 'assistant', content: initialDirect ? 'latest content recovered without reload' : 'partial' },
+      ],
     }))
   }
-
-  if (
-    url.includes('/api/sessions/resume-repro-session/stream')
-    || url.includes('/api/sessions/initial-direct-session/stream')
-  ) {
-    reproWindow.__resumeStreamFetchCount = (reproWindow.__resumeStreamFetchCount ?? 0) + 1
-    reproWindow.__resumeStreamFetchTimes?.push(performance.now())
-
-    if (failFirstTwoStreams && reproWindow.__resumeStreamFetchCount <= 2) {
-      return Promise.reject(new TypeError('Failed to fetch'))
-    }
-
-    if (stallFirstStream && reproWindow.__resumeStreamFetchCount === 1) {
-      return new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => {
-          reject(new DOMException('The operation was aborted.', 'AbortError'))
-        }, { once: true })
-      })
-    }
-
+  if (url.includes('/api/sessions/') && url.endsWith('/events')) {
+    counters.streams += 1
+    counters.times.push(performance.now())
+    Object.assign(window, { __resumeStreamFetchCount: counters.streams })
+    if (failFirstTwoStreams && counters.streams <= 2) return Promise.reject(new TypeError('Failed to fetch'))
+    let heartbeat: ReturnType<typeof setInterval> | undefined
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        reproWindow.__resumeStreamControllers?.push(controller)
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-          type: 'snapshot',
-          streaming: !stallInitialDirectStream,
-          seq: 0,
-          total: 2,
-          hasMore: false,
-          limit: 10,
-          messages: [
-            { id: 'user-1', role: 'user', content: 'run a command' },
-            {
-              id: 'assistant-1',
-              role: 'assistant',
-              content: stallInitialDirectStream ? 'latest content recovered without reload' : 'partial',
-            },
-          ],
-        })}\n\n`))
-
-        if (stallInitialDirectStream) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`))
-          controller.close()
-          return
-        }
-        if (stallAfterSnapshot && reproWindow.__resumeStreamFetchCount === 1) return
+        controller.enqueue(encoder.encode(': keepalive\n\n'))
+        if (!stallAfterSnapshot || counters.streams > 1) heartbeat = setInterval(() => controller.enqueue(encoder.encode(': keepalive\n\n')), 1000)
+        init?.signal?.addEventListener('abort', () => {
+          clearInterval(heartbeat)
+          try { controller.error(new DOMException('Aborted', 'AbortError')) } catch { /* already closed */ }
+        }, { once: true })
       },
-      cancel() {},
+      cancel() { clearInterval(heartbeat) },
     })
-
-    init?.signal?.addEventListener('abort', () => {
-      const controller = reproWindow.__resumeStreamControllers?.at(-1)
-      try {
-        controller?.error(new DOMException('The operation was aborted.', 'AbortError'))
-      } catch {
-        // The stream may already have reached a terminal event.
-      }
-    }, { once: true })
-
-    return Promise.resolve(new Response(stream, {
-      status: 200,
-      headers: { 'Content-Type': 'text/event-stream' },
-    }))
+    return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }))
   }
-
+  if (initialDirect && url.includes('/api/chat')) {
+    counters.direct += 1
+    // A legacy response that never finishes must not own the UI stream.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(encoder.encode('data: {"type":"token","content":"ignored legacy token"}\n\n')) },
+    })
+    return Promise.resolve(new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }))
+  }
   return originalFetch(input, init)
 }) as typeof window.fetch
 
 function UseChatResumeRepro() {
-  const [sessionId, setSessionId] = useState<string | null>(
-    stallInitialDirectStream ? null : 'resume-repro-session',
-  )
+  const [sessionId, setSessionId] = useState<string | null>(initialDirect ? null : 'resume-repro-session')
   const chat = useChat(sessionId)
-  const [fetchCount, setFetchCount] = useState(0)
-  const [directFetchCount, setDirectFetchCount] = useState(0)
-  const initialMessageSentRef = useRef(false)
-
+  const [, update] = useState(0)
+  const sent = useRef(false)
   useEffect(() => {
-    if (!stallInitialDirectStream || initialMessageSentRef.current) return
-    initialMessageSentRef.current = true
+    if (!initialDirect || sent.current) return
+    sent.current = true
     const sessionIdPromise = Promise.resolve('initial-direct-session')
     void sessionIdPromise.then(setSessionId)
     void chat.sendMessage('run a command', { sessionIdPromise })
   }, [chat.sendMessage])
-
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setFetchCount(reproWindow.__resumeStreamFetchCount ?? 0)
-      setDirectFetchCount(reproWindow.__directStreamFetchCount ?? 0)
-    }, 25)
-    return () => window.clearInterval(id)
+    const timer = setInterval(() => update(value => value + 1), 25)
+    return () => clearInterval(timer)
   }, [])
-
-  const assistantContent = chat.messages.find((message) => message.role === 'assistant')?.content ?? ''
-
-  return (
-    <main className="mx-auto max-w-xl p-6">
-      <h1 className="mb-4 text-xl font-semibold">useChat Resume Repro</h1>
-      <dl className="space-y-2 text-sm">
-        <div>
-          <dt>stream fetches</dt>
-          <dd data-testid="stream-fetch-count">{fetchCount}</dd>
-        </div>
-        <div>
-          <dt>direct stream fetches</dt>
-          <dd data-testid="direct-fetch-count">{directFetchCount}</dd>
-        </div>
-        <div>
-          <dt>loading</dt>
-          <dd data-testid="loading">{String(chat.isLoading)}</dd>
-        </div>
-        <div>
-          <dt>history loading</dt>
-          <dd data-testid="history-loading">{String(chat.isLoadingHistory)}</dd>
-        </div>
-        <div>
-          <dt>messages</dt>
-          <dd data-testid="message-count">{chat.messages.length}</dd>
-        </div>
-        <div>
-          <dt>assistant content</dt>
-          <dd data-testid="assistant-content">{assistantContent}</dd>
-        </div>
-      </dl>
-    </main>
-  )
+  return <main className="mx-auto max-w-xl p-6">
+    <h1 className="mb-4 text-xl font-semibold">useChat Resume Repro</h1>
+    <dl className="space-y-2 text-sm">
+      <dd data-testid="stream-fetch-count">{counters.streams}</dd>
+      <dd data-testid="snapshot-fetch-count">{counters.snapshots}</dd>
+      <dd data-testid="direct-fetch-count">{counters.direct}</dd>
+      <dd data-testid="loading">{String(chat.isLoading)}</dd>
+      <dd data-testid="history-loading">{String(chat.isLoadingHistory)}</dd>
+      <dd data-testid="message-count">{chat.messages.length}</dd>
+      <dd data-testid="assistant-content">{chat.messages.find(message => message.role === 'assistant')?.content ?? ''}</dd>
+    </dl>
+  </main>
 }
 
 const container = document.getElementById('root')
-
-if (!container) {
-  throw new Error('Missing root element')
-}
-
-createRoot(container).render(
-  <StrictMode>
-    <UseChatResumeRepro />
-  </StrictMode>,
-)
+if (!container) throw new Error('Missing root element')
+createRoot(container).render(<StrictMode><UseChatResumeRepro /></StrictMode>)

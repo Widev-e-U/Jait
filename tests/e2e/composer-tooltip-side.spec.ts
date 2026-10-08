@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import fs from 'node:fs'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -13,7 +14,7 @@ test('composer tooltips open below their trigger', async ({ page }) => {
   test.setTimeout(300_000)
   await page.setViewportSize({ width: 1280, height: 900 })
 
-  const registration = await page.request.post(`${API_URL}/api/auth/register`, {
+  const registration = await registerTestUser(page.request, API_URL, {
     data: { username: `composer-tooltip-${Date.now()}`, password: 'e2e-password-123' },
   })
   expect(registration.ok()).toBeTruthy()
@@ -42,6 +43,7 @@ test('composer tooltips open below their trigger', async ({ page }) => {
     data: { projectId: project.id, sessionId: session.id },
   })
 
+  await page.context().addCookies([{ name: 'jait_token', value: apiToken, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, gateway }) => {
     localStorage.setItem('jait-auth-token', token)
     localStorage.setItem('jait-gateway-url', gateway)

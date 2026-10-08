@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 import { test, expect } from '@playwright/test'
 
@@ -6,7 +7,7 @@ const API_URL = process.env.API_URL || 'http://localhost:8000'
 test.describe('provider selector actions', () => {
   let apiToken: string
   test.beforeAll(async ({ request }) => {
-    const registration = await request.post(`${API_URL}/api/auth/register`, {
+    const registration = await registerTestUser(request, API_URL, {
       data: { username: `provider-actions-${Date.now()}`, password: 'e2e-password-123' },
     })
     expect(registration.ok()).toBeTruthy()
@@ -66,7 +67,8 @@ test.describe('provider selector actions', () => {
       })
       const session = await sessionResponse.json()
       await request.post(`${API_URL}/api/projects/select`, { headers, data: { projectId: project.id, sessionId: session.id } })
-      await page.addInitScript(({ token, gateway }) => {
+      await page.context().addCookies([{ name: 'jait_token', value: apiToken, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(({ token, gateway }) => {
         localStorage.setItem('jait-auth-token', token)
         localStorage.setItem('jait-gateway-url', gateway)
       }, { token: apiToken, gateway: API_URL })

@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { test, expect, type APIRequestContext } from '@playwright/test'
@@ -9,7 +10,7 @@ async function createSession(request: APIRequestContext) {
   const username = `e2e-browser-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
 
-  const registerResponse = await request.post(`${API_URL}/api/auth/register`, {
+  const registerResponse = await registerTestUser(request, API_URL, {
     data: { username, password },
   })
   expect(registerResponse.ok()).toBeTruthy()

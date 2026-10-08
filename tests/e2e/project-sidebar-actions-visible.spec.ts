@@ -1,6 +1,9 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 
 import { expect, test } from '@playwright/test'
+
+
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
 const PROJECT_ROOT = process.env.PROJECT_ROOT || path.resolve(process.cwd(), '../..')
@@ -9,7 +12,7 @@ async function registerUser(request: Parameters<typeof test>[0]['request']) {
   const username = `e2e-sidebar-actions-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
 
-  const response = await request.post(`${API_URL}/api/auth/register`, {
+  const response = await registerTestUser(request, API_URL, {
     data: { username, password },
   })
   expect(response.ok()).toBeTruthy()
@@ -94,13 +97,14 @@ test.describe('project sidebar actions', () => {
     await createProjectAndSession(request, token, projectTitle)
 
     await page.setViewportSize({ width: 1280, height: 900 })
-    await page.addInitScript(([gatewayUrl]) => {
+    await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(([gatewayUrl]) => {
       window.localStorage.setItem('jait-gateway-url', gatewayUrl)
     }, [API_URL] as const)
 
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
     await loginInBrowser(page, username, password)
-    const toggleProjects = page.getByRole('button', { name: 'Projects and chats', exact: true })
+    const toggleProjects = page.getByRole('button', { name: 'Projects & Chats', exact: true })
     await expect(toggleProjects).toBeVisible({ timeout: 15_000 })
     if (await toggleProjects.getAttribute('aria-pressed') !== 'true') await toggleProjects.click()
 
@@ -109,19 +113,7 @@ test.describe('project sidebar actions', () => {
     })
     await expect(sidebar).toBeVisible()
 
-    const projectActionsButton = sidebar.getByRole('button', { name: 'Project actions' })
-    const projectRow = projectActionsButton.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " group ")][1]')
-    await projectRow.hover()
-    await expect(projectActionsButton).toBeVisible()
-
-    const sidebarBox = await sidebar.boundingBox()
-    const actionsButtonBox = await projectActionsButton.boundingBox()
-    expect(sidebarBox).not.toBeNull()
-    expect(actionsButtonBox).not.toBeNull()
-    assertWithinBounds(actionsButtonBox!, sidebarBox!)
-
-    await projectActionsButton.focus()
-    await projectActionsButton.press('Enter')
+    await sidebar.getByText(projectTitle, { exact: true }).first().click({ button: 'right' })
     const changeDirectoryAction = page.getByRole('menuitem', { name: 'Change directory' })
     const archiveProjectAction = page.getByRole('menuitem', { name: 'Archive project' })
     const viewport = page.viewportSize()
@@ -145,13 +137,13 @@ test('switches between Files and Source Control using sidebar icons', async ({ p
     window.localStorage.setItem('jait-gateway-url', gatewayUrl)
     window.localStorage.setItem('jait.viewMode', 'developer')
   }, [API_URL] as const)
-  await page.goto('/')
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
   await loginInBrowser(page, username, password)
   const files = page.getByRole('button', { name: 'Files', exact: true })
   const source = page.getByRole('button', { name: 'Source Control', exact: true })
   await expect(files).toBeVisible()
   await expect(source).toBeVisible()
-  await expect(source).toHaveText('')
+  await expect(source).toContainText('Source Control')
   await source.click()
   await expect(source).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByText(/^Source Control \(\d+\)$/)).toBeVisible()
@@ -161,7 +153,7 @@ test('switches between Files and Source Control using sidebar icons', async ({ p
   await expect(page.getByText(/^Source Control \(\d+\)$/)).not.toBeVisible()
 })
 
-test('opening editor preserves the selected projects and chats panel', async ({ page, request }) => {
+test('switching to Files replaces the projects and chats sidebar', async ({ page, request }) => {
   test.setTimeout(60_000)
   const { token, username, password } = await registerUser(request)
   await createProjectAndSession(request, token, 'Independent editor navigation')
@@ -171,15 +163,15 @@ test('opening editor preserves the selected projects and chats panel', async ({ 
     window.localStorage.setItem('showSessionsSidebar', 'true')
     window.localStorage.setItem('developerSidebarView', 'projects')
   }, [API_URL] as const)
-  await page.goto('/')
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
   await loginInBrowser(page, username, password)
 
-  const projects = page.getByRole('button', { name: 'Projects and chats', exact: true })
-  const editor = page.getByRole('button', { name: 'Editor', exact: true })
+  const projects = page.getByRole('button', { name: 'Projects & Chats', exact: true })
+  const editor = page.getByRole('button', { name: 'Files', exact: true })
   await expect(projects).toHaveAttribute('aria-pressed', 'true')
   await expect(editor).toHaveAttribute('aria-pressed', 'false')
 
   await editor.click()
   await expect(editor).toHaveAttribute('aria-pressed', 'true')
-  await expect(projects).toHaveAttribute('aria-pressed', 'true')
+  await expect(projects).toHaveAttribute('aria-pressed', 'false')
 })

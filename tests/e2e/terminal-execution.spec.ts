@@ -11,9 +11,20 @@
  * Requires: gateway running on API_URL (default http://localhost:8000)
  */
 import { test, expect } from '@playwright/test'
+import { registerAgentTestUser } from './helpers/agent-user'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
 const supportsInteractiveExecute = process.platform === 'win32'
+
+test.beforeEach(async ({ request }) => {
+  await registerAgentTestUser(request, API_URL, `terminal-${Date.now()}-${Math.random().toString(36).slice(2)}`, 'terminal-test-password')
+})
+
+async function createOwnedSession(request: import('@playwright/test').APIRequestContext): Promise<string> {
+  const response = await request.post(`${API_URL}/api/sessions`, { data: { name: 'Terminal E2E' } })
+  expect(response.ok()).toBeTruthy()
+  return (await response.json()).id
+}
 
 /** Helper: create a fresh terminal and return its id */
 async function createTerminal(
@@ -22,7 +33,7 @@ async function createTerminal(
 ): Promise<{ id: string; shell: string }> {
   const res = await request.post(`${API_URL}/api/terminals`, {
     data: {
-      sessionId: sessionId ?? `e2e-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      sessionId: sessionId ?? await createOwnedSession(request),
       projectRoot: process.cwd(),
     },
   })
@@ -45,7 +56,7 @@ test.describe('Terminal execution', () => {
   test('creates a terminal via REST', async ({ request }) => {
     const res = await request.post(`${API_URL}/api/terminals`, {
       data: {
-        sessionId: `e2e-create-${Date.now()}`,
+        sessionId: await createOwnedSession(request),
         projectRoot: process.cwd(),
       },
     })

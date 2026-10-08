@@ -20,6 +20,7 @@ test('normal chat addresses a saved agent, streams its identity, cancels and res
   const created = await request.post(`${API_URL}/api/sessions`, { headers, data: { name: 'Saved agent conversation' } })
   expect(created.ok()).toBeTruthy()
   const session = await created.json() as { id: string }
+  expect((await request.put(`${API_URL}/api/persona-agents/${id}`, { headers, data: { ...profile, chatSessionId: session.id } })).ok()).toBeTruthy()
   const persona = { id, name: profile.name, avatar: profile.avatar, providerId: profile.providerId, model: profile.model }
   let posted: Record<string, unknown> | undefined
   let cancelled = false
@@ -58,6 +59,7 @@ test('normal chat addresses a saved agent, streams its identity, cancels and res
     await route.fulfill({ json: { ok: true, cancelled: true } })
     stop()
   })
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)
@@ -67,15 +69,13 @@ test('normal chat addresses a saved agent, streams its identity, cancels and res
   await page.addLocatorHandler(page.getByText('A node needs your permission', { exact: true }), async () => {
     await page.getByRole('button', { name: 'Dismiss', exact: true }).click()
   })
-  await page.goto(`/?sessionId=${session.id}`, { waitUntil: 'domcontentloaded' })
-  const recipient = page.getByLabel('Chat recipient')
-  await expect(recipient).toBeVisible()
-  await expect(recipient.locator(`option[value="${id}"]`)).toHaveText('Captain Standup')
-  await recipient.selectOption(id)
+  await page.goto('/agents', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Open Captain Standup', exact: true }).click()
   await page.locator('[data-testid="chat-composer"] [contenteditable="true"]').fill('Status please')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => posted?.personaAgentId).toBe(id)
   expect(posted?.sessionId).toBe(session.id)
+  await page.goto(`/chat?sessionId=${session.id}`, { waitUntil: 'domcontentloaded' })
   const speaker = page.locator(`[data-persona-agent-id="${id}"]`)
   await expect(speaker).toContainText('Captain Standup')
   await expect(speaker).toContainText('saved-model')
@@ -84,7 +84,7 @@ test('normal chat addresses a saved agent, streams its identity, cancels and res
   await page.getByRole('button', { name: 'Stop generating', exact: true }).click()
   await expect.poll(() => cancelled).toBe(true)
   // Current profile edits cannot rename a past response.
-  expect((await request.put(`${API_URL}/api/persona-agents/${id}`, { headers, data: { ...profile, name: 'Renamed captain', model: 'new-model' } })).ok()).toBeTruthy()
+  expect((await request.put(`${API_URL}/api/persona-agents/${id}`, { headers, data: { ...profile, chatSessionId: session.id, name: 'Renamed captain', model: 'new-model' } })).ok()).toBeTruthy()
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(speaker).toContainText('Captain Standup')
   await expect(speaker).toContainText('saved-model')

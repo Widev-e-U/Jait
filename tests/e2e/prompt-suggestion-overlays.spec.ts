@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test'
@@ -9,7 +10,7 @@ async function registerUser(request: APIRequestContext) {
   const username = `e2e-prompt-overlays-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
 
-  const response = await request.post(`${API_URL}/api/auth/register`, {
+  const response = await registerTestUser(request, API_URL, {
     data: { username, password },
   })
   expect(response.ok()).toBeTruthy()
@@ -89,7 +90,8 @@ test.describe('prompt suggestion overlays', () => {
         }]),
       })
     })
-    await page.addInitScript(([gatewayUrl]) => {
+    await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(([gatewayUrl]) => {
       window.localStorage.setItem('jait-gateway-url', gatewayUrl)
     }, [API_URL] as const)
 

@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import { flushSync } from 'react-dom'
 import { Message } from '@/components/chat/message'
 import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
@@ -63,8 +64,8 @@ function UseChatBurstRepro() {
         pendingContentRef.current = nextContent
 
         if (mode === 'legacy') {
-          setThinking(nextThinking)
-          setContent(nextContent)
+          // The legacy baseline measures one committed render per token.
+          flushSync(() => { setThinking(nextThinking); setContent(nextContent) })
           await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
         } else {
           scheduler.schedule()

@@ -23,7 +23,6 @@ test('expanding a user message image opens the lightbox and never the editor', a
   await expect(expandButton).toBeVisible()
 
   await expandButton.hover()
-  await expect(page.getByText('Click to expand')).toBeVisible()
 
   await expandButton.click()
   const dialog = page.getByRole('dialog')

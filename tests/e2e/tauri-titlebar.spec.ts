@@ -1,14 +1,16 @@
+import { registerTestUser } from './helpers/agent-user'
 import { test, expect } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
 
 test('Tauri titlebar overlays content without a gap and preserves window controls', async ({ page, request }) => {
   test.setTimeout(90_000)
-  const registration = await request.post(`${API_URL}/api/auth/register`, { data: {
+  const registration = await registerTestUser(request, API_URL, { data: {
     username: `titlebar-${Date.now()}`, password: 'titlebar-test-password',
   } })
   expect(registration.ok()).toBeTruthy()
   const { access_token: token } = await registration.json()
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)

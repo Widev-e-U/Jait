@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import { test, expect } from "@playwright/test";
 
 const API_URL = process.env.API_URL || "http://localhost:8000";
@@ -6,7 +7,7 @@ async function registerAndLogin(request: any) {
   const username = `e2e-user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const password = "supersecret123";
 
-  const register = await request.post(`${API_URL}/api/auth/register`, {
+  const register = await registerTestUser(request, API_URL, {
     data: { username, password },
   });
   expect(register.ok()).toBeTruthy();

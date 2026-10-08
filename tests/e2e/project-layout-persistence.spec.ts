@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import path from 'node:path'
 
 import { expect, test } from '@playwright/test'
@@ -11,7 +12,7 @@ const PROJECT_C_ROOT = path.join(PROJECT_A_ROOT, 'packages/gateway')
 async function registerUser(request: APIRequestContext) {
   const username = `e2e-project-layout-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
-  const response = await request.post(`${API_URL}/api/auth/register`, {
+  const response = await registerTestUser(request, API_URL, {
     data: { username, password },
   })
   expect(response.ok()).toBeTruthy()
@@ -59,7 +60,7 @@ async function createProject(
 }
 
 async function expectPanelWidth(page: Page, expected: number) {
-  const panel = page.locator('aside:has(.sash-handle)').first()
+  const panel = page.locator('aside:has(.sash-handle-bordered)').last()
   await expect(panel).toBeVisible({ timeout: 15000 })
   await expect.poll(async () => Math.round((await panel.boundingBox())?.width ?? 0), {
     timeout: 15000,
@@ -67,7 +68,7 @@ async function expectPanelWidth(page: Page, expected: number) {
 }
 
 async function resizePanel(page: Page, delta: number) {
-  const panelHandle = page.locator('aside:has(.sash-handle) .sash-handle').last()
+  const panelHandle = page.locator('aside:has(.sash-handle-bordered) .sash-handle-bordered').last()
   const handleBox = await panelHandle.boundingBox()
   expect(handleBox).not.toBeNull()
   const centerX = handleBox!.x + handleBox!.width / 2
@@ -81,10 +82,15 @@ async function resizePanel(page: Page, delta: number) {
 async function switchProject(page: Page, title: string) {
   const projectLabel = page.getByText(title, { exact: true }).first()
   if (!await projectLabel.isVisible()) {
-    await page.getByRole('button', { name: 'Toggle projects panel' }).click()
+    await page.getByRole('button', { name: 'Projects & Chats' }).click()
   }
   await expect(projectLabel).toBeVisible()
-  await projectLabel.click()
+  await Promise.all([
+    page.waitForResponse(response => response.url().endsWith('/api/project/open') && response.request().method() === 'POST' && response.ok()),
+    projectLabel.click(),
+  ])
+  const files = page.getByRole('button', { name: 'Files', exact: true })
+  if (await files.getAttribute('aria-pressed') !== 'true') await files.click()
 }
 
 async function expectSavedPanelWidth(
@@ -117,11 +123,15 @@ test('restores each project panel size through a switch and reload cycle', async
   })
   expect(selectResponse.ok()).toBeTruthy()
 
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(([gatewayUrl, authToken]) => {
     window.localStorage.setItem('jait-gateway-url', gatewayUrl)
     window.localStorage.setItem('jait-auth-token', authToken)
+    window.localStorage.setItem('developerSidebarView', 'files')
+    window.localStorage.setItem('showSessionsSidebar', 'true')
   }, [API_URL, token] as const)
 
+  await page.setViewportSize({ width: 2200, height: 1000 })
   await page.goto('/')
   await expectPanelWidth(page, 640)
 

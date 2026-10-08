@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
     const session = (id: string, projectId: string | null) => ({
-      id, projectId, name: id, createdAt: initial, lastActiveAt: initial, viewedAt: null,
+      id, projectId, name: id, createdAt: '2026-09-13T09:59:00.000Z', lastActiveAt: initial, viewedAt: null,
     })
     const personal = session('personal-1', null)
     const projectChat = session('project-chat', 'project-1')
@@ -108,8 +108,20 @@ test('background tabs acknowledge new content only when focused again', async ({
 test('sidebar activity cannot acknowledge a reply before the transcript stream delivers it', async ({ page }) => {
   let release!: () => void
   const pendingReply = new Promise<void>(resolve => { release = resolve })
+  let delivered = false
+  await page.route('**/messages*', route => route.fulfill({ json: {
+    messages: delivered ? [
+      { id: 'reply-1', role: 'assistant', content: 'Initial answer' },
+      { id: 'prompt-2', role: 'user', content: 'New prompt' },
+      { id: 'reply-2', role: 'assistant', content: 'Delivered reply' },
+    ] : [{ id: 'reply-1', role: 'assistant', content: 'Initial answer' }],
+    total: delivered ? 3 : 1, streaming: false,
+    lastActiveAt: delivered ? replyTime : initial, seq: delivered ? 3 : 0,
+  } }))
   await page.route('**/events', async route => {
     await pendingReply
+    if (delivered) { await route.fulfill({ contentType: 'text/event-stream', body: 'data: {"type":"heartbeat"}\n\n' }).catch(() => {}); return }
+    delivered = true
     await route.fulfill({ contentType: 'text/event-stream', body: [
       { type: 'request', content: 'New prompt' },
       { type: 'token', content: 'Delivered reply' },

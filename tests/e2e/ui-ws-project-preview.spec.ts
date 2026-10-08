@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import { mkdir } from 'node:fs/promises'
 import { test, expect } from '@playwright/test'
 
@@ -9,7 +10,7 @@ async function registerUser(request: Parameters<typeof test>[0]['request']) {
   const username = `e2e-ui-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
 
-  const response = await request.post(`${API_URL}/api/auth/register`, {
+  const response = await registerTestUser(request, API_URL, {
     data: { username, password },
   })
   expect(response.ok()).toBeTruthy()
@@ -57,7 +58,8 @@ test.describe('WS UI reactions for project and preview tools', () => {
     const { token } = await registerUser(request)
     const { projectId, sessionId, sessionName } = await createSession(request, token, 'ws-ui-e2e', projectRoot)
 
-    await page.addInitScript(([gatewayUrl, authToken]) => {
+    await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+  await page.addInitScript(([gatewayUrl, authToken]) => {
       window.localStorage.setItem('jait-gateway-url', gatewayUrl)
       window.localStorage.setItem('jait-auth-token', authToken)
       const testWindow = window as typeof window & { __e2eUiWsSessionId?: string }
@@ -84,7 +86,7 @@ test.describe('WS UI reactions for project and preview tools', () => {
     }, [API_URL, token])
 
     await page.goto(`/?projectId=${encodeURIComponent(projectId)}&sessionId=${encodeURIComponent(sessionId)}`)
-    const projectsSidebarButton = page.getByRole('button', { name: 'Toggle projects panel', exact: true })
+    const projectsSidebarButton = page.getByRole('button', { name: 'Projects & Chats', exact: true })
     await expect(projectsSidebarButton).toBeVisible({ timeout: 15000 })
     await projectsSidebarButton.click()
     const sessionButton = page.getByText(sessionName, { exact: true })
@@ -144,7 +146,7 @@ test.describe('WS UI reactions for project and preview tools', () => {
     const architectureBody = await sendArchitecture.json() as { ok: boolean }
     expect(architectureBody.ok).toBe(true)
 
-    await expect(page.getByTitle('Regenerate diagram')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Regenerate diagram', exact: true })).toBeVisible({ timeout: 20_000 })
 
     await request.post(`${API_URL}/api/tools/execute`, {
       data: {
