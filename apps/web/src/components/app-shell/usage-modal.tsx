@@ -31,6 +31,7 @@ interface UsageQuotaSnapshot {
   models: Array<{ name: string; requestCount: number }>
   activityCost: string | null
   requestCount?: number | null
+  quotaRefreshMissing?: boolean
   usagePeriod?: { from: string; until: string; range: string } | null
 }
 
@@ -98,14 +99,14 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
   const percent = quota.utilization == null
     ? null
     : Math.round(Math.min(1, Math.max(0, quota.utilization)) * 100)
-  const reset = formatReset(quota.resetsAt)
+  const reset = quota.quotaRefreshMissing ? null : formatReset(quota.resetsAt)
 
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span>{QUOTA_LABELS[quota.rateLimitType] ?? quota.rateLimitType}</span>
+        <span>{quota.providerType === 'ollama' && quota.rateLimitType === 'five_hour' ? 'Session usage (5-hour limit)' : QUOTA_LABELS[quota.rateLimitType] ?? quota.rateLimitType}</span>
         <span className="shrink-0 tabular-nums font-medium">
-          {quota.requestCount != null ? `${quota.requestCount.toLocaleString()} requests` : percent == null ? (quota.status ?? 'Unavailable') : `${percent}% used`}
+          {quota.requestCount != null ? `${quota.requestCount.toLocaleString()} requests` : percent == null ? (quota.status ?? 'Unavailable') : `${percent}% used${quota.quotaRefreshMissing ? ' (last reported)' : ''}`}
         </span>
       </div>
       {percent != null && (
@@ -124,7 +125,8 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
         <span>Updated {formatDateTime(quota.updatedAt)}</span>
         {quota.activityCost && <span>Cost {quota.activityCost}</span>}
       </div>
-      {quota.requestCount != null && <p className="text-xs text-muted-foreground">Ollama reports request counts. Subscription quota remaining is unavailable.</p>}
+      {quota.quotaRefreshMissing && <p className="text-xs text-muted-foreground">Last reported quota. The latest Ollama response did not refresh session or weekly usage.</p>}
+      {quota.requestCount != null && <p className="text-xs text-muted-foreground">This response contains request activity only; it does not refresh subscription quota.</p>}
       {quota.models.length > 0 && (
         <div className="flex flex-wrap gap-1.5 pt-0.5">
           {quota.models.map((model) => (

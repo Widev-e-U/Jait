@@ -18,6 +18,7 @@ import type { JaitDB } from "../db/connection.js";
 import { providerUsage } from "../db/schema.js";
 import type { NotificationService } from "./notifications.js";
 import type { CodexRateLimitsResponse, OllamaUsageResponse } from "./provider-quota-fetchers.js";
+import { isOllamaQuotaUsageResponse } from "./provider-quota-fetchers.js";
 import { deriveOllamaResetWindow, parseOllamaResetSource, type OllamaResetSource } from "./provider-reset-windows.js";
 
 /** Mirrors the Claude Agent SDK's `SDKRateLimitInfo` (see @anthropic-ai/claude-agent-sdk). */
@@ -55,6 +56,7 @@ export interface ProviderUsageSnapshot {
   models: Array<{ name: string; requestCount: number }>;
   activityCost: string | null;
   requestCount?: number | null;
+  quotaRefreshMissing?: boolean;
   usagePeriod?: { from: string; until: string; range: string } | null;
   /** Signed-in provider account behind this snapshot (e.g. an Ollama Cloud email). */
   accountLabel: string | null;
@@ -170,9 +172,8 @@ export class ProviderUsageService {
     planType?: string | null,
     accountLabel?: string | null,
   ): void {
-    if ("totals" in response) {
-      // Clear obsolete quota estimates when the provider only publishes activity.
-      this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.providerType, "ollama"))).run();
+    if (!isOllamaQuotaUsageResponse(response) && "totals" in response) {
+      // Activity is not a quota refresh: retain the last provider-reported limits.
       this.recordSnapshot({
         accountId, rateLimitType: "request_activity", providerType: "ollama",
         status: null, utilization: null, resetsAt: null, isUsingOverage: false,
@@ -184,6 +185,7 @@ export class ProviderUsageService {
       });
       return;
     }
+    if (!isOllamaQuotaUsageResponse(response)) return;
     this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, "request_activity"))).run();
     const buckets = [
       ["five_hour", response.limits.session, 300],
@@ -287,12 +289,9 @@ export class ProviderUsageService {
 
   listForUser(accountIds: string[]): ProviderUsageSnapshot[] {
     if (accountIds.length === 0) return [];
-    return this.db
-      .select()
-      .from(providerUsage)
-      .all()
-      .filter((row) => accountIds.includes(row.accountId))
-      .map((row) => {
+    const rows = this.db.select().from(providerUsage).all().filter((row) => accountIds.includes(row.accountId));
+    const activityAccounts = new Set(rows.filter(row => row.providerType === "ollama" && row.rateLimitType === "request_activity").map(row => row.accountId));
+    return rows.map((row) => {
         let raw: Record<string, unknown> = {};
         try {
           raw = JSON.parse(row.rawJson) as Record<string, unknown>;
@@ -323,6 +322,7 @@ export class ProviderUsageService {
           resetSource: parseOllamaResetSource(raw.resetSource),
           credits,
           models,
+          quotaRefreshMissing: row.providerType === "ollama" && row.rateLimitType !== "request_activity" && activityAccounts.has(row.accountId),
           requestCount: typeof raw.requestCount === "number" ? raw.requestCount : null,
           usagePeriod: raw.usagePeriod && typeof raw.usagePeriod === "object" ? raw.usagePeriod as { from: string; until: string; range: string } : null,
           activityCost: typeof raw.activityCost === "string" ? raw.activityCost : null,

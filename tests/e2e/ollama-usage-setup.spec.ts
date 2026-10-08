@@ -65,9 +65,33 @@ for (const width of [1280, 390]) {
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Request activity', { exact: true })).toBeVisible()
     await expect(dialog.getByText(/10[,. ]388 requests/)).toBeVisible()
-    await expect(dialog.getByText('Ollama reports request counts. Subscription quota remaining is unavailable.')).toBeVisible()
+    await expect(dialog.getByText('This response contains request activity only; it does not refresh subscription quota.')).toBeVisible()
     await expect(dialog.getByText(/% used|Resets /)).toHaveCount(0)
     await expect(dialog.getByText('Set up cloud usage', { exact: true })).toHaveCount(0)
     expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+  })
+}
+
+for (const width of [1280, 390]) {
+  test(`Ollama session usage stays visible after an activity-only refresh at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 })
+    let missing = false
+    const quota = { accountId: 'jait-backend:ollama', providerType: 'ollama', rateLimitType: 'five_hour', status: 'allowed', utilization: 0.42, resetsAt: '2026-10-07T23:00:00Z', isUsingOverage: false, updatedAt: '2026-10-07T18:00:00Z', planType: 'pro', windowDurationMins: 300, credits: null, models: [], activityCost: null }
+    await page.route('**/api/provider-usage/summary*', route => route.fulfill({ json: { generatedAt: new Date().toISOString(), profiles: [{ id: 'jait-backend:ollama', providerType: 'ollama', providerLabel: 'Ollama', profileLabel: 'Ollama', locationLabel: 'Jait backend', accountLabel: 'test@example.com', planType: 'pro', error: null, quotas: [{ ...quota, quotaRefreshMissing: missing }, ...(missing ? [{ ...quota, rateLimitType: 'request_activity', utilization: null, resetsAt: null, requestCount: 50 }] : [])] }] } }))
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.evaluate(() => import('/src/e2e-fixtures/ollama-usage-setup.tsx'))
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Session usage (5-hour limit)', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('42% used', { exact: true })).toBeVisible()
+    missing = true
+    await dialog.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect(dialog.getByText('42% used (last reported)', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Last reported quota.', { exact: false })).toBeVisible()
+    await expect(dialog.getByText(/Resets /)).toHaveCount(0)
+    await expect(dialog.getByText('50 requests', { exact: true })).toBeVisible()
+    missing = false
+    await dialog.getByRole('button', { name: 'Refresh', exact: true }).click()
+    await expect(dialog.getByText('42% used', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Last reported quota.', { exact: false })).toHaveCount(0)
   })
 }

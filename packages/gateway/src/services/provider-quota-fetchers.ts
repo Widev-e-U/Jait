@@ -174,8 +174,18 @@ function isOllamaUsageLimit(value: unknown): value is OllamaUsageLimit {
   return typeof limit.usage === "number" && Array.isArray(limit.models);
 }
 
+export function isOllamaQuotaUsageResponse(value: unknown): value is OllamaQuotaUsageResponse {
+  if (!value || typeof value !== "object") return false;
+  const limits = (value as { limits?: unknown }).limits;
+  if (!limits || typeof limits !== "object" || Array.isArray(limits)) return false;
+  const record = limits as Record<string, unknown>;
+  const buckets = [record.session, record.weekly, record.monthly];
+  return buckets.some(isOllamaUsageLimit) && buckets.every((bucket) => bucket === undefined || isOllamaUsageLimit(bucket));
+}
+
 export function isOllamaUsageResponse(value: unknown): value is OllamaUsageResponse {
   if (!value || typeof value !== "object") return false;
+  if (isOllamaQuotaUsageResponse(value)) return true;
   const activity = value as Partial<OllamaRequestUsageResponse>;
   if ("totals" in activity) {
     const validDate = (date: unknown): date is string => typeof date === "string" && Number.isFinite(Date.parse(date));
@@ -188,11 +198,7 @@ export function isOllamaUsageResponse(value: unknown): value is OllamaUsageRespo
         Date.parse(bucket.from) <= Date.parse(bucket.until) && validCount(bucket.request_count) &&
         (bucket.partial === undefined || typeof bucket.partial === "boolean"));
   }
-  const limits = (value as { limits?: unknown }).limits;
-  if (!limits || typeof limits !== "object" || Array.isArray(limits)) return false;
-  const record = limits as Record<string, unknown>;
-  const buckets = [record.session, record.weekly, record.monthly];
-  return buckets.some(isOllamaUsageLimit) && buckets.every((bucket) => bucket === undefined || isOllamaUsageLimit(bucket));
+  return false;
 }
 
 /**

@@ -10,6 +10,9 @@ describe("provider quota fetchers", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+  it("accepts a quota response with ancillary totals", () => {
+    expect(isOllamaUsageResponse({ limits: { session: { usage: 0.42, models: [] } }, totals: { request_count: 50 } })).toBe(true);
+  });
   it("accepts current Ollama session/weekly and monthly response variants", () => {
     expect(
       isOllamaUsageResponse({

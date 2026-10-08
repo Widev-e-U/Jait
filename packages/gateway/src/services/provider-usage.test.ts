@@ -25,7 +25,25 @@ function makeNotifications() {
 }
 
 describe("ProviderUsageService", () => {
-  it("stores request activity without invented quota or reset and replaces stale limits", () => {
+  it("preserves session usage when refresh temporarily returns request activity", () => {
+    const service = new ProviderUsageService(db);
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-10-07T10:00:00Z"));
+      service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.42, models: [] } } });
+      vi.setSystemTime(new Date("2026-10-07T10:01:00Z"));
+      service.recordOllamaUsage("ollama", { range: "7d", scope: "self", granularity: "day", from: "2026-09-30T00:00:00Z", until: "2026-10-07T10:01:00Z", totals: { request_count: 50 }, buckets: [] });
+      expect(service.listForUser(["ollama"])).toEqual(expect.arrayContaining([expect.objectContaining({ rateLimitType: "five_hour", utilization: 0.42, updatedAt: "2026-10-07T10:00:00.000Z", quotaRefreshMissing: true })]));
+      service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.5, models: [] } } });
+      expect(service.listForUser(["ollama"])).toEqual([expect.objectContaining({ rateLimitType: "five_hour", utilization: 0.5, quotaRefreshMissing: false })]);
+    } finally { vi.useRealTimers(); }
+  });
+  it("prioritizes quota limits when response also contains request totals", () => {
+    const service = new ProviderUsageService(db);
+    service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.42, models: [] } }, totals: { request_count: 50 } } as any);
+    expect(service.listForUser(["ollama"])).toEqual([expect.objectContaining({ rateLimitType: "five_hour", utilization: 0.42 })]);
+  });
+  it("stores request activity separately without inventing quota or resetting cached limits", () => {
     const service = new ProviderUsageService(db);
     service.recordOllamaUsage("ollama-1", { limits: { weekly: { usage: 0.8, models: [] } } });
     const activity = {
@@ -35,11 +53,11 @@ describe("ProviderUsageService", () => {
     };
     service.recordOllamaUsage("ollama-1", activity, "pro", "test@example.com");
     service.recordOllamaUsage("ollama-1", activity, "pro", "test@example.com");
-    expect(service.listForUser(["ollama-1"])).toEqual([expect.objectContaining({
+    expect(service.listForUser(["ollama-1"])).toEqual(expect.arrayContaining([expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.8, quotaRefreshMissing: true }), expect.objectContaining({
       rateLimitType: "request_activity", utilization: null, resetsAt: null, status: null,
       requestCount: 10388, planType: "pro", accountLabel: "test@example.com",
       usagePeriod: { from: activity.from, until: activity.until, range: "7d" },
-    })]);
+    })]));
     service.recordOllamaUsage("ollama-1", { limits: { weekly: { usage: 0.2, models: [] } } });
     expect(service.listForUser(["ollama-1"])).toEqual([expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.2, requestCount: null })]);
   });
