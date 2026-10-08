@@ -3602,7 +3602,15 @@ export function registerChatRoutes(
       : (config.llmProvider ?? userBackend ?? "openai");
     let llmRuntime: ResolvedJaitLlmConfig;
     try {
-      llmRuntime = resolveJaitLlmConfig({
+      // CLI adapters own authentication and model resolution. These values
+      // only describe the shared prompt; no HTTP backend is used for the turn.
+      llmRuntime = isCliProviderRequest ? {
+        backend: "openai",
+        openaiApiKey: "",
+        openaiBaseUrl: "",
+        openaiModel: requestBodyModel || "default",
+        contextWindow: config.contextWindow,
+      } : resolveJaitLlmConfig({
         config,
         apiKeys: userApiKeys,
         requestedModel: jaitCoordinatorModel || undefined,

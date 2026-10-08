@@ -336,6 +336,26 @@ async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promis
 }
 
 describe("chat external provider runtime mode selection", () => {
+  it("runs Codex without an API key for the configured OpenCode Go backend", async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer({ ...testConfig, llmProvider: "opencode-go", openaiApiKey: "" }, { providerRegistry });
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/chat",
+        headers: await authHeaders(),
+        payload: { content: "hello", sessionId: "codex-without-go-key", provider: "codex", runtimeMode: "full-access" },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('"type":"done"');
+      expect(provider.sendTurn).toHaveBeenCalledOnce();
+    } finally {
+      await app.close();
+    }
+  });
+
   it("allows a silent CLI turn to finish without interrupting it", { timeout: 30_000 }, async () => {
     expect(loadConfig()).not.toHaveProperty("cliTurnTimeoutMs");
 
