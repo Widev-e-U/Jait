@@ -20,6 +20,8 @@ class TeamProvider implements CliProviderAdapter {
   readonly id = "codex" as const;
   readonly info = { id: this.id, name: "Test", description: "Test", available: true, modes: ["full-access", "supervised"] as ("full-access" | "supervised")[] };
   beforeSend?: () => void;
+  progressContent?: string;
+  replyContent = "Work checked and ready.";
   private events = new EventEmitter();
   startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => ({
     id: "provider-" + options.threadId, providerId: this.id, threadId: options.threadId,
@@ -28,7 +30,8 @@ class TeamProvider implements CliProviderAdapter {
   sendTurn = vi.fn(async (sessionId: string, _content: string) => {
     this.beforeSend?.();
     setTimeout(() => {
-      this.events.emit("event", { type: "token", sessionId, content: "Work checked and ready." });
+      if (this.progressContent) this.events.emit("event", { type: "message", sessionId, role: "assistant", content: this.progressContent });
+      if (this.replyContent) this.events.emit("event", { type: "token", sessionId, content: this.replyContent });
       this.events.emit("event", { type: "turn.completed", sessionId });
     }, 0);
   });
@@ -194,6 +197,24 @@ describe("team room routes and work chat integration", () => {
       payload: { content: "Retest the change", recipientIds: ["Developer"], targetSessionId: workId, clientKey: "retest" } });
     await vi.waitFor(async () => expect((await snapshot()).deliveries.at(-1)?.status).toBe("completed"), { timeout: 10_000 });
     expect((await snapshot()).messages.filter((message: { kind: string }) => message.kind === "result")).toHaveLength(2);
+  });
+
+  it("reports the latest answer after opening progress and fails empty completions", async () => {
+    provider.progressContent = "I'll begin checking the ticket.";
+    await app.inject({ method: "POST", url: "/api/team-rooms/" + roomId + "/messages", headers,
+      payload: { content: "Check ticket", recipientIds: ["Developer"], clientKey: "latest-answer" } });
+    await vi.waitFor(async () => expect((await snapshot()).deliveries[0]?.status).toBe("completed"), { timeout: 10_000 });
+    expect((await snapshot()).messages.at(-1).content).toBe("Work checked and ready.");
+
+    provider.progressContent = undefined;
+    provider.replyContent = "";
+    await app.inject({ method: "POST", url: "/api/team-rooms/" + roomId + "/messages", headers,
+      payload: { content: "Check empty completion", recipientIds: ["Developer"], clientKey: "empty-answer" } });
+    await vi.waitFor(async () => expect((await snapshot()).deliveries.find((item: {agentId: string; status: string; error?: string}) =>
+      item.agentId === "Developer" && item.status === "failed")?.error).toContain("without an answer"), { timeout: 10_000 });
+    // Recovery launches the manager too; await its terminal state before teardown.
+    await vi.waitFor(async () => expect((await snapshot()).deliveries.every((item: {status: string}) =>
+      !["queued", "running"].includes(item.status))).toBe(true), { timeout: 10_000 });
   });
 
   it("relays as the actual named normal chat and rejects empty or foreign-chat messages", async () => {

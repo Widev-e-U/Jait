@@ -136,10 +136,13 @@ describe("deterministic team execution end to end", () => {
       fixtureTool(`fixture.${name}`, { ok: false, message: "fatal: not a git repository: /host/.git" });
       scripted.push(stream(toolReply(`fixture_${name}`, { attempt: i }, `failure-${i}`)));
     }
+    scripted.push(stream(finalReply)); // One manager review, not another worker retry.
     await post("bounded-failure");
     await eventually(async () => (await snapshot()).deliveries[0]?.status === "failed", "execution guard");
     const state = await snapshot(); const thread = threads.getById(state.deliveries[0].sessionId)!;
-    expect(executed).toHaveLength(3); expect(requests).toHaveLength(3);
+    await eventually(async () => (await snapshot()).deliveries[1]?.status === "completed", "manager recovery review");
+    expect(executed).toHaveLength(3); expect(requests).toHaveLength(4);
+    expect(JSON.stringify(requests[3])).toContain("Review this failed handoff");
     expect(thread.status).toBe("error"); expect(thread.error).toContain("two retries");
     expect(threads.getExecutionCheckpoint(thread.id)?.calls).toBe(3);
   });
@@ -147,10 +150,13 @@ describe("deterministic team execution end to end", () => {
   it("halts repetitive successful reads when a full window produces no new evidence", async () => {
     fixtureTool("fixture.read", { ok: true, message: "Read complete", data: { content: "Unchanged fixture content" } });
     for (let i = 0; i < 40; i++) scripted.push(stream(toolReply("fixture_read", { attempt: i }, `read-${i}`)));
+    scripted.push(stream(finalReply)); // The coordinator decides what to do next.
     await post("no-progress");
     await eventually(async () => (await snapshot()).deliveries[0]?.status === "failed", "no-progress cutoff");
     const state = await snapshot(); const thread = threads.getById(state.deliveries[0].sessionId)!;
-    expect(executed).toHaveLength(40); expect(requests).toHaveLength(40);
+    await eventually(async () => (await snapshot()).deliveries[1]?.status === "completed", "manager no-progress review");
+    expect(executed).toHaveLength(40); expect(requests).toHaveLength(41);
+    expect(JSON.stringify(requests[40])).toContain("Review this failed handoff");
     expect(thread.error).toContain("no new evidence");
     expect(state.messages.filter((message: any) => message.kind === "blocked")).toHaveLength(1);
   });

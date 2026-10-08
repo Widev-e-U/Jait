@@ -209,6 +209,65 @@ describe("persistent team coordination", () => {
     restored.close();
   });
 
+  it("treats explicit blockers as failed and asks the manager to recover once", async () => {
+    const dispatcher = vi.fn(async (delivery, agent) => {
+      if (agent.id === "Developer") {
+        service.post(owner, room.id, { sender: { ...sender(agent.id), sourceSessionId: delivery.sessionId },
+          content: "Bun is unavailable; prepare the test runtime.", kind: "blocked", recipientIds: [],
+          clientKey: "explicit-block", parentMessageId: delivery.messageId });
+        return { content: "I could not run tests." };
+      }
+      return { content: "Escalated the environment blocker." };
+    });
+    service.setDispatcher(dispatcher);
+    post("Verify the change", "blocked-work", ["Developer"]);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe("failed"));
+    await vi.waitFor(() => expect(dispatcher).toHaveBeenCalledTimes(2));
+    expect(service.deliveries(owner, room.id)[0]?.error).toContain("Bun is unavailable");
+    expect(service.history(owner, room.id).filter(message => message.kind === "review")).toHaveLength(1);
+    expect(service.history(owner, room.id).find(message => message.kind === "review")).toMatchObject({ recipientIds: ["Scrum"] });
+    expect(service.history(owner, room.id).filter(message => message.kind === "blocked")).toHaveLength(1);
+  });
+
+  it("escalates provider failures once and stops when the coordinator also fails", async () => {
+    const dispatcher = vi.fn(async () => { throw new Error("Provider request failed"); });
+    service.setDispatcher(dispatcher);
+    post("Implement", "provider-failure", ["Developer"]);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)).toHaveLength(2));
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id).every(item => item.status === "failed")).toBe(true));
+    expect(dispatcher).toHaveBeenCalledTimes(2);
+    expect(service.history(owner, room.id).filter(message => message.kind === "blocked")).toHaveLength(2);
+    expect(service.history(owner, room.id).filter(message => message.kind === "review")).toHaveLength(1);
+  });
+
+  it("does not wake paused managers or recover a closed goal", async () => {
+    profiles.savePersonaAgent(owner, { ...profile("Scrum"), paused: true });
+    const dispatcher = vi.fn(async () => { throw new Error("Tool consent timed out"); });
+    service.setDispatcher(dispatcher);
+    post("Implement", "paused-manager", ["Developer"]);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe("failed"));
+    expect(dispatcher).toHaveBeenCalledTimes(1);
+    profiles.savePersonaAgent(owner, profile("Scrum"));
+    service.setGoal(owner, room.id, "Done", ["verified"], human);
+    service.completeGoal(owner, room.id, ["test evidence"], human);
+    post("Implement", "closed-goal", ["Developer"]);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[1]?.status).toBe("failed"));
+    expect(service.deliveries(owner, room.id)).toHaveLength(2);
+  });
+
+  it("allows a later verified result to resolve an earlier blocker in the same turn", async () => {
+    service.setDispatcher(async (delivery, agent) => {
+      for (const kind of ["blocked", "verification"] as const) service.post(owner, room.id, {
+        sender: { ...sender(agent.id), sourceSessionId: delivery.sessionId }, content: kind,
+        kind, recipientIds: [], clientKey: delivery.id + ":" + kind, parentMessageId: delivery.messageId,
+      });
+      return { content: "Verified." };
+    });
+    post("Verify", "resolved-blocker", ["QA"]);
+    await vi.waitFor(() => expect(service.deliveries(owner, room.id)[0]?.status).toBe("completed"));
+    expect(service.deliveries(owner, room.id)).toHaveLength(1);
+  });
+
   it("bounds handoff loops and makes paused-recipient failures visible", () => {
     let parent = post("Start", "start", []);
     for (let depth = 1; depth <= 33; depth++) parent = service.post(owner, room.id, { content: "Round " + depth, clientKey: String(depth), sender: sender("Developer"), recipientIds: [], parentMessageId: parent.id });

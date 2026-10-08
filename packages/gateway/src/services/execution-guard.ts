@@ -7,6 +7,7 @@ export interface ExecutionCheckpoint {
   evidence: string[];
   windowProgress?: boolean;
   failures: Record<string, number>;
+  infrastructureFailures?: number;
   lastAction?: string;
   stopReason?: string;
 }
@@ -38,14 +39,21 @@ export class ExecutionGuard {
     if (this.stopReason) return this.stopReason;
     const data = result.data as Record<string, unknown> | undefined;
     const output = `${result.message}\n${typeof data?.output === "string" ? data.output : ""}`;
-    const failed = !result.ok || (typeof data?.exitCode === "number" && data.exitCode !== 0);
-    const family = failureFamily(output);
     const canonicalTool = tool.replace(/^(?:functions\.)?mcp__.+?__/, "").replace(/_/g, ".");
+    const commandTool = /^(?:execute|terminal\.run|jait\.terminal)$/.test(canonicalTool);
+    const family = failureFamily(output);
+    // A pipeline can hide an infrastructure error behind tail's successful exit.
+    const hiddenFailure = commandTool && /^(?:(?:bash|sh|zsh|fish|bwrap|\/[^\s:]+): .*?(?:command not found|permission denied|operation not permitted)|Command '[^']+' not found|Error(?: \[ERR_MODULE_NOT_FOUND\])?: Cannot find (?:module|package)|fatal: not a git repository|No test files found)/im.test(output);
+    const failed = !result.ok || (typeof data?.exitCode === "number" && data.exitCode !== 0) || (hiddenFailure && !!family);
     this.state.lastAction = `${tool}: ${failed ? "failed" : "succeeded"}`;
     if (failed) {
       // Known infrastructure errors are shared across aliases and changed arguments.
       const key = family ?? createHash("sha256").update(output.slice(0, 4000).replace(/call_[\w-]+|\b\d+\b/g, "#")).digest("hex");
       this.state.failures[key] = (this.state.failures[key] ?? 0) + 1;
+      if (family) {
+        this.state.infrastructureFailures = (this.state.infrastructureFailures ?? 0) + 1;
+        if (this.state.infrastructureFailures >= 6) return this.stop("Execution blocked: environment recovery exhausted six failed attempts. Escalate with the checkpoint before resuming.");
+      }
       if (this.state.failures[key] >= 3) return this.stop(`Execution blocked: ${family ?? "the same tool failure"} persisted after two retries. Fix the underlying cause before resuming.`);
     } else if (!/^(?:todo|jait\.todos|memory\.|team\.chat|thread\.control|agent\.|tools\.|jait\.catalog)/.test(canonicalTool)) {
       // A new observation, successful edit, or command result is evidence. Repeated
@@ -77,8 +85,10 @@ function failureFamily(message: string): string | undefined {
   if (/not a git repository|invalid gitfile|\.git.*(?:not found|no such file)|unable to read.*git/i.test(message)) return "Git metadata unavailable";
   if (/source chat not found/i.test(message)) return "Thread sender identity unavailable";
   if (/ENOENT|no such file or directory/i.test(message)) return "Project path unavailable";
-  if (/command not found/i.test(message)) return "Required executable unavailable";
-  if (/permission denied|EACCES/i.test(message)) return "Execution permission denied";
+  if (/command (?:'[^']+'\s+)?not found|not recognized as (?:an internal|the name of a cmdlet)/i.test(message)) return "Required executable unavailable";
+  if (/cannot find (?:module|package)|ERR_MODULE_NOT_FOUND|could not locate.*bindings/i.test(message)) return "Required dependency unavailable";
+  if (/no test files found/i.test(message)) return "Test configuration unavailable";
+  if (/permission denied|operation not permitted|EACCES/i.test(message)) return "Execution permission denied";
   if (/consent.*(?:timed? out|timeout)/i.test(message)) return "Tool consent unavailable";
   return undefined;
 }

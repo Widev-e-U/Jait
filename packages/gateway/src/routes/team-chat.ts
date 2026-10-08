@@ -56,10 +56,16 @@ export function registerTeamChatRoutes(app: FastifyInstance, config: AppConfig, 
           if (!current) throw new Error("Work thread was deleted.");
           if (current.status === "error" || current.status === "interrupted") throw new Error(current.error ?? "Thread interrupted.");
           if (current.status === "completed") {
+            // Activities are newest first. Ignore partial checkpoints and earlier turns.
             const answer = service.threadActivities(user.id, thread.id)
-              .filter(activity => !previousActivityIds.has(activity.id) && activity.kind === "message" &&
-                (activity.payload as { role?: string } | undefined)?.role === "assistant").at(-1);
-            return { content: (answer?.payload as { content?: string } | undefined)?.content ?? "" };
+              .find(activity => !previousActivityIds.has(activity.id) && activity.kind === "message" &&
+                (activity.payload as { role?: string; partial?: boolean } | undefined)?.role === "assistant" &&
+                !(activity.payload as { partial?: boolean } | undefined)?.partial);
+            const content = (answer?.payload as { content?: string } | undefined)?.content ?? "";
+            const posted = service.history(user.id, delivery.roomId).some(item => item.id > message.id &&
+              item.sender.sourceSessionId === delivery.sessionId && ["result", "verification", "blocked"].includes(item.kind));
+            if (!content.trim() && !posted) throw new Error("Thread completed without an answer or explicit work result. Review the execution trace.");
+            return { content };
           }
           await delay(100);
         }

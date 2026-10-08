@@ -53,6 +53,47 @@ describe("bounded execution", () => {
     expect(restored.snapshot().calls).toBe(4);
   });
 
+  it("counts infrastructure errors hidden by successful shell pipelines across retries", () => {
+    const guard = new ExecutionGuard();
+    for (let i = 0; i < 3; i++) {
+      guard.beforeCall();
+      guard.record("jait.terminal", { ok: true, message: "Command completed", data: { exitCode: 0,
+        output: "bash: bun: command not found; diagnostic attempt " + i } });
+    }
+    expect(guard.stopReason).toContain("Required executable unavailable");
+  });
+
+  it("bounds recovery across different environment failures and persists its budget", () => {
+    let guard = new ExecutionGuard();
+    const outputs = ["bun: command not found", "Cannot find module better-sqlite3", "Permission denied",
+      "ENOENT: project", "Consent request timed out", "No test files found"];
+    for (const output of outputs) {
+      guard.beforeCall();
+      guard.record("terminal.run", { ok: false, message: output });
+      guard = new ExecutionGuard(guard.snapshot());
+    }
+    expect(guard.stopReason).toContain("environment recovery");
+  });
+
+  it("does not treat source text mentioning environment errors as a tool failure", () => {
+    const guard = new ExecutionGuard();
+    for (let i = 0; i < 3; i++) {
+      guard.beforeCall();
+      guard.record("file.read", { ok: true, message: "Read", data: { content: "command not found; permission denied" } });
+    }
+    expect(guard.stopReason).toBeUndefined();
+  });
+
+  it("does not count successful shell searches through error-handling source as failures", () => {
+    const guard = new ExecutionGuard();
+    for (let i = 0; i < 3; i++) {
+      guard.beforeCall();
+      guard.record("jait.terminal", { ok: true, message: "Command completed", data: { exitCode: 0,
+        output: "src/guard.ts: if (/command not found|permission denied/.test(message)) return;" } });
+    }
+    expect(guard.stopReason).toBeUndefined();
+  });
+
   it("enforces a hard limit despite new observations on every call", () => {
     const guard = new ExecutionGuard(undefined, 120);
     for (let i = 0; i < 120; i++) {
