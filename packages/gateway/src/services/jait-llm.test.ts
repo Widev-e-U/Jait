@@ -302,3 +302,10 @@ describe("callJaitLlmCompletion", () => {
     ).rejects.toThrow(/no content \(finish_reason: error/);
   });
 });
+
+it("requires a Go key and resolves the Go default instead of the OpenAI default", () => {
+  expect(() => resolveJaitLlmConfig({config, jaitBackend:"opencode-go"})).toThrow("needs an API key");
+  const resolved = resolveJaitLlmConfig({config, jaitBackend:"opencode-go",apiKeys:{OPENCODE_GO_API_KEY:"key"}});
+  expect(resolved.openaiModel).toBe("glm-5.2");
+  expect(resolved.openaiBaseUrl).toBe("https://opencode.ai/zen/go/v1");
+});

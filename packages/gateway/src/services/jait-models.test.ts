@@ -63,3 +63,13 @@ describe("listJaitModels", () => {
     ]);
   });
 });
+
+// Go must survive settings parsing and remain routed to its own instance.
+it("discovers OpenCode Go models with routable instance IDs", async () => {
+  globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({data: [{id: "glm-5.2"}]}))) as typeof fetch;
+  const models = await listJaitModels({ config, fallbackModels: [], apiKeys: {
+    JAIT_BACKEND_INSTANCES: JSON.stringify([{id: "go", type: "opencode-go", name: "My Go", baseUrl: "https://opencode.ai/zen/go/v1", apiKey: "go-key"}]),
+  }});
+  expect(models.map(m => decodeJaitModelId(m.id))).toEqual([{backend: "opencode-go", instanceId: "go", model: "glm-5.2"}]);
+  expect(models[0]?.group).toBe("My Go · OpenCode Go");
+});

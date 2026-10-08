@@ -327,12 +327,14 @@ export function resolveMcpBaseUrl(
 function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>): string {
   const sessionId = readOptionalString(query?.["sessionId"]);
   const projectRoot = readOptionalString(query?.["projectRoot"]);
+  const runtimeMode = readOptionalString(query?.["runtimeMode"]);
   const toolSet = resolveMcpToolSet(query);
-  if (!sessionId && !projectRoot && toolSet === "all") return baseUrl;
+  if (!sessionId && !projectRoot && !runtimeMode && toolSet === "all") return baseUrl;
 
   const url = new URL(baseUrl);
   if (sessionId) url.searchParams.set("sessionId", sessionId);
   if (projectRoot) url.searchParams.set("projectRoot", projectRoot);
+  if (runtimeMode) url.searchParams.set("runtimeMode", runtimeMode);
   if (toolSet !== "all") url.searchParams.set("toolSet", toolSet);
   return url.toString();
 }

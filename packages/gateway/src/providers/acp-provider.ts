@@ -2,6 +2,7 @@ import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
+import { hasOpenCodeGoCredential, setOpenCodeGoCredential } from "./opencode-credentials.js";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -470,6 +471,7 @@ export class AcpProvider implements CliProviderAdapter {
 
   resetModels(): void {
     this.cachedModels = null;
+    this.cachedAuthStatus = null;
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
@@ -495,14 +497,16 @@ export class AcpProvider implements CliProviderAdapter {
         };
       }).models;
       const effortConfig = findReasoningEffortConfig(newSession.configOptions);
-      const modelConfig = effortConfig ? findModelConfig(newSession.configOptions) : null;
-      if (modelConfig && effortConfig) {
+      const modelConfig = findModelConfig(newSession.configOptions);
+      if (modelConfig) {
         for (const model of modelConfig.models) {
           models.push({
             ...model,
             isDefault: model.id === modelConfig.currentModelId,
-            reasoningEffortSupported: true,
-            supportedReasoningEfforts: effortConfig.efforts,
+            ...(effortConfig ? {
+              reasoningEffortSupported: true,
+              supportedReasoningEfforts: effortConfig.efforts,
+            } : {}),
           });
         }
       } else if (modelState && modelState.availableModels?.length) {
@@ -556,6 +560,9 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async getAuthStatus(): Promise<ProviderAuthStatus> {
+    if (this.providerType === "opencode" && hasOpenCodeGoCredential(this.config.env)) {
+      return {login: true, logout: true, deviceCode: false, authenticated: true, detail: "OpenCode Go API key configured."};
+    }
     if (!this.authKind) {
       return { ...NO_PROVIDER_AUTH, authenticated: null, detail: "Auth is managed by the ACP agent." };
     }
@@ -782,6 +789,14 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async logout(): Promise<ProviderLogoutResult> {
+    if (this.providerType === "opencode" && hasOpenCodeGoCredential(this.config.env)) {
+      setOpenCodeGoCredential(null, this.config.env);
+      this.cachedModels = null;
+      this.cachedAuthStatus = null;
+      this.authenticatedHint = null;
+      return {ok: true, status: "completed", providerId: this.id, message: "OpenCode Go disconnected."};
+    }
+
     if (this.authLoginProcess) {
       killAuthChildTree(this.authLoginProcess);
       this.authLoginProcess = null;

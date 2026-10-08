@@ -1,3 +1,4 @@
+import { callJaitLlmCompletion } from "../services/jait-llm.js";
 /**
  * Provider REST routes.
  *
@@ -325,6 +326,26 @@ export function registerProviderRoutes(
       const message = error instanceof Error ? error.message : "Failed to create provider account";
       const status = message.includes("UNIQUE constraint") ? 409 : 400;
       return reply.status(status).send({ error: status === 409 ? "An account with this label already exists" : message });
+    }
+  });
+
+  app.post("/api/provider-accounts/:id/opencode-go", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const service = deps.providerAccountService;
+    if (!service) return reply.status(503).send({error: "Provider account service is unavailable"});
+    const {id} = request.params as {id: string};
+    if (!service.get(id, authUser.id)) return reply.status(404).send({error: "Provider account not found"});
+    const body = (request.body ?? {}) as {apiKey?: unknown};
+    if (typeof body.apiKey !== "string" || !body.apiKey.trim() || body.apiKey.length > 4096 || /[\r\n]/.test(body.apiKey)) {
+      return reply.status(400).send({error: "Enter an OpenCode Go API key."});
+    }
+    try {
+      service.connectOpenCodeGo(id, authUser.id, body.apiKey.trim());
+      snapshotCache.invalidate();
+      return {ok: true};
+    } catch (error) {
+      return reply.status(400).send({error: error instanceof Error ? error.message : "Could not connect OpenCode Go"});
     }
   });
 
@@ -706,6 +727,10 @@ export function registerProviderRoutes(
     const apiKey = typeof body.api_key === "string" ? body.api_key.trim() : "";
     const model = typeof body.model === "string" && body.model.trim() ? body.model.trim() : "";
 
+    if (backend === "opencode-go" && !apiKey) {
+      return reply.status(400).send({ ok: false, error: "Enter your OpenCode Go API key before testing." });
+    }
+
     const isOllama = backend === "ollama";
     let modelsUrl: string;
     try {
@@ -741,11 +766,20 @@ export function registerProviderRoutes(
       const ids = isOllama
         ? (data.models ?? []).map((m) => m.name).filter((id): id is string => Boolean(id))
         : (data.data ?? []).map((m) => m.id).filter((id): id is string => Boolean(id));
+      if (backend === "opencode-go") {
+        const probeModel = model || (ids.includes("glm-5.2") ? "glm-5.2" : ids[0]);
+        if (!probeModel) return { ok: false, error: "OpenCode Go returned no models." };
+        if (model && !ids.includes(model)) return { ok: false, error: `OpenCode Go does not offer model "${model}".` };
+        // Go's catalogue is public. Only inference verifies a subscription key.
+        await callJaitLlmCompletion({backend, openaiApiKey: apiKey, openaiBaseUrl: rawBaseUrl, openaiModel: probeModel, contextWindow: 128000},
+          [{role: "user", content: "This is a coding-agent connection test. Reply with OK only, without analysis."}],
+          {maxTokens: 512, signal: controller.signal});
+      }
       return {
         ok: true,
         backend,
         baseUrl: rawBaseUrl,
-        latencyMs,
+        latencyMs: Date.now() - startedAt,
         modelCount: ids.length,
         sampleModels: ids.slice(0, 3),
         authenticated: Boolean(apiKey),

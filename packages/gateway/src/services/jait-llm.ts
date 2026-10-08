@@ -1,3 +1,5 @@
+import { fetchJaitLlm } from "./opencode-go-fetch.js";
+import { llmRequestHeaders } from "./llm-headers.js";
 import { decodeJaitModelId, JAIT_BACKEND_DEFAULT_URLS, parseJaitBackendInstances } from "@jait/shared";
 import { inferContextWindow, type AppConfig } from "../config.js";
 import type { LLMConfig } from "../tools/agent-loop.js";
@@ -16,18 +18,15 @@ import type { JaitBackend } from "./users.js";
 export async function callJaitLlmCompletion(
   llm: ResolvedJaitLlmConfig,
   messages: Array<{ role: string; content: string }>,
-  options: { maxTokens?: number; temperature?: number; signal?: AbortSignal } = {},
+  options: { maxTokens?: number; temperature?: number; signal?: AbortSignal; sessionId?: string } = {},
 ): Promise<string> {
   // Ollama's native /api/chat endpoint is only needed for streaming num_ctx
   // control. For a single non-streaming completion the OpenAI-compatible
   // /v1/chat/completions endpoint works fine and keeps the URL shape uniform.
   const url = `${llm.openaiBaseUrl.replace(/\/+$/, "")}/chat/completions`;
-  const res = await fetch(url, {
+  const res = await fetchJaitLlm(llm, url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${llm.openaiApiKey}`,
-    },
+    headers: llmRequestHeaders(llm, options.sessionId),
     body: JSON.stringify({
       model: llm.openaiModel,
       messages,
@@ -249,6 +248,7 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
   // These resolve their own base URL and API key like the generic OpenAI path,
   // so named instances and legacy env-var config both work.
   const API_ROUTES: Partial<Record<JaitBackend, { apiKeyEnv: string; baseUrlEnv: string; defaultUrl: string }>> = {
+    "opencode-go": { apiKeyEnv: "OPENCODE_GO_API_KEY", baseUrlEnv: "OPENCODE_GO_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS["opencode-go"] },
     gemini: { apiKeyEnv: "GEMINI_API_KEY", baseUrlEnv: "GEMINI_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.gemini },
     anthropic: { apiKeyEnv: "ANTHROPIC_API_KEY", baseUrlEnv: "ANTHROPIC_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.anthropic },
     grok: { apiKeyEnv: "XAI_API_KEY", baseUrlEnv: "XAI_BASE_URL", defaultUrl: JAIT_BACKEND_DEFAULT_URLS.grok },
@@ -265,8 +265,11 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
       || routedInstance?.model
       || options.requestedModel?.trim()
       || apiKeys["OPENAI_MODEL"]?.trim()
-      || options.config.openaiModel;
+      || (backend === "opencode-go" ? "glm-5.2" : options.config.openaiModel);
     const apiKey = routedInstance?.apiKey || apiKeys[route.apiKeyEnv]?.trim() || "";
+    if (backend === "opencode-go" && !apiKey) {
+      throw new JaitConfigError("OpenCode Go needs an API key. Add it to the Go backend in Settings → API.");
+    }
     return {
       backend,
       openaiApiKey: apiKey,

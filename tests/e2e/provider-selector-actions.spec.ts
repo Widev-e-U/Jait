@@ -35,7 +35,8 @@ test.describe('provider selector actions', () => {
         ], remoteProviders: [] } })
       })
       await page.route('**/api/providers/*/models', (route) => route.fulfill({ json: {
-        models: [{ id: refreshed ? 'fresh-model' : 'original-model', name: refreshed ? 'Fresh model' : 'Original model', isDefault: true }],
+        models: [{ id: refreshed ? 'fresh-model' : 'original-model', name: refreshed ? 'Fresh model' : 'Original model', isDefault: true,
+          ...(refreshed ? { supportedReasoningEfforts: ['low', 'high', 'max'].map((reasoningEffort) => ({ reasoningEffort })) } : {}) }],
       } }))
       await page.route('**/api/providers/models/reset', async (route) => {
         refreshed = true
@@ -77,6 +78,8 @@ test.describe('provider selector actions', () => {
       await sessionRestored
       await expect(page.getByRole('button', { name: 'Copy chat id' })).toBeVisible()
       const providerSelector = page.getByRole('button', { name: /^Provider .*model / }).first()
+      await expect(providerSelector).not.toContainText('Gateway')
+      await expect(providerSelector).not.toHaveAttribute('aria-label', /reasoning/)
       if (!mobile) {
         await providerSelector.click({ button: 'right', timeout: 30_000 })
         await expect(page.getByRole('menuitem', { name: 'Refresh models' })).toBeVisible()
@@ -125,6 +128,16 @@ test.describe('provider selector actions', () => {
       await account.click()
       await expect(account).toHaveAttribute('aria-selected', 'true')
       await expect(page.getByRole('option', { name: /Fresh model/ }).first()).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(providerSelector).toHaveAttribute('aria-label', /reasoning Default/)
+      for (const effort of ['Low', 'High', 'Max']) {
+        await providerSelector.click()
+        await page.getByRole('button', { name: effort, exact: true }).click()
+        await expect(providerSelector).toContainText(effort)
+        await expect(providerSelector).toHaveAttribute('aria-label', new RegExp(`reasoning ${effort}`))
+        await expect(providerSelector).not.toContainText('Gateway')
+      }
+      await providerSelector.click()
 
       await openMenu()
       await page.getByRole('menuitem', { name: 'Log out' }).click()

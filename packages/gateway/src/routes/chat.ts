@@ -3355,6 +3355,7 @@ export function registerChatRoutes(
     const mcpServers = providerRegistry.buildJaitMcpServerRefs(config, getRequestBaseUrl(request), {
       sessionId,
       projectRoot: wsRoot,
+      runtimeMode,
     });
 
     const startPromise = (async () => {
@@ -4125,6 +4126,7 @@ export function registerChatRoutes(
         const mcpServers = providerRegistry.buildJaitMcpServerRefs(config, getRequestBaseUrl(request), {
           sessionId,
           projectRoot: cliWsRoot,
+          runtimeMode,
         });
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──

@@ -1,5 +1,6 @@
 import { AccountInvitations } from "./AccountInvitations"
 import { DesktopGatewaySetup } from '@/components/onboarding/DesktopGatewaySetup'
+import { OpenCodeGoConnection } from './opencode-go-connection'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, ExternalLink, LogIn, LogOut, Plus, RefreshCw, Trash2, Copy, Watch, Network } from 'lucide-react'
@@ -215,6 +216,7 @@ const BACKEND_OPTIONS: Array<{
   icon: BackendIcon
 }> = [
   { type: 'openai', label: 'OpenAI-compatible', description: 'OpenAI or any compatible /v1 API endpoint.', icon: asIcon(OpenAI) },
+  { type: 'opencode-go', label: 'OpenCode Go', description: 'Coding models included in your OpenCode Go subscription.', icon: asIcon(OpenAI) },
   { type: 'openrouter', label: 'OpenRouter', description: 'Hosted access to many model providers through one API.', icon: asIcon(OpenRouter) },
   { type: 'ollama', label: 'Ollama', description: 'A local or remote Ollama server with its own model library.', icon: asIcon(Ollama) },
   { type: 'omniroute', label: 'OmniRoute', description: 'A local model router with automatic provider selection.', icon: asIcon(Network) },
@@ -1446,6 +1448,7 @@ const providerAccountsCard = (
         const busy = logoutBusy || loginBusy
         const loginInstructions = providerLoginInstructions?.providerId === providerId ? providerLoginInstructions : null
         const configuredAccount = configuredProviderAccounts.find((account) => account.id === providerId)
+        const isOpenCode = configuredAccount?.providerType === 'opencode'
         return (
           <div key={provider.id} className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -1462,6 +1465,7 @@ const providerAccountsCard = (
               {auth?.detail && (
                 <p className="mt-1 text-xs text-muted-foreground">{auth.detail}</p>
               )}
+              {isOpenCode && <OpenCodeGoConnection accountId={providerId} onConnected={loadProviderAccounts} />}
               {loginInstructions && (
                 <div className="mt-2 space-y-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
                   <p>{loginInstructions.message}</p>
@@ -1506,7 +1510,7 @@ const providerAccountsCard = (
               )}
             </div>
             <div className="flex w-full gap-2 sm:w-auto">
-              {shouldShowProviderLoginAction(auth) && (
+              {!isOpenCode && shouldShowProviderLoginAction(auth) && (
                 <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => { void handleProviderLogin(providerId) }} disabled={busy || providerLogoutBusy !== null}>
                   {loginBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogIn className="mr-1.5 h-3.5 w-3.5" />}
                   Login

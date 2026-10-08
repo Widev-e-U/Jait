@@ -1377,6 +1377,7 @@ export function registerThreadRoutes(
     const mcpServers = providerRegistry.buildJaitMcpServerRefs(config, getRequestBaseUrl(request), {
       sessionId: id,
       projectRoot: workingDirectory,
+      runtimeMode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
     });
 
     // Store remote provider for /send, /stop, /interrupt access
@@ -2118,6 +2119,7 @@ export function registerThreadRoutes(
               const mcpServers = providerRegistry.buildJaitMcpServerRefs(config, getRequestBaseUrl(request), {
                 sessionId: id,
                 projectRoot: wdir,
+                runtimeMode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
               });
               const newSession = await provider.startSession({
                 threadId: id,

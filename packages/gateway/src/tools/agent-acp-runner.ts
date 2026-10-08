@@ -187,10 +187,12 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
     return { ok: false, message: `Provider "${opts.providerId}" is currently unavailable${reason ? `: ${reason}` : "."}` };
   }
 
+  const runtimeMode = resolveRuntimeMode(provider, opts.runtimeMode);
   const subThreadId = `${opts.sessionId}:sub:${opts.subAgentId}`;
   const mcpServers = opts.providerRegistry.buildJaitMcpServerRefs(opts.config, undefined, {
     sessionId: subThreadId,
     projectRoot: opts.projectRoot,
+    runtimeMode,
   });
 
   let session;
@@ -198,7 +200,7 @@ export async function runAcpSpecialistTurn(opts: AcpSpecialistTurnOptions): Prom
     session = await provider.startSession({
       threadId: subThreadId,
       workingDirectory: opts.projectRoot,
-      mode: resolveRuntimeMode(provider, opts.runtimeMode),
+      mode: runtimeMode,
       model: opts.model,
       mcpServers,
     });

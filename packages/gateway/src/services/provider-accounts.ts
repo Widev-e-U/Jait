@@ -1,3 +1,4 @@
+import { setOpenCodeGoCredential } from "../providers/opencode-credentials.js";
 import { getStateDirectory } from "../state-directory.js";
 import { and, eq } from "drizzle-orm";
 import { mkdirSync, rmSync } from "node:fs";
@@ -130,6 +131,19 @@ export class ProviderAccountService {
     this.db.insert(providerAccounts).values(account).run();
     this.register(account);
     return account;
+  }
+
+  connectOpenCodeGo(id: string, userId: string, apiKey: string): boolean {
+    const account = this.get(id, userId);
+    if (!account) return false;
+    if (account.providerType !== "opencode") throw new Error("Choose an OpenCode account.");
+    if (account.nodeId !== "gateway") throw new Error("Connect Go on the account's owning device.");
+    setOpenCodeGoCredential(apiKey, {HOME: this.accountHome(id)});
+    // New probes must read the new credentials and discard cached model/auth state.
+    const provider = this.registry.get(id);
+    if (provider instanceof AcpProvider) provider.resetModels();
+    else this.register(account);
+    return true;
   }
 
   async rename(id: string, userId: string, label: string): Promise<ProviderAccountRecord | null> {

@@ -128,3 +128,38 @@ describe('POST /api/providers/omniroute/test', () => {
     await app.close()
   })
 })
+
+describe('OpenCode Go backend connection test', () => {
+  it('rejects a missing key without treating the public catalogue as authentication', async () => {
+    const {app, headers} = await buildApp()
+    const fetcher = vi.fn()
+    globalThis.fetch = fetcher
+    const response = await app.inject({method:'POST',url:'/api/providers/backend/test',headers,payload:{backend:'opencode-go'}})
+    expect(response.statusCode).toBe(400)
+    expect(fetcher).not.toHaveBeenCalled()
+    await app.close()
+  })
+  it('verifies inference before reporting a connected Go subscription', async () => {
+    const {app, headers} = await buildApp()
+    const fetcher = vi.fn(async (_url: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? Response.json({choices:[{message:{content:'OK'}}]})
+      : Response.json({data:[{id:'glm-5.2'}]}))
+    globalThis.fetch = fetcher
+    const response = await app.inject({method:'POST',url:'/api/providers/backend/test',headers,payload:{backend:'opencode-go',api_key:'test-go-key'}})
+    expect(response.json()).toMatchObject({ok:true,authenticated:true,modelCount:1})
+    expect(fetcher).toHaveBeenCalledTimes(2)
+    expect(fetcher.mock.calls[1]![0]).toBe('https://opencode.ai/zen/go/v1/chat/completions')
+    const requestHeaders = new Headers(fetcher.mock.calls[1]![1]?.headers)
+    expect(requestHeaders.get('x-opencode-session')).toBeTruthy()
+    await app.close()
+  })
+  it('reports a rejected Go key even when the catalogue loads', async () => {
+    const {app, headers} = await buildApp()
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => init?.method === 'POST'
+      ? Response.json({error:{message:'Invalid Go API key'}},{status:401})
+      : Response.json({data:[{id:'glm-5.2'}]}))
+    const response = await app.inject({method:'POST',url:'/api/providers/backend/test',headers,payload:{backend:'opencode-go',api_key:'rejected-key'}})
+    expect(response.json()).toMatchObject({ok:false,error:expect.stringContaining('Invalid Go API key')})
+    await app.close()
+  })
+})

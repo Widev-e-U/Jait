@@ -24,6 +24,7 @@ export const JAIT_BACKEND_DEFAULT_URLS: Record<JaitBackend, string> = {
   moonshot: "https://api.moonshot.ai/v1",
   kimi: "https://api.moonshot.ai/v1",
   vllm: "http://localhost:8000/v1",
+  "opencode-go": "https://opencode.ai/zen/go/v1",
 };
 
 /**

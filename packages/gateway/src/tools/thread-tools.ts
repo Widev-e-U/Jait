@@ -526,7 +526,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     }
 
     const mcpServers = deps.mcpConfig
-      ? deps.providerRegistry.buildJaitMcpServerRefs(deps.mcpConfig)
+      ? deps.providerRegistry.buildJaitMcpServerRefs(deps.mcpConfig, undefined, {
+          sessionId: effectiveThread.id,
+          projectRoot: effectiveThread.workingDirectory ?? process.cwd(),
+          runtimeMode: (effectiveThread.runtimeMode as "full-access" | "supervised") ?? "full-access",
+        })
       : undefined;
 
     try {

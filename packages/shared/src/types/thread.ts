@@ -37,7 +37,8 @@ export type JaitBackend =
   | "perplexity"
   | "moonshot"
   | "kimi"
-  | "vllm";
+  | "vllm"
+  | "opencode-go";
 
 export const JAIT_BACKENDS: readonly JaitBackend[] = [
   "openai",
@@ -51,6 +52,7 @@ export const JAIT_BACKENDS: readonly JaitBackend[] = [
   "moonshot",
   "kimi",
   "vllm",
+  "opencode-go",
 ];
 
 export function isJaitBackend(value: unknown): value is JaitBackend {

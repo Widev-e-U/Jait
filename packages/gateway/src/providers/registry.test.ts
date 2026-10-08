@@ -15,6 +15,24 @@ afterEach(() => {
 });
 
 describe("ProviderRegistry", () => {
+  it.each(["full-access", "supervised"] as const)("carries %s to both tool endpoints", (runtimeMode) => {
+    delete process.env.JAIT_OMNIROUTE_MCP;
+    const refs = new ProviderRegistry().buildJaitMcpServerRefs(
+      { host: "127.0.0.1", port: 8000 },
+      undefined,
+      { sessionId: "thread-1", projectRoot: "/workspace/project", runtimeMode },
+    );
+    expect(refs).toHaveLength(2);
+    for (const ref of refs) {
+      expect(new URL(ref.url!).searchParams.get("runtimeMode")).toBe(runtimeMode);
+    }
+  });
+
+  it("does not grant full access when no mode is supplied", () => {
+    const ref = new ProviderRegistry().buildJaitMcpServerRef({ host: "127.0.0.1", port: 8000 });
+    expect(new URL(ref.url!).searchParams.has("runtimeMode")).toBe(false);
+  });
+
   it("splits Jait core and deferred tools into distinct MCP server refs", () => {
     const refs = new ProviderRegistry().buildJaitMcpServerRefs(
       { host: "127.0.0.1", port: 8000 },

@@ -13,6 +13,7 @@ import type {
   ProviderId,
   ProviderInfo,
   McpServerRef,
+  RuntimeMode,
 } from "./contracts.js";
 import {
   JAIT_CORE_MCP_SERVER_NAME,
@@ -90,7 +91,7 @@ export class ProviderRegistry {
   buildJaitMcpServerRef(
     config: { host: string; port: number },
     baseUrl?: string,
-    context?: { sessionId?: string; projectRoot?: string },
+    context?: { sessionId?: string; projectRoot?: string; runtimeMode?: RuntimeMode },
   ): McpServerRef {
     const normalizedBaseUrl = baseUrl?.trim().replace(/\/+$/, "");
     const host = config.host === "0.0.0.0" ? "127.0.0.1" : config.host;
@@ -104,6 +105,10 @@ export class ProviderRegistry {
       url.searchParams.set("projectRoot", context.projectRoot);
     }
 
+    if (context?.runtimeMode) {
+      url.searchParams.set("runtimeMode", context.runtimeMode);
+    }
+
     return {
       name: JAIT_DEFERRED_MCP_SERVER_NAME,
       transport: "http",
@@ -114,7 +119,7 @@ export class ProviderRegistry {
   buildJaitMcpServerRefs(
     config: { host: string; port: number },
     baseUrl?: string,
-    context?: { sessionId?: string; projectRoot?: string },
+    context?: { sessionId?: string; projectRoot?: string; runtimeMode?: RuntimeMode },
   ): McpServerRef[] {
     const baseRef = this.buildJaitMcpServerRef(config, baseUrl, context);
     const coreUrl = new URL(baseRef.url!);

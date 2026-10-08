@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -90,4 +90,32 @@ describe("provider account routes", () => {
     sqlite.close();
     rmSync(root, { recursive: true, force: true });
   });
+});
+
+it("connects Go to the owning OpenCode profile without exposing its key", async () => {
+  const {db, sqlite} = await openDatabase(":memory:"); migrateDatabase(sqlite);
+  const config = {...loadConfig(), jwtSecret: "go-test", logLevel: "silent"};
+  const users = new UserService(db);
+  const owner = users.createUser("go-owner", "password123");
+  const other = users.createUser("go-other", "password123");
+  const registry = new ProviderRegistry();
+  const root = mkdtempSync(join(tmpdir(), "jait-go-"));
+  const accounts = new ProviderAccountService(db, registry, [{id: "opencode", name: "OpenCode", description: "test", command: process.execPath}], root);
+  const account = accounts.create(owner.id, "opencode", "Privat");
+  const app = Fastify({logger: false});
+  registerProviderRoutes(app, config, {providerRegistry: registry, providerAccountService: accounts, userService: users});
+  try {
+    const url = `/api/provider-accounts/${account.id}/opencode-go`;
+    const forbidden = await app.inject({method: "POST", url, headers: await authHeader(config.jwtSecret, other.id, other.username), payload: {apiKey: "go-secret"}});
+    expect(forbidden.statusCode).toBe(404);
+    const connected = await app.inject({method: "POST", url, headers: await authHeader(config.jwtSecret, owner.id, owner.username), payload: {apiKey: "go-secret"}});
+    expect(connected.statusCode).toBe(200);
+    expect(connected.body).not.toContain("go-secret");
+    const path = join(root, account.id, ".local/share/opencode/auth.json");
+    expect(JSON.parse(readFileSync(path, "utf8"))["opencode-go"]).toEqual({type: "api", key: "go-secret"});
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    const invalid = await app.inject({method: "POST", url, headers: await authHeader(config.jwtSecret, owner.id, owner.username), payload: {apiKey: ""}});
+    expect(invalid.statusCode).toBe(400);
+    expect(JSON.parse(readFileSync(path, "utf8"))["opencode-go"].key).toBe("go-secret");
+  } finally { await app.close(); sqlite.close(); rmSync(root, {recursive: true, force: true}); }
 });

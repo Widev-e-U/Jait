@@ -1,3 +1,5 @@
+import { fetchJaitLlm } from "../services/opencode-go-fetch.js";
+import { llmRequestHeaders } from "../services/llm-headers.js";
 import { evaluateDecision, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
 /**
  * Agent Loop — reusable, streamable tool-calling loop.
@@ -118,6 +120,8 @@ export interface LLMConfig {
   openaiApiKey: string;
   openaiBaseUrl: string;
   openaiModel: string;
+  /** Conversation identity carried through auxiliary requests and compaction. */
+  sessionId?: string;
   /** Max context window in tokens */
   contextWindow: number;
   /**
@@ -2695,9 +2699,9 @@ export async function generateLLMConversationSummary(
       ? { model: llm.openaiModel, messages, stream: false, options: { num_ctx: llm.numCtx ?? llm.contextWindow } }
       : { model: llm.openaiModel, messages, stream: false, max_tokens: 2048 };
 
-    const response = await fetch(requestUrl, {
+    const response = await fetchJaitLlm(llm, requestUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${llm.openaiApiKey}` },
+      headers: llmRequestHeaders(llm),
       body: JSON.stringify(reqBody),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
     });
@@ -2918,7 +2922,7 @@ export async function runAgentLoop(
   steering?: SteeringController,
 ): Promise<AgentLoopResult> {
   const {
-    llm,
+    llm: configuredLlm,
     history,
     toolSchemas: initialToolSchemas,
     hasTools,
@@ -2938,6 +2942,7 @@ export async function runAgentLoop(
     onAssistantCheckpoint,
     log = console,
   } = options;
+  const llm = { ...configuredLlm, sessionId };
 
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i]?.role === "system" && history[i]?.content === SYSTEM_ONE_PROMPT) history.splice(i, 1);
@@ -3317,12 +3322,9 @@ export async function runAgentLoop(
       const requestUrl = isOllama
         ? `${llm.openaiBaseUrl.replace(/\/v1\/?$/, "")}/api/chat`
         : `${llm.openaiBaseUrl}/chat/completions`;
-      const response = await fetch(requestUrl, {
+      const response = await fetchJaitLlm(llm, requestUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${llm.openaiApiKey}`,
-        },
+        headers: llmRequestHeaders(llm, sessionId),
         body: JSON.stringify(reqBody),
         signal: llmSignal,
       });
