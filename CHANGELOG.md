@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.911](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.911) — 2026-10-08
+- fix(usage): preserve reported Ollama quota across activity refreshes — 7d9c6002
+- feat(chat): render Mermaid diagrams inline — a54dc61c
+- fix(agents): preserve execution context and bound stalled team work — 986cbab7
+- fix(updates): stage gateway upgrades and verify rollback — 75289285
+
 ## [v0.1.910](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.910) — 2026-10-07
 - feat(agents): run team work in threads and resume interrupted agents — f1e43d5a
 - fix(usage): show Ollama request activity without inventing quota — c91c4c97
