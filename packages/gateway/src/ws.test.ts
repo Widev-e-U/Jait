@@ -1213,6 +1213,25 @@ describe("WsControlPlane", () => {
       client.ws.close();
     });
 
+    it("returns pending approval IDs only for accessible sessions and clears on reconnect", async () => {
+      const token = await createToken("approval-owner");
+      plane.canAccessSession = (sessionId, userId) => sessionId === "owned" && userId === "approval-owner";
+      plane.getPendingConsents = () => [{ id: "request-1", sessionId: "owned" }, { id: "private", sessionId: "other-user" }];
+      const client = openWs(port, { token });
+      await waitForOpen(client.ws);
+      await client.collector.next();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const subscribe = () => client.ws.send(JSON.stringify({ type: "resource.subscribe", payload: { resource: "root:/pending-consents" } }));
+      subscribe();
+      const snapshot = await client.collector.next();
+      expect(snapshot.type).toBe("consent.pending-snapshot");
+      expect(snapshot.payload).toEqual({ requests: [{ id: "request-1", sessionId: "owned" }] });
+      plane.getPendingConsents = () => [];
+      subscribe();
+      expect((await client.collector.next()).payload).toEqual({ requests: [] });
+      client.ws.close();
+    });
+
     it("returns the authoritative streaming-session snapshot after reconnect", async () => {
       const token = await createToken("user-streaming-sessions");
       plane.getStreamingSessionIds = (userId) => (

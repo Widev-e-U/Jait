@@ -42,6 +42,17 @@ describe('isSessionUnread', () => {
 })
 
 describe('SessionRow', () => {
+  it('shows approval waiting ahead of the streaming spinner or old error', () => {
+    const html = renderRow({ isStreaming: true, isWaitingForApproval: true,
+      session: { id: 'chat', metadata: JSON.stringify({ chat: { lastError: 'Old error' } }) },
+    })
+    expect(html).toContain('aria-label="Waiting for approval"')
+    expect(html).toContain('lucide-shield-question')
+    expect(html).not.toContain('animate-spin')
+    expect(html).not.toContain('lucide-message-square-x')
+    expect(renderRow({ isStreaming: true, isWaitingForApproval: false })).toContain('animate-spin')
+  })
+
   it('renders the session name and a non-empty relative time', () => {
     const html = renderRow()
     expect(html).toContain('Deploy fix')

@@ -1,3 +1,4 @@
+import { applyPendingApprovalEvent } from '@/lib/pending-approvals'
 import { safeNotificationLink } from '@jait/shared'
 import { openNotification, subscribeNotificationNavigation, retryNotificationNavigation, androidNotificationBridge } from '@/lib/notification-navigation'
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, type FocusEvent } from 'react'
@@ -640,6 +641,12 @@ function App() {
   // Which sessions (across all projects, not just the one currently open) are
   // actively generating a response — lets the sidebar show a loading spinner
   // for chats running in the background, including on other devices.
+  const [pendingApprovals, setPendingApprovals] = useState<ReadonlyMap<string, string>>(() => new Map())
+  const approvalSessionIds = useMemo(() => new Set(pendingApprovals.values()), [pendingApprovals])
+  useEffect(() => { setPendingApprovals(new Map()) }, [token])
+  const handleConsentEvent = useCallback((event: { type: string; payload: unknown }) => {
+    setPendingApprovals((prev) => applyPendingApprovalEvent(prev, event))
+  }, [])
   const [streamingSessionIds, setStreamingSessionIds] = useState<Set<string>>(() => new Set())
   useEffect(() => {
     setStreamingSessionIds(new Set())
@@ -2018,6 +2025,7 @@ function App() {
     onMessageComplete: handleMessageComplete,
     onSessionStreamingChange: handleSessionStreamingChange,
     onSessionStreamingSnapshot: handleSessionStreamingSnapshot,
+    onConsentEvent: handleConsentEvent,
     onThreadEvent: useCallback((type: string, payload: Record<string, unknown>) => {
       if (type.startsWith('project.') || type.startsWith('chat.')) {
         handleProjectEventRef.current(type, payload)
@@ -5377,6 +5385,7 @@ function App() {
                       sidebarWidth={developerSidebarWidth}
                       showTerminal={showTerminal}
                       streamingSessionIds={streamingSessionIds}
+                      approvalSessionIds={approvalSessionIds}
                       sidebarRef={sidebarRef}
                       onAssignRepository={(projectId) => {
                         void handleAssignProjectRepository(projectId)
@@ -5783,6 +5792,7 @@ function App() {
                       nodes={fsNodes}
                       repositories={automation.repositories}
                       streamingSessionIds={streamingSessionIds}
+                      approvalSessionIds={approvalSessionIds}
                     />
                   </ErrorBoundary>
                 }

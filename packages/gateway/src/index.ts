@@ -611,6 +611,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       console.log(`Consent ${decision.approved ? "approved" : "rejected"}: ${decision.requestId}`);
     },
   });
+  ws.getPendingConsents = () => consentManager.listPending().map(({ id, sessionId }) => ({ id, sessionId }));
   const permissions = getProfile(activeToolProfileName);
   const sessionApprovalsBySession = new Map<string, Set<string>>();
   const getSessionApprovals = (sessionId: string): Set<string> => {

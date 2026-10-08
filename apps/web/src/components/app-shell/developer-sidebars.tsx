@@ -50,6 +50,7 @@ interface DeveloperSidebarsProps {
   sidebarWidth: number
   showTerminal: boolean
   streamingSessionIds: Set<string>
+  approvalSessionIds?: ReadonlySet<string>
   sidebarRef: RefObject<HTMLElement | null>
   onAssignRepository: (projectId: string) => void
   onArchiveSession: (sessionId: string) => void
@@ -112,6 +113,7 @@ export function DeveloperSidebars({
   sidebarWidth,
   showTerminal,
   streamingSessionIds,
+  approvalSessionIds,
   sidebarRef,
   onAssignRepository,
   onArchiveSession,
@@ -233,6 +235,7 @@ export function DeveloperSidebars({
               nodes={fsNodes}
               repositories={repositories}
               streamingSessionIds={streamingSessionIds}
+              approvalSessionIds={approvalSessionIds}
             />
           </ErrorBoundary>
           <div

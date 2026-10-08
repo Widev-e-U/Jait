@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
+import { ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -85,6 +85,7 @@ interface SessionSelectorProps {
   onDismiss?: () => void
   /** IDs of sessions currently generating a response — rendered with a loading spinner. */
   streamingSessionIds?: Set<string>
+  approvalSessionIds?: ReadonlySet<string>
   sessionInfo?: SessionInfo | null
   nodes?: FsNode[]
   repositories?: AutomationRepository[]
@@ -205,6 +206,7 @@ export function SessionSelector({
   onShowFewer,
   onDismiss,
   streamingSessionIds,
+  approvalSessionIds,
   sessionInfo,
   nodes = [],
   repositories = [],
@@ -753,6 +755,11 @@ export function SessionSelector({
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
                           <ProjectColorDot color={project.color} />
+                          {project.sessions.some(session => approvalSessionIds?.has(session.id)) && (
+                            <TooltipHint content="Chat waiting for approval">
+                              <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Chat waiting for approval" />
+                            </TooltipHint>
+                          )}
                           <span className={`min-w-0 truncate text-xs ${hasUnreadSessions ? 'font-bold text-foreground' : 'font-normal'}`}>
                             {project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')}
                           </span>
@@ -1004,6 +1011,7 @@ export function SessionSelector({
                               session={session}
                               isActive={isActiveSession}
                               isStreaming={isStreaming}
+                              isWaitingForApproval={approvalSessionIds?.has(session.id)}
                               dragProps={{
                                 draggable: true,
                                 onDragStart: (e) => {
@@ -1171,6 +1179,7 @@ export function SessionSelector({
                       session={session}
                       isActive={isActive}
                       isStreaming={isStreaming}
+                              isWaitingForApproval={approvalSessionIds?.has(session.id)}
                       fallbackLabel="Personal chat"
                       dragProps={{
                         draggable: true,

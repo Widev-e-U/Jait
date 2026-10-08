@@ -179,6 +179,7 @@ interface UseUICommandsOptions {
   onSessionStreamingChange?: (sessionId: string, streaming: boolean) => void
   /** Called with the authoritative running-session set after every WebSocket connection. */
   onSessionStreamingSnapshot?: (sessionIds: string[]) => void
+  onConsentEvent?: (event: { type: string; payload: unknown }) => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
   onThreadEvent?: ThreadEventHandler
   /** Called when the gateway broadcasts preview session state changes. */
@@ -214,6 +215,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     onMessageComplete,
     onSessionStreamingChange,
     onSessionStreamingSnapshot,
+    onConsentEvent,
     onThreadEvent,
     onFsChanges,
     onConnectionStateChange,
@@ -233,6 +235,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onSessionStreamingChangeRef.current = onSessionStreamingChange
   const onSessionStreamingSnapshotRef = useRef(onSessionStreamingSnapshot)
   onSessionStreamingSnapshotRef.current = onSessionStreamingSnapshot
+  const onConsentEventRef = useRef(onConsentEvent)
+  onConsentEventRef.current = onConsentEvent
   const onThreadEventRef = useRef(onThreadEvent)
   onThreadEventRef.current = onThreadEvent
   const onPreviewSessionEventRef = useRef(onPreviewSessionEvent)
@@ -321,6 +325,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
         if (shouldApplySessionScopedWsEvent(msg.sessionId, sessionIdRef.current)) {
           onMessageCompleteRef.current?.()
         }
+      } else if (['consent.required', 'consent.resolved', 'consent.pending-snapshot'].includes(msg.type)) {
+        onConsentEventRef.current?.(msg)
       } else if (msg.type === 'session.streaming') {
         // Any of the user's sessions started/stopped streaming — sidebar-wide, not session-scoped
         const payload = msg.payload as SessionStreamingData
@@ -701,6 +707,10 @@ export function useUICommands(opts: UseUICommandsOptions) {
         ws.send(JSON.stringify({
           type: 'resource.subscribe',
           payload: { resource: 'root:/threads' },
+        }))
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/pending-consents' },
         }))
         ws.send(JSON.stringify({
           type: 'resource.subscribe',

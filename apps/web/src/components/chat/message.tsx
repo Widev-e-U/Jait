@@ -940,7 +940,6 @@ function MessageInner({
                       data-message-from="user"
                       className={cn(
                         'min-w-0 rounded-lg bg-muted p-4 break-words [overflow-wrap:anywhere]',
-                        !isMobile && messageActionItems.length > 0 && 'pb-10',
                         canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
                         'leading-relaxed [font-size:0.9rem]',
                         steered && 'border border-dashed border-primary/40 bg-primary/5',

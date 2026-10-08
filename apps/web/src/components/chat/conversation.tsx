@@ -1,5 +1,6 @@
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { observeConversationRect } from '@/lib/conversation-viewport'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
@@ -666,6 +667,7 @@ export function Conversation({ children, className, mobile = false, loading, loa
 
   const virtualizer = useVirtualizer({
     count: childItems.length,
+    observeElementRect: observeConversationRect,
     getScrollElement: () => scrollRef.current,
     initialOffset: INITIAL_CONVERSATION_SCROLL_OFFSET,
     estimateSize: estimateItemSize,

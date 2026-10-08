@@ -193,6 +193,15 @@ export class AgentsApi {
     return data.account
   }
 
+  async connectOpenCodeGo(accountId: string, apiKey: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/provider-accounts/${encodeURIComponent(accountId)}/opencode-go`, {
+      method: 'POST', headers: this.getHeaders(true), body: JSON.stringify({ apiKey }),
+    })
+    const data = await res.json().catch(() => null) as {error?: string} | null
+    if (!res.ok) throw new Error(data?.error ?? 'Could not connect OpenCode Go')
+    this._providersInflight = null
+  }
+
   async renameProviderAccount(accountId: string, label: string): Promise<ProviderAccount> {
     const res = await fetch(`${API_URL}/api/provider-accounts/${accountId}`, {
       method: 'PATCH',

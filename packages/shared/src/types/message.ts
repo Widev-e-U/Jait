@@ -57,6 +57,7 @@ export type WsEventType =
   | "tool.result"
   | "consent.required"
   | "consent.resolved"
+  | "consent.pending-snapshot"
   | "secret.requested"
   | "secret.resolved"
   | "user-question.requested"

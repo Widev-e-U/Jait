@@ -1,4 +1,4 @@
-import { Loader2, MessageSquare, MessageSquareX } from 'lucide-react'
+import { Loader2, MessageSquare, MessageSquareX, ShieldQuestion } from 'lucide-react'
 import type {
   HTMLAttributes,
   MouseEventHandler,
@@ -30,6 +30,7 @@ export interface SessionRowProps {
   session: SessionRowSession
   isActive: boolean
   isStreaming?: boolean
+  isWaitingForApproval?: boolean
   /** Shown when session.name is empty (e.g. "Personal chat" vs "Untitled session"). */
   fallbackLabel?: string
   onRowClick?: () => void
@@ -48,6 +49,7 @@ export function SessionRow({
   session,
   isActive,
   isStreaming = false,
+  isWaitingForApproval = false,
   fallbackLabel = 'Untitled session',
   onRowClick,
   onRowContextMenu,
@@ -70,7 +72,11 @@ export function SessionRow({
       {...dragProps}
       {...longPressProps}
     >
-      {isStreaming ? (
+      {isWaitingForApproval ? (
+        <TooltipHint content="Waiting for approval">
+          <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Waiting for approval" />
+        </TooltipHint>
+      ) : isStreaming ? (
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
       ) : chatError ? (
         <TooltipHint content={`Last reply failed: ${chatError.message}`}>

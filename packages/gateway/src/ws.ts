@@ -197,6 +197,7 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
   }>();
   getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[]; hasMore?: boolean };
+  getPendingConsents?: () => Array<{ id: string; sessionId: string }>;
   getStreamingSessionIds?: (userId: string) => string[];
   getSurfaceSnapshot?: (userId?: string | null) => { serverTime: string; surfaces: unknown[] };
   getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
@@ -504,6 +505,18 @@ export class WsControlPlane {
             sessionId: "",
             timestamp: new Date().toISOString(),
             payload: this.getThreadSnapshot(userId),
+          });
+          return;
+        }
+        if (resource === "root:/pending-consents") {
+          const requests = (this.getPendingConsents?.() ?? []).filter((request) =>
+            !this.canAccessSession || this.canAccessSession(request.sessionId, client.userId),
+          );
+          this.send(client.ws, {
+            type: "consent.pending-snapshot",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { requests },
           });
           return;
         }

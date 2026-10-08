@@ -45,6 +45,19 @@ function createProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
 }
 
 describe('SessionSelector', () => {
+  it('marks the project and each waiting project or personal chat', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector projects={[createProject()]} activeProjectId={null}
+        personalSessions={[{ ...createProject().sessions[0], id: 'personal', projectId: null }]}
+        approvalSessionIds={new Set(['session-1', 'personal'])}
+        streamingSessionIds={new Set(['session-1'])}
+        onSelectProject={() => {}} onCreateProject={() => {}}
+        onRemoveProject={() => {}} onChangeDirectory={() => {}} />
+    )
+    expect(markup).toContain('aria-label="Chat waiting for approval"')
+    expect(markup.match(/aria-label="Waiting for approval"/g)).toHaveLength(2)
+  })
+
   it('shows five recent project chats and offers to reveal older ones', () => {
     const markup = renderToStaticMarkup(
       <SessionSelector

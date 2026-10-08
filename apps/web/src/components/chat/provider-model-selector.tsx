@@ -881,6 +881,9 @@ export function ProviderModelSelector({
   const activeModelDef = resolveActiveModel(models, model)
   const reasoningEfforts = resolveReasoningEffortOptions(activeModelDef)
   const modelSupportsReasoning = reasoningEfforts !== null
+  const reasoningLabel = reasoningEfforts
+    ? (reasoningEffort == null ? 'Default' : reasoningEfforts.find((effort) => effort.value === reasoningEffort)?.label)
+    : undefined
 
   const handleReasoningEffortChange = (next: SessionReasoningEffort | null) => {
     saveProjectReasoningEffortSelection(projectId, provider, next)
@@ -941,7 +944,7 @@ export function ProviderModelSelector({
   }, [provider])
 
   const triggerButton = (
-    <TooltipHint side={tooltipSide} content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}>
+    <TooltipHint side={tooltipSide} content={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}${reasoningLabel ? ` · Reasoning: ${reasoningLabel}` : ''}`}>
     <button
       type="button"
       disabled={disabled}
@@ -953,7 +956,7 @@ export function ProviderModelSelector({
         'disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
-      aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
+      aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}${reasoningLabel ? `, reasoning ${reasoningLabel}` : ''}`}
     >
       {currentProvider.iconUrl
         ? <RemoteProviderLogo url={currentProvider.iconUrl} className="h-4 w-4" />
@@ -965,10 +968,10 @@ export function ProviderModelSelector({
           <span className="max-w-36 truncate font-mono text-[11px] font-normal opacity-75">{displayModelLabel}</span>
         </span>
       )}
-      {!compact && locationLabel && (
+      {!compact && reasoningLabel && (
         <span className="inline-flex max-w-28 shrink-0 items-center gap-1 rounded-sm bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-blue-500">
-          <Monitor className="h-3 w-3 shrink-0" />
-          <span className="truncate">{locationLabel}</span>
+          <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">{reasoningLabel}</span>
         </span>
       )}
       {loadingModels && <Loader2 className="h-3 w-3 shrink-0 animate-spin opacity-70" />}
