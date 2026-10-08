@@ -41,6 +41,8 @@ it("creates eval sessions only in a fresh private gateway and removes its databa
   const output = await mkdtemp(path.join(tmpdir(), "jait-eval-isolation-test-"));
   let privateState = "";
   const previousDbPath = process.env.JAIT_DB_PATH;
+  const previousProvider = process.env.LLM_PROVIDER;
+  process.env.LLM_PROVIDER = "ollama";
   const sentinel = path.join(output, "source-sentinel.db");
   await writeFile(sentinel, "source database must stay untouched");
   process.env.JAIT_DB_PATH = sentinel;
@@ -70,6 +72,8 @@ it("creates eval sessions only in a fresh private gateway and removes its databa
     expect(await readFile(sentinel, "utf8")).toBe("source database must stay untouched");
     await rm(path.dirname(reports[0]!.workspace), { recursive: true, force: true });
   } finally {
+    if (previousProvider === undefined) delete process.env.LLM_PROVIDER;
+    else process.env.LLM_PROVIDER = previousProvider;
     if (previousDbPath === undefined) delete process.env.JAIT_DB_PATH;
     else process.env.JAIT_DB_PATH = previousDbPath;
     await close(source); await close(llm); await rm(output, { recursive: true, force: true }); }

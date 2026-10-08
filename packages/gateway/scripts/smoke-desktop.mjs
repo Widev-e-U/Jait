@@ -61,7 +61,7 @@ const watcher = requireGateway('@parcel/watcher');
   const subscription = await watcher.subscribe(${JSON.stringify(temporary)}, () => {});
   await subscription.unsubscribe();
   const windows = process.platform === 'win32';
-  const term = pty.spawn(windows ? 'cmd.exe' : '/bin/sh', windows ? ['/c', 'echo jait-pty-ok'] : ['-c', 'echo jait-pty-ok'], { cols: 80, rows: 24 });
+  const term = pty.spawn(windows ? 'cmd.exe' : '/bin/sh', windows ? ['/c', 'echo jait-pty-ok'] : ['-c', 'echo jait-pty-ok'], { cols: 80, rows: 24, ...(windows ? { useConptyDll: true } : {}) });
   let text = '';
   term.onData(data => { text += data; });
   await new Promise(resolve => term.onExit(() => setTimeout(resolve, 50)));

@@ -12,12 +12,13 @@ export async function startIsolatedEvaluationGateway(source: { gateway: string; 
     signal: source.signal ? AbortSignal.any([source.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error("Cannot read evaluation backend settings: HTTP " + response.status);
-  const settings = await response.json();
+  const settings = await response.json() as { jait_backend?: string };
   const state = await mkdtemp(path.join(tmpdir(), "jait-eval-state-"));
   await chmod(state, 0o700);
   const child = spawn("bun", [fileURLToPath(new URL("./isolated-gateway-child.ts", import.meta.url))], {
     env: { ...process.env, __JAIT_CLI: "1", JAIT_STATE_DIR: state, JAIT_DB_PATH: path.join(state, "data/jait.db"),
       PORT: "0", WS_PORT: "0", HOST: "127.0.0.1", JWT_SECRET: randomUUID(), LOG_LEVEL: "warn",
+      LLM_PROVIDER: settings.jait_backend ?? "openai",
       JAIT_PRIMARY_GATEWAY: "", JAIT_PRIMARY_TOKEN: "", JAIT_NODE_ONLY: "false" },
     stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
   });

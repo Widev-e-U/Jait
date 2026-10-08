@@ -52,6 +52,7 @@ interface SpawnPtyOptions {
   cwd: string;
   env: Record<string, string | undefined>;
   useConpty?: boolean;
+  useConptyDll?: boolean;
 }
 
 function loadNodePty() {
@@ -505,7 +506,9 @@ export class TerminalSurface implements Surface {
         rows: this._rows,
         cwd: input.projectRoot,
         env: { ...process.env, TERM: "xterm-256color", ...this.extraEnv },
-        ...(platform() === "win32" ? { useConpty: !isGitBash } : {}),
+        // Bundled ConPTY closes its input pipe before native teardown, avoiding
+        // the system implementation's AttachConsole/kill deadlock on Windows.
+        ...(platform() === "win32" ? { useConpty: !isGitBash, useConptyDll: !isGitBash } : {}),
       });
 
       this._pty = pty;
