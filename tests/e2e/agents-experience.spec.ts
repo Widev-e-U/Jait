@@ -255,7 +255,7 @@ test('agent graph fills the page by default and compact controls open the sideba
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('button', { name: 'Graph', exact: true })).toHaveAttribute('aria-pressed', 'true')
   const graph = page.getByLabel('Agent reporting graph')
-  await expect(graph.locator('canvas')).toBeVisible()
+  await expect(graph.locator('canvas:not([aria-hidden])')).toBeVisible()
   const bounds = await graph.boundingBox()
   expect(bounds!.height).toBeGreaterThan(400)
   const node = page.getByTestId('agent-graph-node')
@@ -264,7 +264,7 @@ test('agent graph fills the page by default and compact controls open the sideba
   await node.getByRole('button', { name: 'Choose task for Researcher' }).click()
   const sidebar = page.getByRole('complementary', { name: 'Agent details' })
   await expect(sidebar.getByRole('heading', { name: 'Tasks & runs', exact: true })).toBeVisible()
-  await expect(graph.locator('canvas')).toBeVisible()
+  await expect(graph.locator('canvas:not([aria-hidden])')).toBeVisible()
   await sidebar.getByRole('button', { name: 'All agents' }).click()
   await expect(sidebar).toHaveCount(0)
   await page.goto('/')
@@ -294,4 +294,29 @@ test('graph shows a spinning count only while running and stops the active chat'
   await node.getByRole('button', { name: 'Stop Researcher' }).click()
   await expect(node.getByLabel('1 running tasks')).toHaveCount(0)
   await expect(node.getByRole('button', { name: 'Choose task for Researcher' })).toBeEnabled()
+})
+
+test('agent graph keeps a larger team inside the viewport on entry and resize', async ({ page, request }) => {
+  await openAgents(page, request)
+  const agent = await createAgent(page)
+  const team = Array.from({ length: 8 }, (_, index) => ({
+    ...agent, id: 'fit-agent-' + index, name: 'Teammate ' + index,
+    reportsToId: index ? 'fit-agent-0' : null,
+  }))
+  await page.route('**/api/persona-agents', route => route.fulfill({ json: { agents: team } }))
+  await page.getByRole('button', { name: 'All agents' }).click()
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const graph = page.getByLabel('Agent reporting graph')
+  await expect(page.getByTestId('agent-graph-node')).toHaveCount(8)
+  const allCardsFit = async () => graph.evaluate(element => {
+    const bounds = element.getBoundingClientRect()
+    return [...element.querySelectorAll('[data-testid="agent-graph-node"]')].every(card => {
+      const rect = card.getBoundingClientRect()
+      return rect.left >= bounds.left && rect.right <= bounds.right &&
+        rect.top >= bounds.top && rect.bottom <= bounds.bottom
+    })
+  })
+  await expect.poll(allCardsFit, { timeout: 10000 }).toBe(true)
+  await page.setViewportSize({ width: 1000, height: 720 })
+  await expect.poll(allCardsFit, { timeout: 10000 }).toBe(true)
 })

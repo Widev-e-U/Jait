@@ -21,6 +21,7 @@ export function AgentsGraph({ agents, threads, selectedId, onSave, onOpen, onCho
   const wakeWave = useRef<(() => void) | null>(null)
   const drag = useRef<{ node: GraphNode; startX: number; startY: number; moved: boolean; target: HTMLElement } | null>(null)
   const suppressClick = useRef(false)
+  const fitPending = useRef(true)
   const container = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode> | undefined>(undefined)
   const elements = useRef(new Map<string, HTMLDivElement>())
@@ -30,7 +31,7 @@ export function AgentsGraph({ agents, threads, selectedId, onSave, onOpen, onCho
     const members = JSON.parse(topology) as [string, string | null][]
     const ids = new Set(members.map(([id]) => id))
     return {
-      nodes: members.map(([id], index) => ({ id, x: Math.cos(index * Math.PI * 2 / members.length) * 170, y: Math.sin(index * Math.PI * 2 / members.length) * 170 }) as GraphNode),
+      nodes: members.map(([id], index) => ({ id, x: Math.cos(index * Math.PI * 2 / members.length) * 120, y: Math.sin(index * Math.PI * 2 / members.length) * 120 }) as GraphNode),
       links: members.flatMap(([id, manager]) => manager && ids.has(manager) && manager !== id ? [{ source: manager, target: id }] : []),
     }
   }, [topology])
@@ -45,11 +46,12 @@ export function AgentsGraph({ agents, threads, selectedId, onSave, onOpen, onCho
   }, [])
   useEffect(() => {
     const instance = graphRef.current
-    // Limit repulsion so agents without reporting links stay grouped.
-    instance?.d3Force('charge')?.strength(-1100).distanceMax(260)
-    instance?.d3Force('link')?.distance(180)
+    fitPending.current = true
+    // Keep cards close while leaving room for their controls and labels.
+    instance?.d3Force('charge')?.strength(-500).distanceMax(200)
+    instance?.d3Force('link')?.distance(150)
     instance?.d3ReheatSimulation()
-  }, [graph, dimensions.width > 0])
+  }, [graph, dimensions.width, dimensions.height])
   const positionNodes = () => {
     const instance = graphRef.current
     if (!instance) return
@@ -70,7 +72,13 @@ export function AgentsGraph({ agents, threads, selectedId, onSave, onOpen, onCho
       ref={graphRef} width={dimensions.width} height={dimensions.height} graphData={graph} nodeId="id"
       nodeCanvasObject={() => {}} linkColor={() => '#8090a066'} linkDirectionalArrowLength={5}
       onRenderFramePost={positionNodes} cooldownTicks={120} d3VelocityDecay={0.3}
-      minZoom={0.3} maxZoom={2} backgroundColor="transparent" enableNodeDrag={false}
+      onEngineStop={() => {
+        if (!fitPending.current || drag.current) return
+        fitPending.current = false
+        // HTML cards do not scale with the canvas; reserve space for their edges.
+        graphRef.current?.zoomToFit(250, Math.min(100, Math.min(dimensions.width, dimensions.height) / 3))
+      }}
+      minZoom={0.05} maxZoom={2} backgroundColor="transparent" enableNodeDrag={false}
     />}
     <div className="pointer-events-none absolute inset-0">
       {agents.map(agent => <div key={agent.id} ref={element => { if (element) elements.current.set(agent.id, element); else elements.current.delete(agent.id) }} className="pointer-events-auto absolute left-0 top-0 touch-none"
