@@ -655,7 +655,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         ? rowsEl.getBoundingClientRect().height / term.rows
         : 0
       const rowHeight = measuredRowHeight > 0 ? measuredRowHeight : TERMINAL_FALLBACK_ROW_HEIGHT
-      const rows = clampTerminalRows(countTerminalContentRows(term.buffer.active), minRows, maxRows)
+      // Keep the cursor row visible too: a trailing newline otherwise scrolls
+      // the only output line out of a one-row embedded console.
+      const contentRows = Math.max(countTerminalContentRows(term.buffer.active), term.buffer.active.baseY + term.buffer.active.cursorY + 1)
+      const rows = clampTerminalRows(contentRows, minRows, maxRows)
       setContentHeight(Math.ceil(rows * rowHeight))
     }
     const scheduleContentMeasure = () => {

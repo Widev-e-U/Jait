@@ -437,6 +437,9 @@ function App() {
   const closeProjectPreview = useCallback(() => {
     projectRef.current?.closePreviewTarget()
   }, [])
+  const currentProjectPreviewRef = useRef(projectPreviewState)
+  currentProjectPreviewRef.current = projectPreviewState
+
   const routePreviewToProject = useCallback((target?: string | null, projectRoot?: string | null) => {
     const trimmed = target?.trim() || null
     const nextPreviewState: DevPreviewPanelState = {
@@ -584,6 +587,21 @@ function App() {
     token,
     onLoginRequired
   )
+  const chatDraftsRef = useRef(new Map<string, { text: string; segments: UserMessageSegment[] | undefined }>())
+  const draftSessionRef = useRef(activeSessionId)
+  useLayoutEffect(() => {
+    if (draftSessionRef.current === activeSessionId) return
+    const previous = draftSessionRef.current
+    if (!previous && activeSessionId && inputValueRef.current) {
+      draftSessionRef.current = activeSessionId
+      return
+    }
+    if (previous) chatDraftsRef.current.set(previous, { text: inputValueRef.current, segments: inputSegments })
+    draftSessionRef.current = activeSessionId
+    const draft = activeSessionId ? chatDraftsRef.current.get(activeSessionId) : undefined
+    setInputValue(draft?.text ?? '')
+    setInputSegments(draft?.segments)
+  }, [activeSessionId, inputSegments, inputValueRef, setInputSegments, setInputValue])
   fetchProjectsRef.current = fetchProjects
   useEffect(() => {
     setPrimaryChatPanelHidden(false)
@@ -1495,7 +1513,10 @@ function App() {
       if (dp) {
         const nextTarget = getPersistablePreviewTarget(dp.target)
         if (nextTarget) setDevPreviewTarget(nextTarget)
-        if (dp.open && nextTarget) {
+        const currentPreview = currentProjectPreviewRef.current
+        if (dp.open && nextTarget && (!currentPreview.open
+          || currentPreview.target !== nextTarget
+          || currentPreview.projectRoot !== (dp.projectRoot ?? activeProjectRef.current?.projectRoot ?? null))) {
           routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }
@@ -1603,7 +1624,10 @@ function App() {
       if (dp) {
         const nextTarget = getPersistablePreviewTarget(dp.target)
         if (nextTarget) setDevPreviewTarget(nextTarget)
-        if (dp.open && nextTarget) {
+        const currentPreview = currentProjectPreviewRef.current
+        if (dp.open && nextTarget && (!currentPreview.open
+          || currentPreview.target !== nextTarget
+          || currentPreview.projectRoot !== (dp.projectRoot ?? activeProjectRef.current?.projectRoot ?? null))) {
           routePreviewToProject(nextTarget, dp.projectRoot ?? null)
         }
       }

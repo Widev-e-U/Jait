@@ -1666,9 +1666,8 @@ export function useChat(
     }
 
     cacheWriteReadySessionRef.current = requestSessionId
-    if (prevSessionIdRef.current !== requestSessionId) {
-      prevSessionIdRef.current = requestSessionId
-    }
+    // The session effect owns prevSessionIdRef. Marking a newly created
+    // session here would make that effect skip its initial subscription.
 
     // Hand the placeholder to the event consumer so the turn's first token
     // streams into this bubble instead of appending a second one next to it.

@@ -221,7 +221,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     if (user && !deps.ws.canAccessNode(nodeId, user.id)) return reply.status(404).send({ error: "Node not found" });
   });
   if (deps.ws) {
-    if (deps.userService) deps.ws.isValidUser = (userId) => Boolean(deps.userService?.findById(userId));
+    if (deps.userService) {
+      deps.ws.isValidUser = (userId) => Boolean(deps.userService?.findById(userId));
+      deps.ws.isGatewayOwner = (userId) => Boolean(deps.userService?.isOwner(userId));
+    }
     deps.ws.canAccessTerminal = (id, userId) => access.surface(id, userId);
     deps.ws.canAccessConsent = (id, userId) => access.consentRequest(id, userId);
     deps.ws.canAccessSession = (id, userId) => access.session(id, userId);

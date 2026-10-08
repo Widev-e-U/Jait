@@ -350,7 +350,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
           flushSync(() => save({ ...selected, chatSessionId: createdId, updatedAt: new Date().toISOString() }))
         }
         const result = await sessionChat.sendMessage(activeChatSessionId && sessionChat.messages.length > 0 ? message : agentTaskPrompt(selected, message, agents), {
-          sessionId, mode: 'agent', provider: selected.providerId,
+          sessionId, personaAgentId: selected.id, mode: 'agent', provider: selected.providerId,
           model: selected.model, runtimeMode: selected.requiresApproval ? 'supervised' : 'full-access',
           displayContent, displaySegments: displaySegments?.length ? displaySegments : [{ type: 'text', text: displayContent }],
           attachments,
@@ -443,7 +443,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
   return <section className={`${chatFullscreen && selected && tab === 'chat' ? 'fixed inset-0 z-50' : 'min-h-0 flex-1'} relative flex min-w-0 flex-col overflow-hidden bg-background`}>
     <div className={`flex min-h-0 flex-1 flex-col ${current && !chatFullscreen ? "sm:mr-[min(560px,50%)]" : ""}`}>
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3"><div><h1 className="text-xl font-semibold">Agents</h1><p className="mt-1 text-sm text-muted-foreground">People you can ask, assign work to, and schedule.</p><ThreadApprovalNotice /></div><Button size="sm" onClick={() => setCreating({ ...newPersonaAgentDraft(), skillIds: availableSkills.map((skill) => skill.id), usesAllSkills: true })}><Plus className="mr-1 h-4 w-4" /> New agent</Button></div>
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3"><div><h1 className="text-xl font-semibold">Agents</h1><p className="mt-1 text-sm text-muted-foreground">People you can ask, assign work to, and schedule.</p><ThreadApprovalNotice /></div><Button size="sm" className={window.jaitDesktop ? 'mr-36' : undefined} onClick={() => setCreating({ ...newPersonaAgentDraft(), skillIds: availableSkills.map((skill) => skill.id), usesAllSkills: true })}><Plus className="mr-1 h-4 w-4" /> New agent</Button></div>
         {interruptedAgents.length > 0 && <div className="flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-2" role="status">
           <p className="flex-1 text-xs text-muted-foreground">{interruptedAgents.length} agent{interruptedAgents.length === 1 ? '' : 's'} interrupted. Choose a provider/model, then press Play to continue saved work.</p>
           <Button size="sm" variant="outline" disabled={resuming} onClick={() => void resumeInterrupted()}><Play className="mr-1 h-3.5 w-3.5" />{resuming ? 'Continuing…' : 'Resume interrupted agents'}</Button>

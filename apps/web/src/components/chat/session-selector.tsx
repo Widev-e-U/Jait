@@ -512,7 +512,7 @@ export function SessionSelector({
           onNewPersonalSession && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md p-1" onClick={onNewPersonalSession}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md p-1" aria-label="New personal chat" onClick={onNewPersonalSession}>
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
@@ -590,7 +590,7 @@ export function SessionSelector({
                         variant="ghost"
                         size="icon"
                         className="ml-1 h-6 w-6 rounded-md p-1"
-                        onClick={onNewPersonalSession}
+                        aria-label="New personal chat" onClick={onNewPersonalSession}
                       >
                         <MessageSquare className="h-3 w-3" />
                       </Button>
@@ -618,7 +618,7 @@ export function SessionSelector({
                       {view === 'combined' && onNewPersonalSession && (
                         <>
                           {' or '}
-                          <button onClick={onNewPersonalSession} className="underline underline-offset-2 hover:text-foreground">
+                          <button aria-label="New personal chat" onClick={onNewPersonalSession} className="underline underline-offset-2 hover:text-foreground">
                             start a chat
                           </button>
                         </>
@@ -1152,7 +1152,7 @@ export function SessionSelector({
                         {onNewPersonalSession && (
                           <>
                             <br />
-                            <button onClick={onNewPersonalSession} className="mt-1 inline-block underline underline-offset-2 hover:text-foreground">
+                            <button aria-label="New personal chat" onClick={onNewPersonalSession} className="mt-1 inline-block underline underline-offset-2 hover:text-foreground">
                               Start a chat
                             </button>
                           </>

@@ -175,6 +175,15 @@ describe("WsControlPlane", () => {
     expect(port).toBeGreaterThan(0);
   });
 
+  it("allows only the gateway owner to manage gateway permissions", () => {
+    expect(plane.canAccessNode?.("gateway", "owner")).toBe(false);
+    plane.isGatewayOwner = userId => userId === "owner";
+    expect(plane.canAccessNode?.("gateway", "owner")).toBe(true);
+    expect(plane.canAccessNode?.("gateway", "other-user")).toBe(false);
+    expect(plane.canAccessNode?.("gateway", null)).toBe(false);
+    expect(plane.canAccessNode?.("unowned-remote", "owner")).toBe(false);
+  });
+
   afterEach(() => {
     plane.stop();
   });

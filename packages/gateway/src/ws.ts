@@ -206,7 +206,9 @@ export class WsControlPlane {
     this.jwtSecret = new TextEncoder().encode(config.jwtSecret);
     this.nodePermissions = new NodePermissionsService(db ?? null);
     this.nodeCredentials = new NodeCredentialsService(db ?? null);
-    this.canAccessNode = (id, userId) => Boolean(userId && this.nodeCredentials.owner(id) === userId);
+    this.canAccessNode = (id, userId) => Boolean(userId && (id === "gateway"
+      ? this.isGatewayOwner?.(userId)
+      : this.nodeCredentials.owner(id) === userId));
   }
 
   /**
@@ -1358,6 +1360,7 @@ export class WsControlPlane {
   isValidUser?: (userId: string) => boolean;
   canAccessTerminal?: (terminalId: string, userId: string | null) => boolean;
   canAccessConsent?: (requestId: string, userId: string | null) => boolean;
+  isGatewayOwner?: (userId: string) => boolean;
   canAccessNode?: (nodeId: string, userId: string | null) => boolean;
 
   revokeNodeCredentials(nodeId: string, userId: string): boolean {
