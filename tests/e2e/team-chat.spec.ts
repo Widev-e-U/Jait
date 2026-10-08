@@ -1,3 +1,4 @@
+import { registerTestUser } from './helpers/agent-user'
 import { test, expect } from '@playwright/test'
 
 test('team room shows neutral chat relays, agent identity, work links and addressed replies', async ({ page }) => {
@@ -38,7 +39,7 @@ test('team room shows neutral chat relays, agent identity, work links and addres
 test('team room preserves direct user messages and work links through reload', async ({ page, request }) => {
   test.setTimeout(90_000)
   const api = process.env.API_URL || 'http://127.0.0.1:8100'
-  const registration = await request.post(api + '/api/auth/register', { data: { username: 'team-' + Date.now(), password: 'team-test-password' } })
+  const registration = await registerTestUser(request, api, { data: { username: 'team-' + Date.now(), password: 'team-test-password' } })
   expect(registration.ok()).toBeTruthy()
   const { access_token: token } = await registration.json()
   const headers = { Authorization: 'Bearer ' + token }
@@ -50,6 +51,7 @@ test('team room preserves direct user messages and work links through reload', a
     } })
     expect(saved.ok()).toBeTruthy()
   }
+  await page.context().addCookies([{ name: 'jait_token', value: token, url: api, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(({ token, api }) => {
     localStorage.setItem('jait-auth-token', token)
     sessionStorage.setItem('jait-auth-token', token)
@@ -107,3 +109,36 @@ test('team room is at the bottom on its first visible frame when opened or reope
     await expect(page.getByTestId('team-message').first()).toBeInViewport()
   }
 })
+
+for (const width of [1280, 390]) {
+  test(`team message menu opens persisted routing decision at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    const routingDecision = { source: 'system-one', recipientId: 'developer', model: 'test-router', confidence: 0.92,
+      reason: 'Role, skills, or persona expertise best match the request.', candidates: [{ id: 'developer', name: 'Developer', role: 'Senior developer', persona: 'Own development and delegate implementation.', score: 6 }] }
+    const room = { id: 'fixture-room', name: 'Team', rootAgentId: 'developer', goal: null }
+    const messages = [
+      { id: 'request', roomId: room.id, sender: { kind: 'user', id: 'user', name: 'Jakob', avatar: null }, content: 'Implement the feature', kind: 'discussion', recipientIds: ['developer'], createdAt: '2026-10-08T12:00:00Z', depth: 0, routingDecision },
+      { id: 'reply', roomId: room.id, sender: { kind: 'agent', id: 'developer', name: 'Developer', avatar: 'Nova' }, content: 'Ready', kind: 'result', recipientIds: [], createdAt: '2026-10-08T12:01:00Z', depth: 1, parentMessageId: 'request' },
+      { id: 'legacy', roomId: room.id, sender: { kind: 'user', id: 'user', name: 'Jakob', avatar: null }, content: 'Older message', kind: 'discussion', recipientIds: [], createdAt: '2026-10-08T11:00:00Z', depth: 0 },
+    ]
+    await page.route('**/api/team-rooms/fixture-room', route => route.fulfill({ json: { room, messages, members: [], deliveries: [] } }))
+    await page.goto('/team-chat.html')
+    for (const content of ['Implement the feature', 'Ready']) {
+      await page.getByTestId('team-message').filter({ hasText: content }).getByRole('button', { name: /Message actions/ }).click()
+      await page.getByRole('menuitem', { name: 'View routing decision' }).click()
+      const modal = page.getByRole('dialog')
+      await expect(modal).toContainText('System One · test-router')
+      await expect(modal).toContainText('Selected: Developer')
+      await expect(modal).toContainText(routingDecision.reason)
+      await expect(modal).toContainText('Confidence: 92%')
+      await modal.getByText('Candidates considered').click()
+      await expect(modal).toContainText('Own development and delegate implementation.')
+      await page.keyboard.press('Escape')
+      await expect(modal).toHaveCount(0)
+    }
+    await page.reload()
+    await page.getByTestId('team-message').filter({ hasText: 'Older message' }).getByRole('button', { name: /Message actions/ }).click()
+    await page.getByRole('menuitem', { name: 'View routing decision' }).click()
+    await expect(page.getByRole('dialog')).toContainText('No routing decision was recorded')
+  })
+}

@@ -84,15 +84,22 @@ describe("persistent team coordination", () => {
     service.setDecisionKeys(() => ({ SYSTEM_ONE_BASE_URL: "http://localhost:9999" }));
     const evaluate = vi.spyOn(systemOne, "evaluateDecision");
     try {
-      evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "QA" } } });
+      evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "QA", confidence: 0.92 }, reason: { type: "choice", choice: "expertise" } } });
       expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "system", sender: human })).recipientIds).toEqual(["QA"]);
+      const recorded = service.history(owner, room.id).find(message => message.recipientIds.includes("QA"))!;
+      expect(recorded.routingDecision).toMatchObject({ source: "system-one", model: "test", recipientId: "QA", confidence: 0.92, reason: "Role, skills, or persona expertise best match the request." });
+      expect(recorded.routingDecision?.candidates.find(member => member.id === "Developer")).toMatchObject({ persona: "Handle Developer work." });
+      expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "system", sender: human })).routingDecision).toEqual(recorded.routingDecision);
       expect(evaluate).toHaveBeenCalledOnce();
       const state = JSON.parse(evaluate.mock.calls[0]![1]);
       expect(state.hierarchy.find((member: { id: string }) => member.id === "Developer")).toMatchObject({ persona: "Handle Developer work.", reportsToId: "Scrum" });
       evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "Research" } } });
       expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "invalid", sender: human })).recipientIds).toEqual(["Developer"]);
       evaluate.mockRejectedValue(new Error("offline"));
-      expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "offline", sender: human })).recipientIds).toEqual(["Developer"]);
+      const fallback = await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "offline", sender: human });
+      expect(fallback.recipientIds).toEqual(["Developer"]);
+      expect(fallback.routingDecision).toMatchObject({ source: "fallback", recipientId: "Developer" });
+      expect(fallback.routingDecision?.reason).toContain("unavailable");
       expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "explicit", sender: human, recipientIds: ["Scrum"] })).recipientIds).toEqual(["Scrum"]);
       expect(evaluate).toHaveBeenCalledTimes(3);
     } finally { evaluate.mockRestore(); }

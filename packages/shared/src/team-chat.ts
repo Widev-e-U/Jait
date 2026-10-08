@@ -22,6 +22,14 @@ export interface TeamRoom {
   projectPath: string | null;
   goal: TeamGoal | null;
 }
+export interface TeamRoutingDecision {
+  source: "system-one" | "fallback";
+  recipientId: string;
+  model?: string;
+  confidence?: number;
+  reason: string;
+  candidates: Array<{ id: string; name: string; role: string | null; persona: string; score: number }>;
+}
 export interface TeamRoomMessage {
   id: string;
   roomId: string;
@@ -34,6 +42,7 @@ export interface TeamRoomMessage {
   workSessionId?: string;
   workThreadId?: string;
   parentMessageId?: string;
+  routingDecision?: TeamRoutingDecision;
   depth: number;
   targetSessionId?: string;
 }
