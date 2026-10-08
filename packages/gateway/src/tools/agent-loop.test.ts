@@ -5,6 +5,7 @@ import {
   formatLLMError,
   parseOpenAIStream,
   parseOllamaStream,
+  serializeMessages,
   serializeMessagesForOllama,
   buildTieredToolSchemas,
   fromOpenAIName,
@@ -49,6 +50,33 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
     },
   }).getReader();
 }
+describe("serializeMessages", () => {
+  it("omits unsupported tool-result names while preserving call correlation", () => {
+    expect(serializeMessages([
+      { role: "tool", content: "Found", tool_call_id: "c1", name: "file_read" },
+    ])).toEqual([{ role: "tool", content: "Found", tool_call_id: "c1" }]);
+  });
+
+  it("replays assistant reasoning in the OpenAI-compatible field", () => {
+    const calls = [toolCall("c1")];
+    expect(serializeMessages([
+      { role: "assistant", content: "", thinking: "Read the file first.", tool_calls: calls },
+    ])).toEqual([{
+      role: "assistant", content: "", reasoning_content: "Read the file first.", tool_calls: calls,
+    }]);
+  });
+
+  it("keeps non-tool names and omits reasoning on other roles", () => {
+    expect(serializeMessages([
+      { role: "user", content: "Review", name: "reviewer", thinking: "internal metadata" },
+      { role: "assistant", content: "Done" },
+    ])).toEqual([
+      { role: "user", content: "Review", name: "reviewer" },
+      { role: "assistant", content: "Done" },
+    ]);
+  });
+});
+
 describe("serializeMessagesForOllama", () => {
   it("converts OpenAI tool history to ollama-native format", () => {
     const history: AgentMessage[] = [

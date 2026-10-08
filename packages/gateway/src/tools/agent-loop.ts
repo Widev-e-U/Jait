@@ -668,8 +668,11 @@ export function serializeMessages(messages: AgentMessage[]) {
     const msg: Record<string, unknown> = { role: m.role, content: m.content };
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
-    if (m.name) msg.name = m.name;
-    if (m.thinking) msg.thinking = m.thinking;
+    // Tool results are correlated by tool_call_id. Strict endpoints reject name.
+    if (m.name && m.role !== "tool") msg.name = m.name;
+    // Thinking models require their reasoning to be replayed after tool calls.
+    // `thinking` is Ollama's native field, not the chat/completions wire format.
+    if (m.role === "assistant" && m.thinking) msg.reasoning_content = m.thinking;
     return msg;
   });
 }

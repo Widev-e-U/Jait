@@ -57,3 +57,32 @@ it("preserves images and tool results in both native formats", () => {
   expect(goRequest(body,"messages").messages[0].content[0].source).toEqual({type:"base64",media_type:"image/png",data:"YQ=="});
   expect(goRequest(body,"responses").input.at(-1)).toEqual({type:"function_call_output",call_id:"t1",output:"Found"});
 });
+
+it("replays reasoning and unnamed tool results through Go chat completions", async () => {
+  const native = { ...llm, openaiModel: "kimi-k2.5" };
+  const thinking = "Read the source before answering.";
+  const fetcher = vi.fn(async (_url: unknown, _init?: RequestInit) => fetcher.mock.calls.length === 1
+    ? events([
+      { choices: [{ delta: { reasoning_content: thinking } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: "file_read", arguments: '{"path":"test.ts"}' } }] }, finish_reason: "tool_calls" }] },
+    ])
+    : events([{ choices: [{ delta: { content: "Reviewed code." }, finish_reason: "stop" }] }]));
+  vi.stubGlobal("fetch", fetcher);
+  const execute = vi.fn(async () => ({ ok: true, message: "Source contents" }));
+  const result = await runAgentLoop({
+    llm: native, sessionId: "coding-session", history: [{ role: "user", content: "Review test.ts" }],
+    hasTools: true, toolSchemas: [{ type: "function", function: { name: "file_read", description: "Read", parameters: { type: "object", properties: { path: { type: "string" } } } } }],
+    abort: new AbortController(),
+  }, execute);
+  expect(result.content).toBe("Reviewed code.");
+  expect(execute).toHaveBeenCalledOnce();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher.mock.calls[1]![0]).toBe(`${llm.openaiBaseUrl}/chat/completions`);
+  const next = JSON.parse(String(fetcher.mock.calls[1]![1]!.body));
+  const assistant = next.messages.find((m: { role: string }) => m.role === "assistant");
+  expect(assistant.reasoning_content).toBe(thinking);
+  expect(assistant).not.toHaveProperty("thinking");
+  const tool = next.messages.find((m: { role: string }) => m.role === "tool");
+  expect(tool.tool_call_id).toBe("call_1");
+  expect(tool).not.toHaveProperty("name");
+});
