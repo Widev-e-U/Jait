@@ -14,6 +14,7 @@ import { execSync } from "node:child_process";
 import { createRequire } from "node:module";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
+import { prepareUpdate, discardUpdate, launchSystemdUpdate } from "../../bin/safe-update.mjs";
 import { describeUpdateFailure } from "./update-failure.js";
 
 const require = createRequire(import.meta.url);
@@ -262,43 +263,17 @@ export function registerUpdateRoutes(
     const pkg = `@jait/gateway@${version}`;
 
     try {
-      // 1. Install new version
-      execSync(`npm install -g ${pkg}`, {
-        encoding: "utf8",
-        timeout: 120_000,
-        stdio: "pipe",
-        windowsHide: true,
-      });
-
-      // 2. Read newly installed version
-      let newVersion = version;
+      if (!process.env.INVOCATION_ID) {
+        return reply.status(409).send({ error: "Web updates require a systemd-managed gateway. Use jait update from a terminal." });
+      }
+      const plan = await prepareUpdate({ version });
       try {
-        const raw = execSync(
-          "npm list -g @jait/gateway --depth=0 --json",
-          { encoding: "utf8", timeout: 10_000, windowsHide: true, stdio: "pipe" },
-        );
-        newVersion = (JSON.parse(raw) as { dependencies?: Record<string, { version?: string }> }).dependencies?.["@jait/gateway"]?.version ?? version;
-      } catch { /* best effort */ }
-
-      // 3. Schedule restart after response is sent
-      const isSystemdEnv = !!process.env.INVOCATION_ID;
-      setTimeout(async () => {
-        if (isSystemdEnv) {
-          const unit = process.env.JAIT_UNIT ?? "jait-gateway";
-          try {
-            const { spawn } = await import("node:child_process");
-            const child = spawn("systemctl", ["--user", "restart", unit], {
-              stdio: "ignore",
-              detached: true,
-              windowsHide: true,
-            });
-            child.unref();
-          } catch { /* fall through */ }
-          setTimeout(() => process.exit(0), 1_000);
-        } else {
-          await deps.shutdown();
-        }
-      }, 500);
+        await launchSystemdUpdate(plan, process.env.JAIT_UNIT ?? "jait-gateway", deps.port);
+      } catch (error) {
+        await discardUpdate(plan);
+        throw error;
+      }
+      const newVersion = plan.newVersion;
 
       return {
         ok: true,

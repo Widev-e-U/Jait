@@ -95,6 +95,7 @@ describe.skipIf(process.platform !== "linux")("supervised CLI start", () => {
     const f = await fixture({ available: false });
     const isolatedCli = join(f.root, "bin/jait.mjs");
     await writeFile(isolatedCli, await readFile(cliPath));
+    await writeFile(join(f.root, "bin/safe-update.mjs"), await readFile(join(dirname(cliPath), "safe-update.mjs")));
     await writeFile(join(f.root, "package.json"), JSON.stringify({ type: "module", version: "0.0.0" }));
     await writeFile(join(f.root, "bin/compile-cache.mjs"), "export {};\n");
     await mkdir(join(f.root, "dist"));

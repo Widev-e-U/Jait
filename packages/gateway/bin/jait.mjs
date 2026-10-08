@@ -28,9 +28,10 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, openSyn
 import { resolve, dirname, join } from "node:path";
 import { homedir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
-import { execFileSync, execSync, spawn, spawnSync } from "node:child_process";
+import { execFileSync, execSync, spawn } from "node:child_process";
 import { createConnection } from "node:net";
 import { createInterface } from "node:readline";
+import { prepareUpdate, activateUpdate, activateSystemdUpdate } from "./safe-update.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -301,13 +302,14 @@ function isProcessRunning(pid) {
   }
 }
 
-async function cmdStart(cliFlags, { showBanner = true } = {}) {
+async function cmdStart(cliFlags, { showBanner = true, throwOnFailure = false } = {}) {
   if (showBanner) printBanner();
   const port = cliFlags.port || process.env.PORT || "8000";
 
   // Check if already running
   const tracked = getTrackedProcess();
   if (tracked) {
+    if (throwOnFailure) throw new Error(`Gateway process ${tracked.pid} is already running`);
     if (await healthCheck(port)) {
       console.log(`  Jait is already running (PID ${tracked.pid}).`);
       console.log(`  Run 'jait stop' first, or 'jait status' for details.`);
@@ -322,6 +324,7 @@ async function cmdStart(cliFlags, { showBanner = true } = {}) {
   }
 
   if (await isPortReachable(port)) {
+    if (throwOnFailure) throw new Error(`Port ${port} is already in use`);
     console.error(`  Port ${port} is already in use.`);
     console.error(`  A gateway or another process is listening but not responding to /health.`);
     console.error(`  Stop the existing process or start Jait on a different port with 'jait start --port <port>'.`);
@@ -352,6 +355,7 @@ async function cmdStart(cliFlags, { showBanner = true } = {}) {
 
   const started = await waitForBackgroundStart(child.pid, port);
   if (!started.ok) {
+    if (throwOnFailure) throw new Error(`Gateway failed to become healthy on port ${port}: ${started.reason}`);
     cleanupPidFile(PID_PATH);
     console.error(`  Jait failed to become healthy on port ${port}.`);
     if (started.reason === "exit") {
@@ -411,7 +415,7 @@ async function waitForProcessExit(pid, timeoutMs = 10_000) {
   return !isProcessRunning(pid);
 }
 
-async function restartTrackedGateway(tracked, port) {
+async function stopTrackedGateway(tracked) {
   if (platform() === "win32") {
     execFileSync("taskkill", ["/PID", String(tracked.pid), "/T", "/F"], {
       stdio: "ignore",
@@ -426,7 +430,6 @@ async function restartTrackedGateway(tracked, port) {
   }
 
   cleanupPidFile(tracked.pidPath);
-  await cmdStart({ port }, { showBanner: false });
 }
 
 async function cmdUpdate({ version = "latest", port } = {}) {
@@ -442,34 +445,25 @@ async function cmdUpdate({ version = "latest", port } = {}) {
   const packageSpec = `@jait/gateway@${version}`;
 
   console.log(`  Installing ${packageSpec}...`);
-  const install = spawnSync(npmCommand(), ["install", "-g", packageSpec], {
-    stdio: "inherit",
-    timeout: 120_000,
-    windowsHide: true,
-  });
-  if (install.error) {
-    throw new Error(`npm install failed: ${install.error.message}`);
-  }
-  if (install.status !== 0) {
-    throw new Error(`npm install failed with exit code ${install.status ?? "unknown"}`);
-  }
-
-  const installedVersion = readInstalledGatewayVersion() ?? version;
-  console.log(`  Installed @jait/gateway ${installedVersion} (was ${previousVersion}).`);
-
+  const plan = await prepareUpdate({ version });
   if (systemdActive) {
-    execFileSync("systemctl", ["--user", "restart", SERVICE_NAME], {
-      stdio: "inherit",
-      windowsHide: true,
-    });
+    await activateSystemdUpdate(plan, SERVICE_NAME, Number(activePort));
     console.log(`  Restarted ${SERVICE_NAME}.`);
   } else if (tracked) {
-    console.log(`  Restarting background gateway (PID ${tracked.pid})...`);
-    await restartTrackedGateway(tracked, activePort);
+    await activateUpdate(plan, {
+      port: Number(activePort),
+      stop: async () => {
+        const current = getTrackedProcess();
+        if (current) await stopTrackedGateway(current);
+      },
+      restart: () => cmdStart({ port: activePort, envPath: ENV_PATH }, { showBanner: false, throwOnFailure: true }),
+    });
   } else {
-    console.log("  Gateway was not managed by the CLI, so it was not restarted.");
+    await activateUpdate(plan);
     console.log("  Restart the current gateway process to activate the update.");
   }
+  console.log(`  Installed @jait/gateway ${plan.newVersion} (was ${previousVersion}).`);
+  console.log(`  Previous installation retained at ${plan.backup}.`);
 
   console.log("");
 }

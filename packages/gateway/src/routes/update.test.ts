@@ -4,6 +4,13 @@ import { loadConfig } from "../config.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { registerUpdateRoutes, __resetUpdateCaches } from "./update.js";
 
+const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn() }));
+vi.mock("../../bin/safe-update.mjs", () => ({
+  prepareUpdate: updateMocks.prepare,
+  launchSystemdUpdate: updateMocks.launch,
+  discardUpdate: updateMocks.discard,
+}));
+
 async function createUpdateServer() {
   const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent", nodeEnv: "test" };
   const app = Fastify({ logger: false });
@@ -26,7 +33,40 @@ async function createUpdateServer() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.resetAllMocks();
   __resetUpdateCaches();
+});
+
+describe("staged web updates", () => {
+  it("keeps HTTP responsive while the install is pending, then starts the external controller", async () => {
+    vi.stubEnv("INVOCATION_ID", "test-service");
+    vi.stubEnv("JAIT_UNIT", "custom-jait");
+    let finish!: (value: { newVersion: string }) => void;
+    updateMocks.prepare.mockImplementation(() => new Promise((done) => { finish = done; }));
+    updateMocks.launch.mockResolvedValue(undefined);
+    const { app, headers } = await createUpdateServer();
+    const pending = app.inject({ method: "POST", url: "/api/update/apply", headers, payload: { version: "0.1.999" } }).then((result) => result);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    const other = await app.inject({ method: "GET", url: "/does-not-exist" });
+    expect(other.statusCode).toBe(404);
+    finish({ newVersion: "0.1.999" });
+    expect((await pending).json()).toMatchObject({ ok: true, newVersion: "0.1.999" });
+    expect(updateMocks.launch).toHaveBeenCalledWith({ newVersion: "0.1.999" }, "custom-jait", 0);
+    await app.close();
+  });
+
+  it("discards the staged installation if an independent controller cannot be launched", async () => {
+    vi.stubEnv("INVOCATION_ID", "test-service");
+    const plan = { newVersion: "0.1.999" };
+    updateMocks.prepare.mockResolvedValue(plan);
+    updateMocks.launch.mockRejectedValue(new Error("systemd-run failed"));
+    const { app, headers } = await createUpdateServer();
+    const result = await app.inject({ method: "POST", url: "/api/update/apply", headers });
+    expect(result.statusCode).toBe(500);
+    expect(updateMocks.discard).toHaveBeenCalledWith(plan);
+    await app.close();
+  });
 });
 
 describe("changelog route", () => {
