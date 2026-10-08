@@ -4,6 +4,9 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.914](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.914) — 2026-10-08
+- fix(runtime): isolate evaluation backends and use bundled Windows ConPTY — eb2052ca
+
 ## [v0.1.913](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.913) — 2026-10-08
 - fix(deps): pin compatible React and tooltip dependencies — 708d25da
 - test(e2e): align fixtures with authenticated sessions and current UI — b6018ef1
