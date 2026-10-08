@@ -39,9 +39,9 @@
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
   },
   "devDependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "tsx": "^4.23.12",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
