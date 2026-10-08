@@ -87,6 +87,8 @@ describe("persistent team coordination", () => {
       evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "QA" } } });
       expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "system", sender: human })).recipientIds).toEqual(["QA"]);
       expect(evaluate).toHaveBeenCalledOnce();
+      const state = JSON.parse(evaluate.mock.calls[0]![1]);
+      expect(state.hierarchy.find((member: { id: string }) => member.id === "Developer")).toMatchObject({ persona: "Handle Developer work.", reportsToId: "Scrum" });
       evaluate.mockResolvedValue({ model: "test", answers: { recipient: { type: "choice", choice: "Research" } } });
       expect((await service.postRouted(owner, room.id, { content: "Implement fix", clientKey: "invalid", sender: human })).recipientIds).toEqual(["Developer"]);
       evaluate.mockRejectedValue(new Error("offline"));
