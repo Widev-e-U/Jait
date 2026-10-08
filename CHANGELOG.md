@@ -4,6 +4,11 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.912](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.912) — 2026-10-08
+- fix(agents): tighten graph spacing and fit the team viewport — 24ed7e5c
+- chore(deps): update ACP adapters and compatible npm dependencies — 691cc147
+- fix(agents): include persona descriptions in team speaker selection — de4b4d0a
+
 ## [v0.1.911](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.911) — 2026-10-08
 - fix(usage): preserve reported Ollama quota across activity refreshes — 7d9c6002
 - feat(chat): render Mermaid diagrams inline — a54dc61c
