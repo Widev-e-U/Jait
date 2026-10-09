@@ -1,8 +1,9 @@
 .agent-creature-body { transform-origin: 50px 80px; }
-.agent-creature-eyes { transform-box: fill-box; transform-origin: center; animation: agent-blink 6s infinite; }
-.agent-creature-working .agent-creature-body { animation: agent-work 1.8s ease-in-out infinite; }
+.agent-creature-eyes { transform-box: fill-box; transform-origin: center; }
+.agent-creature-working .agent-creature-eyes { animation: agent-blink 6s infinite; }
+.agent-creature-working .agent-creature-body { animation: agent-work 2.8s ease-in-out infinite; animation-delay: inherit; }
 @keyframes agent-blink { 0%, 43%, 47%, 100% { transform: scaleY(1); } 45% { transform: scaleY(.08); } }
-@keyframes agent-work { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-4px) rotate(2deg); } }
+@keyframes agent-work { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-2px) rotate(1deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .agent-creature-eyes, .agent-creature-working .agent-creature-body { animation: none; }
+  .agent-creature-working .agent-creature-eyes, .agent-creature-working .agent-creature-body { animation: none; }
 }
