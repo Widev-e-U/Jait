@@ -643,6 +643,9 @@ export function registerThreadRoutes(
         }
       }
 
+      // A provider may send its aborted completion/error after interrupt returns.
+      // Only a new turn may re-enter running state; old events cannot undo cancel.
+      if (currentThread.status === "interrupted" && event.type !== "turn.started") return;
       if (terminalFailure) return;
       if (event.type === "session.error") terminalFailure = true;
       if (!nativeProvider) {
@@ -1961,7 +1964,23 @@ export function registerThreadRoutes(
     const provider = resolveThreadStopProvider(thread, authUser.id);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
-    await provider.interruptTurn(thread.providerSessionId);
+    // Persist before calling the adapter: abort can emit its error immediately,
+    // or emit nothing at all. Dispatch waiters must observe the user action.
+    const wasRunning = thread.status === "running";
+    if (wasRunning) {
+      threadService.clearRecovery(id);
+      threadService.update(id, { status: "interrupted", error: null });
+    }
+    try {
+      await provider.interruptTurn(thread.providerSessionId);
+    } catch (error) {
+      const current = threadService.getById(id);
+      if (wasRunning && current?.providerSessionId === thread.providerSessionId && current.status === "interrupted") {
+        threadService.update(id, { status: "running", error: thread.error });
+      }
+      throw error;
+    }
+    if (wasRunning) broadcastThreadStatus(id, "interrupted");
     return reply.status(200).send({ ok: true });
   });
 
