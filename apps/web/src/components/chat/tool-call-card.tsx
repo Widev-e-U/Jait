@@ -3977,7 +3977,7 @@ function ToolCallCardInner({
     ? getTodoToolListItems(normalizedArgs, resultData)
     : []
   const effectiveOpen = hasInlineSecretPrompt ? true : open
-  const { authToken } = useContext(SubAgentAuthContext)
+  const { sessionId, authToken } = useContext(SubAgentAuthContext)
   const terminalSurfaceState = useToolTerminalSurface({
     enabled: isPersistentTerminal && (effectiveOpen || isBackgroundCall || call.status === 'running' || call.status === 'pending'),
     terminalId: structuredTerminalId,
@@ -4322,7 +4322,7 @@ function ToolCallCardInner({
     </pre>
     )
   ) : bodyKind === 'browserActivity' ? (
-    <BrowserActivityView tool={displayTool} args={normalizedArgs} data={resultData} status={call.status} output={displayOutput}>
+    <BrowserActivityView tool={displayTool} args={normalizedArgs} data={resultData} status={call.status} output={displayOutput} sessionId={sessionId} authToken={authToken}>
       {screenshotPath ? <BrowserScreenshotView key={screenshotPath} path={screenshotPath} /> : null}
     </BrowserActivityView>
   ) : bodyKind === 'browserSnapshot' && snapshotText ? (

@@ -35,6 +35,7 @@ export interface PreviewSession {
   url: string | null;
   browserId: string | null;
   sharedWithAgent: boolean;
+  origin?: "agent";
   processId: number | null;
   containerId: string | null;
   logs: PreviewLogEntry[];
@@ -308,6 +309,13 @@ export class PreviewService {
   async restart(sessionId: string): Promise<PreviewSession | null> {
     const existing = this.sessions.get(sessionId);
     if (!existing) return null;
+    if (existing.origin === "agent") {
+      const shared = existing.sharedWithAgent;
+      await this.stop(sessionId);
+      const browser = await this.surfaceRegistry.startSurface("browser", existing.browserId!, { sessionId, projectRoot: existing.projectRoot ?? process.cwd() });
+      this.attachAgentBrowser(sessionId, browser as BrowserSurface, existing.projectRoot ?? undefined, shared);
+      return this.get(sessionId);
+    }
     return this.start({
       sessionId,
       projectRoot: existing.projectRoot,
@@ -341,9 +349,38 @@ export class PreviewService {
     return true;
   }
 
+  /** Agent-created browsers are visible in chat and use the same takeover boundary as previews. */
+  attachAgentBrowser(sessionId: string, browser: BrowserSurface, projectRoot?: string, shared = true): void {
+    if (browser.sessionId !== sessionId) throw new Error("This browser belongs to another chat.");
+    const existing = this.sessions.get(sessionId);
+    if (existing) {
+      if (existing.browserId !== browser.id) throw new Error("This chat already has a linked browser.");
+      return; // Never undo user takeover on the next tool call.
+    }
+    const live = browser.getLiveViewInfo();
+    const remote = live ? createLiveViewRemoteBrowser(live) : null;
+    const timestamp = nowIso();
+    const session: InternalPreviewSession = {
+      id: `preview-${sessionId}`, sessionId, projectRoot: projectRoot ?? null,
+      mode: "url", origin: "agent", status: "ready", target: null, command: null, port: null,
+      url: remote?.novncUrl ?? null, browserId: browser.id, sharedWithAgent: shared,
+      processId: null, containerId: null, logs: [], browserEvents: [], metrics: null,
+      remoteBrowser: remote, lastError: null, createdAt: timestamp, updatedAt: timestamp,
+      browserUrl: null, process: null, runnerResult: null, terminating: false,
+    };
+    this.sessions.set(sessionId, session);
+    this.notifyChanged(session);
+  }
+
   get(sessionId: string): PreviewSession | null {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
+    const browser = session.browserId ? this.surfaceRegistry.getSurface(session.browserId) : null;
+    if (session.status === "ready" && (!browser || browser.state !== "running")) {
+      session.status = "stopped";
+      session.url = null;
+      session.remoteBrowser = null;
+    }
     session.browserEvents = this.readBrowserEvents(session);
     return this.toPublicSession(session);
   }
@@ -364,6 +401,8 @@ export class PreviewService {
     if (!session) return null;
     return {
       id: session.id,
+      sessionId: session.sessionId,
+      origin: session.origin,
       browserId: session.browserId ?? undefined,
       controller: session.sharedWithAgent ? "agent" : "user",
       previewUrl: session.url ?? undefined,
@@ -381,13 +420,14 @@ export class PreviewService {
     if (!browserId) return;
     const session = [...this.sessions.values()].find((item) => item.browserId === browserId);
     if (session && !session.sharedWithAgent) {
-      throw new Error("This preview is not shared with the agent. Use Share with Agent in the preview tab to allow browser tools.");
+      throw new Error("This preview is not shared with the agent. Use Share with agent in the chat browser card or preview tab to allow browser tools.");
     }
   }
 
   async refreshSessionCapture(sessionId: string): Promise<PreviewSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
+    if (this.get(sessionId)?.status === "stopped") return this.toPublicSession(session);
     const nextEvents = this.readBrowserEvents(session);
     const nextMetrics = await this.readBrowserMetrics(session).catch(() => session.metrics);
     const eventsChanged = nextEvents.length !== session.browserEvents.length
@@ -592,6 +632,7 @@ export class PreviewService {
       url: session.url,
       browserId: session.browserId,
       sharedWithAgent: session.sharedWithAgent,
+      origin: session.origin,
       processId: session.processId,
       containerId: session.containerId,
       logs: [...session.logs],

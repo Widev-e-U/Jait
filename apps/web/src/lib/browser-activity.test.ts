@@ -14,6 +14,13 @@ describe('browser activity', () => {
     expect(getToolCallBodyKind({ tool: 'browser.search', args: {}, status: 'success', displayOutput: 'result', screenshotPath: null, snapshotText: null })).toBe('output')
   })
 
+  it('renders live browser starts and preview tools inline', () => {
+    for (const tool of ['surfaces.start', 'preview.open', 'preview.status', 'preview.inspect']) {
+      expect(getToolCallBodyKind({ tool, args: { type: 'browser' }, status: 'success', displayOutput: 'result', screenshotPath: null, snapshotText: null })).toBe('browserActivity')
+    }
+    expect(getToolCallBodyKind({ tool: 'surfaces.start', args: { type: 'terminal' }, status: 'success', displayOutput: 'result', screenshotPath: null, snapshotText: null })).toBe('output')
+  })
+
   it('keeps captures, targets, element values, and typed text out of secret-safe cards', () => {
     for (const flag of [{ captureSuppressed: true }, { secretSafe: true }, { browserSession: { secretSafe: true } }]) {
       const activity = getBrowserActivity('browser.type', { selector: '#password', text: 'secret' }, { ...flag, textPreview: 'secret', snapshot: 'secret', interactiveElements: [{ name: 'secret' }] })

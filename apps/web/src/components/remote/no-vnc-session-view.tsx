@@ -36,9 +36,14 @@ function appendNoVncScaleParams(url: string, _options: NoVncSessionOptions): str
   // vnc_lite.html uses query params and auto-connects to the websockify
   // endpoint at the same host:port. Just append ?scale=true.
   if (/vnc_lite\.html/i.test(url)) {
-    const sep = url.includes('?') ? '&' : '?'
-    if (!/[?&]scale=/i.test(url)) return `${url}${sep}scale=true`
-    return url
+    const [base, hash] = url.split('#')
+    const [path, query] = base.split('?')
+    const params = new URLSearchParams(query)
+    if (!params.has('scale')) params.set('scale', 'true')
+    // vnc_lite passes query strings directly to a boolean setter: even '0' is truthy.
+    if (_options.viewOnly === true) params.set('view_only', '1')
+    if (_options.viewOnly === false) params.delete('view_only')
+    return `${path}?${params}${hash ? `#${hash}` : ''}`
   }
   // vnc.html uses hash params (#key=value)
   const [base = url, existingHash = ''] = url.split('#')

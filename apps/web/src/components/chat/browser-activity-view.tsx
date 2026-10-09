@@ -1,14 +1,18 @@
 import type { ReactNode } from 'react'
+import { ChatBrowserView } from './chat-browser-view'
+import { normalizeToolName } from '@/lib/tool-call-body'
 import { CheckCircle2, ExternalLink, Globe, Loader2, MousePointer2, XCircle } from 'lucide-react'
 import { getBrowserActivity } from '@/lib/browser-activity'
 
-export function BrowserActivityView({ tool, args, data, status, output, children }: {
+export function BrowserActivityView({ tool, args, data, status, output, children, sessionId, authToken }: {
   tool: string
   args: Record<string, unknown>
   data?: Record<string, unknown>
   status: 'pending' | 'running' | 'success' | 'error'
   output: string
   children?: ReactNode
+  sessionId?: string | null
+  authToken?: string | null
 }) {
   const activity = getBrowserActivity(tool, args, data)
   const running = status === 'running' || status === 'pending'
@@ -31,6 +35,7 @@ export function BrowserActivityView({ tool, args, data, status, output, children
           <span className="sr-only">Open page</span>
         </a>
       )}
+      <ChatBrowserView data={data} sessionId={sessionId} authToken={authToken} autoOpen={['browser.navigate', 'surfaces.start', 'preview.open', 'preview.status', 'preview.restart'].includes(normalizeToolName(tool)) || status === 'error'} />
       {activity.target && (
         <div className="flex items-start gap-2 px-3 py-2">
           <MousePointer2 className="mt-0.5 h-3 w-3 shrink-0 text-cyan-500" aria-hidden="true" />

@@ -576,6 +576,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   if (normalizedTool === 'jait.link' && input.status === 'success') return 'jaitLink'
   if (isSecurityToolName(normalizedTool) && input.displayOutput) return 'security'
   if (['browser.navigate', 'browser.snapshot', 'browser.inspect', 'browser.click', 'browser.type', 'browser.scroll', 'browser.select', 'browser.wait', 'browser.screenshot'].includes(normalizedTool)) return 'browserActivity'
+  if (['preview.open', 'preview.status', 'preview.restart', 'preview.inspect'].includes(normalizedTool) || (normalizedTool === 'surfaces.start' && input.args.type === 'browser')) return 'browserActivity'
   if (input.screenshotPath) return 'browserScreenshot'
   if (normalizedTool === 'image.view' && input.imageDataUri) return 'imageView'
   if (isAgentToolName(normalizedTool)) return 'subagent'

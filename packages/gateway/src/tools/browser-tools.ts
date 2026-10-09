@@ -12,9 +12,11 @@ type BrowserCollaborationService = {
   getSessionByPreviewSessionId(id: string): BrowserSessionRecord | null;
   getSessionByBrowserId(id: string): BrowserSessionRecord | null;
   assertAgentControl(id?: string): void;
+  attachAgentBrowser?(sessionId: string, browser: BrowserSurface, projectRoot?: string): void;
 };
 type BrowserSessionRecord = {
   id: string;
+  sessionId?: string;
   browserId?: string;
   controller: string;
   secretSafe?: boolean;
@@ -104,6 +106,7 @@ type FetchWithTlsInit = RequestInit & {
 };
 
 const DEFAULT_BROWSER_ID = "browser-default";
+const browserStarts = new WeakMap<SurfaceRegistry, Map<string, ReturnType<SurfaceRegistry["startSurface"]>>>();
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_OPENAI_WEB_SEARCH_MODEL = "gpt-5";
 const DEFAULT_PERPLEXITY_MODEL = "sonar-pro";
@@ -162,28 +165,28 @@ async function ensureBrowserSurface(
     );
   }
 
-  // When no explicit browserId is given, prefer the active preview browser
-  // for this session so agents don't need to look it up separately.
-  if (!browserId && context.sessionId) {
-    const previewId = `preview-browser-${context.sessionId}`;
-    const preview = registry.getSurface(previewId);
-    if (preview?.type === "browser" && preview.state === "running") {
-      return preview as BrowserSurface;
+  const id = browserId ?? (context.sessionId ? `browser-${context.sessionId}` : DEFAULT_BROWSER_ID);
+  let surface = registry.getSurface(id);
+  if (surface?.sessionId && surface.sessionId !== context.sessionId) {
+    throw new Error("This browser belongs to another chat. Open a browser in the current chat.");
+  }
+  if (surface?.type !== "browser" || surface.state !== "running") {
+    let pending = browserStarts.get(registry);
+    if (!pending) { pending = new Map(); browserStarts.set(registry, pending); }
+    let starting = pending.get(id);
+    if (!starting) {
+      starting = registry.startSurface("browser", id, {
+        sessionId: context.sessionId, projectRoot: context.projectRoot, userId: context.userId,
+      });
+      pending.set(id, starting);
     }
+    try { surface = await starting; }
+    finally { if (pending.get(id) === starting) pending.delete(id); }
   }
-  const id = browserId ?? DEFAULT_BROWSER_ID;
-  const existing = registry.getSurface(id);
-  if (existing?.type === "browser" && existing.state === "running") {
-    return existing as BrowserSurface;
-  }
-  const started = await registry.startSurface("browser", id, {
-    sessionId: context.sessionId,
-    projectRoot: context.projectRoot,
-  });
-  if (started.type !== "browser") {
-    throw new Error(`Surface '${id}' is not a browser surface`);
-  }
-  return started as BrowserSurface;
+  if (surface.type !== "browser") throw new Error(`Surface '${id}' is not a browser surface`);
+  if (context.sessionId) collaboration?.attachAgentBrowser?.(context.sessionId, surface as BrowserSurface, context.projectRoot);
+  collaboration?.assertAgentControl(surface.id);
+  return surface as BrowserSurface;
 }
 
 function resolveBrowserSessionMetadata(
@@ -244,7 +247,7 @@ export function createBrowserNavigateTool(
 ): ToolDefinition<BrowserNavigateInput> {
   return {
     name: "browser.navigate",
-    description: "Navigate the browser to a URL and return a page summary. When a preview is active, automatically targets the preview browser.",
+    description: "Open a URL in the live browser displayed in this chat and return a page summary. When a preview is active, automatically targets the preview browser.",
     tier: "standard",
     category: "browser",
     source: "builtin",

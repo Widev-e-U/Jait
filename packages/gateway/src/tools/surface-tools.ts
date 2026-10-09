@@ -8,6 +8,8 @@
 
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
+import { createBrowserInspectTool } from "./browser-tools.js";
+import type { PreviewService } from "../services/preview.js";
 import { formatEllipsedList } from "./list-preview.js";
 
 export function createSurfacesListTool(registry: SurfaceRegistry): ToolDefinition<Record<string, never>> {
@@ -45,7 +47,7 @@ interface SurfaceStartInput {
   projectRoot?: string;
 }
 
-export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefinition<SurfaceStartInput> {
+export function createSurfacesStartTool(registry: SurfaceRegistry, previewService?: PreviewService): ToolDefinition<SurfaceStartInput> {
   return {
     name: "surfaces.start",
     description: "Start a new surface of the given type (terminal, filesystem, browser)",
@@ -63,6 +65,16 @@ export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefiniti
     },
     async execute(input: SurfaceStartInput, context: ToolContext): Promise<ToolResult> {
       try {
+        if (input.type === "browser" && previewService) {
+          if (input.sessionId && input.sessionId !== context.sessionId) throw new Error("Open a browser in the current chat.");
+          const result = await createBrowserInspectTool(registry, previewService).execute({}, {
+            ...context, projectRoot: input.projectRoot ?? context.projectRoot,
+          });
+          const data = result.data as Record<string, unknown> | undefined;
+          const browser = registry.getSurface(data?.browserId as string);
+          if (!result.ok || !browser) return result;
+          return { ...result, message: `Browser ready in chat: ${browser.id}`, data: { ...browser.snapshot(), ...data } };
+        }
         const { uuidv7 } = await import("../db/uuidv7.js");
         const surfaceId = `${input.type}-${uuidv7()}`;
         const surface = await registry.startSurface(input.type, surfaceId, {

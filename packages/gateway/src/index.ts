@@ -715,6 +715,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   const shutdownRef = async () => { if (shutdownFn) await shutdownFn(); else process.exit(0); };
 
   toolRegistry = createToolRegistry(surfaceRegistry, {
+    sessionState,
     scheduler,
     sessionService,
     ws,

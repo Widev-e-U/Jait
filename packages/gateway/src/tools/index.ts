@@ -395,7 +395,7 @@ export function createToolRegistry(
 
   // Surface self-control tools
   tools.register(createSurfacesListTool(surfaceRegistry));
-  tools.register(createSurfacesStartTool(surfaceRegistry));
+  tools.register(createSurfacesStartTool(surfaceRegistry, deps.previewService));
   tools.register(createSurfacesStopTool(surfaceRegistry));
 
   // Scheduler tools (underlying implementations for jait cron.*)
