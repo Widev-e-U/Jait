@@ -663,7 +663,7 @@ export function repairToolCallHistory(messages: AgentMessage[]): void {
   messages.splice(0, messages.length, ...repaired);
 }
 
-export function serializeMessages(messages: AgentMessage[]) {
+export function serializeMessages(messages: AgentMessage[], requireReasoning = false) {
   return messages.map((m) => {
     const msg: Record<string, unknown> = { role: m.role, content: m.content };
     if (m.tool_calls) msg.tool_calls = m.tool_calls;
@@ -672,7 +672,9 @@ export function serializeMessages(messages: AgentMessage[]) {
     if (m.name && m.role !== "tool") msg.name = m.name;
     // Thinking models require their reasoning to be replayed after tool calls.
     // `thinking` is Ollama's native field, not the chat/completions wire format.
-    if (m.role === "assistant" && m.thinking) msg.reasoning_content = m.thinking;
+    if (m.role === "assistant" && (requireReasoning || m.thinking !== undefined || m.tool_calls?.length)) {
+      msg.reasoning_content = m.thinking ?? "";
+    }
     return msg;
   });
 }
@@ -2294,7 +2296,10 @@ function isVerbatimThinkingRepeat(existing: string, addition: string): boolean {
 }
 
 /** Truncate a thinking block to the tail so persisted context stays bounded. */
-function capThinking(thinking: string | undefined): string | undefined {
+function capThinking(thinking: string | undefined, preserveVerbatim = false): string | undefined {
+  // DeepSeek requires the original reasoning payload for tool continuation.
+  // Bound its context by removing complete message groups, never by editing it.
+  if (preserveVerbatim) return thinking ?? "";
   if (!thinking) return undefined;
   if (thinking.length <= MAX_PERSISTED_THINKING_CHARS) return thinking;
   return "…" + thinking.slice(-MAX_PERSISTED_THINKING_CHARS);
@@ -3252,7 +3257,7 @@ export async function runAgentLoop(
         }
       : {
           model: llm.openaiModel,
-          messages: serializeMessages(history),
+          messages: serializeMessages(history, /deepseek/i.test(llm.openaiModel)),
           stream: true,
           stream_options: { include_usage: true },
         };
@@ -3495,7 +3500,7 @@ export async function runAgentLoop(
     }
 
     if (streamInterrupted || abort.signal.aborted) {
-      if (contentText) history.push({ role: "assistant", content: contentText });
+      if (contentText || thinkingText) history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
       log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
       return {
         content: fullContent,
@@ -3596,7 +3601,7 @@ export async function runAgentLoop(
           fullContent,
           executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined,
           segments.length > 0 ? JSON.stringify(segments) : undefined,
-          capThinking(thinkingText) || undefined,
+          capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) || undefined,
         );
         persisted = true;
       }
@@ -3796,7 +3801,7 @@ export async function runAgentLoop(
           role: "assistant",
           content: "",
           tool_calls: ignoredQuarantineCalls,
-          thinking: capThinking(thinkingText),
+          thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)),
         });
         const ignoredCallIds: string[] = [];
         for (const toolCall of ignoredQuarantineCalls) {
@@ -4015,7 +4020,7 @@ export async function runAgentLoop(
               role: "assistant",
               content: "",
               tool_calls: quarantinedCalls,
-              thinking: capThinking(thinkingText),
+              thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)),
             });
             const callIds: string[] = [];
             for (const toolCall of quarantinedCalls) {
@@ -4106,7 +4111,7 @@ export async function runAgentLoop(
         role: "assistant",
         content: contentText || "",
         tool_calls: toolCalls,
-        thinking: capThinking(thinkingText),
+        thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)),
       });
 
       // Enqueue the bounded, deduplicated tool calls for this round.
@@ -4490,7 +4495,7 @@ export async function runAgentLoop(
         plainTextRetries++;
         log.warn(`Plain-text tool call detected in content (attempt ${plainTextRetries}): "${detected.name}" — re-prompting model to use proper format`);
         onEvent?.({ type: "steering", message: `Detected plain-text tool call "${detected.name}" — correcting model` });
-        history.push({ role: "assistant", content: contentText });
+        history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
         history.push({
           role: "system",
           content: `You just wrote a tool call as plain text in your response instead of using the proper function calling format. Do NOT write tool names or JSON arguments in your text. Instead, invoke tools using the structured tool_calls mechanism provided by the API. Re-do your last action using a proper tool call now.`,
@@ -4545,8 +4550,8 @@ export async function runAgentLoop(
           message: `Response hit the output token limit — continuing (${lengthContinuations}/${MAX_LENGTH_CONTINUATIONS})`,
         });
         // Preserve whatever visible text arrived so the model can resume after it.
-        if (contentText) {
-          history.push({ role: "assistant", content: contentText });
+        if (contentText || thinkingText) {
+          history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
         }
         history.push({
           role: "system",
@@ -4576,11 +4581,11 @@ export async function runAgentLoop(
         log.warn(`${reason} for session ${sessionId}`);
         onEvent?.({ type: "token", content: fallback });
         fullContent += fallback;
-        history.push({ role: "assistant", content: fallback, thinking: capThinking(thinkingText) });
+        history.push({ role: "assistant", content: fallback, thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
         segments.push({ type: "text", content: fallback });
         const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
         const segJson = JSON.stringify(segments);
-        onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, capThinking(thinkingText) || undefined);
+        onPersist?.(sessionId, "assistant", fullContent, tcJson, segJson, capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) || undefined);
         persisted = true;
         const planResult =
           mode === "plan" && plannedActions.length > 0
@@ -4637,7 +4642,7 @@ export async function runAgentLoop(
         log.warn(`${message} for session ${sessionId}`);
         onEvent?.({ type: "steering", message });
         if (thinkingText) {
-          history.push({ role: "assistant", content: "", thinking: capThinking(thinkingText) });
+          history.push({ role: "assistant", content: "", thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
         }
         const recoveryPrompt: AgentMessage = {
           role: "system",
@@ -4660,8 +4665,8 @@ export async function runAgentLoop(
 
     if (steering?.hasPending) {
       const steered = steering.drain();
-      if (contentText) {
-        history.push({ role: "assistant", content: contentText });
+      if (contentText || thinkingText) {
+        history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
       }
       for (const msg of steered) {
         history.push({ role: "system", content: "[STEERING] " + msg });
@@ -4674,7 +4679,7 @@ export async function runAgentLoop(
 
     // ── Normal text response — done ──
     if (contentText) {
-      history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText) });
+      history.push({ role: "assistant", content: contentText, thinking: capThinking(thinkingText, /deepseek/i.test(llm.openaiModel)) });
     }
     if (fullContent || thinkingText || segments.length > 0 || executedToolCalls.length > 0) {
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;

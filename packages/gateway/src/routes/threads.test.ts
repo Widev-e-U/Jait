@@ -142,6 +142,31 @@ describe("thread routes", () => {
   });
 
 
+  it.each([false, true])("persists interruption with immediate abort event = %s", async immediate => {
+    const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    const thread = threadService.create({ userId: "user-1", title: "Interrupted task", providerId: "codex", workingDirectory: process.cwd() });
+    const provider = new MockThreadProvider(); const registry = new ProviderRegistry(); registry.register(provider);
+    const app = Fastify(); const config = { ...loadConfig(), nodeEnv: "test" as const };
+    registerThreadRoutes(app, config, { threadService, providerRegistry: registry });
+    try {
+      const headers = await authHeader(config.jwtSecret, "user-1");
+      await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`, headers, payload: { message: "Work", titleTask: "" } });
+      await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+      const sessionId = threadService.getById(thread.id)!.providerSessionId!;
+      if (immediate) vi.spyOn(provider, "interruptTurn").mockImplementation(async () => {
+        provider.emit({ type: "session.error", sessionId, error: "Aborted" });
+      });
+      const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/interrupt`, headers });
+      expect(response.statusCode).toBe(200);
+      expect(threadService.getById(thread.id)?.status).toBe("interrupted");
+      provider.emit({ type: "turn.completed", sessionId });
+      provider.emit({ type: "session.error", sessionId, error: "Aborted" });
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(threadService.getById(thread.id)?.status).toBe("interrupted");
+    } finally { await app.close(); sqlite.close(); }
+  });
+
   it("resumes quota-failed work with the saved agent's new provider and default model", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

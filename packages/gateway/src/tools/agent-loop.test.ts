@@ -66,6 +66,14 @@ describe("serializeMessages", () => {
     }]);
   });
 
+  it("replays explicitly empty reasoning and tool responses without reasoning", () => {
+    const call = toolCall("empty-reasoning");
+    expect(serializeMessages([
+      { role: "assistant", content: "", thinking: "", tool_calls: [call] },
+      { role: "assistant", content: "", tool_calls: [call] },
+    ]).map(m => m.reasoning_content)).toEqual(["", ""]);
+  });
+
   it("keeps non-tool names and omits reasoning on other roles", () => {
     expect(serializeMessages([
       { role: "user", content: "Review", name: "reviewer", thinking: "internal metadata" },
@@ -3634,6 +3642,95 @@ describe("runAgentLoop tool-loop detection", () => {
     expect(assistantWithTools!.thinking!.length).toBe(4001);
     // The tail is preserved (reasoning continuity), not the head.
     expect(assistantWithTools!.thinking!.endsWith(longThinking.slice(-4_000))).toBe(true);
+  });
+
+  it("preserves DeepSeek reasoning during a text-only length continuation", async () => {
+    const reasoning = "Continue from the partial response without repeating it.";
+    const fetch = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(sseResponse([
+        `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: reasoning, content: "Partial " } }] })}\n\n`,
+        'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+        "data: [DONE]\n\n",
+      ]))
+      .mockResolvedValueOnce(textResponse("answer."));
+    await runAgentLoop({
+      llm: { openaiApiKey: "test", openaiBaseUrl: "https://llm.test", openaiModel: "deepseek-v4.1-flash", contextWindow: 100_000 },
+      history: [{ role: "system", content: "system" }, { role: "user", content: "Task" }],
+      toolSchemas: [], hasTools: true, sessionId: "length-replay", abort: new AbortController(), maxRounds: 4, mode: "agent",
+    }, async () => ({ ok: true, message: "unused" }));
+    const sent = JSON.parse((fetch.mock.calls[1]![1] as RequestInit).body as string);
+    expect(sent.messages.find((m: any) => m.role === "assistant")?.reasoning_content).toBe(reasoning);
+  });
+
+  it("replays DeepSeek reasoning verbatim through a real tool round", async () => {
+    // Filler that is long but not a verbatim loop — `"x".repeat(5000)` would
+    // (correctly) trip the runaway-repetition guard instead of exercising the cap.
+    const longThinking = Array.from(
+      { length: 250 },
+      (_, step) => `Step ${step}: inspect branch ${step % 7} of the call graph.`,
+    ).join(" ");
+    const responses = [
+      [
+        `data: {"choices":[{"delta":{"content":"<thinking>${longThinking}</thinking>"}}]}\n\n`,
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"file_read","arguments":"{}"}}]}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+      [
+        'data: {"choices":[{"delta":{"content":"Done."}}]}\n\n',
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+        "data: [DONE]\n\n",
+      ],
+    ];
+    let fetchCalls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const chunks = responses[fetchCalls++] ?? responses[responses.length - 1]!;
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "user", content: "Do the task." },
+    ];
+    const result = await runAgentLoop(
+      {
+        llm: {
+          openaiApiKey: "test-key",
+          openaiBaseUrl: "https://llm.test",
+          openaiModel: "deepseek-v4.1-flash",
+          contextWindow: 100_000,
+        },
+        history,
+        toolSchemas: [{
+          type: "function",
+          function: {
+            name: "file_read",
+            description: "Read a file",
+            parameters: { type: "object", properties: {} },
+          },
+        }],
+        hasTools: true,
+        sessionId: "session-thinking-cap",
+        abort: new AbortController(),
+        maxRounds: 4,
+        mode: "agent",
+      },
+      async () => ({ ok: true, message: "Tool completed" }),
+    );
+
+    expect(result.content).toBe("Done.");
+    const assistantWithTools = history.find((m) => m.role === "assistant" && m.tool_calls);
+    expect(assistantWithTools?.thinking).toBeDefined();
+    expect(longThinking.length).toBeGreaterThan(4_000);
+    expect(assistantWithTools!.thinking).toBe(longThinking);
+    const sent = JSON.parse((vi.mocked(globalThis.fetch).mock.calls[1]![1] as RequestInit).body as string);
+    expect(sent.messages.find((m: any) => m.tool_calls)?.reasoning_content).toBe(longThinking);
   });
 
   it("recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim", async () => {

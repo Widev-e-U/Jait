@@ -383,12 +383,13 @@ export class JaitProvider implements CliProviderAdapter {
   async stopSession(sessionId: string): Promise<void> {
     const state = this.sessions.get(sessionId);
     if (state) {
+      // Retire the handle before cleanup. An unresponsive tool must not hold
+      // stop hostage, and any late events from its turn are now obsolete.
+      this.sessions.delete(sessionId);
       state.currentTurnAbort?.abort();
       state.session.status = "completed";
       state.session.completedAt = new Date().toISOString();
-      if (state.currentTurn) {
-        await state.currentTurn.catch(() => {});
-      }
+      void state.currentTurn?.catch(() => {});
       const containerName = state.sandboxStart
         ? await state.sandboxStart.catch(() => undefined)
         : state.sandboxContainerName;
@@ -406,6 +407,7 @@ export class JaitProvider implements CliProviderAdapter {
   }
 
   private emit(event: ProviderEvent): void {
+    if (!this.sessions.has(event.sessionId) && event.type !== "session.completed") return;
     this.emitter.emit("event", event);
   }
 

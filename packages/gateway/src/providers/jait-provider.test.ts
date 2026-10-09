@@ -136,6 +136,31 @@ describe("JaitProvider context flow", () => {
 });
 
 describe("JaitProvider command sandboxing", () => {
+  it("stops the sandbox without waiting for an unresponsive tool turn", async () => {
+    let release!: () => void;
+    const currentTurn = new Promise<void>(resolve => { release = resolve; });
+    const stopContainer = vi.fn(async () => {});
+    const provider = new JaitProvider({ config: {} as any, threadService: {} as any,
+      sandboxManager: { startCommandSandbox: vi.fn(), stopContainer } });
+    const events: ProviderEvent[] = [];
+    provider.onEvent(event => events.push(event));
+    const abort = new AbortController();
+    (provider as any).sessions.set("blocked-session", {
+      session: { id: "blocked-session", status: "running" },
+      currentTurn, currentTurnAbort: abort, sandboxContainerName: "blocked-sandbox",
+    });
+    const stop = provider.stopSession("blocked-session");
+    try {
+      const outcome = await Promise.race([stop.then(() => "stopped"), new Promise(resolve => setTimeout(() => resolve("blocked"), 100))]);
+      expect(outcome).toBe("stopped");
+      expect(abort.signal.aborted).toBe(true);
+      expect(stopContainer).toHaveBeenCalledWith("blocked-sandbox");
+      expect((provider as any).sessions.has("blocked-session")).toBe(false);
+      (provider as any).emit({ type: "token", sessionId: "blocked-session", content: "late" });
+      expect(events.map(event => event.type)).toEqual(["session.completed"]);
+    } finally { release(); await stop; }
+  });
+
   it("lazily starts and reuses a thread sandbox for command tools", async () => {
     const starts: string[] = [];
     const stops: string[] = [];

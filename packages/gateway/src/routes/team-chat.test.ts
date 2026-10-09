@@ -36,6 +36,7 @@ class TeamProvider implements CliProviderAdapter {
     }, 0);
   });
   stopSession = vi.fn(async () => {});
+  interruptTurn = vi.fn(async () => {});
   checkAvailability = async () => true;
   respondToApproval = async () => {};
   onEvent(handler: (event: ProviderEvent) => void) {
@@ -197,6 +198,22 @@ describe("team room routes and work chat integration", () => {
       payload: { content: "Retest the change", recipientIds: ["Developer"], targetSessionId: workId, clientKey: "retest" } });
     await vi.waitFor(async () => expect((await snapshot()).deliveries.at(-1)?.status).toBe("completed"), { timeout: 10_000 });
     expect((await snapshot()).messages.filter((message: { kind: string }) => message.kind === "result")).toHaveLength(2);
+  });
+
+  it("releases a delivery slot on interrupt so queued work can start", async () => {
+    provider.sendTurn.mockImplementation(async () => {});
+    await app.inject({ method: "POST", url: `/api/team-rooms/${roomId}/messages`, headers,
+      payload: { content: "Bounded task", recipientIds: ["Developer", "QA", "Scrum"], clientKey: "queue-interrupt" } });
+    await vi.waitFor(() => expect(provider.sendTurn).toHaveBeenCalledTimes(2));
+    const initial = await snapshot();
+    const queued = initial.deliveries.find((item: { status: string }) => item.status === "queued");
+    expect(queued).toBeDefined();
+    const active = initial.deliveries.find((item: { agentId: string; status: string }) => item.agentId === "Scrum" && item.status === "running")
+      ?? initial.deliveries.find((item: { status: string }) => item.status === "running");
+    const result = await app.inject({ method: "POST", url: `/api/threads/${active.sessionId}/interrupt`, headers });
+    expect(result.statusCode).toBe(200);
+    await vi.waitFor(() => expect(provider.sendTurn).toHaveBeenCalledTimes(3), { timeout: 1000 });
+    expect((await snapshot()).deliveries.find((item: { id: string }) => item.id === queued.id)?.status).toBe("running");
   });
 
   it("reports the latest answer after opening progress and fails empty completions", async () => {
