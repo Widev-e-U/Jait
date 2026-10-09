@@ -45,7 +45,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.435",
+      "version": "0.1.436",
       "dependencies": {
         "@capacitor/app": "^6.0.3",
         "@capacitor/core": "^6.2.2",
@@ -142,7 +142,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.916",
+      "version": "0.1.921",
       "bin": {
         "jait": "./bin/jait.mjs",
       },

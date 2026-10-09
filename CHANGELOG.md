@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.921](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.921) — 2026-10-09
+
+- fix(chat): display live agent browsers with takeover controls — 448bb0c3
+
+Show live agent browsers directly in chat with takeover and sharing controls. Keep browsers isolated per chat, respect user control, and persist managed preview panel state for reconnects.
+
 ## [v0.1.920](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.920) — 2026-10-09
 
 - fix(gateway): preserve DeepSeek reasoning and unblock interrupted team work — d2c069e1
