@@ -321,3 +321,36 @@ test('agent graph keeps a larger team inside the viewport on entry and resize', 
   await page.setViewportSize({ width: 1000, height: 720 })
   await expect.poll(allCardsFit, { timeout: 10000 }).toBe(true)
 })
+
+
+test.describe('Composite team SVG avatars', () => {
+  for (const size of [24, 64]) {
+    test(`actual member identities remain recognizable at ${size}px`, async ({ page }, testInfo) => {
+      await page.goto('/team-avatars.html')
+      const section = page.getByRole('region', { name: `${size}px avatars`, exact: true })
+      const clusters = section.locator('.team-avatar-cluster')
+      await expect(clusters).toHaveCount(4)
+      await expect(clusters.nth(0)).toHaveAccessibleName('Team: no members')
+      await expect(clusters.nth(1).locator('[data-member-id]')).toHaveCount(1)
+      await expect(clusters.nth(2).locator('[data-member-id]')).toHaveCount(4)
+      await expect(clusters.nth(3).locator('[data-member-id]')).toHaveCount(4)
+      await expect(clusters.nth(3)).toContainText('+3')
+      for (const avatar of await clusters.all()) {
+        const bounds = await avatar.boundingBox()
+        expect(bounds!.width).toBe(size)
+        expect(bounds!.height).toBe(size)
+      }
+      const stack = section.locator('.team-avatar-stack').nth(3)
+      for (const member of await stack.locator('[data-member-id]').all()) {
+        const svgBounds = await member.locator('svg').boundingBox()
+        expect(svgBounds!.width).toBe(size)
+        expect(svgBounds!.height).toBe(size)
+      }
+      const firstMember = clusters.nth(3).locator('[data-member-id="member-0"]')
+      await expect(firstMember.locator('svg')).toHaveCount(1)
+      await expect(firstMember.locator('path').first()).toHaveAttribute('fill', '#a78bfa')
+      await expect.poll(() => firstMember.locator('.agent-creature-eyes').evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+      await section.screenshot({ path: `test-results/team-avatars-${size}px-${testInfo.project.name}.png` })
+    })
+  }
+})

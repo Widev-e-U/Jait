@@ -22,6 +22,22 @@ export function organizationEntries(agents: PersonaAgentDraft[]): OrganizationEn
   return entries
 }
 
+/** Room membership is the coordinator and every report below them. */
+export function teamMembers<T extends { id: string; reportsToId?: string | null }>(rootId: string, agents: readonly T[]): T[] {
+  const memberIds = new Set([rootId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const agent of agents) {
+      if (agent.reportsToId && memberIds.has(agent.reportsToId) && !memberIds.has(agent.id)) {
+        memberIds.add(agent.id)
+        changed = true
+      }
+    }
+  }
+  return agents.filter(agent => memberIds.has(agent.id))
+}
+
 /** A manager cannot be the agent itself or one of its descendants. */
 export function availableManagers(agentId: string, agents: PersonaAgentDraft[]): PersonaAgentDraft[] {
   const byId = new Map(agents.map((agent) => [agent.id, agent]))

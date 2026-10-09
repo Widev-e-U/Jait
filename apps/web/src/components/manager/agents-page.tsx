@@ -11,6 +11,7 @@ import { Conversation, Message, PromptInput } from '@/components/chat'
 import type { PromptSkill, ReferencedFile } from '@/components/chat'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { AgentAvatar } from './agent-avatar'
+import { TeamAvatar } from './team-avatar'
 import { AgentRow } from './agent-row'
 import { agentContinuation } from '@/lib/agent-continuation'
 import { AgentsGraph } from './agents-graph'
@@ -25,7 +26,7 @@ import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user
 import { getAuthToken } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 import { jobsApi } from '@/lib/jobs-api'
-import { availableManagers, organizationEntries } from '@/lib/agent-organization'
+import { availableManagers, organizationEntries, teamMembers } from '@/lib/agent-organization'
 import {
   agentTaskPrompt, newPersonaAgentDraft, normalizePersonaAvatar, PERSONA_AGENTS_STORAGE_KEY,
   PERSONA_AVATARS, readPersonaAgentDrafts, type PersonaAgentDraft, type PersonaTask,
@@ -450,7 +451,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
         </div>}
         {loading && <p className="mt-8 text-center text-sm text-muted-foreground">Loading agents…</p>}
         {!loading && agents.length === 0 && <p className="mt-12 text-center text-sm text-muted-foreground">Create an agent to start a conversation or schedule work.</p>}
-        {teamRooms.length > 0 && <div className="flex shrink-0 flex-wrap gap-2 border-b px-4 py-2" aria-label="Team conversations">{teamRooms.map(room => <Button key={room.id} size="sm" variant="outline" onClick={() => openTeamRoom(room.id)}><UsersRound className="mr-2 h-4 w-4" />{room.name}</Button>)}</div>}
+        {teamRooms.length > 0 && <div className="flex shrink-0 flex-wrap gap-2 border-b px-4 py-2" aria-label="Team conversations">{teamRooms.map(room => <Button key={room.id} size="sm" variant="outline" onClick={() => openTeamRoom(room.id)}><TeamAvatar members={teamMembers(room.rootAgentId, agents)} layout="stack" size={24} />{room.name}</Button>)}</div>}
         {agents.length > 0 && <div className="flex min-h-0 flex-1 flex-col"><div className="flex shrink-0 items-center gap-2 px-4 py-2 text-sm font-medium"><UsersRound className="h-4 w-4 text-muted-foreground" /> Organization <div className="ml-auto flex gap-1"><Button size="sm" variant={organizationView === 'list' ? 'secondary' : 'ghost'} aria-pressed={organizationView === 'list'} onClick={() => setOrganizationView('list')}>List</Button><Button size="sm" variant={organizationView === 'graph' ? 'secondary' : 'ghost'} aria-pressed={organizationView === 'graph'} onClick={() => setOrganizationView('graph')}>Graph</Button></div></div>{organizationView === 'graph' ? <AgentsGraph onResume={resumeWork} resumeBusy={resuming} agents={agents} threads={threads} selectedId={selectedId} onRefresh={onRefreshThreads} onSave={saveProvider} onOpen={id => { setSelectedId(id); setCreating(null); setConversationThreadId(null); setTab('chat') }} onChooseTask={id => { setSelectedId(id); setCreating(null); setConversationThreadId(null); setTab('runs') }} /> : <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-4">{organizationEntries(agents).map(({ agent, depth }) => {
           return <AgentRow onResume={resumeWork} resumeBusy={resuming} key={agent.id} agent={agent} depth={depth} threads={threads} onSaveProvider={(provider, model) => saveProvider(agent.id, provider, model)} onOpen={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('chat') }} onChooseTask={() => { setSelectedId(agent.id); setConversationThreadId(null); setTab('runs') }} onRefresh={onRefreshThreads} />
         })}</div>}</div>}

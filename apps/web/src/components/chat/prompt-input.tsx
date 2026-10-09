@@ -2093,7 +2093,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             type="button"
             size="icon"
             variant="ghost"
-            className="h-8 w-8 shrink-0 rounded-lg"
+            className="shrink-0 rounded-lg"
             onClick={() => fileInputRef.current?.click()} aria-label="Attach files"
           >
             <Paperclip className="h-4 w-4" />
@@ -2105,7 +2105,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               size="icon"
               variant="ghost"
-              className="h-8 w-8 shrink-0 rounded-lg"
+              className="shrink-0 rounded-lg"
               onClick={onVoiceInput} aria-label="Voice input"
             >
               <Mic className="h-4 w-4" />
@@ -2144,7 +2144,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               size="icon"
               variant="outline"
-              className="h-8 w-8 shrink-0 rounded-lg"
+              className="shrink-0 rounded-lg"
               onClick={onStop} aria-label="Stop generating"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
@@ -2158,7 +2158,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   <Button
                     type="button"
                     size="icon"
-                    className="h-8 w-8 shrink-0 rounded-lg"
+                    className="shrink-0 rounded-lg"
                     disabled={submitEmpty || composerDisabled}
                     aria-label="Steer the running agent (Enter)"
                     onClick={() => {
@@ -2182,7 +2182,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       type="button"
                       size="icon"
                       variant="secondary"
-                      className="h-8 w-8 shrink-0 rounded-lg"
+                      className="shrink-0 rounded-lg"
                       disabled={submitEmpty || composerDisabled}
                       aria-label="Add to queue (Alt+Enter)"
                       onClick={() => {
@@ -2207,7 +2207,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                       type="button"
                       size="icon"
                       variant="secondary"
-                      className="h-8 w-8 shrink-0 rounded-lg"
+                      className="shrink-0 rounded-lg"
                       disabled={submitEmpty || composerDisabled}
                       aria-label="Ask in parallel"
                       onClick={() => {
@@ -2232,7 +2232,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Button
                 type="button"
                 size="icon"
-                className="h-8 w-8 shrink-0 rounded-lg"
+                className="shrink-0 rounded-lg"
                 disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
                 onClick={() => {
                   const el = editableRef.current
@@ -2252,7 +2252,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   type="button"
                   size="icon"
                   variant="secondary"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  className="shrink-0 rounded-lg"
                   disabled={submitEmpty || composerDisabled} aria-label="Steer instead (Alt+Enter)"
                   onClick={() => {
                     const el = editableRef.current
@@ -2272,7 +2272,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   type="button"
                   size="icon"
                   variant="secondary"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  className="shrink-0 rounded-lg"
                   disabled={submitEmpty || composerDisabled} aria-label="Add to queue (Alt+Enter)"
                   onClick={() => {
                     const el = editableRef.current
@@ -2293,7 +2293,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <Button
               type="button"
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg"
+              className="shrink-0 rounded-lg"
               disabled aria-label="Sending"
             >
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -2306,7 +2306,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 type="button"
                 size="icon"
                 variant="secondary"
-                className="h-8 w-8 shrink-0 rounded-lg"
+                className="shrink-0 rounded-lg"
                 disabled={submitEmpty || composerDisabled} aria-label="Add to queue"
                 onClick={() => {
                   const el = editableRef.current
@@ -2326,7 +2326,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   type="button"
                   size="icon"
                   variant="secondary"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  className="shrink-0 rounded-lg"
                   disabled={submitEmpty || composerDisabled} aria-label="Steer instead (Alt+Enter)"
                   onClick={() => {
                     const el = editableRef.current
@@ -2347,7 +2347,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <Button
               type="button"
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg"
+              className="shrink-0 rounded-lg"
               disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
               aria-label="Send message"
               onClick={() => {
@@ -2369,7 +2369,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             <Button
               type="button"
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg"
+              className="shrink-0 rounded-lg"
               disabled aria-label="Sending"
             >
               <Loader2 className="h-4 w-4 animate-spin" />

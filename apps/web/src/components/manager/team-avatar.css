@@ -1,0 +1,17 @@
+.team-avatar { display: inline-flex; position: relative; flex-shrink: 0; vertical-align: middle; }
+.team-avatar-member { display: block; flex-shrink: 0; border-radius: 50%; background: hsl(var(--background)); }
+.team-avatar-member .agent-creature { width: 100%; height: 100%; }
+.team-avatar-cluster { width: var(--team-avatar-size); height: var(--team-avatar-size); }
+.team-avatar-cluster .team-avatar-member { position: absolute; width: calc(var(--team-avatar-size) * 2 / 3); height: calc(var(--team-avatar-size) * 2 / 3); }
+.team-avatar-cluster .team-avatar-member-0 { left: 0; top: 0; }
+.team-avatar-cluster .team-avatar-member-1 { right: 0; top: 0; }
+.team-avatar-cluster .team-avatar-member-2 { left: 0; bottom: 0; }
+.team-avatar-cluster .team-avatar-member-3 { right: 0; bottom: 0; }
+.team-avatar-stack { align-items: center; height: var(--team-avatar-size); padding-left: calc(var(--team-avatar-size) / 8); }
+.team-avatar-stack .team-avatar-member { width: var(--team-avatar-size); height: var(--team-avatar-size); margin-left: calc(var(--team-avatar-size) / -8); }
+.team-avatar-more { display: flex; align-items: center; justify-content: center; border-radius: 999px; background: hsl(var(--foreground)); color: hsl(var(--background)); font-weight: 600; line-height: 1; }
+.team-avatar-cluster .team-avatar-more { position: absolute; min-width: calc(var(--team-avatar-size) * 5 / 12); height: calc(var(--team-avatar-size) * 5 / 12); padding: 0 calc(var(--team-avatar-size) / 15); font-size: calc(var(--team-avatar-size) * 5 / 24); right: calc(var(--team-avatar-size) / -12); bottom: calc(var(--team-avatar-size) / -24); }
+.team-avatar-stack .team-avatar-more { min-width: calc(var(--team-avatar-size) * 5 / 8); height: calc(var(--team-avatar-size) * 5 / 8); padding: 0 calc(var(--team-avatar-size) / 10); font-size: calc(var(--team-avatar-size) * 5 / 16); margin-left: calc(var(--team-avatar-size) / -8); z-index: 1; }
+.team-avatar-empty { display: flex; width: 100%; align-items: center; justify-content: center; border-radius: 50%; background: hsl(var(--muted)); color: hsl(var(--muted-foreground)); font-size: calc(var(--team-avatar-size) / 4); }
+.team-avatar-stack .team-avatar-empty { width: var(--team-avatar-size); height: var(--team-avatar-size); }
+.team-avatar-cluster.team-avatar-single .team-avatar-member { width: 100%; height: 100%; }
