@@ -11,8 +11,9 @@ describe('TeamAvatar identity', () => {
     expect(html).toContain('+3')
     expect(html.match(/agent-creature-working/g)).toHaveLength(1)
     expect(html).toContain('data-member-id="agent-2"')
+    expect(html).toContain('data-agent-state="running"')
     expect(html).toContain('fill="#a78bfa"')
-    expect(html).toContain('aria-label="Team: Agent 0, Agent 1, Agent 2, Agent 3, Agent 4, Agent 5, Agent 6"')
+    expect(html).toContain('aria-label="Team: Agent 0, Agent 1, Agent 2 (working), Agent 3, Agent 4, Agent 5, Agent 6"')
   })
   it('escapes member names and renders an accessible empty team', () => {
     expect(renderToStaticMarkup(createElement(TeamAvatar, { members: [{ id: 'one', name: '<script>', avatar: 'unknown' }] }))).toContain('Team: &lt;script&gt;')

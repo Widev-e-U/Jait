@@ -354,7 +354,7 @@ export function DeveloperChatWorkspace({
   const cacheSessionRef = useRef<string | null>(null)
   const scrollToUserMessageId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') return messages[i].id
+      if (messages[i].role === 'user') return messages[i].renderId ?? messages[i].id
     }
     return null
   }, [messages])
@@ -504,6 +504,7 @@ export function DeveloperChatWorkspace({
         sharedRenderVersionRef.current,
         idx,
         messages.length - 1 - idx,
+        msg.renderId,
         msg.role,
         msg.kind,
         msg.persona,
@@ -529,7 +530,7 @@ export function DeveloperChatWorkspace({
       }
       const element = (
         <Message
-          key={msg.id}
+          key={msg.renderId ?? msg.id}
           messageId={msg.id}
           messageIndex={idx}
           messageFromEnd={messages.length - 1 - idx}
@@ -634,7 +635,7 @@ export function DeveloperChatWorkspace({
                 onEditPreviousUserMessage={handleEditPreviousUserMessage}
                 scrollToMessageId={scrollToUserMessageId}
                 showMinimap={!isMobile}
-                elevatedMessageId={editingMessageId}
+                elevatedMessageId={messages.find(message => message.id === editingMessageId)?.renderId ?? editingMessageId}
               >
                 {messageElements}
                 {messageQueue.length > 0 && (

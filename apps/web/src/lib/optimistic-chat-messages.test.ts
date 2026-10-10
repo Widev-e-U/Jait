@@ -54,7 +54,7 @@ describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
       user('local-1', 'same message', { optimistic: true }),
     ]
 
-    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot)
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot.map(message => message.role === 'user' ? { ...message, renderId: current[0].id } : message))
   })
 
   it('matches plain optimistic users whose display content only mirrors content', () => {
@@ -70,7 +70,7 @@ describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
       { id: 'local-assistant-1', role: 'assistant' as const, content: '' },
     ]
 
-    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot)
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual(snapshot.map((message, index) => ({ ...message, renderId: current[index].id })))
   })
 
   it('preserves an optimistic assistant placeholder for an unmatched optimistic user', () => {
@@ -114,5 +114,40 @@ describe('mergeSnapshotMessagesWithOptimisticUsers', () => {
       'server-1',
       'local-2',
     ])
+  })
+})
+
+
+describe('message render identity', () => {
+  it('keeps prompt and response identities through completion and subsequent snapshots', () => {
+    const current: OptimisticUserMessageLike[] = [
+      user('local-user', 'hello', { optimistic: true }),
+      { id: 'local-assistant', role: 'assistant', content: 'partial answer' },
+    ]
+    const snapshot: OptimisticUserMessageLike[] = [
+      user('saved-user', 'hello'),
+      { id: 'saved-assistant', role: 'assistant', content: 'final answer' },
+    ]
+    const merged = mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)
+    expect(merged.map(message => message.id)).toEqual(['saved-user', 'saved-assistant'])
+    expect(merged.map(message => message.renderId)).toEqual(['local-user', 'local-assistant'])
+    expect(merged[1].content).toBe('final answer')
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, merged)).toEqual(merged)
+  })
+
+  it('does not give an older identical prompt the new turn identity', () => {
+    const older = user('older-user', 'repeat')
+    const current = [older, user('local-user', 'repeat', { optimistic: true })]
+    const snapshot = [older, user('saved-user', 'repeat')]
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual([
+      older, { ...snapshot[1], renderId: 'local-user' },
+    ])
+  })
+
+  it('keeps independent identities for multiple identical optimistic prompts', () => {
+    const current = ['local-1', 'local-2'].map(id => user(id, 'repeat', { optimistic: true }))
+    const snapshot = ['saved-1', 'saved-2'].map(id => user(id, 'repeat'))
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map(message => message.renderId))
+      .toEqual(['local-1', 'local-2'])
   })
 })

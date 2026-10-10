@@ -378,6 +378,8 @@ export interface LlmContextFlow {
 export interface ChatMessage {
   persona?: ChatPersona
   id: string
+  /** Stable UI identity; id remains the durable ID used by message APIs. */
+  renderId?: string
   role: 'user' | 'assistant'
   content: string
   /**

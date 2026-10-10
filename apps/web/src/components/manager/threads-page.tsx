@@ -309,6 +309,10 @@ export function ThreadsPage({
                     onStop={() => { if (automation.selectedThread) onStopThread(automation.selectedThread.id) }}
                     isLoading={automation.selectedThread?.status === 'running'}
                     disabled={automation.creating}
+                    // Existing threads execute with their stored selection on
+                    // start/resume/follow-up; changing draft defaults cannot
+                    // change that execution. Show those settings read-only.
+                    controlsDisabled
                     placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
                     onVoiceInput={onVoiceInput}
                     voiceRecording={voiceRecording}
@@ -317,13 +321,13 @@ export function ThreadsPage({
                     onVoiceStop={onStopRecording}
                     responseStyle={chatResponseStyle}
                     onResponseStyleChange={onResponseStyleChange}
-                    provider={chatProvider}
+                    provider={threadProvider}
                     onProviderChange={onProviderChange}
-                    providerRuntimeMode={chatProviderRuntimeMode}
+                    providerRuntimeMode={automation.selectedThread.runtimeMode}
                     onProviderRuntimeModeChange={onProviderRuntimeModeChange}
-                    reasoningEffort={chatReasoningEffort}
+                    reasoningEffort={automation.selectedThread.reasoningEffort ?? null}
                     onReasoningEffortChange={onReasoningEffortChange}
-                    cliModel={cliModel}
+                    cliModel={automation.selectedThread.model ?? null}
                     onCliModelChange={onCliModelChange}
                     repoRuntime={selectedThreadRepoRuntime}
                     onMoveToGateway={onMoveRepoToGateway}

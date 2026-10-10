@@ -27,5 +27,9 @@ export function AgentAvatar({ avatar, running = false, className = 'h-16 w-16' }
       <path d={index % 3 === 0 ? 'M43 62 Q50 69 57 62' : index % 3 === 1 ? 'M46 63 Q50 66 54 63' : 'M44 62 Q50 66 56 62'} fill="none" stroke="#243047" strokeWidth="2.5" strokeLinecap="round" />
       {index >= 5 && <path d="M44 25 Q49 17 55 25" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" opacity=".5" />}
     </g>
+    {running && <g data-agent-state="running">
+      <circle cx="79" cy="77" r="11" fill="#243047" stroke="#fff" strokeWidth="2" />
+      <path d="M80 70 L75 78 H80 L78 84 L84 76 H79Z" fill="#fff" />
+    </g>}
   </svg>
 }

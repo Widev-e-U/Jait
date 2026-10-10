@@ -305,7 +305,7 @@ export function AppHeader(props: AppHeaderProps) {
 
             {/* Mobile avatar + menu group */}
             {isMobile ? (
-              <div className="flex items-center gap-0.5 shrink-0">
+              <div className="flex items-center gap-0 shrink-0">
                 {isAuthLoading ? (
                   <div className="h-8 w-8 shrink-0 animate-pulse rounded-full bg-muted" aria-label="Loading account" />
                 ) : isAuthenticated ? (

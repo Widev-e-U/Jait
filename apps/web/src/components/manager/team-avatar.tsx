@@ -15,7 +15,7 @@ export function TeamAvatar({ members, runningIds = new Set<string>(), layout = '
   const unique = members.filter((member, index) => members.findIndex(other => other.id === member.id) === index)
   const visible = unique.slice(0, 4)
   const remaining = unique.length - visible.length
-  const label = unique.length ? `Team: ${unique.map(member => member.name).join(', ')}` : 'Team: no members'
+  const label = unique.length ? `Team: ${unique.map(member => `${member.name}${runningIds.has(member.id) ? ' (working)' : ''}`).join(', ')}` : 'Team: no members'
   return <span role="img" aria-label={label} title={label} style={{ '--team-avatar-size': `${size ?? (layout === 'cluster' ? 48 : 32)}px` } as CSSProperties} className={`team-avatar team-avatar-${layout} ${unique.length === 1 ? 'team-avatar-single' : ''} ${className}`}>
     {visible.map((member, index) => <span key={member.id} aria-hidden="true" data-member-id={member.id}
       className={`team-avatar-member team-avatar-member-${index}`}>

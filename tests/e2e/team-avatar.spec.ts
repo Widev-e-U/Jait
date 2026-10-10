@@ -24,6 +24,8 @@ test(`team identity reflects membership and confirmed ${kind} execution, respect
   await expect.poll(() => body.evaluate(element => getComputedStyle(element).animationName)).toBe('agent-work')
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await expect.poll(() => body.evaluate(element => getComputedStyle(element).animationName)).toBe('none')
+  await expect(avatar.locator('[data-agent-state="running"]')).toBeVisible()
+  await expect(avatar).toHaveAccessibleName('Team: Nova (working), Cosmo, Atlas, Pixel, Sage, Bolt')
   unavailable = true
   await expect(avatar.locator('.agent-creature-working')).toHaveCount(0)
   unavailable = false; running = false
