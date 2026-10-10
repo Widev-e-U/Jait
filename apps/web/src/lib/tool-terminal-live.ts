@@ -1,4 +1,5 @@
 import type { TerminalExecutionPayload } from '@jait/shared'
+import { invalidateTerminalSnapshot } from './terminal-snapshot'
 
 /**
  * Live registry of "which terminal is this tool call running in".
@@ -70,6 +71,7 @@ export function applyTerminalExecutionEvent(
 ): void {
   const terminalId = payload?.terminalId
   if (!terminalId) return
+  invalidateTerminalSnapshot()
 
   const kept = entries.filter((entry) => entry.terminalId !== terminalId && !isExpired(entry, now))
   const execution = payload.execution
@@ -90,8 +92,19 @@ export function applyTerminalExecutionEvent(
  */
 export function findLiveToolTerminal(
   liveEntries: LiveToolTerminalExecution[],
-  options: { terminalId?: string | null; sessionId?: string | null; command?: string | null },
+  options: { terminalId?: string | null; sessionId?: string | null; command?: string | null; actionId?: string | null; startedAt?: number },
 ): LiveToolTerminalExecution | null {
+  if (options.actionId) {
+    const candidates = liveEntries.filter(entry =>
+      (!options.sessionId || entry.sessionId === options.sessionId)
+      && (!options.terminalId || entry.terminalId === options.terminalId))
+    // MCP assigns a gateway action id separately from the provider call id.
+    // Match its full command and start time, never an older/recent unrelated call.
+    return candidates.find(entry => entry.actionId === options.actionId)
+      ?? candidates.find(entry => !!options.command && entry.command === options.command
+        && options.startedAt != null && Date.parse(entry.startedAt) >= options.startedAt)
+      ?? null
+  }
   // A call that already knows its terminal takes that one or nothing: falling
   // back to "whatever ran most recently" would let a finished card from an
   // older turn latch onto an unrelated command that is running right now.

@@ -18,6 +18,7 @@ import {
 } from '@jait/shared'
 import { desktopOperationError } from '@/lib/desktop-operation-error'
 import { applyTerminalExecutionEvent } from '@/lib/tool-terminal-live'
+import { invalidateTerminalSnapshot } from '@/lib/terminal-snapshot'
 
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getWsUrl } from '@/lib/gateway-url'
@@ -697,6 +698,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       wsRef.current = ws
 
       ws.onopen = () => {
+        invalidateTerminalSnapshot()
         const reconnected = hasConnectedRef.current
         hasConnectedRef.current = true
         onConnectionStateChangeRef.current?.({ connected: true, reconnected })

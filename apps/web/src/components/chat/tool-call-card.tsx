@@ -29,6 +29,7 @@ import { normalizeMessageSegments } from '@/lib/stream-segments'
 import type { MessageSegment } from '@/hooks/useChat'
 import { TerminalView, findToolTerminal, findToolTerminalExecution, getToolTerminalExecution, isTerminalBackgroundWaiting, type TerminalInfo, type ToolTerminalExecutionMetadata } from '@/components/terminal/terminal-view'
 import { findLiveToolTerminal, getLiveToolTerminals, subscribeLiveToolTerminals, type LiveToolTerminalExecution } from '@/lib/tool-terminal-live'
+import { getTerminalSnapshotVersion, subscribeTerminalSnapshot, loadTerminalSnapshot } from '@/lib/terminal-snapshot'
 
 /**
  * Session + auth context used to lazy-load persisted sub-agent bodies. Provided
@@ -2748,7 +2749,8 @@ function useToolTerminalSurface(options: {
   enabled: boolean
   terminalId: string | null
   command: string
-  keepPolling: boolean
+  actionId: string
+  startedAt: number
 }): { terminal: TerminalInfo | null; loaded: boolean } {
   const { sessionId, authToken } = useContext(SubAgentAuthContext)
   const [state, setState] = useState<{ terminal: TerminalInfo | null; loaded: boolean }>({
@@ -2772,9 +2774,12 @@ function useToolTerminalSurface(options: {
       terminalId: options.terminalId,
       sessionId,
       command: options.command,
+      actionId: options.actionId,
+      startedAt: options.startedAt,
     })
     return entry ? liveExecutionAsTerminalInfo(entry) : null
-  }, [liveEntries, options.command, options.enabled, options.terminalId, sessionId])
+  }, [liveEntries, options.actionId, options.command, options.enabled, options.terminalId, options.startedAt, sessionId])
+  const snapshotVersion = useSyncExternalStore(subscribeTerminalSnapshot, getTerminalSnapshotVersion, getTerminalSnapshotVersion)
 
   useEffect(() => {
     if (!options.enabled) {
@@ -2782,36 +2787,28 @@ function useToolTerminalSurface(options: {
       return
     }
 
+    if (liveTerminal) return
     let cancelled = false
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null
-    const refresh = async () => {
-      try {
-        const headers: Record<string, string> = {}
-        if (authToken) headers.Authorization = 'Bearer ' + authToken
-        const response = await fetch(getApiUrl() + '/api/terminals', { headers })
-        if (!response.ok || cancelled) return
-        const payload = await response.json() as { terminals?: TerminalInfo[] }
-        const terminal = findToolTerminal(payload.terminals ?? [], {
-          terminalId: options.terminalId,
-          sessionId,
-          command: options.command,
-        })
-        if (cancelled) return
-        setState({ terminal, loaded: true })
-        if (options.keepPolling && (!terminal || isTerminalBackgroundWaiting(terminal))) {
-          refreshTimer = setTimeout(refresh, 750)
-        }
-      } catch {
-        if (!cancelled && options.keepPolling) refreshTimer = setTimeout(refresh, 1000)
-      }
-    }
-
-    void refresh()
-    return () => {
-      cancelled = true
-      if (refreshTimer) clearTimeout(refreshTimer)
-    }
-  }, [authToken, options.command, options.enabled, options.keepPolling, options.terminalId, sessionId])
+    void loadTerminalSnapshot(authToken).then(terminals => {
+      if (cancelled) return
+      const terminal = findToolTerminal(terminals, {
+        terminalId: options.terminalId,
+        sessionId,
+        command: options.command,
+      })
+      // A partially authored/new call must never attach to an older command.
+      const execution = getToolTerminalExecution(terminal)
+      const matches = terminal && (options.terminalId
+        ? terminal.id === options.terminalId
+        : execution?.actionId === options.actionId
+          || findToolTerminalExecution(terminal, { actionId: options.actionId })
+          || (execution?.command === options.command && Date.parse(execution.startedAt) >= options.startedAt))
+      setState({ terminal: matches ? terminal : null, loaded: true })
+    }).catch(() => {
+      if (!cancelled) setState({ terminal: null, loaded: true })
+    })
+    return () => { cancelled = true }
+  }, [authToken, liveTerminal, options.actionId, options.command, options.enabled, options.terminalId, options.startedAt, sessionId, snapshotVersion])
 
   if (liveTerminal) return { terminal: liveTerminal, loaded: true }
   return state
@@ -3954,10 +3951,9 @@ function ToolCallCardInner({
   const fileContext = getFileContextLabel(normalizedArgs)
   const fileLineRange = getReadLineRange(normalizedArgs, resultData)
   const showFileSummary = !!filePath && (isEditLikeTool(displayTool) || displayTool === 'read' || displayTool === 'file.read')
-  const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
   const editBodyScrollRef = useAutoScroll<HTMLDivElement>(call.streamingArgs)
-  const bodyKind = getToolCallBodyKind({
+  const inferredBodyKind = getToolCallBodyKind({
     tool: displayTool,
     args: normalizedArgs,
     status: call.status,
@@ -3966,6 +3962,7 @@ function ToolCallCardInner({
     screenshotPath,
     imageDataUri,
   })
+  const bodyKind = isPersistentTerminal ? 'terminal' : inferredBodyKind
   const inlineBody = isInlineToolBodyKind(bodyKind)
   const hasExpandableContent = bodyKind === 'terminal'
     ? true
@@ -3982,12 +3979,13 @@ function ToolCallCardInner({
     enabled: isPersistentTerminal && (effectiveOpen || isBackgroundCall || call.status === 'running' || call.status === 'pending'),
     terminalId: structuredTerminalId,
     command: getCommandFromToolArgs(normalizedArgs),
-    keepPolling: call.status === 'running' || call.status === 'pending' || backgroundWatchedResult,
+    actionId: call.callId,
+    startedAt: call.startedAt,
   })
   const toolTerminal = terminalSurfaceState.terminal
   const terminalId = toolTerminal?.id ?? structuredTerminalId
   const canOpenTerminal = terminalId !== null
-  const terminalCommand = getCommandFromToolArgs(normalizedArgs)
+  const terminalCommand = getCommandFromToolArgs(normalizedArgs) || extractStreamingCommand(call.streamingArgs) || ''
   const resultOutputOffset = getStructuredTerminalOutputOffset(call)
   const currentTerminalExecution = getToolTerminalExecution(toolTerminal)
   const completedTerminalExecution = findToolTerminalExecution(toolTerminal, {
@@ -4278,49 +4276,22 @@ function ToolCallCardInner({
   const bodyContent = bodyKind === 'pending' ? (
     <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} bodyScrollRef={editBodyScrollRef} />
   ) : bodyKind === 'terminal' ? (
-    showTerminalSlice && toolTerminal && terminalOutputOffset !== null ? (
-      <div className="overflow-hidden rounded-md bg-background">
-        <div className="px-3 py-2">
-          <TerminalView
-            terminalId={toolTerminal.id}
-            token={authToken}
-            readOnly
-            outputOffset={terminalOutputOffset}
-            outputEndOffset={terminalOutputEndOffset}
-            minRows={TOOL_TERMINAL_MIN_ROWS}
-            maxRows={TOOL_TERMINAL_MAX_ROWS}
-            className="bg-background"
-          />
-        </div>
+    <div className="overflow-hidden rounded-md bg-background">
+      <div className="px-3 py-2">
+        <TerminalView
+          terminalId={showTerminalSlice ? toolTerminal?.id : null}
+          token={authToken}
+          readOnly
+          streamingCommand={terminalCommand}
+          staticOutput={showTerminalSlice ? null : terminalStaticOutput || ((!isPersistentTerminal || terminalSettled) ? terminalDisplayOutput : null)}
+          outputOffset={terminalOutputOffset}
+          outputEndOffset={terminalOutputEndOffset}
+          minRows={TOOL_TERMINAL_MIN_ROWS}
+          maxRows={TOOL_TERMINAL_MAX_ROWS}
+          className="bg-background"
+        />
       </div>
-    ) : terminalStaticOutput ? (
-      <div className="overflow-hidden rounded-md bg-background">
-        <div className="px-3 py-2">
-          <TerminalView
-            staticOutput={terminalStaticOutput}
-            token={authToken}
-            readOnly
-            minRows={TOOL_TERMINAL_MIN_ROWS}
-            maxRows={TOOL_TERMINAL_MAX_ROWS}
-            className="bg-background"
-          />
-        </div>
-      </div>
-    ) : (
-    <pre ref={terminalScrollRef} className={cn(
-      'text-xs font-mono leading-5 rounded-md px-3 py-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words',
-      'bg-muted/50 text-foreground',
-      call.result && !call.result.ok && 'text-destructive'
-    )}>
-      {terminalDisplayOutput}
-      {(call.status === 'running' || call.status === 'pending') && !terminalDisplayOutput && (
-        <span className="text-muted-foreground">{summary ? `Executing ${summary}...` : 'Running...'}</span>
-      )}
-      {(call.status === 'running' || call.status === 'pending') && (
-        <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
-      )}
-    </pre>
-    )
+    </div>
   ) : bodyKind === 'browserActivity' ? (
     <BrowserActivityView tool={displayTool} args={normalizedArgs} data={resultData} status={call.status} output={displayOutput} sessionId={sessionId} authToken={authToken}>
       {screenshotPath ? <BrowserScreenshotView key={screenshotPath} path={screenshotPath} /> : null}

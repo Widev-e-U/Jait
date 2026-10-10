@@ -1331,11 +1331,12 @@ describe('running terminal cards attach to the pushed binding', () => {
       },
     })
 
-    expect(renderInSession('s-live', tool)).toContain('relative w-full overflow-hidden')
+    expect(renderInSession('s-live', tool)).toContain('data-terminal-id="term-live"')
   })
 
-  it('falls back to streamed text when no binding has arrived', () => {
-    expect(renderInSession('s-live')).not.toContain('relative w-full overflow-hidden')
+  it('renders the terminal immediately while waiting for its binding', () => {
+    expect(renderInSession('s-live')).toContain('relative w-full overflow-hidden')
+    expect(renderInSession('s-live')).not.toContain('data-terminal-id=')
   })
 
   it('ignores a binding announced for a different session', async () => {
@@ -1354,7 +1355,7 @@ describe('running terminal cards attach to the pushed binding', () => {
       },
     })
 
-    expect(renderInSession('s-live')).not.toContain('relative w-full overflow-hidden')
+    expect(renderInSession('s-live')).not.toContain('data-terminal-id=')
   })
 })
 

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle, type ReactNode } from 'react'
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle, useSyncExternalStore, type ReactNode } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
+import { getTerminalSnapshotVersion, subscribeTerminalSnapshot, loadTerminalSnapshot } from '@/lib/terminal-snapshot'
 import { buildTerminalDragPayload, JAIT_TERMINAL_REF_MIME } from '@/lib/jait-dnd'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { detectTouchDevice } from '@/lib/device-layout'
@@ -291,14 +292,13 @@ export function useTerminals(token?: string | null) {
   const [terminals, setTerminals] = useState<TerminalInfo[]>([])
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
 
+  const refreshGenerationRef = useRef(0)
   const refresh = useCallback(async () => {
+    const generation = ++refreshGenerationRef.current
     try {
-      const res = await fetch(`${GATEWAY}/api/terminals`, {
-        headers: authHeaders(token),
-      })
-      const data = (await res.json()) as { terminals: TerminalInfo[] }
-      const enriched = data.terminals.map(enrichTerminal)
-      setTerminals(enriched)
+      const terminals = await loadTerminalSnapshot(token, true)
+      const enriched = terminals.map(enrichTerminal)
+      if (generation === refreshGenerationRef.current) setTerminals(enriched)
       return enriched
     } catch {
       // gateway down
@@ -380,18 +380,10 @@ export function useTerminals(token?: string | null) {
     setActiveTerminalId((prev) => (prev === id ? null : prev))
   }, [token])
 
+  const snapshotVersion = useSyncExternalStore(subscribeTerminalSnapshot, getTerminalSnapshotVersion, getTerminalSnapshotVersion)
   useEffect(() => {
     void refresh()
-  }, [refresh])
-
-  const hasWaitingBackgroundTerminal = terminals.some(isTerminalBackgroundWaiting)
-  useEffect(() => {
-    if (!hasWaitingBackgroundTerminal) return
-    const timer = window.setInterval(() => {
-      void refresh()
-    }, 1000)
-    return () => window.clearInterval(timer)
-  }, [hasWaitingBackgroundTerminal, refresh])
+  }, [refresh, snapshotVersion])
 
   return { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh }
 }
@@ -464,6 +456,8 @@ interface TerminalViewProps {
    * socket, no scrolling stream and no input.
    */
   staticOutput?: string | null
+  /** Display-only command being authored; never sent as shell input. */
+  streamingCommand?: string | null
   /**
    * Grow the terminal with its content between these row counts instead of
    * filling the container. Both must be set to take effect.
@@ -477,11 +471,16 @@ export interface TerminalViewHandle {
   focus(): void
 }
 
-export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId = null, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, staticOutput, minRows, maxRows, onReferenceSelection }, ref) {
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId = null, className, token, projectRoot, readOnly = false, outputOffset, outputEndOffset, staticOutput, streamingCommand, minRows, maxRows, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  // The renderer survives command chunks and the transition to a live socket.
+  const contentConfig = { terminalId, token, outputOffset, outputEndOffset, staticOutput, streamingCommand }
+  const contentConfigRef = useRef(contentConfig)
+  contentConfigRef.current = contentConfig
+  const updateContentRef = useRef<((config: typeof contentConfig) => void) | null>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
   const rightClickSelectionRef = useRef<string>('')
   const resolvedTheme = useResolvedTheme()
@@ -519,11 +518,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   useEffect(() => {
     if (!containerRef.current) return
 
-    // A static console replays captured output locally. It never opens a
-    // socket, so the same xterm path that renders a live terminal also renders
-    // a past one — with real ANSI colours instead of a plain grey <pre>.
-    const staticText = typeof staticOutput === 'string' && staticOutput.length > 0 ? staticOutput : null
-    const isStatic = staticText !== null
+    let { terminalId, token, outputOffset, outputEndOffset } = contentConfigRef.current
+    let isStatic = !!contentConfigRef.current.staticOutput
+    let renderedText = ''
+    let resetOnOutput = true
 
     const term = new Terminal({
       cursorBlink: !readOnly && !isStatic,
@@ -674,7 +672,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fitAddon.fit()
       // Replay captured output after the first fit so it reflows to the final
       // column count, then let `onWriteParsed` drive the auto-height measure.
-      if (staticText) term.write(staticText)
+      updateContentRef.current?.(contentConfigRef.current)
       if (!readOnly && !isStatic) term.focus()
       scheduleContentMeasure()
     })
@@ -706,6 +704,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
     function closeSocket() {
       if (!ws) return
+      ws.onopen = null
+      ws.onmessage = null
+      ws.onerror = null
       ws.onclose = null
       ws.close()
       ws = null
@@ -715,24 +716,34 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     function connect() {
       if (disposed) return
       if (typeof document !== 'undefined' && document.hidden) return
-      // A console without an id has nothing to subscribe to; only the static
-      // replay path reaches this without one.
+      // Authored commands and static transcripts have no live subscription yet.
       if (!terminalId) return
+      const subscribedTerminalId = terminalId
       const query = token ? `?token=${encodeURIComponent(token)}` : ''
       ws = new WebSocket(`${WS_URL}${query}`)
       wsRef.current = ws
 
       ws.onopen = () => {
         reconnectDelay = 1000 // reset on successful connect
-        ws!.send(JSON.stringify(buildTerminalSubscribeMessage(terminalId, outputOffset, outputEndOffset)))
+        lastSeqByStream.clear()
+        resetOnOutput = true
+        ws!.send(JSON.stringify(buildTerminalSubscribeMessage(subscribedTerminalId, outputOffset, outputEndOffset)))
         flushPendingInput()
       }
 
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data as string) as { type?: string; payload?: TerminalOutputPayload }
-          if (shouldAcceptTerminalOutput(lastSeqByStream, terminalId, msg.payload, outputEndOffset)) {
-            term.write(msg.payload.data ?? '')
+          if (shouldAcceptTerminalOutput(lastSeqByStream, subscribedTerminalId, msg.payload, outputEndOffset)) {
+            const data = msg.payload.data ?? ''
+            if (data) {
+              // Replace the authored command with the authoritative PTY replay
+              // atomically, without replacing xterm or duplicating the echo.
+              term.write((resetOnOutput ? '\x1bc' : '') + data)
+              resetOnOutput = false
+              term.options.cursorBlink = !readOnly
+              renderedText = ''
+            }
           }
         } catch {
           // ignore
@@ -763,10 +774,46 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       if (!ws) connect()
     }
 
-    if (!isStatic) connect()
-    if (!isStatic && typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange)
+    updateContentRef.current = (next) => {
+      const connectionChanged = terminalId !== next.terminalId || token !== next.token
+        || isStatic !== !!next.staticOutput
+      const boundsChanged = outputOffset !== next.outputOffset || outputEndOffset !== next.outputEndOffset
+      terminalId = next.terminalId
+      token = next.token
+      outputOffset = next.outputOffset
+      outputEndOffset = next.outputEndOffset
+      isStatic = !!next.staticOutput
+      if (connectionChanged) {
+        clearReconnectTimer()
+        closeSocket()
+        lastSeqByStream.clear()
+        resetOnOutput = true
+        if (isStatic) {
+          term.write('\x1bc')
+          renderedText = ''
+        } else {
+          connect()
+        }
+      } else if (boundsChanged && terminalId && ws?.readyState === WebSocket.OPEN) {
+        lastSeqByStream.clear()
+        resetOnOutput = true
+        ws.send(JSON.stringify(buildTerminalSubscribeMessage(terminalId, outputOffset, outputEndOffset)))
+      }
+      // Stream ordinary characters into the existing emulator. Strip control
+      // characters from authored commands so they cannot act as ANSI/OSC.
+      // eslint-disable-next-line no-control-regex
+      const command = next.streamingCommand?.replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, '')
+      const text = isStatic ? next.staticOutput!
+        : (command != null && resetOnOutput ? '$ ' + command.replace(/\n/g, '\r\n') : '')
+      if (text && text !== renderedText) {
+        const append = renderedText.length > 0 && text.startsWith(renderedText)
+        term.write(append ? text.slice(renderedText.length) : '\x1bc' + text)
+        renderedText = text
+      }
+      term.options.cursorBlink = !readOnly || (!isStatic && resetOnOutput && command != null)
     }
+    if (!isStatic) connect()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     // Forward user input to the terminal via WS
     term.onData((data) => {
@@ -863,12 +910,17 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       rootEl.removeEventListener('contextmenu', handleContextMenu, { capture: true })
       if (!readOnly) rootEl.removeEventListener('paste', handlePaste, { capture: true })
       closeSocket()
+      updateContentRef.current = null
       term.dispose()
       termRef.current = null
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token, projectRoot, readOnly, outputOffset, outputEndOffset, staticOutput, minRows, maxRows, onReferenceSelection])
+  }, [projectRoot, readOnly, minRows, maxRows, onReferenceSelection])
+
+  useEffect(() => {
+    updateContentRef.current?.(contentConfigRef.current)
+  }, [terminalId, token, outputOffset, outputEndOffset, staticOutput, streamingCommand, projectRoot, readOnly, minRows, maxRows, onReferenceSelection])
 
   useEffect(() => {
     const term = termRef.current
@@ -912,6 +964,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
   return (
     <div
+      data-terminal-id={terminalId ?? undefined}
       className={`relative w-full overflow-hidden ${className ?? ''}`}
       style={autoHeight
         ? { height: contentHeight ?? (minRows ?? 1) * TERMINAL_FALLBACK_ROW_HEIGHT }

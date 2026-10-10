@@ -105,6 +105,24 @@ describe('findLiveToolTerminal', () => {
     })).toBeNull()
   })
 
+  it('matches MCP execution ids by full command and start time', () => {
+    expect(findLiveToolTerminal(entries, {
+      sessionId: 's-1', actionId: 'provider-call', command: 'git status',
+      startedAt: Date.parse('2026-08-25T10:00:02.000Z'),
+    })).toMatchObject({ terminalId: 'term-2' })
+    expect(findLiveToolTerminal(entries, {
+      sessionId: 's-1', actionId: 'provider-call', command: 'git status',
+      startedAt: Date.parse('2026-08-25T10:00:04.000Z'),
+    })).toBeNull()
+  })
+
+  it('does not attach a streamed or unrelated command to a recent execution', () => {
+    expect(findLiveToolTerminal(entries, {
+      sessionId: 's-1', actionId: 'provider-call', command: 'git',
+      startedAt: Date.parse('2026-08-25T10:00:00.000Z'),
+    })).toBeNull()
+  })
+
   it('ignores other sessions', () => {
     expect(findLiveToolTerminal(entries, { sessionId: 's-3', command: 'ls' })).toBeNull()
   })
