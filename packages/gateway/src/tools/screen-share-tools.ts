@@ -174,6 +174,25 @@ export function createOsTool(screenShare: ScreenShareService, name: "os.tool" | 
       type: "object",
       properties: {
         action: { type: "string", enum: ["state", "register-device", "transfer-control", "transport-update"] },
+        device: {
+          type: "object", description: "Device payload for register-device.",
+          properties: {
+            id: { type: "string" }, name: { type: "string" },
+            platform: { type: "string", enum: ["desktop", "react-native", "web"] },
+            authorized: { type: "boolean" },
+            capabilities: { type: "array", items: { type: "string" } },
+          },
+          required: ["id", "name", "platform"],
+        },
+        controllerDeviceId: { type: "string", description: "Device receiving control for transfer-control." },
+        transport: {
+          type: "object", description: "Viewer transport payload for transport-update.",
+          properties: {
+            deviceId: { type: "string" }, latencyMs: { type: "number" },
+            preferP2P: { type: "boolean" },
+          },
+          required: ["deviceId", "latencyMs"],
+        },
       },
       required: ["action"],
     },

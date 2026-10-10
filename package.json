@@ -31,6 +31,8 @@
     "test": "vitest run",
     "test:e2e": "npm --prefix tests/e2e test",
     "test:watch": "vitest",
+    "test:tools": "vitest run packages/gateway/src/tools --reporter=verbose",
+    "test:tools:browser": "JAIT_BROWSER_INTEGRATION=1 vitest run packages/gateway/src/tools/browser-tools-integration.test.ts --reporter=verbose",
     "lint": "bunx oxlint . && bun run lint:hooks",
     "lint:hooks": "bunx oxlint --react-plugin --allow all --deny react/rules-of-hooks apps/web/src",
     "typecheck": "bun run --filter '*' typecheck",

@@ -90,8 +90,7 @@ export function createScreenshotCaptureTool(): ToolDefinition<ScreenshotCaptureI
 
       let chromium: unknown;
       try {
-        const loadPlaywright = new Function("return import('playwright')") as () => Promise<unknown>;
-        const mod = (await loadPlaywright()) as { chromium?: { launch: () => Promise<unknown> } };
+        const mod = (await import("playwright")) as { chromium?: { launch: () => Promise<unknown> } };
         chromium = mod.chromium;
         if (!chromium) throw new Error("chromium not found in playwright module");
       } catch (err) {

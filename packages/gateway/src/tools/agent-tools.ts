@@ -373,6 +373,8 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           sessionId: sid,
           actionId: uuidv7(),
           projectRoot: context.projectRoot,
+          executionNodeId: context.executionNodeId,
+          sandboxContainerName: context.sandboxContainerName,
           requestedBy: `sub-agent:${subAgentId}`,
           userId: context.userId,
           apiKeys: context.apiKeys,

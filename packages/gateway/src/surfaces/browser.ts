@@ -698,13 +698,11 @@ async function createInProcessPlaywrightDriver(
   _input: SurfaceStartInput,
   liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null = null,
 ): Promise<BrowserDriver> {
-  // Optional runtime dependency: keep static imports out so gateway can still
-  // boot in environments that do not need browser automation.
-  const loadPlaywright = new Function("return import('playwright')") as () => Promise<unknown>;
-
+  // Load lazily relative to this module. Evaluating import in a new Function
+  // loses the module's resolver and fails in VM-based hosts such as Vitest.
   let mod: unknown;
   try {
-    mod = await loadPlaywright();
+    mod = await import("playwright");
   } catch {
     throw new Error(
       "Playwright is not installed. Install it in @jait/gateway: `bun add playwright --cwd packages/gateway`",

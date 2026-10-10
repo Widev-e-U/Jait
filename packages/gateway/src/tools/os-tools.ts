@@ -209,7 +209,7 @@ function detectPackageManager(): string {
 
 function buildInstallCommand(manager: string, pkg: string): string | null {
   // Sanitize package name — only allow alphanumeric, dash, dot, slash
-  if (!/^[\w./@-]+$/.test(pkg)) return null;
+  if (pkg.startsWith("-") || !/^[\w./@-]+$/.test(pkg)) return null;
 
   switch (manager) {
     case "winget": return `winget install --accept-package-agreements --accept-source-agreements -e --id ${pkg}`;
