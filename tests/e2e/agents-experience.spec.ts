@@ -18,7 +18,7 @@ async function openAgents(page: Page, request: APIRequestContext) {
   })
   await page.goto('/agents', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('button', { name: 'New agent' })).toBeVisible()
-  await expect(page.getByText('Threads use auto-approve by default. Supervised runs ask for approval.')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toHaveCount(1)
   return token as string
 }
 

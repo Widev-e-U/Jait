@@ -31,7 +31,9 @@ for (const mobile of [false, true]) {
     const modal = page.getByRole('dialog', { name: 'Catalogue', exact: true })
     await expect(modal).toBeVisible()
     await expect(modal.getByTestId('catalogue-graph').locator('canvas')).toBeVisible({ timeout: 30_000 })
-    await modal.getByLabel('Catalogue page', { exact: true }).selectOption('agents')
+    await modal.getByRole('combobox', { name: 'Catalogue page', exact: true }).click()
+    await page.getByRole('option', { name: 'Agents', exact: true }).click()
+    await expect(modal.getByRole('combobox', { name: 'Catalogue page', exact: true })).toHaveText('Agents')
     await modal.getByRole('button', { name: 'agent.profiles', exact: true }).click()
     await expect(modal.getByRole('heading', { name: 'agent.profiles', exact: true })).toBeVisible()
     await expect(modal.getByText('Manage persistent people and teams on Jait', { exact: false })).toBeVisible()
@@ -61,7 +63,11 @@ test('catalogue refresh includes newly registered tools and reports loading fail
   let failed = true
   await page.route('**/api/tools', async (route) => {
     if (failed) await route.fulfill({ status: 503, json: { error: 'Unavailable' } })
-    else await route.fulfill({ json: { tools: [{ name: 'agent.profiles.new', description: 'New live tool', page: 'agents' }] } })
+    else await route.fulfill({ json: { tools: [
+      { name: 'agent.profiles.new', description: 'New live tool', page: 'agents' },
+      { name: 'rea.inspect', description: 'Inspect binaries', category: 'external', source: 'plugin:rea', sourceMetadata: { kind: 'plugin', pluginId: 'rea', pluginDisplayName: 'Reverse Engineer Anything' } },
+      { name: 'mcp.docs.read', description: 'Read documents', category: 'external', source: 'mcp', sourceMetadata: { kind: 'mcp', serverId: 'docs', serverName: 'Documentation Server' } },
+    ] } })
   })
   await page.goto('/agents')
   await page.getByRole('button', { name: 'Account menu' }).click()
@@ -73,4 +79,11 @@ test('catalogue refresh includes newly registered tools and reports loading fail
   await expect(modal.getByRole('button', { name: 'agent.profiles.new', exact: true })).toBeVisible()
   await expect(modal.getByRole('button', { name: /^agent\.profiles\s*Unavailable$/ })).toContainText('Unavailable')
   await expect(modal.getByRole('alert')).toHaveCount(0)
+  await expect(modal.getByRole('button', { name: 'Settings · Reverse Engineer Anything', exact: true })).toBeVisible()
+  await modal.getByLabel('Search catalogue').fill('Reverse Engineer Anything')
+  await modal.getByRole('button', { name: 'rea.inspect', exact: true }).click()
+  await expect(modal.getByRole('heading', { name: 'rea.inspect', exact: true })).toBeVisible()
+  await expect(modal.getByRole('button', { name: 'mcp.docs.read', exact: true })).toHaveCount(0)
+  await modal.getByLabel('Search catalogue').fill('Documentation Server')
+  await expect(modal.getByRole('button', { name: 'mcp.docs.read', exact: true })).toBeVisible()
 })

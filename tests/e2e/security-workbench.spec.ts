@@ -1,8 +1,9 @@
+import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
 test.setTimeout(90_000)
 
-test('guided scope, evidence, remediation, inconclusive and successful verification, monitoring and export', async ({ page }) => {
+test('guided scope, evidence, remediation, inconclusive and successful verification, monitoring and export', async ({ page }, testInfo) => {
   const now = new Date().toISOString()
   const scope = { id:'scope', targets:['192.0.2.10'], exclusions:[], ports:[80], methods:['http'], authorized:true, expiresAt:new Date(Date.now()+3_600_000).toISOString(), createdAt:now, operatorId:'owner', nodeId:'gateway', vantagePoint:'fixture-gateway', profile:'tcp-connect-v1' }
   let finding = { id:'finding', scopeId:scope.id, runId:'run', ruleId:'http.nosniff', target:'192.0.2.10', port:80, title:'Content type protection missing', severity:'low', confidence:'high', status:'observed', disposition:'open', evidenceIds:['evidence'], firstSeen:now, lastSeen:now, remediation:'Add X-Content-Type-Options: nosniff to this response.', rollback:'Restore the original configuration.' }
@@ -35,7 +36,7 @@ test('guided scope, evidence, remediation, inconclusive and successful verificat
     await route.fulfill({contentType:'application/json',body:JSON.stringify(body)})
   })
   await page.goto('/security-workbench.html',{waitUntil:'domcontentloaded'})
-  await page.getByRole('combobox',{name:'Security check profile'}).selectOption('http')
+  await selectWorkbenchOption(page, 'Security check profile', 'http')
   const start=page.getByRole('button',{name:'Run selected check'})
   await expect(start).toBeDisabled()
   await page.getByRole('textbox',{name:'Security target IP'}).fill('192.0.2.10')
@@ -64,11 +65,11 @@ test('guided scope, evidence, remediation, inconclusive and successful verificat
   await page.getByRole('button',{name:'Verify same check'}).click()
   await expect(page.getByRole('status')).toContainText('verified-absent')
   await expect(page.getByText('low · observed · high confidence · verified-absent')).toBeVisible()
-  await page.screenshot({path:'../../.jait/security-workbench-preview.png',fullPage:true})
+  await page.screenshot({path: testInfo.outputPath('security-workbench-preview.png'),fullPage:true})
   await page.getByRole('tab',{name:'Security checks',exact:true}).click()
   await page.getByRole('button',{name:'Compare previous check'}).click()
   await expect(page.getByText('No longer observed rules: http.nosniff.')).toBeVisible()
-  await page.getByRole('combobox',{name:'Security check profile'}).selectOption('nmap')
+  await selectWorkbenchOption(page, 'Security check profile', 'nmap')
   await expect(page.getByText('Install nmap on the gateway',{exact:false})).toBeVisible()
   await consent.check();await expect(start).toBeDisabled()
 })
@@ -117,22 +118,28 @@ test('all profiles send only the selected authorized method and preserve their s
  await page.getByRole('textbox',{name:'Security target port'}).fill('443')
  for(const profile of ['tls','http','https','ssh','host-audit','nmap','nuclei','trivy','telemetry']){
   selected=profile
-  await page.getByRole('combobox',{name:'Security check profile'}).selectOption(profile)
+  await selectWorkbenchOption(page, 'Security check profile', profile)
   const consent=page.getByRole('checkbox',{name:'I own or am authorized'})
   await expect(consent).not.toBeChecked()
   if(profile==='tls')await page.getByRole('textbox',{name:'Expected TLS server name'}).fill('fixture.example')
   if(profile==='host-audit')await page.getByRole('textbox',{name:'Authorized SSH username'}).fill('fixture-user')
-  if(profile==='nuclei')await page.getByRole('combobox',{name:'Web transport'}).selectOption('https')
+  if(profile==='nuclei')await selectWorkbenchOption(page, 'Web transport', 'https')
   if(profile==='trivy'){
    await page.getByRole('textbox',{name:'Authorized project path'}).fill('Dockerfile')
    await page.getByRole('checkbox',{name:'Include package CVE correlation'}).check()
   }
   if(profile==='telemetry'){
    await page.getByRole('textbox',{name:'Authorized project path'}).fill('alerts.jsonl')
-   await page.getByRole('combobox',{name:'Sensor format'}).selectOption('wazuh')
+   await selectWorkbenchOption(page, 'Sensor format', 'wazuh')
   }
   await consent.check();await page.getByRole('button',{name:'Run selected check'}).click()
   await expect(page.getByRole('heading',{name:profile+' · completed'})).toBeVisible()
  }
  expect(scopeCount).toBe(9)
 })
+
+async function selectWorkbenchOption(page: Page, name: string, value: string) {
+  await page.getByRole('combobox', { name }).click()
+  const labels: Record<string, string> = { http: 'HTTP headers', nmap: 'Nmap TCP inventory', tls: 'TLS certificate', https: 'HTTPS headers', ssh: 'SSH identification', 'host-audit': 'Read-only host audit', nuclei: 'Reviewed web check', trivy: 'Software configuration', telemetry: 'Import sensor alerts', wazuh: 'Wazuh alert JSONL', suricata: 'Suricata EVE JSONL' }
+  await page.getByRole('option', { name: name === 'Web transport' ? value.toUpperCase() : labels[value] || value, exact: true }).click()
+}

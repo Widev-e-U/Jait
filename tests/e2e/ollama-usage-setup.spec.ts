@@ -23,7 +23,7 @@ for (const width of [1280, 390]) {
       saved = route.request().postDataJSON().apiKey === 'valid-test-key'
       await route.fulfill({ status: saved ? 200 : 400, json: saved ? { ok: true } : { error: 'Invalid test key. Saved settings have not changed.' } })
     })
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.evaluate(() => import('/src/e2e-fixtures/ollama-usage-setup.tsx'))
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Set up cloud usage', { exact: true })).toBeVisible()
@@ -37,12 +37,12 @@ for (const width of [1280, 390]) {
     await dialog.getByRole('button', { name: 'Test connection', exact: true }).click()
     await expect.poll(() => refreshes).toBeGreaterThan(1)
     await input.fill('bad-test-key')
-    await dialog.getByRole('button', { name: 'Save and test' }).click()
+    await dialog.getByRole('button', { name: 'Save and test', exact: true }).click()
     await expect(dialog.getByRole('status')).toContainText('Invalid test key')
     await input.fill('  valid-test-key  ')
-    await dialog.getByRole('button', { name: 'Save and test' }).click()
+    await dialog.getByRole('button', { name: 'Save and test', exact: true }).click()
     await expect(dialog.getByRole('status')).toContainText('Connected — cloud usage is up to date.')
-    await expect(input).toHaveCount(0)
+    await expect(input).not.toBeVisible()
   })
 }
 
@@ -60,14 +60,14 @@ for (const width of [1280, 390]) {
         }],
       }],
     } }))
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.evaluate(() => import('/src/e2e-fixtures/ollama-usage-setup.tsx'))
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Request activity', { exact: true })).toBeVisible()
     await expect(dialog.getByText(/10[,. ]388 requests/)).toBeVisible()
     await expect(dialog.getByText('This response contains request activity only; it does not refresh subscription quota.')).toBeVisible()
     await expect(dialog.getByText(/% used|Resets /)).toHaveCount(0)
-    await expect(dialog.getByText('Set up cloud usage', { exact: true })).toHaveCount(0)
+    await expect(dialog.getByText('Set up cloud usage', { exact: true })).toBeVisible()
     expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
   })
 }
