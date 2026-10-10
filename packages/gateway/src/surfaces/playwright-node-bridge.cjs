@@ -201,6 +201,10 @@ async function main() {
     ignoreHTTPSErrors: process.env.BROWSER_IGNORE_HTTPS_ERRORS === "true",
   });
   let page = await selectInitialPage(context);
+  // CDP attachment does not activate the app window on the live desktop.
+  // Display the attached page so VNC shows it and keyboard input reaches it.
+  if (cdpUrl) await page.bringToFront();
+
   const events = [];
   const consoleGuard = createConsoleFloodGuard(process.env);
 

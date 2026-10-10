@@ -26,7 +26,7 @@ async function createSession(request: APIRequestContext) {
 }
 
 test.describe('browser and preview integration', () => {
-  test('browser tools automatically target the visible preview browser', async ({ request }) => {
+  test('browser tools automatically target the visible preview browser', async ({ request, page, context }) => {
     test.setTimeout(90000)
     const { id: sessionId, token } = await createSession(request)
 
@@ -39,7 +39,7 @@ test.describe('browser and preview integration', () => {
     // the entire Jait web app inside Playwright's memory-limited dev stack.
     const pageServer = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/html' })
-      response.end('<title>Preview collaboration</title><h1>Shared preview</h1>')
+      response.end(`<title>Preview collaboration</title><h1>Shared preview</h1><input aria-label="Collaboration note" autofocus oninput="document.getElementById('typed').textContent=this.value"><output id="typed"></output>`)
     })
     await new Promise<void>((resolveListen) => pageServer.listen(0, '0.0.0.0', resolveListen))
     const address = pageServer.address()
@@ -93,6 +93,50 @@ test.describe('browser and preview integration', () => {
       expect(inspection.ok).toBe(true)
       expect(inspection.data?.browserId).toBe(preview.data?.browserId)
       expect(inspection.data?.url).toContain(new URL(previewTarget).host)
+
+      // Exercise the real authenticated noVNC transport inside the chat card.
+      // Only the persisted tool result is injected; API, grants and VNC are live.
+      await context.addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
+      await page.addInitScript(({ sessionId, data, apiUrl }) => {
+        localStorage.setItem('jait-gateway-url', apiUrl)
+        Reflect.set(window, '__chatBrowserFixture', {
+          sessionId,
+          call: { callId: 'live-preview', startedAt: Date.now(), tool: 'preview.open', args: {}, status: 'success', result: { ok: true, data } },
+        })
+      }, { sessionId, apiUrl: API_URL, data: { ...preview.data, sessionId, sharedWithAgent: true } })
+      await page.goto('/chat-browser-repro.html')
+      const viewer = page.locator('iframe[title="Agent browser"]')
+      await expect(viewer).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Take control', exact: true })).toBeEnabled()
+      const canvas = page.frameLocator('iframe[title="Agent browser"]').locator('canvas')
+      const hasDesktopPixels = () => canvas.evaluate(element => {
+        const canvas = element as HTMLCanvasElement
+        if (!canvas.width || !canvas.height) return false
+        const pixels = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data
+        return !!pixels?.some((value, index) => index % 4 !== 3 && value > 20)
+      })
+      await expect.poll(hasDesktopPixels).toBe(true)
+      await expect(viewer).toHaveAttribute('src', /view_only=1/)
+      await page.getByRole('button', { name: 'Take control', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Share with agent', exact: true })).toBeEnabled()
+      await expect(viewer).not.toHaveAttribute('src', /view_only=1/)
+      await expect(canvas).toBeVisible()
+      await page.getByRole('button', { name: '🔍 Navigate', exact: true }).click()
+      // The local fixture focuses this field; key input travels through VNC.
+      await expect(page.frameLocator('iframe[title="Agent browser"]').locator('#status')).toHaveText(/Connected to/)
+      await canvas.focus()
+      await page.keyboard.type('live-browser-takeover')
+      await page.reload()
+      await expect(page.getByRole('button', { name: 'Share with agent', exact: true })).toBeEnabled()
+      await expect(viewer).not.toHaveAttribute('src', /view_only=1/)
+      await expect.poll(hasDesktopPixels).toBe(true)
+      await page.screenshot({ path: 'test-results/live-browser-takeover.png' })
+      await page.getByRole('button', { name: 'Share with agent', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'Take control', exact: true })).toBeEnabled()
+      const typedResponse = await request.post(`${API_URL}/api/tools/execute`, {
+        data: { tool: 'browser.inspect', input: {}, sessionId, projectRoot: PROJECT_ROOT },
+      })
+      expect(JSON.stringify(await typedResponse.json())).toContain('live-browser-takeover')
 
       const unshareResponse = await request.post(`${API_URL}/api/preview/share`, {
         headers: { Authorization: `Bearer ${token}` },

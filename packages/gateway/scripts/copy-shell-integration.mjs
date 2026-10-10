@@ -29,5 +29,9 @@ if (!existsSync(source)) {
 
 mkdirSync(target, { recursive: true });
 cpSync(source, target, { recursive: true });
+// tsc excludes .cjs files. Package the bridge next to browser.js so installed
+// gateways never depend on a source checkout to start their live browser.
+cpSync(join(packageRoot, "src", "surfaces", "playwright-node-bridge.cjs"),
+  join(packageRoot, "dist", "surfaces", "playwright-node-bridge.cjs"));
 
 console.log(`Copied shell integration scripts → ${target}`);
