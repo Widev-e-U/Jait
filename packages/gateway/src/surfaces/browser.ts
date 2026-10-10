@@ -890,7 +890,7 @@ async function createInProcessPlaywrightDriver(
       const page = await ensureActivePage();
       const outPath = path
         ? resolve(path)
-        : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
+        : resolve(process.cwd(), ".jait", "shots", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
       await withSignal(page.screenshot({ path: outPath, fullPage: true }), signal);
       return outPath;

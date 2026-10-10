@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, resolve, win32 } from "node:path";
 import type { WsControlPlane } from "../ws.js";
 import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
@@ -491,7 +491,7 @@ export function createBrowserInteractionTools(
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "Optional output file path" },
+          path: { type: "string", description: "Optional output file path relative to the active project. Default: .jait/shots/browser-<id>.png" },
           browserId: { type: "string", description: "Optional browser surface ID" },
         },
       },
@@ -514,7 +514,12 @@ export function createBrowserInteractionTools(
             },
           };
         }
-        const screenshotPath = await surface.screenshot(input.path, context.signal);
+        // The capture belongs to the active project; the gateway copy below
+        // remains a display cache for the boundary-protected image route.
+        const projectPath = /^[A-Za-z]:[\\\\/]/.test(context.projectRoot) ? win32 : { resolve };
+        const outputPath = projectPath.resolve(context.projectRoot,
+          input.path?.trim() || `.jait/shots/browser-${randomUUID()}.png`);
+        const screenshotPath = await surface.screenshot(outputPath, context.signal);
         const extension = /\.(png|jpe?g|webp|gif)$/i.exec(screenshotPath)?.[0].toLowerCase() ?? ".png";
         const displayDir = resolve(process.cwd(), ".jait", "shots");
         const displayPath = join(displayDir, `browser-${randomUUID()}${extension}`);
@@ -532,7 +537,7 @@ export function createBrowserInteractionTools(
         await writeFile(displayPath, bytes);
         return {
           ok: true,
-          message: "browser.screenshot executed",
+          message: `Screenshot saved to ${screenshotPath}`,
           data: { browserId: surface.id, result: { path: displayPath, capturePath: screenshotPath } },
         };
       },

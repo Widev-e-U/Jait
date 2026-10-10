@@ -5,8 +5,27 @@ import { describe, expect, it } from "vitest";
 import { buildSystemPrompt } from "./prompt-registry.js";
 import "./index.js";
 import type { Skill } from "../../skills/index.js";
+import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE, PROJECT_ARTIFACT_INSTRUCTIONS } from "./shared-sections.js";
 
 describe("buildSystemPrompt", () => {
+  it("includes artifact guidance in the direct CLI provider bootstrap", () => {
+    expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(PROJECT_ARTIFACT_INSTRUCTIONS);
+  });
+
+  it.each([
+    { model: "gpt-4o", baseUrl: "https://api.openai.com/v1" },
+    { model: "glm-4.7", baseUrl: "https://openrouter.ai/api/v1", backend: "openrouter" },
+    { model: "llama3.2", baseUrl: "http://localhost:11434/v1", backend: "ollama" },
+  ])("keeps generated artifacts in the active project for $model", (endpoint) => {
+    const prompt = buildSystemPrompt("agent", endpoint, { projectRoot: "/work/project" });
+    expect(prompt).toContain("<projectArtifacts>");
+    expect(prompt).toContain(".jait/shots/");
+    expect(prompt).toContain(".jait/artifacts/");
+    expect(prompt).toContain("Create the required directories");
+    expect(prompt).toContain("copy the finished artifact");
+    expect(prompt).not.toContain("> /tmp/out.txt");
+  });
+
   it("includes the shared Jait external provider instructions", () => {
     const prompt = buildSystemPrompt("agent", {
       model: "gpt-4o",

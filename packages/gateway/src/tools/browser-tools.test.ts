@@ -83,7 +83,11 @@ describe.each(cases)("$name", ({ name, input, method, args }) => {
     const signal = new AbortController().signal;
     const result = await f.tool(name).execute(input, { ...context, signal });
     expect(result.ok).toBe(true);
-    expect(f.surface[method as keyof typeof f.surface]).toHaveBeenCalledWith(...args, signal);
+    if (name === "browser.screenshot") {
+      expect(f.surface.screenshot).toHaveBeenCalledWith(expect.stringContaining(".jait/shots/browser-"), signal);
+    } else {
+      expect(f.surface[method as keyof typeof f.surface]).toHaveBeenCalledWith(...args, signal);
+    }
     expect(f.registry.startSurface).not.toHaveBeenCalled();
     expect(f.collaboration.assertAgentControl).toHaveBeenCalledWith(f.surface.id);
     if (name === "browser.screenshot") {
@@ -153,6 +157,16 @@ describe("browser surface startup and screenshot transport", () => {
     expect(f.registry.startSurface).toHaveBeenCalledWith("browser", `browser-${context.sessionId}`, {
       sessionId: context.sessionId, projectRoot: context.projectRoot, userId: undefined,
     });
+  });
+
+  it("captures into the active project even when the gateway has another cwd", async () => {
+    const f = fixture();
+    const result = await f.tool("browser.screenshot").execute({}, { ...context, projectRoot: directory });
+    expect(result.ok).toBe(true);
+    const requestedPath = f.surface.screenshot.mock.calls[0]?.[0];
+    expect(requestedPath?.startsWith(join(directory, ".jait", "shots", "browser-"))).toBe(true);
+    const data = result.data as { result: { path: string } };
+    artifacts.push(data.result.path);
   });
 
   it("copies a screenshot from the execution node when the capture is remote", async () => {

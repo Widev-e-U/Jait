@@ -578,6 +578,7 @@ export function registerTerminalRoutes(
       category: t.category,
       risk: t.risk,
       source: t.source,
+      sourceMetadata: t.sourceMetadata,
     }));
     return { tools };
   });

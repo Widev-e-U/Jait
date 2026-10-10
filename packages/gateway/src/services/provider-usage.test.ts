@@ -25,6 +25,23 @@ function makeNotifications() {
 }
 
 describe("ProviderUsageService", () => {
+  it("stores Go windows and provider-reported Ollama resets", () => {
+    const service = new ProviderUsageService(db);
+    const window = { status: "ok" as const, percent: 20, resetsAt: "2026-10-09T12:00:00Z" };
+    service.recordOpenCodeGoUsage("go", { usage: { rolling: window, weekly: { ...window, percent: 90 }, monthly: { ...window, status: "rate-limited", percent: 100 } } });
+    expect(service.listForUser(["go"])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ providerType: "opencode-go", rateLimitType: "five_hour", utilization: 0.2, resetsAt: window.resetsAt }),
+      expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.9, status: "allowed_warning" }),
+      expect.objectContaining({ rateLimitType: "monthly", utilization: 1, status: "rejected" }),
+    ]));
+    service.recordOllamaUsage("ollama", { source: "settings", limits: {
+      session: { usage: 0.4, models: [], resetsAt: window.resetsAt }, weekly: { usage: 0.8, models: [], resetsAt: null },
+    } });
+    expect(service.listForUser(["ollama"])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ rateLimitType: "five_hour", resetsAt: window.resetsAt, resetSource: "provider-reported" }),
+      expect.objectContaining({ rateLimitType: "seven_day", resetsAt: null, resetSource: null }),
+    ]));
+  });
   it("preserves session usage when refresh temporarily returns request activity", () => {
     const service = new ProviderUsageService(db);
     vi.useFakeTimers();

@@ -25,11 +25,13 @@ export interface CodexRateLimitsResponse {
 }
 
 export interface OllamaUsageLimit {
+  resetsAt?: string | null;
   usage: number;
   models: Array<{ name: string; request_count: number }>;
 }
 
 export interface OllamaQuotaUsageResponse {
+  source?: "settings";
   limits: {
     session?: OllamaUsageLimit;
     weekly?: OllamaUsageLimit;

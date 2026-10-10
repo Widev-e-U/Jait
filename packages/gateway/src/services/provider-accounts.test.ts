@@ -1,7 +1,8 @@
+import { ProviderUsageService } from "./provider-usage.js";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { ProviderAccountService } from "./provider-accounts.js";
@@ -9,10 +10,30 @@ import { ProviderAccountService } from "./provider-accounts.js";
 const roots: string[] = [];
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe("ProviderAccountService", () => {
+  it("refreshes Go only with the owning user's isolated credentials", async () => {
+    const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
+    const root = mkdtempSync(join(tmpdir(), "jait-go-usage-")); roots.push(root);
+    const usage = new ProviderUsageService(db);
+    const service = new ProviderAccountService(db, new ProviderRegistry(), [{ id: "opencode", name: "OpenCode", description: "Test", command: process.execPath }], root, usage);
+    const own = service.create("user-1", "opencode", "Own");
+    const other = service.create("user-2", "opencode", "Other");
+    service.connectOpenCodeGo(own.id, "user-1", "own-key");
+    service.connectOpenCodeGo(other.id, "user-2", "other-key");
+    const window = { status: "ok", percent: 40, resetsAt: "2026-10-09T12:00:00Z" };
+    const mock = vi.fn().mockResolvedValue(Response.json({ usage: { rolling: window, weekly: window, monthly: window } }));
+    vi.stubGlobal("fetch", mock);
+    expect(await service.refreshUsage("user-1")).toEqual({});
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock.mock.calls[0]?.[1].headers.Authorization).toBe("Bearer own-key");
+    expect(usage.listForUser([own.id])).toHaveLength(3);
+    expect(usage.listForUser([other.id])).toEqual([]);
+    sqlite.close();
+  });
   it("creates isolated Codex adapters per user account", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

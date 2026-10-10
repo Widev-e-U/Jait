@@ -1,4 +1,5 @@
-import { setOpenCodeGoCredential } from "../providers/opencode-credentials.js";
+import { fetchOpenCodeGoUsage } from "./subscription-usage-fetchers.js";
+import { readOpenCodeGoCredential, setOpenCodeGoCredential } from "../providers/opencode-credentials.js";
 import { getStateDirectory } from "../state-directory.js";
 import { and, eq } from "drizzle-orm";
 import { mkdirSync, rmSync } from "node:fs";
@@ -100,6 +101,15 @@ export class ProviderAccountService {
         this.usageService?.recordCodexRateLimits(account.id, response);
       } catch (error) {
         errors[account.id] = error instanceof Error ? error.message : "Codex usage refresh failed";
+      }
+    }));
+    await Promise.all(this.list(userId).filter(account => account.providerType === "opencode").map(async account => {
+      if (account.nodeId !== "gateway") return;
+      try {
+        const key = readOpenCodeGoCredential({ HOME: this.accountHome(account.id) });
+        if (key) this.usageService?.recordOpenCodeGoUsage(account.id, await fetchOpenCodeGoUsage(key));
+      } catch (error) {
+        errors[account.id] = error instanceof Error ? error.message : "OpenCode Go usage refresh failed";
       }
     }));
     return errors;

@@ -33,7 +33,7 @@
  */
 
 /** Why a reset time is what it is: observed rollovers outrank estimates. */
-export type OllamaResetSource = "observed" | "window-boundary" | "window-grid";
+export type OllamaResetSource = "provider-reported" | "observed" | "window-boundary" | "window-grid";
 
 export interface OllamaResetWindow {
   /** Start of the window the snapshot's utilization belongs to (ISO 8601). */
@@ -77,7 +77,7 @@ function parseIso(value: string | null | undefined): Date | null {
 }
 
 function isResetSource(value: unknown): value is OllamaResetSource {
-  return value === "observed" || value === "window-boundary" || value === "window-grid";
+  return value === "provider-reported" || value === "observed" || value === "window-boundary" || value === "window-grid";
 }
 
 /** Read a stored source value (e.g. from a snapshot's JSON) without trusting it. */

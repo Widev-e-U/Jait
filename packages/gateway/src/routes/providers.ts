@@ -1,3 +1,4 @@
+import { fetchOllamaSettingsUsage, fetchOpenCodeGoUsage, normalizeOllamaSession } from "../services/subscription-usage-fetchers.js";
 import { callJaitLlmCompletion } from "../services/jait-llm.js";
 /**
  * Provider REST routes.
@@ -175,7 +176,7 @@ export function registerProviderRoutes(
     const instances = parseJaitBackendInstances(apiKeys["JAIT_BACKEND_INSTANCES"]);
     const configuredOllamaBackends = instances.filter((instance) => instance.type === "ollama");
     const hasLegacyOllama =
-      settings?.jaitBackend === "ollama" || Boolean(apiKeys["OLLAMA_URL"]?.trim());
+      settings?.jaitBackend === "ollama" || Boolean(apiKeys["OLLAMA_URL"]?.trim()) || Boolean(apiKeys["OLLAMA_SESSION_COOKIE"]);
     const ollamaBackends = configuredOllamaBackends.length > 0
       ? configuredOllamaBackends
       : hasLegacyOllama
@@ -193,7 +194,7 @@ export function registerProviderRoutes(
     const ollamaAccounts = new Map<string, OllamaCloudAccount>();
 
     if (refresh) await Promise.all(ollamaBackends.map(async (backend) => {
-      const quotaAccountId = `jait-backend:${backend.id}`;
+      const quotaAccountId = `jait-backend:${authUser.id}:${backend.id}`;
       const cloud = isOllamaCloudUrl(backend.baseUrl);
       const backendApiKey = "apiKey" in backend ? backend.apiKey?.trim() : undefined;
 
@@ -201,9 +202,9 @@ export function registerProviderRoutes(
       // instead relies on the credentials it stored during `ollama signin`.
       const usageApiKey = cloud ? explicitCloudApiKey || backendApiKey : explicitCloudApiKey;
 
-      const probe = await probeOllamaAccount({
+      const probe = apiKeys["OLLAMA_SESSION_COOKIE"] ? { reachable: true, account: null } : await probeOllamaAccount({
         baseUrl: backend.baseUrl,
-        apiKey: cloud ? backendApiKey : usageApiKey,
+        apiKey: usageApiKey,
       });
       if (probe.account) ollamaAccounts.set(quotaAccountId, probe.account);
 
@@ -215,15 +216,17 @@ export function registerProviderRoutes(
         probe,
       });
 
-      if (!usageApiKey && !probe.account) {
+      if (!apiKeys["OLLAMA_SESSION_COOKIE"] && !usageApiKey && !probe.account) {
         quotaErrors[quotaAccountId] = failureHint;
         return;
       }
 
       try {
-        // Prefer a daemon usage endpoint; local daemons without one can use
-        // their device key to query Ollama Cloud directly.
-        const usage = usageApiKey
+        // Browser sessions expose dashboard quota. API/device authentication
+        // remains available for servers that publish quota through /api/usage.
+        const usage = apiKeys["OLLAMA_SESSION_COOKIE"]
+          ? await fetchOllamaSettingsUsage(apiKeys["OLLAMA_SESSION_COOKIE"])
+          : usageApiKey
           ? await fetchOllamaUsage(usageApiKey)
           : await fetchSignedInOllamaUsage(backend.baseUrl, probe.account!);
         deps.providerUsageService.recordOllamaUsage(
@@ -244,18 +247,30 @@ export function registerProviderRoutes(
       }
     }));
 
+    const goBackends = instances.filter(instance => instance.type === "opencode-go");
+    if (goBackends.length === 0 && (settings?.jaitBackend === "opencode-go" || apiKeys["OPENCODE_GO_API_KEY"])) {
+      goBackends.push({ id: "opencode-go", type: "opencode-go", name: "OpenCode Go", baseUrl: JAIT_BACKEND_DEFAULT_URLS["opencode-go"], apiKey: apiKeys["OPENCODE_GO_API_KEY"] });
+    }
+    if (refresh) await Promise.all(goBackends.map(async backend => {
+      const id = `jait-backend:${authUser.id}:${backend.id}`;
+      const key = backend.apiKey?.trim() || apiKeys["OPENCODE_GO_API_KEY"]?.trim();
+      if (!key) { quotaErrors[id] = "Connect OpenCode Go in Settings to load subscription usage."; return; }
+      try { deps.providerUsageService?.recordOpenCodeGoUsage(id, await fetchOpenCodeGoUsage(key)); }
+      catch (error) { quotaErrors[id] = error instanceof Error ? error.message : "OpenCode Go usage refresh failed"; }
+    }));
     const ollamaQuotaAccountIds = ollamaBackends.map(
-      (backend) => `jait-backend:${backend.id}`,
+      (backend) => `jait-backend:${authUser.id}:${backend.id}`,
     );
     const quotaAccountIds = [
       ...accounts.map((account) => account.id),
       ...ollamaQuotaAccountIds,
+      ...goBackends.map(backend => `jait-backend:${authUser.id}:${backend.id}`),
     ];
     const quotas = deps.providerUsageService?.listForUser(quotaAccountIds) ?? [];
     const summary = summarizeProviderUsage(accounts, quotas, {
       quotaErrors,
-      jaitBackendProfiles: ollamaBackends.map((backend) => {
-        const quotaAccountIdValue = `jait-backend:${backend.id}`;
+      jaitBackendProfiles: [...goBackends.map(backend => ({ id: `jait-backend:${authUser.id}:${backend.id}`, quotaAccountId: `jait-backend:${authUser.id}:${backend.id}`, providerType: "opencode-go", providerLabel: "OpenCode Go", profileLabel: backend.name, planType: "Go" })), ...ollamaBackends.map((backend) => {
+        const quotaAccountIdValue = `jait-backend:${authUser.id}:${backend.id}`;
         const account = ollamaAccounts.get(quotaAccountIdValue);
         const cached = quotas.find(
           (quota) => quota.accountId === quotaAccountIdValue && (quota.planType || quota.accountLabel),
@@ -269,15 +284,38 @@ export function registerProviderRoutes(
           accountLabel: account?.email ?? account?.name ?? cached?.accountLabel ?? null,
           planType: account?.plan ?? cached?.planType ?? null,
         };
-      }),
+      })],
     });
     await Promise.all(summary.profiles.map(async (profile) => {
-      const backend = ollamaBackends.find((item) => profile.id === `jait-backend:${item.id}`);
+      const backend = ollamaBackends.find((item) => profile.id === `jait-backend:${authUser.id}:${item.id}`);
       if (refresh && backend && (profile.error || profile.quotas.length === 0)) {
         profile.ollamaSetup = await getOllamaUsageSetup(backend.baseUrl);
       }
     }));
     return summary;
+  });
+
+  app.post("/api/provider-usage/ollama/session", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    if (!deps.userService) return reply.status(503).send({ error: "Settings are unavailable" });
+    const { session } = (request.body ?? {}) as { session?: unknown };
+    if (session !== null && typeof session !== "string") return reply.status(400).send({ error: "Enter an Ollama browser session." });
+    let cookie: string | null = null;
+    try {
+      if (session !== null) {
+        cookie = normalizeOllamaSession(session as string);
+        await fetchOllamaSettingsUsage(cookie);
+      }
+    } catch (error) {
+      return reply.status(400).send({ error: error instanceof Error ? error.message : "Could not verify this session. Your saved session has not changed." });
+    }
+    const settings = deps.userService.getSettings(authUser.id);
+    const keys = { ...settings.apiKeys };
+    if (cookie) keys["OLLAMA_SESSION_COOKIE"] = cookie;
+    else delete keys["OLLAMA_SESSION_COOKIE"];
+    deps.userService.updateSettings(authUser.id, { apiKeys: keys });
+    return { ok: true };
   });
 
   // Validate before saving; merge on the server so unrelated settings survive.

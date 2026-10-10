@@ -26,6 +26,11 @@ export function hasOpenCodeGoCredential(env?: NodeJS.ProcessEnv): boolean {
   } catch { return false; }
 }
 
+export function readOpenCodeGoCredential(env?: NodeJS.ProcessEnv): string | null {
+  const value = readAuth(authPath(env))["opencode-go"] as { type?: unknown; key?: unknown } | undefined;
+  return value?.type === "api" && typeof value.key === "string" && value.key.trim() ? value.key.trim() : null;
+}
+
 /** Preserve other connections and never put a key on a CLI command line. */
 export function setOpenCodeGoCredential(apiKey: string | null, env?: NodeJS.ProcessEnv): void {
   const path = authPath(env);

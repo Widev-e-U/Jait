@@ -130,7 +130,7 @@ export function getToolPageId(name: string, category?: string): JaitPageId | und
 }
 
 /** Shared membership rule used by agent discovery and the visual catalogue. */
-export function isJaitPageTool(tool: { name: string; page?: JaitPageId }, pageId: JaitPageId): boolean {
-  return tool.page === pageId || getToolPageId(tool.name) === pageId
+export function isJaitPageTool(tool: { name: string; page?: JaitPageId; category?: string }, pageId: JaitPageId): boolean {
+  return (tool.page ?? getToolPageId(tool.name, tool.category)) === pageId
     || JAIT_PAGES[pageId].features.some((feature) => (feature.toolRefs as readonly string[]).includes(tool.name));
 }

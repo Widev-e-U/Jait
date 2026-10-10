@@ -51,6 +51,7 @@ export function summarizeProviderUsage(
       id: account.id,
       providerType: account.providerType,
       providerLabel:
+        accountQuotas.some(quota => quota.providerType === "opencode-go") ? "OpenCode Go" :
         account.providerType === "claude-code"
           ? "Claude Code"
           : account.providerType === "codex"

@@ -8,7 +8,8 @@
  * logic) instead of a generic toolcard.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, copyFileSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ToolDefinition, ToolResult } from "./contracts.js";
 
@@ -81,7 +82,7 @@ export function createScreenshotCaptureTool(): ToolDefinition<ScreenshotCaptureI
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
 
-      const outPath = resolveOutPath(input.path);
+      const outPath = resolveOutPath(input.path, context.projectRoot);
       const url = resolveTarget(input.target, context.projectRoot);
       const width = input.mobile ? 393 : Number(input.width ?? 1280);
       const height = input.mobile ? 851 : Number(input.height ?? 800);
@@ -163,10 +164,16 @@ export function createScreenshotCaptureTool(): ToolDefinition<ScreenshotCaptureI
           await page.screenshot({ path: outPath, fullPage });
         }
 
+        // The image route serves only gateway-local files. Keep a display
+        // cache there without relocating the original project artifact.
+        const displayDir = resolve(process.cwd(), ".jait", "shots");
+        mkdirSync(displayDir, { recursive: true });
+        const displayPath = join(displayDir, `screenshot-display-${randomUUID()}.png`);
+        copyFileSync(outPath, displayPath);
         return {
           ok: true,
           message: `Screenshot saved to ${outPath}`,
-          data: { path: outPath, target: input.target, url, width, height, mobile: Boolean(input.mobile) },
+          data: { path: displayPath, capturePath: outPath, target: input.target, url, width, height, mobile: Boolean(input.mobile) },
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -188,13 +195,13 @@ function resolveTarget(target: string, projectRoot: string): string {
   return "file://" + abs;
 }
 
-function resolveOutPath(inputPath: string | undefined): string {
+export function resolveOutPath(inputPath: string | undefined, projectRoot: string): string {
   if (inputPath && inputPath.trim()) {
-    const resolved = isAbsolute(inputPath) ? inputPath : resolve(process.cwd(), inputPath);
+    const resolved = isAbsolute(inputPath) ? inputPath : resolve(projectRoot, inputPath);
     if (!resolved.endsWith(".png")) return `${resolved}.png`;
     return resolved;
   }
-  const dir = resolve(process.cwd(), ".jait", "shots");
+  const dir = resolve(projectRoot, ".jait", "shots");
   return join(dir, `screenshot-${timestamp()}.png`);
 }
 

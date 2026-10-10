@@ -18,7 +18,7 @@ import { homedir } from "os";
 import { join, resolve } from "path";
 
 import type { ChatMode } from "../chat-modes.js";
-import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS, TOOL_DISCOVERY_INSTRUCTIONS, JAIT_CATALOG_INSTRUCTIONS } from "./shared-sections.js";
+import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS, TOOL_DISCOVERY_INSTRUCTIONS, JAIT_CATALOG_INSTRUCTIONS, PROJECT_ARTIFACT_INSTRUCTIONS } from "./shared-sections.js";
 
 // ── Interfaces ───────────────────────────────────────────────────────
 
@@ -216,6 +216,11 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
 
   if (!prompt.includes("tools.search")) {
     prompt += `\n\n<toolDiscovery>\n${TOOL_DISCOVERY_INSTRUCTIONS}\n</toolDiscovery>`;
+  }
+
+  // Shared across internal, external CLI, and lightweight local providers.
+  if (ctx?.projectRoot) {
+    prompt += `\n\n<projectArtifacts>\n${PROJECT_ARTIFACT_INSTRUCTIONS}\n</projectArtifacts>`;
   }
 
   const globalInstructions = loadGlobalJaitInstructions();

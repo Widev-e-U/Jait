@@ -314,7 +314,7 @@ async function main() {
     screenshot: async (params) => {
       const outPath = params.path
         ? resolve(String(params.path))
-        : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
+        : resolve(process.cwd(), ".jait", "shots", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
       await (await ensurePage()).screenshot({ path: outPath, fullPage: true });
       return outPath;

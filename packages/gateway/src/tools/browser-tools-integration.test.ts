@@ -129,6 +129,14 @@ describe.skipIf(process.env["JAIT_BROWSER_INTEGRATION"] !== "1").each(["in-proce
       expect(result.ok, result.message).toBe(true);
       expect([...(await readFile(path)).subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
     });
+    it("screenshot.capture defaults into the project's .jait/shots directory", async () => {
+      const result = await createScreenshotCaptureTool().execute({ target: url, waitMs: 0 }, { ...context, projectRoot: directory });
+      expect(result.ok, result.message).toBe(true);
+      const data = result.data as { path: string; capturePath: string };
+      artifacts.push(data.path);
+      expect(data.capturePath.startsWith(join(directory, ".jait", "shots") + "/")).toBe(true);
+      expect([...(await readFile(data.capturePath)).subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+    });
     it("browser.screenshot produces a displayable PNG", async () => {
       const result = await tools.execute("browser.screenshot", { path: join(directory, "fixture.png") }, context);
       expect(result.ok).toBe(true);

@@ -314,8 +314,17 @@ export function registerProjectRoutes(
 
   // GET /api/project/read?path=&surfaceId= — read a file
   app.get("/api/project/read", async (req, reply) => {
-    const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath, { fallbackWhenTargetDisallowed: true });
+    const { path: filePath, surfaceId, format } = req.query as { path?: string; surfaceId?: string; format?: string };
+    let imageUserId: string | null = null;
+    if (format === "image" && config) {
+      const user = await requireAuth(req, reply, config.jwtSecret);
+      if (!user) return;
+      imageUserId = user.id;
+      if (!sessionService) return reply.status(503).send({ error: "AUTHORIZATION_UNAVAILABLE" });
+    }
+    const fs = imageUserId
+      ? findUserFsSurface(surfaceRegistry, sessionService!, imageUserId, surfaceId)
+      : findFsSurface(surfaceRegistry, surfaceId, filePath, { fallbackWhenTargetDisallowed: true });
     if (!fs) {
       return reply.status(404).send({ error: "NO_PROJECT", message: "No filesystem surface is running" });
     }
@@ -324,8 +333,17 @@ export function registerProjectRoutes(
     }
 
     try {
-      const content = await fs.read(filePath);
       const stInfo = await fs.statFile(filePath);
+      if (format === "image") {
+        const extension = filePath.split(".").pop()?.toLowerCase() ?? "";
+        const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml", avif: "image/avif", ico: "image/x-icon" };
+        const type = types[extension];
+        if (!type) return reply.status(400).send({ error: "UNSUPPORTED_IMAGE" });
+        if (stInfo.size > 20 * 1024 * 1024) return reply.status(413).send({ error: "IMAGE_TOO_LARGE" });
+        const binary = await fs.readBinary(filePath);
+        return { path: filePath, content: `data:${type};base64,${Buffer.from(binary).toString("base64")}`, size: stInfo.size, modified: stInfo.modified };
+      }
+      const content = await fs.read(filePath);
       return { path: filePath, content, size: stInfo.size, modified: stInfo.modified };
     } catch (err) {
       return reply.status(400).send({

@@ -1,3 +1,4 @@
+import type { OpenCodeGoUsage } from "./subscription-usage-fetchers.js";
 /**
  * Provider usage — subscription rate-limit tracking.
  *
@@ -231,20 +232,33 @@ export class ProviderUsageService {
         providerType: "ollama",
         status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
-        resetsAt: resetWindow.resetsAt,
+        resetsAt: response.source === "settings" ? limit.resetsAt ?? null : resetWindow.resetsAt,
         isUsingOverage: false,
         raw: {
           planType: planType ?? null,
           windowDurationMins,
           accountLabel: accountLabel ?? null,
           windowStartAt: resetWindow.windowStartAt,
-          resetSource: resetWindow.source,
+          resetSource: response.source === "settings" ? (limit.resetsAt ? "provider-reported" : null) : resetWindow.source,
           models: limit.models.map((model) => ({
             name: model.name,
             requestCount: model.request_count,
           })),
           activityCost: response.activity?.cost ?? null,
         },
+      });
+    }
+  }
+
+  recordOpenCodeGoUsage(accountId: string, response: OpenCodeGoUsage): void {
+    for (const [name, rateLimitType, windowDurationMins] of [
+      ["rolling", "five_hour", 300], ["weekly", "seven_day", 10_080], ["monthly", "monthly", null],
+    ] as const) {
+      const window = response.usage[name];
+      this.recordSnapshot({ accountId, rateLimitType, providerType: "opencode-go",
+        status: window.status === "rate-limited" ? "rejected" : window.percent >= 90 ? "allowed_warning" : "allowed",
+        utilization: window.percent / 100, resetsAt: window.resetsAt, isUsingOverage: false,
+        raw: { planType: "Go", windowDurationMins },
       });
     }
   }
