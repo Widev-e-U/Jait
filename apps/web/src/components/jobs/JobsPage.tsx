@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
@@ -219,21 +220,19 @@ export function JobsPage() {
           <label className="text-sm text-muted-foreground" htmlFor="jobs-page-size">
             Per page
           </label>
-          <select
-            id="jobs-page-size"
-            className="h-9 rounded-md border bg-background px-2 text-sm"
-            value={pageSize}
-            onChange={(event) => {
-              const nextSize = Number.parseInt(event.target.value, 10)
-              if (!Number.isFinite(nextSize) || nextSize <= 0) return
-              setPage(1)
-              setPageSize(nextSize)
-            }}
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
+          <Select value={String(pageSize)} onValueChange={(value) => {
+            const nextSize = Number.parseInt(value, 10)
+            if (!Number.isFinite(nextSize) || nextSize <= 0) return
+            setPage(1)
+            setPageSize(nextSize)
+          }}>
+            <SelectTrigger id="jobs-page-size" className="h-9 w-20"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:items-center">
             <Button
               variant="outline"

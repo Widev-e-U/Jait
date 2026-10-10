@@ -17,6 +17,7 @@ import {
   MoonshotIcon,
   OllamaIcon,
   OpenAIIcon,
+  OpenCodeIcon,
   OpenRouterIcon,
   PerplexityIcon,
   PiIcon,
@@ -61,6 +62,9 @@ describe('providerBrandIcon', () => {
       ['pi-gemini', GeminiIcon],
       ['pi', PiIcon],
       ['openai', OpenAIIcon],
+      ['opencode', OpenCodeIcon],
+      ['opencode-go', OpenCodeIcon],
+      ['opencode-zen', OpenCodeIcon],
     ]
     for (const [id, expected] of cases) {
       expect(providerBrandIcon(id), `expected ${id} to resolve to its brand icon`).toBe(expected)

@@ -11,6 +11,7 @@ export function OllamaUsageSetupPanel({ setup, connected, retry, loading }: {
   retry: () => Promise<void>
   loading: boolean
 }) {
+  const [session, setSession] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -41,6 +42,25 @@ export function OllamaUsageSetupPanel({ setup, connected, retry, loading }: {
     }
   }
 
+  async function saveSession(remove = false) {
+    setSaving(true)
+    setMessage(null)
+    try {
+      const token = getAuthToken()
+      if (!token) throw new Error('Sign in to Jait again to save your session.')
+      const response = await fetch(`${getApiUrl()}/api/provider-usage/ollama/session`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session: remove ? null : session.trim() }),
+      })
+      const body = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(body.error ?? 'Could not save the session.')
+      setSession('')
+      setMessage(remove ? 'Browser session removed.' : 'Browser session verified and saved.')
+      await retry()
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save the session.') }
+    finally { setSaving(false) }
+  }
+
   async function copyCommand() {
     if (!setup?.permissionCommand) return
     try {
@@ -60,6 +80,21 @@ export function OllamaUsageSetupPanel({ setup, connected, retry, loading }: {
           {' '}Local model activity does not count toward these cloud limits.
         </p>
       </div>
+      <form className="space-y-2" onSubmit={event => { event.preventDefault(); void saveSession() }}>
+        <label htmlFor="ollama-usage-session" className="font-medium">Ollama browser session</label>
+        <p className="text-xs text-muted-foreground">
+          Sign in at <a href="https://ollama.com/settings" target="_blank" rel="noopener noreferrer" className="underline">Ollama Settings</a>.
+          {' '}In your browser’s developer tools, open Application → Cookies → ollama.com and copy the <code>__Secure-session</code> value here.
+          {' '}Jait saves it privately in your settings and reads the dashboard’s five-hour and weekly percentages. Reconnect when the session expires.
+        </p>
+        <Input id="ollama-usage-session" type="password" autoComplete="off" spellCheck={false}
+          placeholder="__Secure-session value" value={session} disabled={saving}
+          onChange={event => setSession(event.target.value)} />
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" size="sm" disabled={!session.trim() || saving || loading}>Save and test session</Button>
+          <Button type="button" variant="outline" size="sm" disabled={saving || loading} onClick={() => void saveSession(true)}>Remove browser session</Button>
+        </div>
+      </form>
       <form className="space-y-2" onSubmit={(event) => { event.preventDefault(); void saveKey() }}>
         <label htmlFor="ollama-usage-key" className="font-medium">Use an Ollama Cloud API key</label>
         <p className="text-xs text-muted-foreground">

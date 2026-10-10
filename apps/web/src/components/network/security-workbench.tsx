@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useEffect, useMemo, useState } from 'react'
 import { JaitClient } from '@jait/api-client'
 import type { SecurityBaselineComparison, SecurityCheckInput, SecurityCheckRun, SecurityEngineStatus, SecurityFinding, SecurityProfile, SecurityRemediationPlan, SecurityWorkbenchHistory } from '@jait/shared'
@@ -130,9 +131,12 @@ export function SecurityWorkbench({ token, sessionId }: { token: string | null; 
         </div>
         <form className="rounded-lg border p-4 space-y-3" onSubmit={event => { event.preventDefault(); void start() }}>
           <label className="block text-sm">Check
-            <select aria-label="Security check profile" className="mt-1 block w-full rounded border bg-background p-2" value={profile} onChange={event => resetConsent(() => setProfile(event.target.value as SecurityProfile))}>
-              {PROFILES.map(profile => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
-            </select>
+            <Select value={profile} onValueChange={(value) => resetConsent(() => setProfile(value as SecurityProfile))}>
+              <SelectTrigger aria-label="Security check profile" className="h-9 min-w-0 mt-1 w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PROFILES.map(profile => <SelectItem key={profile.id} value={profile.id}>{profile.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </label>
           <p className="text-sm text-muted-foreground">{selected.description}</p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -153,12 +157,18 @@ export function SecurityWorkbench({ token, sessionId }: { token: string | null; 
             <input aria-label="Authorized project path" disabled={!sessionId} className="mt-1 block w-full rounded border bg-background p-2" value={path} onChange={event => resetConsent(() => setPath(event.target.value))} placeholder={sessionId ? 'Project-relative path' : 'Select an owned project chat first'} />
           </label>}
           {profile === 'telemetry' && <label className="block text-sm">Sensor format
-            <select aria-label="Sensor format" value={source} onChange={event => resetConsent(() => setSource(event.target.value as 'wazuh' | 'suricata'))}>
-              <option value="suricata">Suricata EVE JSONL</option><option value="wazuh">Wazuh alert JSONL</option>
-            </select>
+            <Select value={source} onValueChange={(value) => resetConsent(() => setSource(value as 'wazuh' | 'suricata'))}>
+              <SelectTrigger aria-label="Sensor format" className="h-9 min-w-0 "><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="suricata">Suricata EVE JSONL</SelectItem><SelectItem value="wazuh">Wazuh alert JSONL</SelectItem>
+              </SelectContent>
+            </Select>
           </label>}
           {profile === 'nuclei' && <label className="block text-sm">Web transport
-            <select aria-label="Web transport" value={scheme} onChange={event => resetConsent(() => setScheme(event.target.value as 'http' | 'https'))}><option value="http">HTTP</option><option value="https">HTTPS</option></select>
+            <Select value={scheme} onValueChange={(value) => resetConsent(() => setScheme(value as 'http' | 'https'))}>
+              <SelectTrigger aria-label="Web transport" className="h-9 min-w-0 "><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="http">HTTP</SelectItem><SelectItem value="https">HTTPS</SelectItem></SelectContent>
+            </Select>
           </label>}
           {profile === 'trivy' && <label className="flex gap-2 text-sm"><input type="checkbox" checked={includePackages} onChange={event => resetConsent(() => setIncludePackages(event.target.checked))} />Include package CVE correlation using a prepared local database (no downloads)</label>}
           <p className="text-xs text-muted-foreground">Gateway execution only. Scope expires in one hour; each run stops after 60 seconds. No automatic remediation. Network results do not establish WAN reachability.</p>

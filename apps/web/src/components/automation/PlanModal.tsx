@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 /**
  * PlanModal — view, edit, generate, and start task plans for a repository.
  *
@@ -327,15 +328,16 @@ export function PlanModal({
               {/* Plan selector (if multiple plans) */}
               {plans.length > 1 && (
                 <div className="flex items-center gap-2 border-b px-4 py-2">
-                  <select
-                    className="flex-1 rounded border bg-transparent px-2 py-1 text-xs"
-                    value={activePlan.id}
-                    onChange={(e) => setActivePlanId(e.target.value)}
-                  >
-                    {plans.map((p) => (
-                      <option key={p.id} value={p.id}>{p.title} ({p.tasks.length} tasks)</option>
-                    ))}
-                  </select>
+                  <Select value={activePlan.id} onValueChange={(value) => {
+                    setActivePlanId(value)
+                  }}>
+                    <SelectTrigger aria-label="Plan" className="h-9 min-w-0 flex-1 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.title} ({p.tasks.length} tasks)</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Button variant="ghost" size="sm" className="h-6 px-2 text-2xs" onClick={handleCreatePlan}>
                     <Plus className="h-3 w-3" />
                   </Button>

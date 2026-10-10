@@ -35,18 +35,29 @@ export function TeamGoalPanel({ roomId, goal }: { roomId: string; goal: NonNulla
     expandedRoomGoals.set(roomId, next)
     try { sessionStorage.setItem(roomGoalStorageKey(roomId), String(next)) } catch { /* In-memory fallback above. */ }
     setExpanded(next)
-  }} className="border-b bg-muted/40 px-5 py-3 text-sm">
-    <summary className="min-h-11 cursor-pointer content-center rounded-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Goal · {goal.status}</summary>
-    <p className="mt-2">{goal.description}</p>
-    <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">{goal.criteria.map((criterion, index) => <li key={index}>{criterion}{goal.evidence?.[index] && <span> — {goal.evidence[index]}</span>}</li>)}</ul>
+  }} className="shrink-0 border-b bg-muted/30 text-xs">
+    <summary className="min-h-11 cursor-pointer content-center px-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">Goal · {goal.status}<span className="ml-2 font-normal text-muted-foreground">{goal.criteria.length} criteria</span></summary>
+    <div data-testid="team-goal-content" className="max-h-32 overflow-y-auto overscroll-contain px-3 pb-3 sm:max-h-40">
+      <p className="whitespace-pre-wrap break-words">{goal.description}</p>
+      <ul className="mt-2 list-disc space-y-1 break-words pl-4 text-muted-foreground">{goal.criteria.map((criterion, index) => <li key={index}>{criterion}{goal.evidence?.[index] && <span> — {goal.evidence[index]}</span>}</li>)}</ul>
+    </div>
   </details>
 }
 
-export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () => void }) {
+export function TeamRoomView({ roomId, onBack, embedded = false, initialInput = '', onInputChange, onRuntimeChange }: {
+  roomId: string
+  onBack: () => void
+  embedded?: boolean
+  initialInput?: string
+  onInputChange?: (text: string) => void
+  onRuntimeChange?: (state: { roomId: string; runningIds: ReadonlySet<string> }) => void
+}) {
   const [snapshot, setSnapshot] = useState<TeamRoomSnapshot | null>(null)
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set())
+  useEffect(() => { onRuntimeChange?.({ roomId, runningIds }) }, [roomId, runningIds, onRuntimeChange])
   const [decisionMessage, setDecisionMessage] = useState<TeamRoomMessage | null>(null)
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialInput)
+  const changeInput = (text: string) => { setInput(text); onInputChange?.(text) }
   const composer = useRef<PromptInputHandle>(null)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
@@ -82,7 +93,7 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
       finally { if (active) timer = setTimeout(() => { void refresh() }, 2000) }
     }
     setSnapshot(null); setRunningIds(new Set()); setDecisionMessage(null)
-    setInput(''); setError(null); retryKey.current = null
+    setInput(initialInput); setError(null); retryKey.current = null
     void refresh()
     return () => { active = false; clearTimeout(timer) }
   }, [roomId])
@@ -100,18 +111,18 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
     setSending(true); setError(null)
     try {
       await teamChatApi.post(roomId, { content, attachments, clientKey: key })
-      retryKey.current = null; setInput('')
+      retryKey.current = null; changeInput('')
       setSnapshot(await teamChatApi.get(roomId))
-    } catch (error) { setInput(content); attachments.forEach(attachment => composer.current?.addAttachment(attachment)); setError(error instanceof Error ? error.message : 'Could not send message') }
+    } catch (error) { changeInput(content); attachments.forEach(attachment => composer.current?.addAttachment(attachment)); setError(error instanceof Error ? error.message : 'Could not send message') }
     finally { setSending(false) }
   }
   return <div className="flex min-h-0 flex-1 flex-col">
-    <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
+    {!embedded && <header className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
       <Button size="icon" variant="ghost" onClick={onBack} aria-label="Back to agents"><ArrowLeft className="h-4 w-4" /></Button>
       <TeamAvatar members={snapshot?.members ?? []} runningIds={runningIds} />
       <div className="min-w-0"><h1 className="truncate font-semibold">{snapshot?.room.name ?? 'Team conversation'}</h1>
         <p className="truncate text-xs text-muted-foreground">{snapshot?.members.map(member => member.name).join(', ')}</p></div>
-    </header>
+    </header>}
     {snapshot?.room.goal && <TeamGoalPanel key={roomId} roomId={roomId} goal={snapshot.room.goal} />}
     <div className="relative min-h-0 flex-1">
     <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain p-4" aria-label="Team conversation" role="log" aria-live="polite">
@@ -168,11 +179,11 @@ export function TeamRoomView({ roomId, onBack }: { roomId: string; onBack: () =>
         </div> : <p className="text-sm text-muted-foreground">No routing decision was recorded for this message. It may predate decision history, have explicitly addressed recipients, or be a passive team update.</p>}
       </DialogContent>
     </Dialog>
-    <div className="shrink-0 border-t p-4">
+    <div className="shrink-0 border-t p-3">
       <div className="mx-auto max-w-3xl space-y-2">
-        <PromptInput key={roomId} ref={composer} value={input} onChange={setInput} onSubmit={(_files, attachments) => { void send(attachments) }}
+        <PromptInput key={roomId} ref={composer} draftStateKey={`team-room:${roomId}`} value={input} onChange={changeInput} onSubmit={(_files, attachments) => { void send(attachments) }}
           disabled={!snapshot || sending} submitLoading={sending} placeholder="Message the team…" showSendTargetSelector={false} />
-        <p className="text-xs text-muted-foreground">The team chooses who responds based on roles and conversation context.</p>
+        {!embedded && <p className="text-xs text-muted-foreground">The team chooses who responds based on roles and conversation context.</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 /**
  * Edit a folder/project: name, description, colour, and the extra context
  * injected into every chat inside it.
@@ -261,21 +262,22 @@ export function ProjectContextDialog({
                 Repository or folder <span className="text-muted-foreground">(optional)</span>
               </Label>
               <div className="flex items-center gap-2">
-                <select
-                  id="project-source"
-                  className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
-                  value={sourceValue}
-                  onChange={(e) => handleSourceChange(e.target.value)}
-                >
-                  <option value="">No repository or folder</option>
-                  {repositories.map((repo) => (
-                    <option key={repo.id} value={repo.id}>{repo.name}</option>
-                  ))}
-                  {sourceValue === CUSTOM_OPTION && rootPath && (
-                    <option value={CUSTOM_OPTION}>{rootPath}</option>
-                  )}
-                  <option value={BROWSE_OPTION}>Browse for a folder…</option>
-                </select>
+                <Select value={String(sourceValue) || '__jait_empty_selection__'} onValueChange={(selectedValue) => {
+                  const value = selectedValue === '__jait_empty_selection__' ? '' : selectedValue
+                  handleSourceChange(value)
+                }}>
+                  <SelectTrigger id="project-source" className="h-9 min-w-0 flex-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__jait_empty_selection__">No repository or folder</SelectItem>
+                    {repositories.map((repo) => (
+                      <SelectItem key={repo.id} value={repo.id}>{repo.name}</SelectItem>
+                    ))}
+                    {sourceValue === CUSTOM_OPTION && rootPath && (
+                      <SelectItem value={CUSTOM_OPTION}>{rootPath}</SelectItem>
+                    )}
+                    <SelectItem value={BROWSE_OPTION}>Browse for a folder…</SelectItem>
+                  </SelectContent>
+                </Select>
                 {/* Same picker as the "Browse" option — a folder button is what
                     people reach for first, so it sits where they look. */}
                 <TooltipHint content="Browse for a folder">

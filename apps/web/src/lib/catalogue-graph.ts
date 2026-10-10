@@ -7,6 +7,7 @@ export interface CatalogueTool {
   category?: string
   risk?: string
   source?: string
+  sourceMetadata?: { kind: string; pluginId?: string; pluginDisplayName?: string; serverId?: string; serverName?: string }
 }
 export interface CatalogueNode {
   id: string
@@ -24,6 +25,19 @@ export interface CatalogueNode {
 export interface CatalogueLink { source: string | CatalogueNode; target: string | CatalogueNode }
 export interface CatalogueGraphData { nodes: CatalogueNode[]; links: CatalogueLink[] }
 
+function integrationFor(tool: CatalogueTool): { id: string; label: string } | undefined {
+  const metadata = tool.sourceMetadata
+  if (metadata?.kind === 'plugin' || tool.source?.startsWith('plugin:')) {
+    const id = metadata?.pluginId ?? tool.source?.slice(7) ?? 'plugin'
+    return { id: 'plugin:' + id, label: metadata?.pluginDisplayName ?? id }
+  }
+  if (metadata?.kind === 'mcp' || tool.source === 'mcp') {
+    const id = metadata?.serverId ?? tool.name.split('.')[1] ?? 'mcp'
+    return { id: 'mcp:' + id, label: metadata?.serverName ?? id }
+  }
+  if (tool.category === 'external') return { id: 'external', label: 'External tools' }
+}
+
 export function buildCatalogueGraph(tools: CatalogueTool[], pageFilter: JaitPageId | 'all' = 'all', search = ''): CatalogueGraphData {
   const query = search.trim().toLowerCase()
   const nodes = new Map<string, CatalogueNode>()
@@ -39,7 +53,7 @@ export function buildCatalogueGraph(tools: CatalogueTool[], pageFilter: JaitPage
     const pageTools = tools.filter((tool) => isJaitPageTool(tool, pageId))
     const matchingFeatures = page.features.filter((feature) => matches(feature.id + ' ' + feature.description)
       || feature.toolRefs.some((name) => matches(name)))
-    const matchingTools = pageTools.filter((tool) => matches(tool.name + ' ' + tool.description))
+    const matchingTools = pageTools.filter((tool) => matches([tool.name, tool.description, integrationFor(tool)?.label, integrationFor(tool)?.id].join(' ')))
     if (!pageMatch && !matchingFeatures.length && !matchingTools.length) continue
     const pageNodeId = 'page:' + pageId
     nodes.set(pageNodeId, { id: pageNodeId, label: page.title, description: page.description, kind: 'page', pageId })
@@ -64,7 +78,17 @@ export function buildCatalogueGraph(tools: CatalogueTool[], pageFilter: JaitPage
       for (const name of feature.toolRefs) if (pageMatch || matches(name) || matchingFeatures.includes(feature)
         || matchingTools.some((tool) => tool.name === name)) addTool(name, id)
     }
-    for (const tool of pageMatch ? pageTools : matchingTools) if (!linkedTools.has(tool.name)) addTool(tool.name, pageNodeId)
+    for (const tool of pageMatch ? pageTools : matchingTools) {
+      const integration = integrationFor(tool)
+      if (integration) {
+        const id = 'integration:' + pageId + ':' + integration.id
+        if (!nodes.has(id)) {
+          nodes.set(id, { id, label: integration.label, description: 'Registered external tools from ' + integration.label + '.', kind: 'feature', pageId })
+          addLink(pageNodeId, id)
+        }
+        addTool(tool.name, id)
+      } else if (!linkedTools.has(tool.name)) addTool(tool.name, pageNodeId)
+    }
   }
   return { nodes: [...nodes.values()], links: [...links.values()] }
 }

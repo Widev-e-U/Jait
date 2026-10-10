@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Search,
@@ -339,17 +340,16 @@ function SkillMarketplace({ token }: { token: string | null }) {
             className="pl-9"
           />
         </div>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-        >
-          <option value="tool workflow agent">Popular</option>
-          <option value="memory learning self-improving">Memory</option>
-          <option value="search web browser automation">Search</option>
-          <option value="git github code development">Development</option>
-          <option value="calendar slack obsidian productivity">Productivity</option>
-        </select>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger aria-label="Skill category" className="h-9 w-full sm:w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="tool workflow agent">Popular</SelectItem>
+            <SelectItem value="memory learning self-improving">Memory</SelectItem>
+            <SelectItem value="search web browser automation">Search</SelectItem>
+            <SelectItem value="git github code development">Development</SelectItem>
+            <SelectItem value="calendar slack obsidian productivity">Productivity</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {error && (

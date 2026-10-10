@@ -1568,8 +1568,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const addFilesAsAttachments = useCallback(async (files: FileList | File[]) => {
     const results = await Promise.all(Array.from(files).map(readFileAsAttachment))
     setAttachments((prev) => {
-      const names = new Set(prev.map((a) => a.name))
-      return [...prev, ...results.filter((r) => !names.has(r.name))]
+      const names = new Set(prev.map((attachment) => attachment.name))
+      const added = results.map((attachment) => {
+        const original = attachment.name || 'attachment'
+        const dot = original.lastIndexOf('.')
+        const stem = dot > 0 ? original.slice(0, dot) : original
+        const extension = dot > 0 ? original.slice(dot) : ''
+        let name = original
+        let suffix = 2
+        while (names.has(name)) name = `${stem} (${suffix++})${extension}`
+        names.add(name)
+        return { ...attachment, name }
+      })
+      return [...prev, ...added]
     })
     setIsEmpty(false)
   }, [readFileAsAttachment])

@@ -19,6 +19,7 @@ import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { ReviewableEditor } from './reviewable-editor'
+import { ProjectImageViewer, isProjectImage } from './project-image-viewer'
 import { cn } from '@/lib/utils'
 import { saveDetachedProjectTab, type DetachedProjectTabPayload } from '@/lib/detached-project-tab'
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
@@ -281,6 +282,15 @@ async function scanDir(dirHandle: FileSystemDirectoryHandle, prefix: string): Pr
 
 async function readFileHandle(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
+  if (isProjectImage(file.name)) {
+    if (file.size > 20 * 1024 * 1024) throw new Error('Image exceeds 20 MB preview limit')
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsDataURL(file)
+    })
+  }
   if (file.size > 2 * 1024 * 1024) return '// File too large to preview'
   return file.text()
 }
@@ -422,6 +432,7 @@ async function remoteScanDir(
 async function remoteReadFile(filePath: string, surfaceId?: string | null): Promise<string> {
   const read = async (targetSurfaceId?: string | null) => {
     let url = `${API_URL}/api/project/read?path=${encodeURIComponent(filePath)}`
+    if (isProjectImage(filePath)) url += '&format=image'
     if (targetSurfaceId) url += `&surfaceId=${encodeURIComponent(targetSurfaceId)}`
     return fetch(url)
   }
@@ -431,7 +442,7 @@ async function remoteReadFile(filePath: string, surfaceId?: string | null): Prom
   }
   if (!res.ok) throw new Error(`Failed to read file: ${res.statusText}`)
   const data = (await res.json()) as { content: string; size: number }
-  if (data.size > 2 * 1024 * 1024) return '// File too large to preview'
+  if (!isProjectImage(filePath) && data.size > 2 * 1024 * 1024) return '// File too large to preview'
   return data.content
 }
 
@@ -680,7 +691,7 @@ function collectSourceControlFilePaths(nodes: SourceControlTreeNode[]): string[]
 const gitApi = gitApiImport
 
 function isEditableProjectTab(tab: EditorTab | null): boolean {
-  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:'))
+  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:') && !isProjectImage(tab.path))
 }
 
 function getEditorTabTitle(tab: EditorTab): string {
@@ -2330,6 +2341,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [])
 
   const loadTabReviewBaseline = useCallback(async (tabId: string, filePath: string) => {
+    if (isProjectImage(filePath)) return
     const gitOriginalContent = findWorkingTreeDiffEntry(filePath)?.original ?? null
     if (!surfaceId) {
       setTabOriginalContent(tabId, gitOriginalContent)
@@ -2340,7 +2352,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [findWorkingTreeDiffEntry, setTabOriginalContent, surfaceId])
 
   useEffect(() => {
-    if (activeTab?.type !== 'file') return
+    if (activeTab?.type !== 'file' || isProjectImage(activeTab.path)) return
     const entry = findWorkingTreeDiffEntry(activeTab.path)
     if (!entry) return
     if (activeTab.originalContent === entry.original) return
@@ -5581,6 +5593,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading...
                 </div>
+              ) : activeTab?.type === 'file' && isProjectImage(activeTab.path) ? (
+                <ProjectImageViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
               ) : activeTab?.type === 'file' ? (
                 <ReviewableEditor
                   key={activeTab.id}
@@ -6373,6 +6387,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               {onToggleEditor && !panel.collapsed && !panel.maxCollapsed && (
                 <button
                   onClick={onToggleEditor}
+                  aria-label="Hide editor"
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
                 >
                   <EyeOff className="h-3 w-3" />
@@ -6443,6 +6458,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...
           </div>
+        ) : activeTab?.type === 'file' && isProjectImage(activeTab.path) ? (
+          <ProjectImageViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
         ) : activeTab?.type === 'file' ? (
           <ReviewableEditor
             key={activeTab.id}

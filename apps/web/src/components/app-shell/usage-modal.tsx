@@ -4,11 +4,11 @@
 import type { OllamaUsageSetup } from '@jait/shared'
 import { OllamaUsageSetupPanel } from './ollama-usage-setup'
 import { useCallback, useEffect, useState } from 'react'
-import { Brain, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getAuthToken } from '@/lib/auth-token'
-import { Claude, JaitIcon, Ollama, OpenAI } from '@/components/icons/model-icons'
+import { providerIcon } from '@/components/icons/provider-icons'
 
 const API_URL = getApiUrl()
 
@@ -53,15 +53,6 @@ interface UsageProfile {
 interface UsageSummary {
   generatedAt: string
   profiles: UsageProfile[]
-}
-
-const PROVIDER_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  codex: OpenAI,
-  openai: OpenAI,
-  'claude-code': Claude,
-  ollama: Ollama,
-  jait: JaitIcon,
-  pi: Brain,
 }
 
 const QUOTA_LABELS: Record<string, string> = {
@@ -163,6 +154,10 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
         )}
       </div>
 
+      {profile.error && profile.quotas.length > 0 && (
+        <p role="status" className="text-sm text-destructive">Could not refresh usage: {profile.error}</p>
+      )}
+
       {profile.quotas.length > 0 ? (
         <div className="space-y-4 rounded-lg border p-4">
           {profile.quotas.map((quota) => (
@@ -184,10 +179,15 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
         </div>
       )}
 
-      {profile.providerType === 'ollama' && (profile.error || profile.quotas.length === 0) && (
+      {profile.providerType === 'ollama' && (profile.error || profile.quotas.length === 0 || profile.quotas.every(quota => quota.rateLimitType === 'request_activity')) && (
         <OllamaUsageSetupPanel setup={profile.ollamaSetup} connected={Boolean(profile.accountLabel)} retry={retry} loading={loading} />
       )}
-      {profile.providerType === 'ollama' && !profile.error && profile.quotas.length > 0 && (
+      {profile.providerType === 'ollama' && !profile.error && profile.quotas.some(quota => quota.rateLimitType !== 'request_activity') && (
+        <details><summary className="cursor-pointer text-xs text-muted-foreground">Manage Ollama usage connection</summary>
+          <OllamaUsageSetupPanel setup={profile.ollamaSetup} connected={Boolean(profile.accountLabel)} retry={retry} loading={loading} />
+        </details>
+      )}
+      {profile.providerType === 'ollama' && !profile.error && profile.quotas.some(quota => quota.rateLimitType !== 'request_activity') && (
         <p role="status" className="text-xs text-emerald-600 dark:text-emerald-400">Connected — cloud usage is up to date.</p>
       )}
 
@@ -417,7 +417,7 @@ export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange
             )}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {profiles.map((profile) => {
-                const Icon = PROVIDER_ICONS[profile.providerType] ?? Brain
+                const Icon = providerIcon(profile.providerType)
                 const active = profile.id === selectedId
                 const bestPercent = Math.max(
                   -1,
@@ -434,7 +434,7 @@ export function UsageModal({ open, onOpenChange }: { open: boolean; onOpenChange
                       active ? 'border-primary bg-primary/5' : 'hover:bg-muted/50'
                     }`}
                   >
-                    <Icon size={17} className="shrink-0" />
+                    <span aria-hidden="true"><Icon size={17} className="shrink-0" /></span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{profile.providerLabel}</span>
                       <span className="block truncate text-xs text-muted-foreground">{profile.profileLabel}</span>

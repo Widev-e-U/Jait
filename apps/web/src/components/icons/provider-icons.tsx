@@ -14,6 +14,7 @@ import Mistral from '@lobehub/icons/es/Mistral'
 import Moonshot from '@lobehub/icons/es/Moonshot'
 import Ollama from '@lobehub/icons/es/Ollama'
 import OpenAI from '@lobehub/icons/es/OpenAI'
+import OpenCode from '@lobehub/icons/es/OpenCode'
 import OpenRouter from '@lobehub/icons/es/OpenRouter'
 import Perplexity from '@lobehub/icons/es/Perplexity'
 import Qwen from '@lobehub/icons/es/Qwen'
@@ -30,11 +31,11 @@ import Zhipu from '@lobehub/icons/es/Zhipu'
  * network icon for a provider that has a real logo.
  */
 
-export type ProviderIconComponent = ComponentType<{ className?: string }>
+export type ProviderIconComponent = ComponentType<{ size?: number; className?: string }>
 
 /** Wrap a `@lobehub/icons` component so it renders at the selector's 16px size. */
 const brand = (Icon: ComponentType<{ size?: number | string; className?: string }>): ProviderIconComponent => {
-  const Wrapped = ({ className }: { className?: string }) => <Icon size={16} className={className} />
+  const Wrapped = ({ size = 16, className }: { size?: number; className?: string }) => <Icon size={size} className={className} />
   Wrapped.displayName = (Icon as { displayName?: string }).displayName ?? 'ProviderBrandIcon'
   return Wrapped
 }
@@ -43,16 +44,16 @@ const brand = (Icon: ComponentType<{ size?: number | string; className?: string 
 // Custom glyphs for providers without an icon in `@lobehub/icons`.
 // ---------------------------------------------------------------------------
 
-export const JaitIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
+export const JaitIcon = ({ size = 16, className }: { size?: number; className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 1024 1024" className={className}>
     <path d="M318 372 L430 486 L318 600" fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715" fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 )
 
 // Pi (pi.dev) — official pixel-art "pi" wordmark, sourced from pi.dev/logo.svg
-export const PiIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 800 800" fill="none" className={className}>
+export const PiIcon = ({ size = 16, className }: { size?: number; className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 800 800" fill="none" className={className}>
     <rect width="800" height="800" rx="150" fill="#09090b" />
     <path
       fill="#fff"
@@ -65,8 +66,8 @@ export const PiIcon = ({ className }: { className?: string }) => (
 
 // DeepAgents (multi-agent framework) has no dedicated brand icon — use a
 // stack-of-agents glyph so it is distinct from the generic network fallback.
-export const DeepAgentsIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" className={className}>
+export const DeepAgentsIcon = ({ size = 16, className }: { size?: number; className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" className={className}>
     <rect x="4" y="3" width="16" height="10" rx="2.5" fill="none" stroke="currentColor" strokeWidth="2" />
     <path d="M8 6h8M8 9h5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     <path d="M5 17h6a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v0a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -79,6 +80,7 @@ export const DeepAgentsIcon = ({ className }: { className?: string }) => (
 // ---------------------------------------------------------------------------
 
 export const OpenAIIcon = brand(OpenAI)
+export const OpenCodeIcon = brand(OpenCode)
 export const ClaudeIcon = brand(Claude)
 export const ClaudeCodeIcon = brand(ClaudeCode)
 export const CodexIcon = brand(Codex)
@@ -124,6 +126,7 @@ export function providerBrandAccentClass(idOrType: string | undefined | null): s
  */
 const MATCHERS: Array<{ test: RegExp; icon: ProviderIconComponent }> = [
   { test: /(^|[-_/])jait([-_/]|$)|^jait$/, icon: JaitIcon },
+  { test: /opencode|open[-_]?code/, icon: OpenCodeIcon },
   { test: /copilot/, icon: GithubCopilotIcon },
   { test: /claude[-_]?code|claudecode/, icon: ClaudeCodeIcon },
   { test: /anthropic/, icon: AnthropicIcon },

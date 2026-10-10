@@ -78,7 +78,7 @@ export function KeyboardShortcutSettings({ search = '' }: KeyboardShortcutSettin
               const isCustom = id in overrides
               const partners = conflictPartners(command)
               return (
-                <li key={id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
+                <li key={id} className="flex flex-col items-stretch justify-between gap-3 px-3 py-2.5 sm:flex-row sm:items-center">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm">{command.label}</span>
@@ -100,7 +100,7 @@ export function KeyboardShortcutSettings({ search = '' }: KeyboardShortcutSettin
                     <p className="text-xs text-muted-foreground">{command.description}</p>
                   </div>
 
-                  <div className="flex items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1">
                     <ShortcutRecorder
                       value={chord}
                       ariaLabel={`Change shortcut for ${command.label}`}

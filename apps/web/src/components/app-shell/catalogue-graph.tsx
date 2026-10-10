@@ -4,6 +4,7 @@ import { JAIT_PAGES, JAIT_PAGE_IDS, type JaitPageId } from '@jait/shared'
 import { ExternalLink, Loader2, RefreshCw, Search, Scan, ZoomIn, ZoomOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getAuthToken } from '@/lib/auth-token'
 import { openNotification } from '@/lib/notification-navigation'
@@ -126,20 +127,25 @@ export default function CatalogueGraph({ onOpenPage }: { onOpenPage: () => void 
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input className="pl-8" placeholder="Find a page, feature, or tool…" aria-label="Search catalogue" value={query} onChange={(event) => setQuery(event.target.value)} />
       </div>
-      <select aria-label="Catalogue page" className="h-9 max-w-40 rounded-md border bg-background px-2 text-sm" value={pageFilter} onChange={(event) => {
-        const id = event.target.value as JaitPageId | 'all'
+      <Select value={pageFilter} onValueChange={(value) => {
+        const id = value as JaitPageId | 'all'
         setPageFilter(id); setSelectedId(id === 'all' ? 'jait' : 'page:' + id)
       }}>
-        <option value="all">All pages</option>
-        {JAIT_PAGE_IDS.map((id) => <option key={id} value={id}>{JAIT_PAGES[id].title}</option>)}
-      </select>
+        <SelectTrigger aria-label="Catalogue page" className="h-9 w-40 shrink-0">
+          <SelectValue placeholder="All pages" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All pages</SelectItem>
+          {JAIT_PAGE_IDS.map((id) => <SelectItem key={id} value={id}>{JAIT_PAGES[id].title}</SelectItem>)}
+        </SelectContent>
+      </Select>
       <Button variant="outline" size="icon" aria-label="Refresh catalogue" disabled={loading} onClick={() => setRefresh((value) => value + 1)}>
         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
       </Button>
     </div>
     {error && <div role="alert" className="shrink-0 text-sm text-destructive">{error} <button className="underline" onClick={() => setRefresh((value) => value + 1)}>Retry</button></div>}
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:flex-row md:overflow-hidden">
-      <div ref={containerRef} className="relative min-h-[220px] min-w-0 flex-1 overflow-hidden rounded-lg border bg-muted/15 text-foreground" data-testid="catalogue-graph" aria-label="Interactive catalogue graph">
+      <div ref={containerRef} className="relative min-h-[220px] min-w-0 flex-1 md:min-h-0 overflow-hidden rounded-lg border bg-muted/15 text-foreground" data-testid="catalogue-graph" aria-label="Interactive catalogue graph">
         {tools && size.width > 0 && size.height > 0 ? <ForceGraph2D
           key={pageFilter}
           ref={graphRef} width={size.width} height={size.height}

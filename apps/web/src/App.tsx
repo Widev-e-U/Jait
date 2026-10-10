@@ -414,6 +414,10 @@ function App() {
     }
     setShowProjectEditor(true)
   }, [isMobile])
+  const handleActiveProjectFileChange = useCallback((fileId: string | null) => {
+    setActiveProjectFileId(fileId)
+    if (fileId) showProjectEditorPanel()
+  }, [showProjectEditorPanel])
   const openArchitectureInProject = useCallback((projectRoot?: string | null) => {
     const targetProjectRoot = projectRoot?.trim() || activeProject?.projectRoot || null
     if (!targetProjectRoot) return
@@ -1166,6 +1170,7 @@ function App() {
   const [projectUI, setProjectUI, loadingProjectUI] = useBackendState<ProjectUIState>('projects',
     activeProjectId, 'project.ui', token
   )
+  const projectUiRestoreKeyRef = useRef<string | null>(null)
   const projectUIRef = useRef<ProjectUIState | null>(null)
   projectUIRef.current = projectUI
 
@@ -1177,10 +1182,11 @@ function App() {
   ) => {
     const prev = projectUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null, }
     if (areProjectUiValuesEqual(prev[key], value)) return
-    if (key === 'panel' || key === 'layout') {
-          }
     const next = { ...prev, [key]: value }
     projectUIRef.current = next
+    // Local UI saves already describe the rendered state. Hydrating them again
+    // can replay an older panel/layout slice while the other slice is saving.
+    if (activeProjectId) projectUiRestoreKeyRef.current = getProjectUiRestoreKey(activeProjectId, next)
     setProjectUI(next, options)
   }, [activeProjectId, setProjectUI],)
 
@@ -1278,7 +1284,6 @@ function App() {
     setProjectStateReadyId(ready ? activeProjectId : null)
   }, [activeProjectId],)
   const [managerRepoStateReady, setManagerRepoStateReady] = useState(false)
-  const projectUiRestoreKeyRef = useRef<string | null>(null)
   const projectSurfaceFallbackKeyRef = useRef<string | null>(null)
 
   const normalizedSavedManagerSelectedRepo = useMemo(
@@ -5484,10 +5489,7 @@ function App() {
                     terminalShells={terminalShells}
                     terminalViewRef={terminalViewRef}
                     token={token}
-                    onActiveProjectFileChange={(fileId) => {
-                      setActiveProjectFileId(fileId)
-                      if (fileId) showProjectEditorPanel()
-                    }}
+                    onActiveProjectFileChange={handleActiveProjectFileChange}
                     onApplyDiff={handleApplyProjectDiff}
                     onArchitectureOpenChange={setShowArchitecture}
                     onArchitectureRenderResult={handleArchitectureRenderResult}
