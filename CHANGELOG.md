@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.923](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.923) — 2026-10-10
+
+- test(e2e): cover editor panel, terminal cards, and subscription usage — 3752e8d6
+- feat(gateway): serve project images, project-local artifacts, and subscription usage — 22aec2dd
+- feat(web): add editor image viewer and fix panel restore — f1866646
+
+Serve project images and project-local artifacts from the gateway, and surface subscription usage alongside provider quotas, including reset windows and Ollama usage. Add an editor image viewer and restore panel state after reloads. Default browser screenshots into the project's `.jait/shots` directory, and expand end-to-end coverage for the editor panel, terminal cards, team avatars, and subscription usage screens.
+
 ## [v0.1.922](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.922) — 2026-10-10
 
 - fix(ci): preserve build failures and validate browser tools — 69e4c2ae
