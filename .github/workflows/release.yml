@@ -266,8 +266,9 @@ jobs:
                 flock /tmp/jait-vite-build.lock env NODE_OPTIONS=--max-old-space-size=4096 bunx vite build --base ./ --sourcemap false
               ); then
                 return 0
+              else
+                status=$?
               fi
-              status=$?
               if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
                 echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
                 sleep 120
@@ -611,8 +612,9 @@ jobs:
           for attempt in 1 2 3; do
             if flock /tmp/jait-vite-build.lock bun run build; then
               exit 0
+            else
+              status=$?
             fi
-            status=$?
             if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
               echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
               sleep 120
@@ -724,8 +726,9 @@ jobs:
           for attempt in 1 2 3; do
             if flock /tmp/jait-vite-build.lock bun run build; then
               exit 0
+            else
+              status=$?
             fi
-            status=$?
             if [ "$status" -eq 137 ] || [ "$status" -eq 134 ]; then
               echo "⏳ attempt $attempt/3 — build killed (exit $status, OOM); waiting 2 min for host memory to clear"
               sleep 120
