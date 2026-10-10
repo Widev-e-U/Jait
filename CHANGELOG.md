@@ -4,6 +4,17 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.922](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.922) — 2026-10-10
+
+- fix(ci): preserve build failures and validate browser tools — 69e4c2ae
+- fix(browser): display the attached page and package its runtime bridge — 57cabbd7
+- fix(gateway): validate tool contracts and preserve delegated execution — 467a87a6
+- fix(web): preserve streamed chat state and expose working teammates — 3d8dc0bb
+- fix(web): stream commands into persistent terminals without polling — 4d504169
+- feat(web): ship team chat avatars and collapsible goals — b0979453
+
+Stream commands and execution output into one persistent terminal without polling. Restore team avatars, working indicators, collapsible goals, mobile composer behavior, and streamed chat completion. Display attached browser pages, retain takeover input after reload, and include the browser bridge in published packages. Expand built-in tool and real browser validation, preserve delegated execution context, reject installer option injection, and propagate failed CI builds correctly.
+
 ## [v0.1.921](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.921) — 2026-10-09
 
 - fix(chat): display live agent browsers with takeover controls — 448bb0c3
