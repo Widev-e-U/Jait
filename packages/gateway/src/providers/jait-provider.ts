@@ -214,6 +214,10 @@ export class JaitProvider implements CliProviderAdapter {
     return session;
   }
 
+  hasSession(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
+  }
+
   async sendTurn(sessionId: string, message: string): Promise<void> {
     const state = this.sessions.get(sessionId);
     if (!state) {

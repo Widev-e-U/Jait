@@ -1832,6 +1832,19 @@ export function registerThreadRoutes(
     const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
+    // Native sessions live only in memory. A persisted completed thread can
+    // outlive its runtime after a gateway restart; /start restores its saved
+    // history in the same workspace instead of sending to a dead session ID.
+    if (thread.providerId === "jait" && "hasSession" in provider && provider.hasSession?.(thread.providerSessionId) === false) {
+      threadService.update(id, { providerSessionId: null });
+      const response = await app.inject({
+        method: "POST", url: `/api/threads/${id}/start`,
+        headers: { authorization: request.headers.authorization! },
+        payload: { ...body, titleTask: "" },
+      });
+      return reply.status(response.statusCode).send(response.statusCode < 400 ? { ok: true } : response.json());
+    }
+
     // Persist user message BEFORE sendTurn so it survives provider errors
     const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
       role: "user",
@@ -1868,7 +1881,22 @@ export function registerThreadRoutes(
       }
     }
 
-    await provider.sendTurn(thread.providerSessionId, fullMessage, attachments);
+    try {
+      await provider.sendTurn(thread.providerSessionId, fullMessage, attachments);
+    } catch (error) {
+      // A pre-dispatch rejection emits no provider event. Reconcile the state
+      // here, but do not overwrite a completion, interruption or newer session.
+      const current = threadService.getById(id);
+      if (current?.providerSessionId === thread.providerSessionId && current.status === "running") {
+        const message = error instanceof Error ? error.message : String(error);
+        threadService.markError(id, message);
+        const activity = threadService.addActivity(id, "error", message);
+        broadcastThreadEvent(id, "activity", { activity });
+        unregisterThreadResume(id);
+        broadcastThreadStatus(id, "error", message);
+      }
+      throw error;
+    }
     return reply.status(200).send({ ok: true });
   });
 

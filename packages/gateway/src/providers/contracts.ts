@@ -132,6 +132,9 @@ export interface CliProviderAdapter {
    */
   sendTurn(sessionId: string, message: string, attachments?: string[]): Promise<void>;
 
+  /** Whether an in-process session still exists. Omit for providers that can resume on demand. */
+  hasSession?(sessionId: string): boolean;
+
   /**
    * Interrupt the current turn in a session.
    */
