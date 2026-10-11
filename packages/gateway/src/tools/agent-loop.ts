@@ -519,20 +519,59 @@ export class ToolCallQueue {
 
 // ── Tool name conversion ─────────────────────────────────────────────
 
-/** OpenAI requires function names to match ^[a-zA-Z0-9_-]+$ — no dots */
+/**
+ * OpenAI requires function names to match ^[a-zA-Z0-9_-]+$ — no dots.
+ *
+ * The transform is lossy (`a.b_c` and `a_b.c` both collapse to `a_b_c`), so the
+ * inverse cannot be guessed from the character sequence. It is derived from the
+ * names actually advertised instead: every schema builder registers its exact
+ * mapping below. Without that, a discovered multi-segment tool such as
+ * `agent.github.token` inverted to the non-existent `agent.github_token` and
+ * execution failed with "Unknown tool".
+ */
 export function toOpenAIName(name: string): string {
   return name.replace(/\./g, "_");
 }
 
+/** Names that no inverse heuristic can reconstruct and that are not always advertised. */
+const EXPLICIT_OPENAI_ALIASES: Record<string, string> = {
+  browser_sandbox_start: "browser.sandbox.start",
+  windows_sandbox_start: "windows.sandbox.start",
+  windows_sandbox_stop: "windows.sandbox.stop",
+  linux_desktop_sandbox_start: "linux.desktop.sandbox.start",
+  linux_desktop_sandbox_stop: "linux.desktop.sandbox.stop",
+  ssh_session_start: "ssh.session.start",
+  ssh_session_run: "ssh.session.run",
+  ssh_session_close: "ssh.session.close",
+};
+
+/** OpenAI-safe name → exact internal name, for every name that has been advertised. */
+const openAINameToInternalName = new Map<string, string>();
+
+/**
+ * Record the exact inverse of {@link toOpenAIName} for names about to be
+ * advertised. Idempotent; call it from any path that can put a schema in front
+ * of a model, including dynamic `tools.search` injection.
+ *
+ * Two internal names can produce the same OpenAI-safe name. Collisions resolve
+ * to a single deterministic winner so an ambiguous pair cannot poison the
+ * mapping for unrelated tools; a genuine collision is a registry defect and is
+ * asserted against in the registry tests.
+ */
+export function registerOpenAINameMappings(names: Iterable<string>): void {
+  for (const name of names) {
+    const openAIName = toOpenAIName(name);
+    const existing = openAINameToInternalName.get(openAIName);
+    if (existing === undefined || name < existing) openAINameToInternalName.set(openAIName, name);
+  }
+}
+
+/** Reverse of {@link toOpenAIName}, preferring the advertised-name mapping over guessing. */
 export function fromOpenAIName(name: string): string {
-  if (name === "browser_sandbox_start") return "browser.sandbox.start";
-  if (name === "windows_sandbox_start") return "windows.sandbox.start";
-  if (name === "windows_sandbox_stop") return "windows.sandbox.stop";
-  if (name === "linux_desktop_sandbox_start") return "linux.desktop.sandbox.start";
-  if (name === "linux_desktop_sandbox_stop") return "linux.desktop.sandbox.stop";
-  if (name === "ssh_session_start") return "ssh.session.start";
-  if (name === "ssh_session_run") return "ssh.session.run";
-  if (name === "ssh_session_close") return "ssh.session.close";
+  const registered = openAINameToInternalName.get(name);
+  if (registered) return registered;
+  const alias = EXPLICIT_OPENAI_ALIASES[name];
+  if (alias) return alias;
   const idx = name.indexOf("_");
   if (idx === -1) return name;
   return name.slice(0, idx) + "." + name.slice(idx + 1);
@@ -1206,6 +1245,7 @@ export function buildToolSchemas(
   if (allowedTools) {
     tools = tools.filter((t) => allowedTools.has(t.name));
   }
+  registerOpenAINameMappings(tools.map((t) => t.name));
   return tools.map((t) => ({
     type: "function" as const,
     function: {
@@ -1252,6 +1292,7 @@ export function buildTieredToolSchemas(
     for (const tool of registry.selectForLLM(options.query, disabledTools, selectionLimit)) includeTool(tool);
   }
 
+  registerOpenAINameMappings(tools.map((t) => t.name));
   return tools.map((t) => ({
     type: "function" as const,
     function: {
@@ -1283,6 +1324,7 @@ export async function buildSystemOneToolSchemas(
  * Used to dynamically inject schemas discovered via tools.search.
  */
 export function toolDefsToSchemas(defs: Array<{ name: string; description: string; parameters: unknown }>): OpenAIToolSchema[] {
+  registerOpenAINameMappings(defs.map((d) => d.name));
   return defs.map((t) => ({
     type: "function" as const,
     function: {

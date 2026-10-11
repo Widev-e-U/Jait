@@ -8,6 +8,7 @@ import {
   serializeMessages,
   serializeMessagesForOllama,
   buildTieredToolSchemas,
+  toolDefsToSchemas,
   fromOpenAIName,
   runAgentLoop,
   serializeToolResultForModel,
@@ -272,6 +273,75 @@ describe("OpenAI tool name conversion", () => {
     expect(fromOpenAIName("linux_desktop_sandbox_stop")).toBe("linux.desktop.sandbox.stop");
     expect(fromOpenAIName("project_create")).toBe("project.create");
     expect(fromOpenAIName("project_assign_repository")).toBe("project.assign_repository");
+  });
+
+  it("round-trips advertised two-plus-dot tool names without an allowlist entry", () => {
+    const registry = new ToolRegistry();
+    const register = (name: string) => registry.register({
+      name,
+      description: `${name} description`,
+      tier: "standard",
+      category: "external",
+      source: "builtin",
+      parameters: { type: "object", properties: {}, required: [] },
+      execute: async () => ({ ok: true, message: "ok" }),
+    });
+    register("agent.github.token");
+    register("security.assessments.list");
+    register("os.sandbox.list");
+    register("mobile.alarm.schedule");
+
+    // Discovery path: tools.search activates non-core tools, which the builder
+    // then advertises — this is how `agent.github.token` reaches a model.
+    const advertised = buildTieredToolSchemas(registry, undefined, {
+      activatedToolNames: ["agent.github.token", "security.assessments.list", "os.sandbox.list", "mobile.alarm.schedule"],
+    }).map((schema) => schema.function.name);
+    expect(advertised).toContain("agent_github_token");
+
+    const resolved = advertised.map((name) => fromOpenAIName(name));
+    expect(resolved).toEqual(expect.arrayContaining([
+      "agent.github.token",
+      "security.assessments.list",
+      "os.sandbox.list",
+      "mobile.alarm.schedule",
+    ]));
+    for (const [index, name] of resolved.entries()) {
+      expect(registry.isExecutable(name), `${advertised[index]} → ${name} must be executable`).toBe(true);
+    }
+  });
+
+  it("round-trips dynamically injected tool schemas", () => {
+    const advertised = toolDefsToSchemas([
+      { name: "security.findings.list", description: "list findings", parameters: { type: "object", properties: {} } },
+    ]).map((schema) => schema.function.name);
+
+    expect(advertised).toEqual(["security_findings_list"]);
+    expect(fromOpenAIName(advertised[0]!)).toBe("security.findings.list");
+  });
+
+  it("does not let an ambiguous name poison unambiguous ones", () => {
+    const registry = new ToolRegistry();
+    const register = (name: string) => registry.register({
+      name,
+      description: `${name} description`,
+      tier: "standard",
+      category: "external",
+      source: "builtin",
+      parameters: { type: "object", properties: {}, required: [] },
+      execute: async () => ({ ok: true, message: "ok" }),
+    });
+    // Both collapse to the same OpenAI-safe name; the mapping must stay unambiguous for everyone else.
+    register("a.b_c");
+    register("a_b.c");
+    register("preview.open");
+
+    const advertised = buildTieredToolSchemas(registry, undefined, {
+      activatedToolNames: ["a.b_c", "a_b.c", "preview.open"],
+    }).map((schema) => schema.function.name);
+    expect(advertised).toContain("a_b_c");
+
+    expect(fromOpenAIName("preview_open")).toBe("preview.open");
+    expect(["a.b_c", "a_b.c"]).toContain(fromOpenAIName("a_b_c"));
   });
 });
 
