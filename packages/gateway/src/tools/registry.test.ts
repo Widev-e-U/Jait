@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
-import { createToolRegistry } from "./index.js";
+import { createToolRegistry, type ToolRegistryDeps } from "./index.js";
 import { ToolRegistry } from "./registry.js";
 
 function context() {
@@ -242,6 +242,29 @@ describe("ToolRegistry discovery ranking", () => {
       "preview.open",
       "plugin.deploy",
     ]);
+  });
+});
+
+describe("registry rebuild keeps the executing dependency set", () => {
+  // The gateway builds the registry twice (early for the provider, late once the
+  // scheduler exists) and reassigns the variable; the late build is the one that
+  // executes tools. When the late build used a fresh literal, stage-1 dependencies
+  // were dropped, so tools gated on them were advertised but unexecutable
+  // (`Unknown tool: agent.github`, and agent terminals lost their App identity).
+  // A single shared deps object makes that drift structurally impossible.
+  it("keeps a gated stage-1 tool registered after the late rebuild merges more deps", () => {
+    const deps: ToolRegistryDeps = { agentGithubAppService: {} as any };
+    const early = createToolRegistry(new SurfaceRegistry(), deps);
+    expect(early.listNames()).toContain("agent.github");
+
+    Object.assign(deps, { startedAt: Date.now() } satisfies Partial<ToolRegistryDeps>);
+    const late = createToolRegistry(new SurfaceRegistry(), deps);
+
+    expect(late.listNames()).toContain("agent.github");
+    // The old wiring (a late literal omitting the service) is what produced the
+    // unknown-tool failure for an advertised tool.
+    const drifted = createToolRegistry(new SurfaceRegistry(), { startedAt: Date.now() });
+    expect(drifted.listNames()).not.toContain("agent.github");
   });
 });
 

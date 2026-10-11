@@ -128,6 +128,19 @@ export interface JaitProviderDeps {
   threadService: ThreadService;
   userService?: UserService;
   toolRegistry?: ToolRegistry;
+  /**
+   * Late-bound resolver for the *executing* tool registry.
+   *
+   * The gateway builds the registry twice (early, for the provider + HTTP routes,
+   * then late once the scheduler and the remaining services exist) and reassigns
+   * its `toolRegistry` variable. Advertising schemas from the early instance while
+   * executing against the late one offers the model tools that cannot run
+   * (`Unknown tool: agent.github`) and hides every tool registered after the late
+   * build (`channel.send`, `skills.manage`, ...). When provided, this resolver is
+   * the single source for advertised schemas, the agent-loop registry, and
+   * fallback execution.
+   */
+  getToolRegistry?: () => ToolRegistry | undefined;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -242,16 +255,17 @@ export class JaitProvider implements CliProviderAdapter {
       };
 
       try {
+        const registry = this.resolveToolRegistry();
         const userSettings = state.userId ? this.deps.userService?.getSettings(state.userId) : undefined;
         const disabledTools = userSettings?.disabledTools?.length
           ? new Set(userSettings.disabledTools)
           : undefined;
-        if (this.deps.toolRegistry) {
-          const selected = (await this.deps.toolRegistry.rankSearchWithSystemOne(message, { disabledTools, limit: 10, candidates: this.deps.toolRegistry.list().filter(tool => (tool.tier ?? "standard") !== "core") }, userSettings?.apiKeys)).map(match => match.tool);
+        if (registry) {
+          const selected = (await registry.rankSearchWithSystemOne(message, { disabledTools, limit: 10, candidates: registry.list().filter(tool => (tool.tier ?? "standard") !== "core") }, userSettings?.apiKeys)).map(match => match.tool);
           rememberActivatedToolNames(state.activatedToolNames, selected.map((tool) => tool.name));
         }
-        const toolSchemas = this.deps.toolRegistry
-          ? await buildSystemOneToolSchemas(this.deps.toolRegistry, disabledTools, {
+        const toolSchemas = registry
+          ? await buildSystemOneToolSchemas(registry, disabledTools, {
               activatedToolNames: state.activatedToolNames,
             }, userSettings?.apiKeys)
           : [];
@@ -276,7 +290,7 @@ export class JaitProvider implements CliProviderAdapter {
             maxRounds: this.resolveMaxRounds(userSettings?.apiKeys),
             continuous: true,
             parallel: true,
-            toolRegistry: this.deps.toolRegistry,
+            toolRegistry: registry,
             disabledTools,
             mode: "agent",
             onEvent: (event) => {
@@ -437,6 +451,15 @@ export class JaitProvider implements CliProviderAdapter {
     return this.deps.config.agentMaxRounds;
   }
 
+  /**
+   * The registry used for both schema advertising and execution. Prefers the
+   * late-bound accessor so the advertised set can never diverge from the registry
+   * that actually executes tools (see `JaitProviderDeps.getToolRegistry`).
+   */
+  private resolveToolRegistry(): ToolRegistry | undefined {
+    return this.deps.getToolRegistry?.() ?? this.deps.toolRegistry;
+  }
+
   private async executeTool(
     toolName: string,
     input: unknown,
@@ -446,7 +469,8 @@ export class JaitProvider implements CliProviderAdapter {
     signal: AbortSignal | undefined,
     projectRoot: string,
   ): Promise<ToolResult> {
-    if (!this.deps.toolRegistry) {
+    const registry = this.resolveToolRegistry();
+    if (!registry) {
       return { ok: false, message: "Tool registry not available" };
     }
     const state = this.sessions.get(sessionId);
@@ -496,7 +520,7 @@ export class JaitProvider implements CliProviderAdapter {
     try {
       const result = this.deps.toolExecutor
         ? await this.deps.toolExecutor(toolName, toolInput, context)
-        : await this.deps.toolRegistry.execute(toolName, toolInput, context);
+        : await registry.execute(toolName, toolInput, context);
       return recordResult(result);
     } catch (error) {
       return recordResult({ ok: false, message: error instanceof Error ? error.message : String(error) });

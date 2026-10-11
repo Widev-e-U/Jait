@@ -270,6 +270,95 @@ describe("native thread execution regressions", () => {
 });
 
 
+describe("late-bound tool registry (advertised set must match the executing registry)", () => {
+  // The gateway constructs the registry twice and reassigns its variable: the
+  // provider is built from the early instance while execution reads the late one.
+  // Advertising schemas from the early registry offered the model tools that could
+  // not run (`Unknown tool: agent.github`). The provider must read both from one
+  // late-bound accessor.
+  function registryStub(message: string, names: string[] = []) {
+    return {
+      execute: vi.fn(async () => ({ ok: true, message })),
+      list: vi.fn(() => names.map(name => ({ name }))),
+      listNames: vi.fn(() => names),
+    } as any;
+  }
+
+  it("executes on the late registry, not the one captured at construction", async () => {
+    const early = registryStub("early");
+    const late = registryStub("late");
+    const provider = new JaitProvider({
+      config: {} as any,
+      threadService: {} as any,
+      toolRegistry: early,
+      getToolRegistry: () => late,
+    });
+
+    const result = await (provider as any).executeTool(
+      "agent.github", { action: "status" }, "session-1", undefined, undefined, undefined, "/tmp",
+    );
+
+    expect(late.execute).toHaveBeenCalledTimes(1);
+    expect(early.execute).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, message: "late" });
+  });
+
+  it("advertises the late registry, so its tool set matches what executes", async () => {
+    runAgentLoopMock.mockResolvedValueOnce({ content: "ok", executedToolCalls: [] });
+    const early = new ToolRegistry();
+    const late = new ToolRegistry();
+    // Core tier keeps the tool in the initial payload, mirroring the real drift:
+    // tools registered on the late registry (agent.github, channel.send,
+    // skills.manage) were advertised from the early one but executed on the late.
+    early.register({ name: "early.only", description: "early build", tier: "core", parameters: { type: "object" } } as any);
+    late.register({ name: "late.only", description: "late build", tier: "core", parameters: { type: "object" } } as any);
+
+    const provider = new JaitProvider({
+      config: {
+        openaiApiKey: "test",
+        openaiBaseUrl: "http://localhost:11434/v1",
+        openaiModel: "test",
+        ollamaUrl: "http://localhost:11434",
+        ollamaModel: "test",
+        ollamaContextWindow: 0,
+        agentMaxRounds: 0,
+      } as any,
+      threadService: { getById: () => ({ userId: "user-1" }) } as any,
+      userService: { getSettings: () => ({ apiKeys: {}, jaitBackend: "ollama" }) } as any,
+      toolRegistry: early,
+      getToolRegistry: () => late,
+    });
+
+    const session = await provider.startSession({ threadId: "thread-1", workingDirectory: "/repo-worktree", mode: "full-access" });
+    await provider.sendTurn(session.id, "status");
+
+    const advertised = runAgentLoopMock.mock.calls[0]?.[0].toolSchemas as Array<{ function: { name: string } }>;
+    const names = advertised.map(schema => schema.function.name);
+    expect(names).toContain("late_only");
+    expect(names).not.toContain("early_only");
+  });
+
+  it("falls back to the constructor registry when no accessor is supplied", async () => {
+    const early = registryStub("early");
+    const provider = new JaitProvider({ config: {} as any, threadService: {} as any, toolRegistry: early });
+
+    const result = await (provider as any).executeTool(
+      "agent.github", { action: "status" }, "session-1", undefined, undefined, undefined, "/tmp",
+    );
+
+    expect(early.execute).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: true, message: "early" });
+  });
+
+  it("reports unavailable only when neither registry exists", async () => {
+    const provider = new JaitProvider({ config: {} as any, threadService: {} as any });
+    const result = await (provider as any).executeTool(
+      "agent.github", { action: "status" }, "session-1", undefined, undefined, undefined, "/tmp",
+    );
+    expect(result).toEqual({ ok: false, message: "Tool registry not available" });
+  });
+});
+
 describe("thread host file paths", () => {
   it("maps relative and sandbox paths into the active thread worktree", () => {
     expect(prepareThreadFileInput("file.read", { path: "src/parser.ts", limit: 20 }, "/tmp/delivery"))
