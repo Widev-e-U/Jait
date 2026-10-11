@@ -202,7 +202,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
-  const access = new ControlAccess(deps.sessionService, deps.surfaceRegistry, deps.consentManager);
+  const access = new ControlAccess(deps.sessionService, deps.surfaceRegistry, deps.consentManager, deps.threadService);
   app.addHook("onRequest", async (request, reply) => {
     const path = request.url.split("?")[0] ?? "";
     if (path.startsWith("/preview/")) return; // Dedicated handlers verify a resource-scoped grant.
@@ -365,6 +365,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       deviceRegistry: deps.deviceRegistry,
       consentManager: deps.consentManager,
       sessionService: deps.sessionService,
+      threadService: deps.threadService,
       config,
       mobilePush: deps.mobilePush,
       scheduler: deps.scheduler,

@@ -27,6 +27,8 @@ function perm(
 
 const MINIMAL: ToolPermission[] = [
   perm("jait.catalog", "none", "low", "Inspect Jait pages and available capabilities."),
+  perm("tools.search", "none", "low", "Search available tool schemas without executing tools."),
+  perm("tools.list", "none", "low", "List registered tool capabilities without executing tools."),
   perm("agent.profiles.inspect", "none", "low", "Inspect saved agent profiles owned by the user."),
   perm("agent.profiles", "dangerous", "medium", "Create, update, or delete persistent Jait agents."),
   perm("file.read", "none", "low", "Read a file from the project."),
@@ -62,6 +64,8 @@ const MINIMAL: ToolPermission[] = [
 
 const CODING: ToolPermission[] = [
   perm("jait.catalog", "none", "low", "Inspect Jait pages and available capabilities."),
+  perm("tools.search", "none", "low", "Search available tool schemas without executing tools."),
+  perm("tools.list", "none", "low", "List registered tool capabilities without executing tools."),
   perm("agent.profiles.inspect", "none", "low", "Inspect saved agent profiles owned by the user."),
   perm("agent.profiles", "once", "medium", "Create, update, or delete persistent Jait agents."),
   perm("file.read", "none", "low", "Read a file from the project."),
@@ -109,6 +113,8 @@ const CODING: ToolPermission[] = [
 
 const FULL: ToolPermission[] = [
   perm("jait.catalog", "none", "low", "Inspect Jait pages and available capabilities."),
+  perm("tools.search", "none", "low", "Search available tool schemas without executing tools."),
+  perm("tools.list", "none", "low", "List registered tool capabilities without executing tools."),
   perm("agent.profiles.inspect", "none", "low", "Inspect saved agent profiles owned by the user."),
   perm("agent.profiles", "once", "medium", "Create, update, or delete persistent Jait agents."),
   perm("file.read", "none", "low", "Read a file from the project."),

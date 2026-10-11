@@ -7,6 +7,7 @@ import type { ConsentManager } from "../security/consent-manager.js";
 import { attentionKey } from "../services/attention.js";
 import type { DeviceRegistry } from "../services/device-registry.js";
 import type { MobilePushService } from "../services/mobile-push.js";
+import type { ThreadService } from "../services/threads.js";
 import type { SessionService } from "../services/sessions.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
@@ -14,13 +15,14 @@ interface MobileRouteDeps {
   deviceRegistry: DeviceRegistry;
   consentManager: ConsentManager;
   sessionService?: SessionService;
+  threadService?: ThreadService;
   config: AppConfig;
   mobilePush?: MobilePushService;
   scheduler?: SchedulerService;
 }
 
 export function registerMobileRoutes(app: FastifyInstance, deps: MobileRouteDeps) {
-  const access = new ControlAccess(deps.sessionService, undefined, deps.consentManager);
+  const access = new ControlAccess(deps.sessionService, undefined, deps.consentManager, deps.threadService);
   app.get("/api/mobile/discovery", async (request) => {
     const host = request.hostname;
     const protocol = request.protocol;
