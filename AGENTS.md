@@ -35,6 +35,44 @@ Run from repository root unless noted.
 - `bun run lint`: run `oxlint` across repo.
 - `bun run healthcheck`: run the release guard, typecheck, build, tests, and lint in CI order.
 - `bun run test:e2e`: run the Playwright suite from the repo root.
+- `bun run setup:e2e`: one-shot bootstrap so `test:e2e` works in a fresh worktree (see below).
+
+### Fresh worktree bootstrap (agent worktrees and CI)
+A harness-created worktree starts with **no `node_modules` and no built workspace packages**. `@jait/shared`, `@jait/api-client` and `@jait/screen-share` map their `import` condition to `dist/`, so they must be built before the gateway or the Vite dev server can import them (`@jait/ui-shared` exports `src/` and needs no build). Run once per worktree:
+
+```bash
+bun install --frozen-lockfile        # root + workspace deps
+bun run build:libs                   # @jait/shared, @jait/api-client, @jait/screen-share
+```
+
+`bun run test` (Vitest) needs only the root install: `vitest.config.ts` aliases `@jait/shared` to `src` and does not read `dist/`.
+
+For the agents/Playwright suite, add the e2e package and its Chromium runtime:
+
+```bash
+npm --prefix tests/e2e ci        # tests/e2e is a separate npm package with its own lockfile
+bash scripts/setup-e2e-env.sh    # project-local Chromium + any missing system libraries
+bun run test:e2e -- team-avatar.spec.ts
+```
+
+The supported one-shot runs all of it in order:
+
+```bash
+bun run setup:e2e                # root install + build:libs + tests/e2e deps + browser runtime
+bun run test:e2e -- team-avatar.spec.ts
+```
+
+`scripts/run-e2e.sh` (the `test:e2e` entry point) sources `.cache/e2e-env.sh`, so the browser path and `LD_LIBRARY_PATH` are correct without the caller setting anything. On an unbootstrapped worktree it fails fast with the command to run instead of Playwright's `Executable doesn't exist`.
+
+Environment truth, not product bugs — do not file these as defects:
+- A fresh worktree has no dependencies. Before the commands above, `npm run test:e2e` exits **127** (`playwright: not found`) because `tests/e2e` is its own npm package with no `node_modules`, and the Playwright `webServer` can exit with `Cannot find module @jait/shared from packages/gateway/src/index.ts`. Both mean "run `bun run setup:e2e`", not broken resolution: `@jait/shared`, `@jait/api-client` and `@jait/screen-share` map their `import` condition to `dist/`, which a fresh worktree has not built. Installing only the e2e deps (`npm --prefix tests/e2e ci`) reproduces the `@jait/shared` error exactly.
+- Thread sandboxes run as uid 1000 with no `sudo`, and the worktree's `.git` is a **file** pointing at the main checkout's real git directory, which is mounted read-only. `git worktree add` therefore fails with `fatal: cannot lock ref ...: Read-only file system`. This is by design: use the worktree the harness hands you, or a delivery branch. Never try to create a real worktree inside a thread sandbox.
+- `playwright install --with-deps` **cannot work** in a thread sandbox: Playwright shells out to `su root -c "apt-get install ..."` and there is no root or sudo. `scripts/setup-e2e-env.sh` installs the same libraries rootlessly — it reads Playwright's own `nativeDeps.js` package list, resolves the closure with `apt-get -s`, downloads with `curl`, extracts with `dpkg-deb -x` into `.cache/syslibs` and records `LD_LIBRARY_PATH`. Use `--with-deps` only where you actually have root; on the self-hosted runner the check passes and nothing is downloaded.
+- Playwright Chromium needs a fontconfig configuration, and a Jait thread sandbox has **no `/etc/fonts` and no `/usr/share/fonts`**. fontconfig is silent about it: `document.fonts.check()` still returns true, yet every text range measures **0×0**, so every text-based locator or visibility assertion fails no matter what the product code does. `scripts/setup-e2e-env.sh` generates `.cache/fonts.conf` (pointing at the fonts in the extracted prefix), exports `FONTCONFIG_FILE` and proves the result by measuring a 16px string in Chromium. A 0×0 text measurement is an environment failure, never a UI regression.
+- Playwright Chromium is installed into the project-local `.cache/ms-playwright` (via `PLAYWRIGHT_BROWSERS_PATH`) rather than `~/.cache`, so the runtime lives with the worktree instead of a sandbox `HOME`. A fresh container still downloads ~170 MB, which needs network. `.cache/` is gitignored; never commit it.
+- `gh` is present in the thread sandbox but **unauthenticated** (`gh auth status` reports no logged-in hosts), and `python3` is absent (the gateway logs `[graphify] Setup unavailable`). The e2e gate depends on neither.
+- `bun run build` intentionally **excludes** `@jait/web` (`--filter '!@jait/web'`). Building the web bundle means `bun run --filter @jait/web build`; exit **134** / `JavaScript heap out of memory` reports come from that Vite build. The script now sets `NODE_OPTIONS=--max-old-space-size=8192` by default (override it by exporting your own `NODE_OPTIONS`). Separately, a committed compiled `apps/web/vite.config.js` used to shadow `vite.config.ts` and forced `sourcemap: true` on every web build; those stale artifacts have been deleted and are now gitignored — do not commit them again.
+- Run at most one web/Vite build at a time on this machine. The release workflow serializes its own with `flock /tmp/jait-vite-build.lock`; do the same when several agents may be building.
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript (ES modules, strict mode).

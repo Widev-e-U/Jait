@@ -27,9 +27,11 @@
   ],
   "scripts": {
     "build": "bun run --filter '!@jait/web' build",
+    "build:libs": "bun run --filter '@jait/shared' build && bun run --filter '@jait/api-client' build && bun run --filter '@jait/screen-share' build",
     "dev": "bun run --filter '*' dev",
     "test": "vitest run",
-    "test:e2e": "npm --prefix tests/e2e test",
+    "test:e2e": "bash scripts/run-e2e.sh",
+    "setup:e2e": "bun install --frozen-lockfile && bun run build:libs && npm --prefix tests/e2e ci && bash scripts/setup-e2e-env.sh",
     "test:watch": "vitest",
     "test:tools": "vitest run packages/gateway/src/tools --reporter=verbose",
     "test:tools:browser": "JAIT_BROWSER_INTEGRATION=1 vitest run packages/gateway/src/tools/browser-tools-integration.test.ts --reporter=verbose",

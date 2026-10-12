@@ -5,6 +5,10 @@ __pycache__/
 .venv/
 venv/
 
+# Local e2e bootstrap cache (Playwright browser + rootless system libraries),
+# created by scripts/setup-e2e-env.sh. Large and host-specific; never commit.
+.cache/
+
 # Environment
 .env
 *.env
@@ -23,6 +27,13 @@ vitest.config.js
 vitest.config.js.map
 vitest.config.d.ts
 vitest.config.d.ts.map
+# Vite resolves vite.config.js BEFORE vite.config.ts, so a committed compiled
+# copy silently shadows the real config (it once pinned sourcemap: true and
+# dropped the /preview dev proxy). Never commit these.
+apps/web/vite.config.js
+apps/web/vite.config.js.map
+apps/web/vite.config.d.ts
+apps/web/vite.config.d.ts.map
 packages/*/src/**/*.js
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts
