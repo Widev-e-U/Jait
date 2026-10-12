@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build --base ./",
+    "build": "NODE_OPTIONS=\"${NODE_OPTIONS:---max-old-space-size=8192}\" vite build --base ./",
     "analyze": "bun run build && source-map-explorer \"dist/assets/*.js\" --html dist/bundle-report.html --no-border-checks",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
