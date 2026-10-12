@@ -1,3 +1,5 @@
+import { isValidElement, type ReactElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   normalizeSystemNotification,
@@ -234,4 +236,128 @@ it('suppresses only the visible focused chat completion', async () => {
     await triggerSystemNotification({ ...input, id: 'other:1', sessionId: 'other-chat' })
     expect(notify).toHaveBeenCalledOnce()
   } finally { setVisibleNotificationSession(null); vi.unstubAllGlobals() }
+})
+
+describe('in-app agent identity fallback', () => {
+  const base = {
+    id: 'completion:identity:0',
+    kind: 'completion' as const,
+    sessionId: 'identity',
+    title: 'Response ready',
+    body: 'Ada finished the refactor',
+    level: 'success' as const,
+  }
+
+  /** The element the app hands to sonner, rendered to markup so we can read it. */
+  function renderedToast(): string {
+    const [rendered] = toastSuccess.mock.calls[0] ?? []
+    expect(isValidElement(rendered)).toBe(true)
+    return renderToStaticMarkup(rendered as ReactElement)
+  }
+
+  beforeEach(() => {
+    toastInfo.mockReset()
+    toastSuccess.mockReset()
+    toastWarning.mockReset()
+    toastError.mockReset()
+    NotificationMock.permission = 'denied'
+    NotificationMock.instances = []
+    NotificationMock.live = []
+    setNativeNotificationsEnabled(true)
+    setVisibleNotificationSession(null)
+    vi.stubGlobal('window', {
+      Notification: NotificationMock,
+      jaitDesktop: undefined,
+      Capacitor: undefined,
+    } as unknown as Window & typeof globalThis)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('draws the originating agent avatar and name in-app when the browser API is denied', async () => {
+    await triggerSystemNotification({
+      ...base,
+      agentId: 'agent-lady-merge-a-lot',
+      agentName: 'Lady Merge-a-Lot',
+      agentRole: 'Junior Software Engineer',
+      agentAvatar: 'Pixel',
+    })
+
+    // The OS surface produced nothing, so the in-app toast is the only surface.
+    expect(NotificationMock.instances).toEqual([])
+    const html = renderedToast()
+    expect(html).toContain('agent-creature')
+    expect(html).toContain('data-agent-avatar="Pixel"')
+    expect(html).toContain('Lady Merge-a-Lot')
+    expect(html).toContain('Junior Software Engineer')
+  })
+
+  it('falls back in-app on the macOS desktop shell, which only draws the app icon', async () => {
+    const notify = vi.fn(async (_input: unknown) => {})
+    vi.stubGlobal('window', { jaitDesktop: { notify }, Capacitor: undefined })
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' })
+
+    await triggerSystemNotification({ ...base, id: 'completion:identity:1', agentName: 'Lady Merge-a-Lot', agentAvatar: 'Nova' })
+
+    // The shell still owns the OS notification...
+    expect(notify).toHaveBeenCalledOnce()
+    // ...and the app compensates with the agent's own avatar.
+    const html = renderedToast()
+    expect(html).toContain('agent-creature')
+    expect(html).toContain('fill="#a78bfa"')
+    expect(html).toContain('Lady Merge-a-Lot')
+  })
+
+  it('shows identity in-app when another client on this machine owns the OS toast', async () => {
+    const notify = vi.fn(async (_input: unknown) => {})
+    vi.stubGlobal('window', { jaitDesktop: { notify } })
+    setNativeNotificationsEnabled(false)
+
+    await triggerSystemNotification({ ...base, id: 'completion:identity:2', agentName: 'Lady Merge-a-Lot', agentAvatar: 'Pixel' })
+
+    expect(notify).not.toHaveBeenCalled()
+    expect(renderedToast()).toContain('Lady Merge-a-Lot')
+  })
+
+  it('carries the notification action through the identity fallback', async () => {
+    await triggerSystemNotification({ ...base, id: 'completion:identity:3', agentName: 'Ada', link: '/chat?sessionId=identity' })
+
+    expect(renderedToast()).toContain('Open')
+  })
+
+  it('keeps the plain text toast byte-identical when no agent identity is present', async () => {
+    const notify = vi.fn(async (_input: unknown) => {})
+    vi.stubGlobal('window', { jaitDesktop: { notify }, Capacitor: undefined })
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
+
+    // An id without a name or avatar is not an identity, so this must not take
+    // the identity path.
+    await triggerSystemNotification({ ...base, id: 'completion:identity:4', agentId: 'agent-1' })
+
+    expect(toastSuccess).toHaveBeenCalledTimes(1)
+    expect(toastSuccess.mock.calls[0]?.[0]).toBe('Response ready')
+    expect(toastSuccess.mock.calls[0]?.[1]).toEqual({ description: 'Ada finished the refactor' })
+  })
+
+  it('leaves the notification text untouched when identity is added', async () => {
+    const notify = vi.fn(async (_input: unknown) => {})
+    vi.stubGlobal('window', { jaitDesktop: { notify }, Capacitor: undefined })
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh)' })
+    const payload = { ...base, title: 'Ticket 2 landed', body: 'Merged the 5-file patch' }
+
+    await triggerSystemNotification({ ...payload, id: 'completion:identity:5a' })
+    const plainText = { title: toastSuccess.mock.calls[0]?.[0], description: (toastSuccess.mock.calls[0]?.[1] as { description?: string } | undefined)?.description }
+
+    toastSuccess.mockReset()
+    await triggerSystemNotification({ ...payload, id: 'completion:identity:5b', agentName: 'Lady Merge-a-Lot', agentAvatar: 'Pixel' })
+    const html = renderedToast()
+
+    // Same words, same order — the identity is added alongside, not instead.
+    expect(plainText).toEqual({ title: 'Ticket 2 landed', description: 'Merged the 5-file patch' })
+    expect(html).toContain('Ticket 2 landed')
+    expect(html).toContain('Merged the 5-file patch')
+    expect(html).toContain('Lady Merge-a-Lot')
+  })
 })

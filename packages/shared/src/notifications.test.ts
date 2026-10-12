@@ -6,6 +6,11 @@ import {
   notificationAgentContext,
   notificationTitleWithAgent,
   notificationBodyWithAgent,
+  NOTIFICATION_PLATFORM_MATRIX,
+  notificationPlatformCapability,
+  notificationPlatformSupportsAgentIcon,
+  notificationPlatformNeedsAgentIdentityFallback,
+  notificationContextHasAgentIdentity,
 } from './notifications';
 
 describe('notification destinations', () => {
@@ -64,5 +69,54 @@ describe('agent identity in notifications', () => {
     const rawId = `agent:${'a'.repeat(120)}`;
     expect(notificationAgentContext({ id: `agent:\u0000${'a'.repeat(120)}` }).agentId).toBe(rawId);
     expect(notificationAgentContext({ id: '  ' })).toEqual({});
+  });
+});
+
+describe('notification platform support matrix', () => {
+  it('states a transport, note and fallback for every surface, with no duplicate ids', () => {
+    expect(NOTIFICATION_PLATFORM_MATRIX.length).toBeGreaterThan(0);
+    for (const platform of NOTIFICATION_PLATFORM_MATRIX) {
+      expect(platform.transport.trim()).not.toBe('');
+      expect(platform.note.trim()).not.toBe('');
+      expect(platform.fallback.trim()).not.toBe('');
+      expect(platform.text).toBe(true);
+      expect(platform.id).toBe(platform.id.trim());
+    }
+    const ids = NOTIFICATION_PLATFORM_MATRIX.map((platform) => platform.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('admits a per-agent icon on the in-app DOM surface only', () => {
+    const withAgentIcon = NOTIFICATION_PLATFORM_MATRIX.filter((platform) => platform.agentIcon).map((p) => p.id);
+    expect(withAgentIcon).toEqual(['in-app-toast']);
+    expect(notificationPlatformSupportsAgentIcon('in-app-toast')).toBe(true);
+    expect(notificationPlatformSupportsAgentIcon('browser-notification-api')).toBe(false);
+    expect(notificationPlatformSupportsAgentIcon('desktop-shell-macos')).toBe(false);
+    expect(notificationPlatformSupportsAgentIcon('desktop-shell-windows')).toBe(false);
+    expect(notificationPlatformSupportsAgentIcon('fcm-push')).toBe(false);
+  });
+
+  it('requires the in-app fallback on every surface that cannot draw the agent, and on unknown surfaces', () => {
+    for (const platform of NOTIFICATION_PLATFORM_MATRIX) {
+      expect(notificationPlatformNeedsAgentIdentityFallback(platform.id)).toBe(!platform.agentIcon);
+    }
+    expect(notificationPlatformNeedsAgentIdentityFallback('some-future-surface')).toBe(true);
+    expect(notificationPlatformCapability('some-future-surface')).toBeNull();
+    expect(notificationPlatformCapability('in-app-toast')?.appIcon).toBe('not-sent');
+  });
+
+  it('claims a static app icon only where the emitted payload carries one', () => {
+    const sendsAppIcon = NOTIFICATION_PLATFORM_MATRIX.filter((platform) => platform.appIcon === 'sent').map((p) => p.id);
+    expect(sendsAppIcon).toEqual(['browser-notification-api']);
+  });
+
+  it('treats only a real label as identity, so blank fields keep the plain notification', () => {
+    expect(notificationContextHasAgentIdentity({ agentName: 'Lady Merge-a-Lot' })).toBe(true);
+    expect(notificationContextHasAgentIdentity({ agentAvatar: 'Pixel' })).toBe(true);
+    expect(notificationContextHasAgentIdentity({ agentId: 'agent-1' })).toBe(false);
+    expect(notificationContextHasAgentIdentity({ agentName: '   ', agentAvatar: String.fromCharCode(0) })).toBe(false);
+    expect(notificationContextHasAgentIdentity({})).toBe(false);
+    expect(notificationContextHasAgentIdentity(null)).toBe(false);
+    expect(notificationContextHasAgentIdentity(undefined)).toBe(false);
   });
 });
