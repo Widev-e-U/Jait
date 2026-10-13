@@ -262,7 +262,6 @@ function notificationTransportPlatform(): NotificationPlatformId | 'unknown' {
 }
 
 function emitToast(notif: SystemNotificationInput, platform: NotificationPlatformId | 'unknown'): void {
-  if (!notif.includeToast) return
   const toastFn = notif.level === 'error' ? toast.error
     : notif.level === 'warning' ? toast.warning
     : notif.level === 'success' ? toast.success
@@ -271,7 +270,8 @@ function emitToast(notif: SystemNotificationInput, platform: NotificationPlatfor
 
   // Identity fallback: when the transport cannot render the originating agent's
   // icon (see NOTIFICATION_PLATFORM_MATRIX in @jait/shared), the app itself
-  // draws the avatar and name. A payload with no agent identity keeps the plain
+  // draws the avatar and name even when generic completion toasts are disabled.
+  // A payload with no agent identity keeps the plain
   // toast below, so existing notification text stays byte-identical.
   if (agentIdentityToastEnabled(notif) && notificationPlatformNeedsAgentIdentityFallback(platform)) {
     toastFn(buildAgentIdentityToast({
@@ -288,6 +288,8 @@ function emitToast(notif: SystemNotificationInput, platform: NotificationPlatfor
     }))
     return
   }
+
+  if (!notif.includeToast) return
 
   toastFn(notif.title, { description: notif.body, ...(link ? { action: {
     label: 'Open', onClick: () => openNotification({ id: notif.replaceId ?? notif.id, link }),
