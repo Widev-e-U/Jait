@@ -1959,6 +1959,64 @@ export class GitService {
   // ── Worktree operations ───────────────────────────────────────
 
   /**
+   * Resolve a base ref that actually exists locally for `git worktree add`.
+   *
+   * Callers pass a plain branch name (usually the repository default branch).
+   * That name only exists as a *local* ref on a normal developer clone. In a
+   * pull-request / CI checkout, a detached build agent, or a single-branch
+   * clone the default branch is present only as a remote-tracking ref or not
+   * at all, and `git worktree add -b <new> <path> main` then dies with
+   * `fatal: invalid reference: main` (newer git) or
+   * `fatal: not a valid object name: 'main'` (older git).
+   *
+   * Resolution order: local branch -> remote-tracking ref of the preferred
+   * (or any) remote -> `git fetch --depth 1 <remote> <branch>` followed by
+   * FETCH_HEAD. Throws a named error listing the attempted refs when nothing
+   * resolves, so a genuinely missing branch is diagnosable instead of looking
+   * like a broken checkout.
+   */
+  private async resolveWorktreeBase(cwd: string, baseBranch: string): Promise<string> {
+    const name = baseBranch.trim() || "main";
+    const tried: string[] = [name];
+    const exists = async (ref: string): Promise<boolean> =>
+      gitExec(cwd, `rev-parse --verify --quiet "${ref}^{commit}"`)
+        .then(() => true)
+        .catch(() => false);
+
+    if (await exists(name)) return name;
+
+    const remotes = await this.listRemotes(cwd).catch(() => [] as string[]);
+    const preferred = (await this.getPreferredRemote(cwd).catch(() => null))
+      ?? remotes[0]
+      ?? null;
+    const ordered = preferred ? [preferred, ...remotes.filter((r) => r !== preferred)] : remotes;
+
+    for (const remote of ordered) {
+      const tracking = `refs/remotes/${remote}/${name}`;
+      tried.push(tracking);
+      if (await exists(tracking)) return tracking;
+    }
+
+    for (const remote of ordered) {
+      try {
+        await gitExec(cwd, `fetch --depth 1 "${remote}" "${name}"`, 120_000);
+      } catch {
+        tried.push(`fetch ${remote} ${name} (failed)`);
+        continue;
+      }
+      const tracking = `refs/remotes/${remote}/${name}`;
+      if (await exists(tracking)) return tracking;
+      if (await exists("FETCH_HEAD")) return "FETCH_HEAD";
+      tried.push(`fetch ${remote} ${name} (no commit)`);
+    }
+
+    throw new Error(
+      `Cannot resolve worktree base branch "${name}" in ${cwd}. Tried: ${tried.join(", ")}. ` +
+      `Fetch the branch first (git fetch <remote> ${name}) or pass an existing base branch.`,
+    );
+  }
+
+  /**
    * Create a git worktree for a new branch.
    * Worktrees live under ~/.jait/worktrees/{repoName}/{sanitizedBranch}.
    * Uses `git worktree add -b <newBranch> <path> <baseBranch>`.
@@ -1979,17 +2037,30 @@ export class GitService {
     // Ensure parent directory exists
     await mkdir(join(worktreePath, ".."), { recursive: true });
 
+    // A checkout without a local ref for the base branch (pull-request or
+    // detached CI checkout, single-branch clone) must not fail here.
+    const base = await this.resolveWorktreeBase(cwd, baseBranch);
+
+    // Start the new branch from the resolved *commit*, never from a ref name.
+    // When the start point is a remote-tracking ref git also records it as the
+    // new branch's upstream ("branch 'x' set up to track 'origin/main'"), so an
+    // unattended `git push` with push.default=current/upstream would target the
+    // default branch. A raw commit sets no upstream in every git version.
+    const baseCommit = (
+      await gitExec(cwd, `rev-parse --verify "${base}^{commit}"`, 30_000)
+    ).trim();
+
     // Use the fast CoW path when explicitly requested, or automatically for
     // large repos where the plain `git worktree add` checkout is O(N) and slow.
     const useFast = options?.fastPath ?? (await this.isLargeRepo(cwd));
     if (useFast) {
-      await this.createWorktreeFast(cwd, worktreePath, baseBranch, newBranch);
+      await this.createWorktreeFast(cwd, worktreePath, baseCommit, newBranch);
       return { path: worktreePath, branch: newBranch };
     }
 
     await gitExec(
       cwd,
-      `worktree add -b "${newBranch}" "${worktreePath}" "${baseBranch}"`,
+      `worktree add -b "${newBranch}" "${worktreePath}" "${baseCommit}"`,
       60_000,
     );
 
