@@ -1,6 +1,7 @@
-import { safeNotificationLink, type NotificationContext } from '@jait/shared'
+import { notificationPlatformNeedsAgentIdentityFallback, safeNotificationLink, type NotificationContext, type NotificationPlatformId } from '@jait/shared'
 import { openNotification, androidNotificationBridge } from './notification-navigation'
 import { getApiUrl } from './gateway-url'
+import { agentIdentityToastEnabled, buildAgentIdentityToast } from './agent-notification-toast'
 import { toast } from 'sonner'
 
 export interface SystemNotificationInput extends NotificationContext {
@@ -195,7 +196,7 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
   // Another surface on this machine owns the system toast — show the in-app
   // toast only, so the user is told once per device rather than once per client.
   if (!nativeNotificationsEnabled) {
-    emitToast(notif)
+    emitToast(notif, 'unknown')
     return
   }
 
@@ -231,16 +232,65 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
     await notifyWithBrowserApi(browserNotification, browserInput)
   }
 
-  emitToast(notif)
+  emitToast(notif, notificationTransportPlatform())
 }
 
-function emitToast(notif: SystemNotificationInput): void {
-  if (!notif.includeToast) return
+/** Which desktop shell command runs, per the platform the shell is running on. */
+function desktopShellPlatformId(): NotificationPlatformId {
+  const hint = typeof navigator === 'undefined' ? '' : navigator.userAgent.toLowerCase()
+  if (hint.includes('mac')) return 'desktop-shell-macos'
+  if (hint.includes('win')) return 'desktop-shell-windows'
+  return 'desktop-shell-linux'
+}
+
+/**
+ * The notification surface this client is about to use, so the in-app toast can
+ * compensate exactly where the surface cannot render a per-agent icon. The
+ * checks mirror the transport branch below; ordering matters and is the same.
+ * `unknown` is deliberate when no transport is identifiable (including when
+ * another client on this machine owns the OS toast): an unproven surface must
+ * not be assumed to draw the agent, so identity stays in-app.
+ */
+function notificationTransportPlatform(): NotificationPlatformId | 'unknown' {
+  if (!nativeNotificationsEnabled) return 'unknown'
+  if (window.jaitDesktop?.notify) return desktopShellPlatformId()
+  const android = (window.Capacitor as { Plugins?: { AgentOverlay?: { notify?: unknown } } } | undefined)?.Plugins?.AgentOverlay
+  if (android?.notify) return 'android-agent-overlay'
+  if (capacitorNotifications()) return 'capacitor-local-notifications'
+  if ('Notification' in window) return 'browser-notification-api'
+  return 'unknown'
+}
+
+function emitToast(notif: SystemNotificationInput, platform: NotificationPlatformId | 'unknown'): void {
   const toastFn = notif.level === 'error' ? toast.error
     : notif.level === 'warning' ? toast.warning
     : notif.level === 'success' ? toast.success
     : toast.info
   const link = safeNotificationLink(notif.link)
+
+  // Identity fallback: when the transport cannot render the originating agent's
+  // icon (see NOTIFICATION_PLATFORM_MATRIX in @jait/shared), the app itself
+  // draws the avatar and name even when generic completion toasts are disabled.
+  // A payload with no agent identity keeps the plain
+  // toast below, so existing notification text stays byte-identical.
+  if (agentIdentityToastEnabled(notif) && notificationPlatformNeedsAgentIdentityFallback(platform)) {
+    toastFn(buildAgentIdentityToast({
+      id: notif.replaceId ?? notif.id,
+      title: notif.title,
+      body: notif.body,
+      level: notif.level,
+      agentId: notif.agentId,
+      agentName: notif.agentName,
+      agentRole: notif.agentRole,
+      agentAvatar: notif.agentAvatar,
+      link: link ?? undefined,
+      replaceId: notif.replaceId,
+    }))
+    return
+  }
+
+  if (!notif.includeToast) return
+
   toastFn(notif.title, { description: notif.body, ...(link ? { action: {
     label: 'Open', onClick: () => openNotification({ id: notif.replaceId ?? notif.id, link }),
   } } : {}) })

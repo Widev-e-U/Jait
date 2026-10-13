@@ -1,6 +1,6 @@
 import type { TeamChatService } from "../services/team-chat.js";
 import { rankSystemOne, systemOneEnabled, SYSTEM_ONE_PROMPT } from "../services/system-one.js";
-import { chatNotificationLink, notificationPreview } from "@jait/shared";
+import { chatNotificationLink, notificationPreview, notificationAgentContext, notificationTitleWithAgent, notificationBodyWithAgent } from "@jait/shared";
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
@@ -5298,16 +5298,24 @@ export function registerChatRoutes(
           response: fullContent,
           llm: llmRuntime,
         });
+        // A persona that answered (explicitly selected or bound to the session,
+        // i.e. an agent invited into this chat) must be identifiable on the lock
+        // screen: text carries the identity, and the flat agent fields let
+        // in-app surfaces draw the avatar. No persona -> text unchanged.
+        const agentIdentity = personaProfile ? {
+          id: personaProfile.id, name: personaProfile.name, avatar: personaProfile.avatar, role: personaProfile.role,
+        } : null;
         const notification = {
           id: `chat-complete:${sessionId}:${randomUUID()}`,
           replaceId: `chat-complete:${sessionId}`,
           kind: "completion" as const,
           sessionId,
           link: chatNotificationLink(sessionId, completedSession?.projectId),
-          title: completedSession?.name ? `Response ready · ${completedSession.name}` : "Response ready",
-          body: [projectName, notificationDetail ?? (notificationPreview(fullContent) || "Agent response finished. Open chat to read it.")].filter(Boolean).join(" · "),
+          title: notificationTitleWithAgent(completedSession?.name ? `Response ready · ${completedSession.name}` : "Response ready", agentIdentity),
+          body: notificationBodyWithAgent([projectName, notificationDetail ?? (notificationPreview(fullContent) || "Agent response finished. Open chat to read it.")].filter(Boolean).join(" · "), agentIdentity),
           level: "success" as const,
           includeToast: false,
+          ...notificationAgentContext(agentIdentity),
         };
         ws?.broadcastToUser(authUser.id, {
           type: "notification", sessionId, timestamp: new Date().toISOString(), payload: notification,

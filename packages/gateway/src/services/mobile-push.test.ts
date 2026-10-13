@@ -38,6 +38,40 @@ describe("MobilePushService", () => {
     } finally { sqlite.close(); }
   });
 
+  it("carries flat agent identity into the FCM data map, and omits it when absent", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const send = vi.fn(async (_url: unknown, _init?: RequestInit) => new Response("{}", { status: 200 }));
+      const service = new MobilePushService(db, {
+        project_id: "test", client_email: "test@example.com", private_key: "unused",
+      }, send as typeof fetch);
+      Object.assign(service, { accessToken: { value: "test-token", expiresAt: Date.now() + 3600_000 } });
+      service.register("phone-a", "user-a", "token-a");
+
+      await service.sendChatCompleted("user-a", {
+        id: "chat-complete:s:1", title: "Lady Merge-a-Lot · Chat finished", body: "Junior Software Engineer · Done",
+        replaceId: "chat-complete:s", sessionId: "s", link: "/chat?sessionId=s&projectId=p",
+        agentId: "01a1117a-495f-7dde-a504-7643383195f8", agentName: "Lady Merge-a-Lot",
+        agentRole: "Junior Software Engineer", agentAvatar: "Orbit",
+      });
+      // FCM data values are strings only, so identity must survive as flat strings.
+      expect(JSON.parse(send.mock.calls[0]![1]!.body as string).message.data).toEqual({
+        type: "chat.completed", id: "chat-complete:s:1", title: "Lady Merge-a-Lot · Chat finished",
+        body: "Junior Software Engineer · Done", replaceId: "chat-complete:s", sessionId: "s",
+        link: "/chat?sessionId=s&projectId=p",
+        agentId: "01a1117a-495f-7dde-a504-7643383195f8", agentName: "Lady Merge-a-Lot",
+        agentRole: "Junior Software Engineer", agentAvatar: "Orbit",
+      });
+
+      await service.sendChatCompleted("user-a", {
+        id: "chat-complete:s:2", title: "Chat finished", body: "Done", sessionId: "s",
+      });
+      const absent = JSON.parse(send.mock.calls[1]![1]!.body as string).message.data;
+      expect(Object.keys(absent).filter((key) => key.startsWith("agent"))).toEqual([]);
+    } finally { sqlite.close(); }
+  });
+
   it("persists registrations across service instances", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
