@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { AgentAvatar } from './agent-avatar'
 import { TeamAvatar, type TeamAvatarMember } from './team-avatar'
+import { segmentTeamMentions, type TeamMentionMember } from '@/lib/team-mentions'
 import { agentsApi } from '@/lib/agents-api'
 import { useStickToBottom } from '@/components/chat/use-stick-to-bottom'
 
@@ -17,6 +18,16 @@ export function TeamMessageAvatar({ message }: { message: TeamRoomMessage }) {
   if (message.sender.kind === 'agent') return <AgentAvatar avatar={message.sender.avatar || 'Nova'} className="h-8 w-8 shrink-0" />
   return <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs">{message.sender.name.slice(0, 2)}</span>
 }
+export function TeamMessageBody({ content, members }: { content: string; members: readonly TeamMentionMember[] }) {
+  const segments = segmentTeamMentions(content, members)
+  return <p className="mt-1 whitespace-pre-wrap break-words text-sm">{segments.map((segment, index) => segment.kind === 'text'
+    ? <span key={index}>{segment.text}</span>
+    : <span key={index} className="inline-flex items-center gap-1 align-baseline" data-testid="team-mention">
+        <AgentAvatar avatar={segment.member.avatar || 'Nova'} className="h-4 w-4 shrink-0" />
+        <span className="font-medium text-primary">{segment.text}</span>
+      </span>)}</p>
+}
+
 const expandedRoomGoals = new Map<string, boolean>()
 const roomGoalStorageKey = (roomId: string) => 'jait:team-goal:' + roomId
 
@@ -153,7 +164,7 @@ export function TeamRoomView({ roomId, initialIdentity, onBack, embedded = false
                 <DropdownMenuItem onSelect={() => setDecisionMessage({ ...message, routingDecision: decision })}>View routing decision</DropdownMenuItem>
               </DropdownMenuContent></DropdownMenu>
             </div>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">{message.content}</p>
+            <TeamMessageBody content={message.content} members={snapshot.members} />
             {message.attachments?.map((attachment, index) => <p key={index} className="mt-1 text-xs text-muted-foreground">📎 {attachment.name}</p>)}
             {message.recipientIds.length > 0 && <p className="mt-2 text-xs text-muted-foreground">To: {message.recipientIds.map(id => snapshot.members.find(member => member.id === id)?.name ?? id).join(', ')}</p>}
             {message.sender.kind === 'chat' && message.sender.sourceSessionId && <a href={'/?sessionId=' + encodeURIComponent(message.sender.sourceSessionId)} className="mt-2 inline-flex items-center gap-1 text-xs text-primary">Source chat <ExternalLink className="h-3 w-3" /></a>}
