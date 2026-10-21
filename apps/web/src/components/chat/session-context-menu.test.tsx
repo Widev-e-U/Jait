@@ -54,6 +54,14 @@ function renderSubmenu(props: Partial<Parameters<typeof SessionMoveSubmenu>[0]> 
 }
 
 describe('SessionContextMenu', () => {
+  it('offers "Rename chat" only when renaming is wired up', () => {
+    expect(renderMenu()).not.toContain('Rename chat')
+    const markup = renderMenu({ onRename: () => {} })
+    expect(markup).toContain('Rename chat')
+    // First action in the menu, above moving and archiving.
+    expect(markup.indexOf('Rename chat')).toBeLessThan(markup.indexOf('Move to project'))
+  })
+
   it('keeps the project list behind a submenu parent instead of listing it inline', () => {
     const markup = renderMenu()
 
@@ -161,6 +169,7 @@ describe('getSessionContextMenuHeight', () => {
     expect(getSessionContextMenuHeight({ ...base, showPersonalTarget: true })).toBeGreaterThan(plain)
     expect(getSessionContextMenuHeight({ ...base, showStreamingNote: true })).toBeGreaterThan(plain)
     expect(getSessionContextMenuHeight({ ...base, showOpenInPanel: true })).toBe(plain + 30)
+    expect(getSessionContextMenuHeight({ ...base, showRename: true })).toBe(plain + 30)
   })
 
   it('stays compact now that the projects live in a submenu', () => {
