@@ -587,10 +587,12 @@ function App() {
     fetchProjectSubtree,
     assignProjectRepository,
     switchProject,
+    startProjectDraft,
     switchSession,
     setProjectEditorModeActive,
     archiveSession,
     moveSession,
+    renameSession,
     fetchArchivedSessions,
     removeProject,
     clearArchivedProjects,
@@ -2733,7 +2735,9 @@ function App() {
   const handleSwitchProject = useCallback(async (
     projectId: string,
     sessionId?: string,
-    focusChatOnMobile = false
+    focusChatOnMobile = false,
+    /** Show the project's empty "new chat" view without creating a chat yet. */
+    draft = false,
   ) => {
     const project = projects.find((entry) => entry.id === projectId) ?? ( await loadProject(projectId))
     if (!project) return
@@ -2745,7 +2749,7 @@ function App() {
     // Determine which session to activate (mirrors switchProject logic) —
     // an explicit sessionId (e.g. picked from the sidebar's recent-sessions
     // list) wins over the project's most-recently-active session.
-    const nextSessionId = sessionId ?? getLatestProjectSessionId(project)
+    const nextSessionId = draft ? null : sessionId ?? getLatestProjectSessionId(project)
     if (nextSessionId) {
       setParallelChats((current) => closeSecondaryChatPanel(current, nextSessionId))
     }
@@ -2790,7 +2794,9 @@ function App() {
     setProjectFiles([])
     setActiveProjectFileId(null)
     handleAvailableFilesForMentionChange([])
-    if (nextSessionId) {
+    if (draft) {
+      startProjectDraft(projectId)
+    } else if (nextSessionId) {
       switchSession(projectId, nextSessionId)
     } else {
       switchProject(projectId)
@@ -2799,7 +2805,8 @@ function App() {
     // Open the project directory on the gateway and directly hydrate from the
     // response rather than relying on the WS `project.open` event, which is
     // session-scoped and may arrive before the WS re-subscribes to the new session.
-    if (project.rootPath) {
+    // A draft has no chat yet, and the gateway scopes an open project to a chat.
+    if (project.rootPath && !draft) {
       try {
         const openPanel = resolveProjectPanelOpenAfterChatSelection({
           isMobile,
@@ -2840,7 +2847,7 @@ function App() {
         toast.error('Failed to open project files.')
       }
     }
-  }, [projects, loadProject, switchProject, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
+  }, [projects, loadProject, switchProject, startProjectDraft, switchSession, isMobile, handleAvailableFilesForMentionChange, settings?.chat_provider, settings?.selected_model, suppressNextUiSync],)
 
   const handleSelectPersonalSession = useCallback(async (sessionId: string) => {
     setPrimaryChatPanelHidden(false)
@@ -4796,6 +4803,20 @@ function App() {
     void createSession()
   }, [createSession])
 
+  /**
+   * Sidebar project/folder click: the project's empty "new chat" view. The
+   * chat itself is only created when the first message is sent, so browsing
+   * projects leaves no blank chats behind.
+   */
+  const handleNewChatInProject = useCallback(async (projectId: string) => {
+    // Already looking at this project's new-chat view.
+    if (projectId === activeProjectId && !activeSessionId) {
+      if (isMobile) setShowSidebar(false)
+      return
+    }
+    await handleSwitchProject(projectId, undefined, false, true)
+  }, [activeProjectId, activeSessionId, handleSwitchProject, isMobile])
+
   const handleStartNewChatInTab = useCallback(() => {
     void openNewChatSurface('tab')
   }, [openNewChatSurface])
@@ -5609,6 +5630,10 @@ function App() {
                         void handleSelectPersonalSession(sessionId)
                       }}
                       onSelectProject={handleSwitchProject}
+                      onNewChatInProject={(projectId) => {
+                        void handleNewChatInProject(projectId)
+                      }}
+                      onRenameSession={renameSession}
                       onSelectProjectSession={handleSelectProjectSession}
                       onShowFewer={showFewerProjects}
                       onShowMore={showMoreProjects}
@@ -5937,6 +5962,12 @@ function App() {
                         setShowMobileToolbar(false)
                         void handleSwitchProject(projectId)
                       }}
+                      onNewChatInProject={(projectId) => {
+                        setCurrentView('chat')
+                        setShowMobileToolbar(false)
+                        void handleNewChatInProject(projectId)
+                      }}
+                      onRenameSession={renameSession}
                       onSelectProjectSession={(projectId, sessionId) => {
                         setCurrentView('chat')
                         setShowMobileToolbar(false)
