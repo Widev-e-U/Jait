@@ -15,6 +15,7 @@ import {
   segmentsWithError,
   shouldResumeChatSession,
   shouldShowContinueAfterDone,
+  WAKE_RESUME_STALE_MS,
 } from '@/hooks/useChat'
 import type { MessageStreamSnapshot } from '@/lib/message-stream'
 
@@ -132,6 +133,14 @@ describe('getChatWakeRecoveryAction', () => {
       hasSubscription: true,
       transport: { state: 'open', attempts: 0, idleMs: 40_000 },
     })).toBe('none')
+  })
+
+  it('holds a woken app to a one-missed-heartbeat bound', () => {
+    // Android keeps a socket that died in the background looking `open`; after
+    // the wake settle delay a live one has delivered a heartbeat already.
+    const transport = { state: 'open' as const, attempts: 0, idleMs: 30_000 }
+    expect(getChatWakeRecoveryAction({ ...activeStreamParams, transport })).toBe('none')
+    expect(getChatWakeRecoveryAction({ ...activeStreamParams, transport, staleMs: WAKE_RESUME_STALE_MS })).toBe('snapshot')
   })
 
   it('rebuilds from a snapshot when the wire went stale (sleep / half-open socket)', () => {
