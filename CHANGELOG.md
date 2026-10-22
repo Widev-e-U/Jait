@@ -4,6 +4,14 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.959](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.959) — 2026-10-22
+
+- feat: rust gateway contract port, local deploy tooling, messenger and browser UI work — 1d584fb1
+- fix(chat): keep background-terminal steering notices out of the transcript — 78183b9c
+- fix(web): keep desktop transcript visible beside the minimap — 483062b0
+
+Keeps background-terminal steering nudges out of chat transcripts (trajectory keeps internal/deferred badges).
+
 ## [v0.1.958](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.958) — 2026-10-21
 
 - fix(web): keep desktop transcript visible beside the minimap — 483062b0
