@@ -74,6 +74,9 @@ export function normalizeMessageSegments(raw: unknown): MessageSegment[] {
         : []
       if (callIds.length > 0) out.push({ type: 'toolGroup', callIds })
     } else if (type === 'steering') {
+      // Defensive: internal steers must never render even if an old or
+      // hand-built payload carries one into persisted history.
+      if ((seg as { hidden?: unknown }).hidden === true) continue
       const content = (seg as { content?: unknown }).content
       const displayContent = (seg as { displayContent?: unknown }).displayContent
       const queuedMessageId = (seg as { queuedMessageId?: unknown }).queuedMessageId

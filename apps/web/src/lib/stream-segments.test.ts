@@ -153,6 +153,16 @@ describe('normalizeMessageSegments (crash regression: "X.filter is not a functio
     ])
   })
 
+  it('drops a hidden steering segment while keeping visible steering markers', () => {
+    const raw = [
+      { type: 'steering', content: '[system-notification: background command finished]', hidden: true },
+      { type: 'steering', content: 'use b.ts instead', displayContent: 'use b.ts instead' },
+    ] as unknown
+    expect(normalizeMessageSegments(raw)).toEqual([
+      { type: 'steering', content: 'use b.ts instead', displayContent: 'use b.ts instead' },
+    ])
+  })
+
   it('drops unknown segment types and coerces non-string content', () => {
     const raw = [
       { type: 'mystery', payload: 123 },

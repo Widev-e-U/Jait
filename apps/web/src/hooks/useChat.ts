@@ -1205,10 +1205,20 @@ export function useChat(
         const steerContent = typeof data.message === 'string'
           ? data.message
           : typeof data.content === 'string' ? data.content : ''
+        // Internal steers (e.g. a background terminal completing) reach the
+        // model and the trajectory log, but must stay out of the transcript.
+        const steerHidden = data.hidden === true
         if (isReplay || !steerId) {
-          recordSteeredMessage(steerContent, typeof data.displayContent === 'string' ? data.displayContent : undefined)
+          if (!steerHidden) {
+            recordSteeredMessage(steerContent, typeof data.displayContent === 'string' ? data.displayContent : undefined)
+          }
         } else {
-          resolveSteeredMessage(steerId, steerContent, typeof data.displayContent === 'string' ? data.displayContent : undefined)
+          resolveSteeredMessage(
+            steerId,
+            steerContent,
+            typeof data.displayContent === 'string' ? data.displayContent : undefined,
+            steerHidden,
+          )
         }
       } else if (data.type === 'content_rollback') {
         // The gateway discarded a degenerate generation after streaming
@@ -1997,9 +2007,12 @@ export function useChat(
    * splice the marker into the transcript at its real position. Falls back to
    * the pending entry's own content when the event omits it.
    */
-  const resolveSteeredMessage = useCallback((steerId: string, content?: string, displayContent?: string) => {
+  const resolveSteeredMessage = useCallback((steerId: string, content?: string, displayContent?: string, hidden?: boolean) => {
     const pending = messageQueueRef.current.find(entry => entry.steerQueuedMessageId === steerId)
     updateQueue(prev => prev.filter(entry => entry.steerQueuedMessageId !== steerId))
+    // An internal (hidden) steer must still clear its queue entry, but it never
+    // becomes a visible transcript marker.
+    if (hidden) return
     const body = content ?? pending?.content
     if (!body) return
     recordSteeredMessage(body, displayContent ?? pending?.displayContent)

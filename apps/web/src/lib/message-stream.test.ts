@@ -66,6 +66,22 @@ describe('createMessageStream', () => {
     ])
   })
 
+  it('drops a hidden steering event so internal nudges never reach the transcript', () => {
+    // Background-terminal notifications steer the model but are internal: the
+    // chat must stay clean while trajectory mode still logs them.
+    const stream = createMessageStream()
+    stream.pushText('before the steer')
+    stream.push({
+      type: 'steering',
+      content: '[system-notification: background command finished]',
+      hidden: true,
+    })
+    expect(stream.snapshot()).toMatchObject({
+      content: 'before the steer',
+      segments: [{ type: 'text', content: 'before the steer' }],
+    })
+  })
+
   it('groups repeated tool call IDs once', () => {
     const stream = createMessageStream()
     stream.pushToolStart('a', 'x', {})

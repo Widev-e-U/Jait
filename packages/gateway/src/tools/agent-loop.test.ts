@@ -1731,6 +1731,52 @@ describe("runAgentLoop persistence", () => {
     });
   });
 
+  it.each(["before model call", "during final response"])("keeps internal steering hidden when received %s", async (timing) => {
+    const notification = "[system-notification: background command finished]\nprivate command output";
+    const steering = new SteeringController();
+    if (timing === "before model call") steering.steer(notification, { hidden: true });
+    const history: AgentMessage[] = [{ role: "user", content: "Verify the fix." }];
+    const requests: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      requests.push(String(init?.body));
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"Verified."}}]}\n\n' +
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: [DONE]\n\n',
+          ));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+    const events: AgentLoopEvent[] = [];
+    const persisted = vi.fn();
+    const result = await runAgentLoop({
+      llm: { openaiApiKey: "test-key", openaiBaseUrl: "https://llm.test", openaiModel: "test-model", contextWindow: 100_000 },
+      history, toolSchemas: [], hasTools: false, sessionId: "hidden-background-steering", abort: new AbortController(),
+      maxRounds: 2, mode: "agent", onPersist: persisted,
+      onEvent: event => {
+        events.push(event);
+        if (timing === "during final response" && event.type === "token" && requests.length === 1) {
+          steering.steer(notification, { hidden: true });
+        }
+      },
+    }, async () => ({ ok: true, message: "" }), steering);
+
+    expect(requests).toHaveLength(timing === "before model call" ? 1 : 2);
+    expect(requests.at(-1)).toContain("private command output");
+    expect(history.some(message => String(message.content).includes(notification))).toBe(true);
+    expect(result.segments?.some(segment => segment.type === "steering")).toBe(false);
+    expect(JSON.stringify(result)).not.toContain("private command output");
+    expect(JSON.stringify(persisted.mock.calls)).not.toContain("private command output");
+    // The event is still emitted so trajectory/debug views can show it, but it is
+    // flagged hidden so chat surfaces never render it.
+    const steers = events.filter(event => event.type === "steering");
+    expect(steers.length).toBeGreaterThan(0);
+    for (const steer of steers) expect(steer).toMatchObject({ hidden: true });
+  });
+
   it("calls onPersist exactly once and reports persisted=true on normal completion", async () => {
     const chunks = [
       'data: {"choices":[{"delta":{"content":"Hello world"}}]}\n\n',

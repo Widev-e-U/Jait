@@ -238,7 +238,7 @@ function formatExternalProviderFirstTurn(systemPrompt: string, userContent: stri
  * (e.g. a test run) finishes, so the re-triggered agent can react to the result.
  */
 export function formatBackgroundCommandNotification(result: BackgroundCommandResult): string {
-  const status = result.exitCode === 0
+  const status = result.timedOut ? "timed out (execution stopped)" : result.exitCode === 0
     ? "succeeded (exit code 0)"
     : result.exitCode == null
       ? "finished (exit code unavailable)"
@@ -267,7 +267,7 @@ export function formatBackgroundCommandNotification(result: BackgroundCommandRes
  * is only fed to the agent.
  */
 function formatBackgroundCommandNotice(result: BackgroundCommandResult): string {
-  const status = result.exitCode === 0 || result.exitCode == null
+  const status = result.timedOut ? "timed out" : result.exitCode === 0 || result.exitCode == null
     ? "finished"
     : "failed";
   const seconds = Math.max(1, Math.round(result.durationMs / 1000));
@@ -3046,7 +3046,7 @@ export function registerChatRoutes(
     };
 
     try {
-      const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note);
+      const steer = await interventionRunResumeRegistry.resumeChatSession(result.sessionId, note, { hidden: true });
       if (steer.status === "steered") return;
     } catch {
       /* fall through to the thread/idle path */
@@ -4105,11 +4105,11 @@ export function registerChatRoutes(
     // Create steering controller for this session
     const steering = new SteeringController();
     sessionSteeringControllers.set(sessionId, steering);
-    unregisterInterventionResume = interventionRunResumeRegistry.registerChatSession(sessionId, (message) => {
+    unregisterInterventionResume = interventionRunResumeRegistry.registerChatSession(sessionId, (message, options) => {
       if (!activeStreams.has(sessionId)) return { status: "not-running" as const };
       const controller = sessionSteeringControllers.get(sessionId);
       if (!controller) return { status: "not-running" as const };
-      controller.steer(message);
+      controller.steer(message, options);
       return { status: "steered" as const };
     });
 
@@ -4779,11 +4779,13 @@ export function registerChatRoutes(
           flushToolGroup();
           flushTextSegment();
           for (const pending of steered) {
-            cliSegments.push({
-              type: "steering",
-              content: pending.message,
-              ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
-            });
+            if (!pending.hidden) {
+              cliSegments.push({
+                type: "steering",
+                content: pending.message,
+                ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+              });
+            }
             // Mirror the agent loop's consumption event so a client that had the
             // message queued can promote it into the transcript exactly once.
             const steerEvent = {
@@ -4791,10 +4793,13 @@ export function registerChatRoutes(
               message: pending.message,
               ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
               ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
+              ...(pending.hidden ? { hidden: true } : {}),
               deferred: true,
             };
             emitToSubscribers(sessionId, steerEvent as unknown as StreamEvent);
-            safeWrite(`data: ${JSON.stringify(steerEvent)}\n\n`);
+            // Hidden steers are recorded for the trajectory log only — never
+            // written into the chat stream.
+            if (!pending.hidden) safeWrite(`data: ${JSON.stringify(steerEvent)}\n\n`);
           }
           lastSegmentWasText = false;
 
@@ -4948,8 +4953,12 @@ export function registerChatRoutes(
 
         const onEvent = (event: AgentLoopEvent) => {
           if (streamAbort.signal.aborted) return;
+          // Persist first — the trajectory log keeps every event, including the
+          // internal steering nudges that the chat transcript must never show.
           emitToSubscribers(sessionId, event as StreamEvent);
-          safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+          if (!(event.type === "steering" && event.hidden)) {
+            safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+          }
 
           // ── Update streaming accumulator so reload snapshots include partial content ──
           if (event.type === "token") accumulateToken(sessionId, event.content);

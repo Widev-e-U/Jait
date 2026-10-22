@@ -103,6 +103,12 @@ export type MessageStreamEvent =
       queuedMessageId?: string
       /** The gateway accepted the steer earlier and injected it at a round boundary. */
       deferred?: boolean
+      /**
+       * Internal steer (background-terminal completion note and similar). The
+       * model sees it and the trajectory panel logs it, but the chat transcript
+       * must never render it as a visible steering marker.
+       */
+      hidden?: boolean
     }
   | ToolStreamEvent
 
@@ -335,6 +341,10 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
         return
       }
       case 'steering': {
+        // Hidden steers are internal control messages (e.g. a background
+        // terminal finishing). They steer the model but contribute no visible
+        // content, so they never become a transcript segment.
+        if (event.hidden === true) return
         segments = [
           ...segments,
           {

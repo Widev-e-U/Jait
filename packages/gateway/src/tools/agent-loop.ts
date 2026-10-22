@@ -164,7 +164,10 @@ export type AgentLoopEvent =
   | { type: "tool_validation_error"; call_id: string; tool: string; errors: string[] }
   // Emitted only when the loop actually consumes the steer, never on arrival —
   // the client keeps the message in its queued state until this fires.
-  | { type: "steering"; message: string; displayContent?: string; queuedMessageId?: string; deferred?: boolean }
+  // `hidden` marks internal nudges (e.g. background-terminal notifications) that
+  // the model must consume but the chat transcript must not show. They are still
+  // emitted so the persisted trajectory log keeps them for debugging.
+  | { type: "steering"; message: string; displayContent?: string; queuedMessageId?: string; deferred?: boolean; hidden?: boolean }
   | { type: "plan_action"; action: PlannedAction }
   | { type: "plan_complete"; planId: string; summary: string; actions: PlannedAction[] }
   | { type: "mode_notice"; mode: ChatMode; message: string }
@@ -428,6 +431,8 @@ export interface Logger {
  * a queued entry to the moment the loop actually consumes it.
  */
 export interface SteeringMessageMeta {
+  /** Internal guidance must not be emitted or persisted as a visible segment. */
+  hidden?: boolean
   /** What the transcript should render (falls back to `message` when absent). */
   displayContent?: string
   /** Client queue-entry id of the pending message that produced this steer. */
@@ -464,6 +469,7 @@ export class SteeringController {
   steer(message: string, meta?: SteeringMessageMeta): void {
     this.queue.push({
       message,
+      ...(meta?.hidden ? { hidden: true } : {}),
       ...(meta?.displayContent ? { displayContent: meta.displayContent } : {}),
       ...(meta?.queuedMessageId ? { queuedMessageId: meta.queuedMessageId } : {}),
     });
@@ -669,6 +675,7 @@ const SEQUENTIAL_TOOLS = new Set([
   // Shell / terminal — stateful, side-effect heavy
   "execute",
   "terminal.run",
+  "terminal.execution",
   "terminal.exec",
   "terminal.stream",
   "jait.terminal",
@@ -3352,19 +3359,22 @@ export async function runAgentLoop(
       for (const pending of steered) {
         const msg = pending.message;
         history.push({ role: "system", content: `[STEERING] ${msg}` });
-        segments.push({
-          type: "steering",
-          content: msg,
-          ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
-        });
+        if (!pending.hidden) {
+          segments.push({
+            type: "steering",
+            content: msg,
+            ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+          });
+        }
         onEvent?.({
           type: "steering",
           message: msg,
           ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
           ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
+          ...(pending.hidden ? { hidden: true } : {}),
           deferred: true,
         });
-        log.info(`Steering injected for session ${sessionId}: ${msg.slice(0, 100)}`);
+        log.info(`Steering injected for session ${sessionId}: ${msg.slice(0, 100)}${pending.hidden ? " (hidden)" : ""}`);
       }
     }
 
@@ -4893,19 +4903,22 @@ export async function runAgentLoop(
       for (const pending of steered) {
         const msg = pending.message;
         history.push({ role: "system", content: `[STEERING] ${msg}` });
-        segments.push({
-          type: "steering",
-          content: msg,
-          ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
-        });
+        if (!pending.hidden) {
+          segments.push({
+            type: "steering",
+            content: msg,
+            ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+          });
+        }
         onEvent?.({
           type: "steering",
           message: msg,
           ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
           ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
+          ...(pending.hidden ? { hidden: true } : {}),
           deferred: true,
         });
-        log.info(`Steering injected for session ${sessionId}: ${msg.slice(0, 100)}`);
+        log.info(`Steering injected for session ${sessionId}: ${msg.slice(0, 100)}${pending.hidden ? " (hidden)" : ""}`);
       }
       continue;
     }

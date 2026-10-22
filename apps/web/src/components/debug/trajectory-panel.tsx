@@ -59,7 +59,7 @@ export function nextStickToBottom(params: {
   return params.userScrolling ? false : params.stuck
 }
 
-type Role = 'user' | 'assistant' | 'context' | 'tool' | 'done' | 'error'
+type Role = 'user' | 'assistant' | 'context' | 'tool' | 'steering' | 'done' | 'error'
 
 const roleStyles: Record<Role, {
   label: string
@@ -85,6 +85,11 @@ const roleStyles: Record<Role, {
     label: 'Tool',
     iconClass: 'border-amber-500/20 bg-amber-500/10 text-amber-500',
     badgeClass: 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  },
+  steering: {
+    label: 'Steering',
+    iconClass: 'border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-500',
+    badgeClass: 'border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
   },
   done: {
     label: 'Complete',
@@ -117,6 +122,7 @@ function getStepIcon(step: TrajectoryStep) {
   if (step.kind === 'assistant') return Sparkles
   if (step.kind === 'context') return Gauge
   if (step.kind === 'tool') return getToolIcon(step.tool)
+  if (step.kind === 'steering') return Radio
   if (step.kind === 'done') return CheckCircle2
   return AlertCircle
 }
@@ -126,6 +132,7 @@ function getStepTitle(step: TrajectoryStep): string {
   if (step.kind === 'assistant') return step.completedAt ? 'Assistant response' : 'Assistant working'
   if (step.kind === 'context') return 'Context window'
   if (step.kind === 'tool') return step.tool
+  if (step.kind === 'steering') return step.hidden ? 'Steering (internal)' : 'Steering'
   if (step.kind === 'done') return 'Turn completed'
   return 'Turn error'
 }
@@ -185,6 +192,26 @@ function StepContent({ step, expanded }: { step: TrajectoryStep; expanded: boole
             <span>{step.result.message.length > 240 ? `${step.result.message.slice(0, 240)}…` : step.result.message}</span>
           </div>
         )}
+      </div>
+    )
+  }
+  if (step.kind === 'steering') {
+    const body = step.displayContent || step.message
+    return (
+      <div className="min-w-0 space-y-1">
+        <p className={cn('text-sm leading-5 text-foreground/90', expanded ? 'whitespace-pre-wrap break-words' : 'line-clamp-2')}>
+          {body || <span className="italic text-muted-foreground">(empty steer)</span>}
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted-foreground">
+          {step.hidden && (
+            <span className="rounded border border-fuchsia-500/20 bg-fuchsia-500/10 px-1.5 py-0.5 font-medium text-fuchsia-600 dark:text-fuchsia-400">
+              internal
+            </span>
+          )}
+          {step.deferred && (
+            <span className="rounded border border-border/60 px-1.5 py-0.5">deferred</span>
+          )}
+        </div>
       </div>
     )
   }
@@ -434,6 +461,13 @@ function stepDetailText(step: TrajectoryStep): string {
         step.sessionId ? `[session] ${step.sessionId}` : '',
         step.promptCount !== undefined ? `[prompt count] ${step.promptCount}` : '',
       ].filter(Boolean).join('\n')
+    case 'steering':
+      return [
+        step.displayContent && step.displayContent !== step.message ? `[display]\n${step.displayContent}` : '',
+        `[message]\n${step.message}`,
+        step.hidden ? '[internal] yes' : '[internal] no',
+        step.deferred ? '[deferred] yes' : '',
+      ].filter(Boolean).join('\n')
     case 'error':
       return step.message
   }
@@ -473,6 +507,7 @@ export function TrajectoryPanel({ onClose, sessionId, token }: TrajectoryPanelPr
         case 'context': return 'context usage tokens pruned'.includes(q)
         case 'tool': return s.tool.toLowerCase().includes(q) || s.argsPreview.toLowerCase().includes(q) || (s.result?.message ?? '').toLowerCase().includes(q)
         case 'done': case 'error': return s.message.toLowerCase().includes(q)
+        case 'steering': return `${s.hidden ? 'steering internal hidden defer ' : 'steering '}${s.message} ${s.displayContent ?? ''}`.toLowerCase().includes(q)
       }
     })
   }, [steps, filter])
