@@ -19,3 +19,19 @@ pub mod agent_control;
 pub mod skills;
 
 pub mod security_assessments;
+
+pub mod jobs;
+
+pub mod filesystem;
+
+pub mod update_failure;
+
+pub mod maintenance;
+
+pub mod environment;
+
+pub mod chat;
+
+pub mod chat_events;
+
+pub mod reminders;

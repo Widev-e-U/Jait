@@ -22605,280 +22605,280 @@ fn tailstatic_packages_gateway_src_terminal_completion_marker_test_ts_33_1() {
 
 // packages/gateway/src/terminal-tools.test.ts:114:3: returns ok=true when sandbox exit code is zero
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_114_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_128_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_114_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_128_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"Sandbox command completed"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:126:3: rewrites host project paths to the sandbox mount path
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_126_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_126_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"cd /project && bun test"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:140:3: rewrites quoted project file paths to the sandbox mount path
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_154_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_154_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"cat '/project/packages/gateway/src/tools/terminal-tools.ts'"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:148:3: does not rewrite path prefixes that only partially match the project root
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_148_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_162_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_148_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_162_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:156:3: executes sandbox commands inside a thread sandbox container when provided
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_170_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_170_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"start"},{"id":15,"kind":"alt","nodes":[{"id":7,"kind":"seq","nodes":[{"id":1,"kind":"char","value":"d"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"k"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"r"}]},{"id":14,"kind":"seq","nodes":[{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"o"},{"id":10,"kind":"char","value":"d"},{"id":11,"kind":"char","value":"m"},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"n"}]}]},{"id":16,"kind":"end"}]},"flags":""}},{"matcher":"toEqual","negate":false,"expected":["exec","-w","/project","jait-agent-sb-test","bash","-lc","pwd"]},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:174:3: rewrites host paths before executing inside a thread sandbox container
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_174_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_174_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"cd /project && bun test"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:188:3: returns ok=false when sandbox exit code is non-zero
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_202_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_202_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"exit code 1"},{"matcher":"toContain","negate":false,"expected":"error"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:199:3: returns ok=false when sandbox command times out
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_199_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_213_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_199_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_213_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"timed out"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:214:3: announces the terminal binding before the command is written to the PTY
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_214_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_228_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_214_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_228_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"sessionId":"s-test","userId":"u-test","payload":{"terminalId":"term-bind","execution":{"command":"printf hi","actionId":"a-test","outputOffset":7,"outputEndOffset":null,"completedAt":null,"isBackground":true,"watched":true}}}},{"matcher":"toHaveProperty","negate":true,"expected":"execution.output"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:272:3: announces the bounded output range when a background command finishes
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_272_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_286_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_272_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_286_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"command":"printf hi","outputOffset":4,"outputEndOffset":9,"watched":false}},{"matcher":"toBeTruthy","negate":false}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:317:3: background mode appends a completion sentinel after the requested command
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_317_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_331_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_317_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_331_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"outputOffset":4}},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":51,"kind":"seq","nodes":[{"id":0,"kind":"start"},{"id":1,"kind":"char","value":"p"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":"i"},{"id":4,"kind":"char","value":"n"},{"id":5,"kind":"char","value":"t"},{"id":6,"kind":"char","value":"f"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"'"},{"id":9,"kind":"char","value":"\\"},{"id":10,"kind":"char","value":"n"},{"id":11,"kind":"char","value":"_"},{"id":12,"kind":"char","value":"_"},{"id":13,"kind":"char","value":"J"},{"id":14,"kind":"char","value":"A"},{"id":15,"kind":"char","value":"I"},{"id":16,"kind":"char","value":"T"},{"id":17,"kind":"char","value":"_"},{"id":18,"kind":"char","value":"B"},{"id":19,"kind":"char","value":"A"},{"id":20,"kind":"char","value":"C"},{"id":21,"kind":"char","value":"K"},{"id":22,"kind":"char","value":"G"},{"id":23,"kind":"char","value":"R"},{"id":24,"kind":"char","value":"O"},{"id":25,"kind":"char","value":"U"},{"id":26,"kind":"char","value":"N"},{"id":27,"kind":"char","value":"D"},{"id":28,"kind":"char","value":"_"},{"id":29,"kind":"char","value":"D"},{"id":30,"kind":"char","value":"O"},{"id":31,"kind":"char","value":"N"},{"id":32,"kind":"char","value":"E"},{"id":33,"kind":"char","value":"_"},{"id":35,"kind":"repeat","node":{"id":34,"kind":"class","items":[{"low":"0","high":"9"},{"low":"a","high":"f"},{"low":"-","high":"-"}],"negate":false},"min":1,"max":null},{"id":36,"kind":"char","value":"_"},{"id":37,"kind":"char","value":"_"},{"id":38,"kind":"char","value":":"},{"id":39,"kind":"char","value":"%"},{"id":40,"kind":"char","value":"s"},{"id":41,"kind":"char","value":"\\"},{"id":42,"kind":"char","value":"n"},{"id":43,"kind":"char","value":"'"},{"id":44,"kind":"char","value":" "},{"id":45,"kind":"char","value":"\""},{"id":46,"kind":"char","value":"$"},{"id":47,"kind":"char","value":"?"},{"id":48,"kind":"char","value":"\""},{"id":49,"kind":"char","value":"\r"},{"id":50,"kind":"end"}]},"flags":""}},{"matcher":"toMatchObject","negate":false,"expected":{"command":"printf hi","actionId":"a-test","outputOffset":4,"isBackground":true,"watched":true}},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:356:3: persists the completed output range for a watched background command
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_356_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_370_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_356_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_370_3"#,
         r#"[{"matcher":"toBeTruthy","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"command":"printf hi","actionId":"a-test","outputOffset":4,"outputEndOffset":5,"output":"hi","isBackground":true,"watched":false}}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:406:3: runs a background command in its own terminal, separate from the session default
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_406_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_420_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_406_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_420_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeTruthy","negate":false},{"matcher":"toContain","negate":false,"expected":"printf fg1"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeTruthy","negate":false},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:438:3: starts a new terminal when the default terminal has a timed-out command
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_438_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_452_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_438_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"timedOut":true,"watched":true}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":true,"dynamic":true}]"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_452_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"timedOut":false,"yielded":true,"watched":true}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":true,"dynamic":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:462:3: does not write a second command into an explicitly requested watched terminal
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_462_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_476_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_462_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_476_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"still running a watched background command"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:498:3: reattaches a requested remote terminal after gateway surface state is lost
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_498_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_512_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_498_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_512_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"term-existing"},{"matcher":"toMatchObject","negate":false,"expected":{"nodeId":"node-1","op":"start","params":{"terminalId":"term-existing","reuseOnly":true}}}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:527:3: does not replace an unavailable requested remote terminal
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_527_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_541_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_527_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_541_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"Requested terminal term-missing is unavailable"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"nodeId":"node-1","op":"start","params":{"terminalId":"term-missing","reuseOnly":true}}},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:555:3: does not replace an unavailable requested local terminal
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_555_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_555_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Requested terminal term-missing is not running"},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:569:3: completes when a non-OSC shell prompt returns
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_583_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_583_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"exit code 127"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"Command 'rg' not found"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:582:3: completes when a zsh-style path prompt returns
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_582_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_582_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"exit code 0"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"/tmp/alice/jait"},{"matcher":"toContain","negate":true,"expected":"~/jait %"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:596:3: captures late output that arrives after prompt fallback starts settling
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_610_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_610_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"hi"},{"matcher":"toContain","negate":false,"expected":"late formatter output"},{"matcher":"toContain","negate":true,"expected":"alice@dev-host"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:611:3: moves the wait to background when no completion marker returns
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_611_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_625_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_611_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"timed out"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":true,"expected":"\u0003\r"},{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true}}]"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_625_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"still running"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":true,"expected":"\u0003\r"},{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true}}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:624:3: wraps single-line commands in bracketed paste for PSReadLine terminals
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_624_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_638_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_624_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_638_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:665:3: requests an inline secret when a non-SSH terminal command asks for a password
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_665_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_679_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_665_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_679_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"connected"},{"matcher":"toContain","negate":false,"expected":"remote-password\r"},{"matcher":"toEqual","negate":false,"expected":[{"title":"Terminal input required","prompt":"[sudo] password for alice:","requestedBy":"terminal.run"}]}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:683:3: requests an inline secret when an SSH terminal command asks for a password
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_683_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_697_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_683_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_697_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"connected"},{"matcher":"toContain","negate":false,"expected":"remote-password\r"},{"matcher":"toEqual","negate":false,"expected":[{"title":"SSH password","prompt":"alice@host's password:","requestedBy":"terminal.run"}]}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:701:3: does not request a secret for a completed test log containing password prompt fixtures
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_701_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_715_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_701_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_715_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toContain","negate":true,"expected":"unused-secret\r"}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:721:3: detects sudo password prompts
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_721_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_735_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_721_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_735_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
 // packages/gateway/src/terminal-tools.test.ts:725:3: does not flag regular command output
 #[test]
-fn tailstatic_packages_gateway_src_terminal_tools_test_ts_725_3() {
+fn tailstatic_packages_gateway_src_terminal_tools_test_ts_739_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-tools-test-12136908"#,
-        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_725_3"#,
+        r#"tailstatic_packages_gateway_src_terminal_tools_test_ts_739_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
@@ -22909,7 +22909,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_65_3() {
     tail_assertions::check(
         r#"gateway-src-terminal-waiting-test-f15bea14"#,
         r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_65_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true,"timedOut":true}},{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"exitCode":0,"output":{"__jait_matcher":"stringContaining","value":"building first stage"}}},{"matcher":"toContain","negate":false,"expected":"build complete"},{"matcher":"toBeNull","negate":false}]"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true,"timedOut":false,"yielded":true}},{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"exitCode":0,"output":{"__jait_matcher":"stringContaining","value":"building first stage"}}},{"matcher":"toContain","negate":false,"expected":"build complete"},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
@@ -22920,6 +22920,66 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_89_1() {
         r#"gateway-src-terminal-waiting-test-f15bea14"#,
         r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_89_1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"isBackground":true,"watched":true}},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"exitCode":0,"output":{"__jait_matcher":"stringContaining","value":"stage-two"}}},{"matcher":"toContain","negate":false,"expected":"stage-one"}]"#,
+    );
+}
+
+// packages/gateway/src/terminal-waiting.test.ts:current:113: returns bounded progress, enforces execution identity and cancels without rerunning
+#[test]
+fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_113_1() {
+    tail_assertions::check(
+        r#"gateway-src-terminal-waiting-test-f15bea14"#,
+        r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_113_1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","output":{"__jait_matcher":"stringContaining","value":"still building"}}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"cancelled"}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"status":"cancelled"}}]"#,
+    );
+}
+
+// packages/gateway/src/terminal-waiting.test.ts:current:134: rejects incomplete shell syntax before writing anything to a persistent terminal
+#[test]
+fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_134_1() {
+    tail_assertions::check(
+        r#"gateway-src-terminal-waiting-test-f15bea14"#,
+        r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_134_1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"syntaxError":true}},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/terminal-waiting.test.ts:current:148: reports deadline expiry during background startup inline without a duplicate wakeup
+#[test]
+fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_148_1() {
+    tail_assertions::check(
+        r#"gateway-src-terminal-waiting-test-f15bea14"#,
+        r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_148_1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"timedOut":true,"isBackground":false,"watched":false}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/terminal-waiting.test.ts:current:160: never dispatches after cancellation during environment resolution (background=%s)
+#[test]
+fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each0() {
+    tail_assertions::check(
+        r#"gateway-src-terminal-waiting-test-f15bea14"#,
+        r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/terminal-waiting.test.ts:current:160: never dispatches after cancellation during environment resolution (background=%s)
+#[test]
+fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each1() {
+    tail_assertions::check(
+        r#"gateway-src-terminal-waiting-test-f15bea14"#,
+        r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/terminal-waiting.test.ts:current:178: finishes from the real PTY exit even when the shell never returns a prompt
+#[test]
+fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_178_1() {
+    tail_assertions::check(
+        r#"gateway-src-terminal-waiting-test-f15bea14"#,
+        r#"tailstatic_packages_gateway_src_terminal_waiting_test_ts_178_1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"exitCode":7,"timedOut":false}}]"#,
     );
 }
 
@@ -29778,52 +29838,52 @@ fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_60_
     );
 }
 
-// packages/gateway/src/tools/terminal-sandbox-background.test.ts:72:3: keeps foreground sandbox calls waiting for real completion
+// packages/gateway/src/tools/terminal-sandbox-background.test.ts:current:72: yields finite sandbox calls and reports their later completion once
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_72_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-sandbox-background-test-a478164c"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_72_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalled","negate":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
 // packages/gateway/src/tools/terminal-sandbox-background.test.ts:80:3: launches a standalone sandbox with the original mount and resource restrictions
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_80_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_88_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-sandbox-background-test-a478164c"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_80_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_88_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"command":"cat /project/file","projectRoot":"/repo","mountMode":"read-only","networkEnabled":false,"memoryLimitMb":512,"cpuLimit":"1.0","timeoutMs":3600000}]}]"#,
     );
 }
 
 // packages/gateway/src/tools/terminal-sandbox-background.test.ts:89:3: does not start an already cancelled command
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_89_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-sandbox-background-test-a478164c"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_89_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
 // packages/gateway/src/tools/terminal-sandbox-background.test.ts:97:3: stops startup on cancellation without falsely reporting success
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_105_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-sandbox-background-test-a478164c"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_105_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Cancelled"},{"matcher":"toHaveBeenCalled","negate":false}]"#,
     );
 }
 
 // packages/gateway/src/tools/terminal-sandbox-background.test.ts:109:3: cancels the scoped process and suppresses wakeup when session watching is stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_109_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_117_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-sandbox-background-test-a478164c"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_109_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_117_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }

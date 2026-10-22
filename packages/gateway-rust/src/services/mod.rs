@@ -90,3 +90,5 @@ pub mod ollama_device_auth;
 pub mod provider_quota_fetchers;
 
 pub mod session_sql;
+
+pub mod reminders;

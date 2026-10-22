@@ -54,13 +54,13 @@ export function EmailContent({ bodyHtml, bodyText, accountId }: { bodyHtml: stri
   return (
     <div className="min-w-0" data-testid="email-content">
       {prepared.urls.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5 px-2.5 text-[11px] text-muted-foreground sm:mb-2 sm:gap-2 sm:text-xs">
           <span>{images.html === bodyHtml ? 'External images requested.' : 'External images are blocked for privacy.'}</span>
-          {accountId && <Button size="sm" variant="outline" onClick={() => { void loadImages() }} disabled={loading || images.html === bodyHtml} className="h-7 text-xs">{loading ? 'Loading images…' : 'Load images'}</Button>}
+          {accountId && <Button size="sm" variant="outline" onClick={() => { void loadImages() }} disabled={loading || images.html === bodyHtml} className="h-6 px-2 text-[11px] sm:h-7 sm:px-3 sm:text-xs">{loading ? 'Loading images…' : 'Load images'}</Button>}
           {imageError && <span role="status">{imageError}</span>}
         </div>
       )}
-      <iframe title="Email content" referrerPolicy="no-referrer" sandbox="allow-popups allow-popups-to-escape-sandbox" className="h-[min(60vh,600px)] min-h-72 w-full rounded-md border bg-white" srcDoc={prepared.srcDoc} />
+      <iframe title="Email content" referrerPolicy="no-referrer" sandbox="allow-popups allow-popups-to-escape-sandbox" className="h-[38vh] max-h-64 min-h-44 w-full bg-white sm:h-[min(60vh,600px)] sm:max-h-none sm:min-h-72" srcDoc={prepared.srcDoc} />
     </div>
   )
 }

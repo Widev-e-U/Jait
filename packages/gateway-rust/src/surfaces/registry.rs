@@ -42,7 +42,7 @@ pub struct SurfaceSnapshot {
     pub started_at: Option<String>,
     pub metadata: Map<String, Value>,
 }
-pub trait Surface: Send + Sync {
+pub trait Surface: Send + Sync + std::any::Any {
     fn id(&self) -> &str;
     fn kind(&self) -> &str;
     fn state(&self) -> SurfaceState;

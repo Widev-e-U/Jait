@@ -11,7 +11,12 @@ export interface ThreadResumeAttempt {
   error?: string;
 }
 
-type ChatResumeHandler = (message: string) => Promise<ChatResumeAttempt> | ChatResumeAttempt;
+export interface ChatResumeOptions {
+  /** Internal notifications reach the model without a visible steering marker. */
+  hidden?: boolean;
+}
+
+type ChatResumeHandler = (message: string, options?: ChatResumeOptions) => Promise<ChatResumeAttempt> | ChatResumeAttempt;
 type ThreadResumeHandler = (message: string) => Promise<ThreadResumeAttempt> | ThreadResumeAttempt;
 
 class InterventionRunResumeRegistry {
@@ -36,11 +41,11 @@ class InterventionRunResumeRegistry {
     };
   }
 
-  async resumeChatSession(sessionId: string, message: string): Promise<ChatResumeAttempt> {
+  async resumeChatSession(sessionId: string, message: string, options?: ChatResumeOptions): Promise<ChatResumeAttempt> {
     const handler = this.chatHandlers.get(sessionId);
     if (!handler) return { status: "not-running" };
     try {
-      return await handler(message);
+      return await handler(message, options);
     } catch (error) {
       return {
         status: "error",

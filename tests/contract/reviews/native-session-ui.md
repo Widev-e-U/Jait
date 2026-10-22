@@ -24,10 +24,12 @@ calls. Responses, stored records and ordered events are compared exactly; only
 validated generated UUIDv7 identities are replaced with stable symbolic values.
 Title normalization additionally compares all UTF-16 code units for 125 cases.
 
-The HTTP component remains **candidate**, with no native component credit.
-Open compatibility work includes the full legacy ECMAScript Date.parse input
-space, unregistered optional routes/method fallbacks, framework parser errors,
-and provider/platform integration. The typed title/runtime adapters do not
+The HTTP component was **candidate** at this checkpoint. The later review in
+`native-session-http.md` closes the concrete optional-route, HEAD, framework
+parser and reduced-ISO/legacy-date gaps with actual-source differential tests.
+Its source-bound gate now determines focused component credit. Exhaustive legacy
+ECMAScript Date.parse input coverage and provider/platform integration remain
+separate limitations. The typed title/runtime adapters do not
 constitute implementations of provider transport, live chat execution or WebSocket
 transport. The standalone entry point remains unchanged; session routes require
 explicit opt-in via `Gateway::with_sessions`.

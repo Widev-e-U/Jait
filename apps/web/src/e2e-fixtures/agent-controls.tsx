@@ -37,8 +37,8 @@ function Harness() {
         onNavigate={noop} onViewModeChange={noop} onOpenSettings={noop} />}
       <div className="flex-1 p-6"><h1 className="text-lg font-semibold">{agentsPage ? 'Agents page' : 'Agent controls'}</h1><p className="text-sm text-muted-foreground">Work stays visible while agents run.</p></div>
     </main>
-    {mobile && <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} account={account}
-      currentView="agents" onNavigate={noop} onOpenSettings={noop} sessionSelector={null} />}
+    {mobile && <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}
+      currentView="agents" onNavigate={noop} sessionSelector={null} />}
   </div></TooltipProvider>
 }
 const mount = document.createElement('div')

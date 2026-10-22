@@ -41,7 +41,7 @@ export async function dispatch(call:any){
   r.clearForTests();
   const handlers:any={},releases:any={},events:any[]=[],results=[];
   for(const [name,behavior]of Object.entries(call.handlers)as [string,any][]){
-   handlers[name]=async(message:string)=>{events.push({name,message});
+   handlers[name]=async(message:string,options?:unknown)=>{events.push({name,message,...(call.captureOptions?{options:options===undefined?{undefined:true}:options}:{})});
     if(behavior.error!==undefined)throw new Error(behavior.error);
     await Promise.resolve();return behavior.value;
    };
@@ -50,7 +50,7 @@ export async function dispatch(call:any){
    let value:any=null;
    if(step.op==='register')releases[step.alias]=step.kind==='chat'?r.registerChatSession(step.id,handlers[step.handler]):r.registerThread(step.id,handlers[step.handler]);
    if(step.op==='release')releases[step.alias]();
-   if(step.op==='resume')value=step.kind==='chat'?await r.resumeChatSession(step.id,step.message):await r.resumeThread(step.id,step.message);
+   if(step.op==='resume')value=step.kind==='chat'?await r.resumeChatSession(step.id,step.message,step.options):await r.resumeThread(step.id,step.message);
    if(step.op==='clear')r.clearForTests();
    results.push(value);
   }return {results,events};}finally{r.clearForTests();}

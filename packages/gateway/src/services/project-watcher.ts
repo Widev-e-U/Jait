@@ -8,7 +8,7 @@
  */
 
 import type { AsyncSubscription, Event as ParcelEvent } from "@parcel/watcher";
-import { relative, sep } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { EventEmitter } from "node:events";
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -36,6 +36,16 @@ export interface ProjectWatcherOptions {
    * large operations.  Default: 500.
    */
   maxBatchSize?: number;
+  /**
+   * Watch a root that lives inside a generated tree (a `.jait` directory).
+   *
+   * The gateway refuses those roots by default because its own artifacts,
+   * sandboxes and deploy workspaces hold far more directories than the kernel
+   * watch table can hand out.  Callers that pass a small, purpose-built
+   * scratch tree under `.jait` — contract harnesses, fixtures — can opt back
+   * in and get a real subscription.
+   */
+  allowGeneratedRoot?: boolean;
 }
 
 // ── Default ignore list ──────────────────────────────────────────────
@@ -78,6 +88,16 @@ export const DEFAULT_IGNORE = [
   "**/.pytest_cache/**",
   "**/.mypy_cache/**",
   "**/.ruff_cache/**",
+  // Sandboxes include toolchain homes with large package caches.
+  "**/.bun/**",
+  "**/.cargo/**",
+  "**/.rustup/**",
+  "**/.npm/**",
+  "**/.yarn/**",
+  "**/.pnpm-store/**",
+  "**/.gradle-docker/**",
+  "**/.android/**",
+  "**/site-packages/**",
   "**/.DS_Store",
   "**/Thumbs.db",
   "**/*.swp",
@@ -144,6 +164,7 @@ export class ProjectWatcher extends EventEmitter {
       ignore: opts?.ignore ?? DEFAULT_IGNORE,
       coalesceMs: opts?.coalesceMs ?? 150,
       maxBatchSize: opts?.maxBatchSize ?? 500,
+      allowGeneratedRoot: opts?.allowGeneratedRoot ?? false,
     };
   }
 
@@ -161,6 +182,13 @@ export class ProjectWatcher extends EventEmitter {
    */
   async watch(projectRoot: string): Promise<void> {
     await this.stop();
+    // Ignore globs are relative to the watched root. If .jait is an ancestor,
+    // its artifacts and sandbox caches would otherwise receive native watches.
+    // Callers that deliberately watch a small generated scratch tree opt in.
+    if (!this.options.allowGeneratedRoot && /[\\/]\.jait(?:[\\/]|$)/.test(resolve(projectRoot))) {
+      this._root = null;
+      return;
+    }
     this._root = projectRoot;
 
     // Dynamic import so the native module is only loaded when actually needed

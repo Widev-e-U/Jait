@@ -1,6 +1,5 @@
 import {
   CircleQuestionMark,
-  Hourglass,
   Loader2,
   MessageSquare,
   MessageSquareX,
@@ -47,8 +46,9 @@ export interface SessionRowProps {
   /**
    * Why the chat is stopped right now, straight from the gateway. Takes
    * precedence over the legacy `isAwaitingAnswer`/`isWaitingForApproval`
-   * booleans so every wait — browser control, a terminal prompt, a running
-   * background command — is visible in the list, not just questions.
+   * booleans so every user-facing wait — a question, approval, a secret, a
+   * terminal prompt, browser control — is visible in the list. Waits with no
+   * row icon (a running background command) are ignored here.
    */
   wait?: SessionWait
   /** Shown when session.name is empty (e.g. "Personal chat" vs "Untitled session"). */
@@ -62,21 +62,28 @@ export interface SessionRowProps {
 }
 
 /**
- * One icon per wait reason. `background` is deliberately not the streaming
- * spinner: a background command means the agent is *not* producing output.
+ * One icon per wait reason that actually stops the chat for the user.
+ *
+ * `background` (a command the agent asked to be woken up for) has no entry on
+ * purpose: it is the agent's own reminder, it lingers for the whole run and it
+ * used to badge rows that were simply working, so those rows keep their
+ * streaming spinner / normal chat icon instead.
  */
-const SESSION_WAIT_ICONS: Record<SessionWaitKind, LucideIcon> = {
+const SESSION_WAIT_ICONS: Partial<Record<SessionWaitKind, LucideIcon>> = {
   question: CircleQuestionMark,
   consent: ShieldQuestion,
   secret: ShieldQuestion,
   browser: MousePointerClick,
   terminal: TerminalSquare,
-  background: Hourglass,
 }
 
-/** Icon + tooltip for one wait reason. Blocking waits are amber, background is muted. */
-function SessionWaitIcon({ wait }: { wait: SessionWait }) {
-  const Icon = SESSION_WAIT_ICONS[wait.kind] ?? CircleQuestionMark
+/** Icon for a wait reason, or undefined when the wait needs no row badge. */
+export function sessionWaitIcon(wait: SessionWait | undefined): LucideIcon | undefined {
+  return wait ? SESSION_WAIT_ICONS[wait.kind] : undefined
+}
+
+/** Icon + tooltip for one wait reason. Blocking waits are amber, non-blocking ones pulse. */
+function SessionWaitIcon({ wait, Icon }: { wait: SessionWait; Icon: LucideIcon }) {
   const title = wait.detail ? `${wait.label} — ${wait.detail}` : wait.label
   const tone = wait.blocking ? 'text-amber-500' : 'text-muted-foreground'
   return (
@@ -108,6 +115,7 @@ export function SessionRow({
   longPressProps,
 }: SessionRowProps) {
   const chatError = parseSessionChatError(session.metadata)
+  const waitIcon = sessionWaitIcon(wait)
   const unread = isSessionUnread({
     lastActiveAt: session.lastActiveAt ?? '',
     viewedAt: session.viewedAt ?? null,
@@ -123,8 +131,8 @@ export function SessionRow({
       {...dragProps}
       {...longPressProps}
     >
-      {wait ? (
-        <SessionWaitIcon wait={wait} />
+      {wait && waitIcon ? (
+        <SessionWaitIcon wait={wait} Icon={waitIcon} />
       ) : isAwaitingAnswer ? (
         <TooltipHint content="Waiting for your answer">
           <CircleQuestionMark

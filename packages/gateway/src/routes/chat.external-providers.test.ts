@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
+import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
 import { AuditWriter } from "../services/audit.js";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
@@ -388,6 +389,51 @@ describe("chat external provider runtime mode selection", () => {
       expect(response.body).toContain('"type":"done"');
       expect(provider.sendTurn).toHaveBeenCalledOnce();
     } finally {
+      await app.close();
+    }
+  });
+
+  it("delivers background completions to an active CLI without exposing internal steering", async () => {
+    const sessionId = "cli-hidden-background-completion";
+    const monitorSpy = vi.spyOn(backgroundCommandMonitor, "setCompletionHandler");
+    let completeCommand: () => Promise<void> = async () => {};
+    class BackgroundProvider extends MockChatProvider {
+      override readonly sendTurn = vi.fn(async (providerSessionId: string, _content?: string): Promise<void> => {
+        if (this.sendTurn.mock.calls.length === 1) await completeCommand();
+        setTimeout(() => {
+          this.emitForTest({ type: "token", sessionId: providerSessionId, content: "verified" });
+          this.emitForTest({ type: "turn.completed", sessionId: providerSessionId });
+        }, 0);
+      });
+    }
+    const provider = new BackgroundProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const handler = monitorSpy.mock.calls.at(-1)![0];
+    completeCommand = async () => { await handler({
+      sessionId, terminalId: "tty-hidden", command: "check-private-output", exitCode: 0,
+      output: "private completion evidence", durationMs: 1000,
+    }); };
+    try {
+      const headers = await authHeaders();
+      const response = await app.inject({
+        method: "POST", url: "/api/chat", headers,
+        payload: { content: "verify", sessionId, provider: "codex", runtimeMode: "full-access" },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(provider.sendTurn).toHaveBeenCalledTimes(2);
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("private completion evidence");
+      expect(response.body).toContain('"type":"done"');
+      expect(response.body).not.toContain('"type":"steering"');
+      expect(response.body).not.toContain("private completion evidence");
+      expect(response.body).not.toContain("[system-notification:");
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/messages`, headers });
+      expect(history.statusCode).toBe(200);
+      expect(history.body).not.toContain("private completion evidence");
+      expect(history.body).not.toContain('"type":"steering"');
+    } finally {
+      monitorSpy.mockRestore();
       await app.close();
     }
   });

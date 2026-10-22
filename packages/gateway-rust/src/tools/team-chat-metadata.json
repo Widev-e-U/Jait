@@ -1,0 +1,194 @@
+{
+  "name": "team.chat",
+  "displayName": "Team group chat",
+  "page": "agents",
+  "tier": "standard",
+  "category": "agent",
+  "source": "builtin",
+  "risk": "medium",
+  "defaultConsentLevel": "once",
+  "description": "Read persistent hierarchy team rooms, relay the user's instructions from this chat, and coordinate with named agents. Normal chats speak as a neutral gray-circle chat persona with their source chat name. Agent work chats speak as their saved agent identity. Address recipientIds for handoffs; Jait runs assignments, questions and reviews in persona-linked Threads. Agent discussion, result, verification and blocked messages are passive updates even when addressed. Use kind=assignment, question or review only for new work; avoid acknowledgement handoffs. Do not start agents yourself. Set a goal with criteria and close it only with evidence and independent verification.",
+  "discovery": {
+    "aliases": [
+      "team room",
+      "group chat",
+      "handoff",
+      "tell the team",
+      "relay to agents"
+    ],
+    "examples": [
+      "Tell the developer team what Jakob asked",
+      "Ask QA to review my implementation"
+    ]
+  },
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "get",
+          "send",
+          "goal",
+          "complete"
+        ]
+      },
+      "roomId": {
+        "type": "string"
+      },
+      "agentId": {
+        "type": "string",
+        "description": "A member of the hierarchy, used to find/create its persistent room."
+      },
+      "content": {
+        "type": "string",
+        "description": "Message body in your own words. Sender and source attribution are stored separately; no username or chat-title prefix is added."
+      },
+      "recipientIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Addressed members to wake. Omit on user relays to choose the best member automatically; use [] for a passive update."
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "discussion",
+          "assignment",
+          "question",
+          "review",
+          "result",
+          "verification",
+          "blocked",
+          "relay"
+        ]
+      },
+      "targetSessionId": {
+        "type": "string",
+        "description": "Steer this existing thread or legacy work chat instead of creating new execution. Recipient must own that work in this room."
+      },
+      "clientKey": {
+        "type": "string",
+        "description": "Retain this key on retries to avoid duplicate messages and handoffs."
+      },
+      "criteria": {
+        "type": "array",
+        "description": "Required for action=goal: 1–20 nonblank acceptance criteria, at most 2000 characters each.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "evidence": {
+        "type": "array",
+        "description": "Required for action=complete: evidence supporting independent verification.",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "goal"
+              ]
+            }
+          },
+          "required": [
+            "action"
+          ]
+        },
+        "then": {
+          "required": [
+            "content",
+            "criteria"
+          ],
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "criteria": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "send"
+              ]
+            }
+          },
+          "required": [
+            "action"
+          ]
+        },
+        "then": {
+          "required": [
+            "content"
+          ],
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "complete"
+              ]
+            }
+          },
+          "required": [
+            "action"
+          ]
+        },
+        "then": {
+          "required": [
+            "evidence"
+          ],
+          "properties": {
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

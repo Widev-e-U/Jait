@@ -1,12 +1,9 @@
-//! Durable job scheduling and restart recovery belong here.
-//! Use persisted state and Tokio timers; revalidate authorization/expiry on each run.
-//! Do not hold database transactions across external work. Scheduling remains unported.
-
-pub mod hooks;
-
-pub mod cron;
+//! Durable job scheduling with SQLite state and explicit Tokio timer lifecycle.
+//! Dispatch adapters revalidate authorization and expiry on each run.
+//! Database operations never span external tool execution.
 
 pub mod contracts;
-
+pub mod cron;
+pub mod hooks;
 pub mod minute;
 pub mod service;

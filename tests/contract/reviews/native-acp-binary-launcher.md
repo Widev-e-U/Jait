@@ -45,6 +45,14 @@ Host reproductions and fixes (all saved under `.jait/artifacts/gateway-rust/`):
   trailing data after `=` is now ignored as in Node.
 - Two restored mutations (inverted checksum comparison, dropped forwarded argument)
   fail the actual TypeScript differential checks. `launcher-mutations/` holds evidence.
+- Spawning the freshly installed command retries a bounded number of times while the
+  kernel reports `ETXTBSY` (ten attempts, 10 ms apart). The install writes the agent
+  binary and execs it immediately, so a `fork` in another thread that still holds the
+  installer's write descriptor makes the first `execve` fail with "Text file busy";
+  the source surfaces that error immediately. Only that errno is retried, every other
+  spawn failure is reported on the first attempt, and the bound keeps a permanently
+  busy file an honest `SpawnFailed`. Four launcher unit tests cover the policy plus a
+  real-kernel reproduction that releases the writer mid-retry.
 
 Worker test expectations were corrected against actual source/host observations: invalid
 optional digests are ignored, command paths are checked during installation, extraction

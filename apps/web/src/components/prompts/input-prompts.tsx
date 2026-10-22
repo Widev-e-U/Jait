@@ -34,7 +34,10 @@ export function InputPromptCard({ title, kind, children, testId, urgent = false 
 }) {
   const Icon = kind === 'secret' ? KeyRound : MessageCircleQuestion
   return (
-    <Card data-testid={testId} className="min-w-0 overflow-hidden rounded-xl shadow-sm">
+    // Rendered inside the composer shell (which already draws the border, radius and
+    // shadow), so the card itself must stay frameless — otherwise the two frames nest
+    // into a visible double border.
+    <Card data-testid={testId} className="min-w-0 overflow-hidden rounded-none border-0 bg-transparent shadow-none">
       <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
         <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <h3 className="min-w-0 flex-1 text-xs font-medium leading-5">{title}</h3>

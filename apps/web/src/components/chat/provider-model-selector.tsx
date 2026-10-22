@@ -1575,11 +1575,16 @@ export function ProviderModelSelector({
               {triggerButton}
             </PopoverTrigger>,
           )}
+          {/* One slim width at every breakpoint. Scaling the popover with the
+              viewport (it used to reach 72rem on 2xl screens) stretched the
+              provider rail into empty space and left the model list mostly
+              blank, so the selector keeps the compact width the layout was
+              designed for and only ever shrinks to fit narrow windows. */}
           <PopoverContent
             align="start"
             side="top"
             collisionPadding={8}
-            className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0 md:w-[min(52rem,calc(100vw-3rem))] xl:w-[min(60rem,calc(100vw-5rem))] 2xl:w-[min(72rem,calc(100vw-8rem))]"
+            className="flex w-[min(42rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
             style={PROVIDER_SELECTOR_POPOVER_STYLE}
           >
             {selectorContent}

@@ -371,3 +371,93 @@ async fn replacing_a_resume_callback_during_await_preserves_both_invocations() {
         expected
     );
 }
+
+#[tokio::test]
+async fn chat_resume_options_forward_missing_empty_false_and_hidden_without_changing_identity() {
+    use jait_gateway::services::intervention_run_resume::{
+        ChatResumeHandler, ChatResumeOptions, InterventionRunResumeRegistry, ResumeHandler,
+        ResumeKind,
+    };
+    use std::sync::{Arc, Mutex};
+    let call = json!({"op":"nativehelpers.resume","captureOptions":true,"handlers":{"chat":{"value":{"status":"steered"}},"thread":{"value":{"status":"queued"}}},"steps":[
+        {"op":"register","kind":"chat","id":"same","handler":"chat","alias":"first"},
+        {"op":"register","kind":"thread","id":"same","handler":"thread","alias":"thread"},
+        {"op":"resume","kind":"chat","id":"same","message":"missing"},
+        {"op":"resume","kind":"chat","id":"same","message":"empty","options":{}},
+        {"op":"resume","kind":"chat","id":"same","message":"visible","options":{"hidden":false}},
+        {"op":"resume","kind":"chat","id":"same","message":"internal","options":{"hidden":true}},
+        {"op":"resume","kind":"thread","id":"same","message":"thread has no options","options":{"hidden":true}},
+        {"op":"register","kind":"chat","id":"same","handler":"chat","alias":"second"},
+        {"op":"release","alias":"first"},
+        {"op":"resume","kind":"chat","id":"same","message":"removed same identity","options":{"hidden":true}},
+        {"op":"resume","kind":"thread","id":"same","message":"thread still registered"}
+    ]});
+    let expected = reference(call.clone());
+    let registry = InterventionRunResumeRegistry::default();
+    let events = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let log = events.clone();
+    let chat: ChatResumeHandler = Arc::new(move |message, options| {
+        let log = log.clone();
+        Box::pin(async move {
+            log.lock().unwrap().push(json!({"name":"chat","message":message,"options":options.map(|o| serde_json::to_value(o).unwrap()).unwrap_or(json!({"undefined":true}))}));
+            tokio::task::yield_now().await;
+            Ok(json!({"status":"steered"}))
+        })
+    });
+    let log = events.clone();
+    let thread: ResumeHandler = Arc::new(move |message| {
+        let log = log.clone();
+        Box::pin(async move {
+            log.lock()
+                .unwrap()
+                .push(json!({"name":"thread","message":message,"options":{"undefined":true}}));
+            Ok(json!({"status":"queued"}))
+        })
+    });
+    let mut releases = std::collections::HashMap::new();
+    let mut results = vec![];
+    for step in call["steps"].as_array().unwrap() {
+        let kind = if step["kind"] == "chat" {
+            ResumeKind::Chat
+        } else {
+            ResumeKind::Thread
+        };
+        let result = match step["op"].as_str().unwrap() {
+            "register" => {
+                let sub = if kind == ResumeKind::Chat {
+                    registry.register_chat_session("same", chat.clone())
+                } else {
+                    registry.register(kind, "same", thread.clone())
+                };
+                releases.insert(step["alias"].as_str().unwrap(), sub);
+                Value::Null
+            }
+            "release" => {
+                releases[step["alias"].as_str().unwrap()].unsubscribe();
+                Value::Null
+            }
+            "resume" if kind == ResumeKind::Chat => {
+                registry
+                    .resume_chat_session(
+                        "same",
+                        step["message"].as_str().unwrap(),
+                        step.get("options").map(|v| {
+                            serde_json::from_value::<ChatResumeOptions>(v.clone()).unwrap()
+                        }),
+                    )
+                    .await
+            }
+            "resume" => {
+                registry
+                    .resume(kind, "same", step["message"].as_str().unwrap())
+                    .await
+            }
+            _ => unreachable!(),
+        };
+        results.push(result);
+    }
+    assert_eq!(
+        json!({"results":results,"events":*events.lock().unwrap()}),
+        expected
+    );
+}

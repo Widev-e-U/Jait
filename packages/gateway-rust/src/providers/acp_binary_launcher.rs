@@ -26,7 +26,7 @@
 //! # Source fidelity
 //!
 //! Error strings, ordering, file modes, the marker payload, and the archive
-//! tool argv all match the TypeScript source. Three deliberate divergences are
+//! tool argv all match the TypeScript source. Four deliberate divergences are
 //! documented at their call sites and in
 //! `tests/contract/reviews/native-acp-binary-launcher.md`:
 //!
@@ -36,7 +36,10 @@
 //!    source joins the unvalidated `version`/`target` fields into the install
 //!    path and can therefore be walked out of the binary root),
 //! 3. `path.win32` semantics are not replicated; only POSIX path resolution is
-//!    implemented.
+//!    implemented,
+//! 4. spawning the freshly installed command retries a bounded number of times
+//!    while the kernel reports `ETXTBSY` (the source surfaces the first failure
+//!    immediately).
 
 use crate::text::js_trim;
 use serde_json::{Map, Value};
@@ -1172,9 +1175,7 @@ impl LauncherProcess for SystemProcess {
         for (name, value) in env {
             child.env(name, value);
         }
-        let mut child = child
-            .spawn()
-            .map_err(|error| LauncherError::SpawnFailed(error.to_string()))?;
+        let mut child = spawn_surviving_executable_busy(&mut child).await?;
 
         let forwarder = if forward_signals {
             forward_signals_to(child.id())
@@ -1204,6 +1205,61 @@ impl LauncherProcess for SystemProcess {
             signal: None,
         })
     }
+}
+
+/// Total spawn attempts made while `execve` reports `ETXTBSY`.
+const EXECUTABLE_BUSY_ATTEMPTS: usize = 10;
+/// Pause between those attempts.
+const EXECUTABLE_BUSY_BACKOFF: Duration = Duration::from_millis(10);
+
+/// Spawn the installed command, retrying a bounded number of times while the
+/// kernel reports `ETXTBSY`.
+///
+/// The installer writes the agent binary and this process immediately execs it,
+/// so the very file being spawned was, moments earlier, open for writing. On
+/// Linux `execve` fails with `ETXTBSY` ("Text file busy") whenever *any*
+/// process still holds that inode open for writing, including a `fork` in
+/// another thread that inherited the installer's descriptor and has not reached
+/// `exec` yet. The window is sub-millisecond, so retrying is the remedy Cargo
+/// applies to its own freshly built tools; the bound keeps a permanently busy
+/// file an honest [`LauncherError::SpawnFailed`].
+///
+/// Divergence from the source: Node's `spawn` surfaces the first `ETXTBSY`
+/// immediately instead of retrying. Only that one errno is retried, so every
+/// other spawn failure (missing file, permissions, bad format) is reported on
+/// the first attempt as before.
+async fn spawn_surviving_executable_busy(
+    command: &mut Command,
+) -> Result<tokio::process::Child, LauncherError> {
+    retry_executable_busy(|| command.spawn())
+        .await
+        .map_err(|error| LauncherError::SpawnFailed(error.to_string()))
+}
+
+/// Attempt `spawn` until it stops reporting `ETXTBSY`, up to
+/// [`EXECUTABLE_BUSY_ATTEMPTS`] times, then surface the last error unchanged.
+async fn retry_executable_busy<T>(mut spawn: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    let mut attempt = 1;
+    loop {
+        match spawn() {
+            Ok(value) => return Ok(value),
+            Err(error) if is_executable_busy(&error) && attempt < EXECUTABLE_BUSY_ATTEMPTS => {
+                attempt += 1;
+                tokio::time::sleep(EXECUTABLE_BUSY_BACKOFF).await;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+#[cfg(unix)]
+fn is_executable_busy(error: &io::Error) -> bool {
+    error.raw_os_error() == Some(libc::ETXTBSY)
+}
+
+#[cfg(not(unix))]
+fn is_executable_busy(_error: &io::Error) -> bool {
+    false
 }
 
 struct SignalForwarder(tokio::task::JoinHandle<()>);
@@ -1292,5 +1348,82 @@ mod tests {
         .unwrap_err();
         assert!(error.message().contains("1024 bytes"));
         assert_eq!(read.load(Ordering::SeqCst), 1025);
+    }
+    fn executable_busy() -> io::Error {
+        io::Error::from_raw_os_error(26)
+    }
+    #[tokio::test]
+    async fn retry_executable_busy_spawns_once_the_executable_is_released() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let result = retry_executable_busy(|| {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+            if attempt <= 3 {
+                Err(executable_busy())
+            } else {
+                Ok(format!("spawned after {attempt} attempts"))
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), "spawned after 4 attempts");
+        assert_eq!(attempts.load(Ordering::SeqCst), 4);
+    }
+    #[tokio::test]
+    async fn retry_executable_busy_surfaces_other_spawn_errors_immediately() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let error = retry_executable_busy::<()>(|| {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            Err(io::Error::from_raw_os_error(13))
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(attempts.load(Ordering::SeqCst), 1);
+        assert_eq!(error.raw_os_error(), Some(13));
+    }
+    #[tokio::test]
+    async fn retry_executable_busy_gives_up_after_the_attempt_budget() {
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let error = retry_executable_busy::<()>(|| {
+            attempts.fetch_add(1, Ordering::SeqCst);
+            Err(executable_busy())
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(attempts.load(Ordering::SeqCst), EXECUTABLE_BUSY_ATTEMPTS);
+        assert_eq!(error.raw_os_error(), Some(26));
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawn_waits_out_a_text_file_busy_install() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!(
+            "jait-acp-etxtbsy-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let script = root.join("agent.sh");
+        std::fs::write(&script, "#!/bin/sh\nprintf installed\n").unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // An open writer anywhere makes execve fail with ETXTBSY, exactly as it
+        // does while the installer's descriptor is still live.
+        let writer = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&script)
+            .unwrap();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(40)).await;
+            drop(writer);
+        });
+        let mut command = Command::new(&script);
+        command.stdout(Stdio::piped());
+        let child = spawn_surviving_executable_busy(&mut command)
+            .await
+            .expect("the released executable spawns");
+        let output = child.wait_with_output().await.unwrap();
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "installed");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

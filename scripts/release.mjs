@@ -6,8 +6,9 @@
  *   1. bump packages/gateway/package.json (the release source of truth)
  *   2. optionally bump sub-packages whose code changed
  *   3. regenerate CHANGELOG.md from git history
- *   4. commit everything as one `chore(release): v<version>` commit
- *   5. push to main, where CI auto-tags v<version> and publishes
+ *   4. recapture tests/contract/interfaces.json so the drift gate stays green
+ *   5. commit everything as one `chore(release): v<version>` commit
+ *   6. push to main, where CI auto-tags v<version> and publishes
  *
  * No manual `git tag` or `npm publish` is needed. Never force-pushes.
  *
@@ -33,6 +34,17 @@ const RELEASE_PACKAGES = {
 }
 
 const CHANGELOG = 'CHANGELOG.md'
+const INTERFACES = 'tests/contract/interfaces.json'
+const INTERFACE_TOOL = 'tests/contract/tooling/capture-interfaces.mjs'
+// Sources whose fingerprints live in INTERFACES. The manifest hashes these files
+// as well as the release package.json files, so it goes stale on every version
+// bump unless it is recaptured -- which is what failed CI's drift gate.
+const AUDITED_SOURCE = [
+  'packages/gateway/src',
+  'packages/shared/src',
+  'packages/gateway/bin',
+  'packages/gateway/scripts',
+]
 const SOURCE_OF_TRUTH = 'gateway'
 
 class ReleaseError extends Error {}
@@ -163,8 +175,9 @@ What it does (per AGENTS.md "Release & Deployment")
   1. bumps packages/gateway/package.json, the release source of truth
   2. bumps any --also packages, never letting one outrun the gateway
   3. regenerates CHANGELOG.md from git log <previous tag>..HEAD
-  4. commits only those files as chore(release): v<version>
-  5. pushes to main, where CI auto-tags v<version> and publishes
+  4. recaptures tests/contract/interfaces.json for the bumped versions
+  5. commits only those files as chore(release): v<version>
+  6. pushes to main, where CI auto-tags v<version> and publishes
 
 Examples
   node scripts/release.mjs --bump patch --dry-run
@@ -364,6 +377,7 @@ function renderPlan({ target, changes }, options) {
     lines.push(`  ${change.name.padEnd(13)} ${change.from} -> ${change.to}${suffix}`)
   }
   lines.push('', `Changelog:   ${CHANGELOG} entry for v${target}`)
+  lines.push(`Interfaces:  ${INTERFACES} recaptured for v${target}`)
   lines.push(`Commit:      chore(release): v${target}`)
   lines.push(
     options.push
@@ -414,7 +428,26 @@ function main() {
     return
   }
 
-  const paths = [...release.changes.map((change) => RELEASE_PACKAGES[change.name]), CHANGELOG]
+  const paths = [
+    ...release.changes.map((change) => RELEASE_PACKAGES[change.name]),
+    CHANGELOG,
+    INTERFACES,
+  ]
+
+  // The manifest fingerprints every audited file, including the package.json
+  // files bumped below, so a version bump without a recapture fails CI's
+  // `capture-interfaces.mjs --check`. Recapture must read released source: if
+  // audited files still carry uncommitted edits those edits would be baked into
+  // the manifest, widening the drift gate instead of being caught by it. Bail
+  // out before writing anything rather than restore a half-applied bump.
+  const dirtySource = git(['status', '--porcelain', '--', ...AUDITED_SOURCE])
+  if (dirtySource) {
+    fail(
+      'uncommitted changes in audited source; commit or stash them so ' +
+        `${INTERFACES} records released source (--allow-dirty does not apply here):\n` +
+        dirtySource,
+    )
+  }
 
   // Any failure between here and the commit restores every touched file, so a
   // failed release never leaves a half-applied version bump behind.
@@ -441,6 +474,15 @@ function main() {
     })
     insertChangelogEntry(section, release.target)
     console.log(`\nWrote ${CHANGELOG} (${previous ? `since ${previous}` : 'full history'}).`)
+
+    // Keep the contract drift gate honest: the bumped package.json files are
+    // fingerprinted by the manifest, so recapture it in the same commit.
+    if (existsSync(INTERFACE_TOOL)) {
+      execFileSync('node', [INTERFACE_TOOL], { stdio: 'inherit' })
+      console.log(`Refreshed ${INTERFACES}.`)
+    } else {
+      console.warn(`warning: ${INTERFACE_TOOL} not found, ${INTERFACES} was not refreshed`)
+    }
 
     if (!options.skipChecks) {
       const checkScript = 'scripts/check-release-version-source.js'

@@ -5,3 +5,9 @@
 pub mod bounded_json;
 
 pub mod ecmascript_json;
+
+pub mod js_number;
+
+pub mod json_diagnostic;
+
+pub mod lenient_base64;

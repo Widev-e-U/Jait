@@ -18317,7 +18317,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Sandbox command is running. Output is a startup snapshot, not completion. Continue independent work; completion will resume you automatically. Do not poll or rerun the command.",
+              "message": "Sandbox command is running. Output is partial, not completion. Continue independent work; completion will resume you automatically. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
               "data": {
                 "sandbox": true,
                 "containerName": "fixture-container",
@@ -18375,7 +18375,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Sandbox command is running. Output is a startup snapshot, not completion. Continue independent work; completion will resume you automatically. Do not poll or rerun the command.",
+              "message": "Sandbox command is running. Output is partial, not completion. Continue independent work; completion will resume you automatically. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
               "data": {
                 "sandbox": true,
                 "containerName": "fixture-container",
@@ -18662,7 +18662,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Sandbox command is running. Output is a startup snapshot, not completion. Continue independent work; completion will resume you automatically. Do not poll or rerun the command.",
+              "message": "Sandbox command is running. Output is partial, not completion. Continue independent work; completion will resume you automatically. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
               "data": {
                 "sandbox": true,
                 "containerName": "fixture-container",
@@ -18723,7 +18723,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Sandbox command is running. Output is a startup snapshot, not completion. Continue independent work; completion will resume you automatically. Do not poll or rerun the command.",
+              "message": "Sandbox command is running. Output is partial, not completion. Continue independent work; completion will resume you automatically. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
               "data": {
                 "sandbox": true,
                 "containerName": "fixture-container",

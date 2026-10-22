@@ -186,6 +186,7 @@ function inferDefaultConsentLevel(tool: Pick<ToolDefinition, "name" | "tier" | "
       return "none";
     case "file.write":
     case "file.patch":
+    case "terminal.execution":
     case "terminal.run":
     case "terminal.stream":
     case "thread.control":
@@ -231,6 +232,7 @@ function inferRisk(tool: Pick<ToolDefinition, "name" | "category" | "source" | "
       return "low";
     case "file.write":
     case "file.patch":
+    case "terminal.execution":
     case "terminal.run":
     case "terminal.stream":
     case "thread.control":

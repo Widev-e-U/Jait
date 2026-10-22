@@ -2,7 +2,7 @@ import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 for (const browser of [false, true]) {
-  test(`desktop minimap shares the transcript height${browser ? ' below the browser panel' : ''}`, async ({ page }) => {
+  test(`desktop minimap shares the transcript height${browser ? ' with the browser panel floating above it' : ''}`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.route('**/api/preview/session/viewport-fixture', route => route.fulfill({ json: { session: null } }))
     const fixture = path.resolve(__dirname, 'fixtures/conversation-stream-completion.html')
@@ -12,7 +12,7 @@ for (const browser of [false, true]) {
     await expect(scroll).toBeVisible()
     await expect(minimap).toBeVisible()
     const assertLayout = async () => {
-      await expect.poll(() => scroll.evaluate(el => el.clientHeight)).toBeGreaterThan(browser ? 80 : 350)
+      await expect.poll(() => scroll.evaluate(el => el.clientHeight)).toBeGreaterThan(350)
       const viewport = (await scroll.boundingBox())!
       const rail = (await minimap.boundingBox())!
       expect(Math.abs(rail.y - viewport.y)).toBeLessThan(1)
@@ -20,7 +20,11 @@ for (const browser of [false, true]) {
       expect(rail.x).toBeGreaterThanOrEqual(viewport.x + viewport.width - 1)
       if (browser) {
         const panel = (await page.getByRole('region', { name: 'Chat browser' }).boundingBox())!
-        expect(viewport.y).toBeGreaterThanOrEqual(panel.y + panel.height)
+        // The panel floats above the transcript, so it may not claim a row in
+        // the column: both start at the top and the panel overlaps the chat
+        // instead of pushing it down.
+        expect(viewport.y).toBeLessThanOrEqual(panel.y + 1)
+        expect(panel.y + panel.height).toBeGreaterThan(viewport.y + 80)
       }
     }
     await assertLayout()
@@ -38,6 +42,6 @@ for (const browser of [false, true]) {
       }
       return values
     })
-    expect(Math.min(...heights)).toBeGreaterThan(browser ? 80 : 350)
+    expect(Math.min(...heights)).toBeGreaterThan(350)
   })
 }

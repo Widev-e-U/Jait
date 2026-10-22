@@ -1,0 +1,182 @@
+{
+  "edit": {
+    "name": "edit",
+    "description": "Create, overwrite, or patch a file. Create/overwrite: provide path + content. Patch: provide path + search (exact literal text) + replace. search must match exactly one location including whitespace/indentation. Read the file before patching. Content and replacement whitespace are preserved exactly; supply actual newline characters when needed. JSON escapes are decoded once; literal backslash sequences are preserved, not decoded again. Use only one mode per call.",
+    "tier": "core",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "explanation": {
+          "type": "string",
+          "description": "Short explanation of the edit."
+        },
+        "path": {
+          "type": "string",
+          "description": "File path to create or edit."
+        },
+        "content": {
+          "type": "string",
+          "description": "Full file content (create/overwrite mode). Whitespace is preserved exactly, including trailing newlines."
+        },
+        "search": {
+          "type": "string",
+          "description": "Exact literal text to find (patch mode). Include surrounding context for unique match."
+        },
+        "replace": {
+          "type": "string",
+          "description": "Replacement text (patch mode)."
+        }
+      },
+      "required": [
+        "explanation",
+        "path"
+      ]
+    }
+  },
+  "execute": {
+    "name": "execute",
+    "description": "Run a shell command in a persistent terminal visible to the user. Commands yield after a short initial wait with partial output, terminalId and executionId; completion resumes you automatically. Inspect progress or cancel with terminal.execution; do not rerun a running command. Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled. Set isBackground: true for an earlier startup snapshot, useful for servers and watchers.",
+    "tier": "core",
+    "category": "terminal",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The shell command to run."
+        },
+        "explanation": {
+          "type": "string",
+          "description": "What the command does (shown to user)."
+        },
+        "goal": {
+          "type": "string",
+          "description": "Short goal label for UI."
+        },
+        "isBackground": {
+          "type": "boolean",
+          "description": "Return after startup output settles. Useful for servers and watchers; finite jobs also yield automatically after yieldTimeMs."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory (defaults to project root)."
+        },
+        "terminalId": {
+          "type": "string",
+          "description": "Reuse a specific terminal by ID."
+        },
+        "yieldTimeMs": {
+          "type": "number",
+          "description": "Initial wait in ms: default 10000, maximum 30000. Zero yields immediately. Returns a running execution if not finished."
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Execution deadline in ms, separate from yieldTimeMs. Default 1 hour, maximum 24 hours. Expiry stops the execution; 0/negative uses the default."
+        },
+        "sandbox": {
+          "type": "boolean",
+          "description": "Run inside Docker sandbox container."
+        },
+        "sandboxMountMode": {
+          "type": "string",
+          "description": "Sandbox mount mode: none, read-only, read-write.",
+          "enum": [
+            "none",
+            "read-only",
+            "read-write"
+          ]
+        }
+      },
+      "required": [
+        "command",
+        "explanation"
+      ]
+    }
+  },
+  "web": {
+    "name": "web",
+    "description": "Search the web or fetch content from URLs. Provide query for search, url/urls for fetching.",
+    "tier": "core",
+    "category": "web",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "\"search\" or \"fetch\". Inferred from params if omitted.",
+          "enum": [
+            "search",
+            "fetch"
+          ]
+        },
+        "query": {
+          "type": "string",
+          "description": "Search query."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to fetch."
+        },
+        "urls": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Multiple URLs to fetch."
+        },
+        "provider": {
+          "type": "string",
+          "description": "Search provider (default: auto)."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Max search results to return (default: 5)."
+        },
+        "method": {
+          "type": "string",
+          "description": "HTTP method for fetch (default: \"GET\")."
+        },
+        "body": {
+          "type": "string",
+          "description": "Request body for fetch (used with POST/PUT)."
+        },
+        "maxBytes": {
+          "type": "number",
+          "description": "Max response bytes for fetch (default: 512KB)."
+        }
+      },
+      "required": []
+    }
+  },
+  "read": {
+    "name": "read",
+    "description": "Read a file or list a directory. Returns file content (with optional line range) or directory entries. Truncates at 6000 lines or 50KB, whichever is hit first; call again with startLine/endLine for more.",
+    "tier": "core",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "File or directory path."
+        },
+        "startLine": {
+          "type": "number",
+          "description": "1-based start line."
+        },
+        "endLine": {
+          "type": "number",
+          "description": "1-based end line (inclusive)."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  }
+}

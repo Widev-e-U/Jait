@@ -135,3 +135,16 @@ describe("ReminderService", () => {
     expect(active.some((row) => row.tags.includes("review:conflict"))).toBe(true);
   });
 });
+
+it("keeps clipped chat memories valid UTF-16 and stable on repeated scans", () => {
+  const prefix = "remember " + "a".repeat(269);
+  sqlite.prepare("INSERT INTO sessions(id,user_id,name,created_at,last_active_at) VALUES(?,?,?,?,?)")
+    .run("unicode-session", "owner", "Unicode", "2026-01-01", "2026-01-01");
+  sqlite.prepare("INSERT INTO messages(id,session_id,role,content,created_at) VALUES(?,?,?,?,?)")
+    .run("unicode-message", "unicode-session", "user", prefix + "🦀" + "b".repeat(20), "2026-01-01");
+  const service = new ReminderService(db);
+  expect(service.scanOldChatsForMemory("owner")).toEqual({ scanned: 1, created: 1 });
+  expect(service.list({ userId: "owner" })[0]?.content).toBe(prefix + "…");
+  expect(service.scanOldChatsForMemory("owner")).toEqual({ scanned: 1, created: 0 });
+  expect(service.list({ userId: "owner" })).toHaveLength(1);
+});

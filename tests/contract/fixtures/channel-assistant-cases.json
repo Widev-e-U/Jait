@@ -1,0 +1,1075 @@
+{
+  "reference_batch_rows": 64,
+  "rows": [
+    {
+      "ms": 0,
+      "zone": "UTC"
+    },
+    {
+      "ms": 0,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 0,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 0,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 0,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 0,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 0,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 0,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 0,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 0,
+      "zone": " UTC "
+    },
+    {
+      "ms": 0,
+      "zone": ""
+    },
+    {
+      "ms": -1,
+      "zone": "UTC"
+    },
+    {
+      "ms": -1,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -1,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -1,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -1,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -1,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -1,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -1,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -1,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -1,
+      "zone": " UTC "
+    },
+    {
+      "ms": -1,
+      "zone": ""
+    },
+    {
+      "ms": 1,
+      "zone": "UTC"
+    },
+    {
+      "ms": 1,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 1,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 1,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 1,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 1,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 1,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 1,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 1,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 1,
+      "zone": " UTC "
+    },
+    {
+      "ms": 1,
+      "zone": ""
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "UTC"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 1774745999999,
+      "zone": " UTC "
+    },
+    {
+      "ms": 1774745999999,
+      "zone": ""
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "UTC"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 1774746000000,
+      "zone": " UTC "
+    },
+    {
+      "ms": 1774746000000,
+      "zone": ""
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "UTC"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 1792889999999,
+      "zone": " UTC "
+    },
+    {
+      "ms": 1792889999999,
+      "zone": ""
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "UTC"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 1792890000000,
+      "zone": " UTC "
+    },
+    {
+      "ms": 1792890000000,
+      "zone": ""
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "UTC"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -2840140745000,
+      "zone": " UTC "
+    },
+    {
+      "ms": -2840140745000,
+      "zone": ""
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "UTC"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": " UTC "
+    },
+    {
+      "ms": 8640000000000000,
+      "zone": ""
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "UTC"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": " UTC "
+    },
+    {
+      "ms": -8640000000000000,
+      "zone": ""
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "UTC"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": " UTC "
+    },
+    {
+      "ms": 8640000000000001,
+      "zone": ""
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "UTC"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": " UTC "
+    },
+    {
+      "ms": -8640000000000001,
+      "zone": ""
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -62167219199877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -62167219199877,
+      "zone": ""
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -62198755199877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -62198755199877,
+      "zone": ""
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -59042995199877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -59042995199877,
+      "zone": ""
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -59011459199877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -59011459199877,
+      "zone": ""
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "UTC"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 253339228800123,
+      "zone": " UTC "
+    },
+    {
+      "ms": 253339228800123,
+      "zone": ""
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "UTC"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 253370764800123,
+      "zone": " UTC "
+    },
+    {
+      "ms": 253370764800123,
+      "zone": ""
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "UTC"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 253402300800123,
+      "zone": " UTC "
+    },
+    {
+      "ms": 253402300800123,
+      "zone": ""
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -377673580799877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -377673580799877,
+      "zone": ""
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -377705116799877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -377705116799877,
+      "zone": ""
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "UTC"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "+05:45"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": -377736739199877,
+      "zone": " UTC "
+    },
+    {
+      "ms": -377736739199877,
+      "zone": ""
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "UTC"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "Europe/Vienna"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "America/New_York"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "Asia/Kathmandu"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "Africa/Monrovia"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "Pacific/Apia"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "Australia/Lord_Howe"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "+05:45"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": "Bad/Zone"
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": " UTC "
+    },
+    {
+      "ms": 8458209820800123,
+      "zone": ""
+    },
+    {
+      "ms": 1792584000000,
+      "zone": "Europe/Vienna",
+      "channelId": "fixture\nraw",
+      "channelLabel": "Fixture <label>",
+      "conversationId": "room\"with'quotes"
+    },
+    {
+      "ms": 1792584000000,
+      "zone": "Europe/Vienna",
+      "channelId": "fixture\nraw",
+      "channelLabel": "Fixture <label>",
+      "conversationId": "room\"with'quotes",
+      "model": ""
+    },
+    {
+      "ms": 1792584000000,
+      "zone": "Europe/Vienna",
+      "channelId": "fixture\nraw",
+      "channelLabel": "Fixture <label>",
+      "conversationId": "room\"with'quotes",
+      "model": " "
+    },
+    {
+      "ms": 1792584000000,
+      "zone": "Europe/Vienna",
+      "channelId": "fixture\nraw",
+      "channelLabel": "Fixture <label>",
+      "conversationId": "room\"with'quotes",
+      "model": "🦀"
+    },
+    {
+      "ms": 0,
+      "zone": "UTC",
+      "invalid": true
+    }
+  ],
+  "host_cases": [
+    {
+      "error": true
+    },
+    {},
+    {
+      "zone": null
+    },
+    {
+      "zone": ""
+    },
+    {
+      "zone": "UTC"
+    },
+    {
+      "zone": " "
+    },
+    {
+      "zone": "Europe/Vienna"
+    }
+  ],
+  "description": "Deterministic input cases; expected outputs come from actual production reference functions."
+}

@@ -120,6 +120,7 @@ pub fn call_request(
         .env("TEMP", work.join("tmp"))
         .env("TMP", work.join("tmp"))
         .env("NODE_ENV", "test")
+        .env("__JAIT_CLI", "1")
         .env("JAIT_STATE_DIR", work.join("state"))
         .stdin(Stdio::from(File::open(input_path)?))
         .stdout(Stdio::piped())

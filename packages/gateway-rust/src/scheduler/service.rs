@@ -317,14 +317,15 @@ impl SchedulerRepository<'_> {
         if one_shot && succeeded {
             self.forget(&run.job.id)?
         } else {
-            self.db.execute(
-                "UPDATE scheduled_jobs SET last_run_at=?,updated_at=? WHERE id=?",
-                params![run.started, now, run.job.id],
-            )?;
             if one_shot {
                 self.db.execute(
-                    "UPDATE scheduled_jobs SET enabled=0 WHERE id=?",
-                    [&run.job.id],
+                    "UPDATE scheduled_jobs SET last_run_at=?,updated_at=?,enabled=0 WHERE id=?",
+                    params![run.started, now, run.job.id],
+                )?;
+            } else {
+                self.db.execute(
+                    "UPDATE scheduled_jobs SET last_run_at=?,updated_at=? WHERE id=?",
+                    params![run.started, now, run.job.id],
                 )?;
             }
         }
@@ -628,6 +629,83 @@ impl crate::tools::cron::CronScheduler for SchedulerRepository<'_> {
 mod tests {
     use super::*;
     use std::{num::NonZeroU16, path::Path, sync::atomic::AtomicUsize};
+    #[tokio::test]
+    async fn stopping_polls_keeps_inflight_execution_and_its_persisted_result() {
+        let connection = crate::db::open_database(Path::new(":memory:")).unwrap();
+        crate::db::migrate_database(&connection).unwrap();
+        let worker = DatabaseWorker::new(connection, NonZeroU16::new(32).unwrap()).unwrap();
+        let entered = Arc::new(tokio::sync::Semaphore::new(0));
+        let release = Arc::new(tokio::sync::Semaphore::new(0));
+        let finished = Arc::new(tokio::sync::Semaphore::new(0));
+        let captured_entered = entered.clone();
+        let captured_release = release.clone();
+        let mut options = SchedulerOptions::new(
+            worker.clone(),
+            "/fixture".into(),
+            Arc::new(move |_| {
+                captured_entered.add_permits(1);
+                let release = captured_release.clone();
+                Box::pin(async move {
+                    release.acquire().await.unwrap().forget();
+                    Ok(json!({"ok":true,"message":"delivered"}))
+                })
+            }),
+        );
+        options.clock = Arc::new(|| 60_000);
+        options.log = Arc::new(|_| {});
+        let captured_finished = finished.clone();
+        options.on_executed = Some(Arc::new(move |_| {
+            captured_finished.add_permits(1);
+            Ok(())
+        }));
+        let service = SchedulerService::new(options);
+        let job = service
+            .create(CreateJob {
+                user_id: Some("alice".into()),
+                name: "owned fixture".into(),
+                cron: "* * * * *".into(),
+                tool_name: "fixture.execute".into(),
+                input: None,
+                session_id: None,
+                project_root: None,
+                enabled: None,
+            })
+            .await
+            .unwrap();
+        service.start(Some(1));
+        tokio::time::timeout(Duration::from_secs(2), entered.acquire())
+            .await
+            .unwrap()
+            .unwrap()
+            .forget();
+        service.stop();
+        let running = service.list_runs(job.id.clone()).await.unwrap();
+        assert_eq!(running.len(), 1);
+        assert_eq!(running[0]["status"], "running");
+        release.add_permits(1);
+        tokio::time::timeout(Duration::from_secs(2), finished.acquire())
+            .await
+            .unwrap()
+            .unwrap()
+            .forget();
+        let runs = service.list_runs(job.id.clone()).await.unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0]["status"], "completed");
+        assert_eq!(runs[0]["output"], "delivered");
+        assert_eq!(
+            service
+                .get(job.id, Some("alice".into()))
+                .await
+                .unwrap()
+                .unwrap()
+                .last_run_at
+                .as_deref(),
+            Some("1970-01-01T00:01:00.000Z")
+        );
+        assert_eq!(entered.available_permits(), 0);
+        worker.shutdown().await.unwrap();
+    }
+
     #[tokio::test(start_paused = true)]
     async fn interval_start_is_idempotent_and_stop_prevents_future_polls() {
         let connection = crate::db::open_database(Path::new(":memory:")).unwrap();

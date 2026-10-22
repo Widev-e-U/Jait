@@ -1,9 +1,10 @@
 import { AttachmentList, collectAttachments } from './attachment-list'
 import { createInlineImageNode, createInlineNodeRef, readInlineImageNode } from './prompt-input-image'
+import { EmojiPickerPanel } from '../messenger/messenger-emoji-picker'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 import { createPastedTextAttachment, isLongPaste } from '@/lib/pasted-text-attachment'
 import { useState, useRef, useEffect, useCallback, useMemo, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check, GitFork, GitBranch, ChevronUp } from 'lucide-react'
+import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check, GitFork, GitBranch, ChevronUp, Smile } from 'lucide-react'
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider, TooltipHint } from '@/components/ui/tooltip'
@@ -914,6 +915,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const editableRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
+  const isMessenger = variant === 'messenger'
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
   const [compactFooterControls, setCompactFooterControls] = useState(false)
 
   const [dragging, setDragging] = useState(false)
@@ -2069,6 +2072,190 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
   }, [variant, onChange, handleRemoveChip, addFilesAsAttachments, syncComposerSegments])
 
+  // Insert an emoji from the composer picker at the caret and keep the draft in sync.
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = editableRef.current
+    if (!el) return
+    el.focus()
+    insertTextAtCursor(el, emoji)
+    draftSegmentsRef.current = syncComposerSegments(el)
+    isSyncing.current = true
+    const next = getTextFromEditable(el)
+    onChangeRef.current(next)
+    isSyncing.current = false
+    setIsEmpty(isTextEmpty(next) && !hasChipRefs(el))
+    pushUndoRef.current(true)
+    scrollCaretIntoView(el)
+  }, [syncComposerSegments])
+
+  const attachButton = (
+    <TooltipHint side="bottom" content="Attach files">
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground')}
+        disabled={composerDisabled}
+        onClick={() => fileInputRef.current?.click()}
+        aria-label="Attach files"
+      >
+        <Paperclip className={cn(isMessenger ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+      </Button>
+    </TooltipHint>
+  )
+
+  const emojiButton = (
+    <Popover open={emojiPickerOpen} onOpenChange={setEmojiPickerOpen}>
+      <PopoverAnchor asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+          disabled={composerDisabled}
+          aria-label="Emoji"
+          aria-expanded={emojiPickerOpen}
+          onClick={() => setEmojiPickerOpen(open => !open)}
+        >
+          <Smile className="h-[18px] w-[18px]" />
+        </Button>
+      </PopoverAnchor>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="z-[80] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl p-2 shadow-xl"
+      >
+        <EmojiPickerPanel className="h-[18rem]" actionLabel="Insert" onSelect={insertEmoji} />
+      </PopoverContent>
+    </Popover>
+  )
+
+  const dictateButton = onVoiceInput && !voiceRecording && !voiceTranscribing ? (
+    <TooltipHint side="bottom" content={isMessenger ? 'Dictate with your configured speech-to-text provider' : 'Voice input'}>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full text-muted-foreground hover:text-foreground')}
+        disabled={composerDisabled}
+        onClick={onVoiceInput}
+        aria-label={isMessenger ? 'Dictate' : 'Voice input'}
+      >
+        <Mic className={cn(isMessenger ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+      </Button>
+    </TooltipHint>
+  ) : null
+
+  const sendButtonClass = cn('shrink-0', isMessenger ? 'h-9 w-9 rounded-full' : 'rounded-lg')
+
+  const sendRegion = isLoading && sendTarget !== 'thread' ? (
+    submitEmpty || !hasStreamingSendAction ? (
+      <TooltipHint side="bottom" content="Sending">
+        <Button
+          type="button"
+          size="icon"
+          className={sendButtonClass}
+          disabled aria-label="Sending"
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+        </Button>
+      </TooltipHint>
+    ) : (
+      <ComposerSendSplitButton
+        primary={streamingSendPrimary}
+        options={streamingSendOptions}
+        disabled={composerDisabled}
+        loading={Boolean(submitLoading)}
+        onAction={handleSendAction}
+      />
+    )
+  ) : !isLoading || sendTarget === 'thread' ? (
+    <TooltipHint side="bottom" content={submitLoading ? 'Loading chat' : undefined}>
+      <Button
+        type="button"
+        size="icon"
+        className={sendButtonClass}
+        disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
+        aria-label="Send message"
+        onClick={() => {
+          const el = editableRef.current
+          const chips = el ? getChipFiles(el) : []
+          const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+          const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
+          if (clearOnSubmit) clearSubmittedAttachments()
+          onSubmit(chips, submittedAttachments, nextSegments)
+          if (clearOnSubmit) resetComposer()
+        }}
+      >
+        {submitLoading
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : <ArrowUp className="h-4 w-4" />}
+      </Button>
+    </TooltipHint>
+  ) : (
+    <TooltipHint side="bottom" content="Sending">
+      <Button
+        type="button"
+        size="icon"
+        className={sendButtonClass}
+        disabled aria-label="Sending"
+      >
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </Button>
+    </TooltipHint>
+  )
+
+  // Mic and send share one slot: WhatsApp-style mic while the composer is empty,
+  // send as soon as there is text, a chip reference, or an attachment.
+  const showComposerMic = isMessenger && submitEmpty && Boolean(onVoiceInput) && !voiceRecording && !voiceTranscribing && !isLoading
+
+  const composerTrailingControls = (
+    <>
+      {voiceRecording && onVoiceStop && (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground/80">
+            <span className="h-2 w-2 rounded-full bg-foreground/70 animate-pulse" />
+            {!isMobile && !isMessenger && 'Listening...'}
+          </span>
+          <VoiceLevelMeter levels={voiceLevels} compact={isMobile || isMessenger} />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={cn('h-7 shrink-0 rounded-lg text-xs', isMobile ? 'px-2' : 'px-2.5')}
+            onClick={onVoiceStop}
+            aria-label="Finish dictation"
+          >
+            <MicOff className={cn('h-3.5 w-3.5', !isMobile && 'mr-1')} />
+            {!isMobile && !isMessenger && 'Done'}
+          </Button>
+        </div>
+      )}
+      {voiceTranscribing && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {!isMessenger && 'Transcribing...'}
+        </div>
+      )}
+      {!isMessenger && footerTrailingContent}
+      {isLoading && sendTarget !== 'thread' && (
+        <TooltipHint side="bottom" content="Stop generating">
+          <Button
+            type="button"
+            size="icon"
+            variant="outline"
+            className={cn('shrink-0 rounded-lg', isMessenger && 'h-9 w-9 rounded-full')}
+            onClick={onStop} aria-label="Stop generating"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+          </Button>
+        </TooltipHint>
+      )}
+      {showComposerMic ? dictateButton : sendRegion}
+    </>
+  )
+
   return (
     <div
       ref={rootRef}
@@ -2078,7 +2265,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         'group relative z-10 flex flex-col',
         merged
           ? 'bg-transparent'
-          : 'rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+          : cn(
+              isMessenger ? 'rounded-[26px]' : 'rounded-2xl',
+              'border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+            ),
         !merged && dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
       )}
@@ -2143,36 +2333,62 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       />
       {attachmentError && <p role="alert" className="px-3 pt-2 text-xs text-destructive">{attachmentError}</p>}
       {/* Editable area with inline references and images */}
-      <div className="relative px-3 pt-3 pb-1.5">
-        {isEmpty && (
-          <div className="absolute top-5 left-5 pointer-events-none text-muted-foreground leading-relaxed select-none [font-size:0.9rem]">
-            {placeholder}
+      <div
+        className={cn(
+          'relative',
+          isMessenger ? 'flex items-end gap-0.5 py-1 pl-1.5 pr-1.5' : 'px-3 pt-3 pb-1.5',
+        )}
+      >
+        {isMessenger && (
+          <div className="flex shrink-0 items-center pb-0.5">
+            {attachButton}
+            {emojiButton}
           </div>
         )}
-        <div
-          ref={editableRef}
-          contentEditable={!composerDisabled}
-          role="textbox"
-          aria-label="Message"
-          aria-disabled={composerDisabled}
-          aria-multiline
-          suppressContentEditableWarning
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onCopy={handleCopy}
-          onDrop={(e) => { e.preventDefault() }}
-          onDragStart={(e) => { e.preventDefault() }}
-          onBeforeInput={(e) => {
-            const inputType = (e.nativeEvent as InputEvent).inputType
-            if (inputType === 'insertFromDrop' || inputType === 'insertHTML') e.preventDefault()
-          }}
-          className={cn(
-            'min-h-[40px] max-h-[200px] overflow-y-auto leading-relaxed outline-none py-2 px-2 text-foreground [font-size:0.9rem]',
-            'whitespace-pre-wrap break-words',
-            composerDisabled && 'cursor-not-allowed opacity-50',
+        <div className="relative min-w-0 flex-1">
+          {isEmpty && (
+            <div
+              className={cn(
+                'pointer-events-none absolute select-none text-muted-foreground leading-relaxed [font-size:0.9rem]',
+                isMessenger ? 'top-2 left-1.5' : 'top-2 left-2',
+              )}
+            >
+              {placeholder}
+            </div>
           )}
-          style={{ wordBreak: 'break-word' }}
-        />
+          <div
+            ref={editableRef}
+            contentEditable={!composerDisabled}
+            role="textbox"
+            aria-label="Message"
+            aria-disabled={composerDisabled}
+            aria-multiline
+            suppressContentEditableWarning
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onCopy={handleCopy}
+            onDrop={(e) => { e.preventDefault() }}
+            onDragStart={(e) => { e.preventDefault() }}
+            onBeforeInput={(e) => {
+              const inputType = (e.nativeEvent as InputEvent).inputType
+              if (inputType === 'insertFromDrop' || inputType === 'insertHTML') e.preventDefault()
+            }}
+            className={cn(
+              'overflow-y-auto leading-relaxed outline-none text-foreground [font-size:0.9rem]',
+              isMessenger
+                ? 'min-h-[36px] max-h-[140px] py-2 px-1.5'
+                : 'min-h-[40px] max-h-[200px] py-2 px-2',
+              'whitespace-pre-wrap break-words',
+              composerDisabled && 'cursor-not-allowed opacity-50',
+            )}
+            style={{ wordBreak: 'break-word' }}
+          />
+        </div>
+        {isMessenger && (
+          <div className="flex max-w-[60%] shrink-0 items-center justify-end gap-0.5 pb-0.5">
+            {composerTrailingControls}
+          </div>
+        )}
       </div>
 
       {/* @ mention popup */}
@@ -2277,195 +2493,80 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </PopoverContent>
       </Popover>
 
-      <div className="flex min-w-0 items-start gap-2 px-3 pb-2.5 pt-0.5">
-        {hasFooterLeftContent && (
-          <div className="min-w-0 flex-1">
-            {hasFooterControls && (
-              <div className="min-w-0">
-                <div className="min-w-0 overflow-x-auto scrollbar-none">
-                  <div className="flex min-w-max items-center gap-1 pr-1">
-                    {footerLeadingContent}
-                    {showResponseStyleSelector && (
-                      <StyleSelector
-                        value={responseStyle!}
-                        onChange={onResponseStyleChange!}
-                        disabled={selectorsDisabled}
-                        compact={compactFooterControls}
-                      />
-                    )}
-                    {showProviderModelSelector && personalChat && (
-                      <ChatNodeSelector nodeId={personalNode.nodeId} onChange={personalNode.selectNode} disabled={selectorsDisabled || isLoading} compact={compactFooterControls} error={personalNode.error} onRetry={personalNode.retry} />
-                    )}
-                    {showProviderModelSelector && (
-                      <ProviderModelSelector
-                        provider={provider!}
-                        model={cliModel ?? null}
-                        onProviderChange={onProviderChange!}
-                        onModelChange={onCliModelChange!}
-                        disabled={selectorsDisabled}
-                        compact={compactFooterControls}
-                        repoRuntime={repoRuntime}
-                        onMoveToGateway={onMoveToGateway}
-                        sessionInfo={sessionInfo}
-                        projectNodeId={personalChat ? personalNode.nodeId : projectNodeId}
-                        projectId={projectId}
-                        reasoningEffort={reasoningEffort}
-                        onReasoningEffortChange={onReasoningEffortChange}
-                        tooltipSide="bottom"
-                      />
-                    )}
-                    {showProviderRuntimeSelector && (
-                      <ProviderRuntimeSelector
-                        provider={provider!}
-                        value={providerRuntimeMode!}
-                        onChange={onProviderRuntimeModeChange!}
-                        disabled={selectorsDisabled}
-                        compact={compactFooterControls}
-                      />
-                    )}
-                    {showModeSelector && (
-                      <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
-                    )}
+      {!isMessenger && (
+        <div className="flex min-w-0 items-start gap-2 px-3 pb-2.5 pt-0.5">
+          {hasFooterLeftContent && (
+            <div className="min-w-0 flex-1">
+              {hasFooterControls && (
+                <div className="min-w-0">
+                  <div className="min-w-0 overflow-x-auto scrollbar-none">
+                    <div className="flex min-w-max items-center gap-1 pr-1">
+                      {footerLeadingContent}
+                      {showResponseStyleSelector && (
+                        <StyleSelector
+                          value={responseStyle!}
+                          onChange={onResponseStyleChange!}
+                          disabled={selectorsDisabled}
+                          compact={compactFooterControls}
+                        />
+                      )}
+                      {showProviderModelSelector && personalChat && (
+                        <ChatNodeSelector nodeId={personalNode.nodeId} onChange={personalNode.selectNode} disabled={selectorsDisabled || isLoading} compact={compactFooterControls} error={personalNode.error} onRetry={personalNode.retry} />
+                      )}
+                      {showProviderModelSelector && (
+                        <ProviderModelSelector
+                          provider={provider!}
+                          model={cliModel ?? null}
+                          onProviderChange={onProviderChange!}
+                          onModelChange={onCliModelChange!}
+                          disabled={selectorsDisabled}
+                          compact={compactFooterControls}
+                          repoRuntime={repoRuntime}
+                          onMoveToGateway={onMoveToGateway}
+                          sessionInfo={sessionInfo}
+                          projectNodeId={personalChat ? personalNode.nodeId : projectNodeId}
+                          projectId={projectId}
+                          reasoningEffort={reasoningEffort}
+                          onReasoningEffortChange={onReasoningEffortChange}
+                          tooltipSide="bottom"
+                        />
+                      )}
+                      {showProviderRuntimeSelector && (
+                        <ProviderRuntimeSelector
+                          provider={provider!}
+                          value={providerRuntimeMode!}
+                          onChange={onProviderRuntimeModeChange!}
+                          disabled={selectorsDisabled}
+                          compact={compactFooterControls}
+                        />
+                      )}
+                      {showModeSelector && (
+                        <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
+                      )}
+                    </div>
                   </div>
+                  {shouldShowSendTargetSelector && (
+                    <div className="mt-1.5">
+                      <SendTargetSelector
+                        target={sendTarget!}
+                        onChange={onSendTargetChange!}
+                        disabled={selectorsDisabled}
+                        compact={compactFooterControls}
+                      />
+                    </div>
+                  )}
                 </div>
-                {shouldShowSendTargetSelector && (
-                  <div className="mt-1.5">
-                    <SendTargetSelector
-                      target={sendTarget!}
-                      onChange={onSendTargetChange!}
-                      disabled={selectorsDisabled}
-                      compact={compactFooterControls}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+          )}
+          <div className={cn('flex shrink-0 items-center gap-1.5', isMessenger && 'gap-0.5', !isMessenger && hasFooterLeftContent ? 'pl-1' : 'ml-auto')}>
+            {attachButton}
+            {isMessenger && emojiButton}
+            {!isMessenger && dictateButton}
+            {composerTrailingControls}
           </div>
-        )}
-        <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterLeftContent ? 'pl-1' : 'ml-auto')}>
-          <TooltipHint side="bottom" content="Attach files">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="shrink-0 rounded-lg"
-            disabled={composerDisabled}
-            onClick={() => fileInputRef.current?.click()} aria-label="Attach files"
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-          </TooltipHint>
-          {onVoiceInput && !voiceRecording && !voiceTranscribing && (
-            <TooltipHint side="bottom" content={variant === 'messenger' ? 'Dictate with your configured speech-to-text provider' : 'Voice input'}>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="shrink-0 rounded-lg"
-              disabled={composerDisabled}
-              onClick={onVoiceInput} aria-label={variant === 'messenger' ? 'Dictate' : 'Voice input'}
-            >
-              <Mic className="h-4 w-4" />
-            </Button>
-            </TooltipHint>
-          )}
-          {voiceRecording && onVoiceStop && (
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground/80">
-                <span className="h-2 w-2 rounded-full bg-foreground/70 animate-pulse" />
-                {!isMobile && 'Listening...'}
-              </span>
-              <VoiceLevelMeter levels={voiceLevels} compact={isMobile} />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className={cn('h-7 shrink-0 rounded-lg text-xs', isMobile ? 'px-2' : 'px-2.5')}
-                onClick={onVoiceStop}
-              >
-                <MicOff className={cn('h-3.5 w-3.5', !isMobile && 'mr-1')} />
-                {!isMobile && 'Done'}
-              </Button>
-            </div>
-          )}
-          {voiceTranscribing && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Transcribing...
-            </div>
-          )}
-          {footerTrailingContent}
-          {isLoading && sendTarget !== 'thread' && (
-            <TooltipHint side="bottom" content="Stop generating">
-            <Button
-              type="button"
-              size="icon"
-              variant="outline"
-              className="shrink-0 rounded-lg"
-              onClick={onStop} aria-label="Stop generating"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-            </Button>
-            </TooltipHint>
-          )}
-          {isLoading && sendTarget !== 'thread' ? (
-            submitEmpty || !hasStreamingSendAction ? (
-              <TooltipHint side="bottom" content="Sending">
-              <Button
-                type="button"
-                size="icon"
-                className="shrink-0 rounded-lg"
-                disabled aria-label="Sending"
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-              </Button>
-              </TooltipHint>
-            ) : (
-              <ComposerSendSplitButton
-                primary={streamingSendPrimary}
-                options={streamingSendOptions}
-                disabled={composerDisabled}
-                loading={Boolean(submitLoading)}
-                onAction={handleSendAction}
-              />
-            )
-          ) : !isLoading || sendTarget === 'thread' ? (
-            <TooltipHint side="bottom" content={submitLoading ? 'Loading chat' : undefined}>
-            <Button
-              type="button"
-              size="icon"
-              className="shrink-0 rounded-lg"
-              disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
-              aria-label="Send message"
-              onClick={() => {
-                const el = editableRef.current
-                const chips = el ? getChipFiles(el) : []
-                const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-                const submittedAttachments = collectAttachments(attachmentsRef.current.filter(item => !item.mimeType.startsWith('image/')), nextSegments)
-                if (clearOnSubmit) clearSubmittedAttachments()
-                onSubmit(chips, submittedAttachments, nextSegments)
-                if (clearOnSubmit) resetComposer()
-              }}
-            >
-              {submitLoading
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <ArrowUp className="h-4 w-4" />}
-            </Button>
-            </TooltipHint>
-          ) : (
-            <TooltipHint side="bottom" content="Sending">
-            <Button
-              type="button"
-              size="icon"
-              className="shrink-0 rounded-lg"
-              disabled aria-label="Sending"
-            >
-              <Loader2 className="h-4 w-4 animate-spin" />
-            </Button>
-            </TooltipHint>
-          )}
         </div>
-      </div>
+      )}
     </div>
   )
 })

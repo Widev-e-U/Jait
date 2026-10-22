@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { ProjectWatcher } from '../../../packages/gateway/src/services/project-watcher.ts';
 export async function watchCaseSensitiveFiles() {
   const root=join(process.env.JAIT_STATE_DIR!,'watched');await mkdir(join(root,'ignored'),{recursive:true});
-  const watcher=new ProjectWatcher({coalesceMs:200,ignore:['**/ignored/**']});
+  const watcher=new ProjectWatcher({coalesceMs:200,ignore:['**/ignored/**'],allowGeneratedRoot:true});
   const batches:any[]=[];let failure:unknown;
   watcher.on('changes',events=>batches.push(...events));watcher.on('error',error=>{failure=error;});
   try {

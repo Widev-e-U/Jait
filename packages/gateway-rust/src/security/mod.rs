@@ -20,3 +20,5 @@ pub mod tool_permissions;
 pub mod consent_manager;
 
 pub mod tool_profiles;
+
+pub mod consent_executor;

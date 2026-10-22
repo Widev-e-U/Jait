@@ -80,6 +80,29 @@ test('compact questions preserve answers across steps and support custom text', 
   } }])
 })
 
+test('prompt cards do not nest a second frame inside the composer shell', async ({ page }) => {
+  await openPrompt(page, 'question')
+  const card = page.getByTestId('inline-user-question-prompt')
+  await expect(card).toBeVisible()
+  const frames = await card.evaluate(el => {
+    const own = getComputedStyle(el)
+    const shell = el.closest('.rounded-2xl')
+    const shellStyle = shell ? getComputedStyle(shell) : null
+    return {
+      cardBorder: [own.borderTopWidth, own.borderRightWidth, own.borderBottomWidth, own.borderLeftWidth].join('/'),
+      cardRadius: own.borderTopLeftRadius,
+      shellBorder: shellStyle?.borderTopWidth ?? 'missing',
+      shellRadius: shellStyle?.borderTopLeftRadius ?? 'missing',
+    }
+  })
+  // The composer shell owns the one visible frame…
+  expect(frames.shellBorder).toBe('1px')
+  expect(frames.shellRadius).toBe('16px')
+  // …so the prompt card must stay square and frameless, otherwise the two nest into a double border.
+  expect(frames.cardBorder).toBe('0px/0px/0px/0px')
+  expect(frames.cardRadius).toBe('0px')
+})
+
 test('a long question scrolls independently while actions remain visible', async ({ page }) => {
   await openPrompt(page, 'question', { ...question, questions: [{ ...question.questions[0], options: Array.from({ length: 30 }, (_, i) => ({ label: `Choice ${i}`, description: 'Description' })) }] })
   const card = page.getByTestId('inline-user-question-prompt')

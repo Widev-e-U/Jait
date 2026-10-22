@@ -1,3 +1,4 @@
+import { createTerminalExecutionTool } from "./terminal-execution.js";
 import { createDecisionEvaluateTool } from "./decision.js";
 export type {
   ToolContext,
@@ -421,6 +422,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
+  tools.register(createTerminalExecutionTool());
   tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService, agentGithubEnv));
   tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService, agentGithubEnv));
   tools.register(createTerminalStreamTool(surfaceRegistry));

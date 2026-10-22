@@ -1,26 +1,82 @@
 # Native Rust gateway
 
-## Current native checkpoint — 2026-10-21
+## Current native checkpoint — 2026-10-22
 
-The latest completed source-bound gate verifies **165/365 components (45.21%)**.
-Formatting, strict Clippy, native library tests and 100 differential targets
-passed with matching live fingerprints at completion. The report is
-`.jait/artifacts/gateway-rust/checkpoints/165-report.json`.
+The full frozen-source gate passes **199/365 components (54.52%)**, with
+formatting, strict Clippy, 303 native library tests and 132 contract targets.
+Evidence: `.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/199-report.json`.
+The frozen sources stayed unchanged and all recorded live inputs match. The fast
+`tooling/progress.mjs` audit checks current freshness separately.
 
-The TCP assessment baseline and cron tool adapter are now included. Scope
-validation compares 89 reference cases; service contracts cover bounded dispatch,
-ownership, cancellation, persistence/recovery and an owned loopback listener.
-Four deliberate assessment mutations were caught and restored. HTTP assessment
-routes are being implemented and earn no additional component credit until their
-contracts, review and full gate pass. A concurrent health-test change and new
-route work require a refreshed gate for an exact match to current sources.
+Recent additions cover the live capability catalog, six file/image factories,
+seven memory/reminder factories and remote tool routing. The latest three
+components pass 30 focused contract checks and 19 caught/restored deliberate
+regressions. Actual TypeScript comparisons retain complete metadata, exact UTF-8
+byte counts and content, the 8,000-byte image threshold, scoped filesystem call
+order, reminder ownership/retrieval tracking, UTF-16 preview clipping, persistent
+remote terminals, callback identity, node selection and proxy error boundaries.
+Reviews are in `tests/contract/reviews/native-file-tools.md`,
+`native-memory-tools.md` and `native-remote-executor.md`. Focused and mutation
+logs are under `.jait/artifacts/gateway-rust/`. Workspace typechecks, artifact-path
+checks and strict Clippy for the new contracts also pass.
 
-The inventory contains 365 source components. Equal component weights measure
-focused native behavior coverage, not effort remaining or production readiness.
-The production TypeScript gateway remains in place.
+**166 components remain.** Equal source-component weights do not estimate effort
+or time. Production remains TypeScript. Caller-authorized service and transport
+ports do not activate production capabilities or earn underlying engine credit.
+General registry/transport activation, browser chat lifecycle, remaining
+engines/adapters, supported-platform, resource, recovery, rollback and replacement
+gates remain open. Reference-test reconstruction and its freshness are separate
+measurements; this implementation checkpoint grants no translated-test credit.
 
-Parallel native implementation beside `packages/gateway`. The standalone process
-currently serves only `GET /health` (and HEAD). It does not yet serve the application.
+Parallel native implementation beside `packages/gateway`. The default standalone
+profile serves `GET /health` (and HEAD). Explicit development activation composes
+the account/session APIs and optional model-only chat described below.
+
+## Core workflow integration in progress
+
+The default executable remains health-only. An explicit development opt-in now
+composes the migrated account/session APIs with one persistent bounded SQLite
+worker and live database-backed health:
+
+```sh
+JAIT_RUST_APPLICATION=1 \
+JAIT_RUST_DB=/absolute/project/.jait/artifacts/rust-dev/application.sqlite \
+JAIT_RUST_PROJECT_ROOT=/absolute/project \
+JWT_SECRET='<explicit development signing secret>' \
+bun run dev:gateway:rust
+```
+
+Use disposable development state for this migration profile. No dotenv or
+default host state is discovered. This starts accounts and sessions. Shutdown closes the shared worker; storage
+failures return unhealthy readiness. The production service remains TypeScript.
+
+Model-only development chat additionally requires `JAIT_RUST_CHAT=1`, an explicit
+`JAIT_RUST_CHAT_BASE_URL` and `JAIT_RUST_CHAT_MODEL`, with optional
+`JAIT_RUST_CHAT_API_KEY`. It discovers no credentials or host configuration.
+The candidate provides consuming POST SSE, bounded persistent turn history and UI
+message projection, cancellation, and a separate owned-session event subscription
+with durable IDs and Last-Event-ID replay. Its configured factory advertises no
+tools. Existing TypeScript history needs an explicit importer before native model
+execution can use it. The main browser protocol/detached-POST lifecycle, full tool
+registry, WebSocket control plane and frontend hosting remain separate work.
+See `tests/contract/reviews/native-chat-http.md` for the exact limits.
+
+Core slices are checked with targeted Rust contracts:
+
+```sh
+node tests/contract/run.mjs test --test gateway_rust_application --test gateway_rust_remote_provider --test gateway_rust_process_runner
+node --test packages/gateway-rust/tooling/progress.test.mjs
+node packages/gateway-rust/tooling/progress.mjs --output .jait/artifacts/gateway-rust/progress.json
+```
+
+The remote CLI provider adapter requires an explicitly supplied control-plane
+transport; it does not discover or authorize a connected node. The process runner
+requires explicit argv/environment and caller authorization; it is not itself a
+sandbox or exposed terminal tool. These partial slices do not earn whole-component
+credit until their implementation, review and source-bound validation gates pass.
+The fast progress command reads inventories and checkpoint fingerprints without
+compiling or running the migration suite. It reports implementation and reference
+test parity separately and marks stale or missing evidence.
 
 ## Foundation and construction plan
 
@@ -307,3 +363,48 @@ The 100% goal remains open, with **245 components remaining**. See
 .jait/artifacts/gateway-rust/remaining-native-components.json and
 .jait/artifacts/gateway-rust/next-provider-slice.json. Production startup and
 cutover readiness remain separate.
+
+## Explicit native text-chat application
+
+The candidate account/session application can now mount authenticated chat SSE
+when `JAIT_RUST_CHAT=1` is set alongside `JAIT_RUST_APPLICATION=1`. Supply an
+absolute `JAIT_RUST_DB`, absolute `JAIT_RUST_PROJECT_ROOT`, nonblank `JWT_SECRET`,
+explicit `JAIT_RUST_CHAT_BASE_URL` (OpenAI-compatible API prefix) and
+`JAIT_RUST_CHAT_MODEL`. `JAIT_RUST_CHAT_API_KEY` is optional for keyless local
+models and never falls back to ambient OpenAI credentials or dotenv files.
+Invalid configuration fails before opening the database. Use an explicitly
+chosen development database, for example under the repository's
+`.jait/artifacts/gateway-rust/` directory. This opt-in does not deploy or replace
+the running gateway.
+
+Authenticated routes:
+
+- `POST /api/chat`: `{ "sessionId": "<owned-active-session>", "content": "Hello" }`;
+  aliases `session_id` and `message` are accepted. Consume the response body as
+  SSE `data:` JSON until `done` or `error`. A disconnected consumer cancels its
+  turn and retains bounded partial text.
+- `POST /api/chat/cancel`: `{ "sessionId": "<owned-active-session>" }`; also
+  `POST /api/sessions/<id>/cancel`.
+- `GET /api/sessions/<id>/messages?limit=50&before=2`: bounded UI message window;
+  `before` is the exclusive visible message index. Omit it for the latest page.
+
+The executable's configured factory exposes text chat. Typed injected factories
+can compose the separately tested consent/tool adapters; enabling a general
+terminal still requires the registry, sandbox and scoped execution integration.
+Request fields cannot select URLs, credentials, tools, roots or access modes.
+Unknown fields are rejected.
+
+Native turn records materialize compatible user/assistant rows in the existing
+`messages` table in the same transaction, preserving tool-result correlation,
+segments and thinking. The native event log remains authoritative for model
+replay. Existing TypeScript-only conversation rows are readable but require an
+explicit importer before Rust may continue their model history. No schema
+migration is introduced. Native and foreign history are never silently mixed.
+Message pages enforce raw and serialized byte limits before returning data.
+
+This is a consuming POST-SSE API, compatible with the API-client streaming path.
+The main browser chat currently cancels its POST response after acceptance and
+listens through a separate subscription. That browser lifecycle, live trajectory
+subscription/replay, rich request selectors, attachments, platform/resource gates
+and production cutover remain separate work. Review:
+`tests/contract/reviews/native-chat-http.md`.

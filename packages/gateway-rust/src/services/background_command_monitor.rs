@@ -15,9 +15,14 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 pub const DEFAULT_MAX_WATCH_MS: f64 = 21_600_000.0;
 pub const MAX_CONCURRENT_WATCHERS: usize = 50;
 pub const SENTINEL_GRACE_MS: f64 = 250.0;
+pub type ExitListener = Arc<dyn Fn(Option<f64>) -> Result<(), String> + Send + Sync>;
 pub type OutputListener = Arc<dyn Fn(&[u16]) -> Result<(), String> + Send + Sync>;
 /// Registration only attaches a listener; it must not emit output synchronously.
 pub trait MonitorableSurface: Send + Sync {
+    fn add_exit_listener(&self, _listener: ExitListener) {}
+    fn remove_exit_listener(&self, _listener: &ExitListener) -> Result<(), String> {
+        Ok(())
+    }
     fn add_output_listener(&self, listener: OutputListener);
     fn remove_output_listener(&self, listener: &OutputListener) -> Result<(), String>;
 }
@@ -35,6 +40,7 @@ pub type CompletionHandler =
 pub struct Completion {
     pub exit_code: Option<f64>,
     pub output: Utf16Text,
+    pub timed_out: bool,
 }
 #[derive(Clone, Debug)]
 pub struct BackgroundCommandResult {
@@ -44,12 +50,16 @@ pub struct BackgroundCommandResult {
     pub exit_code: Option<f64>,
     pub output: Utf16Text,
     pub duration_ms: f64,
+    pub timed_out: bool,
 }
 pub struct TrackOptions {
     pub session_id: String,
     pub terminal_id: String,
     pub command: String,
     pub surface: Arc<dyn MonitorableSurface>,
+    pub execution_id: Option<String>,
+    pub on_cancel: Option<SimpleCallback>,
+    pub on_timeout: Option<SimpleCallback>,
     pub completion_token: Option<String>,
     pub shell: String,
     pub max_watch_ms: Option<f64>,
@@ -67,6 +77,23 @@ pub struct ExternalOptions {
     pub started_at: f64,
     pub should_notify: Option<ShouldNotify>,
     pub on_cancel: Option<SimpleCallback>,
+    pub execution_id: Option<String>,
+    pub get_output: Option<Arc<dyn Fn() -> Utf16Text + Send + Sync>>,
+}
+#[derive(Clone, Debug)]
+pub struct ExecutionSnapshot {
+    pub terminal_id: String,
+    pub execution_id: String,
+    pub status: String,
+    pub output: Utf16Text,
+    pub exit_code: Option<f64>,
+    pub duration_ms: f64,
+}
+fn tail(mut text: Vec<u16>, max: usize) -> Vec<u16> {
+    if text.len() > max {
+        text.drain(..text.len() - max);
+    }
+    text
 }
 #[derive(Clone)]
 pub struct BackgroundCommandMonitor {
@@ -81,6 +108,7 @@ struct Core {
     schedule: Schedule,
     warn: WarningSink,
     notifications: Mutex<Vec<tokio::task::JoinHandle<()>>>,
+    history: Mutex<Vec<(String, ExecutionSnapshot)>>,
 }
 struct Entry {
     id: u64,
@@ -95,8 +123,19 @@ enum EntryKind {
 impl Entry {
     fn cancel(&self) -> Result<(), String> {
         match &self.kind {
-            EntryKind::Surface(w) => w.cleanup(),
+            EntryKind::Surface(w) => {
+                if let Some(cancel) = &w.options.on_cancel {
+                    cancel()?;
+                }
+                w.cleanup()
+            }
             EntryKind::External(w) => w.cancel(),
+        }
+    }
+    fn snapshot(&self) -> ExecutionSnapshot {
+        match &self.kind {
+            EntryKind::Surface(w) => w.snapshot("running", None),
+            EntryKind::External(w) => w.snapshot("running", None, None),
         }
     }
     fn shutdown(&self) {
@@ -121,6 +160,7 @@ struct SurfaceWatch {
     started_at: f64,
     state: Mutex<SurfaceState>,
     listener: Mutex<Option<OutputListener>>,
+    exit_listener: Mutex<Option<ExitListener>>,
     slot: Mutex<Option<OwnedSemaphorePermit>>,
 }
 struct ExternalWatch {
@@ -208,8 +248,55 @@ impl BackgroundCommandMonitor {
                 schedule,
                 warn,
                 notifications: Mutex::new(vec![]),
+                history: Mutex::new(vec![]),
             }),
         }
+    }
+    pub fn inspect_execution(
+        &self,
+        session: &str,
+        terminal: &str,
+        execution: &str,
+    ) -> Option<ExecutionSnapshot> {
+        let entries = self.core.active.lock().unwrap().clone();
+        for e in entries {
+            if e.session == session && e.terminal == terminal {
+                let snapshot = e.snapshot();
+                if snapshot.execution_id == execution {
+                    return Some(snapshot);
+                }
+            }
+        }
+        self.core
+            .history
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(s, v)| s == session && v.terminal_id == terminal && v.execution_id == execution)
+            .map(|(_, v)| v.clone())
+    }
+    pub fn cancel_execution(
+        &self,
+        session: &str,
+        terminal: &str,
+        execution: &str,
+    ) -> Result<Option<ExecutionSnapshot>, String> {
+        let entries = self.core.active.lock().unwrap().clone();
+        for e in entries {
+            if e.session != session || e.terminal != terminal {
+                continue;
+            }
+            let mut snapshot = e.snapshot();
+            if snapshot.execution_id != execution {
+                continue;
+            }
+            e.cancel()?;
+            snapshot.status = "cancelled".into();
+            self.core.remember(session, snapshot.clone());
+            return Ok(Some(snapshot));
+        }
+        Ok(self.inspect_execution(session, terminal, execution))
     }
     pub fn active_count(&self) -> usize {
         self.core.active.lock().unwrap().len()
@@ -252,7 +339,7 @@ impl BackgroundCommandMonitor {
         let started_at = options
             .started_at
             .unwrap_or_else(|| (self.core.clock)() as f64);
-        let raw = options.initial_output.clone();
+        let raw = tail(options.initial_output.clone(), 64_000);
         let delay = options.max_watch_ms.unwrap_or(DEFAULT_MAX_WATCH_MS);
         let watcher = Arc::new(SurfaceWatch {
             id,
@@ -268,6 +355,7 @@ impl BackgroundCommandMonitor {
                 grace: None,
             }),
             listener: Mutex::new(None),
+            exit_listener: Mutex::new(None),
             slot: Mutex::new(Some(permit)),
         });
         let weak = Arc::downgrade(&watcher);
@@ -277,6 +365,13 @@ impl BackgroundCommandMonitor {
         });
         *watcher.listener.lock().unwrap() = Some(listener.clone());
         watcher.options.surface.add_output_listener(listener);
+        let weak_exit = Arc::downgrade(&watcher);
+        let exit: ExitListener = Arc::new(move |code| match weak_exit.upgrade() {
+            Some(w) => w.finish(code),
+            None => Ok(()),
+        });
+        *watcher.exit_listener.lock().unwrap() = Some(exit.clone());
+        watcher.options.surface.add_exit_listener(exit);
         self.core.active.lock().unwrap().push(Arc::new(Entry {
             id,
             session: watcher.options.session_id.clone(),
@@ -296,6 +391,13 @@ impl BackgroundCommandMonitor {
             cancel();
         } else {
             state.timer = Some(cancel);
+        }
+        let has_initial = !state.raw.is_empty();
+        drop(state);
+        if has_initial {
+            tokio::spawn(async move {
+                let _ = watcher.output(&[]);
+            });
         }
         true
     }
@@ -356,6 +458,7 @@ impl BackgroundCommandMonitor {
         }
         self.core.active.lock().unwrap().clear();
         self.core.handler.lock().unwrap().take();
+        self.core.history.lock().unwrap().clear();
         Ok(())
     }
     /// Drain already queued sink calls; callers may add a shutdown deadline.
@@ -372,6 +475,18 @@ impl BackgroundCommandMonitor {
     }
 }
 impl Core {
+    fn remember(&self, session: &str, value: ExecutionSnapshot) {
+        let mut h = self.history.lock().unwrap();
+        h.retain(|(s, v)| {
+            s != session
+                || v.terminal_id != value.terminal_id
+                || v.execution_id != value.execution_id
+        });
+        h.push((session.into(), value));
+        if h.len() > 100 {
+            h.remove(0);
+        }
+    }
     fn remove(&self, id: u64) {
         self.active.lock().unwrap().retain(|e| e.id != id);
     }
@@ -401,6 +516,24 @@ impl Drop for Core {
     }
 }
 impl SurfaceWatch {
+    fn snapshot(&self, status: &str, code: Option<f64>) -> ExecutionSnapshot {
+        let raw = self.state.lock().unwrap().raw.clone();
+        ExecutionSnapshot {
+            terminal_id: self.options.terminal_id.clone(),
+            execution_id: self
+                .options
+                .execution_id
+                .clone()
+                .unwrap_or_else(|| self.options.terminal_id.clone()),
+            status: status.into(),
+            output: extract_completion_output(&raw, &self.options.command, &self.options.shell),
+            exit_code: code,
+            duration_ms: self
+                .core
+                .upgrade()
+                .map_or(0.0, |c| (c.clock)() as f64 - self.started_at),
+        }
+    }
     fn stop(&self) -> bool {
         let (timer, grace) = {
             let mut s = self.state.lock().unwrap();
@@ -418,6 +551,9 @@ impl SurfaceWatch {
         }
         if let Some(listener) = self.listener.lock().unwrap().as_ref() {
             let _ = self.options.surface.remove_output_listener(listener);
+        }
+        if let Some(listener) = self.exit_listener.lock().unwrap().as_ref() {
+            let _ = self.options.surface.remove_exit_listener(listener);
         }
         true
     }
@@ -454,9 +590,17 @@ impl SurfaceWatch {
                 ),
             ));
         }
-        self.cleanup()
+        if let Some(timeout) = &self.options.on_timeout {
+            timeout()?;
+            self.finish_outcome(None, true)
+        } else {
+            self.cleanup()
+        }
     }
     fn finish(&self, exit_code: Option<f64>) -> Result<(), String> {
+        self.finish_outcome(exit_code, false)
+    }
+    fn finish_outcome(&self, exit_code: Option<f64>, timed_out: bool) -> Result<(), String> {
         let raw = {
             let mut s = self.state.lock().unwrap();
             if s.finished || s.stopped {
@@ -466,10 +610,26 @@ impl SurfaceWatch {
             s.raw.clone()
         };
         let output = extract_completion_output(&raw, &self.options.command, &self.options.shell);
+        if let Some(core) = self.core.upgrade() {
+            core.remember(
+                &self.options.session_id,
+                self.snapshot(
+                    if timed_out {
+                        "timed_out"
+                    } else if exit_code == Some(0.0) {
+                        "completed"
+                    } else {
+                        "failed"
+                    },
+                    exit_code,
+                ),
+            );
+        }
         if let Some(on_complete) = &self.options.on_complete {
             let _ = on_complete(Completion {
                 exit_code,
                 output: output.clone(),
+                timed_out,
             });
         }
         self.cleanup()?;
@@ -484,6 +644,7 @@ impl SurfaceWatch {
                 exit_code,
                 output,
                 duration_ms: (core.clock)() as f64 - self.started_at,
+                timed_out,
             });
         }
         Ok(())
@@ -495,6 +656,10 @@ impl SurfaceWatch {
                 return Ok(());
             }
             s.raw.extend_from_slice(data);
+            if s.raw.len() > 64_000 {
+                let excess = s.raw.len() - 64_000;
+                s.raw.drain(..excess);
+            }
             s.raw.clone()
         };
         if let Some(on_output) = &self.options.on_output {
@@ -569,6 +734,38 @@ impl Drop for SurfaceWatch {
     }
 }
 impl ExternalWatch {
+    fn snapshot(
+        &self,
+        status: &str,
+        code: Option<f64>,
+        output: Option<Utf16Text>,
+    ) -> ExecutionSnapshot {
+        ExecutionSnapshot {
+            terminal_id: self.options.terminal_id.clone(),
+            execution_id: self
+                .options
+                .execution_id
+                .clone()
+                .unwrap_or_else(|| self.options.terminal_id.clone()),
+            status: status.into(),
+            exit_code: code,
+            output: Utf16Text(tail(
+                output
+                    .unwrap_or_else(|| {
+                        self.options
+                            .get_output
+                            .as_ref()
+                            .map_or_else(|| Utf16Text(vec![]), |f| f())
+                    })
+                    .0,
+                16_000,
+            )),
+            duration_ms: self
+                .core
+                .upgrade()
+                .map_or(0.0, |c| (c.clock)() as f64 - self.options.started_at),
+        }
+    }
     fn detach(&self) {
         if let Some(core) = self.core.upgrade() {
             core.remove(self.id);
@@ -596,12 +793,27 @@ impl ExternalWatch {
     fn resolve(&self, result: Result<Completion, String>) {
         self.detach();
         let Ok(result) = result else { return };
-        if self.cancelled.load(Ordering::Acquire)
-            || self.options.should_notify.as_ref().is_some_and(|f| !f())
-        {
+        if self.cancelled.load(Ordering::Acquire) {
             return;
         }
         if let Some(core) = self.core.upgrade() {
+            core.remember(
+                &self.options.session_id,
+                self.snapshot(
+                    if result.timed_out {
+                        "timed_out"
+                    } else if result.exit_code == Some(0.0) {
+                        "completed"
+                    } else {
+                        "failed"
+                    },
+                    result.exit_code,
+                    Some(result.output.clone()),
+                ),
+            );
+            if self.options.should_notify.as_ref().is_some_and(|f| !f()) {
+                return;
+            }
             core.invoke(BackgroundCommandResult {
                 session_id: self.options.session_id.clone(),
                 terminal_id: self.options.terminal_id.clone(),
@@ -609,6 +821,7 @@ impl ExternalWatch {
                 exit_code: result.exit_code,
                 output: result.output,
                 duration_ms: (core.clock)() as f64 - self.options.started_at,
+                timed_out: result.timed_out,
             });
         }
     }

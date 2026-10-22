@@ -26,7 +26,7 @@ interface ExecuteInput {
   goal?: string;
   /** Whether this starts a background process (server, watcher, build --watch).
    *  If true, the command runs asynchronously and you won't see the output immediately.
-   *  If false (default), the command blocks until complete and returns output. */
+   *  Otherwise it returns completed output or yields with a tracked execution. */
   isBackground?: boolean;
   /** Working directory for the command (defaults to project root) */
   cwd?: string;
@@ -36,6 +36,7 @@ interface ExecuteInput {
    *  1-hour default; values above the 24-hour cap are clamped. There is no
    *  run-without-timeout mode. */
   timeout?: number;
+  yieldTimeMs?: number;
   /** Run inside Docker sandbox container */
   sandbox?: boolean;
   /** Sandbox mount mode when sandbox is enabled */
@@ -55,9 +56,9 @@ export function createExecuteTool(
     name: "execute",
     description:
       "Run a shell command in a persistent terminal visible to the user. " +
-      "Wait for every finite one-shot command — including builds, tests, installs, OCR, downloads, and scripts — to complete. " +
+      "Commands yield after a short initial wait with partial output, terminalId and executionId; completion resumes you automatically. Inspect progress or cancel with terminal.execution; do not rerun a running command. " +
       "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled. " +
-      "Set isBackground: true only for indefinite processes such as servers, watchers, and daemons.",
+      "Set isBackground: true for an earlier startup snapshot, useful for servers and watchers.",
     tier: "core",
     category: "terminal",
     source: "builtin",
@@ -78,7 +79,7 @@ export function createExecuteTool(
         },
         isBackground: {
           type: "boolean",
-          description: "True to start the command without blocking. Use only for indefinite processes such as servers, watchers, and daemons. Keep false for finite one-shot commands; raising `timeout` (up to 24 hours) is the way to wait longer.",
+          description: "Return after startup output settles. Useful for servers and watchers; finite jobs also yield automatically after yieldTimeMs.",
         },
         cwd: {
           type: "string",
@@ -88,9 +89,10 @@ export function createExecuteTool(
           type: "string",
           description: "Reuse a specific terminal by ID.",
         },
+        yieldTimeMs: { type: "number", description: "Initial wait in ms: default 10000, maximum 30000. Zero yields immediately. Returns a running execution if not finished." },
         timeout: {
           type: "number",
-          description: "Timeout in ms. Always finite — 1 hour by default; 0/negative falls back to the default, and anything above 24 hours is clamped. The timeout guard cannot be disabled.",
+          description: "Execution deadline in ms, separate from yieldTimeMs. Default 1 hour, maximum 24 hours. Expiry stops the execution; 0/negative uses the default.",
         },
         sandbox: {
           type: "boolean",
@@ -111,6 +113,7 @@ export function createExecuteTool(
           command: input.command,
           terminalId: input.terminalId,
           timeout: input.timeout,
+          yieldTimeMs: input.yieldTimeMs,
           cwd: input.cwd,
           sandbox: input.sandbox,
           sandboxMountMode: input.sandboxMountMode,

@@ -59,19 +59,19 @@ function setup() {
     write(data: string) { writes.push(data); },
     snapshot() { return { metadata: { shell: "/bin/bash" } }; },
   } as unknown as TerminalSurface;
-  const tool = createTerminalRunTool({ getSurface: () => surface } as unknown as SurfaceRegistry);
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
   const notify = vi.fn();
   backgroundCommandMonitor.setCompletionHandler(notify);
   return {
     writes, notify,
     emit(data: string) { for (const cb of [...listeners]) cb(data); },
-    run(isBackground: boolean, timeout = 1000) {
-      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, timeout },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
         { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
     },
   };
 }
-const __jait_hook_1481 = () => {
+const __jait_hook_1599 = () => {
   backgroundCommandMonitor.clearForTests();
   vi.useRealTimers();
 };
@@ -94,7 +94,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1481();
+await __jait_hook_1599();
 }
 }
 
@@ -115,19 +115,19 @@ function setup() {
     write(data: string) { writes.push(data); },
     snapshot() { return { metadata: { shell: "/bin/bash" } }; },
   } as unknown as TerminalSurface;
-  const tool = createTerminalRunTool({ getSurface: () => surface } as unknown as SurfaceRegistry);
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
   const notify = vi.fn();
   backgroundCommandMonitor.setCompletionHandler(notify);
   return {
     writes, notify,
     emit(data: string) { for (const cb of [...listeners]) cb(data); },
-    run(isBackground: boolean, timeout = 1000) {
-      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, timeout },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
         { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
     },
   };
 }
-const __jait_hook_1481 = () => {
+const __jait_hook_1599 = () => {
   backgroundCommandMonitor.clearForTests();
   vi.useRealTimers();
 };
@@ -151,7 +151,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1481();
+await __jait_hook_1599();
 }
 }
 
@@ -172,19 +172,19 @@ function setup() {
     write(data: string) { writes.push(data); },
     snapshot() { return { metadata: { shell: "/bin/bash" } }; },
   } as unknown as TerminalSurface;
-  const tool = createTerminalRunTool({ getSurface: () => surface } as unknown as SurfaceRegistry);
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
   const notify = vi.fn();
   backgroundCommandMonitor.setCompletionHandler(notify);
   return {
     writes, notify,
     emit(data: string) { for (const cb of [...listeners]) cb(data); },
-    run(isBackground: boolean, timeout = 1000) {
-      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, timeout },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
         { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
     },
   };
 }
-const __jait_hook_1481 = () => {
+const __jait_hook_1599 = () => {
   backgroundCommandMonitor.clearForTests();
   vi.useRealTimers();
 };
@@ -213,7 +213,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1481();
+await __jait_hook_1599();
 }
 }
 
@@ -234,19 +234,19 @@ function setup() {
     write(data: string) { writes.push(data); },
     snapshot() { return { metadata: { shell: "/bin/bash" } }; },
   } as unknown as TerminalSurface;
-  const tool = createTerminalRunTool({ getSurface: () => surface } as unknown as SurfaceRegistry);
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
   const notify = vi.fn();
   backgroundCommandMonitor.setCompletionHandler(notify);
   return {
     writes, notify,
     emit(data: string) { for (const cb of [...listeners]) cb(data); },
-    run(isBackground: boolean, timeout = 1000) {
-      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, timeout },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
         { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
     },
   };
 }
-const __jait_hook_1481 = () => {
+const __jait_hook_1599 = () => {
   backgroundCommandMonitor.clearForTests();
   vi.useRealTimers();
 };
@@ -263,7 +263,7 @@ await (async()=>{
   try {
     const result = await tool.execute({
       command: `node -e "console.log('stage-one');setTimeout(()=>console.log('stage-two'),500)"`,
-      timeout: 100,
+      yieldTimeMs: 100,
     }, { sessionId: "s-real-wait", actionId: "a-real-wait", projectRoot: process.cwd(), requestedBy: "test" });
     terminalId = (result.data as { terminalId: string }).terminalId;
     __jait_capture(0, (result.data));
@@ -277,7 +277,356 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_1481();
+await __jait_hook_1599();
+}
+
+
+break;
+}
+case "tailstatic_packages_gateway_src_terminal_waiting_test_ts_113_1": {
+
+
+function setup() {
+  const listeners = new Set<(data: string) => void>();
+  const writes: string[] = [];
+  const surface = {
+    id: "term-waiting", type: "terminal", state: "running",
+    shellIntegrationReady: true,
+    touch() {},
+    addOutputListener(cb: (data: string) => void) { listeners.add(cb); },
+    removeOutputListener(cb: (data: string) => void) { listeners.delete(cb); },
+    write(data: string) { writes.push(data); },
+    snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+  } as unknown as TerminalSurface;
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
+  const notify = vi.fn();
+  backgroundCommandMonitor.setCompletionHandler(notify);
+  return {
+    writes, notify,
+    emit(data: string) { for (const cb of [...listeners]) cb(data); },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
+        { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
+    },
+  };
+}
+const __jait_hook_1599 = () => {
+  backgroundCommandMonitor.clearForTests();
+  vi.useRealTimers();
+};
+
+try {
+await (async()=>{
+
+  vi.useFakeTimers();
+  const { createTerminalExecutionTool } = await import("../../../../packages/gateway/src/tools/terminal-execution.js");
+  const env = setup();
+  const run = env.run(false, 20);
+  await vi.advanceTimersByTimeAsync(25);
+  const result = await run;
+  const ids = result.data as { terminalId: string; executionId: string };
+  const tool = createTerminalExecutionTool();
+  const context = { sessionId: "s-waiting", actionId: "inspect", projectRoot: process.cwd(), requestedBy: "test" };
+  env.emit("still building\r\n");
+  __jait_capture(0, ((await tool.execute({ ...ids, action: "inspect" }, { ...context, sessionId: "other" })).ok));
+  __jait_capture(1, ((await tool.execute({ ...ids, executionId: "stale", action: "cancel" }, context)).ok));
+  __jait_capture(2, ((await tool.execute({ ...ids, action: "inspect" }, context)).data));
+  __jait_capture(3, ((await tool.execute({ ...ids, action: "cancel" }, context)).data));
+  __jait_capture(4, (env.writes.filter(x => x === "STOP")));
+  env.emit("\x1b]633;D;0\x07");
+  __jait_capture(5, (env.notify.mock.calls));
+  __jait_capture(6, ((await tool.execute({ ...ids, action: "inspect" }, context)).data));
+
+})();
+
+} finally {
+await __jait_hook_1599();
+}
+
+
+break;
+}
+case "tailstatic_packages_gateway_src_terminal_waiting_test_ts_134_1": {
+
+
+function setup() {
+  const listeners = new Set<(data: string) => void>();
+  const writes: string[] = [];
+  const surface = {
+    id: "term-waiting", type: "terminal", state: "running",
+    shellIntegrationReady: true,
+    touch() {},
+    addOutputListener(cb: (data: string) => void) { listeners.add(cb); },
+    removeOutputListener(cb: (data: string) => void) { listeners.delete(cb); },
+    write(data: string) { writes.push(data); },
+    snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+  } as unknown as TerminalSurface;
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
+  const notify = vi.fn();
+  backgroundCommandMonitor.setCompletionHandler(notify);
+  return {
+    writes, notify,
+    emit(data: string) { for (const cb of [...listeners]) cb(data); },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
+        { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
+    },
+  };
+}
+const __jait_hook_1599 = () => {
+  backgroundCommandMonitor.clearForTests();
+  vi.useRealTimers();
+};
+
+try {
+await (async()=>{
+
+  const env = setup();
+  // setup's command is valid; this fixture directly exercises dispatch of malformed input.
+  const writes: string[] = [];
+  const surface = { id: "syntax", type: "terminal", state: "running", touch() {}, write(s: string) { writes.push(s); }, snapshot() { return { metadata: { shell: "/bin/bash" } }; } };
+  const tool = createTerminalRunTool({ getSurface: () => surface } as unknown as SurfaceRegistry);
+  const result = await tool.execute({ command: 'printf "unfinished', terminalId: "syntax" },
+    { sessionId: "syntax", actionId: "syntax", projectRoot: process.cwd(), requestedBy: "test" });
+  __jait_capture(0, (result.ok));
+  __jait_capture(1, (result.data));
+  __jait_capture(2, (writes));
+  __jait_capture(3, (env.notify.mock.calls));
+
+})();
+
+} finally {
+await __jait_hook_1599();
+}
+
+
+break;
+}
+case "tailstatic_packages_gateway_src_terminal_waiting_test_ts_148_1": {
+
+
+function setup() {
+  const listeners = new Set<(data: string) => void>();
+  const writes: string[] = [];
+  const surface = {
+    id: "term-waiting", type: "terminal", state: "running",
+    shellIntegrationReady: true,
+    touch() {},
+    addOutputListener(cb: (data: string) => void) { listeners.add(cb); },
+    removeOutputListener(cb: (data: string) => void) { listeners.delete(cb); },
+    write(data: string) { writes.push(data); },
+    snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+  } as unknown as TerminalSurface;
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
+  const notify = vi.fn();
+  backgroundCommandMonitor.setCompletionHandler(notify);
+  return {
+    writes, notify,
+    emit(data: string) { for (const cb of [...listeners]) cb(data); },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
+        { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
+    },
+  };
+}
+const __jait_hook_1599 = () => {
+  backgroundCommandMonitor.clearForTests();
+  vi.useRealTimers();
+};
+
+try {
+await (async()=>{
+
+  vi.useFakeTimers();
+  const env = setup();
+  const run = env.run(true, 1000, 20);
+  await vi.advanceTimersByTimeAsync(25);
+  const result = await run;
+  __jait_capture(0, (result.ok));
+  __jait_capture(1, (result.data));
+  __jait_capture(2, (env.writes.filter(x => x === "STOP")));
+  __jait_capture(3, (env.notify.mock.calls));
+
+})();
+
+} finally {
+await __jait_hook_1599();
+}
+
+
+break;
+}
+case "tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each0": {
+
+
+function setup() {
+  const listeners = new Set<(data: string) => void>();
+  const writes: string[] = [];
+  const surface = {
+    id: "term-waiting", type: "terminal", state: "running",
+    shellIntegrationReady: true,
+    touch() {},
+    addOutputListener(cb: (data: string) => void) { listeners.add(cb); },
+    removeOutputListener(cb: (data: string) => void) { listeners.delete(cb); },
+    write(data: string) { writes.push(data); },
+    snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+  } as unknown as TerminalSurface;
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
+  const notify = vi.fn();
+  backgroundCommandMonitor.setCompletionHandler(notify);
+  return {
+    writes, notify,
+    emit(data: string) { for (const cb of [...listeners]) cb(data); },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
+        { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
+    },
+  };
+}
+const __jait_hook_1599 = () => {
+  backgroundCommandMonitor.clearForTests();
+  vi.useRealTimers();
+};
+/*__jait_scope_open__*/{
+const isBackground = false;
+
+try {
+await (async()=>{
+
+  const abort = new AbortController();
+  const writes: string[] = [];
+  const listeners = new Set<(s: string) => void>();
+  const surface = { id: "cancel-env", type: "terminal", state: "running", shellIntegrationReady: true,
+    touch() {}, snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+    addOutputListener(f: (s: string) => void) { listeners.add(f); }, removeOutputListener(f: (s: string) => void) { listeners.delete(f); },
+    write(s: string) { writes.push(s); } };
+  const registry = { getSurface: () => surface, stopSurface: async () => {} } as unknown as SurfaceRegistry;
+  const tool = createTerminalRunTool(registry, undefined, undefined, undefined, async () => { abort.abort(); return {}; });
+  const result = await tool.execute({ command: "build-app", terminalId: surface.id, isBackground },
+    { sessionId: "cancel-env", actionId: "cancel-env", projectRoot: process.cwd(), requestedBy: "test", signal: abort.signal });
+  __jait_capture(0, (result.ok));
+  __jait_capture(1, (writes.every(s => !s.includes("build-app"))));
+  __jait_capture(2, (backgroundCommandMonitor.activeCount));
+  __jait_capture(3, (listeners.size));
+
+})();
+
+} finally {
+await __jait_hook_1599();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each1": {
+
+
+function setup() {
+  const listeners = new Set<(data: string) => void>();
+  const writes: string[] = [];
+  const surface = {
+    id: "term-waiting", type: "terminal", state: "running",
+    shellIntegrationReady: true,
+    touch() {},
+    addOutputListener(cb: (data: string) => void) { listeners.add(cb); },
+    removeOutputListener(cb: (data: string) => void) { listeners.delete(cb); },
+    write(data: string) { writes.push(data); },
+    snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+  } as unknown as TerminalSurface;
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
+  const notify = vi.fn();
+  backgroundCommandMonitor.setCompletionHandler(notify);
+  return {
+    writes, notify,
+    emit(data: string) { for (const cb of [...listeners]) cb(data); },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
+        { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
+    },
+  };
+}
+const __jait_hook_1599 = () => {
+  backgroundCommandMonitor.clearForTests();
+  vi.useRealTimers();
+};
+/*__jait_scope_open__*/{
+const isBackground = true;
+
+try {
+await (async()=>{
+
+  const abort = new AbortController();
+  const writes: string[] = [];
+  const listeners = new Set<(s: string) => void>();
+  const surface = { id: "cancel-env", type: "terminal", state: "running", shellIntegrationReady: true,
+    touch() {}, snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+    addOutputListener(f: (s: string) => void) { listeners.add(f); }, removeOutputListener(f: (s: string) => void) { listeners.delete(f); },
+    write(s: string) { writes.push(s); } };
+  const registry = { getSurface: () => surface, stopSurface: async () => {} } as unknown as SurfaceRegistry;
+  const tool = createTerminalRunTool(registry, undefined, undefined, undefined, async () => { abort.abort(); return {}; });
+  const result = await tool.execute({ command: "build-app", terminalId: surface.id, isBackground },
+    { sessionId: "cancel-env", actionId: "cancel-env", projectRoot: process.cwd(), requestedBy: "test", signal: abort.signal });
+  __jait_capture(0, (result.ok));
+  __jait_capture(1, (writes.every(s => !s.includes("build-app"))));
+  __jait_capture(2, (backgroundCommandMonitor.activeCount));
+  __jait_capture(3, (listeners.size));
+
+})();
+
+} finally {
+await __jait_hook_1599();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_terminal_waiting_test_ts_178_1": {
+
+
+function setup() {
+  const listeners = new Set<(data: string) => void>();
+  const writes: string[] = [];
+  const surface = {
+    id: "term-waiting", type: "terminal", state: "running",
+    shellIntegrationReady: true,
+    touch() {},
+    addOutputListener(cb: (data: string) => void) { listeners.add(cb); },
+    removeOutputListener(cb: (data: string) => void) { listeners.delete(cb); },
+    write(data: string) { writes.push(data); },
+    snapshot() { return { metadata: { shell: "/bin/bash" } }; },
+  } as unknown as TerminalSurface;
+  const tool = createTerminalRunTool({ getSurface: () => surface, stopSurface: async () => { writes.push("STOP"); } } as unknown as SurfaceRegistry);
+  const notify = vi.fn();
+  backgroundCommandMonitor.setCompletionHandler(notify);
+  return {
+    writes, notify,
+    emit(data: string) { for (const cb of [...listeners]) cb(data); },
+    run(isBackground: boolean, timeout = 1000, executionTimeout?: number) {
+      return tool.execute({ command: "build-app", terminalId: surface.id, isBackground, yieldTimeMs: timeout, timeout: executionTimeout },
+        { sessionId: "s-waiting", actionId: "a-waiting", projectRoot: process.cwd(), requestedBy: "test" });
+    },
+  };
+}
+const __jait_hook_1599 = () => {
+  backgroundCommandMonitor.clearForTests();
+  vi.useRealTimers();
+};
+
+try {
+await (async()=>{
+
+  const registry = new SurfaceRegistry();
+  registry.register(new TerminalSurfaceFactory());
+  const tool = createTerminalRunTool(registry);
+  const result = await tool.execute({ command: "exit 7", yieldTimeMs: 2000 },
+    { sessionId: "shell-exit", actionId: "shell-exit", projectRoot: process.cwd(), requestedBy: "test" });
+  __jait_capture(0, (result.ok));
+  __jait_capture(1, (result.data));
+
+})();
+
+} finally {
+await __jait_hook_1599();
 }
 
 

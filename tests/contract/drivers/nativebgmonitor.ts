@@ -1,6 +1,6 @@
 import { backgroundCommandMonitor as monitor } from '../../../packages/gateway/src/services/background-command-monitor.ts';
 function units(s:string){return Array.from({length:s.length},(_,i)=>s.charCodeAt(i));}
-function result(r:any){return {session:r.sessionId,terminal:r.terminalId,command:r.command,code:r.exitCode,output:units(r.output),duration:r.durationMs};}
+function result(r:any){return {session:r.sessionId,terminal:r.terminalId,command:r.command,code:r.exitCode,output:units(r.output),duration:r.durationMs,...(r.timedOut?{timedOut:true}:{})};}
 export async function dispatch(call:any){
  monitor.clearForTests();
  let now=1000, next=0;
@@ -20,10 +20,10 @@ export async function dispatch(call:any){
    try{
     switch(a.op){
      case 'track':{
-      const listeners=new Set<any>();
-      const surface={listeners,addOutputListener(l:any){listeners.add(l);},removeOutputListener(l:any){listeners.delete(l);if(a.removeError)throw Error('remove');}};
+      const listeners=new Set<any>(), exits=new Set<any>();
+      const surface={listeners,exits,addExitListener(l:any){exits.add(l);},removeExitListener(l:any){exits.delete(l);},addOutputListener(l:any){listeners.add(l);},removeOutputListener(l:any){listeners.delete(l);if(a.removeError)throw Error('remove');}};
       surfaces.set(id,surface);
-      const ok=monitor.track({sessionId:session,terminalId:id,command,surface,completionToken:a.token,shell:a.shell,initialOutput:a.initial,startedAt:a.started,maxWatchMs:a.max,
+      const ok=monitor.track({sessionId:session,terminalId:id,command,surface,executionId:a.execution,onCancel:a.cancel?()=>{events.push(["cancel",id]);}:undefined,onTimeout:a.deadline?()=>{events.push(["timeout",id]);}:undefined,completionToken:a.token,shell:a.shell,initialOutput:a.initial,startedAt:a.started,maxWatchMs:a.max,
        onOutput:r=>{events.push(['output',id,units(r)]);if(a.stopOnOutput)monitor.stopForSession(session);if(a.outputError)throw Error('output');},
        onComplete:r=>{events.push(['complete',id,r.exitCode,units(r.output)]);if(a.completeError)throw Error('complete');},
        onStop:()=>{events.push(['stop',id]);if(a.stopError)throw Error('stop');},shouldNotify:()=>a.notify!==false});
@@ -31,11 +31,16 @@ export async function dispatch(call:any){
      }
      case 'external':{
       let resolve:any,reject:any;const exitPromise=new Promise<any>((a,b)=>{resolve=a;reject=b;});pending.set(id,{resolve,reject});
-      events.push(['track',id,monitor.trackExternal({sessionId:session,terminalId:id,command,startedAt:a.started??now,exitPromise,shouldNotify:()=>a.notify!==false,onCancel:()=>{events.push(['cancel',id]);if(a.cancelError)throw Error('cancel');}})]);break;
+      events.push(['track',id,monitor.trackExternal({sessionId:session,terminalId:id,command,executionId:a.execution,getOutput:()=>a.partial??"",startedAt:a.started??now,exitPromise,shouldNotify:()=>a.notify!==false,onCancel:()=>{events.push(['cancel',id]);if(a.cancelError)throw Error('cancel');}})]);break;
      }
-     case 'resolve':pending.get(id).resolve({exitCode:a.code??null,output:a.output??''});break;
+     case 'resolve':pending.get(id).resolve({exitCode:a.code??null,output:a.output??'',timedOut:a.timedOut});break;
      case 'reject':pending.get(id).reject(Error('external'));break;
+     case 'exit':for(const listener of [...(surfaces.get(id)?.exits??[])])listener(a.code??null);break;
      case 'emit':for(const listener of [...(surfaces.get(id)?.listeners??[])])listener(a.data);break;
+     case 'inspect':case 'cancelExecution':{
+      const value=a.op==='inspect'?monitor.inspectExecution(session,id,a.execution??id):monitor.cancelExecution(session,id,a.execution??id);
+      events.push([a.op,value?{...value,output:units(value.output)}:null]);break;
+     }
      case 'advance':{
       const target=now+a.ms;
       for(;;){const due=[...timers].filter(([,t])=>t.at<=target).sort((a,b)=>a[1].at-b[1].at||a[0]-b[0])[0];if(!due)break;now=due[1].at;timers.delete(due[0]);try{due[1].fn();}catch(e){errors.push((e as Error).message);}}

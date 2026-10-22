@@ -80,7 +80,12 @@ test('one sticky browser follows the conversation and minimizes without reconnec
   expect(before!.width).toBeGreaterThan(650)
   expect(before!.height).toBeGreaterThan(350)
   const scroll = page.locator('[data-conversation-scroll]')
-  expect((await scroll.boundingBox())!.y).toBeGreaterThanOrEqual(before!.y + before!.height)
+  // The panel floats above the transcript rather than taking a row in the
+  // column, so the chat is not pushed down: both share the same top edge and
+  // the panel overlaps the transcript instead of sitting above it.
+  const scrollBox = (await scroll.boundingBox())!
+  expect(scrollBox.y).toBeLessThanOrEqual(before!.y + 1)
+  expect(before!.y).toBeLessThan(scrollBox.y + scrollBox.height)
   // The URL, refresh, tools, agent toggle, options and collapse share one header.
   const header = panel.locator('form')
   await expect(header.getByRole('textbox', { name: 'Browser URL' })).toBeVisible()
@@ -103,8 +108,9 @@ test('one sticky browser follows the conversation and minimizes without reconnec
   await expect.poll(async () => Math.round((await panel.boundingBox())!.y)).toBe(Math.round(before!.y))
   await page.getByRole('button', { name: 'Minimize browser', exact: true }).click()
   await expect(panel).toHaveAttribute('data-browser-minimized', 'true')
-  expect((await panel.boundingBox())!.width).toBe(160)
-  expect((await panel.boundingBox())!.height).toBe(90)
+  // The shrink is animated, so the final box has to be awaited, not sampled.
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(160)
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.height)).toBe(90)
   await expect(panel.getByRole('button')).toHaveCount(1)
   await expect(panel.locator('iframe')).toHaveCount(1)
   await expect(frame).not.toHaveAttribute('src', /view_only=/)
@@ -180,6 +186,6 @@ test('the first browser tool opens the large panel automatically', async ({ page
   await expect(panel).toHaveCount(0)
   await page.getByRole('button', { name: 'Open browser', exact: true }).click()
   await expect(panel).toHaveAttribute('data-browser-minimized', 'false')
-  expect((await panel.boundingBox())!.width).toBeGreaterThan(650)
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeGreaterThan(650)
   await expect(page.getByTitle('Agent browser')).toHaveCount(1)
 })

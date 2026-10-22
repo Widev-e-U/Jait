@@ -11,9 +11,18 @@ import json
 import os
 import shutil
 import subprocess
+import re
 
 ROOT = Path(__file__).resolve().parents[3]
-OUTPUT = ROOT / ".jait/artifacts/gateway-rust"
+BASE_OUTPUT = ROOT / ".jait/artifacts/gateway-rust"
+# Independent validation runs must never refresh another run's source tree.
+# A stable explicit lane also permits warm compiler caches on later batches.
+RUN_LABEL = os.environ.get("JAIT_RUST_VALIDATION_RUN", "")
+if RUN_LABEL and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", RUN_LABEL):
+    raise ValueError("JAIT_RUST_VALIDATION_RUN must be a simple alphanumeric run label (max 64 characters)")
+OUTPUT = BASE_OUTPUT / "runs" / RUN_LABEL if RUN_LABEL else BASE_OUTPUT
+if not OUTPUT.resolve().is_relative_to(ROOT):
+    raise ValueError("validation output must remain inside the project")
 SNAPSHOT = OUTPUT / "frozen-source"
 RUN_OUTPUT = SNAPSHOT / ".jait/artifacts"
 
@@ -95,7 +104,37 @@ def prepare_compiler_caches():
             link(destination, cache)
 
 
+def acquire_run_lock(output):
+    """Own one snapshot until validation and report publication finish."""
+    output.mkdir(parents=True, exist_ok=True)
+    lock = (output / "validation.lock").open("a+b")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            if os.fstat(lock.fileno()).st_size == 0:
+                lock.write(b"0")
+                lock.flush()
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        lock.close()
+        raise RuntimeError(f"validation snapshot is already in use: {output}; wait for the current run") from None
+    return lock
+
+
 def main():
+    with acquire_run_lock(OUTPUT):
+        run_locked()
+
+
+def run_locked():
+    isolation_tests = subprocess.run(
+        ["python3", "-B", "tests/contract/tooling/test_native_validation_output.py"], cwd=ROOT
+    )
+    assert isolation_tests.returncode == 0, "validation output isolation checks failed"
     assert not SNAPSHOT.is_symlink()
     if RUN_OUTPUT.is_symlink():
         assert RUN_OUTPUT.resolve() == (OUTPUT / "frozen-output").resolve()
@@ -182,6 +221,11 @@ def main():
             cwd=SNAPSHOT, stdout=log, stderr=subprocess.STDOUT,
         )
         assert classifier_tests.returncode == 0, "inventory metadata classification checks failed"
+        lock_tests = subprocess.run(
+            ["python3", "-B", "tests/contract/tooling/test_native_validation_lock.py"],
+            cwd=SNAPSHOT, stdout=log, stderr=subprocess.STDOUT,
+        )
+        assert lock_tests.returncode == 0, "validation snapshot locking checks failed"
         result = subprocess.run(
             ["bun", "run", "test:gateway:rust"], cwd=SNAPSHOT,
             stdout=log, stderr=subprocess.STDOUT,
@@ -210,6 +254,7 @@ def main():
                 drift.remove(inventory_path)
         except (OSError, ValueError):
             pass
+    report["validation_snapshot_lock_checked"] = True
     report["inventory_metadata_classifier_checked"] = True
     report["live_validation_metadata_drift"] = metadata_drift
     report["live_fingerprints_exact_match"] = not drift and not metadata_drift

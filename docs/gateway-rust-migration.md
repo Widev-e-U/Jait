@@ -1,25 +1,32 @@
 # Gateway migration to Rust
 
-## Current native checkpoint — 2026-10-20
+## Current native checkpoint — 2026-10-22
 
-The source-bound gate verifies **148/364 components (40.66%)** with unchanged
-sources and exact live fingerprints. This supersedes historical counts below.
-The latest batches add the DNS-pinned public mail-image loader and an opt-in
-skills HTTP adapter (12 and 8 focused tests, nine caught/restored mutations).
-The preceding batch implements subscription quota fetching: 26 focused differential
-checks and 34 native checks cover cookie/status handling, HTML and quota parsing,
-stream limits/cleanup, UTF-8, redirects and deadlines. Four timezone subprocesses
-cover local dates and daylight-saving transitions. A 100,000-level document now
-passes in 0.40 seconds after replacing repeated ancestor scans; a duration bound
-retains the regression. All 2,231 entity mappings match the reference decoder.
+The full frozen-source gate passes **199/365 components (54.52%)**, with
+formatting, strict Clippy, 303 native library tests and 132 contract targets.
+Evidence: `.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/199-report.json`.
+The frozen sources stayed unchanged and all recorded live inputs match. The fast
+`tooling/progress.mjs` audit checks current freshness separately.
 
-Evidence: `tests/contract/reviews/native-subscription-usage.md` and
-`.jait/artifacts/gateway-rust/checkpoints/148-report.json`. The review records
-fail-then-pass discrepancies and explicit format/platform/integration limits.
-The full gate passes 171 native library tests and 82 differential targets.
-Production remains the TypeScript gateway. **216 components remain**; full
-replacement, client/platform, resource and rollback gates remain open.
+Recent additions cover the live capability catalog, six file/image factories,
+seven memory/reminder factories and remote tool routing. The latest three
+components pass 30 focused contract checks and 19 caught/restored deliberate
+regressions. Actual TypeScript comparisons retain complete metadata, exact UTF-8
+byte counts and content, the 8,000-byte image threshold, scoped filesystem call
+order, reminder ownership/retrieval tracking, UTF-16 preview clipping, persistent
+remote terminals, callback identity, node selection and proxy error boundaries.
+Reviews are in `tests/contract/reviews/native-file-tools.md`,
+`native-memory-tools.md` and `native-remote-executor.md`. Focused and mutation
+logs are under `.jait/artifacts/gateway-rust/`. Workspace typechecks, artifact-path
+checks and strict Clippy for the new contracts also pass.
 
+**166 components remain.** Equal source-component weights do not estimate effort
+or time. Production remains TypeScript. Caller-authorized service and transport
+ports do not activate production capabilities or earn underlying engine credit.
+General registry/transport activation, browser chat lifecycle, remaining
+engines/adapters, supported-platform, resource, recovery, rollback and replacement
+gates remain open. Reference-test reconstruction and its freshness are separate
+measurements; this implementation checkpoint grants no translated-test credit.
 
 Status: parallel Rust implementation and reference-test reconstruction. The initial standalone native gateway is in `packages/gateway-rust`; production remains the TypeScript gateway.
 
@@ -757,3 +764,39 @@ are caught. Five public-contract checks plus four transport checks bind declarat
 TypeScript fixtures, including negative cases. These type-only rows add no new engine behavior.
 Credit requires the next frozen-source full gate; the 364-component goal and production
 activation remain open. Reviews: native-model-fetchers.md and native-public-contracts.md.
+
+
+## Native chat/tool runtime continuation — 2026-10-21
+
+Component implementation remains **185/365 (50.68%)**. This continuation focuses
+on the first complete internal turn path and adds no duplicate component credit
+for a partial agent loop or chat HTTP route. Test reconstruction remains a
+separate ledger: **2,742/2,883 declarations (95.11%)**, with source freshness
+reported by the progress audit rather than implied by that percentage.
+
+The candidate native turn coordinator connects configured OpenAI-compatible
+streaming, consent-aware dispatch, bounded process execution and persistent
+owner-scoped turn records. A real owned loopback SSE fixture requests a tool,
+ConsentManager approves its bounded subprocess, the model consumes its result,
+and a second turn resumes after SQLite is closed and reopened. Shared admission
+holds a session lease through load/execution/persistence. Before tool effects,
+capacity checks reserve serialized history/result headroom; cancellation and
+timeout retain bounded partial text. Native stream regressions fix framing,
+reasoning separation, completion and correlation defects; consent regressions
+fix stalled trust-lookup cancellation and JavaScript number wire parity.
+
+The full source-bound gate passes all four stages (format, strict Clippy,
+**271 native tests**, and **118 contract targets**) with matching post-gate
+fingerprints. The focused application/provider/process/consent/session contracts
+pass **60 checks**. A reproduced remote-provider boundary mismatch was isolated to a
+submillisecond offset introduced by pausing the test clock late; initializing the
+test runtime paused preserves exact timeout assertions and passes the same
+comparison. The provider implementation did not change for that fixture fix.
+See `tests/contract/reviews/native-chat-flow.md` for boundaries and evidence.
+
+This candidate has no mounted chat HTTP endpoint or browser integration. Its
+versioned development turn log is separate from the production UI message
+projection and existing TypeScript history. Supported-platform, resource and
+cutover gates remain separate. The next application slice is authenticated chat
+streaming with disconnect/cancellation handling and an explicit production
+message projection, followed by the actual browser workflow.

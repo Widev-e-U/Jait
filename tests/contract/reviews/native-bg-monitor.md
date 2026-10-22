@@ -46,3 +46,25 @@ PTY transport, and external node to it is separate migration work. Arbitrary inv
 delays, unbounded output retention compatibility, all callback reentrancy, OS timer load,
 and a complete production wake-up pipeline are outside this evidence. No production
 gateway startup or live agent/notification service was changed.
+
+## Responsive execution update (2026-10-21)
+
+Both implementations now expose session- and execution-scoped bounded progress,
+cancellation, and the last 100 finished states. An old execution identity cannot
+cancel the current command in a reused terminal. Explicit execution deadline
+callbacks stop the owned execution, retain `timed_out`, and notify once with a
+timeout flag; legacy observation-only expiry still just removes its watcher.
+External process snapshots use a live output getter and preserve timed-out exit
+outcomes. Captured raw output is capped at 64,000 UTF-16 units. Initial completion
+markers are processed after registration so foreground handoff cannot lose them.
+
+Four new differential scenarios cover ownership rejection, stale IDs, cancellation
+with late completion, retained finished state, external output and timeout,
+deadline stop/notification ordering, and an already-arrived completion marker.
+The native wait policy and real TypeScript tool acceptance target are also linked
+in the inventory. Focused evidence: `.jait/artifacts/terminal-execution/`.
+Native terminal dispatch and PTY execution remain separate unported components.
+
+Local and remote shell-exit subscriptions now finish without OSC/prompt markers.
+The Rust surface port and TypeScript surface agree on exit callbacks, including
+late duplicate exits after cleanup; a real PTY `exit 7` regression also passes.

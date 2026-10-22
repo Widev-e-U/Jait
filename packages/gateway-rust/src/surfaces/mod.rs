@@ -5,3 +5,7 @@ pub mod registry;
 pub mod terminal_output;
 
 pub mod contracts;
+
+pub mod filesystem;
+
+pub mod remote_filesystem;

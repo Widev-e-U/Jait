@@ -9,13 +9,10 @@ import {
   MessagesSquare,
   UsersRound,
   Brain,
-  Settings,
   Wifi,
   X,
 } from 'lucide-react'
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import type { SidebarAccount } from '@/components/app-shell/mode-sidebar'
 import { Button } from '@/components/ui/button'
 import type { AppView } from '@/lib/app-view'
 
@@ -43,7 +40,6 @@ const MANAGER_NAV_ITEMS: readonly NavItem[] = [
 ]
 
 interface MobileNavDrawerProps {
-  account?: SidebarAccount
   open: boolean
   onClose: () => void
 
@@ -53,19 +49,14 @@ interface MobileNavDrawerProps {
 
   // Projects / sessions sidebar
   sessionSelector: ReactNode
-
-  // Settings
-  onOpenSettings: () => void
 }
 
 export function MobileNavDrawer({
-  account,
   open,
   onClose,
   currentView,
   onNavigate,
   sessionSelector,
-  onOpenSettings,
 }: MobileNavDrawerProps) {
   const managerMode = currentView === 'threads' || currentView === 'agents'
   return (
@@ -117,40 +108,17 @@ export function MobileNavDrawer({
                   <span>{label}</span>
                 </button>
               ))}
-              <button
-                onClick={() => { onOpenSettings(); onClose() }}
-                className={`flex flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-2xs transition-colors ${
-                  currentView === 'settings'
-                    ? 'bg-secondary text-foreground'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                }`}
-                aria-label="Settings"
-                aria-current={currentView === 'settings' ? 'page' : undefined}
-              >
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </button>
             </div>
           </nav>
 
-          {/* Projects / sessions selector */}
+          {/* Projects / sessions selector — no title row: the selector's own search field names it */}
           {!managerMode && <div className="flex min-h-0 flex-1 flex-col">
-            <div className="flex h-9 shrink-0 items-center border-b px-3 text-xs font-medium text-foreground">
-              <span>Projects & Chats</span>
-            </div>
             <div className="min-h-0 flex-1">
               {sessionSelector}
             </div>
           </div>}
 
         </div>
-        {account && <div className="shrink-0 space-y-1 border-t p-2">
-          {account.agentControl?.(false)}
-          <Button variant="ghost" className="h-11 w-full justify-start gap-3" onClick={account.username ? onOpenSettings : account.onLogin} aria-label={account.username ? 'Account settings' : 'Sign in'}>
-            <Avatar className="h-7 w-7"><AvatarFallback>{account.initial}</AvatarFallback></Avatar>
-            <span className="truncate">{account.username ?? 'Sign in'}</span>
-          </Button>
-        </div>}
       </aside>
     </>
   )

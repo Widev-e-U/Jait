@@ -733,3 +733,14 @@ async fn real_database_restart_preserves_runs_and_minute_deduplication_through_c
     service.stop();
     worker.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn failed_disarm_write_preserves_the_reference_single_statement_boundary() {
+    compare(vec![
+        create("once", Some("alice"), json!({"__jaitJobMeta":{"once":true}})),
+        json!({"op":"raw","sql":"CREATE TRIGGER reject_disarm BEFORE UPDATE OF enabled ON scheduled_jobs BEGIN SELECT RAISE(FAIL, 'disarm refused'); END"}),
+        json!({"op":"trigger","id":"once","trigger":"schedule","runAt":"2026-10-01T00:00:00.000Z","result":{"ok":false,"message":"delivery failed"}}),
+        json!({"op":"get","id":"once"}),
+        json!({"op":"runs","id":"once"}),
+    ]).await;
+}

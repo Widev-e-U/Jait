@@ -33,3 +33,22 @@ all logs were replaced after the baseline passed and the script required an
 assertion panic, a failed test result and no compilation failure.
 Restored sources pass all eleven tests (seven domain and four transport checks).
 Logs: .jait/artifacts/gateway-rust/helpers-mutation-*.log and helpers-restored.log.
+
+## Chat resume options source update — 2026-10-22
+
+The live TypeScript reference added `ChatResumeOptions` and forwards its optional
+`hidden` flag to chat callbacks. The first 189-component gate correctly rejected
+the stale reference fingerprint. Native chat handlers now accept typed optional
+options, while one-argument handlers and thread callbacks retain their existing
+API. Callback identity is retained through an explicit enum rather than allocating
+an identity-changing wrapper during registration.
+
+The real-source driver now forwards and records options. An additional
+comparison checks missing options, an empty object, hidden=false, hidden=true,
+thread isolation, repeated same-handler registration and old-subscription cleanup.
+The original replacement-during-await and error cases remain active. All twelve
+helper checks pass after restoration. Lost-options and wrong-chat-identity
+mutations both fail the new comparison and are restored; evidence is in
+`.jait/artifacts/gateway-rust/resume-options-*.log` and
+`resume-options-mutations.json`. Only after this review is the reference hash
+refreshed. These options are typed known fields, not arbitrary JavaScript objects.

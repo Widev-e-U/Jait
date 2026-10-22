@@ -1,0 +1,131 @@
+{
+  "read": {
+    "name": "file.read",
+    "description": "Read the contents of a file within the project",
+    "tier": "standard",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative or absolute path to the file"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  "write": {
+    "name": "file.write",
+    "description": "Write UTF-8 content to a file (creates parent directories). Whitespace is preserved exactly as supplied. JSON newline escapes must decode to actual newline characters; literal backslash sequences are not decoded again.",
+    "tier": "standard",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative or absolute path to the file"
+        },
+        "content": {
+          "type": "string",
+          "description": "Exact file content, including required trailing newlines and CRLF. Copy the raw read content, not line-numbered display text."
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ]
+    }
+  },
+  "patch": {
+    "name": "file.patch",
+    "description": "Search-and-replace within a file (first occurrence)",
+    "tier": "standard",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to the file"
+        },
+        "search": {
+          "type": "string",
+          "description": "Exact text to find"
+        },
+        "replace": {
+          "type": "string",
+          "description": "Replacement text"
+        }
+      },
+      "required": [
+        "path",
+        "search",
+        "replace"
+      ]
+    }
+  },
+  "list": {
+    "name": "file.list",
+    "description": "List files and directories at a path within the project",
+    "tier": "standard",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Directory path to list"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  "stat": {
+    "name": "file.stat",
+    "description": "Get file metadata (size, type, modified date)",
+    "tier": "standard",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to the file"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  "image": {
+    "name": "image.view",
+    "description": "Display a project image in the tool card. The user already sees the image there; do not repeat it in assistant messages with Markdown image embeds, attachments, or redundant file links unless explicitly requested. Do not call after screenshot.capture or browser.screenshot: those tools already display the image. Do not call again when a tool card has already shown the image.",
+    "tier": "standard",
+    "category": "filesystem",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to the image file"
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  }
+}

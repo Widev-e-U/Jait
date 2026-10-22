@@ -40,6 +40,8 @@ interface ConversationProps {
     toolCalls?: unknown
     segments?: unknown
     role?: 'user' | 'agent' | 'assistant'
+    /** Set to 'system-notice' for background notices, which share role 'user'. */
+    kind?: 'system-notice'
     error?: unknown
   }>
   /** Whether there are older messages available to load. */

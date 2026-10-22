@@ -1,0 +1,59 @@
+[
+  {
+    "name": "tools.list",
+    "description": "List all available tools grouped by category. Use tools.search for full schemas.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "Filter by category.",
+          "enum": [
+            "terminal",
+            "filesystem",
+            "os",
+            "surfaces",
+            "scheduler",
+            "gateway",
+            "screen",
+            "browser",
+            "web",
+            "memory",
+            "voice",
+            "agent",
+            "channels",
+            "meta",
+            "external"
+          ]
+        }
+      },
+      "required": []
+    },
+    "tier": "core",
+    "category": "meta",
+    "source": "builtin"
+  },
+  {
+    "name": "tools.search",
+    "description": "Search deferred tools by describing the capability you need. Returns the most relevant full schemas so they can be called in subsequent rounds. Use one broad natural-language query.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Broad natural-language description of the capability you need."
+        },
+        "limit": {
+          "type": "number",
+          "description": "Maximum matches to return. Defaults to 3 and is capped at 20."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    },
+    "tier": "core",
+    "category": "meta",
+    "source": "builtin"
+  }
+]

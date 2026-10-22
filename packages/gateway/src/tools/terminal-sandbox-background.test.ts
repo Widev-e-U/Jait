@@ -69,12 +69,20 @@ describe("sandbox startup lifecycle", () => {
     } finally { unregister(); }
   });
 
-  it("keeps foreground sandbox calls waiting for real completion", async () => {
-    const { tool, manager } = fixture();
-    const result = await tool.execute({ command: "build", sandbox: true }, context);
-    expect(result.ok).toBe(true);
-    expect(manager.execInContainer).toHaveBeenCalled();
-    expect(manager.startBackgroundCommand).not.toHaveBeenCalled();
+  it("yields finite sandbox calls and reports their later completion once", async () => {
+    vi.useFakeTimers();
+    const { tool, manager, finish } = fixture();
+    const notify = vi.fn();
+    backgroundCommandMonitor.setCompletionHandler(notify);
+    const pending = tool.execute({ command: "build", sandbox: true, yieldTimeMs: 20 }, context);
+    await vi.advanceTimersByTimeAsync(20);
+    const result = await pending;
+    expect(result.data).toMatchObject({ isBackground: true, executionId: context.actionId, output: "booting" });
+    expect(manager.startBackgroundCommand).toHaveBeenCalledOnce();
+    expect(manager.execInContainer).not.toHaveBeenCalled();
+    finish({ ok: true, output: "built", exitCode: 0, timedOut: false, containerName: context.sandboxContainerName! });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(notify).toHaveBeenCalledOnce();
   });
 
   it("launches a standalone sandbox with the original mount and resource restrictions", async () => {

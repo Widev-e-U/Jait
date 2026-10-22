@@ -985,26 +985,6 @@ function MessageInner({
                         Steered into running turn
                       </span>
                     )}
-                    {isUser && (sendState === 'sending' || showSentAck) && (
-                      <div
-                        className="mb-1 flex items-center gap-1.5 text-2xs font-medium text-muted-foreground"
-                        aria-live="polite"
-                        data-testid="user-message-send-status"
-                        data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
-                      >
-                        {showSentAck ? (
-                          <>
-                            <Check className="h-3 w-3 text-primary" />
-                            <span>Sent</span>
-                          </>
-                        ) : (
-                          <>
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            <span>Sending…</span>
-                          </>
-                        )}
-                      </div>
-                    )}
                     <TooltipHint content={canEdit && !isEditing ? 'Click to edit message' : undefined}>
                     <AIMessageContent
                       ref={userBubbleRef}
@@ -1078,6 +1058,26 @@ function MessageInner({
                         </div>
                         {messenger?.attachment}
                       </div>
+                      {isUser && (sendState === 'sending' || showSentAck) && (
+                        <div
+                          className="-mb-2 mt-1 flex items-center justify-end gap-1 text-2xs font-medium leading-4 text-muted-foreground"
+                          aria-live="polite"
+                          data-testid="user-message-send-status"
+                          data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
+                        >
+                          {showSentAck ? (
+                            <>
+                              <Check className="h-3 w-3 text-primary" />
+                              <span>Sent</span>
+                            </>
+                          ) : (
+                            <>
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <span>Sending…</span>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </AIMessageContent>
                     </TooltipHint>
 

@@ -1,11 +1,32 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Minimize2, RotateCcw, Settings2 } from 'lucide-react'
 import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { apiFetch } from '@/lib/api-fetch'
+import { readBrowserCollapsed, rememberBrowserCollapsed } from '@/lib/browser-panel-state'
 import { getApiUrl } from '@/lib/gateway-url'
 
 interface BrowserState { sessionId: string; browserId?: string; url: string | null; sharedWithAgent: boolean; verified: boolean; currentUrl?: string | null }
+
+// Fast enough to feel instant, slow enough to read as a deliberate grow/shrink.
+// Kept as a class, not an inline style: an inline `transition` shorthand would
+// outrank `motion-reduce:transition-none` and animate for users who asked not to.
+// `[transition-*:…]` instead of `duration-*`/`ease-*`: those shorthands are ambiguous
+// between transition and animation utilities in this project's Tailwind config.
+const PANEL_TRANSITION = 'transition-[left,top,width,height,border-radius,box-shadow] [transition-duration:180ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none'
+const PANEL_INSET = 12
+const PANEL_COLLAPSED = { width: 160, height: 90 }
+
+// Measurement is cosmetic, so it must not warn when rendered on the server.
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
+// The panel floats above the transcript, so its frame follows the conversation column.
+function panelBox(expanded: boolean, frame: { width: number; height: number }) {
+  if (!expanded) return { left: PANEL_INSET, top: PANEL_INSET, ...PANEL_COLLAPSED }
+  const width = Math.min(768, Math.max(PANEL_COLLAPSED.width, frame.width - PANEL_INSET * 2))
+  const height = Math.min(480, Math.max(PANEL_COLLAPSED.height, Math.round(frame.height * 0.55)))
+  return { left: Math.max(0, Math.round((frame.width - width) / 2)), top: PANEL_INSET, width, height }
+}
 
 // Only gateway live views can be embedded. Page URLs remain ordinary links.
 function liveViewUrl(value: unknown): string | null {
@@ -22,8 +43,21 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const record = (data?.browserSession ?? (liveViewUrl(data?.url) ? { ...data, previewUrl: data?.url, controller: data?.sharedWithAgent ? 'agent' : 'user' } : undefined)) as Record<string, unknown> | undefined
   const id = sessionId ?? (typeof record?.sessionId === 'string' ? record.sessionId : undefined)
   const browserId = typeof data?.browserId === 'string' ? data.browserId : undefined
-  const [expanded, setExpanded] = useState(autoOpen)
+  const [expanded, setExpandedState] = useState(() => {
+    // Remembered per chat: leaving a chat collapsed and coming back must not
+    // re-expand it. The panel unmounts both on chat switches and when the user
+    // sends their next message, so a fresh mount is the normal case.
+    const collapsed = readBrowserCollapsed(id)
+    return collapsed === undefined ? autoOpen : !collapsed
+  })
+  const setExpanded = useCallback((next: boolean) => {
+    setExpandedState(next)
+    rememberBrowserCollapsed(id, !next)
+  }, [id])
   const [controlsContainer, setControlsContainer] = useState<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLElement>(null)
+  const [frame, setFrame] = useState({ width: 768, height: 468 })
+  const [fullscreen, setFullscreen] = useState(false)
   const optionsRef = useRef<HTMLDetailsElement>(null)
   const [state, setState] = useState<BrowserState | null>(() => id && liveViewUrl(record?.previewUrl) ? {
     sessionId: id, browserId, url: liveViewUrl(record?.previewUrl), sharedWithAgent: record?.controller === 'agent', verified: false,
@@ -31,6 +65,36 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const headers = authToken ? { Authorization: `Bearer ${authToken}` } : undefined
+
+  // The panel is an overlay, so it sizes itself from the positioned ancestor it floats over.
+  useIsomorphicLayoutEffect(() => {
+    const panel = panelRef.current
+    const parent = panel?.offsetParent
+    if (!panel || !(parent instanceof HTMLElement)) return
+    const measure = () => {
+      const width = parent.clientWidth
+      const height = parent.clientHeight
+      setFrame((current) => (current.width === width && current.height === height ? current : { width, height }))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(parent)
+    return () => observer.disconnect()
+  }, [id])
+
+  // Inline geometry would win over the fullscreen sizing, so drop it while fullscreen.
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const update = () => {
+      const element = document.fullscreenElement
+      setFullscreen(!!element && (element === panel || panel.contains(element)))
+    }
+    update()
+    document.addEventListener('fullscreenchange', update)
+    return () => document.removeEventListener('fullscreenchange', update)
+  }, [id])
 
   useEffect(() => {
     if (!id) return
@@ -115,14 +179,15 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     </button>
   </>
   return (
-    <section aria-label="Chat browser" data-browser-panel data-browser-minimized={!expanded}
-      className={expanded
-        ? 'relative z-30 mx-auto mb-1 mt-3 flex h-[min(480px,55vh)] max-h-[65%] w-[calc(100%-1.5rem)] max-w-3xl shrink-0 flex-col rounded-xl border border-border bg-background text-xs shadow-lg [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:max-h-none [&:fullscreen]:w-screen [&:fullscreen]:max-w-none'
-        : 'absolute left-3 top-3 z-30 h-[90px] w-40 overflow-hidden rounded-lg border border-border bg-background text-xs shadow-lg'}>
+    <section ref={panelRef} aria-label="Chat browser" data-browser-panel data-browser-minimized={!expanded}
+      style={fullscreen ? undefined : panelBox(expanded, frame)}
+      className={`absolute z-30 border border-border bg-background text-xs shadow-lg ${PANEL_TRANSITION} ${expanded
+        ? 'flex flex-col rounded-xl [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'
+        : 'overflow-hidden rounded-lg'}`}>
       <div className={expanded ? 'min-h-0 flex-1 [&_[data-browser-layout]]:rounded-xl' : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
         <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls }}>
           {state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
-            hideControls={!expanded} viewOnly={state.sharedWithAgent || busy || !state.verified} className="h-full w-full rounded-b-xl border-0 bg-white" />
+            hideControls={!expanded} viewOnly={state.sharedWithAgent || busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
             : <p className="p-3 text-muted-foreground">No live browser is available for this chat.</p>}
         </BrowserViewLayout>
       </div>

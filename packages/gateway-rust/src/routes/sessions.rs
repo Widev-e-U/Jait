@@ -17,7 +17,7 @@ use axum::{
     extract::{Request, State},
     http::Method,
     response::Response,
-    routing::{get, post},
+    routing::{any, get, post},
 };
 use serde_json::{Map, Value, json};
 use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc};
@@ -91,10 +91,18 @@ impl SessionRoutes {
             .route("/api/sessions/{id}/generate-title", post(handle))
             .route("/api/tools/sessions.list", get(handle))
             .route("/api/tools/sessions.status", get(handle));
-        if state {
-            router = router.route("/api/sessions/{id}/state", get(handle).patch(handle));
-        }
-        router.with_state(self)
+        router = router.route(
+            "/api/sessions/{id}/state",
+            if state {
+                get(handle).patch(handle)
+            } else {
+                any(not_found)
+            },
+        );
+        router
+            .route("/api/sessions/{id}/{*rest}", any(not_found))
+            .method_not_allowed_fallback(not_found)
+            .with_state(self)
     }
     fn event(&self, user: &str, event: &str, data: Value, now: &str) {
         self.runtime.broadcast(
@@ -102,6 +110,26 @@ impl SessionRoutes {
             json!({"type":format!("chat.{event}"),"sessionId":"","timestamp":now,"payload":data}),
         );
     }
+}
+fn parser_error(error: Response) -> Response {
+    if error.status() == 415 {
+        response(
+            415,
+            json!({"statusCode":415,"code":"FST_ERR_CTP_INVALID_MEDIA_TYPE","error":"Unsupported Media Type","message":"Unsupported Media Type"}),
+        )
+    } else {
+        error
+    }
+}
+async fn not_found(State(state): State<SessionRoutes>, request: Request) -> Response {
+    if let Err(error) = auth::require_user(&state.auth, request.headers()).await {
+        return *error;
+    }
+    let headers = request.headers().clone();
+    if let Err(error) = auth::parse_body(request.into_body(), &headers).await {
+        return parser_error(*error);
+    }
+    response(404, json!({"error":"Not Found"}))
 }
 #[derive(Default)]
 struct Query(BTreeMap<String, Vec<String>>);
@@ -173,12 +201,16 @@ async fn handle(State(state): State<SessionRoutes>, request: Request) -> Respons
         Ok(false) => return auth::denied(),
         Err(e) => return auth::database_failure(&e),
     }
-    let method = request.method().clone();
+    let method = if request.method() == Method::HEAD {
+        Method::GET
+    } else {
+        request.method().clone()
+    };
     let path = request.uri().path().to_string();
     let query = Query::parse(request.uri().query().unwrap_or(""));
     let body = match auth::parse_body(request.into_body(), &headers).await {
         Ok(v) => v,
-        Err(r) => return *r,
+        Err(r) => return parser_error(*r),
     };
     if path.ends_with("/generate-title") {
         let encoded = path
@@ -388,8 +420,7 @@ fn dispatch(
         ("POST", "viewed") => {
             if let Some(observed) = body.get("lastActiveAt") {
                 let valid = observed.as_str().is_some_and(|s| {
-                    chrono::DateTime::parse_from_rfc3339(s).is_ok()
-                        || chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_ok()
+                    crate::services::subscription_usage_fetchers::js_date_parse(s).is_some()
                 });
                 if !valid {
                     return Ok(response(400, json!({"error":"INVALID_TIMESTAMP"})));

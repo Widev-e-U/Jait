@@ -1,6 +1,6 @@
 #[path = "../src/internal_driver.rs"]
 mod internal_driver;
-use jait_gateway::tools::core_agent::{self, AgentError, AgentTool, SpawnPort};
+use jait_gateway::tools::core_agent::{AgentError, SpawnPort};
 use serde_json::{Value, json};
 use std::{
     path::PathBuf,
@@ -72,7 +72,7 @@ async fn compare(cases: Vec<Value>) {
                     Box::pin(async move { result })
                 })
             };
-            let tool = AgentTool::new(|| {
+            let tool = jait_gateway::tools::core::create_agent_tool(|| {
                 constructions.fetch_add(1, Ordering::SeqCst);
                 match test.get("factoryThrown") {
                     Some(value) => Err(AgentError::Thrown(value.clone())),
@@ -95,7 +95,7 @@ async fn compare(cases: Vec<Value>) {
                             Err(error) => json!({"thrown":thrown(error)}),
                         });
                     }
-                    json!({"metadata":core_agent::metadata(),"constructions":constructions.load(Ordering::SeqCst),"requests":*requests.lock().unwrap(),"outcomes":outcomes})
+                    json!({"metadata":tool.definition(),"constructions":constructions.load(Ordering::SeqCst),"requests":*requests.lock().unwrap(),"outcomes":outcomes})
                 }
             };
             actual.push(result);

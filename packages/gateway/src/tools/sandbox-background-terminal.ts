@@ -9,6 +9,7 @@ export async function runSandboxBackgroundTerminal(
   options: SandboxRunOptions | SandboxExecOptions,
   command: string,
   context: ToolContext,
+  wait: { isBackground: boolean; yieldTimeMs: number } = { isBackground: true, yieldTimeMs: 5000 },
 ): Promise<ToolResult> {
   if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
   const startedAt = Date.now();
@@ -18,7 +19,7 @@ export async function runSandboxBackgroundTerminal(
   let startupPending = true;
   let release!: () => void;
   const startup = new Promise<void>(resolve => { release = resolve; });
-  const timer = setTimeout(() => release(), Math.min(options.timeoutMs, 5000));
+  const timer = setTimeout(() => release(), Math.min(options.timeoutMs, wait.isBackground ? 5000 : wait.yieldTimeMs));
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   const onAbort = () => { void execution.stop(); release(); };
   context.signal?.addEventListener("abort", onAbort, { once: true });
@@ -27,8 +28,10 @@ export async function runSandboxBackgroundTerminal(
   const removeOutput = execution.onOutput(chunk => {
     if (!startupPending) return;
     context.onOutputChunk?.(chunk);
-    if (idleTimer) clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => release(), 500);
+    if (wait.isBackground) {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => release(), 500);
+    }
   });
   const completion = execution.completion.then(result => {
     completed = result;
@@ -46,7 +49,7 @@ export async function runSandboxBackgroundTerminal(
   }
   const data = {
     sandbox: true, containerName: execution.containerName,
-    threadSandbox: Boolean(context.sandboxContainerName), hostUnaffected: true, terminalId,
+    threadSandbox: Boolean(context.sandboxContainerName), hostUnaffected: true, terminalId, executionId: context.actionId,
   };
   if (context.signal?.aborted) {
     await execution.stop();
@@ -60,7 +63,8 @@ export async function runSandboxBackgroundTerminal(
     };
   }
   const watched = backgroundCommandMonitor.trackExternal({
-    sessionId: context.sessionId, terminalId, command, startedAt,
+    sessionId: context.sessionId, terminalId, executionId: context.actionId, command, startedAt,
+    getOutput: () => execution.output,
     exitPromise: completion,
     shouldNotify: () => !context.signal?.aborted,
     onCancel: () => { void execution.stop(); },
@@ -71,7 +75,7 @@ export async function runSandboxBackgroundTerminal(
   }
   return {
     ok: true,
-    message: "Sandbox command is running. Output is a startup snapshot, not completion. Continue independent work; completion will resume you automatically. Do not poll or rerun the command.",
+    message: "Sandbox command is running. Output is partial, not completion. Continue independent work; completion will resume you automatically. Use terminal.execution to inspect progress or cancel. Do not rerun the command.",
     data: { ...data, output: execution.output, exitCode: null, timedOut: false, isBackground: true, watched },
   };
 }

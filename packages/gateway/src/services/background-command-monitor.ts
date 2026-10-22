@@ -17,6 +17,8 @@ import { isShellPromptLine } from "../tools/shell-prompt.js";
 
 /** Minimal terminal-surface contract the monitor needs (satisfied by TerminalSurface). */
 export interface MonitorableSurface {
+  addExitListener?(listener: (exitCode: number | null) => void): void;
+  removeExitListener?(listener: (exitCode: number | null) => void): void;
   addOutputListener(listener: (data: string) => void): void;
   removeOutputListener(listener: (data: string) => void): void;
 }
@@ -30,6 +32,7 @@ export interface BackgroundCommandResult {
   /** Cleaned command output (OSC/ANSI stripped, echoed command removed, tail-truncated). */
   output: string;
   durationMs: number;
+  timedOut?: boolean;
 }
 
 export type BackgroundCompletionHandler = (
@@ -41,6 +44,9 @@ export interface TrackBackgroundCommandOptions {
   terminalId: string;
   command: string;
   surface: MonitorableSurface;
+  executionId?: string;
+  onCancel?: () => void;
+  onTimeout?: () => void;
   /** Optional sentinel printed by the terminal tool when shell integration is unavailable. */
   completionToken?: string;
   /** Terminal's shell, used to recognise (and strip) the trailing prompt. */
@@ -58,7 +64,7 @@ export interface TrackBackgroundCommandOptions {
   /** Suppress a wake-up when completion is returned inline by the tool. */
   shouldNotify?: () => boolean;
   /** Called when the command completion marker is observed. */
-  onComplete?: (result: { exitCode: number | null; output: string }) => void;
+  onComplete?: (result: { exitCode: number | null; output: string; timedOut?: boolean }) => void;
   /** Called once when the watcher completes, expires, or is cancelled. */
   onStop?: () => void;
 }
@@ -140,15 +146,57 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export interface TerminalExecutionSnapshot {
+  terminalId: string;
+  executionId: string;
+  status: "running" | "completed" | "failed" | "timed_out" | "cancelled";
+  output: string;
+  exitCode: number | null;
+  durationMs: number;
+}
+
 interface ActiveWatcher {
   sessionId: string;
   terminalId: string;
   cancel: () => void;
+  stop?: () => void;
+  snapshot?: () => TerminalExecutionSnapshot;
 }
 
 class BackgroundCommandMonitor {
   private handler: BackgroundCompletionHandler | undefined;
   private readonly active = new Set<ActiveWatcher>();
+  private readonly history = new Map<string, { sessionId: string; snapshot: TerminalExecutionSnapshot }>();
+
+  private remember(sessionId: string, snapshot: TerminalExecutionSnapshot): void {
+    const key = JSON.stringify([sessionId, snapshot.terminalId, snapshot.executionId]);
+    this.history.delete(key);
+    this.history.set(key, { sessionId, snapshot });
+    while (this.history.size > 100) this.history.delete(this.history.keys().next().value!);
+  }
+
+  inspectExecution(sessionId: string, terminalId: string, executionId: string): TerminalExecutionSnapshot | null {
+    for (const entry of this.active) {
+      if (entry.sessionId !== sessionId || entry.terminalId !== terminalId) continue;
+      const snapshot = entry.snapshot?.();
+      if (snapshot?.executionId === executionId) return snapshot;
+    }
+    return this.history.get(JSON.stringify([sessionId, terminalId, executionId]))?.snapshot ?? null;
+  }
+
+  cancelExecution(sessionId: string, terminalId: string, executionId: string): TerminalExecutionSnapshot | null {
+    for (const entry of this.active) {
+      if (entry.sessionId !== sessionId || entry.terminalId !== terminalId) continue;
+      const snapshot = entry.snapshot?.();
+      if (snapshot?.executionId !== executionId) continue;
+      entry.stop?.();
+      entry.cancel();
+      const cancelled = { ...snapshot, status: "cancelled" as const };
+      this.remember(sessionId, cancelled);
+      return cancelled;
+    }
+    return this.inspectExecution(sessionId, terminalId, executionId);
+  }
 
   /**
    * Register the (single) handler invoked when a tracked background command
@@ -214,15 +262,20 @@ class BackgroundCommandMonitor {
     terminalId: string;
     command: string;
     startedAt: number;
-    exitPromise: Promise<{ exitCode: number | null; output: string }>;
+    exitPromise: Promise<{ exitCode: number | null; output: string; timedOut?: boolean }>;
     shouldNotify?: () => boolean;
     onCancel?: () => void;
+    executionId?: string;
+    getOutput?: () => string;
   }): boolean {
     if (this.active.size >= MAX_CONCURRENT_WATCHERS) return false;
     let cancelled = false;
     const entry: ActiveWatcher = {
       sessionId: options.sessionId,
       terminalId: options.terminalId,
+      snapshot: () => ({ terminalId: options.terminalId, executionId: options.executionId ?? options.terminalId,
+        status: "running", output: (options.getOutput?.() ?? "").slice(-16_000), exitCode: null,
+        durationMs: Date.now() - options.startedAt }),
       cancel: () => {
         cancelled = true;
         this.active.delete(entry);
@@ -232,9 +285,14 @@ class BackgroundCommandMonitor {
     this.active.add(entry);
 
     void options.exitPromise
-      .then(({ exitCode, output }) => {
+      .then(({ exitCode, output, timedOut }) => {
         this.active.delete(entry);
-        if (cancelled || options.shouldNotify?.() === false) return;
+        if (cancelled) return;
+        this.remember(options.sessionId, { terminalId: options.terminalId,
+          executionId: options.executionId ?? options.terminalId,
+          status: timedOut ? "timed_out" : exitCode === 0 ? "completed" : "failed",
+          exitCode, output: output.slice(-16_000), durationMs: Date.now() - options.startedAt });
+        if (options.shouldNotify?.() === false) return;
         this.invokeHandler({
           sessionId: options.sessionId,
           terminalId: options.terminalId,
@@ -242,6 +300,7 @@ class BackgroundCommandMonitor {
           exitCode,
           output,
           durationMs: Date.now() - options.startedAt,
+          ...(timedOut ? { timedOut: true } : {}),
         });
       })
       .catch(() => this.active.delete(entry));
@@ -283,16 +342,21 @@ class BackgroundCommandMonitor {
       } catch {
         /* surface already gone */
       }
+      try { options.surface.removeExitListener?.(exitListener); } catch { /* surface already gone */ }
       this.active.delete(entry);
       options.onStop?.();
     };
 
-    const finish = (exitCode: number | null) => {
+    const finish = (exitCode: number | null, timedOut = false) => {
       if (finished) return;
       finished = true;
       const output = extractCompletionOutput(raw, options.command, options.shell);
+      this.remember(options.sessionId, { terminalId: options.terminalId,
+        executionId: options.executionId ?? options.terminalId,
+        status: timedOut ? "timed_out" : exitCode === 0 ? "completed" : "failed",
+        output, exitCode, durationMs: Date.now() - startedAt });
       try {
-        options.onComplete?.({ exitCode, output });
+        options.onComplete?.({ exitCode, output, ...(timedOut ? { timedOut: true } : {}) });
       } catch {
         // Completion bookkeeping must not prevent watcher cleanup or notification.
       }
@@ -306,12 +370,13 @@ class BackgroundCommandMonitor {
         exitCode,
         output,
         durationMs: Date.now() - startedAt,
+        ...(timedOut ? { timedOut: true } : {}),
       });
     };
 
     const listener = (data: string) => {
       if (finished) return;
-      raw += data;
+      raw = (raw + data).slice(-64_000);
       options.onOutput?.(raw);
       // onOutput can synchronously cancel this watcher.
       if (finished) return;
@@ -347,23 +412,33 @@ class BackgroundCommandMonitor {
         `[background-command] ${options.terminalId}: giving up on "${options.command.slice(0, 80)}" after ` +
           `${Math.round((options.maxWatchMs ?? DEFAULT_MAX_WATCH_MS) / 60_000)}min — no completion marker seen`,
       );
-      cleanup();
+      if (options.onTimeout) {
+        options.onTimeout();
+        finish(null, true);
+      } else cleanup();
     }, options.maxWatchMs ?? DEFAULT_MAX_WATCH_MS);
     const entry: ActiveWatcher = {
       sessionId: options.sessionId,
       terminalId: options.terminalId,
       cancel: cleanup,
+      stop: options.onCancel,
+      snapshot: () => ({ terminalId: options.terminalId, executionId: options.executionId ?? options.terminalId,
+        status: "running", output: extractCompletionOutput(raw, options.command, options.shell),
+        exitCode: null, durationMs: Date.now() - startedAt }),
     };
 
+    const exitListener = (exitCode: number | null) => finish(exitCode);
     options.surface.addOutputListener(listener);
+    options.surface.addExitListener?.(exitListener);
     this.active.add(entry);
+    if (raw) queueMicrotask(() => listener(""));
     return true;
   }
 
   /** Stop watching every background command for a session (e.g. on session close). */
   stopForSession(sessionId: string): void {
     for (const entry of [...this.active]) {
-      if (entry.sessionId === sessionId) entry.cancel();
+      if (entry.sessionId === sessionId) { entry.stop?.(); entry.cancel(); }
     }
   }
 
@@ -371,6 +446,7 @@ class BackgroundCommandMonitor {
     for (const entry of [...this.active]) entry.cancel();
     this.active.clear();
     this.handler = undefined;
+    this.history.clear();
   }
 }
 

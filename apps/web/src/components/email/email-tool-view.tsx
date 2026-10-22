@@ -27,15 +27,15 @@ export function EmailToolView({ data, args }: { data?: Record<string, unknown>; 
   const shown = hasBody ? message : loaded
   if (!shown) return <div className="rounded-xl border p-4 text-sm text-muted-foreground" role="status">{error || (accountId && id ? 'Loading email…' : 'Email content unavailable.')}</div>
   return (
-    <article className="my-2 min-w-0 overflow-hidden rounded-xl border bg-card" aria-label="Email preview">
-      <header className="space-y-1 border-b p-4">
-        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"><Mail className="h-4 w-4" />Email</div>
-        <h3 className="break-words text-base font-semibold">{text(shown.subject) || '(no subject)'}</h3>
-        <p className="break-words text-xs"><span className="text-muted-foreground">From: </span>{text(shown.from)}</p>
-        {text(shown.to) && <p className="break-words text-xs"><span className="text-muted-foreground">To: </span>{text(shown.to)}</p>}
-        {text(shown.date) && <p className="text-xs text-muted-foreground">{text(shown.date)}</p>}
+    <article className="my-0 min-w-0 overflow-hidden rounded-md border bg-card" aria-label="Email preview">
+      <header className="space-y-1 border-b p-2.5 sm:p-4">
+        <div className="mb-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground sm:mb-2 sm:gap-2 sm:text-xs"><Mail className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />Email</div>
+        <h3 className="break-words text-sm font-semibold sm:text-base">{text(shown.subject) || '(no subject)'}</h3>
+        <p className="break-words text-[11px] sm:text-xs"><span className="text-muted-foreground">From: </span>{text(shown.from)}</p>
+        {text(shown.to) && <p className="break-words text-[11px] sm:text-xs"><span className="text-muted-foreground">To: </span>{text(shown.to)}</p>}
+        {text(shown.date) && <p className="text-[11px] text-muted-foreground sm:text-xs">{text(shown.date)}</p>}
       </header>
-      <div className="p-3"><EmailContent key={accountId + id} accountId={accountId || undefined} bodyHtml={text(shown.bodyHtml)} bodyText={text(shown.bodyText) || text(shown.body)} /></div>
+      <div className="p-0"><EmailContent key={accountId + id} accountId={accountId || undefined} bodyHtml={text(shown.bodyHtml)} bodyText={text(shown.bodyText) || text(shown.body)} /></div>
     </article>
   )
 }

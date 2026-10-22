@@ -1,7 +1,7 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Plus, Search, Settings2, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Loader2, LockKeyhole, MessageCircle, MoreHorizontal, Search, Settings2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -10,6 +10,7 @@ import { MessengerBubble } from './messenger-message'
 import { MessengerStatusView } from './messenger-status-view'
 import { MessengerOptions } from './messenger-options'
 import { dayDividerLabel, needsDayDivider } from '@/lib/messenger/dates'
+import { messageGroupPositions } from '@/lib/messenger/grouping'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { PromptInput, type PromptInputHandle } from '@/components/chat/prompt-input'
@@ -20,6 +21,7 @@ import { appendTranscript } from '@/lib/transcript-merge'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useMessenger } from './messenger-provider'
 import { MAX_ATTACHMENT_BYTES, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
+import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
 
 function ConnectionForm() {
@@ -107,6 +109,8 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const connected = !!snapshot.session
   const services = ['All', ...new Set([...snapshot.rooms.map(room => room.service), ...(service !== 'All' ? [service] : [])])]
   const messages = snapshot.messages.filter(message => !search || (!message.unableToDecrypt && message.body.toLowerCase().includes(search.toLowerCase())))
+  // Consecutive messages from the same sender render as one run: one avatar, tighter spacing.
+  const groupPositions = messageGroupPositions(messages)
   // Message hits are independent of the conversation-name filter: only the service filter narrows them.
   const searchResults = store.searchLoadedMessages(search).filter(item => service === 'All' || snapshot.rooms.some(room => room.id === item.roomId && room.service === service))
   const rooms = snapshot.rooms.filter(room => (service === 'All' || room.service === service) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
@@ -130,7 +134,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const chatRooms = rooms.filter(room => room.kind !== 'channel' && room.kind !== 'team')
   const roomRow = (item: MessengerRoom, channel = false) => (
     <div key={item.id} role="group" aria-label={'Conversation ' + item.name} data-room-kind={item.kind ?? 'chat'} className="group/room flex min-w-0 items-center border-b border-border/50"><button onClick={() => selectRoom(item.id)} aria-pressed={item.id === roomId} className={'flex min-w-0 flex-1 gap-3 p-3 text-left hover:bg-muted/60 ' + (item.id === roomId ? 'bg-secondary' : '')}>
-      <span className={'flex h-10 w-10 shrink-0 items-center justify-center bg-primary/10 text-sm font-medium text-primary ' + (channel ? 'rounded-lg text-base' : 'rounded-full')}>{channel ? '#' : item.name.slice(0, 2).toUpperCase()}</span>
+      <MessengerPeerAvatar size="lg" showPresence={false} {...chatListAvatarProps(item, channel)} />
       <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-medium">{channel ? '#' + item.name : item.name}</span>{(item.unread > 0 || item.markedUnread) && <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{item.unread || <span aria-label="Unread">•</span>}</span>}</span><span className="block truncate text-2xs text-muted-foreground">{item.team ? item.team + ' · ' + item.service : item.service}{!item.team && item.network ? ' · ' + item.network : ''}{item.membership === 'invite' ? ' · Invitation' : ''}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.preview}</span></span>
     </button>{roomMenu(item, 'Options for ' + item.name)}</div>
   )
@@ -227,10 +231,9 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   </DropdownMenu>
 
   return <section aria-label="Messenger" className="flex h-full min-h-0 w-full flex-col bg-background">
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b px-4">
-      <div className="flex min-w-0 items-center gap-2"><MessageCircle className="h-5 w-5 shrink-0 text-primary" /><h1 className="font-semibold">Messenger</h1><span role="status" className="truncate text-xs text-muted-foreground">{snapshot.status === 'ready' ? 'Connected' : snapshot.status === 'disconnected' ? 'Matrix' : snapshot.status}</span></div>
-      {connected && <Button variant="ghost" size="sm" className="gap-2" onClick={() => setPane(optionsOpen ? '' : 'options')} aria-label="Connections" aria-pressed={optionsOpen}><Settings2 className="h-4 w-4" /><span className="hidden sm:inline">Connections</span></Button>}
-    </header>
+    {/* No page title chrome: the conversation list toolbar is the only header the page needs.
+        Status stays in the tree so screen readers still get the connection state. */}
+    <span role="status" className="sr-only">{snapshot.status === 'ready' ? 'Connected' : snapshot.status === 'disconnected' ? 'Matrix' : snapshot.status}</span>
     {connected && snapshot.error && <p role="alert" className="border-b bg-muted px-4 py-2 text-sm">{snapshot.error}</p>}
     {actionError && <div className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm text-destructive" role="alert">{actionError}<button aria-label="Dismiss error" onClick={() => setActionError('')}><X className="h-4 w-4" /></button></div>}
     {!connected ? <div className="flex min-h-0 flex-1 overflow-y-auto"><ConnectionForm /></div>
@@ -238,19 +241,17 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
       : <>
       <div className="flex min-h-0 flex-1">
         <aside aria-label="Conversations" className={(roomId ? 'hidden md:flex ' : 'flex ') + 'w-full shrink-0 flex-col border-r md:w-72 lg:w-80'}>
-          <div className="space-y-2 border-b p-3">
-            <div className="flex items-center justify-between"><h2 className="text-sm font-medium">Conversations <span className="text-muted-foreground">{snapshot.rooms.length}</span></h2><Button variant="ghost" size="icon" className="h-7 w-7" aria-label="New conversation" onClick={() => setPane('options')}><Plus className="h-4 w-4" /></Button></div>
-            <div className="flex items-center gap-2">
-              <div className="relative min-w-0 flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input aria-label="Search conversations and messages" placeholder="Search" value={search} onChange={event => setSearch(event.target.value)} className="h-9 pl-8 pr-8 text-sm" />
-                {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
-              </div>
-              <Select value={service} onValueChange={value => setService(value === 'All' ? '' : value)}>
-                <SelectTrigger aria-label="Filter by service" className="h-9 w-auto max-w-[9rem] shrink-0 gap-1.5 px-2.5 text-xs font-medium"><SelectValue /></SelectTrigger>
-                <SelectContent align="end" className="min-w-[8rem]">{services.map(item => <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>)}</SelectContent>
-              </Select>
+          <div className="flex h-14 shrink-0 items-center gap-2 border-b px-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input aria-label="Search conversations and messages" placeholder="Search" value={search} onChange={event => setSearch(event.target.value)} className="h-9 pl-8 pr-8 text-sm" />
+              {search && <button type="button" aria-label="Clear search" onClick={() => setSearch('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"><X className="h-3.5 w-3.5" /></button>}
             </div>
+            <Select value={service} onValueChange={value => setService(value === 'All' ? '' : value)}>
+              <SelectTrigger aria-label="Filter by service" className="h-9 w-auto max-w-[9rem] shrink-0 gap-1.5 px-2.5 text-xs font-medium"><SelectValue /></SelectTrigger>
+              <SelectContent align="end" className="min-w-[8rem]">{services.map(item => <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setPane('options')} aria-label="Connections" title="Connections"><Settings2 className="h-4 w-4" /></Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {search && <div aria-label="Message search results" className="border-b">
@@ -263,7 +264,13 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
               const collapsed = collapsedTeams.has(name)
               return <div key={'team:' + name} data-team-section={name} className="border-b border-border/50">
                 <button type="button" onClick={() => toggleTeam(name)} aria-expanded={!collapsed} aria-label={'Team ' + name} className="flex w-full min-w-0 items-center gap-3 px-3 py-2 text-left hover:bg-muted/50">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-medium text-primary">{name.slice(0, 2).toUpperCase()}</span>
+                  <MessengerPeerAvatar
+                    name={name}
+                    size="lg"
+                    rounded="lg"
+                    showPresence={false}
+                    {...(entry.hub?.avatarUrl ? { mxcUrl: entry.hub.avatarUrl } : {})}
+                  />
                   <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{name}</span><span className="flex items-center gap-2">{unread > 0 && <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{unread}</span>}<ChevronDown className={'h-4 w-4 text-muted-foreground transition-transform ' + (collapsed ? '-rotate-90' : '')} /></span></span><span className="block truncate text-2xs text-muted-foreground">{entry.hub?.service ?? entry.channels[0]?.service ?? 'Team'} · {entry.channels.length} {entry.channels.length === 1 ? 'channel' : 'channels'}</span></span>
                 </button>
                 {!collapsed && entry.channels.map(channel => roomRow(channel, true))}
@@ -289,9 +296,15 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
                 hasMore={ready && !loadingHistory && !!snapshot.hasEarlier}
                 onLoadMore={() => void loadEarlier()}
               >
-                {messages.map((message, index) => <div key={message.id} className="pb-1">
+                {messages.map((message, index) => <div key={message.id} className={groupPositions[index]?.end === false ? 'pb-1.5' : 'pb-3'}>
                   {needsDayDivider(messages[index - 1]?.timestamp, message.timestamp) && <p data-day-divider className="mx-auto my-2 w-fit rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(message.timestamp)}</p>}
-                  <MessengerBubble messageId={message.id} message={message} roomId={room.id} disabled={!ready || busy} variant={room.kind === 'channel' ? 'channel' : 'chat'} />
+                  <MessengerBubble
+                    messageId={message.id} message={message} roomId={room.id} disabled={!ready || busy}
+                    variant={room.kind === 'channel' ? 'channel' : 'chat'}
+                    groupStart={groupPositions[index]?.start ?? true}
+                    groupEnd={groupPositions[index]?.end ?? true}
+                    {...(room.peer ? { avatar: { name: room.peer.name, presence: room.peer.presence, ...(room.peer.avatarUrl ? { mxcUrl: room.peer.avatarUrl } : {}) } } : {})}
+                  />
                 </div>)}
               </Conversation>
               {loadingHistory && <p role="status" className="px-3 py-1 text-xs text-muted-foreground">Loading earlier messages…</p>}

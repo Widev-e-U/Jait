@@ -177,7 +177,7 @@ describe('SessionRow wait reasons', () => {
   })
 
   it('shows one icon per wait reason instead of a single Q&A badge', () => {
-    for (const kind of ['question', 'consent', 'secret', 'browser', 'terminal', 'background'] as const) {
+    for (const kind of ['question', 'consent', 'secret', 'browser', 'terminal'] as const) {
       const html = renderRow({ wait: wait(kind) })
       expect(html).toContain(`data-testid="session-row-wait-${kind}"`)
       expect(html).toContain(`aria-label="${sessionWaitLabel(kind)}"`)
@@ -205,12 +205,18 @@ describe('SessionRow wait reasons', () => {
       .toContain('aria-label="Waiting for terminal input — bun run dev"')
   })
 
-  it('pulses a background wait but never spins it like streaming', () => {
-    const html = renderRow({ wait: wait('background', { blocking: false }) })
-    expect(html).toContain('data-testid="session-row-wait-background"')
-    expect(html).toContain('animate-pulse')
-    expect(html).not.toContain('animate-spin')
-    expect(html).toContain('text-muted-foreground')
+  it('ignores a background wait so a working chat keeps its normal icon', () => {
+    // A running background command is the agent's own reminder, not a wait on
+    // the user, so it must not badge the row — neither blocked nor pulsing.
+    for (const blocking of [true, false]) {
+      const idle = renderRow({ wait: wait('background', { blocking }) })
+      expect(idle).not.toContain('session-row-wait-')
+      expect(idle).not.toContain('animate-pulse')
+      expect(idle).toContain('lucide-message-square')
+    }
+    const streaming = renderRow({ wait: wait('background'), isStreaming: true })
+    expect(streaming).not.toContain('session-row-wait-')
+    expect(streaming).toContain('animate-spin')
   })
 
   it('keeps blocking waits steady and amber', () => {

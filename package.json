@@ -27,6 +27,8 @@
   ],
   "scripts": {
     "build:local": "bash scripts/build-local.sh",
+    "deploy:local": "bash scripts/local-deploy.sh",
+    "test:local-deploy": "node --test scripts/local-deploy.test.mjs",
     "build": "bun run --filter '!@jait/web' build",
     "dev": "bun run --filter '*' dev",
     "test": "vitest run",
@@ -53,6 +55,8 @@
     "test:contract:coverage": "node tests/contract/run.mjs coverage",
     "test:contract:translated": "node tests/contract/run.mjs translated-report",
     "test:contract:matcher-differential": "node tests/contract/tooling/matcher-differential.mjs",
+    "test:contract:interfaces": "node tests/contract/tooling/capture-interfaces.mjs",
+    "test:contract:interfaces:check": "node tests/contract/tooling/capture-interfaces.mjs --check",
     "dev:gateway:rust": "node packages/gateway-rust/run.mjs run",
     "build:gateway:rust": "node packages/gateway-rust/run.mjs build",
     "test:gateway:rust": "node packages/gateway-rust/tooling/check-native.mjs",

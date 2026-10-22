@@ -115,6 +115,65 @@ export function startSandboxBackgroundProcess(
   };
 }
 
+/**
+ * Background execution for a manager built on an injected command runner.
+ * The runner owns process lifetime, so this adapter only projects its eventual
+ * result onto the streaming execution contract instead of spawning the real
+ * container binary and silently discarding the injected runtime.
+ */
+export function startExecutorBackedBackgroundCommand(
+  run: (cmd: string[], timeoutMs: number) => Promise<{ output: string; exitCode: number | null; timedOut: boolean }>,
+  invocation: string[],
+  containerName: string,
+  timeoutMs: number,
+): SandboxBackgroundExecution {
+  let output = "";
+  let stopped = false;
+  let finished = false;
+  const listeners = new Set<(chunk: string) => void>();
+  let settle!: (result: SandboxRunResult) => void;
+  const completion = new Promise<SandboxRunResult>(resolve => { settle = resolve; });
+  const publish = (chunk: string) => {
+    for (const listener of listeners) { try { listener(chunk.slice(-MAX_OUTPUT_CHARS)); } catch { /* observer */ } }
+  };
+  const finish = (result: SandboxRunResult) => {
+    if (finished) return;
+    finished = true;
+    listeners.clear();
+    settle(result);
+  };
+  void (async () => {
+    try {
+      const result = await run(invocation, timeoutMs);
+      output = result.output;
+      if (stopped) {
+        finish({ ok: false, output: output.trim() || "(no output)", exitCode: result.exitCode, timedOut: false, containerName });
+        return;
+      }
+      const bounded = output.slice(-MAX_OUTPUT_CHARS);
+      if (bounded.trim()) publish(bounded);
+      finish({
+        ok: !result.timedOut && result.exitCode === 0,
+        output: bounded.trim() || "(no output)",
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+        containerName,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      output = output ? `${output}\n${message}` : message;
+      finish({ ok: false, output: output.slice(-MAX_OUTPUT_CHARS), exitCode: null, timedOut: false, containerName });
+    }
+  })();
+  return {
+    containerName,
+    get output() { return output.slice(-MAX_OUTPUT_CHARS).trim() || "(no output)"; },
+    completion,
+    async stop() { stopped = true; },
+    onOutput(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+  };
+}
+
 function runCleanup(args: string[], launch: typeof spawn): Promise<void> {
   return new Promise(resolve => {
     const child = launch(args[0]!, args.slice(1), { stdio: "ignore", windowsHide: true });

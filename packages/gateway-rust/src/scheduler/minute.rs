@@ -12,7 +12,7 @@ use std::{
 #[path = "tzdata_2024a.rs"]
 mod tzdata_2024a;
 pub const TIME_ZONE_DATA_VERSION: &str = tzdata_2024a::VERSION;
-fn named_zone(zone: &str) -> Option<jiff::tz::TimeZone> {
+pub(crate) fn named_zone(zone: &str) -> Option<jiff::tz::TimeZone> {
     static CACHE: LazyLock<Mutex<BTreeMap<&'static str, jiff::tz::TimeZone>>> =
         LazyLock::new(|| Mutex::new(BTreeMap::new()));
     let &(name, start, size) = tzdata_2024a::INDEX

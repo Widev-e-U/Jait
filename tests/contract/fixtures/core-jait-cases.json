@@ -1,0 +1,1138 @@
+{
+  "cases": [
+    {
+      "available": [],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.save"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.save"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.forget"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.add"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.list"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.remove"
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        },
+        {
+          "input": {
+            "action": "unknown"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "memory",
+        "reminders",
+        "scheduler",
+        "sessions",
+        "surfaces",
+        "hooks"
+      ],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.save"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.save"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.forget"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.add"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.list"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.remove"
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        },
+        {
+          "input": {
+            "action": "unknown"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "memory",
+        "reminders",
+        "scheduler",
+        "sessions",
+        "surfaces",
+        "hooks"
+      ],
+      "memories": [
+        {
+          "id": "m",
+          "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🦀after",
+          "source": {
+            "type": "user"
+          }
+        }
+      ],
+      "reminders": [
+        {
+          "id": "r",
+          "content": "one reminder",
+          "status": "archived"
+        }
+      ],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "stable 🦀 preference",
+            "scope": "contact",
+            "ttlSeconds": 0
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "stable 🦀 preference",
+            "scope": "contact",
+            "ttlSeconds": 1
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "stable 🦀 preference",
+            "scope": "contact",
+            "ttlSeconds": -1
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "stable 🦀 preference",
+            "scope": "contact",
+            "ttlSeconds": 0.0001
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "stable 🦀 preference",
+            "scope": "contact",
+            "ttlSeconds": 1.5
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "stable 🦀 preference",
+            "scope": "contact",
+            "ttlSeconds": 1e+20
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "x",
+            "scope": null,
+            "sourceId": "",
+            "sourceType": ""
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "asReminder": true,
+            "content": "task",
+            "sessionId": null,
+            "projectId": "project",
+            "tags": [
+              "x"
+            ]
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.save",
+            "content": "y",
+            "sessionId": "other",
+            "sourceId": "source",
+            "sourceType": "user"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x",
+            "scope": "contact",
+            "limit": 0
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list",
+            "status": "active",
+            "projectId": null,
+            "sessionId": "s",
+            "limit": 2.5
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list",
+            "status": "archived",
+            "projectId": null,
+            "sessionId": "s",
+            "limit": 2.5
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list",
+            "status": "all",
+            "projectId": null,
+            "sessionId": "s",
+            "limit": 2.5
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list",
+            "status": "invalid",
+            "projectId": null,
+            "sessionId": "s",
+            "limit": 2.5
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r",
+            "memoryId": "ignored",
+            "content": "new",
+            "projectId": null,
+            "tags": []
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "memoryId": "fallback",
+            "status": "archived"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r",
+            "status": "invalid"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r",
+            "status": null
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.forget",
+            "reminderId": "r"
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.forget",
+            "memoryId": "fallback"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "memory",
+        "reminders",
+        "scheduler"
+      ],
+      "noUser": true,
+      "ops": [
+        {
+          "input": {
+            "action": "memory.save",
+            "asReminder": true,
+            "content": "none"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "r"
+          },
+          "reminderRemoved": true
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          },
+          "reminderRemoved": false,
+          "memoryRemoved": false
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "missing"
+          },
+          "missingReminder": true
+        },
+        {
+          "input": {
+            "action": "reminder.forget",
+            "reminderId": "r"
+          },
+          "reminderRemoved": true
+        },
+        {
+          "input": {
+            "action": "cron.update",
+            "jobId": "missing"
+          },
+          "missingJob": true
+        },
+        {
+          "input": {
+            "action": "cron.remove",
+            "jobId": "missing"
+          },
+          "jobRemoved": false
+        }
+      ]
+    },
+    {
+      "available": [
+        "memory",
+        "reminders",
+        "scheduler",
+        "sessions",
+        "surfaces",
+        "hooks"
+      ],
+      "startedAt": 1790000005123,
+      "jobs": [
+        {
+          "id": "0",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "1",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "2",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "3",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "4",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "5",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "6",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "7",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "8",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "9",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "10",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "11",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "12",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "13",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "14",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "15",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "16",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "17",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        },
+        {
+          "id": "18",
+          "name": "job 🦀",
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": false
+        },
+        {
+          "id": "19",
+          "name": null,
+          "cron": "* * * * *",
+          "toolName": "file.read",
+          "enabled": true
+        }
+      ],
+      "hookEvents": [
+        "event0",
+        "event1",
+        "event2",
+        "event3",
+        "event4",
+        "event5",
+        "event6",
+        "event7",
+        "event8"
+      ],
+      "sessions": [
+        {},
+        {}
+      ],
+      "surfaces": [
+        {}
+      ],
+      "devices": 3,
+      "listeners": 4,
+      "ops": [
+        {
+          "input": {
+            "action": "cron.add",
+            "name": "N",
+            "cron": "* * * * *",
+            "toolName": "file_read_extra",
+            "input": null
+          }
+        },
+        {
+          "input": {
+            "action": "cron.add",
+            "name": "N",
+            "cron": "* * * * *",
+            "toolName": "file.read_extra",
+            "input": null
+          }
+        },
+        {
+          "input": {
+            "action": "cron.add",
+            "name": "N",
+            "cron": "* * * * *",
+            "toolName": "plain",
+            "input": null
+          }
+        },
+        {
+          "input": {
+            "action": "cron.list"
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update",
+            "jobId": "j",
+            "name": "",
+            "enabled": false,
+            "input": null
+          }
+        },
+        {
+          "input": {
+            "action": "cron.remove",
+            "jobId": "j"
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "reminders"
+      ],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x"
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "memory"
+      ],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x"
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "scheduler"
+      ],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x"
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "memory",
+        "reminders",
+        "scheduler",
+        "sessions",
+        "surfaces",
+        "hooks"
+      ],
+      "ops": [
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "x"
+          },
+          "replies": {
+            "memory.save": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.save",
+            "content": "x"
+          },
+          "replies": {
+            "memory.save": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x"
+          },
+          "replies": {
+            "memory.search": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.search",
+            "query": "x"
+          },
+          "replies": {
+            "memory.search": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          },
+          "replies": {
+            "memory.forget": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "m"
+          },
+          "replies": {
+            "memory.forget": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.save",
+            "content": "x"
+          },
+          "replies": {
+            "reminders.create": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.save",
+            "content": "x"
+          },
+          "replies": {
+            "reminders.create": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list"
+          },
+          "replies": {
+            "reminders.list": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.list"
+          },
+          "replies": {
+            "reminders.list": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r"
+          },
+          "replies": {
+            "reminders.update": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r"
+          },
+          "replies": {
+            "reminders.update": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "r"
+          },
+          "replies": {
+            "reminders.delete": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "memory.forget",
+            "memoryId": "r"
+          },
+          "replies": {
+            "reminders.delete": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.add",
+            "name": "n",
+            "cron": "c",
+            "toolName": "t"
+          },
+          "replies": {
+            "scheduler.create": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.add",
+            "name": "n",
+            "cron": "c",
+            "toolName": "t"
+          },
+          "replies": {
+            "scheduler.create": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.list"
+          },
+          "replies": {
+            "scheduler.list": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.list"
+          },
+          "replies": {
+            "scheduler.list": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update",
+            "jobId": "j"
+          },
+          "replies": {
+            "scheduler.update": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update",
+            "jobId": "j"
+          },
+          "replies": {
+            "scheduler.update": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.remove",
+            "jobId": "j"
+          },
+          "replies": {
+            "scheduler.remove": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.remove",
+            "jobId": "j"
+          },
+          "replies": {
+            "scheduler.remove": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "sessions.list": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "sessions.list": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "surfaces.listSurfaces": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "surfaces.listSurfaces": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "hooks.registeredEventTypes": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "hooks.registeredEventTypes": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "hooks.listenerCount": {
+              "error": "fixture failed"
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          },
+          "replies": {
+            "hooks.listenerCount": {
+              "thrown": {
+                "bad": "opaque"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "available": [
+        "reminders",
+        "scheduler"
+      ],
+      "startedAt": 0,
+      "ops": [
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r",
+            "content": null
+          },
+          "replies": {
+            "reminders.update": {
+              "value": null
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "reminder.update",
+            "reminderId": "r"
+          },
+          "replies": {
+            "reminders.update": {
+              "undefined": true
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update",
+            "jobId": "j"
+          },
+          "replies": {
+            "scheduler.update": {
+              "value": null
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "cron.update",
+            "jobId": "j"
+          },
+          "replies": {
+            "scheduler.update": {
+              "undefined": true
+            }
+          }
+        },
+        {
+          "input": {
+            "action": "status"
+          }
+        }
+      ]
+    }
+  ]
+}

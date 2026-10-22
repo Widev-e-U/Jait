@@ -476,6 +476,39 @@ async fn viewed_watermark_rejects_bad_values_and_only_broadcasts_when_changed() 
     scenario(&session("s", "owner", None), json!(steps), json!({})).await;
 }
 #[tokio::test]
+async fn viewed_accepts_reference_date_parse_formats_and_rejects_invalid_dates() {
+    let mut steps = vec![];
+    for stamp in [
+        "2026-10-17",
+        "2026-10",
+        "2026",
+        "2026-02-30",
+        "2026-10-17T24:00:00Z",
+        "2026-10-17T10:00:00+0230",
+        "2026-10-17T10:00:00.123456Z",
+        "2026-10-17t10:00:00z",
+        "10/17/2026",
+        "2026/10/17",
+        "10-17-2026",
+        "Oct 17 2026",
+        "Sat, 17 Oct 2026 10:00:00 GMT",
+        "October 17, 2026 06:00:00 EDT",
+        "2026-10-17T10:00:00",
+        "2026-13-01",
+        "2026-01-32",
+        "2026-10-17T24:01:00Z",
+        "2026-10-17T10:00:00+25:00",
+        "2026-10-17T10:00:60Z",
+        " 2026-10-17T10:00:00Z",
+        "",
+        "not a date",
+    ] {
+        steps.push(json!({"sql":"UPDATE sessions SET viewed_at=NULL WHERE id='s'"}));
+        steps.push(json!({"method":"POST","path":"/api/sessions/s/viewed","user":"owner","body":{"lastActiveAt":stamp}}));
+    }
+    scenario(&session("s", "owner", None), json!(steps), json!({})).await;
+}
+#[tokio::test]
 async fn state_routes_filter_keys_validate_objects_and_delete_null_entries() {
     scenario(&session("s","owner",None),json!([
         {"method":"PATCH","path":"/api/sessions/s/state","user":"owner","body":{"x":1,"y":true}},
@@ -488,6 +521,28 @@ async fn state_routes_filter_keys_validate_objects_and_delete_null_entries() {
         {"method":"PATCH","path":"/api/sessions/s/state","user":"owner","body":{"y":null}},
         {"method":"GET","path":"/api/sessions/s/state","user":"owner"}
     ]),json!({})).await;
+}
+#[tokio::test]
+async fn head_optional_routes_method_fallbacks_and_parser_errors_match_reference() {
+    for options in [json!({}), json!({"state":false})] {
+        scenario(&session("s","owner",None),json!([
+            {"method":"HEAD","path":"/api/sessions","user":"owner"},
+            {"method":"HEAD","path":"/api/sessions/s","user":"owner"},
+            {"method":"HEAD","path":"/api/sessions/s/state","user":"owner"},
+            {"method":"GET","path":"/api/sessions/s/state","user":"owner"},
+            {"method":"PATCH","path":"/api/sessions/s/state","user":"owner","body":{}},
+            {"method":"PUT","path":"/api/sessions/s","user":"owner","body":{}},
+            {"method":"GET","path":"/api/sessions/s/archive","user":"owner"},
+            {"method":"GET","path":"/api/sessions/s/generate-title","user":"owner"},
+            {"method":"GET","path":"/api/sessions/s/unknown","user":"owner"},
+            {"method":"PUT","path":"/api/sessions/s"},
+            {"method":"POST","path":"/api/sessions","user":"owner","raw":"{","headers":{"content-type":"application/json"}},
+            {"method":"POST","path":"/api/sessions","user":"owner","raw":"","headers":{"content-type":"application/json"}},
+            {"method":"PATCH","path":"/api/sessions/s","user":"owner","raw":"text","headers":{"content-type":"application/xml"}},
+            {"method":"PATCH","path":"/api/sessions/s","user":"owner","raw":"{\"__proto__\":{}}","headers":{"content-type":"application/json"}},
+            {"method":"GET","path":"/api/sessions","user":"owner"}
+        ]),options).await;
+    }
 }
 #[tokio::test]
 async fn title_generation_and_fallback_recheck_after_await() {

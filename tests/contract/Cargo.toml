@@ -7,6 +7,10 @@ publish = false
 default-run = "jait-contract"
 
 [[bin]]
+name = "jait-local-deploy"
+path = "../../packages/gateway-rust/src/bin/jait-local-deploy.rs"
+
+[[bin]]
 name = "gateway-native"
 path = "../../packages/gateway-rust/src/main.rs"
 

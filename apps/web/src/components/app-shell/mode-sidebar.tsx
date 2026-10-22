@@ -125,7 +125,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
           <Icon className="h-4 w-4" />
           {!!item.badge && (
             <span className="absolute -right-2 -top-2 z-10 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-2xs font-bold leading-none tabular-nums text-primary-foreground">
-              <span className="relative top-px">{item.badge > 99 ? '99+' : item.badge}</span>
+              {item.badge > 99 ? '99+' : item.badge}
             </span>
           )}
         </span>

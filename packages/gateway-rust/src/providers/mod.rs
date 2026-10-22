@@ -23,3 +23,7 @@ pub mod acp_registry;
 pub mod acp_binary_launcher;
 
 pub mod model_fetchers;
+
+pub mod remote_cli;
+
+pub mod openai_stream;

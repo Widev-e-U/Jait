@@ -54,6 +54,8 @@ export class RemoteTerminalSurface implements Surface {
    */
   private _bracketedPasteSeen = false;
 
+  private readonly exitListeners = new Set<(exitCode: number | null) => void>();
+
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
 
@@ -187,6 +189,9 @@ export class RemoteTerminalSurface implements Surface {
     ]);
   }
 
+  addExitListener(listener: (exitCode: number | null) => void): void { this.exitListeners.add(listener); }
+  removeExitListener(listener: (exitCode: number | null) => void): void { this.exitListeners.delete(listener); }
+
   addOutputListener(listener: (data: string) => void): void {
     this._outputListeners.push(listener);
   }
@@ -234,6 +239,7 @@ export class RemoteTerminalSurface implements Surface {
       this.ingestOutput(`\r\n[remote terminal exited${typeof exitCode === "number" ? ` with code ${exitCode}` : ""}${signal ? `, signal ${signal}` : ""}]\r\n`);
     }
     this._setState("stopped");
+    for (const listener of [...this.exitListeners]) { try { listener(exitCode ?? null); } catch { /* observer */ } }
   }
 
   snapshot(): SurfaceSnapshot {

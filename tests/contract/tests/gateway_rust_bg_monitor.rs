@@ -14,9 +14,17 @@ use std::{
 #[derive(Default)]
 struct Surface {
     listeners: Mutex<Vec<OutputListener>>,
+    exits: Mutex<Vec<ExitListener>>,
     remove_error: bool,
 }
 impl MonitorableSurface for Surface {
+    fn add_exit_listener(&self, l: ExitListener) {
+        self.exits.lock().unwrap().push(l);
+    }
+    fn remove_exit_listener(&self, l: &ExitListener) -> Result<(), String> {
+        self.exits.lock().unwrap().retain(|v| !Arc::ptr_eq(v, l));
+        Ok(())
+    }
     fn add_output_listener(&self, l: OutputListener) {
         self.listeners.lock().unwrap().push(l);
     }
@@ -52,7 +60,15 @@ fn string(v: &Value, k: &str, default: &str) -> String {
     v[k].as_str().unwrap_or(default).to_string()
 }
 fn record(r: BackgroundCommandResult) -> Value {
-    json!({"session":r.session_id,"terminal":r.terminal_id,"command":r.command,"code":r.exit_code,"output":r.output.0,"duration":r.duration_ms})
+    let timed_out = r.timed_out;
+    let mut v = json!({"session":r.session_id,"terminal":r.terminal_id,"command":r.command,"code":r.exit_code,"output":r.output.0,"duration":r.duration_ms});
+    if timed_out {
+        v["timedOut"] = json!(true);
+    }
+    v
+}
+fn snapshot(v: ExecutionSnapshot) -> Value {
+    json!({"terminalId":v.terminal_id,"executionId":v.execution_id,"status":v.status,"output":v.output.0,"exitCode":v.exit_code,"durationMs":v.duration_ms})
 }
 fn handler(m: &BackgroundCommandMonitor, e: &Events, id: &str, fail: bool) -> HandlerSubscription {
     let e = e.clone();
@@ -117,6 +133,7 @@ async fn native(actions: &[Value]) -> Value {
             "track" => {
                 let surface = Arc::new(Surface {
                     listeners: Mutex::default(),
+                    exits: Mutex::default(),
                     remove_error: a["removeError"] == true,
                 });
                 surfaces.insert(id.clone(), surface.clone());
@@ -153,6 +170,27 @@ async fn native(actions: &[Value]) -> Value {
                     terminal_id: id.clone(),
                     command,
                     surface,
+                    execution_id: a["execution"].as_str().map(String::from),
+                    on_cancel: if a["cancel"] == true {
+                        let e = events.clone();
+                        let i = id.clone();
+                        Some(Arc::new(move || {
+                            push(&e, json!(["cancel", i]));
+                            Ok(())
+                        }))
+                    } else {
+                        None
+                    },
+                    on_timeout: if a["deadline"] == true {
+                        let e = events.clone();
+                        let i = id.clone();
+                        Some(Arc::new(move || {
+                            push(&e, json!(["timeout", i]));
+                            Ok(())
+                        }))
+                    } else {
+                        None
+                    },
                     completion_token: a["token"].as_str().map(String::from),
                     shell: string(a, "shell", ""),
                     max_watch_ms: a["max"].as_f64(),
@@ -175,6 +213,11 @@ async fn native(actions: &[Value]) -> Value {
                 let notify = a["notify"] != false;
                 let ok = monitor.track_external(
                     ExternalOptions {
+                        execution_id: a["execution"].as_str().map(String::from),
+                        get_output: {
+                            let output = units(a["partial"].as_str().unwrap_or(""));
+                            Some(Arc::new(move || Utf16Text(output.clone())))
+                        },
                         session_id: session,
                         terminal_id: id.clone(),
                         command,
@@ -200,12 +243,26 @@ async fn native(actions: &[Value]) -> Value {
                         Err("external".into())
                     } else {
                         Ok(Completion {
+                            timed_out: a["timedOut"] == true,
                             exit_code: a["code"].as_f64(),
                             output: Utf16Text(units(a["output"].as_str().unwrap_or(""))),
                         })
                     });
                 }
                 Ok(())
+            }
+            "exit" => {
+                let mut result = Ok(());
+                if let Some(surface) = surfaces.get(&id) {
+                    let exits = surface.exits.lock().unwrap().clone();
+                    for listener in exits {
+                        result = listener(a["code"].as_f64());
+                        if result.is_err() {
+                            break;
+                        }
+                    }
+                }
+                result
             }
             "emit" => {
                 let mut res = Ok(());
@@ -258,6 +315,7 @@ async fn native(actions: &[Value]) -> Value {
             }
             "report" => {
                 monitor.report_completion(BackgroundCommandResult {
+                    timed_out: a["timedOut"] == true,
                     session_id: session,
                     terminal_id: id,
                     command,
@@ -266,6 +324,21 @@ async fn native(actions: &[Value]) -> Value {
                     duration_ms: a["duration"].as_f64().unwrap_or(0.0),
                 });
                 Ok(())
+            }
+            "inspect" | "cancelExecution" => {
+                let execution = string(a, "execution", &id);
+                let value = if a["op"] == "inspect" {
+                    Ok(monitor.inspect_execution(&session, &id, &execution))
+                } else {
+                    monitor.cancel_execution(&session, &id, &execution)
+                };
+                match value {
+                    Ok(value) => {
+                        push(&events, json!([a["op"], value.map(snapshot)]));
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
             }
             other => panic!("unknown {other}"),
         };
@@ -495,6 +568,9 @@ async fn dropping_owner_removes_listeners_and_timers() {
         terminal_id: "t".into(),
         command: "run".into(),
         surface: s.clone(),
+        execution_id: None,
+        on_cancel: None,
+        on_timeout: None,
         completion_token: None,
         shell: "".into(),
         max_watch_ms: None,
@@ -558,6 +634,9 @@ async fn cancellation_from_another_thread_wins_during_output_callback() {
         terminal_id: "t".into(),
         command: "run".into(),
         surface: s.clone(),
+        execution_id: None,
+        on_cancel: None,
+        on_timeout: None,
         completion_token: Some(TOKEN.into()),
         shell: "".into(),
         max_watch_ms: None,
@@ -591,4 +670,70 @@ async fn cancellation_from_another_thread_wins_during_output_callback() {
     assert_eq!(m.active_count(), 0);
     assert!(s.listeners.lock().unwrap().is_empty());
     assert!(timers.lock().unwrap().timers.is_empty());
+}
+
+#[tokio::test]
+async fn tracked_progress_cancellation_scope_stale_identity_and_completed_retention() {
+    compare(vec![
+        json!({"op":"track","execution":"one","cancel":true}),
+        json!({"op":"emit","data":"stage one\r\n"}),
+        json!({"op":"inspect","execution":"one"}),
+        json!({"op":"cancelExecution","execution":"one","session":"foreign"}),
+        json!({"op":"cancelExecution","execution":"stale"}),
+        json!({"op":"inspect","execution":"one"}),
+        json!({"op":"cancelExecution","execution":"one"}),
+        json!({"op":"emit","data":osc("0")}),
+        json!({"op":"inspect","execution":"one"}),
+        json!({"op":"track","execution":"two"}),
+        json!({"op":"cancelExecution","execution":"one"}),
+        json!({"op":"emit","data":osc("7")}),
+        json!({"op":"inspect","execution":"two"}),
+    ])
+    .await;
+}
+#[tokio::test]
+async fn execution_deadline_stops_once_notifies_as_timeout_and_retains_partial_output() {
+    compare(vec![
+        json!({"op":"track","execution":"deadline","deadline":true,"max":50}),
+        json!({"op":"emit","data":"partial result\r\n"}),
+        json!({"op":"advance","ms":50}),
+        json!({"op":"emit","data":osc("0")}),
+        json!({"op":"inspect","execution":"deadline"}),
+    ])
+    .await;
+}
+#[tokio::test]
+async fn external_execution_progress_cancellation_and_timeout_completion() {
+    compare(vec![
+        json!({"op":"external","execution":"a","partial":"working"}),
+        json!({"op":"inspect","execution":"a"}),
+        json!({"op":"cancelExecution","execution":"a","session":"foreign"}),
+        json!({"op":"cancelExecution","execution":"a"}),
+        json!({"op":"resolve","code":0,"output":"late"}),
+        json!({"op":"inspect","execution":"a"}),
+        json!({"op":"external","execution":"b"}),
+        json!({"op":"resolve","code":124,"output":"partial","timedOut":true}),
+        json!({"op":"inspect","execution":"b"}),
+    ])
+    .await;
+}
+#[tokio::test]
+async fn initial_completion_marker_is_not_lost_at_foreground_handoff() {
+    compare(vec![
+        json!({"op":"track","initial":osc("0")}),
+        json!({"op":"inspect"}),
+    ])
+    .await;
+}
+
+#[tokio::test]
+async fn shell_exit_finishes_without_a_prompt_or_command_marker_and_detaches_once() {
+    compare(vec![
+        json!({"op":"track","execution":"shell-exit"}),
+        json!({"op":"emit","data":"last output"}),
+        json!({"op":"exit","code":7}),
+        json!({"op":"exit","code":0}),
+        json!({"op":"inspect","execution":"shell-exit"}),
+    ])
+    .await;
 }

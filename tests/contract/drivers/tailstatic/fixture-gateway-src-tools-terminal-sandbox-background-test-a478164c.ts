@@ -162,11 +162,19 @@ function fixture(completed?: { ok: boolean; output: string; exitCode: number; ti
 try {
 await (async()=>{
 
-    const { tool, manager } = fixture();
-    const result = await tool.execute({ command: "build", sandbox: true }, context);
-    __jait_capture(0, (result.ok));
-    __jait_capture(1, (manager.execInContainer.mock.calls));
-    __jait_capture(2, (manager.startBackgroundCommand.mock.calls));
+    vi.useFakeTimers();
+    const { tool, manager, finish } = fixture();
+    const notify = vi.fn();
+    backgroundCommandMonitor.setCompletionHandler(notify);
+    const pending = tool.execute({ command: "build", sandbox: true, yieldTimeMs: 20 }, context);
+    await vi.advanceTimersByTimeAsync(20);
+    const result = await pending;
+    __jait_capture(0, (result.data), ({ isBackground: true, executionId: context.actionId, output: "booting" }));
+    __jait_capture(1, (manager.startBackgroundCommand.mock.calls));
+    __jait_capture(2, (manager.execInContainer.mock.calls));
+    finish({ ok: true, output: "built", exitCode: 0, timedOut: false, containerName: context.sandboxContainerName! });
+    await vi.advanceTimersByTimeAsync(0);
+    __jait_capture(3, (notify.mock.calls));
   
 })();
 
@@ -177,7 +185,7 @@ await __jait_hook_589();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_80_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_88_3": {
 
 
 const context: ToolContext = {
@@ -213,7 +221,7 @@ await __jait_hook_589();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3": {
 
 
 const context: ToolContext = {
@@ -251,7 +259,7 @@ await __jait_hook_589();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_105_3": {
 
 
 const context: ToolContext = {
@@ -293,7 +301,7 @@ await __jait_hook_589();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_109_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_117_3": {
 
 
 const context: ToolContext = {

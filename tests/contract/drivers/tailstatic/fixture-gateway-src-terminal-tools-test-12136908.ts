@@ -13,6 +13,7 @@ import { TerminalSurfaceFactory, type TerminalSurface } from "../../../../packag
 import { SecretInputService } from "../../../../packages/gateway/src/services/secret-input.js";
 import { backgroundCommandMonitor } from "../../../../packages/gateway/src/services/background-command-monitor.js";
 import type { WsControlPlane } from "../../../../packages/gateway/src/ws.js";
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -53,9 +54,20 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_114_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_128_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -149,12 +161,13 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
-    const sandbox = new SandboxManager(async () => ({ output: "done", exitCode: 0, timedOut: false }));
+    const sandbox = sandboxFixture(async () => ({ output: "done", exitCode: 0, timedOut: false }));
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
     const result = await tool.execute({ command: "echo hi", sandbox: true }, makeContext());
@@ -167,15 +180,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_126_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -269,13 +293,14 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
     const commands: string[][] = [];
-    const sandbox = new SandboxManager(async (cmd) => {
+    const sandbox = sandboxFixture(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
@@ -289,15 +314,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_154_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -391,6 +427,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -405,15 +442,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_148_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_162_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -507,6 +555,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -521,15 +570,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_170_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -623,13 +683,14 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
     const commands: string[][] = [];
-    const sandbox = new SandboxManager(async (cmd) => {
+    const sandbox = sandboxFixture(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
@@ -647,15 +708,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_174_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -749,13 +821,14 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
     const commands: string[][] = [];
-    const sandbox = new SandboxManager(async (cmd) => {
+    const sandbox = sandboxFixture(async (cmd) => {
       commands.push(cmd);
       return { output: "done", exitCode: 0, timedOut: false };
     });
@@ -769,15 +842,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_202_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -871,12 +955,13 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
-    const sandbox = new SandboxManager(async () => ({ output: "error", exitCode: 1, timedOut: false }));
+    const sandbox = sandboxFixture(async () => ({ output: "error", exitCode: 1, timedOut: false }));
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
     const result = await tool.execute({ command: "bad-command", sandbox: true }, makeContext());
@@ -888,15 +973,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_199_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_213_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -990,12 +1086,13 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
 await (async()=>{
 
-    const sandbox = new SandboxManager(async () => ({
+    const sandbox = sandboxFixture(async () => ({
       output: "[timeout after 1000ms]",
       exitCode: null,
       timedOut: true,
@@ -1011,15 +1108,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_214_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_228_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1113,6 +1221,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -1162,15 +1271,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_272_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_286_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1264,6 +1384,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -1310,15 +1431,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_317_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_331_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1412,6 +1544,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -1451,15 +1584,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_356_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_370_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1553,6 +1697,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -1601,15 +1746,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_406_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_420_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1703,6 +1859,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -1741,15 +1898,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_438_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_452_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1843,6 +2011,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -1854,7 +2023,7 @@ await (async()=>{
     const tool = createTerminalRunTool(registry);
 
     const waiting = await tool.execute(
-      { command: "sleep 2", timeout: 20 },
+      { command: "sleep 2", yieldTimeMs: 20 },
       makeContext(),
     );
     __jait_capture(0, (waiting.data));
@@ -1873,15 +2042,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_462_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_476_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -1975,6 +2155,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2017,15 +2198,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_498_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_512_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2119,6 +2311,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2150,15 +2343,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_527_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_541_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2252,6 +2456,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2282,15 +2487,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_555_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2384,6 +2600,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2404,15 +2621,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_583_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2506,6 +2734,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2525,15 +2754,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_582_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2627,6 +2867,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2647,15 +2888,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_610_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2749,6 +3001,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2770,15 +3023,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_611_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_625_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2872,6 +3136,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -2879,7 +3144,7 @@ await (async()=>{
 
     const { tool, writes } = makePromptFallbackTool(["running without prompt\r\n"]);
 
-    const result = await tool.execute({ command: "long-running", terminalId: "term-existing", timeout: 20 }, makeContext());
+    const result = await tool.execute({ command: "long-running", terminalId: "term-existing", yieldTimeMs: 20 }, makeContext());
 
     __jait_capture(0, (result.ok));
     __jait_capture(1, (result.message));
@@ -2891,15 +3156,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_624_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_638_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -2993,6 +3269,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -3038,15 +3315,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_665_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_679_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -3140,6 +3428,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -3160,15 +3449,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_683_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_697_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -3262,6 +3562,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -3282,15 +3583,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_701_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_715_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -3384,6 +3696,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -3407,15 +3720,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_721_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_735_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -3509,6 +3833,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -3519,15 +3844,26 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_terminal_tools_test_ts_725_3": {
+case "tailstatic_packages_gateway_src_terminal_tools_test_ts_739_3": {
 
 
+function sandboxFixture(run: NonNullable<ConstructorParameters<typeof SandboxManager>[0]>) {
+  const sandbox = new SandboxManager(run);
+  vi.spyOn(sandbox, "startBackgroundCommand").mockImplementation(options => {
+    let output = "";
+    const completion = ("containerName" in options ? sandbox.execInContainer(options) : sandbox.runCommand(options))
+      .then(result => { output = result.output; return result; });
+    return { containerName: "containerName" in options ? options.containerName : "test-sandbox",
+      get output() { return output; }, completion, stop: async () => {}, onOutput: () => () => {} };
+  });
+  return sandbox;
+}
 function makeContext() {
   return {
     sessionId: "s-test",
@@ -3621,6 +3957,7 @@ function makeSecretPromptTool(
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
+const __jait_hook_689 = () => backgroundCommandMonitor.clearForTests();
 /*__jait_scope_open__*/{
 
 try {
@@ -3631,7 +3968,7 @@ await (async()=>{
 })();
 
 } finally {
-
+await __jait_hook_689();
 }
 }
 

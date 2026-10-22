@@ -5907,7 +5907,6 @@ function App() {
 
             {isMobile && (
               <MobileNavDrawer
-                account={sidebarAccount}
                 open={showMobileToolbar}
                 onClose={() => setShowMobileToolbar(false)}
                 currentView={currentView}
@@ -5997,7 +5996,6 @@ function App() {
                     />
                   </ErrorBoundary>
                 }
-                onOpenSettings={() => setCurrentView('settings')}
               />
             )}
           </>

@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
+import { validationCommands } from './validation-commands.mjs';
+
+const flags = process.argv.slice(2);
+if (flags.some(flag => flag !== '--full-contracts')) throw new Error('Expected only --full-contracts');
+const fullContracts = flags.includes('--full-contracts');
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const manifestPath = fileURLToPath(new URL('../native-coverage.json', import.meta.url));
@@ -31,21 +36,21 @@ const paths = [...new Set([
   'tests/contract/coverage.json', 'packages/gateway-rust/native-coverage.json',
   'packages/gateway-rust/Cargo.toml', 'packages/gateway-rust/Cargo.lock',
   'packages/gateway-rust/build.rs', 'packages/gateway-rust/tooling/validate-frozen.py',
-  'tests/contract/tooling/test_native_inventory_metadata.py', 'tests/contract/Cargo.toml', 'tests/contract/Cargo.lock',
+  'packages/gateway-rust/tooling/validation-commands.mjs',
+  'tests/contract/tooling/test_native_validation_output.py', 'tests/contract/tooling/test_native_inventory_metadata.py', 'tests/contract/tooling/test_native_validation_lock.py', 'tests/contract/Cargo.toml', 'tests/contract/Cargo.lock',
   'tests/contract/src/internal_driver.rs', 'tests/contract/drivers/internals.ts',
+  // Supplementary deployment regression; not additional component credit.
+  'scripts/local-deploy.mjs', 'scripts/local-deploy.sh', 'scripts/local-deploy.test.mjs',
+  'tests/contract/drivers/localdeploy.ts', 'tests/contract/tests/local_deploy_pipeline.rs',
+  'tests/contract/tests/local_deploy_host.rs',
   ...credited.flatMap(c => [c.reference, ...c.native, ...c.contracts]),
 ])].sort();
 const fingerprint = () => Object.fromEntries(paths.map(p => [p, hash(p)]));
 const before = fingerprint();
 const output = resolve(root, '.jait/artifacts/gateway-rust/native-progress');
 mkdirSync(output, {recursive:true});
-const targets = [...new Set(credited.flatMap(c => c.targets))];
-const commands = [
-  [join(root, 'packages/gateway-rust/run.mjs'), 'fmt'],
-  [join(root, 'packages/gateway-rust/run.mjs'), 'clippy', '--all-targets', '--', '-D', 'warnings'],
-  [join(root, 'packages/gateway-rust/run.mjs'), 'test', '--lib'],
-  [join(root, 'tests/contract/run.mjs'), 'test', ...targets.flatMap(t => ['--test', t])],
-];
+const targets = [...new Set([...credited.flatMap(c => c.targets), 'local_deploy_pipeline', 'local_deploy_host'])];
+const commands = validationCommands(root, targets, fullContracts);
 const checks = [];
 let stdout = '', stderr = '';
 for (const args of commands) {
@@ -63,7 +68,7 @@ const report = {
   sources_unchanged: JSON.stringify(before) === JSON.stringify(after),
   inventory_total: manifest.inventory_total, verified_components: passed ? credited.length : 0,
   verified_percent: passed ? Number((100 * credited.length / manifest.inventory_total).toFixed(2)) : 0,
-  replacement_ready: false, checks, targets, sources: before, components: credited,
+  replacement_ready: false, full_contracts: fullContracts, checks, targets, sources: before, components: credited,
 };
 writeFileSync(join(output, 'report.json'), JSON.stringify(report, null, 2) + '\n');
 console.log((result.stdout ?? '').slice(-7000) + (result.stderr ?? '').slice(-2000));

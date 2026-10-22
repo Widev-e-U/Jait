@@ -1,5 +1,5 @@
 import { commandSandboxGateway, commandSandboxOwner, commandSandboxOwnerAlive } from "./agent-sandbox-owner.js";
-import { startSandboxBackgroundProcess, type SandboxBackgroundExecution } from "./sandbox-background-process.js";
+import { startExecutorBackedBackgroundCommand, startSandboxBackgroundProcess, type SandboxBackgroundExecution } from "./sandbox-background-process.js";
 import { worktreeGitMountArgs } from "./worktree-sandbox.js";
 import { spawn, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
@@ -246,9 +246,14 @@ interface ProcessResult {
 }
 
 export class SandboxManager {
+  /** An injected runner owns process lifetime; real containers must not be spawned. */
+  private readonly injectedRunner: boolean;
+
   constructor(
     private readonly runProcess: (cmd: string[], timeoutMs: number) => Promise<ProcessResult> = runDockerProcess,
-  ) {}
+  ) {
+    this.injectedRunner = runProcess !== runDockerProcess;
+  }
 
   private commandInvocation(options: SandboxRunOptions): { cmd: string[]; containerName: string } {
     const projectRoot = resolve(options.projectRoot);
@@ -396,6 +401,9 @@ export class SandboxManager {
     const { cmd, containerName } = isExisting
       ? this.execInvocation(options)
       : this.commandInvocation(options);
+    if (this.injectedRunner) {
+      return startExecutorBackedBackgroundCommand(this.runProcess, cmd, containerName, options.timeoutMs);
+    }
     return startSandboxBackgroundProcess(cmd, containerName, options.timeoutMs, !isExisting);
   }
 

@@ -4531,7 +4531,12 @@ function ToolCallCardInner({
         </CollapsibleContent>
       )}
       {inlineBody && (
-        <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
+        <div className={cn(
+          'ml-8 mr-3 mb-2 rounded-md',
+          bodyKind === 'emailView'
+            ? 'bg-transparent p-0'
+            : cn('px-3 py-2', stateClasses.body),
+        )}>
           {bodyContent}
         </div>
       )}

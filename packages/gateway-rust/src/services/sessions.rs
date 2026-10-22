@@ -156,14 +156,21 @@ impl<'a> SessionService<'a> {
         })
     }
     fn millis(&self, value: &str) -> rusqlite::Result<Option<i64>> {
-        self.db.query_row("SELECT CAST(strftime('%s',?1) AS INTEGER)*1000 + CAST(substr(strftime('%f',?1),4,3) AS INTEGER)",[value],|r|r.get(0))
+        Ok(crate::services::subscription_usage_fetchers::js_date_parse(
+            value,
+        ))
     }
     fn iso(&self, millis: i64) -> rusqlite::Result<String> {
-        self.db.query_row(
-            "SELECT strftime('%Y-%m-%dT%H:%M:%fZ',?1 / 1000.0,'unixepoch')",
-            [millis],
-            |r| r.get(0),
-        )
+        use chrono::Datelike;
+        let date =
+            chrono::DateTime::from_timestamp_millis(millis).ok_or(rusqlite::Error::InvalidQuery)?;
+        let year = date.year();
+        let year = if (0..=9999).contains(&year) {
+            format!("{year:04}")
+        } else {
+            format!("{year:+07}")
+        };
+        Ok(format!("{year}{}", date.format("-%m-%dT%H:%M:%S%.3fZ")))
     }
     pub fn create(&self, data: CreateSession) -> rusqlite::Result<SessionRecord> {
         let id = crate::db::identifiers::uuidv7().to_string();

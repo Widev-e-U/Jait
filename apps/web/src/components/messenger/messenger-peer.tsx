@@ -17,39 +17,108 @@ const DOT: Record<MessengerPresence, string> = {
   unknown: '',
 }
 
+const SIZE = {
+  sm: 'h-8 w-8 text-[11px]',
+  md: 'h-9 w-9 text-xs',
+  lg: 'h-10 w-10 text-sm',
+} as const
+
 /**
- * Peer avatar with a presence dot, fed by `rooms[].peer` in the snapshot.
- * The image is a Matrix `mxc://` URI, so it is loaded as a blob through the
- * store (gateway media route) exactly like an attachment.
+ * Shared `mxc://` → object URL cache. The chats panel, the conversation header
+ * and the message gutter all point at the same avatar, so a single fetch per
+ * URI is shared by every mount and survives list re-ordering. The blob URLs are
+ * kept for the lifetime of the page (bounded by the number of rooms/peers).
  */
-export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown' }: {
+const avatarCache = new Map<string, string>()
+const avatarRequests = new Map<string, Promise<string>>()
+
+/**
+ * A long chat list mounts every row at once. Matrix media goes through the
+ * gateway, so cap in-flight avatar requests and let the rest queue up rather
+ * than firing one request per room in the same tick.
+ */
+const MAX_PARALLEL_AVATARS = 4
+let activeAvatarRequests = 0
+const avatarQueue: Array<() => void> = []
+
+function acquireAvatarSlot() {
+  if (activeAvatarRequests < MAX_PARALLEL_AVATARS) {
+    activeAvatarRequests++
+    return Promise.resolve()
+  }
+  return new Promise<void>(resolve => { avatarQueue.push(resolve) })
+}
+
+function releaseAvatarSlot() {
+  const next = avatarQueue.shift()
+  // Hand the slot over instead of dropping it, so the cap stays exact.
+  if (next) next()
+  else activeAvatarRequests--
+}
+
+function loadAvatar(store: { avatarBlob(mxcUrl: string): Promise<Blob> }, mxcUrl: string): Promise<string> {
+  const cacheKey = mxcUrl
+  const cached = avatarCache.get(cacheKey)
+  if (cached) return Promise.resolve(cached)
+  const pending = avatarRequests.get(cacheKey)
+  if (pending) return pending
+  const tracked = acquireAvatarSlot()
+    .then(() => store.avatarBlob(cacheKey))
+    .then(blob => {
+      const url = URL.createObjectURL(blob)
+      avatarCache.set(cacheKey, url)
+      return url
+    })
+    .finally(() => {
+      releaseAvatarSlot()
+      avatarRequests.delete(cacheKey)
+    })
+  avatarRequests.set(cacheKey, tracked)
+  return tracked
+}
+
+/**
+ * Peer or room avatar with an optional presence dot, fed by `rooms[].avatarUrl`
+ * (`rooms[].peer.avatarUrl` for direct chats) in the snapshot. The image is a
+ * Matrix `mxc://` URI, so it is loaded as a blob through the store (gateway
+ * media route) exactly like an attachment.
+ */
+export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown', size = 'md', rounded = 'full', showPresence = true, fallback }: {
   name: string
   mxcUrl?: string
   presence?: MessengerPresence
+  /** Matches the surrounding gutter: the chat list uses `lg`, message rows `md`. */
+  size?: keyof typeof SIZE
+  /** Channels and team hubs use squared corners. */
+  rounded?: 'full' | 'lg'
+  showPresence?: boolean
+  /** Overrides the initials, e.g. `#` for a channel without an avatar. */
+  fallback?: string
 }) {
   const { store } = useMessenger()
-  const [url, setUrl] = useState<string>()
+  const [url, setUrl] = useState<string | undefined>(() => (mxcUrl ? avatarCache.get(mxcUrl) : undefined))
   useEffect(() => {
-    setUrl(undefined)
-    if (!mxcUrl) return
+    if (!mxcUrl) return setUrl(undefined)
+    const cached = avatarCache.get(mxcUrl)
+    if (cached) return setUrl(cached)
     let cancelled = false
-    let objectUrl: string | undefined
-    void store.avatarBlob(mxcUrl).then(blob => {
-      if (cancelled) return
-      objectUrl = URL.createObjectURL(blob)
-      setUrl(objectUrl)
+    setUrl(undefined)
+    void loadAvatar(store, mxcUrl).then(next => {
+      if (!cancelled) setUrl(next)
     }).catch(() => {}) // A missing avatar is cosmetic; the initials stay.
-    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl) }
+    return () => { cancelled = true }
   }, [store, mxcUrl])
+  const roundClass = rounded === 'lg' ? 'rounded-lg' : 'rounded-full'
+  const withPresence = showPresence && presence !== 'unknown'
   return <span
     data-presence={presence}
     aria-hidden
-    className="relative flex h-9 w-9 shrink-0 select-none items-center justify-center overflow-visible rounded-full bg-primary/10 text-xs font-semibold text-primary"
+    className={'relative flex shrink-0 select-none items-center justify-center bg-primary/10 font-semibold text-primary ' + SIZE[size] + ' ' + roundClass}
   >
     {url
-      ? <img src={url} alt="" className="h-9 w-9 rounded-full object-cover" />
-      : <span className="truncate px-1">{initials(name)}</span>}
-    {presence !== 'unknown' && <span
+      ? <img src={url} alt="" className={'h-full w-full object-cover ' + roundClass} />
+      : <span className="truncate px-1">{fallback ?? initials(name)}</span>}
+    {withPresence && <span
       data-presence-dot={presence}
       title={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}
       className={'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ' + DOT[presence]}

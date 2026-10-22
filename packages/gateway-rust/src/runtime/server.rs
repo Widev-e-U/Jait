@@ -28,15 +28,18 @@ pub struct Gateway {
 }
 impl Gateway {
     pub async fn bind(config: GatewayConfig, health: HealthState) -> io::Result<Self> {
+        let router = Router::new()
+            .route("/health", get(health_response))
+            .with_state(health);
+        Self::bind_router(config, router).await
+    }
+    pub(super) async fn bind_router(config: GatewayConfig, router: Router) -> io::Result<Self> {
         if !config.address.ip().is_loopback() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "migration gateway requires loopback",
             ));
         }
-        let router = Router::new()
-            .route("/health", get(health_response))
-            .with_state(health);
         Ok(Self {
             listener: bind_loopback(config.address).await?,
             router,
@@ -54,6 +57,16 @@ impl Gateway {
     /// Explicit opt-in session API; production activation remains separately gated.
     pub fn with_sessions(mut self, sessions: routes::sessions::SessionRoutes) -> Self {
         self.router = self.router.merge(sessions.router());
+        self
+    }
+    /// Explicit filesystem control-plane and environment; no default mount.
+    pub fn with_filesystem(mut self, routes: routes::filesystem::FilesystemRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Supervision only; command execution remains a separately authorized host port.
+    pub fn with_maintenance(mut self, routes: routes::maintenance::MaintenanceRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
         self
     }
     /// Opt-in immutable asset hook. Full frontend/static fallback serving is separate.
@@ -97,6 +110,16 @@ impl Gateway {
         self
     }
     pub fn with_architecture(mut self, routes: routes::architecture::ArchitectureRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Explicit jobs API; starting the scheduler timer and authorizing its executor are separate.
+    pub fn with_jobs(mut self, routes: routes::jobs::JobRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Read-only environment composition over explicitly supplied native stores.
+    pub fn with_environment(mut self, routes: routes::environment::EnvironmentRoutes) -> Self {
         self.router = self.router.merge(routes.router());
         self
     }

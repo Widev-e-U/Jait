@@ -1,0 +1,125 @@
+{
+  "name": "jait",
+  "description": "Jait platform tool — access memory, scheduler, and gateway status. Actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.update, reminder.forget, cron.add, cron.list, cron.update, cron.remove, status.",
+  "tier": "core",
+  "category": "gateway",
+  "source": "builtin",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "Action to perform.",
+        "enum": [
+          "memory.save",
+          "memory.search",
+          "memory.forget",
+          "reminder.save",
+          "reminder.list",
+          "reminder.update",
+          "reminder.forget",
+          "cron.add",
+          "cron.list",
+          "cron.update",
+          "cron.remove",
+          "status"
+        ]
+      },
+      "content": {
+        "type": "string",
+        "description": "Content to save."
+      },
+      "scope": {
+        "type": "string",
+        "description": "Memory scope.",
+        "enum": [
+          "project",
+          "contact"
+        ]
+      },
+      "query": {
+        "type": "string",
+        "description": "Search query."
+      },
+      "memoryId": {
+        "type": "string",
+        "description": "Memory ID to forget."
+      },
+      "sourceType": {
+        "type": "string",
+        "description": "Source type."
+      },
+      "sourceId": {
+        "type": "string",
+        "description": "Source ID (for memory.save)."
+      },
+      "ttlSeconds": {
+        "type": "number",
+        "description": "TTL in seconds for memory expiry (for memory.save)."
+      },
+      "limit": {
+        "type": "number",
+        "description": "Max results (for memory.search, default: 5)."
+      },
+      "asReminder": {
+        "type": "boolean",
+        "description": "For memory.save, save content to the reminders table instead of semantic memory."
+      },
+      "projectId": {
+        "type": "string",
+        "description": "Project ID for reminder actions."
+      },
+      "reminderId": {
+        "type": "string",
+        "description": "Reminder ID to forget."
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Reminder tags."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "archived",
+          "all"
+        ],
+        "description": "Reminder status for list/update."
+      },
+      "sessionId": {
+        "type": "string",
+        "description": "Session ID for reminder actions."
+      },
+      "name": {
+        "type": "string",
+        "description": "Cron job name (for cron.add)."
+      },
+      "cron": {
+        "type": "string",
+        "description": "Cron expression (for cron.add/update). E.g. \"0 9 * * *\" for daily at 9am."
+      },
+      "toolName": {
+        "type": "string",
+        "description": "Tool name to execute on schedule (for cron.add)."
+      },
+      "input": {
+        "type": "object",
+        "description": "Tool input arguments (for cron.add/update)."
+      },
+      "jobId": {
+        "type": "string",
+        "description": "Cron job ID (for cron.update/remove)."
+      },
+      "enabled": {
+        "type": "boolean",
+        "description": "Enable/disable toggle (for cron.update)."
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

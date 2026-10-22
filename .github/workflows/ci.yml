@@ -32,6 +32,9 @@ jobs:
       - name: Release workflow regression tests
         run: node --test .github/scripts/*.test.mjs
 
+      - name: Local deployment guard tests
+        run: node --test scripts/local-deploy.test.mjs
+
       - name: Typecheck
         run: bun run typecheck
 

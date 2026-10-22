@@ -38,3 +38,31 @@ pub mod session_sql;
 pub mod cron;
 
 pub mod core_agent;
+
+pub mod core_io;
+
+pub mod surfaces;
+
+pub mod core_search;
+
+pub mod filesystem_resolver;
+
+pub mod core_jait;
+
+pub mod core;
+
+pub mod catalog;
+
+pub mod file_tools;
+
+pub mod memory_tools;
+
+pub mod remote_executor;
+
+pub mod registry;
+
+pub mod team_chat;
+
+pub mod meta_tools;
+
+pub mod messenger;
