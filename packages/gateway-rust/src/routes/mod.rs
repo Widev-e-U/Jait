@@ -35,3 +35,7 @@ pub mod chat;
 pub mod chat_events;
 
 pub mod reminders;
+
+pub mod security_workbench;
+
+pub mod code_graph;

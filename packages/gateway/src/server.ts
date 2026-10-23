@@ -115,6 +115,7 @@ import {
 import { getAgentGithubAppService } from "./services/agent-github-apps.js";
 
 export interface ServerDeps {
+  chatLoops?: import("./services/chat-loops.js").ChatLoopService;
   db?: JaitDB;
   sqlite?: SqliteDatabase;
   sessionService?: SessionService;
@@ -305,6 +306,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     deps.toolRegistry?.register(createTeamChatTool(teamChat, deps.sessionService));
   }
   registerChatRoutes(app, config, {
+    chatLoops: deps.chatLoops,
     teamChat,
     agentControl,
     db: deps.db,

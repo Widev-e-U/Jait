@@ -1,5 +1,7 @@
 # Konzeptvorschlag: Goal Skills für Jait
 
+> Implementierungsstand: Der TypeScript-Gateway hat inzwischen persistente Chat-Loops über `loop.goal`, `loop.status`, `loop.check`, `loop.pause` und `loop.resume`, inklusive Fortsetzung zwischen Turns und Goal-Karte. Die Kriterienprüfung erfolgt durch den arbeitenden Assistenten; das Gateway verlangt Evidenz-Einträge für einen Abschluss. Der separate Evaluator und die Skill-Policies unten bleiben Vorschläge. Siehe [Capability-Katalog](capability-catalog.md) für das implementierte Verhalten. Die folgenden Bestandsaufnahmen beschreiben den Stand vor dieser Chat-Loop-Implementierung.
+
 **Status:** Vorschlag ([PROPOSE] — siehe Abschnitt 6 für Entscheidungspunkte)
 **Kontext:** Loop Engineering mit `/goal`-Skills (Claude-Code-Pattern) — Bewertung und Umsetzungsplan für Jait
 **Verwandte Doku:** `docs/vision.md`, `docs/memory-model.md`, `docs/claude-code-learnings.md`

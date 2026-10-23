@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { MessengerPresence } from '@/lib/messenger/model'
+import { getApiUrl } from '@/lib/gateway-url'
+import { cachedAvatarBlob } from '@/lib/messenger/avatar-cache'
 import { useMessenger } from './messenger-provider'
 
 /** Initials keep the header stable while the image loads, or when no avatar exists. */
@@ -27,7 +29,7 @@ const SIZE = {
  * Shared `mxc://` → object URL cache. The chats panel, the conversation header
  * and the message gutter all point at the same avatar, so a single fetch per
  * URI is shared by every mount and survives list re-ordering. The blob URLs are
- * kept for the lifetime of the page (bounded by the number of rooms/peers).
+ * kept for the lifetime of the page, with account-scoped blobs cached across reloads.
  */
 const avatarCache = new Map<string, string>()
 const avatarRequests = new Map<string, Promise<string>>()
@@ -56,14 +58,14 @@ function releaseAvatarSlot() {
   else activeAvatarRequests--
 }
 
-function loadAvatar(store: { avatarBlob(mxcUrl: string): Promise<Blob> }, mxcUrl: string): Promise<string> {
-  const cacheKey = mxcUrl
+function loadAvatar(store: { avatarBlob(mxcUrl: string): Promise<Blob> }, scope: string, mxcUrl: string): Promise<string> {
+  const cacheKey = JSON.stringify([scope, mxcUrl])
   const cached = avatarCache.get(cacheKey)
   if (cached) return Promise.resolve(cached)
   const pending = avatarRequests.get(cacheKey)
   if (pending) return pending
   const tracked = acquireAvatarSlot()
-    .then(() => store.avatarBlob(cacheKey))
+    .then(() => cachedAvatarBlob(scope, mxcUrl, () => store.avatarBlob(mxcUrl)))
     .then(blob => {
       const url = URL.createObjectURL(blob)
       avatarCache.set(cacheKey, url)
@@ -87,7 +89,7 @@ export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown', size =
   name: string
   mxcUrl?: string
   presence?: MessengerPresence
-  /** Matches the surrounding gutter: the chat list uses `lg`, message rows `md`. */
+  /** Chat list and message rows use `md`; larger surfaces can opt into `lg`. */
   size?: keyof typeof SIZE
   /** Channels and team hubs use squared corners. */
   rounded?: 'full' | 'lg'
@@ -95,19 +97,19 @@ export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown', size =
   /** Overrides the initials, e.g. `#` for a channel without an avatar. */
   fallback?: string
 }) {
-  const { store } = useMessenger()
-  const [url, setUrl] = useState<string | undefined>(() => (mxcUrl ? avatarCache.get(mxcUrl) : undefined))
+  const { store, snapshot } = useMessenger()
+  const scope = snapshot.session ? JSON.stringify([getApiUrl(), snapshot.session.homeserver, snapshot.session.userId]) : undefined
+  const cacheKey = scope && mxcUrl ? JSON.stringify([scope, mxcUrl]) : undefined
+  const [loaded, setLoaded] = useState<{ key: string; url: string }>()
+  const url = cacheKey ? (loaded?.key === cacheKey ? loaded.url : avatarCache.get(cacheKey)) : undefined
   useEffect(() => {
-    if (!mxcUrl) return setUrl(undefined)
-    const cached = avatarCache.get(mxcUrl)
-    if (cached) return setUrl(cached)
+    if (!mxcUrl || !scope || !cacheKey || avatarCache.has(cacheKey)) return
     let cancelled = false
-    setUrl(undefined)
-    void loadAvatar(store, mxcUrl).then(next => {
-      if (!cancelled) setUrl(next)
+    void loadAvatar(store, scope, mxcUrl).then(next => {
+      if (!cancelled) setLoaded({ key: cacheKey, url: next })
     }).catch(() => {}) // A missing avatar is cosmetic; the initials stay.
     return () => { cancelled = true }
-  }, [store, mxcUrl])
+  }, [store, scope, mxcUrl, cacheKey])
   const roundClass = rounded === 'lg' ? 'rounded-lg' : 'rounded-full'
   const withPresence = showPresence && presence !== 'unknown'
   return <span

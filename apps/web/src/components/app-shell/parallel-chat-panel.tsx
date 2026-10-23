@@ -18,7 +18,11 @@ import type { UserMessageSegment } from '@/lib/user-message-segments'
 import { mergeAttachmentsIntoSegments } from '@/lib/message-segment-builders'
 import type { DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { TooltipHint } from '@/components/ui/tooltip'
-import { shouldShowNormalChatComposer } from '@/components/chat/message-edit-layout'
+import {
+  getChatColumnClassName,
+  getChatComposerBoundaryClassName,
+  shouldShowNormalChatComposer,
+} from '@/components/chat/message-edit-layout'
 import { ChatPanelDivider } from './chat-panel-divider'
 
 export interface ParallelChatPrompt {
@@ -458,13 +462,13 @@ function ParallelChatPanelImpl({
         ))}
       </Conversation>
 
-      <div className="relative z-30 isolate shrink-0 bg-background px-2 py-2 pb-3 sm:px-4">
+      <div className={getChatComposerBoundaryClassName(isMobile)}>
         {error && !isLoading && (
-          <div className="mx-auto mb-2 w-full max-w-4xl rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div className={getChatColumnClassName('mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive')}>
             {error}
           </div>
         )}
-        <div className="mx-auto w-full max-w-4xl space-y-1.5">
+        <div className={getChatColumnClassName('space-y-1.5')}>
         {messageQueue.length > 0 && (
           <MessageQueue
             items={messageQueue}

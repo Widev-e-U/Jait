@@ -10,15 +10,15 @@ const base = { encrypted: false, unableToDecrypt: false, pending: false, failed:
  * page must group channels under their team and open channels with a
  * channel-flavoured header, while plain chats keep the normal transcript.
  */
-async function mount(page: Page, roomId = '!general:test') {
+async function mount(page: Page, roomId = '!general:test', service = 'Slack') {
   const calls: any[] = []
   const snapshot = {
     status: 'ready', error: null, notifications: false, assistantAccess: false, hasEarlier: false,
     session: { homeserver: 'https://matrix.test', userId: '@alice:test', deviceId: 'A' },
     rooms: [
-      { id: '!eng:test', name: 'Engineering', membership: 'join', unread: 0, encrypted: false, service: 'Slack', network: 'Acme', timestamp: 1, preview: 'Team', kind: 'team' },
-      { id: '!general:test', name: 'general', membership: 'join', unread: 2, encrypted: false, service: 'Slack', network: 'Acme', team: 'Engineering', kind: 'channel', topic: 'Team-wide announcements', timestamp: 2, preview: 'Deploy done' },
-      { id: '!random:test', name: 'random', membership: 'join', unread: 0, encrypted: false, service: 'Slack', network: 'Acme', team: 'Engineering', kind: 'channel', timestamp: 3, preview: 'Meme of the day' },
+      { id: '!eng:test', name: 'Engineering', membership: 'join', unread: 0, encrypted: false, service, network: 'Acme', timestamp: 1, preview: 'Team', kind: 'team' },
+      { id: '!general:test', name: 'general', membership: 'join', unread: 2, encrypted: false, service, network: 'Acme', team: 'Engineering', kind: 'channel', topic: 'Team-wide announcements', timestamp: 2, preview: 'Deploy done' },
+      { id: '!random:test', name: 'random', membership: 'join', unread: 0, encrypted: false, service, network: 'Acme', team: 'Engineering', kind: 'channel', timestamp: 3, preview: 'Meme of the day' },
       { id: '!bob:test', name: 'Bob', membership: 'join', unread: 0, encrypted: true, service: 'WhatsApp', network: '', timestamp: 4, preview: 'Hello', kind: 'chat' },
     ],
     messagesByRoom: {
@@ -86,4 +86,15 @@ test('Team sections collapse while plain chats keep the normal transcript', asyn
   await expect(page.locator('[data-messenger-bubble][data-message-style="chat"]')).toHaveCount(1)
   await expect(page.getByRole('heading', { name: 'Bob' })).toBeVisible()
   await expect(page.locator('[data-channel-topic]')).toHaveCount(0)
+})
+
+
+test('Teams can be filtered separately from WhatsApp', async ({ page }) => {
+  await mount(page, '!general:test', 'Teams')
+  await page.getByRole('combobox', { name: 'Filter by service' }).click()
+  await expect(page.getByRole('option', { name: 'WhatsApp', exact: true })).toBeVisible()
+  await page.getByRole('option', { name: 'Teams', exact: true }).click()
+  await expect(page.getByRole('group', { name: 'Conversation general' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Conversation Bob' })).toHaveCount(0)
+  await expect(page.getByRole('combobox', { name: 'Filter by service' })).toHaveText('Teams')
 })

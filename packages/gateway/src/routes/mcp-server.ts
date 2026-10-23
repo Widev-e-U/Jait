@@ -1,3 +1,4 @@
+import { projectToolEvidence } from "../tools/context-evidence.js";
 import { projectModelData, boundModelData } from "../tools/model-result.js";
 /**
  * MCP HTTP Server — exposes Jait's tool registry as MCP-compatible endpoints.
@@ -83,7 +84,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-export function mcpContentForToolResult(uiResult: ToolResult): McpToolContent[] {
+export function mcpContentForToolResult(uiResult: ToolResult, context?: ToolContext, toolName?: string): McpToolContent[] {
+  if (context?.userId && !(isRecord(uiResult.data) && isRecord(uiResult.data.screenshot))) {
+    return [{ type: "text", text: projectToolEvidence(uiResult, context, toolName).content }];
+  }
   const result = { ...uiResult, data: projectModelData(uiResult.data) };
   if (typeof result.data === "string") return [{ type: "text", text: capMcpToolResultText(result.data) }];
 
@@ -725,7 +729,7 @@ export async function handleMcpRequest(
           jsonrpc: "2.0",
           id: request.id ?? null,
           result: {
-            content: mcpContentForToolResult(result),
+            content: mcpContentForToolResult(result, context, tool.name),
             isError: !result.ok,
           },
         };

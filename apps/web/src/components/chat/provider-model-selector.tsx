@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties, type ReactNode } from 'react'
-import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download } from 'lucide-react'
+import { Check, AlertTriangle, Server, Loader2, Monitor, Search, LogIn, Copy, ExternalLink, X, Network, Brain, Star, ChevronDown, Download, CircleHelp } from 'lucide-react'
 import { toast } from 'sonner'
 import { ProviderActionsMenu } from './provider-actions-menu'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -44,6 +44,35 @@ import {
   type ModelFavorite,
 } from './model-favorites'
 import { ModelPickerRail, type ModelPickerRailSection } from './model-picker-rail'
+
+const REASONING_EFFORT_HELP = 'Controls how much the model reasons before answering. Only applies to this reasoning model.'
+
+function ReasoningEffortHelp({ mobile }: { mobile: boolean }) {
+  const title = (
+    <button
+      type="button"
+      aria-label="About reasoning effort"
+      className="flex max-w-full items-center gap-1.5 text-left text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <Brain className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 text-2xs font-medium uppercase tracking-wider">Reasoning effort</span>
+      <CircleHelp className="h-3 w-3 shrink-0" aria-hidden="true" />
+    </button>
+  )
+
+  if (mobile) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>{title}</PopoverTrigger>
+        <PopoverContent side="top" align="end" className="max-w-[calc(100vw-2rem)] px-2.5 py-1.5 text-xs" aria-label="About reasoning effort">
+          {REASONING_EFFORT_HELP}
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
+  return <TooltipHint side="top" content={REASONING_EFFORT_HELP}>{title}</TooltipHint>
+}
 
 interface ModelDef {
   id: string
@@ -670,7 +699,6 @@ export function ProviderModelSelector({
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
   const currentModel = model ? models.find((entry) => entry.id === model) : null
-  const currentGroupLabel = currentModel ? modelGroupLabel(currentModel) : null
   const displayModelLabel = loadingModels
       ? 'Loading'
       : (currentModel?.name || model ? formatModelDisplayLabel(currentModel?.name ?? model!) : 'Default')
@@ -796,10 +824,10 @@ export function ProviderModelSelector({
   const modelVirtualizer = useVirtualizer({
     count: modelRows.length,
     getScrollElement: () => modelListRef.current,
-    // Header rows are boxed bars with a 24px logo badge (~40px tall). Keeping the
+    // Header rows have a 24px icon and equal vertical padding (44px tall). Keeping the
     // estimate at/above the real height means rows never get positioned on top of
     // a group header while measurements settle.
-    estimateSize: (index) => (modelRows[index]?.type === 'header' ? 42 : 46),
+    estimateSize: (index) => (modelRows[index]?.type === 'header' ? 44 : 46),
     overscan: 12,
     enabled: open,
     getItemKey: modelRowKey,
@@ -1236,7 +1264,7 @@ export function ProviderModelSelector({
               onRefresh={() => { void runProviderAction(entry, 'refresh') }}
               onLogout={() => { void runProviderAction(entry, 'logout') }}
             >
-              <div className={cn('relative flex min-w-0 items-start gap-1.5', isMobile && 'gap-0')}>
+              <div className="flex min-w-0 items-center">
                 <TooltipHint side="left" content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
                 <button
                   type="button"
@@ -1247,10 +1275,6 @@ export function ProviderModelSelector({
                   className={cn(
                     'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
                     isMobile && 'gap-1.5 px-1.5 py-1.5',
-                    // Reserve the action-button gutter on every viewport: the
-                    // buttons are absolutely positioned (so they stay centred
-                    // however the row wraps) and would otherwise cover the name.
-                    (showUpdateAction || showLoginAction) && 'pr-[3.75rem]',
                     'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                     !entry.isAvailable && 'cursor-not-allowed opacity-60',
                   )}
@@ -1260,7 +1284,7 @@ export function ProviderModelSelector({
                     : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className={cn('flex min-w-0 items-center gap-1.5 font-medium', isMobile ? 'flex-wrap text-xs' : 'text-sm')}>
-                      <span className={isMobile ? 'min-w-0 [overflow-wrap:anywhere]' : 'min-w-0 truncate'}>{entry.label}</span>
+                      <span className="min-w-0 max-w-full truncate" title={entry.label}>{entry.label}</span>
                       {!entry.isAvailable && (
                         <span className="flex min-w-0 items-center gap-0.5 truncate text-2xs text-destructive/80">
                           <AlertTriangle className="h-3 w-3" />
@@ -1273,7 +1297,7 @@ export function ProviderModelSelector({
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
                 </TooltipHint>
-                <div className="absolute right-1 top-1/2 z-[1] flex -translate-y-1/2 flex-row items-center gap-0.5">
+                {(showUpdateAction || showLoginAction) && <div className="mr-1 flex shrink-0 items-center gap-0.5">
                 {showUpdateAction && (
                   <TooltipHint side="left" content={updating
                     ? `Updating ${entry.label} to ${entry.update?.latestVersion}…`
@@ -1320,7 +1344,7 @@ export function ProviderModelSelector({
                   </button>
                   </TooltipHint>
                 )}
-                </div>
+                </div>}
               </div>
             </ProviderActionsMenu>
           )
@@ -1352,15 +1376,6 @@ export function ProviderModelSelector({
         <div className={cn('flex min-w-0 shrink-0 items-center gap-2 border-b px-3 py-2', isMobile && 'min-h-10 pr-12')}>
           <div id="model-selector-heading" className="shrink-0 text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
         </div>
-      {currentGroupLabel && (
-        <div className="flex shrink-0 items-center gap-1.5 border-b bg-muted/40 px-3 py-1.5">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          </span>
-          <span className="truncate text-2xs font-medium text-foreground">Current: {currentGroupLabel}</span>
-        </div>
-      )}
       <div className="flex shrink-0 items-center gap-2 border-b border-border/70 px-3 py-2 focus-within:border-ring">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
@@ -1422,7 +1437,7 @@ export function ProviderModelSelector({
                       key={virtualRow.key}
                       data-index={virtualRow.index}
                       ref={modelVirtualizer.measureElement}
-                      className="px-1 pt-1.5"
+                      className="px-1 py-1.5"
                       style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                     >
                       <button
@@ -1431,19 +1446,19 @@ export function ProviderModelSelector({
                         onClick={() => toggleSectionCollapsed(row.key)}
                         title={row.collapsed ? `Expand ${row.label}` : `Collapse ${row.label}`}
                         className={cn(
-                          'flex w-full items-center gap-2 rounded-md border border-border/60 bg-muted/60 px-1.5 py-1 text-left transition-colors',
-                          'hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          'flex w-full items-center gap-2 bg-transparent px-1.5 py-1 text-left transition-colors',
+                          'hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                         )}
                       >
                         <ChevronDown
                           aria-hidden="true"
                           className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', row.collapsed && '-rotate-90')}
                         />
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-background text-foreground ring-1 ring-border/70">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
                           <HeaderIcon className="h-3.5 w-3.5" />
                         </span>
                         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{row.label}</span>
-                        <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground ring-1 ring-border/60">
+                        <span className="shrink-0 px-1.5 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground">
                           {row.modelCount}
                         </span>
                       </button>
@@ -1485,11 +1500,8 @@ export function ProviderModelSelector({
 
       {modelSupportsReasoning && !loadingModels && (
         <div className="shrink-0 border-t px-3 py-2">
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <Brain className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-              Reasoning effort
-            </span>
+          <div className="mb-1.5">
+            <ReasoningEffortHelp mobile={isMobile} />
           </div>
           <div className="grid grid-cols-2 gap-1">
             <button
@@ -1524,9 +1536,6 @@ export function ProviderModelSelector({
               )
             })}
           </div>
-          <p className="mt-1.5 text-2xs leading-snug text-muted-foreground">
-            Controls how much the model reasons before answering. Only applies to this reasoning model.
-          </p>
         </div>
       )}
       </section>
@@ -1720,7 +1729,7 @@ function ModelRow({
         }
       } : undefined}
       className={cn(
-        'group flex w-full cursor-pointer items-start gap-2 px-3 py-1.5 text-left transition-colors',
+        'group flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors',
         mobile && 'gap-1 px-2',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         highlighted ? 'bg-accent text-accent-foreground' : 'hover:bg-accent hover:text-accent-foreground',

@@ -1,4 +1,6 @@
-import { AlertTriangle, FolderOpen, X } from 'lucide-react'
+import { readChatLoop } from '@jait/shared'
+import { ChatLoopGoal } from '@/components/chat/loop-goal-card'
+import { AlertTriangle, FolderOpen, RotateCcw, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 
 import {
@@ -14,6 +16,7 @@ import {
 } from '@/components/chat'
 import { ContextIndicator } from '@/components/chat/context-indicator'
 import {
+  getChatColumnClassName,
   getChatComposerBoundaryClassName,
   getChatTranscriptBoundaryClassName,
   shouldShowChatContextIndicator,
@@ -56,6 +59,7 @@ interface DeveloperChatWorkspaceProps {
   activeProjectDisplayName: string | null
   activeProjectRoot: string | null
   onLatestContentViewed?: () => void
+  sessionMetadata?: string | null
   activeSessionId: string | null
   availableFilesForMention: any[]
   availableSkills: any[]
@@ -126,7 +130,7 @@ interface DeveloperChatWorkspaceProps {
   onClearTodoList: () => void
   onCliModelChange: (model: string | null) => void
   onReasoningEffortChange: (reasoningEffort: SessionReasoningEffort | null) => void
-  onContinueChat: (options: { token: string | null; sessionId: string | null }) => void
+  onContinueChat: (options: { token: string | null; sessionId: string | null }) => Promise<unknown> | void
   onDequeueMessage: (id: string) => void
   onEditPreviousMessage: (...args: any[]) => void
   onExecutePlan: () => void
@@ -176,6 +180,7 @@ export function DeveloperChatWorkspace({
   activeProjectDisplayName,
   activeProjectRoot,
   onLatestContentViewed,
+  sessionMetadata,
   activeSessionId,
   availableFilesForMention,
   availableSkills,
@@ -285,6 +290,24 @@ export function DeveloperChatWorkspace({
   onVoiceInput,
   renderInlineSecretPrompt,
 }: DeveloperChatWorkspaceProps) {
+  const [isContinuing, setIsContinuing] = useState(false)
+  const continuationPendingRef = useRef(false)
+  const handleErrorRetry = useCallback(async () => {
+    if (!activeSessionId || isLoading || isLoadingHistory || limitReached || continuationPendingRef.current) return
+    continuationPendingRef.current = true
+    setIsContinuing(true)
+    try {
+      await onContinueChat({ token, sessionId: activeSessionId })
+    } finally {
+      continuationPendingRef.current = false
+      setIsContinuing(false)
+    }
+  }, [activeSessionId, isLoading, isLoadingHistory, limitReached, onContinueChat, token])
+  const retryDisabled = isLoading || isLoadingHistory || limitReached || isContinuing
+  const latestMessage = messages.at(-1)
+  const latestMessageHasError = latestMessage?.role === 'assistant'
+    && Array.isArray(latestMessage.segments) && latestMessage.segments.at(-1)?.type === 'error'
+
   const [editingQueue, setEditingQueue] = useState(false)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   // Width of the chat panel, used to hide the floating top indicators when the
@@ -610,6 +633,9 @@ export function DeveloperChatWorkspace({
     for (let idx = 0; idx < messages.length; idx++) {
       const msg = messages[idx]
       const isStreaming = isLoading && msg.id === lastMsgId
+      const onTryContinue = msg.id === lastMsgId && latestMessageHasError && activeSessionId
+        ? handleErrorRetry : undefined
+      const isMessageContinuing = Boolean(onTryContinue && retryDisabled)
       const cached = cache.get(msg.id)
       const renderInputs = [
         sharedRenderVersionRef.current,
@@ -634,6 +660,8 @@ export function DeveloperChatWorkspace({
         msg.toolCalls,
         msg.segments,
         isStreaming,
+        onTryContinue,
+        isMessageContinuing,
         editingMessageId === msg.id,
       ]
       if (cached && !haveRenderInputsChanged(cached.renderInputs, renderInputs)) {
@@ -674,6 +702,8 @@ export function DeveloperChatWorkspace({
           renderInlineSecretPrompt={renderInlineSecretPrompt}
           onApprovalResponse={onApprovalResponse}
           onEditMessage={onEditPreviousMessage}
+          onTryContinue={onTryContinue}
+          isContinuing={isMessageContinuing}
           editing={editingMessageId === msg.id}
           onEditingChange={handleMessageEditingChange}
           editComposer={editComposerBag}
@@ -696,6 +726,8 @@ export function DeveloperChatWorkspace({
     }
   }
 
+  const loop = readChatLoop(sessionMetadata)
+  const showLoopInGutter = !isMobile && getChatTranscriptColumnLeft(chatPanelWidth, false) >= 232
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
 
   return (
@@ -715,6 +747,11 @@ export function DeveloperChatWorkspace({
                 onOpen={onOpenSourceControl}
                 compact={isMobile}
               />
+            </div>
+          )}
+          {!showDebugPanel && loop && activeSessionId && (
+            <div className={showLoopInGutter ? 'absolute top-12 left-2 z-10 w-52 max-h-[calc(100%-64px)] overflow-auto' : 'mx-4 mt-12 mb-2 shrink-0'}>
+              <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} />
             </div>
           )}
           {shouldShowChatContextIndicator(Boolean(contextUsage), showDebugPanel) && contextUsage && (
@@ -774,12 +811,18 @@ export function DeveloperChatWorkspace({
           )}
 
           {showNormalComposer && (
-            <div className={getChatComposerBoundaryClassName(isMobile, showDesktopProject)}>
-            <div className="mx-auto w-full max-w-4xl space-y-1.5">
+            <div className={getChatComposerBoundaryClassName(isMobile)}>
+            <div className={getChatColumnClassName('space-y-1.5')}>
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 break-words">{error}</span>
+                  <span className="min-w-0 flex-1 break-words">{error}</span>
+                  {activeSessionId && !latestMessageHasError && (
+                    <Button type="button" variant="outline" size="sm" disabled={retryDisabled} onClick={handleErrorRetry} className="shrink-0 gap-1.5">
+                      <RotateCcw className="h-3 w-3" />
+                      Retry
+                    </Button>
+                  )}
                 </div>
               )}
               {hitMaxRounds && !isLoading && (

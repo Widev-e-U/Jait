@@ -59,11 +59,29 @@ pub struct SessionWaitChange {
     pub session_id: Utf16Text,
     pub waits: Vec<WaitHandle>,
 }
-pub type SessionWaitBroadcaster = Rc<dyn Fn(SessionWaitChange) -> Result<(), String>>;
+pub type SessionWaitChangeHandle = Rc<RefCell<SessionWaitChange>>;
+pub type SessionWaitBroadcaster = Rc<dyn Fn(SessionWaitChangeHandle) -> Result<(), String>>;
+pub type SessionWaitUnsubscribe = Rc<dyn Fn()>;
+#[derive(Default)]
+struct Listeners {
+    entries: Vec<Option<SessionWaitBroadcaster>>,
+    emissions: usize,
+}
+struct Emission(Rc<RefCell<Listeners>>);
+impl Drop for Emission {
+    fn drop(&mut self) {
+        let mut state = self.0.borrow_mut();
+        state.emissions -= 1;
+        if state.emissions == 0 {
+            state.entries.retain(Option::is_some);
+        }
+    }
+}
 /// Use on the gateway event loop. The broadcaster can reenter after mutation.
 pub struct SessionWaitService {
     waits: RefCell<Vec<(Utf16Text, WaitHandle)>>,
     broadcaster: RefCell<Option<SessionWaitBroadcaster>>,
+    listeners: Rc<RefCell<Listeners>>,
     collator: CollatorBorrowed<'static>,
 }
 impl Default for SessionWaitService {
@@ -76,9 +94,38 @@ impl SessionWaitService {
         Self {
             waits: RefCell::new(vec![]),
             broadcaster: RefCell::new(None),
+            listeners: Rc::new(RefCell::new(Listeners::default())),
             collator: Collator::try_new(Default::default(), CollatorOptions::default())
                 .expect("compiled collation"),
         }
+    }
+    /// Matches Set callback identity, including duplicate registrations and an
+    /// older unsubscribe removing a later registration of the same callback.
+    pub fn subscribe(&self, listener: SessionWaitBroadcaster) -> SessionWaitUnsubscribe {
+        let mut state = self.listeners.borrow_mut();
+        if !state
+            .entries
+            .iter()
+            .flatten()
+            .any(|current| Rc::ptr_eq(current, &listener))
+        {
+            state.entries.push(Some(listener.clone()));
+        }
+        let listeners = self.listeners.clone();
+        Rc::new(move || {
+            let mut state = listeners.borrow_mut();
+            for entry in &mut state.entries {
+                if entry
+                    .as_ref()
+                    .is_some_and(|current| Rc::ptr_eq(current, &listener))
+                {
+                    *entry = None;
+                }
+            }
+            if state.emissions == 0 {
+                state.entries.retain(Option::is_some);
+            }
+        })
     }
     pub fn set_broadcaster(&self, broadcaster: Option<SessionWaitBroadcaster>) {
         *self.broadcaster.borrow_mut() = broadcaster;
@@ -195,12 +242,31 @@ impl SessionWaitService {
         self.broadcaster.borrow_mut().take();
     }
     fn emit(&self, session_id: &Utf16Text) -> Result<(), String> {
+        let change = Rc::new(RefCell::new(SessionWaitChange {
+            session_id: session_id.clone(),
+            waits: self.list(session_id),
+        }));
+        self.listeners.borrow_mut().emissions += 1;
+        let _emission = Emission(self.listeners.clone());
         let broadcaster = self.broadcaster.borrow().clone();
         if let Some(broadcaster) = broadcaster {
-            broadcaster(SessionWaitChange {
-                session_id: session_id.clone(),
-                waits: self.list(session_id),
-            })?;
+            broadcaster(change.clone())?;
+        }
+        // Live Set traversal: additions are visited, deletions are skipped and
+        // reentrant emissions keep outer traversal indices stable.
+        let mut index = 0;
+        loop {
+            let next = {
+                let state = self.listeners.borrow();
+                if index >= state.entries.len() {
+                    break;
+                }
+                state.entries[index].clone()
+            };
+            index += 1;
+            if let Some(listener) = next {
+                listener(change.clone())?;
+            }
         }
         Ok(())
     }
@@ -248,6 +314,7 @@ mod tests {
         let service = Rc::new(SessionWaitService::new());
         let weak = Rc::downgrade(&service);
         service.set_broadcaster(Some(Rc::new(move |change| {
+            let change = change.borrow();
             let service = weak.upgrade().unwrap();
             assert_eq!(service.list(&change.session_id).len(), 1);
             change.waits[0].borrow_mut().label = "changed during callback".into();

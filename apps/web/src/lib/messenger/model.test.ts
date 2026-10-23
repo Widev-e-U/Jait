@@ -103,3 +103,9 @@ describe('Read receipt rendering', () => {
     ])
   })
 })
+
+
+it('recognizes the deployed mautrix Teams protocol ID', () => {
+  expect(bridgeLabel({ protocol: { id: 'go.mau.fi/mautrix-teams', displayname: 'Microsoft Teams' } }))
+    .toEqual({ service: 'Teams', network: '' })
+})

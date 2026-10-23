@@ -3,6 +3,9 @@ use serde_json::Value;
 pub const DEFAULT_COMMAND_YIELD_MS: f64 = 10_000.0;
 pub const MAX_COMMAND_YIELD_MS: f64 = 30_000.0;
 pub fn resolve_command_yield_ms(value: Option<&Value>, timeout_ms: f64) -> f64 {
+    if timeout_ms.is_nan() {
+        return f64::NAN;
+    }
     let requested = value
         .and_then(Value::as_f64)
         .filter(|v| v.is_finite() && *v >= 0.0)

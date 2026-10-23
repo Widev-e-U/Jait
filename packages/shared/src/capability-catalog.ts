@@ -31,9 +31,10 @@ export const JAIT_PAGES = {
     examples: ["Start a chat", "Find a prior conversation", "Run a command in this project"],
     features: [{ id: "diagrams", description: "Render Mermaid diagrams directly in chat with preserved source and visible parse errors.", toolRefs: ["diagram.render"] },
       { id: "navigation", description: "Render an explicit link to where a Jait change happened.", toolRefs: ["jait.link"] },
+      { id: "goal_loop", description: "Continue a chat towards an explicit goal across turns, with progress, verification evidence, pause/resume and quiet completion notifications.", toolRefs: ["loop.goal", "loop.status", "loop.check", "loop.pause", "loop.resume"] },
       { id: "history", description: "Search persisted conversations and inspect exact chat traces.", toolRefs: ["session.search", "chat.traces"] },
       { id: "workspace", description: "Read, edit, search, execute, and preview work in the active project.", toolRefs: ["read", "edit", "search", "jait.terminal", "preview.open"] }],
-    toolPrefixes: ["chat.", "session.", "file.", "terminal.", "preview.", "browser.", "web.", "project.", "surface.", "screen.", "voice.", "architecture."],
+    toolPrefixes: ["loop.", "chat.", "session.", "file.", "terminal.", "preview.", "browser.", "web.", "project.", "surface.", "screen.", "voice.", "architecture."],
   },
   messenger: {
     queryParameters: { q: "Filter conversations by name or network.", messageQ: "Search loaded decrypted message text; bounded to 50 joined rooms, not complete history.", service: "Filter conversations by exact service label, e.g. WhatsApp.", roomId: "Select a Matrix conversation.", homeserver: "Prefill existing Matrix homeserver sign-in; no credentials.", username: "Optional Matrix username to prefill." },

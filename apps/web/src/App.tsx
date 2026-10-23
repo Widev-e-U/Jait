@@ -5745,6 +5745,7 @@ function App() {
                         activeProjectDisplayName={activeProjectDisplayName}
                         activeProjectRoot={activeProjectRoot}
                         activeSessionId={activeSessionId}
+                        sessionMetadata={activeSessionRecord?.metadata}
                         availableFilesForMention={availableFilesForMention}
                         availableSkills={availableSkills}
                         changedFiles={changedFiles}

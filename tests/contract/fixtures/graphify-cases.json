@@ -1,0 +1,1387 @@
+{
+  "cases": [
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": ".",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": ".",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": ".",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": ".",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state/a/../b//",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state/a/../b//",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state/a/../b//",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "/state/a/../b//",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "relative/state",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "relative/state",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "relative/state",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "relative/state",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "C:\\state\\dir",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "C:\\state\\dir",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "C:\\state\\dir",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "C:\\state\\dir",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "//state//root",
+      "env": {}
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "//state//root",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": ""
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "//state//root",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " ﻿ "
+      }
+    },
+    {
+      "op": "nativegraphify.paths",
+      "name": "path and command",
+      "jaitDir": "//state//root",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom-command "
+      }
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe 'Graphify 0.9.30'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '0.9.30'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "0.9.30"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe 'a0.9.30beta'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "a0.9.30beta"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '10.9.30'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "10.9.30"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '0.9.301'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "0.9.301"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '0.9.30.1'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "0.9.30.1"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '①0.9.30②'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "①0.9.30②"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '０0.9.30１'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "０0.9.30１"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '0.9.30\\n'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '\\ufeff0.9.30\\ufeff'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "﻿0.9.30﻿"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe 'Graphify 0.9.1'",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.1"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe ''",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": ""
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "managed probe '   '",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": "   "
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "stderr probe",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stderr": " Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "stdout whitespace wins",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "stdout": " ",
+          "stderr": "Graphify 0.9.30"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "probe error",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "probe error",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "thrown": null
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "probe error",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "thrown": {
+            "untrusted": "banner"
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "probe error",
+      "actions": [
+        "inspect"
+      ],
+      "responses": [
+        {
+          "error": {
+            "message": ""
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "custom validate",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom "
+      },
+      "responses": [
+        {
+          "stdout": "custom build"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "custom validate",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom "
+      },
+      "responses": [
+        {
+          "stdout": ""
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "custom validate",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": " custom "
+      },
+      "responses": [
+        {
+          "stdout": " "
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "custom error",
+      "env": {
+        "JAIT_GRAPHIFY_COMMAND": "custom"
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "ready installation",
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "ready ensures probe again",
+      "actions": [
+        "ensure",
+        "ensure"
+      ],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "new install",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "parallel shared install",
+      "actions": [
+        "parallel"
+      ],
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          },
+          "delay": 10
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "failed install retry",
+      "actions": [
+        "inspect",
+        "ensure"
+      ],
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "no files",
+      "actions": [
+        "files"
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "command file exists",
+      "actions": [
+        "files"
+      ],
+      "files": [
+        "state/runtime/graphify/venv/bin/graphify"
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "metadata clock zero",
+      "clock": 0,
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 3.9.99",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.9.99"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 3.10",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.10"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 4.0",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 4.0"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 3.010",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.010"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection PYTHON﻿3.10rc1",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "PYTHON﻿3.10rc1"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection noise python 3.11.1",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "noise python 3.11.1"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python3.12",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python3.12"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python\t3.10",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python\t3.10"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python ٣.١٢",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python ٣.١٢"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 3.9\nPython 3.12",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.9\nPython 3.12"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 999999999999999999999999999999999",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999.1"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection Python 3.9999999999999999999999999999999",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection unknown",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "unknown"
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python selection ",
+      "env": {
+        "JAIT_GRAPHIFY_PYTHON": " configured-python "
+      },
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": ""
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.30\n"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "no supported python",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.9.1"
+        },
+        {
+          "stderr": "Python 2.7"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "python errors",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "thrown": "bad"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "venv failure",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {
+          "error": {
+            "message": "venv unavailable",
+            "code": 1
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "pip failure",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {
+          "thrown": {
+            "error": "pip"
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "post-install validation mismatch",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {
+          "stdout": "Graphify 0.9.29"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runtime",
+      "name": "post-install validation empty",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "Python 3.12.3\n"
+        },
+        {},
+        {},
+        {}
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version channel selection",
+      "versionOnly": true,
+      "responses": [
+        {
+          "stdout": " version\n",
+          "stderr": "err"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version channel selection",
+      "versionOnly": true,
+      "responses": [
+        {
+          "stdout": "",
+          "stderr": " stderr version "
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version channel selection",
+      "versionOnly": true,
+      "responses": [
+        {
+          "stdout": " ",
+          "stderr": "meaningful"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version channel selection",
+      "versionOnly": true,
+      "responses": [
+        {
+          "stdout": "",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version error class",
+      "versionOnly": true,
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version error class",
+      "versionOnly": true,
+      "responses": [
+        {
+          "unavailable": true
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version error class",
+      "versionOnly": true,
+      "responses": [
+        {
+          "runtimeError": "runtime failure"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version error class",
+      "versionOnly": true,
+      "responses": [
+        {
+          "thrown": null
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "version error class",
+      "versionOnly": true,
+      "responses": [
+        {
+          "error": {
+            "message": "spoofed",
+            "name": "GraphifyUnavailableError"
+          }
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build output selection",
+      "command": "custom",
+      "ensure": {},
+      "files": [],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {
+          "stdout": "\nraw output \n",
+          "stderr": " warning \n",
+          "cancel": true
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build output selection",
+      "command": "custom",
+      "ensure": {},
+      "files": [
+        "output/graph.json"
+      ],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {
+          "stdout": "\nraw output \n",
+          "stderr": " warning \n",
+          "cancel": true
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build output selection",
+      "command": "custom",
+      "ensure": {},
+      "files": [
+        "output/graphify-out/graph.json"
+      ],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {
+          "stdout": "\nraw output \n",
+          "stderr": " warning \n",
+          "cancel": true
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build output selection",
+      "command": "custom",
+      "ensure": {},
+      "files": [
+        "output/graph.json",
+        "output/graphify-out/graph.json"
+      ],
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {
+          "stdout": "\nraw output \n",
+          "stderr": " warning \n",
+          "cancel": true
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build missing version",
+      "responses": [
+        {
+          "error": {
+            "message": "missing",
+            "code": "ENOENT"
+          }
+        },
+        {
+          "stdout": "done"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build unavailable version",
+      "responses": [
+        {
+          "unavailable": true
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "ensure failure",
+      "ensure": {
+        "runtimeError": "install failed"
+      }
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "build failure",
+      "ensure": {},
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {
+          "thrown": "extract failed"
+        }
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "custom empty command",
+      "command": "",
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {}
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "environment override",
+      "env": {
+        "GRAPHIFY_QUERY_LOG_DISABLE": "0",
+        "EXTRA": "value"
+      },
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {}
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "already aborted signal",
+      "aborted": true,
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {}
+      ]
+    },
+    {
+      "op": "nativegraphify.runner",
+      "name": "signal omitted",
+      "noSignal": true,
+      "responses": [
+        {
+          "stdout": "Graphify 0.9.30\n"
+        },
+        {}
+      ]
+    }
+  ]
+}

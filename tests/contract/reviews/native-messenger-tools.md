@@ -39,3 +39,10 @@ This grants only tool-factory credit; the existing bridge is a separate componen
 Evidence is saved under `.jait/artifacts/gateway-rust/messenger-tools/`. Focused
 checks alone do not grant shared frozen-gate credit. No production activation,
 database schema or environment change is part of this slice.
+
+Eight isolated deliberate regressions are caught and restored: selected action,
+command-validation bypass, limit forwarding, owner forwarding, cancellation,
+non-loopback HTTP, embedded credentials and query-bearing sign-in links. The
+restored seven-test suite, strict Clippy, formatting and artifact checks pass.
+The mutation harness first passes the unchanged baseline and copies only the
+adapter and private text helper into generated storage; no live source is mutated.

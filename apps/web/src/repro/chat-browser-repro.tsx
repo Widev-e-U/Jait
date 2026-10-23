@@ -13,17 +13,20 @@ function BrowserChatFixture() {
   const [started, setStarted] = useState(!fixture?.initiallyUnused)
   const [extraActions, setExtraActions] = useState(0)
   const [otherChat, setOtherChat] = useState(false)
+  const [userSends, setUserSends] = useState(0)
   const sessionId = fixture?.sessionId ?? 'chat-fixture'
   const firstCall = fixture?.call ?? call
   const messages = started ? [
     { id: 'first', content: '', toolCalls: [firstCall] },
-    ...Array.from({ length: extraActions }, (_, index) => ({ id: `action-${index}`, content: '', toolCalls: [{ ...firstCall, callId: `click-${index}`, tool: 'browser.click', args: { selector: '#next' } }] })),
     ...Array.from({ length: fixture?.messageCount ?? 30 }, (_, index) => ({ id: `text-${index}`, content: `Chat message ${index}`, toolCalls: [] })),
+    ...Array.from({ length: userSends }, (_, index) => ({ id: `user-${index}`, role: 'user' as const, content: `User message ${index}`, toolCalls: [] })),
+    ...Array.from({ length: extraActions }, (_, index) => ({ id: `action-${index}`, content: '', toolCalls: [{ ...firstCall, callId: `click-${index}`, tool: 'browser.click', args: { selector: '#next' } }] })),
   ] : [{ id: 'intro', content: 'Open a page in the browser to begin.', toolCalls: [] }]
   return <TooltipProvider><main className="mx-auto flex h-screen max-w-3xl flex-col p-4">
     <h1 className="mb-4 text-xl">Browser in chat</h1>
     <div className="flex gap-3 pb-2">
       <button onClick={() => { setStarted(true); setExtraActions(value => value + 1) }}>{started ? 'Another browser action' : 'Open browser'}</button>
+      <button onClick={() => setUserSends(value => value + 1)}>Send user message</button>
       <button onClick={() => setOtherChat(value => !value)}>Switch chat</button>
     </div>
     <Conversation sessionId={otherChat ? 'other-chat' : sessionId} messageEstimateInputs={otherChat ? [] : messages} messageContents={messages.map(message => message.content)}>

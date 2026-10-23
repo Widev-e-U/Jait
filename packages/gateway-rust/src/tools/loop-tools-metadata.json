@@ -1,0 +1,132 @@
+[
+  {
+    "page": "chat",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "tier": "standard",
+    "category": "meta",
+    "source": "builtin",
+    "name": "loop.goal",
+    "displayName": "Chat loop goal",
+    "description": "Turn this chat into a persistent goal loop, only when the user requests autonomous continuation. Replaces the previous goal. Continues across chat completions until verified complete, paused, waiting for input, or an error. Preserves existing tool consent and security scope. Routine completion notifications are muted.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": [
+        "goal",
+        "criteria"
+      ]
+    }
+  },
+  {
+    "page": "chat",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "tier": "standard",
+    "category": "meta",
+    "source": "builtin",
+    "name": "loop.status",
+    "displayName": "Chat loop status",
+    "description": "Read this chat's loop goal, acceptance criteria, current revision, progress, next message and verification evidence.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "page": "chat",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "tier": "standard",
+    "category": "meta",
+    "source": "builtin",
+    "name": "loop.check",
+    "displayName": "Check loop goal",
+    "description": "Evaluate the active goal before ending each turn. Continue with a concrete next message, wait for user input, or complete with one verified evidence entry per acceptance criterion. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "number"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "continue",
+            "complete",
+            "waiting"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "nextMessage": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "outcome",
+        "summary"
+      ]
+    }
+  },
+  {
+    "page": "chat",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "tier": "standard",
+    "category": "meta",
+    "source": "builtin",
+    "name": "loop.pause",
+    "displayName": "Pause chat loop",
+    "description": "Pause automatic continuation after the current turn. The goal and progress remain saved.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "page": "chat",
+    "risk": "low",
+    "defaultConsentLevel": "none",
+    "tier": "standard",
+    "category": "meta",
+    "source": "builtin",
+    "name": "loop.resume",
+    "displayName": "Resume chat loop",
+    "description": "Resume this chat's saved goal loop after the user requests continuation. Does not bypass pending questions or approvals.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

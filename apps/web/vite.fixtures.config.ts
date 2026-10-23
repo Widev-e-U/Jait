@@ -9,6 +9,8 @@ export default defineConfig({
   optimizeDeps: {
     ...base.optimizeDeps,
     entries: [
+      'src/e2e-fixtures/chat-column-alignment.tsx',
+      'src/e2e-fixtures/chat-loop.tsx',
       'src/e2e-fixtures/email-workspace.tsx',
       'src/e2e-fixtures/browser-controls.tsx',
       'src/e2e-fixtures/messenger-tools.tsx',
@@ -16,6 +18,7 @@ export default defineConfig({
       'src/e2e-fixtures/agents-graph-layout.tsx',
       'src/e2e-fixtures/sidebar-overflow.tsx',
       'src/e2e-fixtures/message-attachment-regressions.tsx',
+      'src/e2e-fixtures/message-send-status.tsx',
       'src/e2e-fixtures/queue-edit-workspace.tsx',
       'src/e2e-fixtures/queue-selection.tsx',
       'src/e2e-fixtures/queued-attachments.tsx',

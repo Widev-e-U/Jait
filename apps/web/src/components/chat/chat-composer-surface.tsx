@@ -13,7 +13,10 @@ export function ChatComposerSurface({ children, className }: ChatComposerSurface
     <footer
       data-chat-composer-surface="true"
       className={cn(
-        'px-1 py-1',
+        // No horizontal padding here: callers sit flush on the shared chat
+        // column edge and PromptInput insets its own text, so the box lines up
+        // with the transcript gutter instead of drifting inward by a few px.
+        'py-1',
         className,
       )}
     >

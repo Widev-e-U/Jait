@@ -28,3 +28,24 @@ describe('AssistantBody message-part reveal', () => {
     expect(markup).toContain('chat-message-part-reveal-inner')
   })
 })
+
+
+describe('AssistantBody error retry', () => {
+  const error = { type: 'error' as const, content: 'The model provider is experiencing issues (502). Please try again later.' }
+
+  it('offers Retry for a final provider error when a handler is available', () => {
+    const markup = renderToStaticMarkup(<AssistantBody segments={[error]} onTryContinue={() => {}} />)
+    expect(markup).toContain('Retry</button>')
+    expect(markup).not.toContain('disabled=""')
+  })
+
+  it.each([{ isContinuing: true }, { isStreaming: true }])('disables Retry while busy: %j', (busy) => {
+    const markup = renderToStaticMarkup(<AssistantBody segments={[error]} onTryContinue={() => {}} {...busy} />)
+    expect(markup).toContain('disabled=""')
+  })
+
+  it('does not offer Retry without a handler or after a later response', () => {
+    expect(renderToStaticMarkup(<AssistantBody segments={[error]} />)).not.toContain('Retry</button>')
+    expect(renderToStaticMarkup(<AssistantBody segments={[error, { type: 'text', content: 'Recovered' }]} onTryContinue={() => {}} />)).not.toContain('Retry</button>')
+  })
+})

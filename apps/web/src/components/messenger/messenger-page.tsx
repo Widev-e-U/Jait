@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { automaticReadAllowed } from '@/lib/messenger/notification-actions'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -23,6 +24,7 @@ import { useMessenger } from './messenger-provider'
 import { MAX_ATTACHMENT_BYTES, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
 import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
+import { CenteredBadgeText } from './centered-badge-text'
 
 function ConnectionForm() {
   const { store, snapshot } = useMessenger()
@@ -54,7 +56,6 @@ function ConnectionForm() {
       <Button type="submit" className="w-full gap-2" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}{busy ? 'Connecting…' : 'Connect Matrix'}</Button>
       <button type="button" className="text-xs text-muted-foreground underline" disabled={busy} onClick={() => { setUseToken(!useToken); setPassword(''); setToken('') }}>{useToken ? 'Use a password instead' : 'Use a device access token (SSO accounts)'}</button>
     </form>
-    {snapshot.error && <p role="alert" className="text-sm text-destructive">{snapshot.error}</p>}
     {(busy || snapshot.error) && <Button variant="outline" size="sm" onClick={() => void store.disconnect().catch(() => {})}>{busy ? 'Cancel connection' : 'Clear saved connection'}</Button>}
     <p className="text-xs text-muted-foreground">Your password is never saved. Your gateway keeps one Matrix connection and its encryption keys for all your signed-in Jait devices. Messages are not sent to AI unless you enable assistant access in Connections.</p>
     <details className="rounded-lg border p-4 text-sm">
@@ -69,7 +70,9 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const { store, snapshot } = useMessenger()
   const confirm = useConfirmDialog()
   const historyBusy = useRef(false)
+  const historyErrorToast = useRef<string | number | undefined>(undefined)
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyFailedRoom, setHistoryFailedRoom] = useState<string | null>(null)
   // Messenger options are their own pane, not a drawer sliding over the conversation list.
   const [pane, setPane] = useUrlSearchState('messenger', 'pane')
   const optionsOpen = pane === 'options'
@@ -80,7 +83,10 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const service = serviceValue || 'All'
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  const [actionError, setActionError] = useState('')
+  useEffect(() => {
+    if (snapshot.error) toast.error(snapshot.error, { id: 'messenger-connection-error' })
+    else toast.dismiss('messenger-connection-error')
+  }, [snapshot.error])
   const composerRef = useRef<PromptInputHandle>(null)
   const mobile = useIsMobile()
   const roomId = snapshot.selectedRoomId
@@ -94,7 +100,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
     sttProvider,
     // Every recording supplies its own room-bound target below.
     setInputValue: () => {},
-    onAuthRequired: () => setActionError('Sign in to Jait to use dictation.'),
+    onAuthRequired: () => toast.error('Sign in to Jait to use dictation.'),
   })
   const dictate = () => {
     if (!roomId || !ready || busy || voiceRecording || voiceTranscribing) return
@@ -133,10 +139,22 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   }
   const chatRooms = rooms.filter(room => room.kind !== 'channel' && room.kind !== 'team')
   const roomRow = (item: MessengerRoom, channel = false) => (
-    <div key={item.id} role="group" aria-label={'Conversation ' + item.name} data-room-kind={item.kind ?? 'chat'} className="group/room flex min-w-0 items-center border-b border-border/50"><button onClick={() => selectRoom(item.id)} aria-pressed={item.id === roomId} className={'flex min-w-0 flex-1 gap-3 p-3 text-left hover:bg-muted/60 ' + (item.id === roomId ? 'bg-secondary' : '')}>
-      <MessengerPeerAvatar size="lg" showPresence={false} {...chatListAvatarProps(item, channel)} />
-      <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-medium">{channel ? '#' + item.name : item.name}</span>{(item.unread > 0 || item.markedUnread) && <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{item.unread || <span aria-label="Unread">•</span>}</span>}</span><span className="block truncate text-2xs text-muted-foreground">{item.team ? item.team + ' · ' + item.service : item.service}{!item.team && item.network ? ' · ' + item.network : ''}{item.membership === 'invite' ? ' · Invitation' : ''}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.preview}</span></span>
-    </button>{roomMenu(item, 'Options for ' + item.name)}</div>
+    <div key={item.id} role="group" aria-label={'Conversation ' + item.name} data-room-kind={item.kind ?? 'chat'} className={'group/room flex min-w-0 items-center border-b border-border/50 ' + (item.id === roomId ? 'bg-secondary' : 'hover:bg-muted/60 [&:has([data-state=open])]:bg-muted/60')}>
+      <button onClick={() => selectRoom(item.id)} aria-pressed={item.id === roomId} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 text-left">
+        <MessengerPeerAvatar size="md" showPresence={false} {...chatListAvatarProps(item, channel)} />
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-medium leading-4">{channel ? '#' + item.name : item.name}</span>
+            <span className="max-w-[55%] shrink-0 truncate text-2xs leading-4 text-muted-foreground" title={[item.service, item.team || item.network, item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
+              {item.service}{item.team || item.network ? ' · ' + (item.team || item.network) : ''}{item.membership === 'invite' ? ' · Invitation' : ''}
+            </span>
+          </span>
+          <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{item.preview}</span>
+        </span>
+        {(item.unread > 0 || item.markedUnread) && <span aria-label={item.unread > 0 ? `${item.unread} unread messages` : 'Unread'} className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-center text-[10px] font-semibold text-primary-foreground tabular-nums"><CenteredBadgeText text={item.unread > 99 ? '99+' : item.unread || '•'} /></span>}
+      </button>
+      {roomMenu(item, 'Options for ' + item.name, true)}
+    </div>
   )
 
   useEffect(() => {
@@ -175,14 +193,14 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   }, [snapshot.session])
   const act = async (action: () => Promise<unknown>, errorText?: string) => {
     setBusy(true)
-    setActionError('')
     try { await action() }
-    catch (error) { setActionError(errorText ?? messengerError(error)) }
+    catch (error) { toast.error(errorText ?? messengerError(error)) }
     finally { setBusy(false) }
   }
   const selectRoom = (id: string | null) => {
     store.selectRoom(id)
-    setActionError('')
+    setHistoryFailedRoom(null)
+    if (historyErrorToast.current !== undefined) toast.dismiss(historyErrorToast.current)
     const url = new URL(window.location.href)
     if (id) url.searchParams.set('roomId', id)
     else url.searchParams.delete('roomId')
@@ -197,24 +215,34 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
     // store's local echo, so waiting for the gateway would only look laggy.
     const sending = store.send(target, text)
     composer?.reset()
-    setActionError('')
     setDrafts(current => ({ ...current, [target]: current[target] === text ? '' : current[target] }))
     void sending.catch(error => {
-      setActionError(messengerError(error))
+      toast.error(messengerError(error))
       setDrafts(current => ({ ...current, [target]: current[target] || text }))
     })
   }
 
-  const loadEarlier = async () => {
-    if (historyBusy.current || !ready) return
+  const loadEarlier = async (target = roomId) => {
+    if (historyBusy.current || !ready || !target || store.getSnapshot().selectedRoomId !== target) return
     historyBusy.current = true
     setLoadingHistory(true)
-    try { await store.loadEarlier() }
-    catch { setActionError('Could not load earlier messages. Please try again.') }
+    try {
+      await store.loadEarlier()
+      setHistoryFailedRoom(null)
+      if (historyErrorToast.current !== undefined) toast.dismiss(historyErrorToast.current)
+    } catch {
+      // Pause automatic pagination until an explicit retry; repeated failures
+      // must not keep fetching or flood the user with notifications.
+      setHistoryFailedRoom(target)
+      historyErrorToast.current = toast.error('Could not load earlier messages. Please try again.', {
+        duration: Infinity,
+        action: { label: 'Retry', onClick: () => void loadEarlier(target) },
+      })
+    }
     finally { historyBusy.current = false; setLoadingHistory(false) }
   }
-  const roomMenu = (item: MessengerRoom, label: string) => <DropdownMenu>
-    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="mr-1 h-8 w-8 shrink-0" aria-label={label} disabled={!ready || busy}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+  const roomMenu = (item: MessengerRoom, label: string, inList = false) => <DropdownMenu>
+    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className={'mr-1 h-8 w-8 shrink-0 hover:text-foreground data-[state=open]:text-foreground ' + (inList ? 'bg-transparent hover:bg-transparent data-[state=open]:bg-transparent' : 'hover:bg-muted focus-visible:bg-muted data-[state=open]:bg-muted')} aria-label={label} disabled={!ready || busy}><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end">
       {item.membership === 'join' && <DropdownMenuItem onSelect={() => void act(async () => {
         if (item.unread > 0 || item.markedUnread) await store.markRead(item.id)
@@ -234,8 +262,6 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
     {/* No page title chrome: the conversation list toolbar is the only header the page needs.
         Status stays in the tree so screen readers still get the connection state. */}
     <span role="status" className="sr-only">{snapshot.status === 'ready' ? 'Connected' : snapshot.status === 'disconnected' ? 'Matrix' : snapshot.status}</span>
-    {connected && snapshot.error && <p role="alert" className="border-b bg-muted px-4 py-2 text-sm">{snapshot.error}</p>}
-    {actionError && <div className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm text-destructive" role="alert">{actionError}<button aria-label="Dismiss error" onClick={() => setActionError('')}><X className="h-4 w-4" /></button></div>}
     {!connected ? <div className="flex min-h-0 flex-1 overflow-y-auto"><ConnectionForm /></div>
       : optionsOpen ? <MessengerOptions onBack={() => setPane('')} onOpenConversation={id => { selectRoom(id); setPane('') }} />
       : <>
@@ -263,15 +289,15 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
               const unread = entry.channels.reduce((sum, item) => sum + (item.unread || 0) + (item.markedUnread ? 1 : 0), 0)
               const collapsed = collapsedTeams.has(name)
               return <div key={'team:' + name} data-team-section={name} className="border-b border-border/50">
-                <button type="button" onClick={() => toggleTeam(name)} aria-expanded={!collapsed} aria-label={'Team ' + name} className="flex w-full min-w-0 items-center gap-3 px-3 py-2 text-left hover:bg-muted/50">
+                <button type="button" onClick={() => toggleTeam(name)} aria-expanded={!collapsed} aria-label={'Team ' + name} className="flex w-full min-w-0 items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50">
                   <MessengerPeerAvatar
                     name={name}
-                    size="lg"
+                    size="md"
                     rounded="lg"
                     showPresence={false}
                     {...(entry.hub?.avatarUrl ? { mxcUrl: entry.hub.avatarUrl } : {})}
                   />
-                  <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{name}</span><span className="flex items-center gap-2">{unread > 0 && <span className="rounded-full bg-primary px-1.5 text-xs text-primary-foreground">{unread}</span>}<ChevronDown className={'h-4 w-4 text-muted-foreground transition-transform ' + (collapsed ? '-rotate-90' : '')} /></span></span><span className="block truncate text-2xs text-muted-foreground">{entry.hub?.service ?? entry.channels[0]?.service ?? 'Team'} · {entry.channels.length} {entry.channels.length === 1 ? 'channel' : 'channels'}</span></span>
+                  <span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold">{name}</span><span className="flex items-center gap-2">{unread > 0 && <span aria-label={`${unread} unread messages`} className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-center text-[10px] font-semibold text-primary-foreground tabular-nums"><CenteredBadgeText text={unread > 99 ? '99+' : unread} /></span>}<ChevronDown className={'h-4 w-4 text-muted-foreground transition-transform ' + (collapsed ? '-rotate-90' : '')} /></span></span><span className="block truncate text-2xs text-muted-foreground">{entry.hub?.service ?? entry.channels[0]?.service ?? 'Team'} · {entry.channels.length} {entry.channels.length === 1 ? 'channel' : 'channels'}</span></span>
                 </button>
                 {!collapsed && entry.channels.map(channel => roomRow(channel, true))}
               </div>
@@ -293,7 +319,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
                 mobile={mobile}
                 messageContents={messages.map(message => message.body)}
                 messageEstimateInputs={messages.map(message => ({ content: message.body, role: message.own ? 'user' : 'assistant' }))}
-                hasMore={ready && !loadingHistory && !!snapshot.hasEarlier}
+                hasMore={ready && !loadingHistory && historyFailedRoom !== room.id && !!snapshot.hasEarlier}
                 onLoadMore={() => void loadEarlier()}
               >
                 {messages.map((message, index) => <div key={message.id} className={groupPositions[index]?.end === false ? 'pb-1.5' : 'pb-3'}>
@@ -330,16 +356,15 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
                     onFilesSelected={files => {
                       if (!ready || busy) return
                       if (files.some(file => file.size > MAX_ATTACHMENT_BYTES)) {
-                        setActionError('Attachment exceeds 20 MB.')
+                        toast.error('Attachment exceeds 20 MB.')
                         return
                       }
                       // Upload without the global busy lock: the store renders
                       // each file as a pending message, so the composer stays
                       // usable while the bytes are in flight.
-                      setActionError('')
                       void (async () => {
                         try { for (const file of files) await store.sendAttachment(room.id, file) }
-                        catch (error) { setActionError(messengerError(error)) }
+                        catch (error) { toast.error(messengerError(error)) }
                       })()
                     }}
                   />

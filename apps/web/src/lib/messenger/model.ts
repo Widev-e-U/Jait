@@ -87,6 +87,7 @@ export function bridgeLabel(content: Record<string, unknown> | undefined): { ser
   const known: Record<string, string> = {
     whatsapp: 'WhatsApp', telegram: 'Telegram', signal: 'Signal',
     'microsoft-teams': 'Teams', msteams: 'Teams', teams: 'Teams',
+    'go.mau.fi/mautrix-teams': 'Teams',
     discord: 'Discord', slack: 'Slack', googlechat: 'Google Chat',
   }
   return {

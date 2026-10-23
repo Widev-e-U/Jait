@@ -91,7 +91,7 @@ export function DeveloperComposerControlRow({
 
   return (
     <>
-      <ChatComposerSurface>
+      <ChatComposerSurface className="px-3 sm:px-4">
       <div className={`${compact ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
         <div className={`${compact ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
           <div className={`${compact ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>

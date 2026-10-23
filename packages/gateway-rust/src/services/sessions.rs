@@ -470,6 +470,13 @@ impl<'a> SessionService<'a> {
         let mut metadata = self
             .metadata(source_id, Some(user))?
             .expect("existing session");
+        // A question branch never inherits the parent's autonomous loop.
+        if metadata.get().starts_with('{') {
+            let mut object: RawObject =
+                serde_json::from_str(metadata.get()).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            object.remove("loop");
+            metadata = raw_json(&serde_json::to_string(&object).expect("metadata object"));
+        }
         raw_property(
             &mut metadata,
             "branch",

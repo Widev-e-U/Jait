@@ -1,3 +1,4 @@
+import { configureContextEvidence, createContextReadTool } from "./context-evidence.js";
 import { createTerminalExecutionTool } from "./terminal-execution.js";
 import { createDecisionEvaluateTool } from "./decision.js";
 export type {
@@ -303,7 +304,11 @@ import {
   createJaitTool,
 } from "./core/index.js";
 
+import { createLoopTools } from "./loop-tools.js";
+import type { ChatLoopService } from "../services/chat-loops.js";
+
 export interface ToolRegistryDeps {
+  chatLoops?: ChatLoopService;
   scheduler?: SchedulerService;
   sessionService?: SessionService;
   ws?: WsControlPlane;
@@ -380,6 +385,8 @@ export function createToolRegistry(
   deps: ToolRegistryDeps = {},
 ): ToolRegistry {
   const tools = new ToolRegistry();
+  if (deps.sessionState) configureContextEvidence(deps.sessionState);
+  tools.register(createContextReadTool());
 
   /**
    * Terminal commands run by an agent thread authorise as that agent's own
@@ -405,6 +412,7 @@ export function createToolRegistry(
   tools.register(createSearchTool(surfaceRegistry));
   tools.register(createWebTool());
   tools.register(createTodoTool());
+  if (deps.chatLoops) for (const tool of createLoopTools(deps.chatLoops)) tools.register(tool);
   tools.register(createJaitTool({
     memoryService: deps.memoryService,
     reminderService: deps.reminderService,

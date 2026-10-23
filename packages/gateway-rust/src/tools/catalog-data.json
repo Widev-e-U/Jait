@@ -30,6 +30,17 @@
           ]
         },
         {
+          "id": "goal_loop",
+          "description": "Continue a chat towards an explicit goal across turns, with progress, verification evidence, pause/resume and quiet completion notifications.",
+          "toolRefs": [
+            "loop.goal",
+            "loop.status",
+            "loop.check",
+            "loop.pause",
+            "loop.resume"
+          ]
+        },
+        {
           "id": "history",
           "description": "Search persisted conversations and inspect exact chat traces.",
           "toolRefs": [
@@ -50,6 +61,7 @@
         }
       ],
       "toolPrefixes": [
+        "loop.",
         "chat.",
         "session.",
         "file.",

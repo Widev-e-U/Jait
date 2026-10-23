@@ -92,3 +92,7 @@ pub mod provider_quota_fetchers;
 pub mod session_sql;
 
 pub mod reminders;
+
+pub mod context_budget;
+
+pub mod chat_loops;

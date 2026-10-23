@@ -1,3 +1,6 @@
+import { applyContextCaching } from "../services/context-cache.js";
+import { contextBudget, contextBudgetFromJson, boundSummaryInput, captureUsageAnchor, estimateAnchoredContext, pruneToolContext, compactionPlan, shouldCommitCompaction, priceTokenUsage, type ContextBudget, type UsageAnchor, type TokenPrices } from "../services/context-budget.js";
+import { loadContextState, saveContextState, projectToolEvidence } from "./context-evidence.js";
 import { serializeToolResultForModel } from "./model-result.js";
 import { fetchJaitLlm } from "../services/opencode-go-fetch.js";
 import { llmRequestHeaders } from "../services/llm-headers.js";
@@ -31,6 +34,12 @@ function isAgentSpawnToolName(name: string): boolean {
   return name === ToolName.AgentSpawn || name === ToolName.CoreAgent;
 }
 
+function projectToolHistory(result: ToolResult, sessionId: string, userId?: string, toolName?: string): Pick<AgentMessage, "content" | "evidenceReference"> {
+  if (!userId) return { content: serializeToolResultForModel(result) };
+  const projected = projectToolEvidence(result, { sessionId, userId }, toolName);
+  return { content: projected.content, ...(projected.reference ? { evidenceReference: projected.reference } : {}) };
+}
+
 // ── Public types ─────────────────────────────────────────────────────
 
 /** Wire format for a single OpenAI tool call */
@@ -42,6 +51,8 @@ export interface OpenAIToolCall {
 
 /** A chat message in the conversation history */
 export interface AgentMessage {
+  /** Recovery handle for model-only pruning; omitted from the wire transcript. */
+  evidenceReference?: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   tool_calls?: OpenAIToolCall[];
@@ -91,6 +102,10 @@ export interface LlmContextFlowRound {
 
 /** Per-round performance and token metrics. */
 export interface RoundMetrics {
+  /** Configured-rate estimate, never an authoritative invoice. Unknown counters remain unknown. */
+  cost?: { amount: number; currency: string; basis: "configured-rates" };
+  contextAccounting?: { tokens: number; source: "provider-anchor" | "estimate" };
+
   requestCount?: number;
   /** Wall-clock duration of the LLM request in ms. */
   durationMs: number;
@@ -119,6 +134,11 @@ export interface RoundMetrics {
 
 /** LLM connection config */
 export interface LLMConfig {
+  contextBudget?: Partial<ContextBudget>;
+  /** Explicit auxiliary route; never switches the conversation's primary model. */
+  compressionLlm?: LLMConfig;
+  tokenPrices?: TokenPrices;
+
   openaiApiKey: string;
   openaiBaseUrl: string;
   openaiModel: string;
@@ -1524,6 +1544,7 @@ interface ParsedStream {
     completion_tokens: number;
     total_tokens: number;
     cached_tokens?: number;
+    cache_write_tokens?: number;
   };
   /**
    * Set when the stream was cut short because the model started repeating
@@ -1587,7 +1608,9 @@ export async function parseOpenAIStream(
         if (typeof u.prompt_tokens === "number" && typeof u.completion_tokens === "number") {
           const cachedTokens = u.prompt_tokens_details?.cached_tokens
             ?? u.input_tokens_details?.cached_tokens;
+          const cacheWriteTokens = u.prompt_tokens_details?.cache_write_tokens ?? u.cache_creation_input_tokens;
           usage = {
+            ...(typeof cacheWriteTokens === "number" ? { cache_write_tokens: cacheWriteTokens } : {}),
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
             total_tokens: u.total_tokens ?? (u.prompt_tokens + u.completion_tokens),
@@ -1938,7 +1961,7 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
     },
     historyEntry: {
       role: "tool",
-      content: serializeToolResultForModel(result),
+      ...projectToolHistory(result, sessionId, auth?.userId, internalName),
       tool_call_id: tc.id,
       name: tc.function.name,
     },
@@ -2845,7 +2868,7 @@ export async function generateLLMConversationSummary(
   signal?: AbortSignal,
 ): Promise<string> {
   signal?.throwIfAborted();
-  const conversationText = serializeConversationForSummary(removedMessages);
+  const conversationText = boundSummaryInput(serializeConversationForSummary(removedMessages), llm.contextWindow);
   if (!conversationText.trim()) {
     return buildStructuredConversationSummary(removedMessages);
   }
@@ -3053,7 +3076,7 @@ export async function compactActiveTurnHistory(
   history: AgentMessage[],
   toolSchemas: unknown[] = [],
   contextWindow = 0,
-  options?: { summaryGenerator: (messages: AgentMessage[]) => Promise<string> },
+  options?: { summaryGenerator: (messages: AgentMessage[]) => Promise<string>; keepToolRounds?: number },
 ): Promise<boolean> {
   let lastUserIndex = -1;
   for (let index = history.length - 1; index >= 0; index--) {
@@ -3071,9 +3094,10 @@ export async function compactActiveTurnHistory(
       toolRoundStarts.push(index);
     }
   }
-  if (toolRoundStarts.length <= ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP) return false;
+  const roundsToKeep = options?.keepToolRounds ?? ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP;
+  if (toolRoundStarts.length <= roundsToKeep) return false;
 
-  const removableRounds = toolRoundStarts.length - ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP;
+  const removableRounds = toolRoundStarts.length - roundsToKeep;
   const targetTokens = contextWindow > 0 ? Math.floor(contextWindow * PRUNE_TARGET_RATIO) : 0;
   let roundsToDrop = removableRounds;
 
@@ -3112,11 +3136,9 @@ export async function compactActiveTurnHistory(
 /** Add provider-specific cache affinity without disclosing session identifiers. */
 export function applyProviderPromptCaching(
   requestBody: Record<string, unknown>,
-  llm: Pick<LLMConfig, "backend">,
+  llm: { backend?: string; openaiModel?: string; sessionId?: string; contextBudget?: Partial<ContextBudget> },
 ): void {
-  if (llm.backend === "openai") {
-    requestBody.prompt_cache_key = "jait-agent";
-  }
+  applyContextCaching(requestBody, { backend: llm.backend, model: llm.openaiModel, sessionId: llm.sessionId }, contextBudget(llm.contextBudget));
 }
 
 export async function runAgentLoop(
@@ -3146,6 +3168,20 @@ export async function runAgentLoop(
     log = console,
   } = options;
   const llm = { ...configuredLlm, sessionId };
+  const budget = configuredLlm.contextBudget ? contextBudget(configuredLlm.contextBudget) : contextBudgetFromJson(process.env.JAIT_CONTEXT_BUDGET);
+  llm.contextBudget = budget;
+  if (!llm.tokenPrices && process.env.JAIT_TOKEN_PRICES) {
+    try { llm.tokenPrices = JSON.parse(process.env.JAIT_TOKEN_PRICES); } catch { /* no cost estimate without valid configured prices */ }
+  }
+
+  const summaryLlm = configuredLlm.compressionLlm ?? (process.env.JAIT_COMPRESSION_MODEL
+    ? { ...llm, openaiModel: process.env.JAIT_COMPRESSION_MODEL,
+        contextWindow: Number(process.env.JAIT_COMPRESSION_CONTEXT_WINDOW) > 8192 ? Number(process.env.JAIT_COMPRESSION_CONTEXT_WINDOW) : llm.contextWindow } : llm);
+  const contextScope = { sessionId, userId: auth?.userId };
+  const restored = loadContextState(contextScope) as { anchor?: UsageAnchor; lastAttempt?: number } | undefined;
+  let usageAnchor = restored?.anchor;
+  let lastCompactAttempt = restored?.lastAttempt;
+
 
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i]?.role === "system" && history[i]?.content === SYSTEM_ONE_PROMPT) history.splice(i, 1);
@@ -3402,51 +3438,43 @@ export async function runAgentLoop(
       }
     }
 
-    // ── Context budget tracking & compaction (Codex-style) ────────────
-    // Everything stays verbatim in history until usage crosses
-    // CONTEXT_COMPACT_TRIGGER_RATIO — a high fraction of the window, matching
-    // Codex's token-budget-only auto-compaction (it fires at ~90% of the model
-    // window, never by round count). When it fires, the old portion of the
-    // conversation is replaced by a single structured summary; the current
-    // request and the most recent tool rounds stay verbatim.
+    // Model-only projection. The UI and persisted executedToolCalls retain full evidence.
     const contextWindow = llm.contextWindow;
+    const identity = JSON.stringify([llm.backend, llm.openaiBaseUrl, llm.openaiModel, activeSchemas]);
     try {
       if (contextWindow > 0) {
         let usage = computeContextUsage(history, activeSchemas, contextWindow);
+        const anchored = estimateAnchoredContext(history, identity, usageAnchor, usage.total);
+        const plan = compactionPlan({ tokens: anchored.tokens, contextWindow, owner: "jait", nativeAvailable: false,
+          now: Date.now(), lastAttempt: lastCompactAttempt }, budget);
         onEvent?.({ type: "context_usage", ...usage });
-
-        if (usage.ratio >= CONTEXT_COMPACT_TRIGGER_RATIO) {
-          // Summarize completed turns (before the last user message) first.
-          const pruned = await pruneHistory(history, contextWindow, activeSchemas, {
-            summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
-          });
-          // In a long single-turn run there are no completed turns to prune, so
-          // also collapse the completed prefix of the active turn into a summary
-          // (keeps the most recent rounds verbatim). Both passes summarize rather
-          // than truncate — no tool result is ever shortened into a stub.
-          const activeTurnCompacted = await compactActiveTurnHistory(
-            history,
-            activeSchemas,
-            contextWindow,
-            { summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal) },
-          );
-          if (pruned || activeTurnCompacted) {
+        if (plan.action === "summary") {
+          let summaryAttempted = false;
+          let contextChanged = false;
+          const projected = pruneToolContext(history, budget);
+          if (projected.pruned) { history.splice(0, history.length, ...projected.messages); contextChanged = true; }
+          const before = computeContextUsage(history, activeSchemas, contextWindow).total;
+          if (before >= plan.trigger) {
+            const candidate = history.map(message => ({ ...message }));
+            const summaryGenerator = (removed: AgentMessage[]) => { summaryAttempted = true; return generateLLMConversationSummary(removed, summaryLlm, abort.signal); };
+            await pruneHistory(candidate, plan.targetWindow, activeSchemas, { summaryGenerator });
+            await compactActiveTurnHistory(candidate, activeSchemas, plan.targetWindow, { summaryGenerator, keepToolRounds: Math.max(2, Math.min(8, budget.tailToolResults * 2)) });
+            const after = computeContextUsage(candidate, activeSchemas, contextWindow).total;
+            if (shouldCommitCompaction(before, after, budget) || before >= contextWindow * 0.85 && after < before) { history.splice(0, history.length, ...candidate); contextChanged = true; }
+          }
+          // A structural no-op must not arm the cooldown and block later feasible work.
+          if (summaryAttempted || contextChanged) lastCompactAttempt = Date.now();
+          if (contextChanged) {
+            usageAnchor = undefined;
             usage = computeContextUsage(history, activeSchemas, contextWindow);
             onEvent?.({ type: "context_usage", ...usage, pruned: true });
-            log.info(
-              `Context compacted: ${usage.total}/${contextWindow} tokens (${(usage.ratio * 100).toFixed(0)}%)`,
-            );
-            // Coverage tracking describes tool results that were just summarised
-            // away. Keeping it would mark the model's legitimate re-reads of that
-            // now-invisible content as stalled orbits over the same line range.
             readCoverageByTarget.clear();
           }
+          saveContextState(contextScope, { anchor: usageAnchor, lastAttempt: lastCompactAttempt });
         }
       }
     } catch (error) {
-      if (abort.signal.aborted) {
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
-      }
+      if (abort.signal.aborted) return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
       throw error;
     }
     repairToolCallHistory(history);
@@ -3595,10 +3623,10 @@ export async function runAgentLoop(
           const emergencyUsage = computeContextUsage(history, activeSchemas, llm.contextWindow);
           if (emergencyUsage.ratio >= 0.30) {
             await pruneHistory(history, llm.contextWindow, activeSchemas, {
-              summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
+              summaryGenerator: (removed) => generateLLMConversationSummary(removed, summaryLlm, abort.signal),
             });
             await compactActiveTurnHistory(history, activeSchemas, llm.contextWindow, {
-              summaryGenerator: (removed) => generateLLMConversationSummary(removed, llm, abort.signal),
+              summaryGenerator: (removed) => generateLLMConversationSummary(removed, summaryLlm, abort.signal),
             });
           }
 
@@ -3637,6 +3665,11 @@ export async function runAgentLoop(
         metrics.cachedPromptTokens = parsed.usage.cached_tokens;
         metrics.completionTokens = parsed.usage.completion_tokens;
         metrics.totalTokens = parsed.usage.total_tokens;
+        if (llm.tokenPrices && parsed.usage.cached_tokens !== undefined && parsed.usage.cache_write_tokens !== undefined) {
+          metrics.cost = priceTokenUsage({ inputTokens: parsed.usage.prompt_tokens, cachedInputTokens: parsed.usage.cached_tokens,
+            cacheWriteTokens: parsed.usage.cache_write_tokens, outputTokens: parsed.usage.completion_tokens }, llm.tokenPrices);
+        }
+
         if (parsed.usage.completion_tokens > 0 && durationMs > 0) {
           metrics.tokensPerSecond = Math.round((parsed.usage.completion_tokens / (durationMs / 1000)) * 10) / 10;
         }
@@ -3648,7 +3681,15 @@ export async function runAgentLoop(
           metrics.tokensPerSecond = Math.round((estimatedCompletionTokens / (durationMs / 1000)) * 10) / 10;
         }
       }
-      if (roundContextUsage) metrics.contextUsage = roundContextUsage;
+      if (roundContextUsage) {
+        metrics.contextUsage = roundContextUsage;
+        metrics.contextAccounting = estimateAnchoredContext(history, identity, usageAnchor, roundContextUsage.total);
+      }
+      if (parsed.usage) {
+        usageAnchor = captureUsageAnchor(history, identity, parsed.usage.prompt_tokens, parsed.usage.completion_tokens);
+        saveContextState(contextScope, { anchor: usageAnchor, lastAttempt: lastCompactAttempt });
+      }
+
       currentRound.metrics = metrics;
     } catch (fetchErr) {
       clearEmptyResponseRecoveryPrompts();

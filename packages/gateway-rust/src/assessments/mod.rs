@@ -6,3 +6,8 @@ pub mod scope;
 
 pub mod service;
 pub mod store;
+
+pub mod workbench;
+pub mod workbench_engines;
+pub mod workbench_policy;
+pub mod workbench_store;

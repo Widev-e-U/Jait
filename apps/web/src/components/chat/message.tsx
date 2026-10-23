@@ -86,7 +86,7 @@ interface MessageProps {
   steered?: boolean
   /**
    * Delivery state of a freshly sent or edited user turn: `sending` shows a
-   * spinner beside the bubble, `sent` flashes a short acknowledgement before
+   * spinner in the bottom-right corner, `sent` flashes an acknowledgement before
    * the indicator disappears. Absent for ordinary history rows.
    */
   sendState?: 'sending' | 'sent'
@@ -111,6 +111,8 @@ interface MessageProps {
   /** Ordered interleaving of text and tool-call groups (from live streaming). */
   segments?: MessageSegment[]
   isStreaming?: boolean
+  onTryContinue?: () => void
+  isContinuing?: boolean
   compact?: boolean
   preferLlmUi?: boolean
   /** Active chat provider. Non-Jait providers still use inline tool groups. */
@@ -209,6 +211,8 @@ function MessageInner({
   toolCalls: toolCallsProp,
   segments: segmentsProp,
   isStreaming,
+  onTryContinue,
+  isContinuing,
   compact,
   preferLlmUi,
   provider: requestedProvider,
@@ -659,6 +663,24 @@ function MessageInner({
     },
   ]
 
+  // Keep delivery updates out of the bubble layout.
+  const showSendStatus = isUser && (sendState === 'sending' || showSentAck)
+  const compactMobileActions = isMobile && isUser && !messenger
+  const mobileStatusRow = compactMobileActions && canCopyMessage && messageActionItems.length > 0
+  const sendStatus = showSendStatus ? (
+    <div
+      className="pointer-events-none flex min-w-0 items-center gap-1 text-2xs font-medium leading-4 text-muted-foreground"
+      title={sendState === 'sending' ? 'Sending…' : 'Sent'}
+      aria-live="polite"
+      data-testid="user-message-send-status"
+      data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
+    >
+      {showSentAck ? <Check className="h-3 w-3 shrink-0 text-primary" /> : <Loader2 className="h-3 w-3 shrink-0 animate-spin" />}
+      <span className="truncate">{showSentAck ? 'Sent' : 'Sending…'}</span>
+    </div>
+  ) : null
+
+
   const renderActions = (outsideBubble?: boolean) => {
     if (isEditing || !canCopyMessage || messageActionItems.length === 0) return null
 
@@ -669,23 +691,30 @@ function MessageInner({
         <div
           className={cn(
             'absolute z-10',
-            getMobileMessageActionsPositionClassName(isUser, outsideBubble),
+            compactMobileActions
+              ? 'bottom-px right-2.5 flex h-4 max-w-[calc(100%-1.125rem)] items-center gap-0.5'
+              : getMobileMessageActionsPositionClassName(isUser, outsideBubble),
           )}
         >
+          {compactMobileActions && sendStatus}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="Message actions"
-                className="relative flex h-6 w-6 items-center justify-center text-muted-foreground transition-colors active:text-foreground"
+                className={cn(
+                  'relative flex shrink-0 items-center justify-center text-muted-foreground transition-colors active:text-foreground',
+                  compactMobileActions
+                    ? "h-4 w-1 before:absolute before:-inset-x-2.5 before:-inset-y-1 before:content-['']"
+                    : 'h-6 w-6',
+                )}
               >
-                {/* Pinned to the tap-area's right edge. The lucide
-                    ellipsis-vertical glyph is inset 7.33px (at 16px scale,
-                    viewBox 24) from its box's right edge but only 2.67px from
-                    its box's bottom (bottom dot r=1 at cy=19), so the box is
-                    lifted 4.67px (= 7.33 - 2.67) — that makes the visible gap
-                    to the bubble edge pixel-identical bottom vs right. */}
-                <MoreVertical className="absolute bottom-[4.67px] right-0 h-4 w-4" />
+                {compactMobileActions ? (
+                  // Crop the SVG's empty sides; retain the same dots and a 24px tap area.
+                  <MoreVertical viewBox="9 0 6 24" className="h-4 w-1" />
+                ) : (
+                  <MoreVertical className="absolute bottom-[4.67px] right-0 h-4 w-4" />
+                )}
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top" className="min-w-[10rem]">
@@ -713,7 +742,7 @@ function MessageInner({
       <div
         className={cn(
           'absolute z-10 rounded-md border border-border/60 bg-background/95 p-0.5 shadow-sm',
-          outsideBubble ? 'right-1 bottom-1' : 'right-1 bottom-[.25rem]',
+          showSendStatus ? 'right-1 bottom-5' : outsideBubble ? 'right-1 bottom-1' : 'right-1 bottom-[.25rem]',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           copied && 'opacity-100',
         )}
@@ -854,6 +883,8 @@ function MessageInner({
                 preferLlmUi={preferLlmUi}
                 onOpenPath={onOpenPath}
                 capNonSteeringWidth={hasSteeringSegment}
+                onTryContinue={onTryContinue}
+                isContinuing={isContinuing}
               />
 
               <div className={cn('min-w-0', hasSteeringSegment && 'max-w-[85%]')}>
@@ -1058,25 +1089,9 @@ function MessageInner({
                         </div>
                         {messenger?.attachment}
                       </div>
-                      {isUser && (sendState === 'sending' || showSentAck) && (
-                        <div
-                          className="-mb-2 mt-1 flex items-center justify-end gap-1 text-2xs font-medium leading-4 text-muted-foreground"
-                          aria-live="polite"
-                          data-testid="user-message-send-status"
-                          data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
-                        >
-                          {showSentAck ? (
-                            <>
-                              <Check className="h-3 w-3 text-primary" />
-                              <span>Sent</span>
-                            </>
-                          ) : (
-                            <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              <span>Sending…</span>
-                            </>
-                          )}
-                        </div>
+                      {/* Use the existing padding so delivery updates never resize the bubble. */}
+                      {showSendStatus && !mobileStatusRow && (
+                        <div className="absolute bottom-0 right-2 max-w-[calc(100%-1rem)]">{sendStatus}</div>
                       )}
                     </AIMessageContent>
                     </TooltipHint>

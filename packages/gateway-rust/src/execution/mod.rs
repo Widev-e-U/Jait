@@ -11,3 +11,5 @@ pub mod shell_prompt;
 pub mod local_deploy;
 
 pub mod process_runner;
+
+pub mod command_syntax;

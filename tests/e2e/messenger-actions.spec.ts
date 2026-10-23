@@ -1,8 +1,9 @@
 import path from 'node:path'
+import { expectBadgeInkCentered } from './badge-ink'
 import { expect, test, type Page } from '@playwright/test'
 
 test.use({ screenshot: 'off' })
-async function mount(page: Page) {
+async function mount(page: Page, failHistory = false, reactionCount = 1, reactionKey = '❤️') {
   const calls: any[] = []
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
   const today = startOfToday.getTime()
@@ -13,7 +14,7 @@ async function mount(page: Page) {
     session: { homeserver: 'https://matrix.test', userId: '@alice:test', deviceId: 'A' },
     rooms: [{ id: '!room:test', name: 'Bob', membership: 'join', unread: 0, encrypted: true, service: 'WhatsApp', network: '', timestamp: 1, preview: 'Hello' }],
     messages: [
-      { ...base, id: '$one', sender: 'Bob', body: 'Incoming message', own: false, timestamp: yesterday + 43_200_000, reactions: [{ key: '❤️', count: 1, own: false, senders: ['Bob'] }] },
+      { ...base, id: '$one', sender: 'Bob', body: 'Incoming message', own: false, timestamp: yesterday + 43_200_000, reactions: [{ key: reactionKey, count: reactionCount, own: false, senders: ['Bob'] }] },
       { ...base, id: '$two', sender: 'Alice', body: 'My message', own: true, timestamp: today + 60_000, reactions: [] },
       { ...base, id: '$image', sender: 'Bob', body: 'photo.png', own: false, timestamp: today + 120_000, attachment: { url: 'mxc://test/photo', name: 'photo.png', mime: 'image/png', image: true } },
     ],
@@ -23,6 +24,7 @@ async function mount(page: Page) {
     if (url.pathname.endsWith('/command')) {
       const cmd = route.request().postDataJSON(); calls.push(cmd)
       if (cmd.action === 'earlier') {
+        if (failHistory) return route.fulfill({ status: 502, json: { error: 'private server error' } })
         snapshot.messages.unshift({ ...base, id: '$old', sender: 'Bob', body: 'Older message', own: false, reactions: [] } as any)
         snapshot.hasEarlier = false
       }
@@ -66,9 +68,11 @@ test('React, remove reaction, and edit own message', async ({ page }) => {
   await own.hover()
   await own.getByRole('button', { name: 'React to message' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'React with 👍' }).click()
-  await expect(own.getByRole('button', { name: '👍 1' })).toHaveAttribute('aria-pressed', 'true')
-  await own.getByRole('button', { name: '👍 1' }).click()
-  await expect(own.getByRole('button', { name: '👍 1' })).toHaveCount(0)
+  const reaction = own.locator('[data-reaction-pills]').getByRole('button', { name: 'You', exact: true })
+  await expect(reaction).toHaveAttribute('aria-pressed', 'true')
+  await expect(reaction).toContainText('👍')
+  await reaction.click()
+  await expect(reaction).toHaveCount(0)
   await own.getByRole('button', { name: 'Message options' }).click()
   await page.getByRole('menuitem', { name: 'Edit message' }).click()
   await own.getByRole('textbox', { name: 'Edit message' }).fill('Updated message')
@@ -153,3 +157,50 @@ test('Search messages from the mobile chat menu reveals the search field', async
   await expect(page.getByRole('textbox', { name: 'Search conversations and messages' })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Search conversations and messages' })).toBeFocused()
 })
+
+
+test('History failures show one notification, pause automatic loads, and allow retry', async ({ page }) => {
+  const calls = await mount(page, true)
+  const notification = page.locator('[data-sonner-toast]:not([data-removed="true"])').filter({ hasText: 'Could not load earlier messages' })
+  await expect(notification).toBeVisible()
+  await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/messenger-error-notification.png') })
+  await expect(page.getByRole('log', { name: 'Messages' })).toContainText('Incoming message')
+  await expect(page.getByRole('button', { name: 'Load earlier messages' })).toHaveCount(0)
+  await expect(notification).not.toContainText('private server error')
+  expect(calls.filter(c => c.action === 'earlier')).toHaveLength(1)
+  await notification.getByRole('button', { name: 'Retry', exact: true }).click()
+  await expect.poll(() => calls.filter(c => c.action === 'earlier').length).toBe(2)
+  await expect(notification).toBeVisible()
+  await notification.getByRole('button', { name: 'Close toast' }).click()
+  await expect(notification).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Dismiss error' })).toHaveCount(0)
+})
+
+
+for (const count of [1, 3]) {
+  test(`reaction badge is ${count === 1 ? 'a centered circle' : 'a pill with a count'}`, async ({ page }) => {
+    await mount(page, false, count)
+    const reaction = page.locator('[data-message-id="$one"] [data-reaction-pills]').getByRole('button')
+    await expect(reaction).toBeVisible()
+    const bounds = await reaction.boundingBox()
+    if (count === 1) {
+      expect(bounds!.width).toBe(bounds!.height)
+      await expect(reaction).not.toContainText('1')
+    } else {
+      expect(bounds!.width).toBeGreaterThan(bounds!.height)
+      await expect(reaction).toContainText(String(count))
+    }
+    await expectBadgeInkCentered(reaction, 'reaction', 'reaction-' + count)
+    await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/messenger-reaction-count-' + count + '.png') })
+  })
+}
+
+
+for (const emoji of ['👍', '😂', '🔥']) {
+  test(`reaction glyph ink is centered for ${emoji}`, async ({ page }) => {
+    await mount(page, false, 1, emoji)
+    const reaction = page.locator('[data-message-id="$one"] [data-reaction-pills]').getByRole('button')
+    await expect(reaction).toBeVisible()
+    await expectBadgeInkCentered(reaction, 'reaction', 'emoji-' + emoji.codePointAt(0)!.toString(16))
+  })
+}

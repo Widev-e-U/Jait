@@ -144,11 +144,11 @@ export class ProviderUsageService {
     const { rateLimits } = response;
     // A team/workspace account can be blocked while its window percentages are
     // still below 100 (for example when workspace credits run out), so the
-    // account-level flag is authoritative for "full".
+    // account-level flag is authoritative for "full". hasCredits only describes
+    // extra usage credits; having none does not exhaust included subscription usage.
     const accountExhausted = response.ordinaryUsageAllowed === false ||
       rateLimits.spendControlReached === true ||
-      rateLimits.rateLimitReachedType === "workspace_member_credits_depleted" ||
-      rateLimits.credits?.hasCredits === false;
+      rateLimits.rateLimitReachedType === "workspace_member_credits_depleted";
     const windows = [
       ["primary", rateLimits.primary],
       ["secondary", rateLimits.secondary],

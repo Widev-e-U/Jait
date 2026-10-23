@@ -7,6 +7,6 @@ export function validationCommands(root, targets, fullContracts = false) {
     [path('packages/gateway-rust/run.mjs'), 'fmt'],
     [path('packages/gateway-rust/run.mjs'), 'clippy', '--all-targets', '--', '-D', 'warnings'],
     [path('packages/gateway-rust/run.mjs'), 'test', '--lib'],
-    [path('tests/contract/run.mjs'), 'test', ...(fullContracts ? [] : targets.flatMap(target => ['--test', target]))],
+    [path('tests/contract/run.mjs'), 'test', ...(fullContracts ? [] : [...new Set([...targets, 'gateway_rust_context_budget'])].flatMap(target => ['--test', target]))],
   ];
 }

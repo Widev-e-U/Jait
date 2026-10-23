@@ -1,5 +1,6 @@
 import {
   CircleQuestionMark,
+  Infinity as InfinityIcon,
   Loader2,
   MessageSquare,
   MessageSquareX,
@@ -12,7 +13,7 @@ import type {
   HTMLAttributes,
   MouseEventHandler,
 } from 'react'
-import type { SessionWait, SessionWaitKind } from '@jait/shared'
+import { readChatLoop, type SessionWait, type SessionWaitKind } from '@jait/shared'
 import { SessionChatIcon } from '@/components/chat/session-chat-icon'
 import { formatAgo } from '@/lib/relative-time'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -115,6 +116,7 @@ export function SessionRow({
   longPressProps,
 }: SessionRowProps) {
   const chatError = parseSessionChatError(session.metadata)
+  const loop = readChatLoop(session.metadata)
   const waitIcon = sessionWaitIcon(wait)
   const unread = isSessionUnread({
     lastActiveAt: session.lastActiveAt ?? '',
@@ -145,10 +147,19 @@ export function SessionRow({
         <TooltipHint content="Waiting for approval">
           <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Waiting for approval" />
         </TooltipHint>
+      ) : loop?.status === 'running' ? (
+        <TooltipHint content="Goal loop running">
+          <span className="relative flex size-3.5 shrink-0 items-center justify-center" role="status" aria-label="Goal loop running" data-testid="session-row-loop">
+            <span className="absolute inset-[-2px] rounded-full border border-primary/25 border-t-primary animate-spin motion-reduce:animate-none" />
+            <InfinityIcon className="size-3 text-primary" />
+          </span>
+        </TooltipHint>
+      ) : loop?.status === 'waiting' ? (
+        <CircleQuestionMark className="size-3.5 shrink-0 text-amber-500" aria-label="Loop waiting for your answer" />
       ) : isStreaming ? (
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-      ) : chatError ? (
-        <TooltipHint content={`Last reply failed: ${chatError.message}`}>
+      ) : chatError || loop?.status === 'error' ? (
+        <TooltipHint content={`Last reply failed: ${chatError?.message || loop?.summary}`}>
           <MessageSquareX
             className="h-3.5 w-3.5 shrink-0 text-destructive"
             aria-label="Last reply failed"

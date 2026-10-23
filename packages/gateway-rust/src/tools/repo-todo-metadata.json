@@ -1,0 +1,68 @@
+{
+  "name": "jait.todos",
+  "description": "Manage global Jait todo items for future agent threads. Use this to save worthwhile follow-up work in the Todo page.",
+  "tier": "core",
+  "category": "gateway",
+  "source": "builtin",
+  "risk": "low",
+  "defaultConsentLevel": "none",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "enum": [
+          "list",
+          "add",
+          "update",
+          "remove"
+        ],
+        "description": "Operation to perform."
+      },
+      "repoId": {
+        "type": "string",
+        "description": "Explicit repository ID. Omit to infer it from the current projectRoot."
+      },
+      "todoId": {
+        "type": "string",
+        "description": "Todo ID. Required for action=update or action=remove."
+      },
+      "message": {
+        "type": "string",
+        "description": "Future user message or task to save. Required for action=add."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "open",
+          "in_progress",
+          "done"
+        ],
+        "description": "Todo status."
+      },
+      "priority": {
+        "type": "string",
+        "enum": [
+          "low",
+          "normal",
+          "high"
+        ],
+        "description": "Todo priority."
+      },
+      "dueDate": {
+        "type": "string",
+        "description": "Optional due date in YYYY-MM-DD format. Use an empty string to clear it."
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Optional lowercase tags for grouping/filtering todos."
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

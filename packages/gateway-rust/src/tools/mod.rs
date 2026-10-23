@@ -66,3 +66,21 @@ pub mod team_chat;
 pub mod meta_tools;
 
 pub mod messenger;
+
+pub mod security_dispatch;
+
+pub mod security_tools;
+
+pub mod security_workbench_tools;
+
+pub mod repo_todos;
+
+pub mod network_scan;
+
+pub mod terminal_execution;
+
+pub mod context_evidence;
+
+pub mod loop_tools;
+
+pub mod code_graph;

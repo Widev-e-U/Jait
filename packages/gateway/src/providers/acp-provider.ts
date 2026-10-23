@@ -1,3 +1,4 @@
+import { compactProviderContext, type ProviderContextState } from "./context-control.js";
 import { parseAcpUsage } from "./usage.js";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -252,6 +253,7 @@ interface PendingApproval {
 }
 
 interface AcpSessionState {
+  contextControl?: ProviderContextState;
   session: ProviderSession;
   child: ChildProcess;
   connection: ClientSideConnection;
@@ -882,11 +884,14 @@ export class AcpProvider implements CliProviderAdapter {
     }
   }
 
+  private readonly contextControls = new Map<string, ProviderContextState>();
+
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
     if (this.executionNodeId && this.executionNodeId !== "gateway") {
       throw new Error(`Provider account ${this.id} must run on device ${this.executionNodeId}`);
     }
     const sessionId = uuidv7();
+    this.contextControls.set(sessionId, {});
     const session: ProviderSession = {
       id: sessionId,
       providerId: this.id,
@@ -953,6 +958,7 @@ export class AcpProvider implements CliProviderAdapter {
           : { error: `ACP provider exited (${signal ?? code ?? "unknown"})` }),
       } as ProviderEvent);
       this.sessions.delete(sessionId);
+      this.contextControls.delete(sessionId);
       current.piProvisionCleanup?.();
     });
 
@@ -1038,6 +1044,7 @@ export class AcpProvider implements CliProviderAdapter {
         }
       }
     } catch (error) {
+      this.contextControls.delete(sessionId);
       child.kill();
       throw error;
     }
@@ -1049,6 +1056,7 @@ export class AcpProvider implements CliProviderAdapter {
       connection,
       agent: capturedAgent ?? connection,
       client,
+      contextControl: this.contextControls.get(sessionId),
       acpSessionId: newSession.sessionId,
       approvals,
       initialized,
@@ -1062,6 +1070,18 @@ export class AcpProvider implements CliProviderAdapter {
 
   async sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void> {
     const state = this.getSession(sessionId);
+    if (state.contextControl) await compactProviderContext(state.contextControl, async command => {
+      try {
+        const result = await withTimeout(state.connection.prompt({ sessionId: state.acpSessionId, prompt: [{ type: "text", text: command }] }), 60_000);
+        const usage = parseAcpUsage(result.usage, uuidv7());
+        if (usage) this.emitEvent({ type: "usage", sessionId, usage });
+        const failure = readAcpSessionFailure(result._meta);
+        if (failure || result.stopReason === "cancelled") throw new Error(failure ?? "Context compaction cancelled");
+      } catch (error) {
+        await withTimeout(state.connection.cancel({ sessionId: state.acpSessionId }), 2_000).catch(() => {});
+        throw error;
+      }
+    });
     state.turnError = undefined;
     state.session.error = undefined;
     state.session.status = "running";
@@ -1166,6 +1186,7 @@ export class AcpProvider implements CliProviderAdapter {
     state.session.completedAt = new Date().toISOString();
     state.child.kill();
     this.sessions.delete(sessionId);
+    this.contextControls.delete(sessionId);
     state.piProvisionCleanup?.();
     this.emitEvent({ type: "session.completed", sessionId });
   }
@@ -1297,12 +1318,25 @@ export class AcpProvider implements CliProviderAdapter {
         }
         break;
       }
+      case "available_commands_update": {
+        const control = this.contextControls.get(sessionId);
+        if (control) control.commands = update.availableCommands.map(command => command.name);
+        this.emitEvent({ type: "activity", sessionId, kind: update.sessionUpdate, summary: update.sessionUpdate, payload: update });
+        break;
+      }
+      case "usage_update": {
+        const context = this.contextControls.get(sessionId);
+        if (context) {
+          context.usedTokens = update.used;
+          context.contextWindow = update.size;
+        }
+        this.emitEvent({ type: "activity", sessionId, kind: update.sessionUpdate, summary: update.sessionUpdate, payload: update });
+        break;
+      }
       case "user_message_chunk":
-      case "available_commands_update":
       case "current_mode_update":
       case "config_option_update":
       case "session_info_update":
-      case "usage_update":
         this.emitEvent({
           type: "activity",
           sessionId,

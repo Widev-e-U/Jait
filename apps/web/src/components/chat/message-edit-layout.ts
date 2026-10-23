@@ -1,9 +1,59 @@
+import { cn } from '@/lib/utils'
+
+/**
+ * The chat column.
+ *
+ * The transcript and the composer are laid out in one centered column that
+ * owns the pane's width; the children only add their own horizontal inset.
+ * That is how the VS Code Copilot chat pane works too — `.interactive-session`
+ * centers once (max-width + margin auto), then `.interactive-item-container`
+ * pads the messages and `.chat-input-container` pads the input box. Keeping the
+ * centering in one place is what makes the message text and the text you type
+ * share a left edge instead of drifting apart by the wrapper paddings.
+ *
+ * `floating-indicator-layout.ts` mirrors this geometry numerically
+ * (`CHAT_TRANSCRIPT_COLUMN_MAX_WIDTH_PX` = 896 = `max-w-4xl`, 16/20px).
+ */
+export const CHAT_COLUMN_MAX_WIDTH_CLASS = 'max-w-4xl'
+
+/** Left/right inset of message text inside the chat column. */
+export const CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS = 'px-4 sm:px-5'
+
+/**
+ * Left/right inset of the composer *box*. The box spans the column edge and
+ * `PromptInput` supplies the inner text padding (1px border + `px-2`/`sm:px-3`
+ * editor area + `px-2` editable = 17/21px), which lands the typed text on the
+ * message text's left edge (16/20px). That is Copilot's arrangement too: the
+ * transcript pads 16px, the input box takes its own 1px + 6px inset and the
+ * two text edges end up within a pixel or two of each other.
+ */
+export const CHAT_COMPOSER_COLUMN_PADDING_CLASS = 'px-0'
+
+/** Centered chat column, without a horizontal inset. */
+export function getChatColumnClassName(...extra: Array<string | false | null | undefined>): string {
+  return cn('mx-auto w-full', CHAT_COLUMN_MAX_WIDTH_CLASS, ...extra)
+}
+
+/** Centered chat column carrying the transcript's message gutter. */
+export function getChatTranscriptColumnClassName(...extra: Array<string | false | null | undefined>): string {
+  return getChatColumnClassName(CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS, ...extra)
+}
+
 export function getChatTranscriptBoundaryClassName(): string {
   return 'relative z-0 isolate min-h-0 flex-1 overflow-hidden'
 }
 
-export function getChatComposerBoundaryClassName(isMobile: boolean, showDesktopProject: boolean): string {
-  return `relative z-30 isolate shrink-0 bg-background ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopProject ? 'px-3' : 'px-4'}`}`
+/**
+ * Composer boundary. Horizontal padding lives in
+ * `CHAT_COMPOSER_COLUMN_PADDING_CLASS`; only vertical padding is kept here so
+ * the composer box can span the column edge while message text stays inset.
+ */
+export function getChatComposerBoundaryClassName(isMobile: boolean): string {
+  return cn(
+    'relative z-30 isolate shrink-0 bg-background',
+    CHAT_COMPOSER_COLUMN_PADDING_CLASS,
+    isMobile ? 'py-2' : 'py-3',
+  )
 }
 
 export function getMessageEditPromptClassName(): string {

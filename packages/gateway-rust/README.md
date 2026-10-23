@@ -1,32 +1,76 @@
 # Native Rust gateway
 
-## Current native checkpoint — 2026-10-22
+## Latest frozen native checkpoint — 2026-10-23
 
-The full frozen-source gate passes **199/365 components (54.52%)**, with
-formatting, strict Clippy, 303 native library tests and 132 contract targets.
-Evidence: `.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/199-report.json`.
+The full frozen-source native gate passes **212/370 components (57.30%)**
+in the recorded inventory, with formatting, strict Clippy, 303 native library
+tests and 145 contract targets. Evidence:
+`.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/212-report.json`.
+Frozen sources stayed unchanged. **This snapshot does not certify the current
+workspace:** concurrent context-budget/evidence changes modified live inputs
+and added runtime files. The fast `tooling/progress.mjs` audit records both
+the changed inputs and unrecorded runtime paths. Reconcile those additions
+and rerun the source-bound gate before claiming current-workspace parity.
+
+This continuation adds native shell syntax validation, command-yield timing
+policy and the terminal execution inspection/cancellation adapter. Their
+sources still match the passing snapshot. Actual TypeScript comparisons cover
+199 timing cases, parse-only shell behavior, startup environment/flags,
+malformed executable/path errors, byte/time limits, UTF-16 diagnostics, metadata
+and dispatch. Actual native monitor checks retain session ownership, partial
+output and cancellation history. Seven isolated mutations failed their intended
+assertions; restored suites pass. Workspace TypeScript and artifact-path checks
+passed before the concurrent edits. Review:
+`tests/contract/reviews/native-terminal-helpers.md`; detailed evidence:
+`.jait/artifacts/gateway-rust/terminal-helpers/`.
+
+The recorded inventory has **158 pending components**, plus newly added runtime
+files awaiting inventory reconciliation. Equal component weights do not estimate
+remaining effort. Production remains TypeScript. Loop service/tools, terminal
+integration, remaining adapters and platform/resource/recovery/replacement gates
+remain open. No production activation or version bump is included.
+
+## Previous native checkpoint — 2026-10-22
+
+The full frozen-source gate passes **209/370 components (56.49%)**, with
+formatting, strict Clippy, 303 native library tests and 143 contract targets.
+Evidence: `.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/209-report.json`.
 The frozen sources stayed unchanged and all recorded live inputs match. The fast
-`tooling/progress.mjs` audit checks current freshness separately.
+`tooling/progress.mjs` audit reports no drift, missing runtime inputs or issues.
 
-Recent additions cover the live capability catalog, six file/image factories,
-seven memory/reminder factories and remote tool routing. The latest three
-components pass 30 focused contract checks and 19 caught/restored deliberate
-regressions. Actual TypeScript comparisons retain complete metadata, exact UTF-8
-byte counts and content, the 8,000-byte image threshold, scoped filesystem call
-order, reminder ownership/retrieval tracking, UTF-16 preview clipping, persistent
-remote terminals, callback identity, node selection and proxy error boundaries.
-Reviews are in `tests/contract/reviews/native-file-tools.md`,
-`native-memory-tools.md` and `native-remote-executor.md`. Focused and mutation
-logs are under `.jait/artifacts/gateway-rust/`. Workspace typechecks, artifact-path
-checks and strict Clippy for the new contracts also pass.
+This continuation adds six native source components: assessment tool factories,
+workbench tool factories/service/HTTP routes, repository todo/plan tools, and the
+network scan tool/cache. Actual TypeScript comparisons cover metadata, dispatch,
+ownership, authorization/budget/cancellation, persisted findings and dispositions,
+remediation/verification, report aliases, repository task/plan behavior, network
+cache identity, SQLite persistence and partial failures. Forty-one deliberate
+regressions were caught and restored across this batch and its freshness fixes.
+Reviews: `tests/contract/reviews/native-security-workbench.md`,
+`native-repo-todo-tools.md`, `native-network-scan-tool.md`, and
+`native-session-freshness.md`.
 
-**166 components remain.** Equal source-component weights do not estimate effort
-or time. Production remains TypeScript. Caller-authorized service and transport
-ports do not activate production capabilities or earn underlying engine credit.
-General registry/transport activation, browser chat lifecycle, remaining
-engines/adapters, supported-platform, resource, recovery, rollback and replacement
-gates remain open. Reference-test reconstruction and its freshness are separate
-measurements; this implementation checkpoint grants no translated-test credit.
+Session forks now discard parent loop state; wait subscriptions preserve shared
+event identity, live subscription changes and reset behavior. The capability
+catalog matches the current loop capability. These freshness fixes add no
+component credit. The prior 203-component registry/team/Messenger checkpoint and
+its reviews remain recorded.
+
+An inventory audit added five previously omitted runtime files as **pending**
+components: command syntax/wait helpers, terminal execution factory, loop service
+and loop tools. Existing test mappings and reference fingerprints were preserved.
+The historical 208/365 checkpoint remains valid for its former inventory;
+adding inventory entries grants no native or translated-test credit.
+
+**161 components remain.** Equal source-component weights do not estimate effort
+or time. Production remains TypeScript. Explicit engine, snapshot, scanner and
+transport ports retain their caller's authorization, target/vantage, budget,
+cancellation and evidence duties; adapters earn no underlying engine or
+production-activation credit. Registry/transport activation, browser chat
+lifecycle, remaining engines/adapters, supported-platform, resource, recovery,
+rollback and replacement gates remain open. Reference-test reconstruction and
+freshness are measured separately. Workspace TypeScript and artifact-path checks
+pass; focused/restored/mutation evidence lives under
+`.jait/artifacts/gateway-rust/security-workbench/`.
 
 Parallel native implementation beside `packages/gateway`. The default standalone
 profile serves `GET /health` (and HEAD). Explicit development activation composes
@@ -250,7 +294,7 @@ installed gateway have not been switched over.
 
 ## Completion target
 
-The requested target is **all inventoried native components (currently 365/365, 100%)**.
+The requested target is **all inventoried native components (currently 370/370, 100%)**.
 The source-bound report and its live-source match flag are authoritative.
 The earlier 55/361 checkpoint described below is historical; the completion target remains open.
 The source-bound report covers formatting, strict Clippy, seven native tests and

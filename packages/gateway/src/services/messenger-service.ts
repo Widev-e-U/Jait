@@ -714,6 +714,9 @@ class Connection {
           discord: 'Discord',
           slack: 'Slack',
           msteams: 'Teams',
+          teams: 'Teams',
+          'microsoft-teams': 'Teams',
+          'go.mau.fi/mautrix-teams': 'Teams',
         };
         room.summary.service =
           labels[String(protocol?.id).toLowerCase()] ??

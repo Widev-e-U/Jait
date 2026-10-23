@@ -116,3 +116,18 @@ describe('Messenger homeserver validation', () => {
     expect(() => messengerHomeserver('ws://matrix.example.org')).toThrow('Use an HTTPS Matrix homeserver');
   });
 });
+
+
+describe('Messenger bridged service detection', () => {
+  it.each(['go.mau.fi/mautrix-teams', 'msteams', 'teams', 'microsoft-teams'])('recognizes Teams metadata after joining an invitation (%s)', async protocol => {
+    const { c } = setup();
+    await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'A conversation' } },
+    ] } } } } });
+    expect(c.snapshot().rooms.find((r: any) => r.id === '!teams:test')).toMatchObject({ membership: 'invite', service: 'Matrix' });
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: protocol, displayname: 'Microsoft Teams' } } },
+    ] }, timeline: { events: [] } } } } });
+    expect(c.snapshot().rooms.find((r: any) => r.id === '!teams:test')).toMatchObject({ membership: 'join', service: 'Teams' });
+  });
+});

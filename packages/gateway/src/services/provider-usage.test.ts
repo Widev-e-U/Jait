@@ -280,6 +280,53 @@ describe("ProviderUsageService", () => {
     });
   });
 
+  it.each([true, undefined])("keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)", (ordinaryUsageAllowed) => {
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-plus", {
+      ordinaryUsageAllowed,
+      rateLimits: {
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+        secondary: { usedPercent: 18, windowDurationMins: 10_080 },
+        planType: "plus",
+        credits: { hasCredits: false, unlimited: false, balance: "0" },
+      },
+    });
+
+    expect(service.listForUser(["codex-plus"])).toEqual([
+      expect.objectContaining({ rateLimitType: "five_hour", utilization: 0.15, status: "allowed" }),
+      expect.objectContaining({ rateLimitType: "seven_day", utilization: 0.18, status: "allowed" }),
+    ]);
+  });
+
+  it.each([
+    { ordinaryUsageAllowed: false, rateLimits: {} },
+    { rateLimits: { spendControlReached: true } },
+    { rateLimits: { rateLimitReachedType: "workspace_member_credits_depleted" } },
+  ])("honors explicit Codex account blocks below the window limit: %j", (block) => {
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-blocked", {
+      ...block,
+      rateLimits: {
+        ...block.rateLimits,
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+      },
+    });
+    expect(service.listForUser(["codex-blocked"])[0].status).toBe("rejected");
+  });
+
+  it("updates Codex window status after a fresh quota report", () => {
+    const service = new ProviderUsageService(db);
+    for (const [usedPercent, status] of [[100, "rejected"], [95, "allowed_warning"], [15, "allowed"]] as const) {
+      service.recordCodexRateLimits("codex-plus", {
+        rateLimits: {
+          primary: { usedPercent, windowDurationMins: 300 },
+          credits: { hasCredits: false },
+        },
+      });
+      expect(service.listForUser(["codex-plus"])[0].status).toBe(status);
+    }
+  });
+
   it("marks every Codex window as full when workspace credits are depleted", () => {
     const service = new ProviderUsageService(db);
     // Shape reported by the live Work (team) account: the workspace blocks

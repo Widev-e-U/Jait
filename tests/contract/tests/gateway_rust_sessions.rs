@@ -418,3 +418,22 @@ fn session_nullable_legacy_rows_and_invalid_activity_remain_observable() {
         ],
     );
 }
+
+#[test]
+fn question_fork_drops_parent_loop_state_and_preserves_parent_metadata() {
+    for value in [
+        json!({"enabled":true,"iteration":4}),
+        json!(false),
+        json!(null),
+    ] {
+        scenario(
+            &fork_seed(),
+            vec![
+                json!({"op":"update","id":"s1","user":"owner","data":{"metadata":{"loop":value,"keep":"retained"}}}),
+                json!({"op":"fork","id":"s1","user":"owner"}),
+                json!({"op":"get","id":"$created","user":"owner"}),
+                json!({"op":"get","id":"s1","user":"owner"}),
+            ],
+        );
+    }
+}

@@ -230,3 +230,21 @@ describe('SessionRow wait reasons', () => {
       .toContain('data-testid="session-row-question"')
   })
 })
+describe('goal loop sidebar status', () => {
+  const metadata = (status: 'running' | 'waiting' | 'paused' | 'completed') => JSON.stringify({ loop: {
+    id: 'goal', goal: 'Fix the issue', criteria: ['Regression passes'], status, iteration: 2,
+    revision: 4, checkedIteration: 1, summary: '', nextMessage: '', evidence: [], updatedAt: '2026-10-22T00:00:00Z',
+  } })
+  it('keeps the infinity spinner between turns and gives questions precedence', () => {
+    const session = { id: 'goal-chat', metadata: metadata('running') }
+    expect(renderRow({ session })).toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session })).toContain('animate-spin')
+    expect(renderRow({ session, isAwaitingAnswer: true })).not.toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session, isWaitingForApproval: true })).not.toContain('data-testid="session-row-loop"')
+  })
+  it('stops spinning when paused or completed and shows waiting questions', () => {
+    expect(renderRow({ session: { id: 'goal', metadata: metadata('paused') } })).not.toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session: { id: 'goal', metadata: metadata('completed') } })).not.toContain('data-testid="session-row-loop"')
+    expect(renderRow({ session: { id: 'goal', metadata: metadata('waiting') } })).toContain('Loop waiting for your answer')
+  })
+})

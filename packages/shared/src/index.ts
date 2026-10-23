@@ -31,3 +31,4 @@ export * from "./network-resources.js";
 export type * from "./email.js";
 
 export type { ModelUsage, UsageSummary } from "./model-usage.js";
+export * from "./chat-loop.js";

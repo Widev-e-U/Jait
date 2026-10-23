@@ -31,6 +31,7 @@ fn observer(service: &Rc<SessionWaitService>, changes: &Rc<RefCell<Vec<Value>>>,
     let changes = changes.clone();
     let config = config.clone();
     service.set_broadcaster(Some(Rc::new(move |change| {
+        let change = change.borrow();
         changes
             .borrow_mut()
             .push(json!({"sessionId":change.session_id,"waits":handles(change.waits.clone())}));

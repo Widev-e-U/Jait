@@ -37,6 +37,12 @@ export type SessionWaitBroadcaster = (change: { sessionId: string; waits: Sessio
 export class SessionWaitService {
   private readonly waits = new Map<string, SessionWait>();
   private broadcaster?: SessionWaitBroadcaster;
+  private readonly listeners = new Set<SessionWaitBroadcaster>();
+
+  subscribe(listener: SessionWaitBroadcaster): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
 
   setBroadcaster(broadcaster: SessionWaitBroadcaster | undefined): void {
     this.broadcaster = broadcaster;
@@ -104,7 +110,9 @@ export class SessionWaitService {
   }
 
   private emit(sessionId: string): void {
-    this.broadcaster?.({ sessionId, waits: this.list(sessionId) });
+    const change = { sessionId, waits: this.list(sessionId) };
+    this.broadcaster?.(change);
+    for (const listener of this.listeners) listener(change);
   }
 }
 

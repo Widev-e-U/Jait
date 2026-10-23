@@ -10,6 +10,7 @@ import { WsControlPlane } from "./ws.js";
 import { PrimaryLink } from "./services/primary-link.js";
 import { openDatabase, migrateDatabase, sqliteBackend } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
+import { ChatLoopService } from "./services/chat-loops.js";
 import { SessionStateService } from "./services/session-state.js";
 import { ProjectStateService } from "./services/project-state.js";
 import { AuditWriter } from "./services/audit.js";
@@ -253,6 +254,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
 
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config, db);
+  const chatLoops = new ChatLoopService(sessionService, ws);
   const threadReviewSync = new ThreadReviewSyncService({ threadService, ws });
 
   // Notification service — broadcasts to all connected clients
@@ -492,6 +494,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // the executing registry — that drift is what left `agent.github` advertised but
   // unexecutable (Unknown tool) and agent terminals without an App identity.
   const toolDeps: ToolRegistryDeps = {
+    chatLoops,
     memoryService: memory,
     hooks,
     voiceService,
@@ -606,6 +609,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       attention.clear("question", request.id, request.status === "submitted"
         ? "answered"
         : "cancelled");
+      if (request.status === "submitted") {
+        chatLoops.resumeAfterAnswer(request.sessionId, request.id, request.userId ?? undefined);
+      }
       console.log(`User question ${request.status}: ${request.id}`);
     },
   });
@@ -1140,6 +1146,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   });
 
   const server = await createServer(config, {
+    chatLoops,
     db,
     sqlite,
     sessionService,

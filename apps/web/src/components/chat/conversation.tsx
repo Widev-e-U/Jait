@@ -6,6 +6,7 @@ import { Conversation as AIConversation, ConversationScrollButton } from '@/comp
 import { ConversationMinimap, MINIMAP_RAIL_WIDTH_PX } from './conversation-minimap'
 import { TOOL_CARD_ANCHOR_SETTLE_MS, TOOL_CARD_TOGGLE_EVENT } from './tool-card-anchor'
 import { cn } from '@/lib/utils'
+import { getChatTranscriptColumnClassName } from './message-edit-layout'
 import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
 import { TooltipHint } from '@/components/ui/tooltip'
 import { ChatBrowserView } from './chat-browser-view'
@@ -391,7 +392,7 @@ function ConversationPositioningSkeleton({ label }: { label: string }) {
       className="pointer-events-none absolute inset-0 z-20 overflow-hidden bg-background"
     >
       <span className="sr-only">{label}</span>
-      <div className="mx-auto flex h-full max-w-4xl flex-col justify-between gap-6 px-4 pb-8 pt-12 sm:px-5">
+      <div className={getChatTranscriptColumnClassName('flex h-full flex-col justify-between gap-6 pb-8 pt-12')}>
         {CONVERSATION_SKELETON_TURNS.map((turn, turnIndex) => {
           // Stagger the pulse, but cycle it so the top of a long list isn't
           // still waiting to start animating.
@@ -1437,7 +1438,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
                 </div>
               </div>
             )}
-            <div ref={innerRef} className={cn('mx-auto max-w-4xl px-4 pb-6 sm:py-6 sm:px-5', variant === 'messenger' ? 'pt-6' : 'pt-12')}>
+            <div ref={innerRef} className={cn(getChatTranscriptColumnClassName('pb-6 sm:py-6', variant === 'messenger' ? 'pt-6' : 'pt-12'))}>
               {hasMore && (
                 <div className="flex justify-center py-3">
                   <button
@@ -1491,11 +1492,13 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
           // Styled after the user chat bubble itself (bg-muted, rounded, right
           // where user messages sit) because the chip *is* the previous message:
           // clicking it jumps to that message and starts editing it. The frame
-          // mirrors the transcript column (mx-auto max-w-4xl px-*) so the chip
-          // never extends past the chat's width; pointer-events pass through so
-          // the strip only captures clicks on the button itself.
+          // mirrors the transcript column (getChatTranscriptColumnClassName) so
+          // the chip never extends past the chat's width; pointer-events pass
+          // through so the strip only captures clicks on the button itself.
           <div
-            className="pointer-events-none absolute inset-x-0 top-14 z-20 mx-auto flex max-w-4xl justify-end px-4 sm:top-10 sm:px-5"
+            className={getChatTranscriptColumnClassName(
+              'pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-end sm:top-10',
+            )}
           >
             <TooltipHint content="Jump to and edit previous user message">
             <button

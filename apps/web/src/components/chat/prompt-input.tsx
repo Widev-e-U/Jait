@@ -2336,7 +2336,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       <div
         className={cn(
           'relative',
-          isMessenger ? 'flex items-end gap-0.5 py-1 pl-1.5 pr-1.5' : 'px-3 pt-3 pb-1.5',
+          // 8px/12px here plus the 1px box border and the `px-2` editable keeps
+          // the typed text on the transcript's 16px/20px gutter.
+          isMessenger ? 'flex items-end gap-0.5 py-1 pl-1.5 pr-1.5' : 'px-2 pt-3 pb-1.5 sm:px-3',
         )}
       >
         {isMessenger && (

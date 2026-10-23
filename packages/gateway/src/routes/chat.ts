@@ -1,3 +1,6 @@
+import { ChatLoopService, chatLoopInstructions } from "../services/chat-loops.js";
+import { sessionWaits } from "../services/session-waits.js";
+import { createLoopTools } from "../tools/loop-tools.js";
 import { TurnUsageAccumulator, summarizeUsage } from "../providers/usage.js";
 import { agentHaltedBody, type AgentControlService, type AgentStopResult } from "../services/agent-control.js";
 import type { TeamChatService } from "../services/team-chat.js";
@@ -2647,6 +2650,7 @@ export const __chatTestUtils = {
 };
 
 export interface ChatRouteDeps {
+  chatLoops?: ChatLoopService;
   agentControl?: AgentControlService;
   teamChat?: TeamChatService;
   db?: JaitDB;
@@ -2695,6 +2699,7 @@ export function registerChatRoutes(
   let architectureDiagrams: ArchitectureDiagramService | undefined;
   let teamChat: TeamChatService | undefined;
   let agentControl: AgentControlService | undefined;
+  let chatLoops: ChatLoopService | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -2715,10 +2720,111 @@ export function registerChatRoutes(
     architectureDiagrams = deps.architectureDiagrams;
     teamChat = deps.teamChat;
     agentControl = deps.agentControl;
+    chatLoops = deps.chatLoops;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
   }
+
+  if (!chatLoops && sessionService && userService && sessionStateService) chatLoops = new ChatLoopService(sessionService, ws);
+  if (chatLoops && toolRegistry) {
+    for (const tool of createLoopTools(chatLoops)) {
+      if (!toolRegistry.get(tool.name)) toolRegistry.register(tool);
+    }
+  }
+
+  const loopTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const loopDispatches = new Set<string>();
+  let loopsClosed = false;
+  const wakeLoop = (sessionId: string): void => {
+    if (loopsClosed || loopTimers.has(sessionId) || loopDispatches.has(sessionId)) return;
+    const timer = setTimeout(() => {
+      loopTimers.delete(sessionId);
+      void dispatchLoop(sessionId);
+    }, 250);
+    timer.unref?.();
+    loopTimers.set(sessionId, timer);
+  };
+  const dispatchLoop = async (sessionId: string): Promise<void> => {
+    if (loopsClosed || !chatLoops || !sessionService || !userService || activeStreams.has(sessionId) || drainingQueuedSessions.has(sessionId) || loopDispatches.has(sessionId)) return;
+    const session = sessionService.getById(sessionId);
+    const loop = chatLoops.get(sessionId);
+    if (!session?.userId || session.status !== "active" || loop?.status !== "running") return;
+    if (sessionWaits.list(sessionId).some(wait => wait.blocking)) return;
+    const queue = parseQueuedChatMessages(sessionStateService?.get(sessionId, ["queued_messages"])["queued_messages"]);
+    if (queue[0] && !queue[0].held) return;
+    const user = userService.findById(session.userId);
+    if (!user) return;
+    loopDispatches.add(sessionId);
+    try {
+      const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      // A pause/goal edit may have arrived while signing the internal request.
+      if (loopsClosed || chatLoops.get(sessionId)?.revision !== loop.revision) return;
+      const continuation = buildBackgroundCommandContinuationPayload({
+        sessionId, userId: user.id, userService, sessionState: sessionStateService, sessionMetadata: session.metadata,
+        notification: [chatLoopInstructions(loop), `Next message to yourself: ${JSON.stringify(loop.nextMessage || "Begin working towards the goal. Check existing work first.")}`].join("\n\n"),
+      });
+      const selection = parseDurableActiveTurn(sessionStateService?.get(sessionId, ["loop.turn-options"])["loop.turn-options"]);
+      const response = await app.inject({
+        method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(config, token),
+        payload: { ...continuation, ...selection, _loopRevision: loop.revision },
+      });
+      if (response.statusCode >= 400) {
+        chatLoops.finishTurn(sessionId, `Loop continuation failed (HTTP ${response.statusCode}). Resume to retry.`);
+        notifyLoopAttention(sessionId, "Loop stopped", "Loop continuation failed. Open the chat to review and resume.");
+      }
+    } catch (error) {
+      app.log.error({ error, sessionId }, "Chat loop continuation failed");
+      chatLoops.finishTurn(sessionId, "Loop continuation failed. Review the chat before resuming.");
+      notifyLoopAttention(sessionId, "Loop stopped", "Loop continuation failed. Open the chat to review and resume.");
+    } finally {
+      loopDispatches.delete(sessionId);
+      if (chatLoops.get(sessionId)?.status === "running") wakeLoop(sessionId);
+    }
+  };
+  const notifyLoopAttention = (sessionId: string, title: string, body: string): void => {
+    const session = sessionService?.getById(sessionId);
+    if (!session?.userId) return;
+    const notification = {
+      id: `chat-loop:${sessionId}:${randomUUID()}`, replaceId: `chat-complete:${sessionId}`,
+      kind: "attention" as const, sessionId, title, body: notificationPreview(body) || "Open the chat to review.",
+      link: chatNotificationLink(sessionId, session.projectId),
+    };
+    ws?.publishChatNotification(session.userId, notification);
+    void mobilePush?.sendChatCompleted(session.userId, notification).catch(() => {});
+  };
+  if (chatLoops) chatLoops.onWake = wakeLoop;
+  const unsubscribeLoopWaits = sessionWaits.subscribe(({ sessionId, waits }) => {
+    if (!waits.some(wait => wait.blocking) && chatLoops?.get(sessionId)?.status === "running") wakeLoop(sessionId);
+  });
+  app.addHook("onReady", async () => {
+    for (const { sessionId } of chatLoops?.running() ?? []) wakeLoop(sessionId);
+  });
+  app.addHook("onClose", async () => {
+    loopsClosed = true;
+    unsubscribeLoopWaits();
+    for (const timer of loopTimers.values()) clearTimeout(timer);
+    loopTimers.clear();
+    if (chatLoops) chatLoops.onWake = undefined;
+  });
+
+  app.get("/api/sessions/:sessionId/loop", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (!sessionService?.getById(sessionId, user.id)) return reply.status(404).send({ error: "NOT_FOUND" });
+    return { loop: chatLoops?.get(sessionId, user.id) ?? null };
+  });
+  app.post("/api/sessions/:sessionId/loop", async (request, reply) => {
+    const user = await requireAuth(request, reply, config.jwtSecret);
+    if (!user) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (!sessionService?.getById(sessionId, user.id)) return reply.status(404).send({ error: "NOT_FOUND" });
+    const body = request.body as Record<string, unknown> | null;
+    if (!chatLoops || !body || !["pause", "resume"].includes(body.action as string)) return reply.status(400).send({ error: "VALIDATION_ERROR" });
+    try { return { loop: chatLoops.control(sessionId, body.action as "pause" | "resume", user.id) }; }
+    catch (error) { return reply.status(409).send({ error: "LOOP_CONFLICT", details: error instanceof Error ? error.message : "Cannot update loop" }); }
+  });
 
   // Store refs for persistence from extracted functions
   _dbRef = db;
@@ -3017,6 +3123,7 @@ export function registerChatRoutes(
       app.log.warn({ err, sessionId }, "Queued chat message drain failed");
     } finally {
       drainingQueuedSessions.delete(sessionId);
+      if (chatLoops?.get(sessionId)?.status === "running") wakeLoop(sessionId);
     }
   };
 
@@ -3566,6 +3673,19 @@ export function registerChatRoutes(
       if (isQuestionBranch) chatMode = "ask";
     }
 
+    if (body["_loopRevision"] !== undefined) {
+      const loop = chatLoops?.get(sessionId, authUser.id);
+      if (!systemNotification || loop?.status !== "running" || loop.revision !== body["_loopRevision"]) {
+        return reply.status(202).send({ ok: true, skipped: "loop-changed" });
+      }
+    }
+
+    // A direct user reply releases a loop's explicit question checkpoint.
+    // Paused loops require an explicit resume and never restart on ordinary chat.
+    if (!systemNotification && chatLoops?.get(sessionId, authUser.id)?.status === "waiting") {
+      chatLoops.control(sessionId, "resume", authUser.id);
+    }
+
     // Queue identity belongs to the gateway, including explicit client sends.
     // Check before the busy-session branch so a retry cannot create a new id.
     if (!isQueuedDrainRequest && queuedMessageId && getConsumedQueueIds(sessionId).has(queuedMessageId)) {
@@ -3750,6 +3870,8 @@ export function registerChatRoutes(
       try { metadata = JSON.parse(sessionRecord.metadata ?? "{}"); } catch { /* malformed historical metadata */ }
       sessionService.update(sessionId, { metadata: { ...metadata, chatPersonaAgentId: requestedPersonaId } }, authUser.id);
     }
+    const loopAtTurnStart = chatLoops?.get(sessionId, authUser.id) ?? null;
+    const loopInstructions = chatLoopInstructions(loopAtTurnStart);
     const teamInstructions = personaProfile ? teamChat?.context(authUser.id, sessionId, personaProfile) : undefined;
     const availableSkills = (skillRegistry?.listEnabled() ?? []).filter(skill => !personaProfile || personaProfile.usesAllSkills || personaProfile.skillIds.includes(skill.id));
     const promptCtx: PromptContext = {
@@ -3758,7 +3880,7 @@ export function registerChatRoutes(
       skills: availableSkills,
       architectureGraph,
       responseStyle,
-      ...((projectInstructions || teamInstructions) ? { projectInstructions: [projectInstructions, teamInstructions].filter(Boolean).join("\n\n") } : {}),
+      ...((projectInstructions || teamInstructions || loopInstructions) ? { projectInstructions: [projectInstructions, teamInstructions, loopInstructions].filter(Boolean).join("\n\n") } : {}),
       backend: llmRuntime.backend,
       platform: /^(win32|windows)$/.test(projectPlatform) ? "Windows" : /^(darwin|macos)$/.test(projectPlatform) ? "macOS" : "Linux",
       shell: /^(win32|windows)$/.test(projectPlatform) ? "PowerShell" : projectNode ? "bash" : process.env.SHELL?.split("/").pop() ?? "bash",
@@ -3795,7 +3917,7 @@ export function registerChatRoutes(
         ...(requestReasoningEffortProvided ? { reasoningEffort: requestReasoningEffort ?? null } : {}),
         ...(recoveryAttempts > 0 ? { recoveryAttempts } : {}),
       };
-      sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: activeTurn });
+      sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: activeTurn, "loop.turn-options": activeTurn });
     }
 
     // Build user message — multimodal if attachments are present. A background
@@ -5448,7 +5570,10 @@ export function registerChatRoutes(
 
     // One event identity on every transport: push and the open app must not
     // independently invent IDs for the same completed turn.
-    if (!loopErrorMessage && !turnCancelledOrErrored && !hitMaxRounds) {
+    const loopAtCompletion = chatLoops?.get(sessionId) ?? null;
+    const isGoalLoopTurn = loopAtTurnStart?.status === "running"
+      || (loopAtCompletion !== null && (loopAtCompletion.id !== loopAtTurnStart?.id || loopAtCompletion.revision !== loopAtTurnStart?.revision));
+    if (!isGoalLoopTurn && !loopErrorMessage && !turnCancelledOrErrored && !hitMaxRounds) {
       const queuedState = sessionStateService?.get(sessionId, ["queued_messages"]);
       if (parseQueuedChatMessages(queuedState?.queued_messages).length === 0) {
         const projectName = completedSession?.projectId ? projectService?.getById(completedSession.projectId, authUser.id)?.title : null;
@@ -5475,6 +5600,11 @@ export function registerChatRoutes(
         ws?.publishChatNotification(authUser.id, notification);
         void mobilePush?.sendChatCompleted(authUser.id, notification).catch(() => { /* best effort */ });
       }
+    }
+    const loopAtEnd = isGoalLoopTurn ? chatLoops?.finishTurn(sessionId, turnErrorMessage ?? loopErrorMessage ?? undefined, turnCancelledOrErrored) : null;
+    if (loopAtEnd?.status === "error") notifyLoopAttention(sessionId, "Loop stopped", loopAtEnd.summary);
+    if (loopAtEnd?.status === "waiting" && !sessionWaits.list(sessionId).some(wait => wait.kind === "question")) {
+      notifyLoopAttention(sessionId, "Loop needs your answer", loopAtEnd.summary);
     }
     void drainQueuedChatMessages(sessionId);
   });
@@ -5537,6 +5667,7 @@ export function registerChatRoutes(
       sessionStateService!.set(sessionId, { queued_messages: reordered });
       broadcastQueuedMessagesState(sessionId, reordered);
     }
+    if (chatLoops?.get(sessionId, authUser.id)?.status === "running") chatLoops.control(sessionId, "pause", authUser.id);
     // A registered controller is not proof that a turn is still live. When the
     // turn body throws before its `finally` teardown, the controller object
     // outlives the turn it belonged to, so `abort()` is a silent no-op that

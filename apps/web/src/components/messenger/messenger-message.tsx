@@ -8,6 +8,7 @@ import { MAX_ATTACHMENT_BYTES, type MessengerMessage, type MessengerPresence } f
 import { isStandaloneEmoji, isStandaloneImage } from '@/lib/messenger/standalone'
 import { EmojiPickerDialog, QUICK_REACTIONS } from './messenger-emoji-picker'
 import { MessengerPeerAvatar } from './messenger-peer'
+import { CenteredBadgeText } from './centered-badge-text'
 import { ForwardDialog } from './messenger-forward-dialog'
 import { useMessenger } from './messenger-provider'
 
@@ -250,15 +251,17 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           aria-pressed={reaction.own}
           title={reaction.senders.join(', ')}
           onClick={() => react(reaction.key)}
-          className={'flex min-h-[20px] select-none items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-4 shadow-sm backdrop-blur transition active:scale-95 ' +
+          className={'inline-flex h-6 shrink-0 select-none items-center justify-center rounded-full border text-center text-[11px] shadow-sm backdrop-blur transition active:scale-95 ' +
+            (reaction.count > 1 ? 'min-w-6 gap-1 px-1.5 ' : 'w-6 p-0 ') +
             (reaction.own
               ? 'border-primary/40 bg-primary/15 hover:bg-primary/25'
               : 'border-border/70 bg-background/95 hover:bg-muted')}
         >
-          <span aria-hidden className="text-[13px] leading-none">{reaction.key}</span>
-          {reaction.count > 1 && <span
+          <CenteredBadgeText aria-hidden text={reaction.key} className="text-[13px]" />
+          {reaction.count > 1 && <CenteredBadgeText
+            text={reaction.count}
             className={'font-medium tabular-nums ' + (reaction.own ? 'text-foreground/80' : 'text-muted-foreground')}
-          >{reaction.count}</span>}
+          />}
         </button>)}
       </div>}
       {store.react && <ReactionBar

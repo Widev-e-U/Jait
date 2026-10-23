@@ -66,6 +66,7 @@ export class SessionService {
         metadata = {};
       }
     }
+    delete metadata["loop"];
     metadata["branch"] = {
       kind: "question",
       parentSessionId: source.id,
