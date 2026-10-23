@@ -4,6 +4,15 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.961](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.961) — 2026-10-23
+
+- test(gateway,shared): cover directory copy guards, terminal exit listeners and chat loop parsing — d8d7141e
+- test(chat): measure the inner composer column in the alignment fixture — 367bfb3f
+- fix(ci): resolve node from PATH and mount browser panel in e2e fixture — fac193a0
+- fix(ci): green the contract fmt/clippy lane and tooling target list — 78b57108
+
+Home chat: transcript and composer share one centered Copilot-style column.
+
 ## [v0.1.960](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.960) — 2026-10-23
 
 - chore(e2e): drop leftover column-alignment debug log — 6d3ddafe

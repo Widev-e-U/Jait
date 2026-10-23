@@ -1746,7 +1746,7 @@
     },
     {
       "path": "packages/gateway/package.json",
-      "fingerprint": "a463190a68c47baa",
+      "fingerprint": "01edbd160ab695d9",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -1789,7 +1789,7 @@
         "packages/gateway/package.json#dependency:yaml",
         "packages/gateway/package.json#dependency:zod"
       ],
-      "claims_fingerprint": "ce5d0fd9eba61a22",
+      "claims_fingerprint": "c35609a6c43ebfd2",
       "claims": [
         {
           "id": "packages/gateway/package.json#dependency:@agentclientprotocol/claude-agent-acp",
@@ -1797,7 +1797,7 @@
           "name": "@agentclientprotocol/claude-agent-acp",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "0.87.0"
           },
@@ -1811,7 +1811,7 @@
           "name": "@agentclientprotocol/codex-acp",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "2.1.1"
           },
@@ -1825,7 +1825,7 @@
           "name": "@agentclientprotocol/sdk",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^1.7.0"
           },
@@ -1839,7 +1839,7 @@
           "name": "@fastify/cookie",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^11.1.2"
           },
@@ -1853,7 +1853,7 @@
           "name": "@fastify/cors",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^11.3.0"
           },
@@ -1867,7 +1867,7 @@
           "name": "@fastify/static",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^9.3.0"
           },
@@ -1881,7 +1881,7 @@
           "name": "@fastify/websocket",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^11.3.3"
           },
@@ -1895,7 +1895,7 @@
           "name": "@jait/screen-share",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "workspace:*"
           },
@@ -1909,7 +1909,7 @@
           "name": "@jait/shared",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "workspace:*"
           },
@@ -1923,7 +1923,7 @@
           "name": "@modelcontextprotocol/sdk",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^1.32.1"
           },
@@ -1937,7 +1937,7 @@
           "name": "@parcel/watcher",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^2.6.0"
           },
@@ -1951,7 +1951,7 @@
           "name": "baileys",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^7.0.0-rc14"
           },
@@ -1965,7 +1965,7 @@
           "name": "bun-pty",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^0.4.11"
           },
@@ -1979,7 +1979,7 @@
           "name": "dotenv",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^16.6.1"
           },
@@ -1993,7 +1993,7 @@
           "name": "drizzle-orm",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^0.45.3"
           },
@@ -2007,7 +2007,7 @@
           "name": "fast-xml-parser",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^5.11.2"
           },
@@ -2021,7 +2021,7 @@
           "name": "fastify",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^5.12.5"
           },
@@ -2035,7 +2035,7 @@
           "name": "htmlparser2",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^12.0.0"
           },
@@ -2049,7 +2049,7 @@
           "name": "imapflow",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^2.5.2"
           },
@@ -2063,7 +2063,7 @@
           "name": "jose",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^6.2.12"
           },
@@ -2077,7 +2077,7 @@
           "name": "mailparser",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^3.9.40"
           },
@@ -2091,7 +2091,7 @@
           "name": "matrix-bot-sdk",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^0.8.0"
           },
@@ -2105,7 +2105,7 @@
           "name": "matrix-encrypt-attachment",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^1.0.3"
           },
@@ -2119,7 +2119,7 @@
           "name": "nanoid",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^5.1.16"
           },
@@ -2133,7 +2133,7 @@
           "name": "node-pty",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^1.1.0"
           },
@@ -2147,7 +2147,7 @@
           "name": "nodemailer",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^10.1.2"
           },
@@ -2161,7 +2161,7 @@
           "name": "pino",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^9.14.0"
           },
@@ -2175,7 +2175,7 @@
           "name": "playwright",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^1.64.0"
           },
@@ -2189,7 +2189,7 @@
           "name": "qrcode",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^1.5.4"
           },
@@ -2203,7 +2203,7 @@
           "name": "ws",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^8.22.0"
           },
@@ -2217,7 +2217,7 @@
           "name": "yaml",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^2.9.1"
           },
@@ -2231,7 +2231,7 @@
           "name": "zod",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^4.6.5"
           },
@@ -2245,7 +2245,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-nodejs",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "0.6.1"
           },
@@ -2259,7 +2259,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-wasm",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "version": "^18.9.0"
           },
@@ -2273,7 +2273,7 @@
           "name": "jait",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "entry": "./bin/jait.mjs"
           },
@@ -2287,7 +2287,7 @@
           "name": "jait-matrix",
           "start": 0,
           "end": 2786,
-          "fingerprint": "a463190a68c47baa",
+          "fingerprint": "01edbd160ab695d9",
           "details": {
             "entry": "./bin/matrix-stack.mjs"
           },
