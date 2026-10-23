@@ -29,7 +29,7 @@ function Harness() {
     <button onClick={() => { setIsStreaming(true); setMessages(current => [...current, { ...prompt, id: 'next-prompt' }]) }}>Send again</button>
     <div style={{ height: 400, display: 'flex' }}>
       <Conversation mobile={params.has('mobile')} showMinimap={params.has('minimap')} sessionId="viewport-fixture" isStreaming={isStreaming} className="h-full w-full" messageContents={messages.map(message => message.content)}
-        messageEstimateInputs={params.has('browser') ? messages.map((message, index) => index === 0 ? { ...message, toolCalls: [{ tool: 'browser.navigate' }] } : message) : messages} scrollToMessageId={latestUser && renderKey(latestUser)}>
+        messageEstimateInputs={params.has('browser') ? messages.map((message, index) => index === messages.length - 1 ? { ...message, toolCalls: [{ tool: 'browser.navigate' }] } : message) : messages} scrollToMessageId={latestUser && renderKey(latestUser)}>
         {messages.map(message => <div key={renderKey(message)} style={{ height: message.content === answer.content ? answerHeight : 160 }}>
           {message.content}
         </div>)}

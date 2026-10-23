@@ -38,6 +38,18 @@ fn binary() -> &'static str {
     env!("CARGO_BIN_EXE_jait-local-deploy")
 }
 
+// CI runners install node into the setup-node toolcache rather than /usr/bin,
+// so resolve the interpreter from PATH instead of hardcoding a distro path.
+fn node_binary() -> PathBuf {
+    for dir in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()) {
+        let candidate = dir.join("node");
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    PathBuf::from("node")
+}
+
 #[test]
 fn native_cli_executes_all_mandatory_gates_and_never_issues_failed_or_changed_build_proof() {
     for mode in ["pass", "fail", "drift"] {
@@ -116,7 +128,7 @@ async fn production_controller_writes_backup_activates_and_restores_using_fake_s
         r#"{"name":"@jait/gateway","version":"old"}"#,
     )
     .unwrap();
-    let node = PathBuf::from("/usr/bin/node");
+    let node = node_binary();
     let mut service = Child(
         Command::new(&node)
             .arg(&entry)
