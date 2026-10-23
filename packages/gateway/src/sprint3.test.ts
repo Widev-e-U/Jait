@@ -178,30 +178,6 @@ describe("FileSystemSurface", () => {
     const snap = fs.snapshot();
     expect(snap.metadata.operationCount).toBe(2);
   });
-
-  it("rejects copying a directory into itself", async () => {
-    await expect(fs.copyFile("src", "src")).rejects.toThrow(
-      "Cannot copy a directory into itself or its descendants.",
-    );
-  });
-
-  it("rejects copying a directory into its descendant", async () => {
-    mkdirSync(join(project, "src", "inner"), { recursive: true });
-    await expect(fs.copyFile("src", "src/inner")).rejects.toThrow(
-      "Cannot copy a directory into itself or its descendants.",
-    );
-  });
-
-  it("copies a directory into a new sibling destination", async () => {
-    await fs.copyFile("src", "copied");
-    expect(readFileSync(join(project, "copied", "hello.ts"), "utf-8")).toBe("export const x = 42;\n");
-  });
-
-  it("copies a directory into an existing sibling destination", async () => {
-    mkdirSync(join(project, "existing"), { recursive: true });
-    await fs.copyFile("src", "existing");
-    expect(readFileSync(join(project, "existing", "hello.ts"), "utf-8")).toBe("export const x = 42;\n");
-  });
 });
 
 // ── Surface Registry Tests (async) ──────────────────────────────

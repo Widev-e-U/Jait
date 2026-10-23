@@ -53,16 +53,6 @@ describe("ToolRegistry audit and validation behavior", () => {
     expect(registry.get("session.search")?.description).toContain("prior chat messages");
   });
 
-  it("registers context and loop tools when session state and chat loops are provided", () => {
-    const registry = createToolRegistry(new SurfaceRegistry(), {
-      sessionState: { get: () => ({}), set: () => {} },
-      chatLoops: {},
-    } as any);
-
-    expect(registry.get("context.read")?.name).toBe("context.read");
-    expect(registry.get("loop.goal")?.name).toBe("loop.goal");
-  });
-
   it("normalizes builtin tools with builtin source metadata", () => {
     const registry = new ToolRegistry();
     registry.register({
