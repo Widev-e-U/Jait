@@ -4,6 +4,16 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.960](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.960) — 2026-10-23
+
+- chore(e2e): drop leftover column-alignment debug log — 6d3ddafe
+- feat: context/cost controls, native Rust ports, and messenger/chat UI — eed1be75
+- feat: rust gateway contract port, local deploy tooling, messenger and browser UI work — 1d584fb1
+- fix(chat): keep background-terminal steering notices out of the transcript — 78183b9c
+- fix(web): keep desktop transcript visible beside the minimap — 483062b0
+
+Context/cost controls, native Rust ports (chat loops, code graph, workbench, security tools, context budget), and messenger/chat UI; native gate 219/374.
+
 ## [v0.1.959](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.959) — 2026-10-22
 
 - feat: rust gateway contract port, local deploy tooling, messenger and browser UI work — 1d584fb1
