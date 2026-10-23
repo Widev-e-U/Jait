@@ -218,6 +218,25 @@ describe("buildSystemPrompt", () => {
     }
   });
 
+  it("injects the project architecture graph and truncates oversized graphs", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      architectureGraph: "graph TD\nA-->B",
+    });
+    expect(prompt).toContain("<projectArchitecture>");
+    expect(prompt).toContain("A-->B");
+
+    const clipped = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      architectureGraph: "graph TD\nA" + "x".repeat(5000),
+    });
+    expect(clipped).toContain("%% …truncated");
+  });
+
   it("does not inject the skill evaluation appendix", () => {
     const prompt = buildSystemPrompt("agent", {
       model: "gpt-4o",

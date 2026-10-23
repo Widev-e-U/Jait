@@ -519,6 +519,51 @@ describe("AcpProvider MCP startup events", () => {
   });
 });
 
+describe("AcpProvider context-control session updates", () => {
+  function provider() {
+    return new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+  }
+
+  it("forwards available_commands_update as an activity event", () => {
+    const p = provider();
+    const events: ProviderEvent[] = [];
+    p.onEvent((event) => events.push(event));
+
+    p.handleSessionUpdate("s1", {
+      update: {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [{ name: "cmd1" }, { name: "cmd2" }],
+      },
+    } as any);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "activity", sessionId: "s1", kind: "available_commands_update" });
+  });
+
+  it("forwards usage_update as an activity event", () => {
+    const p = provider();
+    const events: ProviderEvent[] = [];
+    p.onEvent((event) => events.push(event));
+
+    p.handleSessionUpdate("s1", {
+      update: {
+        sessionUpdate: "usage_update",
+        used: 1234,
+        size: 2000,
+      },
+    } as any);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: "activity", sessionId: "s1", kind: "usage_update" });
+  });
+});
+
 describe("AcpProvider thinking forwarding", () => {
   it("emits a thinking event for agent_thought_chunk text blocks", () => {
     const provider = new AcpProvider({

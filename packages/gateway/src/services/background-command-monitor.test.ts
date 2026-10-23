@@ -279,6 +279,131 @@ describe("extractCompletionOutput", () => {
 });
 
 
+class ExitSurface extends FakeSurface {
+  private readonly exits = new Set<(exitCode: number | null) => void>();
+  addExitListener(listener: (exitCode: number | null) => void): void {
+    this.exits.add(listener);
+  }
+  removeExitListener(listener: (exitCode: number | null) => void): void {
+    this.exits.delete(listener);
+  }
+  exit(exitCode: number | null): void {
+    for (const listener of [...this.exits]) listener(exitCode);
+  }
+}
+
+describe("BackgroundCommandMonitor execution inspection and cancellation", () => {
+  beforeEach(() => backgroundCommandMonitor.clearForTests());
+  afterEach(() => backgroundCommandMonitor.clearForTests());
+
+  it("inspects a running execution and reads its completed history", async () => {
+    const surface = new FakeSurface();
+    backgroundCommandMonitor.setCompletionHandler(() => {});
+    backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "npm test", surface, executionId: "exec-1" });
+
+    const running = backgroundCommandMonitor.inspectExecution("s", "t", "exec-1");
+    expect(running?.status).toBe("running");
+    expect(running?.executionId).toBe("exec-1");
+    expect(running?.exitCode).toBeNull();
+
+    surface.emit("npm test\r\nPASS\r\n" + oscDone(0));
+    await flush();
+
+    const done = backgroundCommandMonitor.inspectExecution("s", "t", "exec-1");
+    expect(done?.status).toBe("completed");
+    expect(done?.exitCode).toBe(0);
+    expect(backgroundCommandMonitor.activeCount).toBe(0);
+  });
+
+  it("cancels a running execution and records a cancelled snapshot", () => {
+    const surface = new FakeSurface();
+    backgroundCommandMonitor.setCompletionHandler(() => {});
+    backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "npm test", surface, executionId: "exec-1", onCancel: () => {} });
+
+    const cancelled = backgroundCommandMonitor.cancelExecution("s", "t", "exec-1");
+    expect(cancelled?.status).toBe("cancelled");
+    expect(cancelled?.executionId).toBe("exec-1");
+    expect(backgroundCommandMonitor.activeCount).toBe(0);
+    // Cancelled execution is now inspectable through history.
+    expect(backgroundCommandMonitor.inspectExecution("s", "t", "exec-1")?.status).toBe("cancelled");
+  });
+
+  it("returns null for an unknown execution", () => {
+    expect(backgroundCommandMonitor.inspectExecution("s", "t", "nope")).toBeNull();
+    expect(backgroundCommandMonitor.cancelExecution("s", "t", "nope")).toBeNull();
+  });
+
+  it("tracks an external process through its exit promise and records failed status", async () => {
+    backgroundCommandMonitor.setCompletionHandler(() => {});
+    const startedAt = Date.now() - 1000;
+    let resolve: (value: { exitCode: number | null; output: string; timedOut?: boolean }) => void = () => {};
+    const promise = new Promise<{ exitCode: number | null; output: string; timedOut?: boolean }>((r) => { resolve = r; });
+
+    expect(backgroundCommandMonitor.trackExternal({
+      sessionId: "s", terminalId: "t", command: "build", startedAt,
+      exitPromise: promise, executionId: "exec-1", getOutput: () => "building…",
+    })).toBe(true);
+    expect(backgroundCommandMonitor.inspectExecution("s", "t", "exec-1")?.status).toBe("running");
+
+    resolve({ exitCode: 1, output: "failed" });
+    await flush();
+
+    const done = backgroundCommandMonitor.inspectExecution("s", "t", "exec-1");
+    expect(done?.status).toBe("failed");
+    expect(done?.exitCode).toBe(1);
+    expect(done?.output).toBe("failed");
+  });
+
+  it("records a timed-out external process without notifying when shouldNotify is false", async () => {
+    const notified = vi.fn();
+    backgroundCommandMonitor.setCompletionHandler(notified);
+    const promise = Promise.resolve({ exitCode: null, output: "", timedOut: true });
+    backgroundCommandMonitor.trackExternal({
+      sessionId: "s", terminalId: "t", command: "hang", startedAt: Date.now(),
+      exitPromise: promise, executionId: "exec-1", shouldNotify: () => false,
+    });
+    await flush();
+    expect(backgroundCommandMonitor.inspectExecution("s", "t", "exec-1")?.status).toBe("timed_out");
+    expect(notified).not.toHaveBeenCalled();
+  });
+
+  it("finishes through the surface exit listener", async () => {
+    const surface = new ExitSurface();
+    const results: BackgroundCommandResult[] = [];
+    backgroundCommandMonitor.setCompletionHandler((r) => results.push(r));
+    backgroundCommandMonitor.track({ sessionId: "s", terminalId: "t", command: "npm test", surface, executionId: "exec-1" });
+
+    surface.exit(0);
+    await flush();
+
+    expect(results).toHaveLength(1);
+    expect(results[0]!.exitCode).toBe(0);
+    expect(backgroundCommandMonitor.inspectExecution("s", "t", "exec-1")?.status).toBe("completed");
+  });
+
+  it("reports a timed-out execution through onTimeout", async () => {
+    vi.useFakeTimers();
+    try {
+      const surface = new ExitSurface();
+      const notified = vi.fn();
+      const onTimeout = vi.fn();
+      backgroundCommandMonitor.setCompletionHandler(notified);
+      backgroundCommandMonitor.track({
+        sessionId: "s", terminalId: "t", command: "npm run dev", surface,
+        executionId: "exec-1", maxWatchMs: 1000, onTimeout,
+      });
+
+      await vi.advanceTimersByTimeAsync(1001);
+
+      expect(onTimeout).toHaveBeenCalledTimes(1);
+      expect(backgroundCommandMonitor.inspectExecution("s", "t", "exec-1")?.status).toBe("timed_out");
+      expect(notified).toHaveBeenCalledWith(expect.objectContaining({ timedOut: true }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("BackgroundCommandMonitor cancellation during output delivery", () => {
   afterEach(() => backgroundCommandMonitor.clearForTests());
   it.each([undefined, "__JAIT_BACKGROUND_DONE_abc-123__"])("does not complete or notify when onOutput cancels the session (token=%s)", async (completionToken) => {
