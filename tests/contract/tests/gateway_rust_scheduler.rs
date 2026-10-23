@@ -635,10 +635,13 @@ async fn simultaneous_jobs_and_later_ticks_progress_while_same_job_is_guarded() 
     // may legitimately skip it. Retry across successive minutes: `slow` stays guarded for the
     // whole window, and some later tick must still make progress on the unguarded jobs.
     for minute in 1..=5i64 {
-        tokio::time::timeout(Duration::from_secs(5), service.tick(first_ms + minute * 60_000))
-            .await
-            .unwrap()
-            .unwrap();
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            service.tick(first_ms + minute * 60_000),
+        )
+        .await
+        .unwrap()
+        .unwrap();
         let progressed = calls
             .lock()
             .unwrap()
