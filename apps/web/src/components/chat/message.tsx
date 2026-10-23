@@ -29,7 +29,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { AgentToolCallWrapper, SubAgentAuthProvider, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, ChatOpenPathContext, SubAgentAuthProvider, ToolCallGroup, formatElapsedDuration, shouldRenderToolCall, type ToolCallInfo } from './tool-call-card'
 import { AssistantBody, shouldUseAgentToolCallWrapper } from './assistant-body'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import { getCachedContextFlow, fetchContextFlow } from '@/lib/context-flow-cache'
@@ -841,7 +841,7 @@ function MessageInner({
   }
 
   return (
-    <>
+    <ChatOpenPathContext.Provider value={onOpenPath ?? null}>
     <div className="w-full">
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn(
@@ -1135,7 +1135,7 @@ function MessageInner({
       responseContent={content}
       loading={contextFlowLoading}
     />
-    </>
+    </ChatOpenPathContext.Provider>
   )
 }
 

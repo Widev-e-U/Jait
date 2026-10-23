@@ -336,7 +336,8 @@ export function registerProjectRoutes(
       const stInfo = await fs.statFile(filePath);
       if (format === "image") {
         const extension = filePath.split(".").pop()?.toLowerCase() ?? "";
-        const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml", avif: "image/avif", ico: "image/x-icon" };
+        // `format=image` is the binary preview path: images, plus PDFs for the in-app viewer.
+        const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml", avif: "image/avif", ico: "image/x-icon", pdf: "application/pdf" };
         const type = types[extension];
         if (!type) return reply.status(400).send({ error: "UNSUPPORTED_IMAGE" });
         if (stInfo.size > 20 * 1024 * 1024) return reply.status(413).send({ error: "IMAGE_TOO_LARGE" });

@@ -51,6 +51,7 @@ import {
   type UserImageAttachment,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
+import { COMPOSER_BULLET, bulletsToMarkdown, resolveListLineBreak, shouldAutoBullet } from '@/lib/prompt-list-format'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
 import type { ResponseStyle } from '@jait/shared'
 
@@ -306,6 +307,10 @@ function getVsFolderIconName(foldername: string): string {
 
 /** Extract plain text from the editable div, ignoring chip nodes. */
 function getTextFromEditable(el: HTMLElement): string {
+  return bulletsToMarkdown(collectEditableText(el))
+}
+
+function collectEditableText(el: HTMLElement): string {
   let text = ''
   const children = el.childNodes
   for (let i = 0; i < children.length; i++) {
@@ -321,11 +326,113 @@ function getTextFromEditable(el: HTMLElement): string {
         const isLast = i === children.length - 1
         if (!isLast) text += '\n'
       } else {
-        text += getTextFromEditable(node)
+        text += collectEditableText(node)
       }
     }
   }
   return text
+}
+
+/** Text of the caret's line up to the caret (chips count as one character). */
+function getLineBeforeCaret(el: HTMLElement): string | null {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!range.collapsed || (range.startContainer !== el && !el.contains(range.startContainer))) return null
+  const before = document.createRange()
+  before.selectNodeContents(el)
+  before.setEnd(range.startContainer, range.startOffset)
+  const read = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+    if (!(node instanceof HTMLElement)) return Array.from(node.childNodes).map(read).join('')
+    if (node.hasAttribute('data-chip-ref')) return '￼'
+    if (node.tagName === 'BR') return '\n'
+    return Array.from(node.childNodes).map(read).join('')
+  }
+  const text = read(before.cloneContents())
+  return text.slice(text.lastIndexOf('\n') + 1)
+}
+
+/** Insert a `<br>` (plus an optional list prefix) at the caret. */
+function insertLineBreakAtCaret(prefix: string) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+  const range = selection.getRangeAt(0)
+  range.deleteContents()
+  const br = document.createElement('br')
+  range.insertNode(br)
+  const caret = document.createRange()
+  if (prefix) {
+    const text = document.createTextNode(prefix)
+    br.after(text)
+    caret.setStart(text, prefix.length)
+  } else {
+    // Empty text nodes left by `insertNode` make Chrome snap the caret back to
+    // the previous line, and a trailing <br> renders no line of its own.
+    let next = br.nextSibling
+    while (next && next.nodeType === Node.TEXT_NODE && !next.textContent) {
+      const following = next.nextSibling
+      next.remove()
+      next = following
+    }
+    if (!next) br.after(document.createElement('br'))
+    caret.setStartAfter(br)
+  }
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+}
+
+/**
+ * Delete `count` characters directly before the caret without crossing a line
+ * break or chip (`selection.modify` would also swallow the preceding `<br>`).
+ */
+function deleteBeforeCaret(count: number): boolean {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || count <= 0) return false
+  const range = selection.getRangeAt(0)
+  let node: Node = range.startContainer
+  let offset = range.startOffset
+  if (node.nodeType !== Node.TEXT_NODE) {
+    const previous = node.childNodes[offset - 1]
+    if (!previous || previous.nodeType !== Node.TEXT_NODE) return false
+    node = previous
+    offset = previous.textContent?.length ?? 0
+  }
+  const text = node.textContent ?? ''
+  if (offset < count) return false
+  node.textContent = text.slice(0, offset - count) + text.slice(offset)
+  // An emptied last line after a <br> would not render; keep it alive.
+  // (`range.insertNode` leaves empty text nodes behind, so skip those.)
+  let next = node.nextSibling
+  while (next && next.nodeType === Node.TEXT_NODE && !next.textContent) next = next.nextSibling
+  if (!node.textContent && !next && node.previousSibling?.nodeName === 'BR') {
+    (node as Text).after(document.createElement('br'))
+  }
+  const caret = document.createRange()
+  caret.setStart(node, offset - count)
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+  return true
+}
+
+/** Swap the `- ` just typed at the start of a line for a bullet. */
+function replaceDashWithBullet() {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return false
+  const range = selection.getRangeAt(0)
+  const node = range.startContainer
+  const offset = range.startOffset
+  if (node.nodeType !== Node.TEXT_NODE || offset < 2) return false
+  const text = node.textContent ?? ''
+  node.textContent = `${text.slice(0, offset - 2)}${COMPOSER_BULLET} ${text.slice(offset)}`
+  const caret = document.createRange()
+  caret.setStart(node, offset)
+  caret.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(caret)
+  return true
 }
 
 /** Strip zero-width and invisible formatting characters. */
@@ -447,7 +554,20 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
   }
 
   for (const child of el.childNodes) visit(child)
-  return normalizeUserMessageSegments(segments)
+  // Bullets only become markdown at the start of a line, never after a chip.
+  let atLineStart = true
+  return normalizeUserMessageSegments(segments).map((segment) => {
+    if (segment.type !== 'text') {
+      atLineStart = false
+      return segment
+    }
+    const firstBreak = segment.text.indexOf('\n')
+    const text = atLineStart
+      ? bulletsToMarkdown(segment.text)
+      : firstBreak < 0 ? segment.text : segment.text.slice(0, firstBreak) + bulletsToMarkdown(segment.text.slice(firstBreak))
+    atLineStart = text.endsWith('\n')
+    return text === segment.text ? segment : { ...segment, text }
+  })
 }
 
 function readChipLineRange(node: HTMLElement): { lineRange: { startLine: number; endLine: number } } | Record<string, never> {
@@ -1487,13 +1607,59 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setSlashQuery('')
   }, [handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments])
 
+  /**
+   * Line break inside the composer (Shift+Enter, or the soft keyboard's Enter
+   * on Android, which arrives as `insertParagraph`). On a list line it
+   * continues the list; on an empty item it ends the list instead. Inserting
+   * the `<br>` ourselves also keeps the browser from wrapping the new line in a
+   * `<div>` that the sanitizer would flatten away.
+   */
+  const applyLineBreak = useCallback((): boolean => {
+    const el = editableRef.current
+    if (!el) return false
+    const line = getLineBeforeCaret(el)
+    if (line === null) return false
+    pushUndoSnapshot(true)
+    const action = resolveListLineBreak(line)
+    if (action?.kind !== 'end' || !deleteBeforeCaret(action.markerLength)) {
+      insertLineBreakAtCaret(action?.kind === 'continue' ? action.prefix : '')
+    }
+    draftSegmentsRef.current = syncComposerSegments(el)
+    isSyncing.current = true
+    onChange(getTextFromEditable(el))
+    isSyncing.current = false
+    setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
+    scrollCaretIntoView(el)
+    return true
+  }, [onChange, pushUndoSnapshot, syncComposerSegments])
+  const applyLineBreakRef = useRef(applyLineBreak)
+  applyLineBreakRef.current = applyLineBreak
+
+  // React's synthetic onBeforeInput never reports `insertParagraph`, which is
+  // what Android keyboards send for their Enter key — listen natively.
+  useEffect(() => {
+    const el = editableRef.current
+    if (!el) return
+    const handleBeforeInput = (event: InputEvent) => {
+      if (event.inputType !== 'insertParagraph' && event.inputType !== 'insertLineBreak') return
+      if (applyLineBreakRef.current()) event.preventDefault()
+    }
+    el.addEventListener('beforeinput', handleBeforeInput)
+    return () => el.removeEventListener('beforeinput', handleBeforeInput)
+  }, [syncComposerSegments, variant]) // same mount lifecycle as the input listener below
+
   /** Handle input events on the contentEditable — uses a native listener
    *  because React's synthetic onInput doesn't fire reliably for contentEditable. */
   useEffect(() => {
     const el = editableRef.current
     if (!el) return
 
-    const handleNativeInput = () => {
+    const handleNativeInput = (event: Event) => {
+      const inputEvent = event as InputEvent
+      if (inputEvent.inputType?.startsWith('insert') && !inputEvent.isComposing) {
+        const line = getLineBeforeCaret(el)
+        if (line !== null && shouldAutoBullet(line)) replaceDashWithBullet()
+      }
       isSyncing.current = true
       sanitizeEditableContent(el)
       const text = getTextFromEditable(el)
@@ -1742,6 +1908,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         }
       }
     }
+    if (e.key === 'Enter' && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      if (applyLineBreak()) e.preventDefault()
+      return
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       if (readingAttachments > 0) {
         e.preventDefault()
@@ -1779,7 +1949,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       }
       runSendAction(action, { chips, segments: nextSegments })
     }
-  }, [composerDisabled, submitLoading, mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, defaultStreamingAction, onQueue, onSteer, onThreadSubmit, onAskInParallel, onSubmit, clearOnSubmit, attachments, segments, resetComposer, clearSubmittedAttachments, restoreSnapshot, runSendAction, readingAttachments, syncComposerSegments])
+  }, [composerDisabled, submitLoading, mentionOpen, searchResults, mentionIndex, insertMention, slashOpen, slashResults, slashIndex, insertSkill, value, isLoading, sendTarget, defaultStreamingAction, onQueue, onSteer, onThreadSubmit, onAskInParallel, onSubmit, clearOnSubmit, attachments, segments, resetComposer, clearSubmittedAttachments, restoreSnapshot, runSendAction, readingAttachments, syncComposerSegments, applyLineBreak])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {

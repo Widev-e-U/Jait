@@ -73,6 +73,8 @@ interface DeveloperSidebarsProps {
   onSearch: (query: string) => void
   onSelectPersonalSession: (sessionId: string) => void
   onSelectProject: (projectId: string) => void
+  onNewChatInProject?: (projectId: string) => void
+  onRenameSession?: (sessionId: string, name: string) => void | Promise<unknown>
   onSelectProjectSession: (projectId: string, sessionId: string) => void
   onShowFewer: () => void
   onShowMore: () => void
@@ -138,6 +140,8 @@ export function DeveloperSidebars({
   onSearch,
   onSelectPersonalSession,
   onSelectProject,
+  onNewChatInProject,
+  onRenameSession,
   onSelectProjectSession,
   onShowFewer,
   onShowMore,
@@ -222,6 +226,8 @@ export function DeveloperSidebars({
               searchResults={searchResults}
               onSearch={onSearch}
               onSelectProject={onSelectProject}
+              onNewChatInProject={onNewChatInProject}
+              onRenameSession={onRenameSession}
               onSelectProjectSession={onSelectProjectSession}
               onSelectPersonalSession={onSelectPersonalSession}
               onArchiveSession={onArchiveSession}

@@ -12,7 +12,7 @@ import {
 } from '@/components/ai-elements/code-block'
 import { cn } from '@/lib/utils'
 import { FileIcon } from '@/components/icons/file-icons'
-import { parseProjectLinkTarget } from '@/lib/project-links'
+import { parseInlinePathCandidate, parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { useGatewayImage } from '@/hooks/useGatewayImage'
 import { TooltipHint } from '@/components/ui/tooltip'
@@ -263,14 +263,32 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
         )
       }
 
+      const codeClassName = cn(
+        'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
+        'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
+      )
+      const pathTarget = onOpenPath ? parseInlinePathCandidate(String(children ?? '')) : null
+      if (pathTarget && onOpenPath) {
+        return (
+          <TooltipHint content={`Open ${pathTarget.path}`}>
+            <button
+              type="button"
+              data-chat-path={pathTarget.path}
+              className={cn(codeClassName, 'cursor-pointer items-center gap-1 hover:border-primary/50 hover:bg-muted hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+              onClick={(event) => {
+                event.preventDefault()
+                void onOpenPath(pathTarget.path, pathTarget.line, pathTarget.column)
+              }}
+            >
+              <FileIcon filename={getFileLinkLabel(pathTarget.path)} className="h-3 w-3 shrink-0 self-center" />
+              <span className="max-w-[32rem] truncate sm:max-w-[40rem]">{children}</span>
+            </button>
+          </TooltipHint>
+        )
+      }
+
       return (
-        <code
-          className={cn(
-            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
-            'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
-          )}
-          {...props}
-        >
+        <code className={codeClassName} {...props}>
           <span className="max-w-[32rem] truncate sm:max-w-[40rem]">{children}</span>
         </code>
       )

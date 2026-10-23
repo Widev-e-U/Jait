@@ -121,6 +121,19 @@ export interface ChatTransportSnapshot {
  */
 export const WAKE_TRANSPORT_STALE_MS = 45_000
 
+/**
+ * Staleness bound used after a wake once the socket had a moment to drain what
+ * the OS buffered while the app was paused. A live socket has delivered a 15s
+ * heartbeat by then; Android WebViews routinely keep a socket that died in the
+ * background looking `open`, and waiting the full 45s bound left the chat
+ * frozen until the user left and re-entered it.
+ */
+export const WAKE_RESUME_STALE_MS = 20_000
+/** How long a wake waits for buffered bytes before judging the socket. */
+const WAKE_SETTLE_MS = 1_500
+/** Foreground watchdog cadence for a socket that went silent without an error. */
+const TRANSPORT_WATCHDOG_INTERVAL_MS = 10_000
+
 export function getChatWakeRecoveryAction(params: {
   sessionId: string | null
   isLoading: boolean
@@ -129,6 +142,7 @@ export function getChatWakeRecoveryAction(params: {
   error?: string | null
   hasSubscription: boolean
   transport?: ChatTransportSnapshot | null
+  staleMs?: number
 }): ChatWakeRecoveryAction {
   if (!shouldResumeChatSession({ ...params, forceRefresh: true })) return 'none'
   const transport = params.transport
@@ -136,7 +150,7 @@ export function getChatWakeRecoveryAction(params: {
     transport != null &&
     transport.state === 'open' &&
     transport.attempts === 0 &&
-    transport.idleMs <= WAKE_TRANSPORT_STALE_MS
+    transport.idleMs <= (params.staleMs ?? WAKE_TRANSPORT_STALE_MS)
   ) {
     // The durable subscription replays any gap from Last-Event-ID and the
     // accumulator holds every uncommitted delta, so tearing down and refetching a
@@ -769,7 +783,8 @@ export function useChat(
     setTodoList((items) => items.some((item) => item.status !== 'completed') ? [] : items)
   }, [])
 
-  const prevSessionIdRef = useRef<string | null>(null)
+  // `undefined` = "re-run the session effect"; `null` = deliberately no chat (a new-chat draft).
+  const prevSessionIdRef = useRef<string | null | undefined>(undefined)
   const subscriptionRunIdRef = useRef(0)
   const requestVersionRef = useRef(0)
   /**
@@ -854,7 +869,7 @@ export function useChat(
    */
   const resumeSessionStream = useCallback(() => {
     preserveMessagesOnNextResumeRef.current = true
-    prevSessionIdRef.current = null
+    prevSessionIdRef.current = undefined
     setRefreshTrigger(n => n + 1)
   }, [])
 
@@ -1460,6 +1475,7 @@ export function useChat(
 
     const subscribe = (fromSeq: string | null) => {
       if (!isCurrent()) return
+      let hasOpened = false
       subscriptionRef.current = openSessionEventSubscription({
         url: `${API_URL}/api/sessions/${sessionId}/events`,
         headers: authHeaders(authToken),
@@ -1468,6 +1484,13 @@ export function useChat(
         onOpen: () => {
           if (!isCurrent()) return
           setState(prev => (prev.error === TRANSIENT_CONNECTION_MESSAGE ? { ...prev, error: null } : prev))
+          // The gateway tags everything it replays after a drop as `replay`,
+          // including turns that ran entirely while this client was cut off
+          // (e.g. a queued prompt the server drained). Replays never synthesize
+          // the user bubble, so such a prompt simply vanished until the chat
+          // was reopened. Re-seed from an authoritative snapshot instead.
+          if (hasOpened) resumeSessionStreamRef.current?.()
+          hasOpened = true
         },
         onReconnect: (attempt) => {
           // A drop that repairs itself within a retry or two loses nothing —
@@ -1556,7 +1579,7 @@ export function useChat(
       scheduler.cancel()
       if (activeStreamRef.current?.isCurrent === isCurrent) activeStreamRef.current = null
       // Reset so React strict-mode re-mount can re-run the effect
-      prevSessionIdRef.current = null
+      prevSessionIdRef.current = undefined
     }
   }, [authToken, cacheScope, clearUnfinishedTodoList, onLoginRequired, sessionId, refreshTrigger, updateQueue])
 
@@ -2081,10 +2104,14 @@ export function useChat(
   // Last-Event-ID and the latest accumulated state paints on the next visible
   // frame. Rebuilding unconditionally was visible as jank + a refetch pause
   // every time the user returned to the tab mid-stream.
+  const wakeStateRef = useRef({ isLoading: state.isLoading, isLoadingHistory: state.isLoadingHistory, messageCount: state.messages.length, error: state.error })
+  wakeStateRef.current = { isLoading: state.isLoading, isLoadingHistory: state.isLoadingHistory, messageCount: state.messages.length, error: state.error }
+
   useEffect(() => {
     if (typeof window === 'undefined') return
+    let settleTimer: ReturnType<typeof setTimeout> | null = null
 
-    const reattach = () => {
+    const reattach = (staleMs?: number) => {
       const subscription = subscriptionRef.current
       const health = subscription?.getHealth()
       const transport = health
@@ -2096,14 +2123,22 @@ export function useChat(
         : null
       const recoveryAction = getChatWakeRecoveryAction({
         sessionId,
-        isLoading: state.isLoading,
-        isLoadingHistory: state.isLoadingHistory,
-        messageCount: state.messages.length,
-        error: state.error,
+        ...wakeStateRef.current,
         hasSubscription: subscription != null,
         transport,
+        staleMs,
       })
       if (recoveryAction === 'snapshot') resumeSessionStream()
+    }
+
+    // Returning from the background: give a surviving socket a moment to
+    // deliver what was buffered, then hold it to a one-missed-heartbeat bound.
+    const reattachAfterWake = () => {
+      if (settleTimer !== null) clearTimeout(settleTimer)
+      settleTimer = setTimeout(() => {
+        settleTimer = null
+        if (!document.hidden) reattach(WAKE_RESUME_STALE_MS)
+      }, WAKE_SETTLE_MS)
     }
 
     const handleVisibilityChange = () => {
@@ -2113,10 +2148,10 @@ export function useChat(
       }
       if (!documentWasHiddenRef.current) return
       documentWasHiddenRef.current = false
-      reattach()
+      reattachAfterWake()
     }
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) reattach()
+      if (event.persisted) reattachAfterWake()
     }
     const handleOffline = () => {
       browserWasOfflineRef.current = true
@@ -2127,17 +2162,34 @@ export function useChat(
       if (wasOffline) reattach()
     }
 
+    // A socket can also die in the foreground without any error (Wi-Fi/LTE
+    // handoff, NAT timeout, Android doze): `read()` just never resolves again.
+    // The gateway heartbeats every 15s, so prolonged silence is proof enough.
+    const watchdog = setInterval(() => {
+      if (document.hidden) return
+      const health = subscriptionRef.current?.getHealth()
+      if (health?.state === 'open' && Date.now() - health.lastActivityAt > WAKE_TRANSPORT_STALE_MS) {
+        resumeSessionStream()
+      }
+    }, TRANSPORT_WATCHDOG_INTERVAL_MS)
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    // Capacitor dispatches `resume` on the document when the Android/iOS app
+    // returns to the foreground; WebViews do not always flip `visibilityState`.
+    document.addEventListener('resume', reattachAfterWake)
     window.addEventListener('pageshow', handlePageShow)
     window.addEventListener('offline', handleOffline)
     window.addEventListener('online', handleOnline)
     return () => {
+      if (settleTimer !== null) clearTimeout(settleTimer)
+      clearInterval(watchdog)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      document.removeEventListener('resume', reattachAfterWake)
       window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('online', handleOnline)
     }
-  }, [state.error, state.isLoading, state.isLoadingHistory, state.messages.length, resumeSessionStream, sessionId])
+  }, [resumeSessionStream, sessionId])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients

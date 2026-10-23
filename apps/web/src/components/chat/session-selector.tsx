@@ -5,6 +5,8 @@ import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import {
@@ -53,6 +55,12 @@ interface SessionSelectorProps {
   searchLoading?: boolean
   onSearch?: (query: string) => void
   onSelectProject: (projectId: string) => void
+  /**
+   * When set, clicking a project or folder row starts a new chat there; only a
+   * chat row opens an existing chat. Without it the row opens the latest chat.
+   */
+  onNewChatInProject?: (projectId: string) => void
+  onRenameSession?: (sessionId: string, name: string) => void | Promise<unknown>
   onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
   onArchiveSession?: (sessionId: string) => void
@@ -195,6 +203,8 @@ export function SessionSelector({
   searchLoading = false,
   onSearch,
   onSelectProject,
+  onNewChatInProject,
+  onRenameSession,
   onSelectProjectSession,
   onSelectPersonalSession,
   onArchiveSession,
@@ -391,11 +401,31 @@ export function SessionSelector({
     return validateProjectMove(projects, draggedId, targetId) === null
   }, [onMoveProject, projects],)
 
-  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel)
+  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel || onRenameSession)
+
+  const [renameTarget, setRenameTarget] = useState<{ sessionId: string; name: string } | null>(null)
+  const [renameSaving, setRenameSaving] = useState(false)
+  const startRename = (sessionId: string) => {
+    const session = projects.flatMap((project) => project.sessions).find((item) => item.id === sessionId)
+      ?? personalSessions.find((item) => item.id === sessionId)
+    setRenameTarget({ sessionId, name: session?.name ?? '' })
+  }
+  const submitRename = async () => {
+    const name = renameTarget?.name.trim()
+    if (!renameTarget || !name || !onRenameSession) return
+    setRenameSaving(true)
+    try {
+      await onRenameSession(renameTarget.sessionId, name)
+      setRenameTarget(null)
+    } finally {
+      setRenameSaving(false)
+    }
+  }
 
   const openSessionContextMenu = (x: number, y: number, sessionId: string, projectId: string | null) => {
     if (!hasSessionContextMenu) return
     const menuHeight = getSessionContextMenuHeight({
+      showRename: Boolean(onRenameSession),
       showOpenInPanel: Boolean(onOpenSessionInPanel),
       showMoveSection: Boolean(onMoveSession),
       showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
@@ -676,7 +706,7 @@ export function SessionSelector({
                   return (
                     <div key={project.id} style={{ marginLeft: depth * FOLDER_INDENT_PX }}>
                     <div
-                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
+                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${offline || (!onNewChatInProject && isLatestProjectSessionActive) ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
                       // Workspaces stay draggable as a project *reference* (the
                       // existing prompt-attachment gesture). Every row is also
                       // draggable as a move within the sidebar.
@@ -746,7 +776,9 @@ export function SessionSelector({
                       onClick={() => {
                         if (consumedByProjectMenu()) return
                         onDismiss?.()
-                        if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id)
+                        if (offline) return
+                        if (onNewChatInProject) onNewChatInProject(project.id)
+                        else if (!isLatestProjectSessionActive) onSelectProject(project.id)
                       }}
                       {...projectRowMenuHandlers(project.id)}
                     >
@@ -1264,10 +1296,42 @@ export function SessionSelector({
               onMoveSession={onMoveSession}
               onArchiveSession={onArchiveSession}
               onOpenInPanel={onOpenSessionInPanel}
+              onRename={onRenameSession ? startRename : undefined}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}
             />
           )}
+
+          <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open && !renameSaving) setRenameTarget(null) }}>
+            {/* Above the mobile navigation drawer (z-[61]) the list lives in. */}
+            <DialogContent className="z-[70] sm:max-w-sm" overlayClassName="z-[70]">
+              <DialogHeader>
+                <DialogTitle>Rename chat</DialogTitle>
+              </DialogHeader>
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void submitRename()
+                }}
+              >
+                <Input
+                  autoFocus
+                  aria-label="Chat name"
+                  value={renameTarget?.name ?? ''}
+                  maxLength={200}
+                  onChange={(event) => setRenameTarget((current) => current && { ...current, name: event.target.value })}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <DialogFooter>
+                  <Button type="button" variant="ghost" onClick={() => setRenameTarget(null)} disabled={renameSaving}>Cancel</Button>
+                  <Button type="submit" disabled={renameSaving || !renameTarget?.name.trim()}>
+                    {renameSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>

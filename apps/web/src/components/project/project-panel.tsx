@@ -1,5 +1,5 @@
 import { useGitChangeCounts, refreshGitChangeCounts } from '@/lib/git-service'
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type SetStateAction } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import Editor, { loader } from '@monaco-editor/react'
 import { AlertCircle, Bot, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
@@ -22,6 +22,7 @@ import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { ProjectImageViewer, isProjectImage } from './project-image-viewer'
+import { ProjectMarkdownView, ProjectPdfViewer, isProjectBinaryPreview, isProjectMarkdown, isProjectPdf } from './project-file-preview'
 import { cn } from '@/lib/utils'
 import { saveDetachedProjectTab, type DetachedProjectTabPayload } from '@/lib/detached-project-tab'
 import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
@@ -311,8 +312,8 @@ async function scanDir(dirHandle: FileSystemDirectoryHandle, prefix: string): Pr
 
 async function readFileHandle(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
-  if (isProjectImage(file.name)) {
-    if (file.size > 20 * 1024 * 1024) throw new Error('Image exceeds 20 MB preview limit')
+  if (isProjectBinaryPreview(file.name)) {
+    if (file.size > 20 * 1024 * 1024) throw new Error('File exceeds 20 MB preview limit')
     return new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => resolve(String(reader.result))
@@ -461,7 +462,7 @@ async function remoteScanDir(
 async function remoteReadFile(filePath: string, surfaceId?: string | null): Promise<string> {
   const read = async (targetSurfaceId?: string | null) => {
     let url = `${API_URL}/api/project/read?path=${encodeURIComponent(filePath)}`
-    if (isProjectImage(filePath)) url += '&format=image'
+    if (isProjectBinaryPreview(filePath)) url += '&format=image'
     if (targetSurfaceId) url += `&surfaceId=${encodeURIComponent(targetSurfaceId)}`
     return fetch(url)
   }
@@ -471,7 +472,7 @@ async function remoteReadFile(filePath: string, surfaceId?: string | null): Prom
   }
   if (!res.ok) throw new Error(`Failed to read file: ${res.statusText}`)
   const data = (await res.json()) as { content: string; size: number }
-  if (!isProjectImage(filePath) && data.size > 2 * 1024 * 1024) return '// File too large to preview'
+  if (!isProjectBinaryPreview(filePath) && data.size > 2 * 1024 * 1024) return '// File too large to preview'
   return data.content
 }
 
@@ -720,7 +721,7 @@ function collectSourceControlFilePaths(nodes: SourceControlTreeNode[]): string[]
 const gitApi = gitApiImport
 
 function isEditableProjectTab(tab: EditorTab | null): boolean {
-  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:') && !isProjectImage(tab.path))
+  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:') && !isProjectBinaryPreview(tab.path))
 }
 
 function getEditorTabTitle(tab: EditorTab): string {
@@ -1661,6 +1662,8 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   )
 
   const restoredTabsRootRef = useRef<string | null>(null)
+  /** Bumped by every explicit open-file request (see the tab restore effect). */
+  const explicitFileOpensRef = useRef(0)
   const restoringTabsRef = useRef(false)
   const waitingForPreviewRef = useRef(false)
   const lastPersistedTabsRef = useRef<string>('')
@@ -1891,6 +1894,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
     let cancelled = false
     restoringTabsRef.current = true
+    const explicitOpensAtStart = explicitFileOpensRef.current
     const restore = async () => {
       const restored: EditorTab[] = []
       for (const t of savedTabsState.tabs) {
@@ -1925,8 +1929,10 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
 
       // When the preview tab was the active tab before reload, skip
       // setting activeTabId to a file tab — the preview tab is activated
-      // directly above (or by the preview restoration flow).
-      if (active && !savedTabsState.activePreview) {
+      // directly above (or by the preview restoration flow). Likewise when a
+      // file was opened explicitly while this ran (e.g. tapping a path in chat
+      // mounts the panel on mobile): the restore must not steal its focus.
+      if (active && !savedTabsState.activePreview && explicitFileOpensRef.current === explicitOpensAtStart) {
         const activeFile = restored.find((t) => t.id === active)
         setActiveTabId(active)
         if (activeFile) {
@@ -2371,7 +2377,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [])
 
   const loadTabReviewBaseline = useCallback(async (tabId: string, filePath: string) => {
-    if (isProjectImage(filePath)) return
+    if (isProjectBinaryPreview(filePath)) return
     const gitOriginalContent = findWorkingTreeDiffEntry(filePath)?.original ?? null
     if (!surfaceId) {
       setTabOriginalContent(tabId, gitOriginalContent)
@@ -2382,7 +2388,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [findWorkingTreeDiffEntry, setTabOriginalContent, surfaceId])
 
   useEffect(() => {
-    if (activeTab?.type !== 'file' || isProjectImage(activeTab.path)) return
+    if (activeTab?.type !== 'file' || isProjectBinaryPreview(activeTab.path)) return
     const entry = findWorkingTreeDiffEntry(activeTab.path)
     if (!entry) return
     if (activeTab.originalContent === entry.original) return
@@ -3122,6 +3128,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
   }, [remoteRoot])
 
   const handleOpenFileByPath = useCallback(async (path: string): Promise<boolean> => {
+    explicitFileOpensRef.current += 1
     const targetPath = normalizePath(path)
     ensureEditorVisible()
     const rootPath = remoteRoot ? normalizePath(remoteRoot) : null
@@ -3200,6 +3207,30 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
     setLoadingFile(false)
     return true
   }, [bumpTree, ensureEditorVisible, lazyTree, loadTabReviewBaseline, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
+
+  /** Markdown opens rendered (unless a review diff is shown); links in it open in the viewer. */
+  const renderFileEditor = (tab: EditorTab, editor: ReactNode) => {
+    if (!isProjectMarkdown(tab.path) || tab.originalContent != null) return editor
+    const baseDir = tab.path.replace(/\\/g, '/').replace(/\/[^/]*$/, '')
+    return (
+      <ProjectMarkdownView
+        key={`md:${tab.id}`}
+        content={tab.content ?? ''}
+        editor={editor}
+        onOpenPath={(target) => {
+          const normalized = target.replace(/\\/g, '/')
+          const joined = /^(?:[A-Za-z]:)?\//.test(normalized) ? normalized : `${baseDir}/${normalized}`
+          // Resolve `.` / `..` so `../src/a.ts` from docs/guide.md lands on src/a.ts.
+          const segments: string[] = []
+          for (const segment of joined.split('/')) {
+            if (segment === '..') segments.pop()
+            else if (segment !== '.') segments.push(segment)
+          }
+          void handleOpenFileByPath(segments.join('/'))
+        }}
+      />
+    )
+  }
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
@@ -5724,9 +5755,11 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading...
                 </div>
+              ) : activeTab?.type === 'file' && isProjectPdf(activeTab.path) ? (
+                <ProjectPdfViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
               ) : activeTab?.type === 'file' && isProjectImage(activeTab.path) ? (
                 <ProjectImageViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
-              ) : activeTab?.type === 'file' ? (
+              ) : activeTab?.type === 'file' ? renderFileEditor(activeTab, (
                 <ReviewableEditor
                   key={activeTab.id}
                   path={activeTab.path}
@@ -5753,7 +5786,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
                     )))
                   }}
                 />
-              ) : editorFile ? (
+              )) : editorFile ? (
                 <pre className="text-xs leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
                   <code>{editorFile.content}</code>
                 </pre>
@@ -6612,9 +6645,11 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...
           </div>
+        ) : activeTab?.type === 'file' && isProjectPdf(activeTab.path) ? (
+          <ProjectPdfViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
         ) : activeTab?.type === 'file' && isProjectImage(activeTab.path) ? (
           <ProjectImageViewer key={activeTab.id} src={activeTab.content ?? ''} path={activeTab.path} />
-        ) : activeTab?.type === 'file' ? (
+        ) : activeTab?.type === 'file' ? renderFileEditor(activeTab, (
           <ReviewableEditor
             key={activeTab.id}
             path={activeTab.path}
@@ -6641,7 +6676,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
               )))
             }}
           />
-        ) : editorFile ? (
+        )) : editorFile ? (
           <Editor
             height="100%"
             beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}

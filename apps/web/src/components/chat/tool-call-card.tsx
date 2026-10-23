@@ -3477,6 +3477,13 @@ function formatLineRangeLabel(lineRange: { start: number; end: number } | null |
     : `:${lineRange.start}-${lineRange.end}`
 }
 
+/**
+ * Opens a file in the project viewer. Provided per chat message so file names
+ * deep inside (memoized) tool-call cards are clickable without threading a
+ * prop through every card layer.
+ */
+export const ChatOpenPathContext = createContext<((path: string, line?: number, column?: number) => Promise<void> | void) | null>(null)
+
 function FileSummaryButton({
   path,
   context,
@@ -3491,7 +3498,10 @@ function FileSummaryButton({
   disabled?: boolean
 }) {
   const fileName = getBaseName(path)
-  const interactive = !!onOpenDiff && !disabled
+  const openPath = useContext(ChatOpenPathContext)
+  // Edits open their diff; everything else (reads, writes without a diff) opens the file.
+  const openTarget = onOpenDiff ?? (openPath ? (target: string) => { void openPath(target, lineRange?.start) } : undefined)
+  const interactive = !!openTarget && !disabled
   const lineRangeLabel = formatLineRangeLabel(lineRange)
   const content = (
     <>
@@ -3515,21 +3525,22 @@ function FileSummaryButton({
   }
 
   return (
-    <TooltipHint content={`Open diff for ${path}`}>
+    <TooltipHint content={onOpenDiff ? `Open diff for ${path}` : `Open ${path}`}>
     <span
       role="button"
       tabIndex={0}
+      data-chat-path={path}
       className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
-        onOpenDiff(path)
+        openTarget!(path)
       }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           event.stopPropagation()
-          onOpenDiff(path)
+          openTarget!(path)
         }
       }}
     >

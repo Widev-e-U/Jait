@@ -634,6 +634,17 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     persistActiveSelectionToCache(projectId, sessionId)
   }, [persistActiveSelectionToCache, persistSelection, projects])
 
+  /**
+   * A "new chat" in a project that does not exist yet: the project is active
+   * but no chat is. Sending the first message creates the chat (the composer
+   * falls back to `createSession` without an active chat), so merely looking
+   * leaves nothing behind. Not persisted — a reload returns to the last chat.
+   */
+  const startProjectDraft = useCallback((projectId: string) => {
+    setActiveProjectId(projectId)
+    setActiveSessionId(null)
+  }, [])
+
   // Keep acknowledgments across stale list responses and out-of-order WS events.
   const readReceiptsRef = useRef(new Map<string, string>())
   const pendingReadReceiptsRef = useRef(new Set<string>())
@@ -1377,6 +1388,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     createSession,
     forkSession,
     switchProject,
+    startProjectDraft,
     switchSession,
     setProjectEditorModeActive,
     archiveSession,
