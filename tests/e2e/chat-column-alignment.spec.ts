@@ -42,7 +42,6 @@ for (const viewport of viewports) {
 
     const message = await glyphBox(page, MESSAGE_SELECTOR)
     const composer = await glyphBox(page, COMPOSER_EDITOR_SELECTOR)
-    console.log(`DELTA ${viewport.name}: ${(message.left - composer.left).toFixed(2)}px`)
     expect(Math.abs(message.left - composer.left)).toBeLessThanOrEqual(2)
 
     const transcript = await page.getByTestId('fixture-transcript-boundary').boundingBox()
