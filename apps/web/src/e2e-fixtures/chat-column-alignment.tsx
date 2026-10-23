@@ -23,7 +23,7 @@ function Harness() {
         </Conversation>
       </div>
       <div data-testid="fixture-composer-boundary" className={getChatComposerBoundaryClassName(false)}>
-        <div className={getChatColumnClassName()}>
+        <div data-testid="fixture-composer-column" className={getChatColumnClassName()}>
           <PromptInput value={value} onChange={setValue} onSubmit={() => {}} placeholder="Message Jait" />
         </div>
       </div>
