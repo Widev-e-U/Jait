@@ -56,7 +56,7 @@ test.describe('WS UI reactions for project and preview tools', () => {
     const projectRoot = CONFIGURED_PROJECT_ROOT || testInfo.outputPath('project')
     await mkdir(projectRoot, { recursive: true })
     const { token } = await registerUser(request)
-    const { projectId, sessionId, sessionName } = await createSession(request, token, 'ws-ui-e2e', projectRoot)
+    const { projectId, sessionId } = await createSession(request, token, 'ws-ui-e2e', projectRoot)
 
     await page.context().addCookies([{ name: 'jait_token', value: token, url: API_URL, httpOnly: true, sameSite: 'Lax' }])
   await page.addInitScript(([gatewayUrl, authToken]) => {
@@ -86,12 +86,8 @@ test.describe('WS UI reactions for project and preview tools', () => {
     }, [API_URL, token])
 
     await page.goto(`/?projectId=${encodeURIComponent(projectId)}&sessionId=${encodeURIComponent(sessionId)}`)
-    const projectsSidebarButton = page.getByRole('button', { name: 'Projects & Chats', exact: true })
-    await expect(projectsSidebarButton).toBeVisible({ timeout: 15000 })
-    await projectsSidebarButton.click()
-    const sessionButton = page.getByText(sessionName, { exact: true })
-    await expect(sessionButton).toBeVisible()
-    await sessionButton.click()
+    // The URL and persisted selection identify the chat. Wait for its actual
+    // WebSocket subscription before executing tools, independent of sidebar state.
     await page.waitForFunction((expectedSessionId) => (
       (window as typeof window & { __e2eUiWsSessionId?: string }).__e2eUiWsSessionId === expectedSessionId
     ), sessionId)
@@ -113,7 +109,7 @@ test.describe('WS UI reactions for project and preview tools', () => {
     const projectBody = await openProject.json() as { ok: boolean }
     expect(projectBody.ok).toBe(true)
 
-    await expect(projectsSidebarButton).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Toggle projects sidebar', exact: true })).toBeVisible()
 
     const openPreview = await request.post(`${API_URL}/api/tools/execute`, {
       data: {
@@ -127,8 +123,8 @@ test.describe('WS UI reactions for project and preview tools', () => {
       },
     })
     expect(openPreview.ok()).toBeTruthy()
-    const previewBody = await openPreview.json() as { ok: boolean }
-    expect(previewBody.ok).toBe(true)
+    const previewBody = await openPreview.json() as { ok: boolean; message?: string }
+    expect(previewBody.ok, `preview.open failed: ${previewBody.message ?? 'no message'}`).toBe(true)
 
     await expect(page.locator(`iframe[title="${FRONTEND_URL}"]`)).toBeVisible({ timeout: 20000 })
 

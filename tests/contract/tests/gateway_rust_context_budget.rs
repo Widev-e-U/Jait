@@ -101,11 +101,16 @@ fn native(c: &Value) -> Value {
             let reference = projected["reference"].as_str().unwrap_or("");
             let offset = c["offset"].as_u64().unwrap_or(0) as usize;
             let limit = c["limit"].as_u64().unwrap_or(4000) as usize;
-            let before = store.read(scope, reference, offset, limit, now);
+            let input = json!({"reference":reference,"offset":offset,"limit":limit});
+            let mut input = input;
+            if let Some(query) = c.get("query") {
+                input["query"] = query.clone();
+            }
+            let before = store.read_tool(&input, scope, now);
             let ledger = store.snapshot(scope["sessionId"].as_str().unwrap());
             store = ContextEvidence::default();
             store.restore(scope["sessionId"].as_str().unwrap(), ledger);
-            let restored = store.read(scope, reference, offset, limit, now);
+            let restored = store.read_tool(&input, scope, now);
             let mut other = scope.clone();
             other["userId"] = json!("other");
             let denied = store.read(&other, reference, 0, 4000, now);
@@ -424,4 +429,23 @@ fn explicit_recovery_pages_preserve_content_and_offsets_under_small_budgets() {
     assert_eq!(projected, result);
     assert_eq!(projected["data"]["content"], content);
     assert_eq!(projected["data"]["nextOffset"], 5000);
+}
+
+#[test]
+fn evidence_search_reloads_scoped_evidence_and_finds_tail_diagnostics_without_paging() {
+    let scope = json!({"sessionId":"search-session","userId":"owner"});
+    let result = json!({"ok":false,"message":"Command failed", "data":{"output":format!("start\n{}\nERROR: final diagnostic 🦀\nend", "noise ".repeat(1400)),"executionId":"exec-1","exitCode":1}});
+    let cases: Vec<_> = [json!("ERROR:"),json!("missing"),json!("🦀"),json!(""),json!(7),json!("x".repeat(257))].into_iter().map(|query| json!({"op":"contextbudget.evidence","scope":scope,"result":result,"query":query,"limit":200})).collect();
+    let outputs = compare(cases);
+    assert!(
+        outputs[0]["before"]["data"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("ERROR: final diagnostic")
+    );
+    assert_eq!(outputs[0]["before"], outputs[0]["restored"]);
+    assert_eq!(outputs[0]["denied"]["ok"], false);
+    assert_eq!(outputs[0]["expired"]["ok"], false);
+    assert_eq!(outputs[1]["before"]["data"]["matchOffset"], Value::Null);
+    assert_eq!(outputs[3]["before"]["ok"], false);
 }

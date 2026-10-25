@@ -64,9 +64,19 @@ pub fn resolve_tool_permission(
     tool_name: &str,
     permissions: &HashMap<String, ToolPermission>,
 ) -> ResolvedToolPermission {
-    match permissions.get(tool_name) {
+    match crate::tools::tool_names::policy_names(tool_name)
+        .into_iter()
+        .find_map(|name| permissions.get(name))
+    {
         Some(permission) => ResolvedToolPermission {
-            permission: permission.clone(),
+            permission: if crate::tools::tool_names::policy_names(tool_name).len() > 1 {
+                ToolPermission {
+                    tool_name: tool_name.into(),
+                    ..permission.clone()
+                }
+            } else {
+                permission.clone()
+            },
             known_tool: true,
             source: PolicySource::Profile,
         },

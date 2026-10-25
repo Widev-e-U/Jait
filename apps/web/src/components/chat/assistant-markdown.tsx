@@ -15,6 +15,8 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { parseProjectLinkTarget } from '@/lib/project-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { useGatewayImage } from '@/hooks/useGatewayImage'
+import { safeNotificationLink } from '@jait/shared'
+import { MessageLink } from '@/components/ui/message-link'
 import { TooltipHint } from '@/components/ui/tooltip'
 
 /**
@@ -276,22 +278,11 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
       )
     },
     a: ({ href, ref: _ref, ...props }) => {
-      if (!onOpenPath) {
-        return (
-          <a href={href} {...props}>
-            {props.children}
-          </a>
-        )
-      }
-
-      const target = parseProjectLinkTarget(href)
-      if (!target) {
-        return (
-          <a href={href} {...props}>
-            {props.children}
-          </a>
-        )
-      }
+      // Resolve Jait pages before absolute project paths. Web URLs remain web URLs,
+      // even when their pathname ends in a file extension.
+      const target = onOpenPath && !safeNotificationLink(href) && !/^(?:https?:)?\/\//i.test(href ?? '')
+        ? parseProjectLinkTarget(href) : null
+      if (!target || !onOpenPath) return <MessageLink href={href} {...props} />
 
       return <ProjectPathLink href={href} target={target} onOpenPath={onOpenPath} />
     },

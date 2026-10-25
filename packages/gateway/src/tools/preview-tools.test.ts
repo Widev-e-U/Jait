@@ -1,18 +1,36 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPreviewInspectTool, createPreviewOpenTool, createPreviewRestartTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
-import { buildToolSchemas } from "./agent-loop.js";
+import { buildToolSchemas, buildTieredToolSchemas } from "./agent-loop.js";
 import { createToolRegistry } from "./index.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 
 describe("createPreviewOpenTool", () => {
-  it("exposes preview.open, not preview.start, through the schema path", () => {
+  it("exposes browser tools while retaining legacy execution without duplicate schemas", () => {
     const tools = createToolRegistry(new SurfaceRegistry());
     const schemas = buildToolSchemas(tools);
     const names = new Set(schemas.map((schema) => schema.function.name));
 
-    expect(names.has("preview_open")).toBe(true);
+    expect(names.has("browser_open")).toBe(true);
+    expect(names.has("preview_open")).toBe(false);
+    expect(tools.get("preview.open")).toBeDefined();
+    expect(tools.list().some(tool => tool.name.startsWith("preview."))).toBe(false);
     expect(names.has("preview_start")).toBe(false);
+    const resumed = buildTieredToolSchemas(tools, undefined, { activatedToolNames: ["preview.open"] });
+    expect(resumed.some(schema => schema.function.name === "browser_open")).toBe(true);
+    expect(resumed.some(schema => schema.function.name === "preview_open")).toBe(false);
+    expect(tools.isExecutable("browser.open", new Set(["preview.open"]))).toBe(false);
+    expect(tools.isExecutable("preview.open", new Set(["browser.open"]))).toBe(false);
+  });
+
+  it("opens the visible browser through the canonical registry with the original session and project scope", async () => {
+    const start = vi.fn().mockResolvedValue({ id: "browser-session", sessionId: "owned", status: "ready", target: "5173", mode: "local", logs: [], browserEvents: [] });
+    const tools = createToolRegistry(new SurfaceRegistry(), { previewService: { start } as any });
+    const context: ToolContext = { sessionId: "owned", userId: "owner", actionId: "action", projectRoot: "/project", requestedBy: "assistant" };
+    expect((await tools.execute("browser.open", { target: "5173" }, context)).ok).toBe(true);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "owned", projectRoot: "/project", target: "5173", agentInitiated: true }));
+    expect((await tools.execute("browser.open", { target: "5173" }, { ...context, sessionId: "" })).ok).toBe(false);
+    expect(start).toHaveBeenCalledTimes(1);
   });
 
   it("starts a managed preview and broadcasts panel state", async () => {

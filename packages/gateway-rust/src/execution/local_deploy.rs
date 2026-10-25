@@ -2,16 +2,52 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
     fs::{self, OpenOptions},
     io::Read,
     os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     process::Stdio,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
-use tokio::process::Command;
+use tokio::{process::Command, task::JoinHandle};
 
 pub type Result<T> = std::result::Result<T, String>;
+
+/// Stages whose work is safe to begin before the ladder reaches their position.
+/// They write only to their own artifact and cache directories and read the
+/// source tree, so starting them early cannot change another stage's evidence.
+/// Sequencing is unchanged: the controller awaits a prefetched stage at its own
+/// index, so the proof order and the reported failure stay exactly what a
+/// strictly sequential run produces.
+const PREFETCHED_STEPS: [&str; 3] = ["rust-migration", "web-e2e", "web-ui"];
+/// Cheap preflight stages that run alone so they observe an idle workspace.
+const PREFLIGHT_STEPS: [&str; 2] = ["release-guard", "artifact-paths"];
+
+fn verification_timeout(id: &str) -> Duration {
+    // The complete single-worker browser suite takes over 30 minutes.
+    Duration::from_secs(if matches!(id, "web-e2e" | "web-ui") {
+        3600
+    } else {
+        1800
+    })
+}
+
+/// Cooperative cancellation shared with detached prefetched stages.
+#[derive(Clone, Default)]
+struct Cancel(Arc<AtomicBool>);
+impl Cancel {
+    fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    fn cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
@@ -70,6 +106,7 @@ pub fn verification_steps(root: &Path) -> Result<Vec<Step>> {
             "node",
             &[
                 "tests/e2e/scripts/run-isolated.mjs",
+                "--shards=2",
                 "bun",
                 "run",
                 "test:e2e",
@@ -83,9 +120,18 @@ pub fn verification_steps(root: &Path) -> Result<Vec<Step>> {
                 "bun",
                 "run",
                 "test:e2e:ui",
+                "--workers=2",
             ],
         ),
     ])
+}
+/// Explicit local deployment exception; the default policy continues to run every gate.
+pub fn verification_steps_for(root: &Path, skip_e2e: bool) -> Result<Vec<Step>> {
+    let mut steps = verification_steps(root)?;
+    if skip_e2e {
+        steps.retain(|step| !matches!(step.id.as_str(), "web-e2e" | "web-ui"));
+    }
+    Ok(steps)
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Check {
@@ -247,6 +293,8 @@ pub fn override_unit(argv: &[String], entry: &str) -> Result<String> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Plan {
+    #[serde(default)]
+    pub skip_e2e: bool,
     pub artifact_root: PathBuf,
     pub previous_argv: Vec<String>,
     pub unit: String,
@@ -298,7 +346,10 @@ pub fn validate_plan(plan: &Plan, plan_path: &Path, home: &Path) -> Result<()> {
     {
         return Err("Unexpected local service override".into());
     }
-    validate_proof(&plan.proof, &verification_steps(&plan.runtime)?)?;
+    validate_proof(
+        &plan.proof,
+        &verification_steps_for(&plan.runtime, plan.skip_e2e)?,
+    )?;
     if !valid_hash(&plan.runtime_hash) || plan.runtime_hash != plan.proof.fingerprint {
         return Err("Runtime is not bound to verification evidence".into());
     }
@@ -360,6 +411,19 @@ pub async fn run_logged(
     log: &Path,
     limit: Duration,
 ) -> Result<()> {
+    run_logged_cancellable(command, args, cwd, log, limit, None).await
+}
+
+/// Same contract as [`run_logged`], plus cooperative cancellation so a stage that
+/// runs ahead of the ladder can still be torn down with its whole process group.
+async fn run_logged_cancellable(
+    command: &str,
+    args: &[String],
+    cwd: &Path,
+    log: &Path,
+    limit: Duration,
+    cancel: Option<Cancel>,
+) -> Result<()> {
     let output = OpenOptions::new()
         .write(true)
         .create(true)
@@ -367,6 +431,13 @@ pub async fn run_logged(
         .mode(0o600)
         .open(log)
         .map_err(err)?;
+    let mut term =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).map_err(err)?;
+    let mut interrupt =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).map_err(err)?;
+    if cancel.as_ref().is_some_and(|token| token.cancelled()) {
+        return Err("Local deployment cancelled".into());
+    }
     let mut child = Command::new(command)
         .args(args)
         .current_dir(cwd)
@@ -378,12 +449,10 @@ pub async fn run_logged(
         .spawn()
         .map_err(err)?;
     let pid = child.id().ok_or("Missing process id")? as i32;
-    let mut term =
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).map_err(err)?;
-    let mut interrupt =
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()).map_err(err)?;
     let mut progress = tokio::time::interval(Duration::from_secs(30));
     progress.tick().await;
+    let mut cancel_watch = tokio::time::interval(Duration::from_millis(250));
+    cancel_watch.tick().await;
     let deadline = tokio::time::sleep(limit);
     tokio::pin!(deadline);
     let outcome = loop {
@@ -394,6 +463,11 @@ pub async fn run_logged(
             _ = &mut deadline => break Err(format!("Stage exceeded {}ms", limit.as_millis())),
             _ = term.recv() => break Err("Local deployment cancelled".into()),
             _ = interrupt.recv() => break Err("Local deployment cancelled".into()),
+            _ = cancel_watch.tick() => {
+                if cancel.as_ref().is_some_and(|token| token.cancelled()) {
+                    break Err("Local deployment cancelled".into());
+                }
+            }
             _ = progress.tick() => eprintln!("[local-deploy] {} still running", log.display()),
         }
     };
@@ -418,7 +492,17 @@ pub async fn run_logged(
         unsafe {
             libc::kill(-pid, libc::SIGKILL);
         }
-        let _ = child.wait().await;
+        // SIGKILL is only queued here; drain the group so no descendant outlives this call.
+        let drain = async {
+            let _ = child.wait().await;
+            loop {
+                if unsafe { libc::kill(-pid, 0) } != 0 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        let _ = tokio::time::timeout(Duration::from_secs(5), drain).await;
     }
     outcome
 }
@@ -426,25 +510,139 @@ pub async fn run_logged(
 pub struct FilesystemVerificationHost {
     pub root: PathBuf,
     pub logs: PathBuf,
+    cancel: Cancel,
+    pending: Vec<Step>,
+    running: BTreeMap<String, JoinHandle<Result<()>>>,
+}
+impl FilesystemVerificationHost {
+    /// Prefetched stages start only after the preflight pair has finished, so the
+    /// cheap workspace guards still observe an idle tree.
+    pub fn new(root: PathBuf, logs: PathBuf, steps: &[Step]) -> Self {
+        let pending = steps
+            .iter()
+            .filter(|step| PREFETCHED_STEPS.contains(&step.id.as_str()))
+            .cloned()
+            .collect();
+        Self {
+            root,
+            logs,
+            cancel: Cancel::default(),
+            pending,
+            running: BTreeMap::new(),
+        }
+    }
+    fn log_path(&self, step: &Step) -> PathBuf {
+        self.logs.join(format!("{}.log", step.id))
+    }
+    /// Start independent lanes when their predecessors have finished.
+    fn start_prefetch(&mut self, current: &str) {
+        if PREFLIGHT_STEPS.contains(&current) || self.pending.is_empty() {
+            return;
+        }
+        // Keep browser gates in one lane: Playwright shares report/output paths.
+        // Start that lane only when the ordinary checks (including browser-tools)
+        // are finished, while a still-running Rust gate occupies the other lane.
+        let browsers_ready = current == "rust-migration"
+            && self
+                .running
+                .get(current)
+                .is_some_and(|handle| !handle.is_finished());
+        let mut previous_browser = None;
+        for step in std::mem::take(&mut self.pending) {
+            if step.id == current {
+                continue;
+            }
+            let browser = matches!(step.id.as_str(), "web-e2e" | "web-ui");
+            if browser && !browsers_ready {
+                self.pending.push(step);
+                continue;
+            }
+            let predecessor = if browser {
+                previous_browser.take()
+            } else {
+                None
+            };
+            let completion = if browser {
+                let (sender, receiver) = tokio::sync::oneshot::channel::<bool>();
+                previous_browser = Some(receiver);
+                Some(sender)
+            } else {
+                None
+            };
+            let log = self.log_path(&step);
+            eprintln!(
+                "[local-deploy] {}; log: {} (started early)",
+                step.id,
+                log.display()
+            );
+            let (command, args, root, cancel) = (
+                step.command.clone(),
+                step.args.clone(),
+                self.root.clone(),
+                self.cancel.clone(),
+            );
+            let timeout = verification_timeout(&step.id);
+            self.running.insert(
+                step.id.clone(),
+                tokio::spawn(async move {
+                    if let Some(predecessor) = predecessor
+                        && predecessor.await != Ok(true)
+                    {
+                        return Err("Previous browser stage failed".into());
+                    }
+                    let result =
+                        run_logged_cancellable(&command, &args, &root, &log, timeout, Some(cancel))
+                            .await;
+                    if let Some(completion) = completion {
+                        let _ = completion.send(result.is_ok());
+                    }
+                    result
+                }),
+            );
+        }
+    }
+}
+impl Drop for FilesystemVerificationHost {
+    fn drop(&mut self) {
+        self.cancel.cancel();
+    }
 }
 impl VerificationHost for FilesystemVerificationHost {
     async fn fingerprint(&mut self) -> Result<String> {
         tree_digest(&self.root)
     }
     async fn run(&mut self, step: &Step) -> Result<()> {
-        eprintln!(
-            "[local-deploy] {}; log: {}",
-            step.id,
-            self.logs.join(format!("{}.log", step.id)).display()
-        );
-        run_logged(
-            &step.command,
-            &step.args,
-            &self.root,
-            &self.logs.join(format!("{}.log", step.id)),
-            Duration::from_secs(1800),
-        )
-        .await
+        self.start_prefetch(&step.id);
+        let result = if let Some(handle) = self.running.remove(&step.id) {
+            handle
+                .await
+                .map_err(|error| format!("{} stage aborted: {error}", step.id))
+                .and_then(|result| result)
+        } else {
+            eprintln!(
+                "[local-deploy] {}; log: {}",
+                step.id,
+                self.log_path(step).display()
+            );
+            run_logged_cancellable(
+                &step.command,
+                &step.args,
+                &self.root,
+                &self.log_path(step),
+                verification_timeout(&step.id),
+                Some(self.cancel.clone()),
+            )
+            .await
+        };
+        if result.is_err() {
+            // The CLI exits immediately on failure. Keep its runtime alive until
+            // every prefetched stage has torn down its entire process group.
+            self.cancel.cancel();
+            for (_, handle) in std::mem::take(&mut self.running) {
+                let _ = handle.await;
+            }
+        }
+        result
     }
 }
 
@@ -600,4 +798,144 @@ pub async fn current_service_matches(plan: &Plan, run: &Path) -> Result<()> {
         return Err("Service configuration changed during verification".into());
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod parallel_tests {
+    use super::*;
+
+    struct Fixture(PathBuf);
+    impl Fixture {
+        fn new() -> Self {
+            let directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/execution/.jait/artifacts/parallel-tests")
+                .join(format!(
+                    "{}-{}",
+                    std::process::id(),
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos()
+                ));
+            fs::create_dir_all(directory.join(".jait/logs")).unwrap();
+            Self(directory)
+        }
+        fn stage(&self, id: &str, body: &str) -> Step {
+            step(
+                id,
+                "node",
+                &[
+                    "--eval",
+                    &format!(
+                        "const fs = require('node:fs'); \
+                 const marker = n => '.jait/' + n; \
+                 const exists = n => fs.existsSync(marker(n)); \
+                 const write = n => fs.writeFileSync(marker(n), 'ready'); \
+                 const wait = async n => {{ \
+                   const deadline = Date.now() + 5000; \
+                   while (!exists(n)) {{ \
+                     if (Date.now() > deadline) throw Error('Missing marker: ' + n); \
+                     await new Promise(r => setTimeout(r, 10)); \
+                   }} \
+                 }}; \
+                 (async () => {{ {body} }})().catch(e => {{ console.error(e); process.exitCode = 1; }});"
+                    ),
+                ],
+            )
+        }
+        fn host(&self, steps: &[Step]) -> FilesystemVerificationHost {
+            FilesystemVerificationHost::new(self.0.clone(), self.0.join(".jait/logs"), steps)
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn browser_lane_overlaps_rust_but_keeps_browser_order_and_proof_order() {
+        let fixture = Fixture::new();
+        let steps = vec![
+            fixture.stage("release-guard", "if (exists('rust-started')) throw Error('early Rust');"),
+            fixture.stage("artifact-paths", "if (exists('rust-started')) throw Error('early Rust'); write('preflight');"),
+            fixture.stage("typecheck", "await wait('rust-started');"),
+            fixture.stage("browser-tools", "if (exists('e2e-started')) throw Error('early browser'); write('tools-done');"),
+            fixture.stage("rust-migration", "await wait('preflight'); write('rust-started'); await wait('ui-done');"),
+            fixture.stage("web-e2e", "if (!exists('tools-done')) throw Error('tools still running'); write('e2e-started'); await wait('rust-started'); write('e2e-done');"),
+            fixture.stage("web-ui", "if (!exists('e2e-done')) throw Error('browsers overlapped'); write('ui-done');"),
+        ];
+        let proof = verify(&mut fixture.host(&steps), &steps).await.unwrap();
+        assert_eq!(
+            proof
+                .checks
+                .iter()
+                .map(|check| &check.step)
+                .collect::<Vec<_>>(),
+            steps.iter().collect::<Vec<_>>()
+        );
+        validate_proof(&proof, &steps).unwrap();
+    }
+
+    #[tokio::test]
+    async fn failed_browser_does_not_start_the_next_browser() {
+        let fixture = Fixture::new();
+        let steps = vec![
+            fixture.stage("typecheck", "await wait('rust-started');"),
+            fixture.stage(
+                "rust-migration",
+                "write('rust-started'); await wait('e2e-failed');",
+            ),
+            fixture.stage("web-e2e", "write('e2e-failed'); process.exitCode = 18;"),
+            fixture.stage("web-ui", "write('ui-started');"),
+        ];
+        let error = verify(&mut fixture.host(&steps), &steps).await.unwrap_err();
+        assert!(error.contains("web-e2e.log"), "{error}");
+        assert!(!fixture.0.join(".jait/ui-started").exists());
+    }
+
+    #[tokio::test]
+    async fn failed_rust_drains_the_active_browser_and_cancels_queued_ui() {
+        let fixture = Fixture::new();
+        let steps = vec![
+            fixture.stage("typecheck", "await wait('rust-started');"),
+            fixture.stage("rust-migration", "write('rust-started'); await wait('browser-pid'); process.exitCode = 17;"),
+            fixture.stage("web-e2e", "fs.writeFileSync(marker('browser-pid'), String(process.pid)); await new Promise(r => setTimeout(r, 30000));"),
+            fixture.stage("web-ui", "write('ui-started');"),
+        ];
+        let error = verify(&mut fixture.host(&steps), &steps).await.unwrap_err();
+        assert!(error.contains("rust-migration.log"), "{error}");
+        let pid = fs::read_to_string(fixture.0.join(".jait/browser-pid"))
+            .unwrap()
+            .parse::<i32>()
+            .unwrap();
+        // SAFETY: read-only liveness check for our own fixture subprocess.
+        assert_ne!(
+            unsafe { libc::kill(pid, 0) },
+            0,
+            "browser outlived verification"
+        );
+        assert!(!fixture.0.join(".jait/ui-started").exists());
+    }
+
+    #[tokio::test]
+    async fn completed_failed_rust_does_not_launch_browsers() {
+        let fixture = Fixture::new();
+        let steps = vec![
+            fixture.stage(
+                "typecheck",
+                "await wait('rust-failed'); await new Promise(r => setTimeout(r, 100));",
+            ),
+            fixture.stage(
+                "rust-migration",
+                "write('rust-failed'); process.exitCode = 17;",
+            ),
+            fixture.stage("web-e2e", "write('e2e-started');"),
+            fixture.stage("web-ui", "write('ui-started');"),
+        ];
+        let error = verify(&mut fixture.host(&steps), &steps).await.unwrap_err();
+        assert!(error.contains("rust-migration.log"), "{error}");
+        assert!(!fixture.0.join(".jait/e2e-started").exists());
+        assert!(!fixture.0.join(".jait/ui-started").exists());
+    }
 }

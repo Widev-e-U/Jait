@@ -132,9 +132,18 @@ async fn prepare_failures_stop_copy_and_copy_failures_return_the_actual_error() 
 }
 #[tokio::test]
 async fn source_nul_rejection_occurs_after_prepare_without_spawning_scp() {
-    let mut i = input();
-    i["sourcePath"] = json!("source\0path/");
-    compare(i, json!({})).await;
+    for source in [
+        "source\0path/",
+        "source\0\n\t\r\u{8}\u{c}\u{b}\u{1}\u{1f}\u{7f}path/",
+        "single'\0path/",
+        "both'\"`\\\0path/",
+        "\u{85}\u{a0}\u{200b}\u{2028}\u{2029}\u{feff}\0🦀/",
+        "source\x00123/",
+    ] {
+        let mut i = input();
+        i["sourcePath"] = json!(source);
+        compare(i, json!({})).await;
+    }
 }
 #[tokio::test]
 async fn validation_order_and_output_trim_match_reference() {

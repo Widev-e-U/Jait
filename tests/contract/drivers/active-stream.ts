@@ -1,7 +1,13 @@
 /** Real shipping HTTP routes; fixture-only provider and gate, no outcome assertions. */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { createServer } from '../../../packages/gateway/src/server.ts';
+import { createRequire } from 'node:module';
+
+// Finish the ESM dependency before the gateway graph also requires it through
+// matrix-bot-sdk. Bun otherwise races the two loading paths.
+const gatewayRequire = createRequire(new URL('../../../packages/gateway/package.json', import.meta.url));
+await import(gatewayRequire.resolve('htmlparser2'));
+const { createServer } = await import('../../../packages/gateway/src/server.ts');
 import { loadConfig } from '../../../packages/gateway/src/config.ts';
 import { openDatabase, migrateDatabase } from '../../../packages/gateway/src/db/index.ts';
 import { UserService } from '../../../packages/gateway/src/services/users.ts';

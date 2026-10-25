@@ -96,3 +96,7 @@ pub mod reminders;
 pub mod context_budget;
 
 pub mod chat_loops;
+
+pub mod thread_review_sync;
+
+pub mod provider_updates;

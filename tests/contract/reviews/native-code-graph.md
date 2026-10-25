@@ -65,7 +65,8 @@ deeply nested raw properties needs review and additional implementation before
 claiming complete parser parity. SQL failure diagnostics beyond the tested trigger
 case also need reconciliation.
 
-The code-graph HTTP ownership/remote-node adapter remains pending. Supported
-Windows process behavior, full platform/resource/recovery gates, and production
-activation are separate from these focused Linux checks. The process executor
+The code-graph HTTP ownership/remote-node adapter is reviewed separately in
+`native-code-graph-http.md`; its credit is controlled by the full native gate.
+Supported Windows process behavior, full platform/resource/recovery gates, and
+production activation are separate from these focused Linux checks. The process executor
 adds explicit bounds; it does not establish filesystem authorization by itself.

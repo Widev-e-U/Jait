@@ -402,8 +402,8 @@ describe('sub-agent activity', () => {
 
     for (const markup of [beforeChildCalls, afterChildCalls]) {
       expect(markup).toContain('sticky top-0 z-20')
-      expect(markup).toContain('file.read')
-      expect(markup).toContain('terminal.run')
+      expect(markup).toContain('File Read')
+      expect(markup).toContain('Terminal Run')
     }
   })
 
@@ -540,14 +540,14 @@ describe('formatMcpHeaderText', () => {
     expect(formatMcpHeaderText('Ran mcp.jait.terminal.run', {
       title: 'mcp.jait.terminal.run',
       details: null,
-    })).toBe('mcp.jait.terminal.run')
+    })).toBe('MCP Jait Terminal Run')
   })
 
   it('keeps details behind the MCP title without wrapper metadata', () => {
     expect(formatMcpHeaderText('Ran mcp.jait.thread.control', {
       title: 'mcp.jait.thread.control',
       details: 'action: create',
-    })).toBe('mcp.jait.thread.control • action: create')
+    })).toBe('MCP Jait Thread Control • action: create')
   })
 })
 
@@ -832,7 +832,7 @@ describe('structured tool result views', () => {
 
     expect(markup).toContain('Available tools')
     expect(markup).toContain('2 found')
-    expect(markup).toContain('file.read')
+    expect(markup).toContain('File Read')
     expect(markup).toContain('Filesystem')
     expect(markup).not.toContain('parameters')
     expect(markup).not.toContain('&quot;')

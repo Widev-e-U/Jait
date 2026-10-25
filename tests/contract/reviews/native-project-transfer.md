@@ -36,6 +36,15 @@ spelling for missing/nonexecutable relative binaries. Captured failures are in
 `project-transfer-contract.log`. Error text follows the current Bun reference profile;
 other runtime/platform error wording remains a compatibility boundary.
 
+Current Bun argument diagnostics escape NUL and other control bytes and select
+quotes for embedded apostrophes. The frozen gate caught the earlier raw-NUL
+native message; the expanded source-NUL comparison now checks six control,
+quote, backslash, Unicode and following-digit cases. It still verifies preparation
+runs first and SCP never starts for rejected arguments. Evidence:
+`.jait/artifacts/gateway-rust/channels-http/project-transfer-recheck.log` and
+`nul-runtime-probe.jsonl` in the same directory. These diagnostic changes do not
+change transfer authorization, argv rejection or process limits.
+
 Four mutations are caught by native plan tests and the differential suite: omitted
 remote quote escaping, changed connection timeout, wrong SCP port flag, and keeping
 source trailing separators. Original source is restored byte-for-byte. Evidence is

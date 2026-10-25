@@ -55,6 +55,11 @@ pub enum ToolName {
     LinuxDesktopSandboxStop,
     WebFetch,
     WebSearch,
+    BrowserOpen,
+    BrowserClose,
+    BrowserRestart,
+    BrowserStatus,
+    BrowserLogs,
     PreviewStart,
     PreviewOpen,
     PreviewStop,
@@ -144,6 +149,11 @@ impl ToolName {
             Self::LinuxDesktopSandboxStop => "linux.desktop.sandbox.stop",
             Self::WebFetch => "web.fetch",
             Self::WebSearch => "web.search",
+            Self::BrowserOpen => "browser.open",
+            Self::BrowserClose => "browser.close",
+            Self::BrowserRestart => "browser.restart",
+            Self::BrowserStatus => "browser.status",
+            Self::BrowserLogs => "browser.logs",
             Self::PreviewStart => "preview.start",
             Self::PreviewOpen => "preview.open",
             Self::PreviewStop => "preview.stop",
@@ -233,6 +243,11 @@ impl ToolName {
             Self::LinuxDesktopSandboxStop => "LinuxDesktopSandboxStop",
             Self::WebFetch => "WebFetch",
             Self::WebSearch => "WebSearch",
+            Self::BrowserOpen => "BrowserOpen",
+            Self::BrowserClose => "BrowserClose",
+            Self::BrowserRestart => "BrowserRestart",
+            Self::BrowserStatus => "BrowserStatus",
+            Self::BrowserLogs => "BrowserLogs",
             Self::PreviewStart => "PreviewStart",
             Self::PreviewOpen => "PreviewOpen",
             Self::PreviewStop => "PreviewStop",
@@ -325,6 +340,11 @@ pub const ALL_TOOL_NAMES: &[ToolName] = &[
     ToolName::LinuxDesktopSandboxStop,
     ToolName::WebFetch,
     ToolName::WebSearch,
+    ToolName::BrowserOpen,
+    ToolName::BrowserClose,
+    ToolName::BrowserRestart,
+    ToolName::BrowserStatus,
+    ToolName::BrowserLogs,
     ToolName::PreviewStart,
     ToolName::PreviewOpen,
     ToolName::PreviewStop,
@@ -357,3 +377,21 @@ pub const ALL_TOOL_NAMES: &[ToolName] = &[
     ToolName::CoreTodo,
     ToolName::CoreJait,
 ];
+
+/// Canonical policies win when explicitly configured; legacy policies remain a fallback.
+pub fn policy_names(name: &str) -> Vec<&str> {
+    match name {
+        "browser.open" | "preview.open" => vec!["browser.open", "preview.open"],
+        "browser.close" | "preview.stop" => vec!["browser.close", "preview.stop"],
+        "browser.restart" | "preview.restart" => vec!["browser.restart", "preview.restart"],
+        "browser.status" | "preview.status" => vec!["browser.status", "preview.status"],
+        "browser.logs" | "preview.logs" => vec!["browser.logs", "preview.logs"],
+        "browser.inspect" | "preview.inspect" => vec!["browser.inspect", "preview.inspect"],
+        _ => vec![name],
+    }
+}
+pub fn is_tool_disabled(name: &str, disabled: &std::collections::HashSet<String>) -> bool {
+    policy_names(name)
+        .into_iter()
+        .any(|candidate| disabled.contains(candidate))
+}

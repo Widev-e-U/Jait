@@ -1,5 +1,5 @@
-//! Native title normalization only. Provider turns and LLM transport are pending
-//! and the TypeScript thread-title component receives no native completion credit.
+//! Title cleanup and generation policy. Callers supply authorized provider, HTTP,
+//! and shared LLM ports; this module discovers no credentials or endpoints.
 use crate::{
     contracts::bounded_json::Utf16Text,
     text::{js_trim, js_whitespace},
@@ -105,3 +105,7 @@ fn is_tool_protocol(title: &str) -> bool {
             .is_some_and(|prefix| prefix.eq_ignore_ascii_case(marker))
     })
 }
+
+#[path = "thread_title_generation.rs"]
+mod generation;
+pub use generation::*;

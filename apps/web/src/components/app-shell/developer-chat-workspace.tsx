@@ -733,6 +733,7 @@ export function DeveloperChatWorkspace({
   return (
     <div
       ref={setChatPanelElement}
+      data-browser-chat-scope
       className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
       style={developerChatPanelStyle}
     >
@@ -750,8 +751,8 @@ export function DeveloperChatWorkspace({
             </div>
           )}
           {!showDebugPanel && loop && activeSessionId && (
-            <div className={showLoopInGutter ? 'absolute top-12 left-2 z-10 w-52 max-h-[calc(100%-64px)] overflow-auto' : 'mx-4 mt-12 mb-2 shrink-0'}>
-              <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} />
+            <div data-testid="chat-goal-overlay" className={`pointer-events-none absolute z-30 bg-transparent ${showLoopInGutter ? 'top-12 left-2 w-52 max-h-[calc(100%-64px)] overflow-y-auto' : 'top-2 left-4 right-4'}`}>
+              <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
           )}
           {shouldShowChatContextIndicator(Boolean(contextUsage), showDebugPanel) && contextUsage && (
@@ -811,7 +812,7 @@ export function DeveloperChatWorkspace({
           )}
 
           {showNormalComposer && (
-            <div className={getChatComposerBoundaryClassName(isMobile)}>
+            <div data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
             <div className={getChatColumnClassName('space-y-1.5')}>
               {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
                 <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">

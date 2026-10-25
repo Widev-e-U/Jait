@@ -42,3 +42,10 @@ assertion. Valid seeded rows include both required network observation timestamp
 No TypeScript production behavior or original assertions were changed.
 
 Reference SHA256: 1b3ba9ed1884f5d39584fe29b785c7565d9bbce09b7feb36550932213612e829
+
+Runtime refresh (2026-10-25): the actual reference now uses Bun 1.4.0 / ICU
+78.3. Its missing-table response includes `code: "SQLITE_ERROR"`; native
+composition preserves that field. The existing differential regression drops
+each of the four repository tables independently, and retains separate malformed
+stored-JSON failures. No reference output or assertion is normalized or relaxed.
+Evidence: `.jait/artifacts/gateway-rust/channels-http/environment-refresh.log`.

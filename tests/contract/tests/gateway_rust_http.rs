@@ -106,8 +106,10 @@ async fn scenario(seed: &str, empty: bool, tools: Option<Value>, steps: Value) -
     let task = tokio::spawn(gateway.serve(async {
         let _ = receive.await;
     }));
+    // This is a transport hang guard, not a response-time contract. Password
+    // hashing in debug builds competes with the full parallel verification run.
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
         .build()
         .unwrap();
     let mut results = vec![];

@@ -34,8 +34,11 @@ without changing its data assertions; raw hex comparisons strengthen it.
 The reference Bun binding uses SQLite's legacy UTF-16 conversion, including BOM
 removal/byte swapping and malformed-surrogate pairing. The native adapter preserves
 those stored bytes using a safe ToSql implementation; JSON columns remain lossless.
-The test read adapter separately models Bun's empty-string decoding of invalid UTF-8
-and compares raw hex too, so it cannot hide storage corruption. Actual probes:
+The test read adapter separately models the current Bun runtime's replacement-
+character decoding of invalid UTF-8 (the earlier runtime returned an empty string).
+Raw hex comparisons remain intact, so read presentation cannot hide storage
+corruption. The concurrent adapter correction is rechecked in
+`.jait/artifacts/gateway-rust/channels-http/sub-agent-history-recheck.log`. Actual probes:
 `sub-agent-binding-probe.jsonl`; before failure: `sub-agent-binding-before.log`.
 SQLite's bundled sqlite3VdbeMemTranslate implementation was inspected to verify
 conversion behavior. Node-specific SQLite binding behavior is a separate supported-

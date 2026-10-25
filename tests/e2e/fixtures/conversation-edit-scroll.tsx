@@ -11,15 +11,17 @@ const original = Array.from({ length: 30 }, (_, index) => ({
 
 function Harness() {
   const [messages, setMessages] = useState(original)
+  const [replyGrowth, setReplyGrowth] = useState(0)
   const latestUserId = [...messages].reverse().find(message => message.role === 'user')?.id
   return <>
+    <button onClick={() => setReplyGrowth(value => value + 160)}>Grow latest reply</button>
     <button onClick={() => setMessages([...original.slice(0, 10), {
       id: 'edited-message', role: 'user', content: 'Edited message',
     }])}>Edit and send</button>
     <div style={{ height: 400, display: 'flex' }}>
       <Conversation className="h-full w-full" messageContents={messages.map(message => message.content)}
         messageEstimateInputs={messages} scrollToMessageId={latestUserId}>
-        {messages.map(message => <div key={message.id} style={{ height: 160 }}>{message.content}</div>)}
+        {messages.map((message, index) => <div key={message.id} style={{ height: 160 + (index === messages.length - 1 ? replyGrowth : 0) }}>{message.content}</div>)}
       </Conversation>
     </div>
   </>

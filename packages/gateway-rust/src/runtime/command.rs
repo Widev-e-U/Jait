@@ -30,6 +30,33 @@ impl std::fmt::Display for CommandFailure {
     }
 }
 impl std::error::Error for CommandFailure {}
+// Bun's child_process argument errors inspect strings rather than embedding raw
+// control bytes. Keep rejection before spawning and preserve its quote choice.
+fn inspect_argument(value: &str) -> String {
+    let quote = if value.contains('\'') { '"' } else { '\'' };
+    let mut result = String::from(quote);
+    for c in value.chars() {
+        match c {
+            '\\' => result.push_str("\\\\"),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            '\u{8}' => result.push_str("\\b"),
+            '\u{c}' => result.push_str("\\f"),
+            c if c == quote => {
+                result.push('\\');
+                result.push(c);
+            }
+            '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}' => {
+                use std::fmt::Write;
+                write!(&mut result, "\\x{:02x}", c as u32).expect("string write");
+            }
+            c => result.push(c),
+        }
+    }
+    result.push(quote);
+    result
+}
 #[derive(Clone)]
 pub struct CommandPool {
     permits: Arc<Semaphore>,
@@ -54,7 +81,8 @@ impl CommandPool {
         for (index, arg) in spec.args.iter().enumerate() {
             if arg.contains('\0') {
                 return Err(failure(format!(
-                    "The argument 'args[{index}]' must be a string without null bytes. Received '{arg}'"
+                    "The argument 'args[{index}]' must be a string without null bytes. Received {}",
+                    inspect_argument(arg)
                 )));
             }
         }
@@ -398,7 +426,7 @@ mod tests {
         spec.args = vec!["x\0y".into()];
         assert_eq!(
             pool(HashMap::new()).run(&spec).await.unwrap_err().message,
-            "The argument 'args[0]' must be a string without null bytes. Received 'x\0y'"
+            "The argument 'args[0]' must be a string without null bytes. Received 'x\\x00y'"
         );
     }
 }

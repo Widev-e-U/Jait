@@ -210,6 +210,11 @@ fn continuation_preserves_metadata_null_overrides_and_external_provider_selectio
     continuation(json!({"state":state,"notice":"","metadata":{"chat":{"reasoningEffort":null}}}));
     continuation(json!({"seed":seed,"withState":false,"state":state}));
     continuation(json!({"seed":seed,"state":state,"userId":" u ","sessionId":" s "}));
+    // A continuation turn on the jait backend must name the user's selected
+    // model instead of leaving resolution to the backend default.
+    continuation(
+        json!({"seed":"UPDATE user_settings SET selected_model=' deepseek-v4.1-flash:cloud '","state":{},"metadata":null}),
+    );
     continuation(
         json!({"seed":seed,"state":{"chat.reasoningEffort":"invalid effort","chat.cliModels":[],"chat.providerRuntimeMode":"invalid"}}),
     );

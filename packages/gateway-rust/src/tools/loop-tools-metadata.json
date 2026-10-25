@@ -58,7 +58,7 @@
     "source": "builtin",
     "name": "loop.check",
     "displayName": "Check loop goal",
-    "description": "Evaluate the active goal before ending each turn. Continue with a concrete next message, wait for user input, or complete with one verified evidence entry per acceptance criterion. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal.",
+    "description": "Evaluate the active goal before ending each turn. Continue with a concrete next message, wait for user input, or complete with one verified evidence entry per acceptance criterion. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal. The gateway uses configured System One to review reported evidence, may reject completion, and pauses on review failure or repeated stalls. Inspect the returned status and monitor.",
     "parameters": {
       "type": "object",
       "properties": {

@@ -299,3 +299,35 @@ pub fn limit_serialized_json(value: &str, max_bytes: usize) -> String {
         ),
     }
 }
+
+/// Enumerable JSON object fields, including JavaScript string-index UTF-16 units.
+pub fn object_spread(
+    value: &Value,
+) -> std::collections::BTreeMap<String, Box<serde_json::value::RawValue>> {
+    use serde_json::value::{RawValue, to_raw_value};
+    match value {
+        Value::Object(fields) => fields
+            .iter()
+            .map(|(k, v)| (k.clone(), to_raw_value(v).expect("JSON value")))
+            .collect(),
+        Value::Array(items) => items
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i.to_string(), to_raw_value(v).expect("JSON value")))
+            .collect(),
+        Value::String(text) => text
+            .encode_utf16()
+            .enumerate()
+            .map(|(i, unit)| {
+                (
+                    i.to_string(),
+                    RawValue::from_string(
+                        serde_json::to_string(&Utf16Text(vec![unit])).expect("UTF-16 JSON"),
+                    )
+                    .expect("JSON string"),
+                )
+            })
+            .collect(),
+        _ => Default::default(),
+    }
+}

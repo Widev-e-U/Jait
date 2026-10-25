@@ -57,6 +57,34 @@ describe("mcp-server", () => {
     }
   });
 
+  it("pauses MCP actions until this chat's question is answered or cancelled", async () => {
+    const app = Fastify();
+    appsToClose.push(app);
+    const questions = new UserQuestionService();
+    const registry = new ToolRegistry();
+    const mutate = vi.fn(async () => ({ ok: true, message: "changed" }));
+    registry.register({ name: "file.write", tier: "standard", category: "filesystem", source: "builtin",
+      description: "Test mutation", parameters: { type: "object", properties: {} }, execute: mutate });
+    registry.register(createUserAskTool(questions));
+    registerMcpRoutes(app, { toolRegistry: registry, userQuestionService: questions,
+      config: { host: "127.0.0.1", port: 3000 } as AppConfig });
+    const call = async (sessionId: string, name: string, args = {}) => (await app.inject({
+      method: "POST", url: `/mcp?sessionId=${sessionId}`,
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
+    })).json();
+    const id = questions.startResumable({ sessionId: "waiting-chat", questions: [], requestedBy: "user.ask" });
+    const blocked = await call("waiting-chat", "file_write");
+    expect(blocked.result.isError).toBe(true);
+    expect(JSON.stringify(blocked)).toContain(id);
+    expect(mutate).not.toHaveBeenCalled();
+    expect((await call("another-chat", "file_write")).result.isError).toBe(false);
+    expect(mutate).toHaveBeenCalledTimes(1);
+    questions.submit(id, { answers: {} });
+    expect((await call("waiting-chat", "user_ask", { requestId: id })).result.isError).toBe(false);
+    expect((await call("waiting-chat", "file_write")).result.isError).toBe(false);
+    expect(mutate).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps essential tools in a dedicated core MCP catalog", async () => {
     const registry = new ToolRegistry();
     for (const [name, tier] of [

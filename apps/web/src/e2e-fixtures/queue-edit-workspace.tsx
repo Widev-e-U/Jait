@@ -12,6 +12,8 @@ const noop = () => {}
 function Harness() {
   const isMobile = window.innerWidth < 768
   const retryMode = new URLSearchParams(window.location.search).get('retry')
+  const goalMode = new URLSearchParams(window.location.search).get('goal')
+  const [showGoal, setShowGoal] = useState(true)
   const providerError = 'The model provider is experiencing issues (502). Please try again later.'
   const [retryLoading, setRetryLoading] = useState(false)
   const [retryCompleted, setRetryCompleted] = useState(false)
@@ -23,7 +25,10 @@ function Harness() {
     retryResolveRef.current?.()
     retryResolveRef.current = null
   }
-  const fixtureMessages = retryMode ? [
+  const fixtureMessages = goalMode ? [
+    { id: 'user-request', role: 'user', content: 'Investigate the layout' },
+    { id: 'assistant-reply', role: 'assistant', content: Array.from({ length: 50 }, (_, index) => `Paragraph ${index}: Checking the chat layout and its floating controls.`).join('\n\n') },
+  ] : retryMode ? [
     { id: 'older-error', role: 'assistant', content: '', segments: [{ type: 'error', content: providerError }] },
     { id: 'user-request', role: 'user', content: 'Investigate the issue' },
     { id: 'latest-error', role: 'assistant', content: '', segments: retryMode === 'footer' ? [] : [{ type: 'error', content: providerError }] },
@@ -38,6 +43,7 @@ function Harness() {
     activeProjectDisplayName: null,
     activeProjectRoot: null,
     activeSessionId: 'queue-edit-fixture',
+    sessionMetadata: goalMode && showGoal ? JSON.stringify({ loop: { id: 'layout-goal', goal: 'Verify the floating goal layout', criteria: ['Chat stays in place'], status: 'running', iteration: 1, revision: 1, checkedIteration: 0, summary: '', nextMessage: '', evidence: [], updatedAt: new Date().toISOString() } }) : null,
     availableFilesForMention: [],
     availableSkills: [],
     changedFiles: [],
@@ -73,7 +79,7 @@ function Harness() {
     limitReached: false,
     managerThreads: [],
     messageContents: fixtureMessages.map(message => message.content),
-    messageQueue: retryMode ? [] : items,
+    messageQueue: retryMode || goalMode ? [] : items,
     messages: fixtureMessages,
     pendingPlan: null,
     previewOpen: false,
@@ -143,7 +149,7 @@ function Harness() {
     onVoiceInput: noop,
   }
   return <TooltipProvider><ConfirmDialogProvider>
-    <button className="fixed left-2 top-2 z-[80]" onClick={() => setItems([])}>Remove queued item externally</button>
+    {goalMode ? <button className="fixed right-2 bottom-2 z-[80]" onClick={() => setShowGoal(value => !value)}>Toggle goal overlay</button> : <button className="fixed left-2 top-2 z-[80]" onClick={() => setItems([])}>Remove queued item externally</button>}
     {retryMode && <div className="fixed right-2 top-2 z-[80] flex gap-2 bg-background">
       <output data-testid="retry-calls">{JSON.stringify(retryCalls)}</output>
       <button onClick={() => finishRetry(true)}>Complete retry</button>

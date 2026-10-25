@@ -8,10 +8,18 @@ const frontend = process.env.UI_FRONTEND_URL || 'http://127.0.0.1:3150'
 // the gateway-backed config and its single-worker default.
 export default defineConfig({
   ...base,
+  globalSetup: undefined,
   testMatch: [
+    'message-links.spec.ts',
+    'tool-results.spec.ts',
     'chat-loop.spec.ts',
     'email-workspace.spec.ts',
     'browser-controls.spec.ts',
+    'browser-control-transition.spec.ts',
+    'chat-browser.spec.ts',
+    'browser-mobile-input.spec.ts',
+    'browser-handoff.spec.ts',
+    'composer-prompts.spec.ts',
     'messenger-tools.spec.ts',
     'messenger-list.spec.ts',
     'agent-controls.spec.ts',
@@ -24,6 +32,8 @@ export default defineConfig({
     'queued-attachments.spec.ts',
     'usage-prefetch.spec.ts',
     'chat-column-alignment.spec.ts',
+    'conversation-bottom-scroll.spec.ts',
+    'conversation-edit-scroll.spec.ts',
   ],
   workers: process.env.PLAYWRIGHT_WORKERS ? Number(process.env.PLAYWRIGHT_WORKERS) : 2,
   use: { ...base.use, baseURL: frontend },

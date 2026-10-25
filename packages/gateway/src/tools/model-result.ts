@@ -32,17 +32,34 @@ export function boundModelData(data: unknown, maxChars = MODEL_RESULT_MAX_CHARS)
     preview: "",
   };
   // Retain execution/evidence status even when the bulk payload is clipped.
-  if (record(data)) for (const key of ["ok", "exitCode", "timedOut", "needsInteraction", "terminalId", "outputOffset", "outputEndOffset"]) {
-    if (["boolean", "number", "string"].includes(typeof data[key]) || data[key] === null) result[key] = data[key];
+  if (record(data)) for (const key of ["ok", "exitCode", "timedOut", "needsInteraction", "terminalId", "executionId", "status", "yielded", "isBackground", "watched", "outputOffset", "outputEndOffset"]) {
+    if (["boolean", "number", "string"].includes(typeof data[key]) || data[key] === null) result[key] = typeof data[key] === "string" ? prefix(data[key], 128) : data[key];
   }
-  let lower = 0, upper = serialized.length;
+  // Small diagnostic/coverage fields survive even when output comes first.
+  if (record(data)) for (const key of ["error", "errors", "warnings", "coverage", "limitations", "total", "count", "hasMore", "nextOffset"]) {
+    const value = data[key];
+    const encoded = JSON.stringify(value);
+    if (encoded && encoded.length <= Math.min(1024, Math.floor(maxChars / 4))) {
+      result[key] = value;
+      if (JSON.stringify(result).length > maxChars / 2) delete result[key];
+    }
+  }
+  // Terminal diagnostics often occur at the end. Label omissions explicitly.
+  const text = record(data) && typeof data.output === "string" ? data.output : serialized;
+  const excerpt = (length: number): string => {
+    if (length >= text.length) return text;
+    const head = Math.ceil(length / 2), tail = Math.floor(length / 2);
+    const suffix = text.slice(text.length - tail).replace(/^[\uDC00-\uDFFF]/, "");
+    return prefix(text, head) + (maxChars < 256 ? "…" : "\n… [omitted middle; full evidence available] …\n") + suffix;
+  };
+  let lower = 0, upper = text.length;
   while (lower < upper) {
     const middle = Math.ceil((lower + upper) / 2);
-    result.preview = prefix(serialized, middle);
+    result.preview = excerpt(middle);
     if (JSON.stringify(result).length <= maxChars) lower = middle;
     else upper = middle - 1;
   }
-  result.preview = prefix(serialized, lower);
+  result.preview = lower ? excerpt(lower) : "";
   return result;
 }
 

@@ -103,9 +103,9 @@ export async function dispatch(call: any): Promise<any> {
       const backing = { get: () => structuredClone(state), set: (_: string, entries: Record<string, unknown>) => { state = structuredClone(entries); } };
       let store = new ContextEvidence(backing, () => now);
       const projected = store.project(call.result, call.scope, budget.toolResultChars, call.toolName);
-      const before = store.read(call.scope, projected.reference ?? '', call.offset, call.limit);
+      const before = store.read(call.scope, projected.reference ?? '', call.offset, call.limit, call.query);
       store = new ContextEvidence(backing, () => now); // actual persisted reload
-      const restored = store.read(call.scope, projected.reference ?? '', call.offset, call.limit);
+      const restored = store.read(call.scope, projected.reference ?? '', call.offset, call.limit, call.query);
       const denied = store.read({ ...call.scope, userId: 'other' }, projected.reference ?? '');
       now += 86_400_001;
       const expired = store.read(call.scope, projected.reference ?? '');

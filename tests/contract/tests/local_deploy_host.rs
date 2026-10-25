@@ -181,6 +181,7 @@ async fn production_controller_writes_backup_activates_and_restores_using_fake_s
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let hash = tree_digest(&runtime).unwrap();
     let plan = Plan {
+        skip_e2e: false,
         artifact_root: base.clone(),
         previous_argv: expected.clone(),
         unit: "jait-gateway.service".into(),
@@ -324,4 +325,161 @@ async fn timeout_kills_signal_resistant_descendants_in_the_stage_process_group()
         stat.is_empty() || stat.split(") ").nth(1).unwrap().starts_with('Z'),
         "descendant still executing: {stat}"
     );
+}
+
+fn prefetch_fixture(engine: &str) -> (Fixture, PathBuf, PathBuf, PathBuf) {
+    let fixture = Fixture::new();
+    let workspace = fixture.0.join("workspace");
+    let logs = fixture.0.join("logs");
+    let bin = fixture.0.join("bin");
+    for path in [workspace.join(".github/scripts"), logs.clone(), bin.clone()] {
+        fs::create_dir_all(path).unwrap();
+    }
+    for name in ["bun", "node"] {
+        executable(&bin.join(name), engine);
+    }
+    (fixture, workspace, logs, bin)
+}
+
+const WAIT_FOR_MARKER: &str = r#"
+wait_for() {
+    count=0
+    while [ ! -f "$1" ]; do
+        count=$((count + 1))
+        [ "$count" -lt 500 ] || exit 90
+        /bin/sleep 0.01
+    done
+}
+"#;
+
+#[test]
+fn native_prefetch_overlaps_after_preflight_and_preserves_proof_order() {
+    let engine = format!(
+        "#!/bin/sh\n{WAIT_FOR_MARKER}{}",
+        r#"
+case "$*" in
+    *release:check*) [ ! -f "$CONTROL/rust-started" ] || exit 91;;
+    *check:artifacts*)
+        [ ! -f "$CONTROL/rust-started" ] || exit 92
+        printf ready > "$CONTROL/preflight-complete";;
+    *test:gateway:rust*)
+        [ -f "$CONTROL/preflight-complete" ] || exit 93
+        printf started > "$CONTROL/rust-started"
+        wait_for "$CONTROL/typescript-started"
+        printf finished > "$CONTROL/rust-finished";;
+    *typecheck*)
+        printf started > "$CONTROL/typescript-started"
+        wait_for "$CONTROL/rust-finished";;
+esac
+"#
+    );
+    let (fixture, workspace, logs, bin) = prefetch_fixture(&engine);
+    let output = Command::new(binary())
+        .args([
+            "--verify",
+            workspace.to_str().unwrap(),
+            logs.to_str().unwrap(),
+        ])
+        .env("PATH", bin)
+        .env("CONTROL", &fixture.0)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let proof: Proof = serde_json::from_slice(&fs::read(logs.join("proof.json")).unwrap()).unwrap();
+    validate_proof(&proof, &verification_steps(&workspace).unwrap()).unwrap();
+    assert!(fixture.0.join("rust-finished").exists());
+}
+
+#[test]
+fn native_prefetch_failure_keeps_the_first_canonical_failure_and_stops_later_gates() {
+    let engine = format!(
+        "#!/bin/sh\n{WAIT_FOR_MARKER}{}",
+        r#"
+case "$*" in
+    *test:gateway:rust*) printf failed > "$CONTROL/rust-failed"; exit 17;;
+    *typecheck*)
+        wait_for "$CONTROL/rust-failed"
+        if [ "$FAIL_TYPESCRIPT" = yes ]; then exit 19; fi;;
+esac
+"#
+    );
+    for fail_typescript in ["yes", "no"] {
+        let (fixture, workspace, logs, bin) = prefetch_fixture(&engine);
+        let output = Command::new(binary())
+            .args([
+                "--verify",
+                workspace.to_str().unwrap(),
+                logs.to_str().unwrap(),
+            ])
+            .env("PATH", bin)
+            .env("CONTROL", &fixture.0)
+            .env("FAIL_TYPESCRIPT", fail_typescript)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let failure = stderr.lines().last().unwrap();
+        assert!(
+            failure.contains(if fail_typescript == "yes" {
+                "typecheck.log"
+            } else {
+                "rust-migration.log"
+            }),
+            "{stderr}"
+        );
+        assert_eq!(
+            logs.join("unit-tests.log").exists(),
+            fail_typescript == "no"
+        );
+        assert_eq!(
+            logs.join("browser-tools.log").exists(),
+            fail_typescript == "no"
+        );
+        assert!(!logs.join("web-e2e.log").exists());
+        assert!(!logs.join("proof.json").exists());
+    }
+}
+
+#[test]
+fn native_failed_foreground_drains_prefetched_signal_resistant_descendants_before_exit() {
+    let engine = format!(
+        "#!/bin/sh\n{WAIT_FOR_MARKER}{}",
+        r#"
+case "$*" in
+    *test:gateway:rust*)
+        trap '' TERM
+        printf '%s' "$$" > "$CONTROL/leader.pid"
+        /bin/sleep 30 &
+        printf '%s' "$!" > "$CONTROL/sleeper.pid"
+        wait;;
+    *typecheck*) wait_for "$CONTROL/sleeper.pid"; exit 19;;
+esac
+"#
+    );
+    let (fixture, workspace, logs, bin) = prefetch_fixture(&engine);
+    let output = Command::new(binary())
+        .args([
+            "--verify",
+            workspace.to_str().unwrap(),
+            logs.to_str().unwrap(),
+        ])
+        .env("PATH", bin)
+        .env("CONTROL", &fixture.0)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(!logs.join("proof.json").exists());
+    assert!(!logs.join("unit-tests.log").exists());
+    for name in ["leader.pid", "sleeper.pid"] {
+        let pid = fs::read_to_string(fixture.0.join(name)).unwrap();
+        let stat = fs::read_to_string(format!("/proc/{}/stat", pid.trim())).unwrap_or_default();
+        assert!(
+            stat.is_empty() || stat.split(") ").nth(1).unwrap().starts_with('Z'),
+            "{name} still executing after controller exit: {stat}"
+        );
+    }
 }

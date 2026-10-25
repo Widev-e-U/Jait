@@ -7,6 +7,7 @@ import {
   type BrowserRuntimeEvent,
   resolveBrowserRuntimeMode,
   selectInitialBrowserPage,
+  selectVisibleBrowserPage,
 } from "./browser.js";
 
 const originalPlatform = process.platform;
@@ -294,5 +295,23 @@ describe("selectInitialBrowserPage", () => {
     })).resolves.toBe(openBlankPage);
 
     expect(newPage).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("visible browser tab selection", () => {
+  it("follows the visible popup instead of automating a hidden original tab", async () => {
+    const original = { isClosed: () => false, evaluate: vi.fn().mockResolvedValue({ visible: false, focused: false }) };
+    const popup = { isClosed: () => false, evaluate: vi.fn().mockResolvedValue({ visible: true, focused: true }) };
+    expect(await selectVisibleBrowserPage([original, popup], original)).toBe(popup);
+    const { createRequire } = await import("node:module");
+    const bridge = createRequire(import.meta.url)("./playwright-node-bridge.cjs");
+    expect(await bridge.selectVisiblePage([original, popup], original)).toBe(popup);
+    original.evaluate.mockResolvedValue({ visible: true, focused: true });
+    expect(await selectVisibleBrowserPage([original, popup], popup)).toBe(popup);
+    expect(await bridge.selectVisiblePage([original, popup], popup)).toBe(popup);
+    popup.evaluate.mockRejectedValue(new Error("Tab closed"));
+    expect(await selectVisibleBrowserPage([original, popup], original)).toBe(original);
+    expect(await bridge.selectVisiblePage([original, popup], original)).toBe(original);
   });
 });

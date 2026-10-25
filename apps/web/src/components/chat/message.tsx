@@ -1,3 +1,4 @@
+import { MessageText } from '@/components/ui/message-text'
 import { MessageReadStatus } from './message-read-status'
 import type { MessengerReadReceipt } from '@/lib/messenger/model'
 import { AgentAvatar } from '@/components/manager/agent-avatar'
@@ -6,7 +7,7 @@ import { AttachmentList, collectAttachments } from './attachment-list'
 import { MessageAgentActivity } from './message-agent-activity'
 import { UserMessageImages, UserMessageImageReference } from './user-message-images'
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode, type ReactElement, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
-import { ArrowRight, BookOpen, Brain, Check, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
+import { ArrowRight, BookOpen, Brain, Check, CheckCheck, Copy, Eye, Loader2, MessageSquare, MoreVertical, Pencil, RotateCcw, X } from 'lucide-react'
 import { AssistantMarkdown } from './assistant-markdown'
 import {
   Message as AIMessage,
@@ -86,8 +87,8 @@ interface MessageProps {
   steered?: boolean
   /**
    * Delivery state of a freshly sent or edited user turn: `sending` shows a
-   * spinner in the bottom-right corner, `sent` flashes an acknowledgement before
-   * the indicator disappears. Absent for ordinary history rows.
+   * single check in the bottom-right corner; `sent` keeps a double check visible.
+   * Absent for ordinary history rows.
    */
   sendState?: 'sending' | 'sent'
   contextFlow?: LlmContextFlow
@@ -305,18 +306,6 @@ function MessageInner({
   }, [messageId, onEditingChange])
   const [showEditComposer, setShowEditComposer] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
-  // "Sending…" holds until the server confirms; "Sent" then flashes briefly
-  // instead of vanishing, so an edited resend visibly completes.
-  const [showSentAck, setShowSentAck] = useState(false)
-  useEffect(() => {
-    if (sendState !== 'sent') {
-      setShowSentAck(false)
-      return
-    }
-    setShowSentAck(true)
-    const timer = window.setTimeout(() => setShowSentAck(false), 2000)
-    return () => window.clearTimeout(timer)
-  }, [sendState])
   const [contextOpen, setContextOpen] = useState(false)
   const [memoryExpanded, setMemoryExpanded] = useState(false)
   const [memoryFeedbackState, setMemoryFeedbackState] = useState<{
@@ -664,20 +653,20 @@ function MessageInner({
   ]
 
   // Keep delivery updates out of the bubble layout.
-  const showSendStatus = isUser && (sendState === 'sending' || showSentAck)
+  const showSendStatus = isUser && (sendState === 'sending' || sendState === 'sent')
   const compactMobileActions = isMobile && isUser && !messenger
   const mobileStatusRow = compactMobileActions && canCopyMessage && messageActionItems.length > 0
   const sendStatus = showSendStatus ? (
-    <div
-      className="pointer-events-none flex min-w-0 items-center gap-1 text-2xs font-medium leading-4 text-muted-foreground"
-      title={sendState === 'sending' ? 'Sending…' : 'Sent'}
+    <span
+      className="pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+      title={sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}
       aria-live="polite"
       data-testid="user-message-send-status"
       data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
     >
-      {showSentAck ? <Check className="h-3 w-3 shrink-0 text-primary" /> : <Loader2 className="h-3 w-3 shrink-0 animate-spin" />}
-      <span className="truncate">{showSentAck ? 'Sent' : 'Sending…'}</span>
-    </div>
+      {sendState === 'sent' ? <CheckCheck aria-hidden="true" className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4 translate-x-[1.33px]" />}
+      <span className="sr-only">{sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}</span>
+    </span>
   ) : null
 
 
@@ -691,29 +680,24 @@ function MessageInner({
         <div
           className={cn(
             'absolute z-10',
-            compactMobileActions
-              ? 'bottom-px right-2.5 flex h-4 max-w-[calc(100%-1.125rem)] items-center gap-0.5'
-              : getMobileMessageActionsPositionClassName(isUser, outsideBubble),
+            getMobileMessageActionsPositionClassName(isUser, outsideBubble),
+            compactMobileActions && '-right-0.5 bottom-[2.67px]',
           )}
         >
-          {compactMobileActions && sendStatus}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="Message actions"
                 className={cn(
-                  'relative flex shrink-0 items-center justify-center text-muted-foreground transition-colors active:text-foreground',
-                  compactMobileActions
-                    ? "h-4 w-1 before:absolute before:-inset-x-2.5 before:-inset-y-1 before:content-['']"
-                    : 'h-6 w-6',
+                  'relative flex h-6 w-6 shrink-0 items-center justify-center text-muted-foreground transition-colors active:text-foreground',
+                  compactMobileActions && 'w-[29.33px]',
                 )}
               >
-                {compactMobileActions ? (
-                  // Crop the SVG's empty sides; retain the same dots and a 24px tap area.
-                  <MoreVertical viewBox="9 0 6 24" className="h-4 w-1" />
-                ) : (
-                  <MoreVertical className="absolute bottom-[4.67px] right-0 h-4 w-4" />
+                <MoreVertical className={cn('absolute right-0 h-4 w-4', compactMobileActions ? 'bottom-0' : 'bottom-[4.67px]')} />
+                {/* Keep the painted gaps while sharing the menu's full touch target. */}
+                {compactMobileActions && sendStatus && (
+                  <span className="absolute bottom-0 right-[13.33px]">{sendStatus}</span>
                 )}
               </button>
             </DropdownMenuTrigger>
@@ -742,9 +726,12 @@ function MessageInner({
       <div
         className={cn(
           'absolute z-10 rounded-md border border-border/60 bg-background/95 p-0.5 shadow-sm',
-          showSendStatus ? 'right-1 bottom-5' : outsideBubble ? 'right-1 bottom-1' : 'right-1 bottom-[.25rem]',
-          'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
-          copied && 'opacity-100',
+          // Toolbar sits above the bubble: even at opacity 0 it still receives
+          // pointer events while hovered, so overlaying the message text made
+          // the text unclickable (click-to-edit / lightbox regressions).
+          showSendStatus ? 'right-1 -top-8' : outsideBubble ? 'right-1 -top-6' : 'right-1 -top-5',
+          'pointer-events-none opacity-0 transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          copied && 'pointer-events-auto opacity-100',
         )}
       >
         <MessageActions>
@@ -1035,7 +1022,7 @@ function MessageInner({
                           {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
                             ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
                                 segment.type === 'text' ? (
-                                  <span key={`text-${index}`}>{segment.text}</span>
+                                  <span key={`text-${index}`}><MessageText>{segment.text}</MessageText></span>
                                 ) : segment.type === 'image' ? (
                                   <UserMessageImageReference key={`image-${index}`} image={segment} number={userImages.findIndex(image => image.name === segment.name && image.mimeType === segment.mimeType && image.data === segment.data) + 1} />
                                 ) : segment.type === 'file' ? (
@@ -1085,7 +1072,7 @@ function MessageInner({
                                   </TooltipHint>
                                 ) : null,
                               )
-                            : (optimisticUserDisplayText ?? userDisplayText)}
+                            : <MessageText>{optimisticUserDisplayText ?? userDisplayText}</MessageText>}
                         </div>
                         {messenger?.attachment}
                       </div>

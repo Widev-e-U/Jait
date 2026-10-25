@@ -136,6 +136,9 @@ export interface CliProviderAdapter {
    */
   sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void>;
 
+  /** Deliver to the running turn. False leaves the message queued for a follow-up. */
+  steerTurn?(sessionId: string, message: string): Promise<boolean>;
+
   /**
    * Interrupt the current turn in a session.
    */

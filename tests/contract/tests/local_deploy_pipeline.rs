@@ -191,6 +191,7 @@ fn plan(fixture: &Fixture) -> Plan {
         .map(|step| Check { step, passed: true })
         .collect();
     Plan {
+        skip_e2e: false,
         artifact_root: base.clone(),
         previous_argv: argv.clone(),
         unit: "jait-gateway.service".into(),
@@ -504,4 +505,32 @@ fn real_native_verification_cancellation_kills_the_running_stage_without_proof()
     };
     assert!(!status.success());
     assert!(!logs.join("proof.json").exists());
+}
+
+#[test]
+fn skip_e2e_is_explicit_and_cannot_drop_other_required_evidence() {
+    let all = verification_steps(&root()).unwrap();
+    assert_eq!(all, verification_steps_for(&root(), false).unwrap());
+    let reduced = verification_steps_for(&root(), true).unwrap();
+    assert_eq!(reduced.len(), all.len() - 2);
+    assert!(
+        reduced
+            .iter()
+            .all(|s| !matches!(s.id.as_str(), "web-e2e" | "web-ui"))
+    );
+    let proof = Proof {
+        fingerprint: "a".repeat(64),
+        checks: reduced
+            .iter()
+            .map(|s| Check {
+                step: s.clone(),
+                passed: true,
+            })
+            .collect(),
+    };
+    validate_proof(&proof, &reduced).unwrap();
+    assert!(validate_proof(&proof, &all).is_err());
+    let mut incomplete = proof.clone();
+    incomplete.checks.remove(0);
+    assert!(validate_proof(&incomplete, &reduced).is_err());
 }

@@ -343,10 +343,15 @@ impl OllamaAuthTransport for ReqwestOllamaAuthTransport {
                 && matches!(status, 301 | 302 | 303 | 307 | 308)
                 && response.headers().contains_key(reqwest::header::LOCATION)
             {
-                return Err(OllamaAuthError::plain(format!(
-                    "UnexpectedRedirect fetching \"{}\". For more information, pass `verbose: true` in the second argument to fetch()",
-                    request.url
-                )));
+                // Match Bun's rejected-redirect error without following the signed request.
+                return Err(OllamaAuthError::transport(
+                    "TypeError".into(),
+                    format!(
+                        "UnexpectedRedirect fetching \"{}\". For more information, pass `verbose: true` in the second argument to fetch()",
+                        request.url
+                    ),
+                    None,
+                ));
             }
             // Status failures do not consume an error body or allow its content into errors.
             if !(200..300).contains(&status) {

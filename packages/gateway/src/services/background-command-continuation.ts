@@ -48,13 +48,22 @@ export function buildBackgroundCommandContinuationPayload(options: {
     userService: options.userService,
     sessionState: options.sessionState,
   });
+  const settings = options.userService.getSettings(options.userId);
   const provider = defaults.providerId ?? "jait";
   const persistedReasoningEffort = readPersistedReasoningEffort(options.sessionMetadata);
   const reasoningEffort = persistedReasoningEffort !== undefined
     ? persistedReasoningEffort
     : defaults.reasoningEffort
-      ?? normalizeReasoningEffort(options.userService.getSettings(options.userId).reasoningEffort)
+      ?? normalizeReasoningEffort(settings.reasoningEffort)
       ?? null;
+  // A continuation turn has no model picker, so it must name the model explicitly.
+  // Leaving it out lets resolveJaitLlmConfig fall through to the backend default
+  // (OLLAMA_MODEL / OPENAI_MODEL), which can be a different — and more expensive —
+  // model than the one the user actually selected.
+  const inheritedModel = defaults.model
+    ?? (provider === "jait" && typeof settings.selectedModel === "string"
+      ? settings.selectedModel.trim()
+      : "");
 
   return {
     sessionId: options.sessionId,
@@ -65,8 +74,8 @@ export function buildBackgroundCommandContinuationPayload(options: {
       ? {
           provider,
           ...(defaults.runtimeMode ? { runtimeMode: defaults.runtimeMode } : {}),
-          ...(defaults.model ? { model: defaults.model } : {}),
         }
       : {}),
+    ...(inheritedModel ? { model: inheritedModel } : {}),
   };
 }

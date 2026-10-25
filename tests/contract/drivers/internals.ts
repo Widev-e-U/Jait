@@ -45,6 +45,14 @@ for (const call of input.calls) {
       const prefix = typeof call.op === 'string' ? call.op.split('.')[0] : '';
       // Lane-owned drivers are resolved by prefix so adding a lane never edits this bridge.
       if (!/^[a-z][a-z0-9]{0,23}$/.test(prefix)) throw new Error('unknown driver operation');
+      // Bun can race a CJS require against this pure ESM parser's module job
+      // when a server fixture imports Matrix. Settle the real parser first;
+      // no stubs, package edits, connector startup or network effects.
+      const {createRequire} = await import('node:module');
+      const gatewayRequire=createRequire(new URL('../../../packages/gateway/package.json',import.meta.url));
+      const matrixRequire=createRequire(gatewayRequire.resolve('matrix-bot-sdk'));
+      const sanitizerRequire=createRequire(matrixRequire.resolve('sanitize-html'));
+      await import(sanitizerRequire.resolve('htmlparser2'));
       let adapter: { dispatch?: (call: unknown) => unknown };
       try {
         adapter = await import(`./${prefix}.ts`);

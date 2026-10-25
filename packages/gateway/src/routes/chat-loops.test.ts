@@ -167,6 +167,42 @@ describe("chat loop automatic continuation", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it("exposes a stopped goal on a manual retry and continues automatically after resume", async () => {
+    responseStatus = 400;
+    loops.goal(sessionId, "Finish the saved migration", ["Regression passes"]);
+    await vi.waitFor(() => expect(loops.get(sessionId)?.status).toBe("error"), { timeout: 10000 });
+    responseStatus = 200;
+    onTurn = () => {
+      if (calls.length === 2) {
+        const context = JSON.stringify(calls.at(-1));
+        expect(context).toContain("Loop status: error");
+        expect(context).toContain("Finish the saved migration");
+        expect(context).toContain("loop.resume before working on it");
+        // Model follows the explicit user request through the same service as
+        // loop.resume. Its checkpoint must restart automatic continuation.
+        const resumed = loops.control(sessionId, "resume");
+        loops.check(sessionId, { revision: resumed.revision, outcome: "continue", summary: "Recovered", nextMessage: "Run the remaining regression" });
+      } else {
+        expect(JSON.stringify(calls.at(-1))).toContain("Run the remaining regression");
+        loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Regression passes"] });
+      }
+    };
+    await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Continue the saved migration goal" } });
+    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "completed", iteration: 3 }), { timeout: 10000 });
+    expect(calls).toHaveLength(3);
+  });
+
+  it("continues a goal created mid-turn even when the model omits its check", async () => {
+    onTurn = () => {
+      if (calls.length === 1) loops.goal(sessionId, "Finish work", ["Check passes"]);
+      if (calls.length === 3) loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passes"] });
+    };
+    await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId, content: "Work until the check passes" } });
+    await vi.waitFor(() => expect(loops.get(sessionId)).toMatchObject({ status: "completed", iteration: 3 }), { timeout: 10000 });
+    expect(calls).toHaveLength(3);
+    expect(JSON.stringify(calls[1])).toContain("Verify completed work before repeating actions");
+  });
+
   it("a direct answer resumes a waiting goal and validates owner access", async () => {
     const goal = loops.goal(sessionId, "Fix", ["Pass"]);
     loops.check(sessionId, { revision: goal.revision, outcome: "waiting", summary: "Which target?" });

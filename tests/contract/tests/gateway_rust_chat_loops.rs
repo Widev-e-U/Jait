@@ -34,7 +34,24 @@ fn view(v: Value) -> Value {
     }
 }
 fn loop_view(s: &ChatLoop) -> Value {
-    json!({"id":s.id.0,"goal":s.goal.0,"criteria":s.criteria.iter().map(|s|s.0.clone()).collect::<Vec<_>>(),"status":units(&s.status),"iteration":s.iteration,"revision":s.revision,"checkedIteration":s.checked_iteration,"summary":s.summary.0,"nextMessage":s.next_message.0,"evidence":s.evidence.iter().map(|s|s.0.clone()).collect::<Vec<_>>(),"updatedAt":s.updated_at.0})
+    let mut value = json!({"id":s.id.0,"goal":s.goal.0,"criteria":s.criteria.iter().map(|s|s.0.clone()).collect::<Vec<_>>(),"status":units(&s.status),"iteration":s.iteration,"revision":s.revision,"checkedIteration":s.checked_iteration,"summary":s.summary.0,"nextMessage":s.next_message.0,"evidence":s.evidence.iter().map(|s|s.0.clone()).collect::<Vec<_>>(),"updatedAt":s.updated_at.0});
+    for (key, number) in [
+        ("budgetStartIteration", s.budget_start_iteration),
+        ("stalledChecks", s.stalled_checks),
+        ("uncheckedTurns", s.unchecked_turns),
+    ] {
+        if let Some(number) = number {
+            value[key] = json!(number);
+        }
+    }
+    if let Some(m) = &s.monitor {
+        let mut monitor = json!({"status":units(&m.status),"reviewedRevision":m.reviewed_revision,"reviewedAt":m.reviewed_at.0,"criteriaPassed":m.criteria_passed,"progress":units(&m.progress),"reason":m.reason.0});
+        if let Some(model) = &m.model {
+            monitor["model"] = json!(model.0);
+        }
+        value["monitor"] = monitor;
+    }
+    value
 }
 fn optional(s: Option<ChatLoop>) -> Value {
     s.as_ref().map(loop_view).unwrap_or(Value::Null)
@@ -157,7 +174,34 @@ fn compare(mut call: Value) {
         .unwrap();
     let sessions:Vec<Value>=query.query_map([],|row|Ok(json!({"id":row.get::<_,String>(0)?,"user_id":row.get::<_,Option<String>>(1)?,"status":row.get::<_,Option<String>>(2)?,"metadata":row.get::<_,Option<String>>(3)?}))).unwrap().map(Result::unwrap).collect();
     let actual = json!({"results":results,"events":*events.lock().unwrap(),"sessions":sessions});
-    assert_eq!(numeric(actual), numeric(expected), "fixture: {call}");
+    let actual = numeric(actual);
+    let expected = numeric(expected);
+    assert!(
+        actual == expected,
+        "{}",
+        first_difference(&actual, &expected, "$")
+    );
+}
+fn first_difference(a: &Value, b: &Value, path: &str) -> String {
+    if let (Some(a), Some(b)) = (a.as_object(), b.as_object()) {
+        for key in a.keys().chain(b.keys()) {
+            if a.get(key) != b.get(key) {
+                return first_difference(
+                    a.get(key).unwrap_or(&Value::Null),
+                    b.get(key).unwrap_or(&Value::Null),
+                    &format!("{path}.{key}"),
+                );
+            }
+        }
+    }
+    if let (Some(a), Some(b)) = (a.as_array(), b.as_array()) {
+        for (index, (a, b)) in a.iter().zip(b).enumerate() {
+            if a != b {
+                return first_difference(a, b, &format!("{path}[{index}]"));
+            }
+        }
+    }
+    format!("{path}: native={a}; reference={b}")
 }
 fn goal() -> Value {
     json!({"op":"goal","user":"owner","input":{"goal":"  Finish work 😀  ","criteria":[" First test "," Second test "]}})
@@ -183,6 +227,20 @@ fn stale_checks_pauses_replacements_failures_and_recovery_match_reference() {
         {"op":"finish","error":"provider failed"},{"op":"get","user":"owner"},{"op":"running"},
         {"op":"control","action":"resume","user":"owner"},{"op":"finish"},{"op":"get","user":"owner"}]}),
     );
+}
+#[test]
+fn stopped_goal_instructions_preserve_error_pause_and_wait_recovery_context() {
+    compare(json!({"steps":[
+        {"op":"instructions"},goal(),
+        {"op":"finish","error":"Workspace is out of credits"},
+        {"op":"instructions","user":"owner"},
+        {"op":"restart"},{"op":"instructions","user":"owner"},
+        {"op":"control","user":"owner","action":"pause"},
+        {"op":"instructions","user":"owner"},
+        {"op":"control","user":"owner","action":"resume"},
+        {"op":"check","user":"owner","input":{"revision":4,"outcome":"waiting","summary":"Need authorized target"}},
+        {"op":"instructions","user":"owner"},{"op":"running"}
+    ]}));
 }
 #[test]
 fn owner_scope_archival_no_goal_and_metadata_legacy_shapes_match_reference() {
@@ -222,6 +280,9 @@ fn invalid_goal_schema_and_completion_evidence_match_reference() {
     }
     for input in [
         json!({"revision":1,"outcome":"other","summary":"progress"}),
+        json!({"revision":1,"outcome":"complete","summary":"ok","nextMessage":17}),
+        json!({"revision":1,"outcome":"waiting","summary":"ok","nextMessage":17}),
+        json!({"revision":1,"outcome":"continue","summary":"ok","nextMessage":17}),
         json!({"revision":1,"outcome":"continue","summary":"  ","nextMessage":"valid"}),
         json!({"revision":1,"outcome":"continue","summary":"ok","nextMessage":"  "}),
         json!({"revision":1,"outcome":"complete","summary":"ok","evidence":["only one"]}),
@@ -394,4 +455,234 @@ async fn bounded_worker_persists_loop_across_database_close_and_reopen() {
     assert_eq!(restored.status, "running");
     assert!(service.get(&session_id, Some("foreign")).unwrap().is_none());
     assert_eq!(service.running().unwrap().len(), 1);
+}
+
+#[test]
+fn deterministic_turn_budgets_and_resume_match_reference() {
+    let mut steps = vec![goal()];
+    for _ in 0..3 {
+        steps.push(json!({"op":"finish"}));
+    }
+    steps.push(json!({"op":"get","user":"owner"}));
+    steps.push(json!({"op":"control","action":"resume","user":"owner"}));
+    for turn in 0..2 {
+        steps.push(json!({"op":"check","user":"owner","input":{"revision":5+turn*2,"outcome":"continue","summary":format!("verified step {turn}"),"nextMessage":"verify next"}}));
+        steps.push(json!({"op":"finish"}));
+    }
+    steps.push(json!({"op":"get","user":"owner"}));
+    compare(json!({"steps":steps}));
+    // Seed boundary states to keep the exact trace under the driver byte limit.
+    for start in [0, 17] {
+        let metadata = json!({"loop":{"id":"boundary","goal":"goal","criteria":["criterion"],"status":"running","iteration":start+48,"revision":1,"checkedIteration":start+47,"summary":"previous","nextMessage":"next","evidence":[],"budgetStartIteration":start,"updatedAt":"now"}}).to_string();
+        compare(
+            json!({"sessions":[{"id":"chat","userId":"owner","metadata":metadata}],"steps":[
+                {"op":"check","user":"owner","input":{"revision":1,"outcome":"continue","summary":"verified","nextMessage":"verify next"}},
+                {"op":"finish"},{"op":"get","user":"owner"},
+                {"op":"check","user":"owner","input":{"revision":3,"outcome":"continue","summary":"verified again","nextMessage":"verify next"}},
+                {"op":"finish"},{"op":"get","user":"owner"}
+            ]}),
+        );
+    }
+}
+
+#[test]
+fn disabled_monitor_stalls_and_waiting_match_reference() {
+    let mut steps = vec![goal()];
+    for turn in 0..4 {
+        steps.push(json!({"op":"tool","name":"loop.check","context":{"userId":"owner"},"input":{"revision":1+turn*2,"outcome":"continue","summary":"same checkpoint","nextMessage":"verify actual results","evidence":["same evidence"]}}));
+        if turn < 3 {
+            steps.push(json!({"op":"finish"}));
+        }
+    }
+    steps.push(json!({"op":"instructions","user":"owner"}));
+    steps.push(json!({"op":"control","action":"resume","user":"owner"}));
+    steps.push(json!({"op":"tool","name":"loop.check","context":{"userId":"owner"},"input":{"revision":9,"outcome":"waiting","summary":"need answer"}}));
+    compare(json!({"steps":steps}));
+}
+
+#[test]
+fn persisted_monitor_metadata_and_bounds_match_shared_schema() {
+    for model in [json!("model"), json!("m".repeat(201)), json!(null)] {
+        let metadata = json!({"loop":{"id":"saved","goal":"goal","criteria":["criterion"],"status":"running","iteration":4,"revision":2,"checkedIteration":3,"summary":"progress","nextMessage":"next","evidence":[],"updatedAt":"now","budgetStartIteration":1,"stalledChecks":2,"uncheckedTurns":1,"monitor":{"status":"rejected","model":model,"reviewedRevision":1,"reviewedAt":"then","criteriaPassed":[false],"progress":"stalled","reason":"missing evidence","unknown":"strip"}}}).to_string();
+        compare(
+            json!({"sessions":[{"id":"chat","userId":"owner","metadata":metadata}],"steps":[{"op":"get","user":"owner"},{"op":"instructions","user":"owner"},{"op":"control","action":"resume","user":"owner"}]}),
+        );
+    }
+}
+
+// Migration acceptance specifications: these exercise the live TS service through
+// the Rust harness. They intentionally do not award configured-monitor native parity.
+fn monitor_verdict(passed: bool, progress: bool) -> Value {
+    json!({"model":"contract-monitor","answers":{
+        "progress":{"type":"choice","choice":if progress {"progress"} else {"stalled"},"confidence":0.95},
+        "criterion_0":{"type":"choice","choice":if passed {"passed"} else {"unverified"},"confidence":0.95},
+        "criterion_1":{"type":"choice","choice":if passed {"passed"} else {"unverified"},"confidence":0.95}
+    }})
+}
+fn monitor_check(revision: u64, outcome: &str) -> Value {
+    json!({"op":"monitored","user":"owner","input":{"revision":revision,"outcome":outcome,"summary":format!("Checkpoint {revision}"),"evidence":["Test exit 0","Build exit 0"],"nextMessage":"Inspect results"}})
+}
+fn monitor_reference(steps: Vec<Value>, responses: Vec<Value>) -> Value {
+    reference(
+        json!({"op":"nativechatloops.sequence","monitor":{"keys":{"SYSTEM_ONE_API_KEY":"fixture-secret"},"responses":responses},"steps":steps}),
+    )
+}
+fn checkpoint(result: &Value, index: usize) -> &Value {
+    &result["results"][index]["value"]
+}
+#[test]
+fn monitor_acceptance_requires_supported_confident_verdict_for_each_criterion() {
+    for mode in ["rejected", "uncertain", "missing", "accepted"] {
+        let mut verdict = monitor_verdict(mode != "rejected", true);
+        if mode == "uncertain" {
+            verdict["answers"]["criterion_1"]["confidence"] = json!(0.79);
+        }
+        if mode == "missing" {
+            verdict["answers"]
+                .as_object_mut()
+                .unwrap()
+                .remove("criterion_1");
+        }
+        let result = monitor_reference(vec![goal(), monitor_check(1, "complete")], vec![verdict]);
+        let state = checkpoint(&result, 1);
+        assert_eq!(
+            state["status"],
+            units(if mode == "accepted" {
+                "completed"
+            } else {
+                "running"
+            }),
+            "{mode}"
+        );
+        assert_eq!(
+            state["monitor"]["status"],
+            units(if mode == "accepted" {
+                "accepted"
+            } else {
+                "rejected"
+            })
+        );
+        assert_eq!(state["monitor"]["reviewedRevision"], 1);
+        assert_eq!(state["monitor"]["model"], units("contract-monitor"));
+        assert!(
+            result["reviews"][0]["questions"]
+                .get("criterion_1")
+                .is_some()
+        );
+        assert_eq!(result["reviews"][0]["hasDeadline"], true);
+    }
+}
+#[test]
+fn monitor_failures_pause_and_do_not_publish_provider_errors() {
+    let result = monitor_reference(
+        vec![goal(), monitor_check(1, "complete")],
+        vec![json!({"error":"private credential failure"})],
+    );
+    assert_eq!(checkpoint(&result, 1)["status"], units("paused"));
+    assert_eq!(
+        checkpoint(&result, 1)["monitor"]["status"],
+        units("unavailable")
+    );
+    assert!(!result.to_string().contains("private credential failure"));
+}
+#[test]
+fn monitor_redacts_credentials_before_model_boundary() {
+    let mut check = monitor_check(1, "complete");
+    check["input"]["summary"] =
+        json!("fixture-secret Bearer other-secret https://user:password@example.com");
+    let result = monitor_reference(vec![goal(), check], vec![monitor_verdict(true, true)]);
+    let state = result["reviews"][0]["state"].to_string();
+    for secret in ["fixture-secret", "other-secret", "user:password"] {
+        assert!(!state.contains(secret));
+    }
+    assert!(state.contains("[REDACTED]"));
+}
+#[test]
+fn monitor_pending_review_cannot_overwrite_pause_or_replacement() {
+    for action in ["pause", "replace"] {
+        let mut check = monitor_check(1, "complete");
+        check["during"] = json!(action);
+        let result = monitor_reference(
+            vec![goal(), check, json!({"op":"get","user":"owner"})],
+            vec![monitor_verdict(true, true)],
+        );
+        assert!(
+            result["results"][1]["error"]
+                .as_str()
+                .unwrap()
+                .contains("changed")
+        );
+        let state = checkpoint(&result, 2);
+        assert!(state.get("monitor").is_none());
+        assert_eq!(
+            state["status"],
+            units(if action == "pause" {
+                "paused"
+            } else {
+                "running"
+            })
+        );
+        if action == "replace" {
+            assert_eq!(state["goal"], units("Replacement goal"));
+        }
+    }
+}
+#[test]
+fn monitor_stalls_pause_and_explicit_resume_resets_budget() {
+    let result = monitor_reference(
+        vec![
+            goal(),
+            monitor_check(1, "continue"),
+            json!({"op":"finish"}),
+            monitor_check(3, "continue"),
+            json!({"op":"finish"}),
+            monitor_check(5, "continue"),
+            json!({"op":"finish"}),
+            json!({"op":"control","action":"resume","user":"owner"}),
+        ],
+        vec![monitor_verdict(false, false); 3],
+    );
+    assert_eq!(checkpoint(&result, 5)["status"], units("paused"));
+    assert_eq!(checkpoint(&result, 5)["stalledChecks"], 3);
+    assert_eq!(checkpoint(&result, 7)["status"], units("running"));
+    assert_eq!(checkpoint(&result, 7)["stalledChecks"], 0);
+    assert_eq!(checkpoint(&result, 7)["budgetStartIteration"], 3);
+}
+#[test]
+fn monitor_waiting_and_oversized_state_skip_model_review() {
+    let waiting = monitor_reference(vec![goal(), monitor_check(1, "waiting")], vec![]);
+    assert_eq!(checkpoint(&waiting, 1)["status"], units("waiting"));
+    assert!(waiting["reviews"].as_array().unwrap().is_empty());
+    let large = json!({"op":"goal","user":"owner","input":{"goal":"Fix","criteria":vec!["x".repeat(2000);20]}});
+    let mut check = monitor_check(1, "complete");
+    check["input"]["evidence"] = json!(vec!["Reported verification"; 20]);
+    let result = reference(
+        json!({"op":"nativechatloops.sequence","monitor":{"compact":true,"keys":{"SYSTEM_ONE_API_KEY":"fixture-secret"},"responses":[]},"steps":[large,check]}),
+    );
+    assert_eq!(checkpoint(&result, 1)["status"], units("paused"));
+    assert_eq!(
+        checkpoint(&result, 1)["monitor"]["status"],
+        units("unavailable")
+    );
+    assert!(result["reviews"].as_array().unwrap().is_empty());
+}
+#[test]
+fn monitor_tool_dispatch_awaits_review_and_persists_verdict_on_restart() {
+    let check = monitor_check(1, "complete");
+    let result = monitor_reference(
+        vec![
+            goal(),
+            json!({"op":"tool","name":"loop.check","context":{"userId":"owner","apiKeys":{"SYSTEM_ONE_API_KEY":"fixture-secret"}},"input":check["input"]}),
+            json!({"op":"restart"}),
+            json!({"op":"get","user":"owner"}),
+        ],
+        vec![monitor_verdict(false, true)],
+    );
+    assert_eq!(checkpoint(&result, 1)["ok"], true);
+    assert_eq!(checkpoint(&result, 1)["data"]["status"], units("running"));
+    assert_eq!(
+        checkpoint(&result, 3)["monitor"]["status"],
+        units("rejected")
+    );
+    assert_eq!(result["reviews"].as_array().unwrap().len(), 1);
 }

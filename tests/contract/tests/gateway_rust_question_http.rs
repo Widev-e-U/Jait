@@ -302,3 +302,16 @@ async fn hooks_enforce_origin_and_parse_before_secret_validation() {
         {"method":"POST","path":"/hooks/agent","raw":"\u{feff}{}","headers":{"content-type":"application/json","x-hook-token":"hook-fixture"}}
     ]})).await;
 }
+
+#[tokio::test]
+async fn answered_card_choices_survive_authenticated_http_submission() {
+    let answers = json!({"target":{"selected":["Homelab","Local"],"freeText":"Only the lab 🦀","skipped":false},"later":{"selected":[],"freeText":null,"skipped":true}});
+    let result = scenario(json!({"op":"nativequestionhttp.routes","steps":[
+        {"ask":{"sessionId":"card","userId":"owner","questions":[{"id":"target","header":"Target","question":"Where should it run?"},{"id":"later","header":"Later","question":"Anything else?"}]}},
+        {"method":"POST","path":"/api/user-questions/requests/$card/submit","user":"other","body":{"answers":answers}},
+        {"method":"POST","path":"/api/user-questions/requests/$card/submit","user":"owner","body":{"answers":answers}},
+        {"method":"GET","path":"/api/user-questions/requests?sessionId=card","user":"owner"}
+    ]})).await;
+    assert_eq!(result["answers"]["card"]["answers"], answers);
+    assert_eq!(result["pending"], json!([]));
+}

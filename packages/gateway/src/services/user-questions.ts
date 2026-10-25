@@ -69,10 +69,15 @@ export class UserQuestionService {
     sessionId: string;
     userId: string | null;
     result: Promise<UserQuestionResult | null>;
+    waiters: number;
+    yielded: boolean;
   }>();
   private readonly pending = new Map<string, PendingUserQuestion>();
   private readonly onRequest?: (request: UserQuestionRequest) => void;
   private readonly onResolved?: (request: UserQuestionRequest) => void;
+
+  // Only detached MCP waits need a new turn; an attached tool resumes itself.
+  onDetachedResolved?: (request: UserQuestionRequest) => void;
 
   constructor(options: UserQuestionServiceOptions = {}) {
     this.onRequest = options.onRequest;
@@ -86,28 +91,33 @@ export class UserQuestionService {
   startResumable(input: UserQuestionInput): string {
     const { request, result } = this.createRequest(input);
     this.resumable.set(request.id, {
-      sessionId: request.sessionId, userId: request.userId, result,
+      sessionId: request.sessionId, userId: request.userId, result, waiters: 0, yielded: false,
     });
     return request.id;
   }
 
-  async waitForAnswer(requestId: string, sessionId: string, userId?: string | null): Promise<UserQuestionWaitResult> {
+  async waitForAnswer(requestId: string, sessionId: string, userId?: string | null, options: { yieldAfterMs?: number | null } = {}): Promise<UserQuestionWaitResult> {
     const entry = this.resumable.get(requestId);
     if (!entry || entry.sessionId !== sessionId || entry.userId !== (userId ?? null)) {
       return { status: "missing" };
     }
+    entry.waiters += 1;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const outcome = await Promise.race([
-        entry.result.then(result => ({ status: "answered" as const, result })),
-        new Promise<{ status: "pending" }>(resolve => {
-          timer = setTimeout(() => resolve({ status: "pending" }), 60_000);
-        }),
-      ]);
+      const outcome = options.yieldAfterMs === null
+        ? { status: "answered" as const, result: await entry.result }
+        : await Promise.race([
+          entry.result.then(result => ({ status: "answered" as const, result })),
+          new Promise<{ status: "pending" }>(resolve => {
+            timer = setTimeout(() => resolve({ status: "pending" }), options.yieldAfterMs ?? 60_000);
+          }),
+        ]);
       if (outcome.status === "answered") this.resumable.delete(requestId);
+      else entry.yielded = true;
       return outcome;
     } finally {
       clearTimeout(timer);
+      entry.waiters -= 1;
     }
   }
 
@@ -173,5 +183,7 @@ export class UserQuestionService {
     const request = { ...entry.request, status };
     entry.resolve(result);
     this.onResolved?.(request);
+    const resumable = this.resumable.get(requestId);
+    if (resumable?.yielded && resumable.waiters === 0) this.onDetachedResolved?.(request);
   }
 }

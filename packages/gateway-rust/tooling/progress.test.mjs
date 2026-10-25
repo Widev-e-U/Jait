@@ -1,8 +1,9 @@
+import { validationRuntimePaths } from './progress.mjs';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';
 import { resolve } from 'node:path';
-import { artifactOutputPath, fingerprint, isGatewayRuntimePath, summarizeProgress } from './progress.mjs';
+import { artifactOutputPath, fingerprint, isGatewayRuntimePath, summarizeProgress, runtimePaths } from './progress.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 
@@ -148,4 +149,47 @@ test('unrecorded gateway paths use the same source/test extensions as the covera
   for (const path of ['packages/gateway/src/chat.test.ts', 'packages/gateway/src/util.spec.mjs', 'packages/gateway/src/types.d.ts', 'packages/gateway/src/fixture.json']) {
     assert.equal(isGatewayRuntimePath(path), false);
   }
+});
+
+
+test('runtime audit skips generated nested .jait evidence but retains unrecorded native assets', async () => {
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../../../.jait/artifacts/gateway-rust/progress-fixtures/' + crypto.randomUUID() + '/', import.meta.url));
+  mkdirSync(resolve(root, 'packages/gateway-rust/src/execution/.jait/artifacts'), { recursive: true });
+  writeFileSync(resolve(root, 'packages/gateway-rust/src/execution/new.rs'), 'pub fn actual_source() {}');
+  writeFileSync(resolve(root, 'packages/gateway-rust/src/execution/native-assets.json'), '{}');
+  writeFileSync(resolve(root, 'packages/gateway-rust/src/execution/.jait/artifacts/test.log'), 'generated evidence');
+  try {
+    assert.deepEqual(runtimePaths(root, 'packages/gateway-rust/src').sort(), [
+      'packages/gateway-rust/src/execution/native-assets.json',
+      'packages/gateway-rust/src/execution/new.rs',
+    ]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test('gate runtime inputs include uninventoried CommonJS dependencies and detect later drift', async () => {
+  const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../../../.jait/artifacts/gateway-rust/progress-fixtures/' + crypto.randomUUID() + '/', import.meta.url));
+  const paths = ['packages/gateway/src/surfaces/browser-cursor.cjs', 'packages/shared/src/new.ts', 'packages/gateway-rust/src/asset.bin'];
+  for (const path of paths) {
+    mkdirSync(resolve(root, path, '..'), { recursive: true });
+    writeFileSync(resolve(root, path), 'runtime');
+  }
+  try {
+    const recorded = validationRuntimePaths(root);
+    assert.deepEqual(recorded.sort(), paths.sort());
+    const input = fixture();
+    input.currentRuntimePaths = recorded;
+    for (const path of recorded) {
+      input.files[path] = Buffer.from('runtime');
+      input.checkpoints[0].report.sources[path] = createHash('sha256').update(input.files[path]).digest('hex');
+    }
+    assert.equal(summarizeProgress(input).latest_frozen_checkpoint.current_inputs_match, true);
+    input.files[paths.find(p => p.endsWith('.cjs'))] = Buffer.from('changed runtime');
+    assert.equal(summarizeProgress(input).latest_frozen_checkpoint.current_inputs_match, false);
+    assert(summarizeProgress(input).latest_frozen_checkpoint.recorded_input_drift.includes('packages/gateway/src/surfaces/browser-cursor.cjs'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });

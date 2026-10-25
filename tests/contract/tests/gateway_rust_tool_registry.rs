@@ -202,6 +202,11 @@ async fn compare(cases: Vec<Value>) {
                 let disabled = set(&op["disabled"]);
                 let name = op["name"].as_str().unwrap_or("");
                 let outcome: Result<Value, HostError> = match op["op"].as_str().unwrap() {
+                    "compatibility" => {
+                        let (d, e) = tool(&op["item"], events.clone(), context.clone());
+                        registry.register_compatibility(d, e);
+                        Ok(Value::Null)
+                    }
                     "register" => {
                         let (d, e) = tool(&op["item"], events.clone(), context.clone());
                         registry.register(d, e);
@@ -619,4 +624,23 @@ async fn execution_errors_and_audit_failure_boundaries_stop_or_record_as_referen
     d["parameters"] = json!({"type":"object","properties":{"p":{"type":"object","enum":["x"]}}});
     cases.push(json!({"tools":[item(d)],"ops":[{"op":"execute","name":"file.read","input":{"p":{"toString":1}},"audit":true}]}));
     compare(cases).await;
+}
+
+#[tokio::test]
+async fn browser_compatibility_calls_execute_without_duplicate_discovery_and_keep_validation() {
+    let mut legacy = definition("preview.open", "Open project browser");
+    legacy["parameters"] =
+        json!({"type":"object","properties":{"target":{"type":"string"}},"required":["target"]});
+    compare(vec![json!({"tools":[item(definition("browser.open", "Open project browser"))],"context":{"sessionId":"s","userId":"owner"},"ops":[
+        {"op":"compatibility","item":item(legacy)},
+        {"op":"names"},{"op":"list"},{"op":"info"},
+        {"op":"mcp","disabled":["preview.open"]},
+        {"op":"executable","name":"preview.open","disabled":["browser.open"]},
+        {"op":"executable","name":"browser.open","disabled":["preview.open"]},
+        {"op":"get","name":"preview.open"},{"op":"has","name":"preview.open"},
+        {"op":"search","query":"Open project browser"},
+        {"op":"execute","name":"preview.open","input":{}},
+        {"op":"execute","name":"preview.open","input":{"target":"5173"},"audit":true},
+        {"op":"unregister","name":"preview.open"},{"op":"has","name":"preview.open"}
+    ]})]).await;
 }

@@ -32,3 +32,10 @@ be a string; malformed native content fails with a redacted error. Arbitrary
 JavaScript prototypes/coercion, concurrent lifecycle races, a real WebSocket/node
 transport and supported-platform/resource acceptance remain outside this slice.
 No production node or filesystem activation occurs here.
+
+Bun 1.4.0 refresh (2026-10-25): the unchanged actual Buffer corpus exposed
+UTF-16 low-byte semantics for `Tő==` and `TQĽAAAA`. The native decoder now
+narrows UTF-16 code units before interpreting alphabet/padding. No reference
+assertion or response normalization changes. This repair earns no additional
+component credit; focused evidence is in
+`.jait/artifacts/gateway-rust/channels-http/filesystem-refresh.log`.

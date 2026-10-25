@@ -47,6 +47,24 @@ describe("HTTP protocol evidence", () => {
     expect(result.rules).toEqual([]);
     expect(JSON.stringify(result)).not.toContain("/logout");
   });
+  it("keeps cancellation evidence stable after the request is destroyed", async () => {
+    const server = createHttpServer();
+    server.on("connection", socket => socket.on("error", () => {}));
+    const port = await listen(server);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const controller = new AbortController();
+      const pending = checkHttp("127.0.0.1", port, false, controller.signal);
+      queueMicrotask(() => controller.abort());
+      const result = await pending;
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(result.conclusive).toBe(false);
+      expect(result.evidence).toEqual([]);
+      expect(result.coverageGaps).toEqual([
+        "Gateway-side observation; WAN exposure and exploitability are not established.",
+        "HTTP check cancelled",
+      ]);
+    }
+  });
   it("bounds streamed bodies and handles cancellation", async () => {
     const port = await listen(createHttpServer((_request, response) => response.end(Buffer.alloc(100_000))));
     const result = await checkHttp("127.0.0.1", port, false, signal());

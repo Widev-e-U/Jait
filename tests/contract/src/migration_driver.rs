@@ -133,14 +133,18 @@ pub fn call_request(
     );
     let stdout = reader(child.0.stdout.take().context("missing driver stdout")?);
     let stderr = reader(child.0.stderr.take().context("missing driver stderr")?);
-    let deadline = Instant::now() + Duration::from_secs(30);
+    // 120s rather than 30s: this suite runs beside vitest and two other cargo suites in
+    // the deploy ladder. The heaviest single call (messenger.recover, count=50000) needs
+    // ~17.5s with the machine idle, so a 30s bound reported load as a hang. A genuinely
+    // wedged driver still exceeds this bound and still fails the test.
+    let deadline = Instant::now() + Duration::from_secs(120);
     let mut output = None;
     let mut errors = None;
     loop {
         ensure!(!cancelled(), "internal driver cancelled");
         ensure!(
             Instant::now() < deadline,
-            "internal driver exceeded 30 seconds"
+            "internal driver exceeded 120 seconds"
         );
         if output.is_none()
             && let Ok(bytes) = stdout.try_recv()

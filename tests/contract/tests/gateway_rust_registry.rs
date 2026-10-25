@@ -238,6 +238,9 @@ fn mcp_refs_normalize_hosts_urls_context_and_keep_router_auth_opt_in() {
             json!(" https://Example.TEST:443/path/// "),
             json!("http://user:pass@localhost:20128/base?x=y#z"),
             json!("invalid"),
+            json!("http://["),
+            json!("://broken"),
+            json!("mailto:owner@example.invalid"),
         ] {
             calls.push(json!({"op":"nativeregistry.refs","config":{"host":host,"port":8220},"base":base,"context":{"sessionId":"s +&🦀","projectRoot":"/tmp/a b","runtimeMode":"supervised"}}));
         }

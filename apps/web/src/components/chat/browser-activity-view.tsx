@@ -15,7 +15,7 @@ export function BrowserActivityView({ tool, args, data, status, output, children
   const StatusIcon = running ? Loader2 : status === 'error' ? XCircle : CheckCircle2
   const details = activity.textPreview || activity.snapshot
   return (
-    <section aria-label="Browser activity" className="my-1 overflow-hidden rounded-lg border border-cyan-500/20 bg-background text-xs">
+    <section aria-label="Browser activity" className="overflow-hidden rounded-lg border border-cyan-500/20 bg-background text-xs">
       <div className="flex min-w-0 items-center gap-2 border-b border-border/60 bg-muted/30 px-3 py-2">
         <Globe className="h-3.5 w-3.5 shrink-0 text-cyan-500" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate font-medium">{activity.title || 'Browser'}</span>

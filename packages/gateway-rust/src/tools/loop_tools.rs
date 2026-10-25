@@ -48,7 +48,7 @@ pub fn execute(
                 .goal(id, input.get("goal"), input.get("criteria"), user)
                 .map(Some),
             "loop.status" => service.get(id, user),
-            "loop.check" => service.check(id, input, user).map(Some),
+            "loop.check" => service.check_unmonitored(id, input, user).map(Some),
             "loop.pause" => service.control(id, "pause", user).map(Some),
             "loop.resume" => service.control(id, "resume", user).map(Some),
             _ => Err("Unknown loop tool".into()),

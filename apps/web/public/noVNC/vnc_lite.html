@@ -15,6 +15,7 @@
         http://example.com/?host=HOST&port=PORT&scale=true
     -->
     <title>noVNC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
     <style>
         :root {
@@ -42,7 +43,7 @@
             overflow: hidden;
         }
 
-        #mobile_keyboard_button {
+        #mobile_keyboard_button, #mobile_pointer_button {
             position: fixed;
             right: max(16px, env(safe-area-inset-right));
             bottom: max(16px, env(safe-area-inset-bottom));
@@ -62,15 +63,18 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        #mobile_keyboard_button.visible {
+        #mobile_keyboard_button.visible, #mobile_pointer_button.visible {
             display: inline-flex;
         }
+
+        #mobile_pointer_button { left: max(16px, env(safe-area-inset-left)); right: auto; font-size: 13px; }
 
         #mobile_keyboard_button.active {
             background: rgba(37, 99, 235, 0.95);
         }
 
         #mobile_keyboard_input {
+            font-size: 16px;
             width: 1px;
             height: 1px;
             position: fixed;
@@ -87,6 +91,7 @@
     <script type="module" crossorigin="anonymous">
         // RFB holds the API to connect and communicate with a VNC server
         import RFB from './core/rfb.js';
+        import { setupTouchPointer } from './jait-touch-pointer.js';
         import Keyboard from './core/input/keyboard.js';
         import KeyTable from './core/input/keysym.js';
         import keysyms from './core/input/keysymdef.js';
@@ -95,6 +100,7 @@
         let rfb;
         let desktopName;
         let touchKeyboard;
+        let touchPointer;
         let lastKeyboardInput = null;
         const defaultKeyboardInputLen = 100;
 
@@ -107,6 +113,7 @@
 
         // This function is called when we are disconnected
         function disconnectedFromServer(e) {
+            hideVirtualKeyboard();
             window.parent.postMessage({ type: 'jait-vnc-status', status: 'disconnected' }, '*');
             document.getElementById('top_bar').style.display = 'block';
             if (e.detail.clean) {
@@ -157,10 +164,10 @@
         }
 
         function showVirtualKeyboard() {
-            if (!isTouchDevice) return;
+            if (!isTouchDevice || rfb.viewOnly) return;
             const input = keyboardInputElement();
             if (document.activeElement === input) return;
-            input.focus();
+            input.focus({ preventScroll: true });
             try {
                 const len = input.value.length;
                 input.setSelectionRange(len, len);
@@ -183,17 +190,21 @@
         }
 
         function onVirtualKeyboardFocus() {
+            window.parent.postMessage({ type: 'jait-vnc-keyboard', open: true }, '*');
             keyboardButtonElement().classList.add('active');
+            keyboardButtonElement().setAttribute('aria-pressed', 'true');
             if (rfb) rfb.focusOnClick = false;
         }
 
         function onVirtualKeyboardBlur() {
+            window.parent.postMessage({ type: 'jait-vnc-keyboard', open: false }, '*');
             keyboardButtonElement().classList.remove('active');
+            keyboardButtonElement().setAttribute('aria-pressed', 'false');
             if (rfb) rfb.focusOnClick = true;
         }
 
         function onVirtualKeyboardInput(event) {
-            if (!rfb) return;
+            if (!rfb || rfb.viewOnly) return;
 
             const newValue = event.target.value;
             if (!lastKeyboardInput) keyboardInputReset();
@@ -241,15 +252,17 @@
 
             const button = keyboardButtonElement();
             const input = keyboardInputElement();
-            button.classList.add('visible');
+            button.classList.toggle('visible', !rfb.viewOnly);
+            // Preserve the input focus until click decides whether to close the keyboard.
+            button.addEventListener('pointerdown', event => event.preventDefault());
             button.addEventListener('click', toggleVirtualKeyboard);
 
             touchKeyboard = new Keyboard(input);
             touchKeyboard.onkeyevent = (keysym, code, down) => {
-                if (!rfb) return;
+                if (!rfb || rfb.viewOnly) return;
                 rfb.sendKey(keysym, code, down);
             };
-            touchKeyboard.grab();
+            if (!rfb.viewOnly) touchKeyboard.grab();
 
             input.addEventListener('focus', onVirtualKeyboardFocus);
             input.addEventListener('blur', onVirtualKeyboardBlur);
@@ -259,8 +272,8 @@
             // Keep the OS keyboard open while interacting with the remote page
             // after the user explicitly enabled typing.
             document.getElementById('screen').addEventListener('touchstart', () => {
-                if (document.activeElement === input) {
-                    setTimeout(() => input.focus(), 0);
+                if (!rfb.viewOnly && document.activeElement === input) {
+                    setTimeout(() => { if (!rfb.viewOnly) input.focus(); }, 0);
                 }
             }, { passive: true });
         }
@@ -328,6 +341,23 @@
         rfb.scaleViewport = readQueryVariable('scale', false);
 
         setupTouchKeyboard();
+        if (isTouchDevice) touchPointer = setupTouchPointer(rfb, document.getElementById('screen'), document.getElementById('mobile_pointer_button'));
+
+        // Only this viewer's embedding parent may update an existing connection.
+        // Messages from pages, other frames and unrelated origins cannot take control.
+        window.addEventListener('message', event => {
+            if (window.parent === window || event.source !== window.parent ||
+                !document.referrer || event.origin !== new URL(document.referrer).origin ||
+                event.data?.type !== 'jait-vnc-control' || typeof event.data.viewOnly !== 'boolean') return;
+            touchPointer?.reset(); // Release held mouse buttons before disabling input.
+            if (event.data.viewOnly) { hideVirtualKeyboard(); touchKeyboard?.ungrab(); }
+            rfb.viewOnly = event.data.viewOnly;
+            if (isTouchDevice) {
+                keyboardButtonElement().classList.toggle('visible', !rfb.viewOnly);
+                if (!rfb.viewOnly) touchKeyboard?.grab();
+                touchPointer?.update();
+            }
+        });
     </script>
 </head>
 
@@ -339,7 +369,8 @@
     <div id="screen">
         <!-- This is where the remote screen will appear -->
     </div>
-    <button id="mobile_keyboard_button" type="button" aria-label="Toggle keyboard">⌨</button>
-    <input id="mobile_keyboard_input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" />
+    <button id="mobile_pointer_button" type="button" aria-label="Toggle mouse mode" aria-pressed="true">Mouse</button>
+    <button id="mobile_keyboard_button" type="button" aria-label="Toggle keyboard" aria-pressed="false">⌨</button>
+    <input id="mobile_keyboard_input" aria-label="Remote keyboard input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" />
 </body>
 </html>

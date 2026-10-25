@@ -53,6 +53,7 @@ function ConnectionForm() {
         <label className="block space-y-1.5 text-sm">Matrix username<Input value={username} onChange={event => setUsername(event.target.value)} placeholder="@you:example.com" required autoComplete="username" disabled={busy} /></label>
         <label className="block space-y-1.5 text-sm">Matrix password<Input type="password" value={password} onChange={event => setPassword(event.target.value)} required autoComplete="current-password" disabled={busy} /></label>
       </>}
+      {snapshot.error && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{snapshot.error}</p>}
       <Button type="submit" className="w-full gap-2" disabled={busy}>{busy && <Loader2 className="h-4 w-4 animate-spin" />}{busy ? 'Connecting…' : 'Connect Matrix'}</Button>
       <button type="button" className="text-xs text-muted-foreground underline" disabled={busy} onClick={() => { setUseToken(!useToken); setPassword(''); setToken('') }}>{useToken ? 'Use a password instead' : 'Use a device access token (SSO accounts)'}</button>
     </form>

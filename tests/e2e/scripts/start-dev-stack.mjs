@@ -10,6 +10,9 @@ const gatewayDir = resolve(repoRoot, 'packages/gateway')
 const webDir = resolve(repoRoot, 'apps/web')
 
 const frontendUrl = process.env.FRONTEND_URL || 'http://127.0.0.1:3100'
+// Preview surfaces run Chromium inside a container and rewrite loopback targets
+// to host.docker.internal, so the web server has to listen on more than 127.0.0.1.
+const webHost = process.env.E2E_WEB_HOST || '127.0.0.1'
 const gatewayUrl = process.env.API_URL || 'http://127.0.0.1:8100'
 const frontendPort = String(new URL(frontendUrl).port || (new URL(frontendUrl).protocol === 'https:' ? 443 : 80))
 const gatewayPort = String(new URL(gatewayUrl).port || (new URL(gatewayUrl).protocol === 'https:' ? 443 : 80))
@@ -141,7 +144,7 @@ try {
   })
   await waitForUrl(gatewayHealthUrl, 'gateway health')
 
-  spawnServer('web', process.execPath, [resolve(webDir, 'node_modules/vite/bin/vite.js'), '--config', 'vite.config.ts', '--host', '127.0.0.1'], webDir, {
+  spawnServer('web', process.execPath, [resolve(webDir, 'node_modules/vite/bin/vite.js'), '--config', 'vite.config.ts', '--host', webHost], webDir, {
     JAIT_GATEWAY_URL: gatewayUrl,
     VITE_WS_URL: gatewayUrl.replace(/^http/, 'ws'),
     NODE_ENV: 'development',

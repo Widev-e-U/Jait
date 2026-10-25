@@ -5,7 +5,7 @@ import base from './vite.config'
 // Component browser checks need React and their fixture, not App startup or a gateway.
 export default defineConfig({
   ...base,
-  cacheDir: resolve(__dirname, '../../.jait/artifacts/vite-ui-cache'),
+  cacheDir: base.cacheDir || resolve(__dirname, '../../.jait/artifacts/vite-ui-cache'),
   optimizeDeps: {
     ...base.optimizeDeps,
     entries: [

@@ -36,6 +36,18 @@ count, skipped new-file removal on restore, wrong patch substitution and inverte
 directory-copy guard. See `filesystem-mutations.json` and the per-mutant logs.
 Full frozen validation controls new source-bound checkpoint credit.
 
+
+Bun 1.4.0 refresh (2026-10-25): actual reference checks exposed changed cp
+SystemError envelopes for same-inode and file/directory conflicts, destination
+symlink replacement, nested symlink target resolution, and stat/lstat labels.
+The native implementation now matches these effects and errors without response
+normalization. The existing copy corpus additionally checks file-to-directory
+failure. All twelve focused checks pass; evidence:
+`.jait/artifacts/gateway-rust/channels-http/filesystem-refresh.log`. A separate
+owned-fixture probe covers same inode via hardlink and symlink. Path validation,
+operation counts and bounded execution remain in place. This repair adds no
+component credit and remains subject to the full frozen gate.
+
 Limits: Linux, typed Unicode-scalar paths/content, serial operations and the
 existing reference path policy. Directory enumeration is filesystem dependent.
 The original final-symlink check and lexical-only metadata/destination checks are

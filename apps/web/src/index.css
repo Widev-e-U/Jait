@@ -387,6 +387,13 @@
   }
 }
 
+/* The phone browser toolbar keeps every action on one row. */
+@media (max-width: 639px) {
+  [data-browser-toolbar] button[aria-label] {
+    min-width: 2rem;
+  }
+}
+
 /*
  * While a resize sash is being dragged, force the resize cursor on every
  * element under the pointer. Setting cursor on <body> alone is not enough:
@@ -590,6 +597,14 @@ html.is-dragging-row-resize {
 
 @media (prefers-reduced-motion: reduce) {
   .preview-shared-frame { animation: none; }
+}
+
+/* The remote keyboard owns the phone's input space. Keep the composer mounted
+ * so drafts survive; scope this to its own chat, including parallel panels. */
+@media (max-width: 767px) {
+  [data-browser-chat-scope]:has([data-browser-keyboard-open="true"]) [data-chat-composer-dock] {
+    display: none;
+  }
 }
 
 /*

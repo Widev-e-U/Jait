@@ -280,6 +280,7 @@ import type { ArchitectureDiagramService } from "../services/architecture-diagra
 import type { CodeGraphService } from "../services/code-graph/code-graphs.js";
 import type { SecretInputService } from "../services/secret-input.js";
 import type { UserQuestionService } from "../services/user-questions.js";
+import { createBrowserHandoffTool } from "./browser-handoff.js";
 import type { UserSecretService } from "../services/user-secrets.js";
 import type { ProjectService } from "../services/projects.js";
 import type { RepositoryService } from "../services/repositories.js";
@@ -525,6 +526,7 @@ export function createToolRegistry(
 
   if (deps.userQuestionService) {
     tools.register(createUserAskTool(deps.userQuestionService));
+    if (deps.previewService) tools.register(createBrowserHandoffTool(deps.previewService, deps.userQuestionService));
   }
 
   // Self-update / redeploy tool
@@ -641,12 +643,21 @@ export function createToolRegistry(
   for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService, deps.ws)) {
     tools.register(tool);
   }
-  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewRestartTool(deps.previewService));
-  tools.register(createPreviewStatusTool(deps.previewService));
-  tools.register(createPreviewLogsTool(deps.previewService));
-  tools.register(createPreviewInspectTool(deps.previewService));
+  // Keep the managed project runner internally, with one public browser tool family.
+  const browserLifecycle = [
+    [createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService), "browser.open"],
+    [createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService), "browser.close"],
+    [createPreviewRestartTool(deps.previewService), "browser.restart"],
+    [createPreviewStatusTool(deps.previewService), "browser.status"],
+    [createPreviewLogsTool(deps.previewService), "browser.logs"],
+  ] as const;
+  for (const [legacy, name] of browserLifecycle) {
+    tools.registerCompatibility(legacy);
+    tools.register({ ...legacy, name,
+      description: legacy.description.replace(/preview\.(open|inspect|status|restart|logs|stop)/g, (_, action: string) => `browser.${action === "stop" ? "close" : action}`),
+    });
+  }
+  tools.registerCompatibility(createPreviewInspectTool(deps.previewService));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());

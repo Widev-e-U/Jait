@@ -1,3 +1,4 @@
+import { UserQuestionService } from "../services/user-questions.js";
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { backgroundCommandMonitor } from "../services/background-command-monitor.js";
@@ -8,6 +9,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import type { CliProviderAdapter, ProviderEvent, ProviderInfo, ProviderSession, StartSessionOptions } from "../providers/contracts.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { ChatLoopService } from "../services/chat-loops.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
@@ -341,6 +343,42 @@ async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promis
 }
 
 describe("chat external provider runtime mode selection", () => {
+  it.each(["error", "paused"] as const)("refreshes a %s goal in reused CLI sessions", async (status) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("goal-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Saved goal" });
+    const chatLoops = new ChatLoopService(sessionService);
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry, chatLoops });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const send = (content: string) => app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content, provider: "codex", runtimeMode: "full-access" } });
+    try {
+      expect((await send("Inspect current work")).statusCode).toBe(200);
+      chatLoops.goal(session.id, "Finish saved migration", ["All components verified"]);
+      if (status === "error") chatLoops.finishTurn(session.id, "Workspace is out of credits");
+      else chatLoops.control(session.id, "pause");
+      expect((await send("Why did the goal stop?")).statusCode).toBe(200);
+      expect(provider.startSession).toHaveBeenCalledOnce();
+      expect(provider.sendTurn).toHaveBeenCalledTimes(2);
+      const prompt = provider.sendTurn.mock.calls[1]![1];
+      expect(prompt).toContain("<chatGoalLoop>");
+      expect(prompt).toContain(`Loop status: ${status}`);
+      expect(prompt).toContain("Finish saved migration");
+      expect(prompt).toContain("loop.resume before working on it");
+      if (status === "error") expect(prompt).toContain("Workspace is out of credits");
+      // Asking about the failure grants no automatic resume authority.
+      expect(chatLoops.get(session.id)?.status).toBe(status);
+    } finally { await app.close(); sqlite.close(); }
+  });
+
   it.each([false, true])("delivers uploaded images on first and reused turns, including display-segment uploads (recovery=%s)", async (recovery) => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
@@ -390,6 +428,48 @@ describe("chat external provider runtime mode selection", () => {
       expect(provider.sendTurn).toHaveBeenCalledOnce();
     } finally {
       await app.close();
+    }
+  });
+
+  it.each(["user.ask", "browser.handoff"])("resumes an idle CLI after a delayed %s answer through HTTP", async (requestedBy) => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("question-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Browser handoff" });
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const questions = new UserQuestionService();
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService,
+      providerRegistry, userQuestionService: questions });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    try {
+      await app.inject({ method: "POST", url: "/api/chat", headers,
+        payload: { sessionId: session.id, content: "Continue after my answer", provider: "codex", runtimeMode: "full-access" } });
+      vi.useFakeTimers();
+      const id = questions.startResumable({ sessionId: session.id, userId: user.id, requestedBy,
+        questions: [{ id: "browser", header: "Browser", question: "Finish this step" }] });
+      const wait = questions.waitForAnswer(id, session.id, user.id);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(await wait).toEqual({ status: "pending" });
+      vi.useRealTimers();
+      expect(provider.sendTurn).toHaveBeenCalledTimes(1);
+      const submitted = await app.inject({ method: "POST", url: `/api/user-questions/requests/${id}/submit`, headers,
+        payload: { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } } });
+      expect(submitted.statusCode).toBe(200);
+      await vi.waitFor(() => expect(provider.sendTurn).toHaveBeenCalledTimes(2));
+      expect(provider.sendTurn.mock.calls[1]![1]).toContain(`${requestedBy} with only requestId=`);
+      expect(provider.startSession.mock.calls.at(-1)![0].mode).toBe("full-access");
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages`, headers });
+      expect(history.body).not.toContain("Call browser.handoff with only requestId=");
+    } finally {
+      vi.useRealTimers();
+      await app.close();
+      sqlite.close();
     }
   });
 

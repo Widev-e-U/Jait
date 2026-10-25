@@ -46,8 +46,11 @@ Observed discrepancies corrected by the focused suite:
 - Native floating-number JSON emitted integer page/size values differently.
 - Error text containing generated job IDs needed the same precise aliasing as
   those IDs, without normalizing arbitrary user strings.
-- SQLite statement errors and constraint errors have different Fastify envelopes:
-  a missing table has no code field while trigger constraints retain theirs.
+- SQLite statement and constraint errors preserve the runtime error codes.
+  On the current Bun 1.4 reference, missing tables carry `SQLITE_ERROR` and
+  trigger constraints carry `SQLITE_CONSTRAINT_TRIGGER`. The earlier runtime
+  omitted the missing-table code; the full frozen gate caught this change,
+  and the existing SQLite fault comparison remains the regression contract.
 - All JSON outcomes, including early auth/parser errors, carry the reference
   content type; 204 deletion has no content type.
 - A separate scheduler regression exposed split disarm writes; its correction

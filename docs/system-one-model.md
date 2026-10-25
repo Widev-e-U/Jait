@@ -26,3 +26,15 @@ With no `SYSTEM_ONE_BASE_URL`, requests go to `https://api.typesafe.ai/v1/system
 Automatic ranking considers at most 48 candidates, starting with local lexical matches. It preserves the original behavior on errors, malformed results, cancellation, or a 1.5-second timeout. A 15-second per-credential circuit breaker avoids repeatedly waiting for an unavailable service. Bounded 30-second caches are isolated by credential and full request. `decision.evaluate` reports failure explicitly so the calling model can reason normally.
 
 This is a ranking/decision integration, not a prompt rewriting or text generation service. Memory scope, user instructions, permission checks, and execution authority stay with Jait. External coding agents use the prompt guidance and MCP discovery; Jait does not alter their internal provider loops.
+
+## Chat goal monitoring (TypeScript gateway)
+
+`loop.check` automatically calls the configured System One model to review progress against the previous checkpoint. Completion additionally needs a positive decision with at least 0.8 reported confidence for each acceptance criterion and its corresponding evidence entry. Missing or uncertain evidence rejects completion and returns a concrete verification message. The verdict, model, reviewed revision, criterion results and timestamp are saved in chat metadata and returned by `loop.status`.
+
+This reviews **agent-reported evidence**; it does not independently rerun tests or establish that an artifact exists. A model confidence value is not a calibrated guarantee. The existing requirement for one nonblank evidence entry per criterion remains. No System One configuration preserves that existing behavior and records monitoring as disabled.
+
+Reviews have a five-second deadline and the decision API's 24,000-character state limit. Failure, cancellation, oversized input or malformed decisions pause the loop for explicit review/resume instead of accepting completion. Pauses, changed goals and concurrent checkpoints invalidate in-flight reviews. Waiting for user input needs no model call. Existing consent and assessment scope checks remain authoritative.
+
+Only goal text, criteria, the previous summary/evidence and the proposed checkpoint are sent to the configured endpoint. Configured credential values, URL credentials and bearer tokens are scrubbed; unrelated history and raw tool logs are excluded. Checkpoints must still avoid sensitive evidence: pattern redaction cannot recognize every secret or private asset name. Local storage does not mean local model processing.
+
+Three stalled checkpoints, three turns without a checkpoint, or 50 turns since goal creation/explicit resume pause automatic continuation. Explicit resume renews the budget; answering a pending question does not. Completion accepted on the final budgeted turn still succeeds. These limits bound continuation even with System One disabled. They do not bound work inside a single provider turn, which retains its existing limits. Rust gateway parity for this monitor is not implemented.

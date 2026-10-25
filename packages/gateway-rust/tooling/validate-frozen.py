@@ -31,6 +31,19 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def copy_changed_source(source, target, expected_digest):
+    """Invalidate timestamp-based compiler caches when snapshot bytes change.
+
+    Git checkouts or restored edits may have mtimes older than a warm artifact.
+    copy2 would retain those mtimes and allow Cargo to reuse stale native code.
+    Unchanged sources keep their times so warm incremental checks remain useful.
+    """
+    if target.is_symlink():
+        target.unlink()
+    if not target.exists() or digest(target) != expected_digest:
+        shutil.copyfile(source, target)
+
+
 def link(path, target):
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
@@ -130,6 +143,12 @@ def main():
         run_locked()
 
 
+def is_source_path(relative):
+    return (".jait" not in relative.parts
+            and relative.parts[0] not in (".git", ".agents", ".codex", ".aws")
+            and relative.name != ".env")
+
+
 def run_locked():
     isolation_tests = subprocess.run(
         ["python3", "-B", "tests/contract/tooling/test_native_validation_output.py"], cwd=ROOT
@@ -151,9 +170,7 @@ def run_locked():
             continue
         relative = Path(name)
         assert not relative.is_absolute() and ".." not in relative.parts
-        if relative.parts[0] in (".git", ".jait", ".agents", ".codex", ".aws"):
-            continue
-        if relative.name == ".env" or not (ROOT / relative).is_file():
+        if not is_source_path(relative) or not (ROOT / relative).is_file():
             continue
         paths.append(relative)
     before = {str(p): digest(ROOT / p) for p in paths}
@@ -168,10 +185,7 @@ def run_locked():
     for relative in paths:
         source, target = ROOT / relative, SNAPSHOT / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if target.is_symlink():
-            target.unlink()
-        if not target.exists() or digest(target) != before[str(relative)]:
-            shutil.copy2(source, target)
+        copy_changed_source(source, target, before[str(relative)])
     copied = {str(p): digest(SNAPSHOT / p) for p in paths}
     after = {str(p): digest(ROOT / p) for p in paths}
     assert before == copied == after, "source changed while copying; retry snapshot preparation"

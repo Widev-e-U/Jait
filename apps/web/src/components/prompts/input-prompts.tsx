@@ -1,6 +1,7 @@
+import { MessageLink } from '@/components/ui/message-link'
 import { chatNotificationLink } from '@jait/shared'
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { ArrowUpRight, Check, ChevronLeft, Eye, EyeOff, KeyRound, Loader2, MessageCircleQuestion } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useId, type ReactNode } from 'react'
+import { ArrowUpRight, Check, ChevronDown, ChevronLeft, Eye, EyeOff, KeyRound, Loader2, MessageCircleQuestion } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -25,26 +26,49 @@ const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
 
 /** Shared shell for decisions and private inputs beside the composer. */
-export function InputPromptCard({ title, kind, children, testId, urgent = false }: {
+export function InputPromptCard({ title, kind, children, testId, urgent = false, collapsible = false, centeredCollapse = false }: {
   title: string
   kind: 'question' | 'secret'
   children: ReactNode
   testId?: string
   urgent?: boolean
+  centeredCollapse?: boolean
+  collapsible?: boolean
 }) {
+  const [collapsed, setCollapsed] = useState(false)
+  const bodyId = useId()
   const Icon = kind === 'secret' ? KeyRound : MessageCircleQuestion
   return (
     // Rendered inside the composer shell (which already draws the border, radius and
     // shadow), so the card itself must stay frameless — otherwise the two frames nest
     // into a visible double border.
     <Card data-testid={testId} className="min-w-0 overflow-hidden rounded-none border-0 bg-transparent shadow-none">
-      <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
-        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <h3 className="min-w-0 flex-1 text-xs font-medium leading-5">{title}</h3>
-        {kind === 'secret' && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Private</Badge>}
-        {urgent && <Badge variant="warning" className="px-1.5 py-0 text-[10px]">Urgent</Badge>}
-      </div>
-      {children}
+      {collapsible && !centeredCollapse ? (
+        <button type="button" className={cn('flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/30', !collapsed && 'border-b border-border/60')}
+          aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed(value => !value)}>
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate text-xs font-medium leading-5" title={title}>{title}</span>
+          {urgent && <Badge variant="warning" className="px-1.5 py-0 text-[10px]">Urgent</Badge>}
+          <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground', collapsed && '-rotate-90')} aria-hidden="true" />
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 border-b border-border/60 px-3 py-2">
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <h3 className="min-w-0 flex-1 text-xs font-medium leading-5">{title}</h3>
+          {kind === 'secret' && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Private</Badge>}
+          {urgent && <Badge variant="warning" className="px-1.5 py-0 text-[10px]">Urgent</Badge>}
+        </div>
+      )}
+      <div id={bodyId} hidden={collapsed}>{children}</div>
+      {collapsible && centeredCollapse && <div className="flex justify-center border-t border-border/60">
+        <button type="button" aria-label={title} aria-expanded={!collapsed} aria-controls={bodyId}
+          className="flex min-h-9 items-center justify-center gap-2 rounded px-4 text-xs text-muted-foreground hover:bg-muted/30"
+          onClick={() => setCollapsed(value => !value)}>
+          {collapsed && <span>{title}</span>}
+          <ChevronDown className={cn('h-4 w-4', !collapsed && 'rotate-180')} aria-hidden="true" />
+          <span className="sr-only">{collapsed ? 'Expand' : 'Collapse'}</span>
+        </button>
+      </div>}
     </Card>
   )
 }
@@ -430,7 +454,8 @@ export function useUserQuestionPrompt({
   const [submitting, setSubmitting] = useState(false)
   const nativeQuestionStatesRef = useRef(new Map<string, 'presenting' | 'resolved'>())
   const activeRequest = getActiveUserQuestion(requests, sessionId)
-  const nativeRequest = requests[0] ?? null
+  // Browser handoffs stay inline so a native question modal cannot cover the browser.
+  const nativeRequest = requests.find(request => request.requestedBy !== 'browser.handoff') ?? null
 
   const authHeaders = useCallback((contentType = false) => {
     const headers: Record<string, string> = {}
@@ -469,6 +494,15 @@ export function useUserQuestionPrompt({
       })
     }).catch(() => { /* Push remains optional when Firebase is not configured. */ })
   }, [authHeaders, token])
+
+  useEffect(() => {
+    if (activeRequest?.requestedBy !== 'browser.handoff') return
+    const sessionId = activeRequest.sessionId
+    window.dispatchEvent(new CustomEvent('jait-browser-handoff', { detail: { sessionId, pending: true } }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('jait-browser-handoff', { detail: { sessionId, pending: false } }))
+    }
+  }, [activeRequest])
 
   const submitRequestAnswers = useCallback(async (
     request: UserQuestionRequest,
@@ -668,21 +702,47 @@ export function useUserQuestionPrompt({
   }, [])
 
   const inlinePrompt = activeRequest ? (
-    <InputPromptCard title={activeRequest.title} kind="question" urgent={activeRequest.attention === 'urgent'} testId="inline-user-question-prompt">
-      <UserQuestionForm key={activeRequest.id}
-        request={activeRequest} answers={answers} submitting={submitting}
-        onAnswerChange={setAnswer} onSubmit={submitAnswers} onCancel={cancelRequest} />
+    <InputPromptCard key={activeRequest.id} collapsible centeredCollapse={activeRequest.requestedBy === 'browser.handoff'} title={activeRequest.title} kind="question" urgent={activeRequest.attention === 'urgent'} testId="inline-user-question-prompt">
+      {activeRequest.requestedBy === 'browser.handoff'
+        ? <BrowserHandoffPrompt message={activeRequest.questions[0]?.question ?? ''} submitting={submitting}
+            onRespond={(choice, reason) => submitRequestAnswers(activeRequest, { browser: { selected: [choice], freeText: reason ?? null, skipped: false } })} />
+        : <UserQuestionForm key={activeRequest.id}
+            request={activeRequest} answers={answers} submitting={submitting}
+            onAnswerChange={setAnswer} onSubmit={submitAnswers} onCancel={cancelRequest} />}
     </InputPromptCard>
   ) : null
 
   return { activeRequest, inlinePrompt }
 }
 
+export function BrowserHandoffPrompt({ message, submitting, onRespond }: {
+  message: string
+  submitting: boolean
+  onRespond: (choice: string, reason?: string) => Promise<void>
+}) {
+  const [reasonOpen, setReasonOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  return <div data-testid="browser-handoff-prompt" className="space-y-2 px-3 py-2">
+    <p className="whitespace-pre-wrap text-sm">{message}</p>
+    <p className="text-xs text-muted-foreground">You have browser control. Enter passwords directly in the browser. Done returns control to the agent.</p>
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" size="sm" disabled={submitting} onClick={() => void onRespond('Done')}>Done</Button>
+      <Button type="button" size="sm" variant="outline" disabled={submitting} onClick={() => void onRespond("I'm not able to do it")}>I'm not able to do it</Button>
+      <Button type="button" size="sm" variant="ghost" disabled={submitting} aria-expanded={reasonOpen}
+        onClick={() => setReasonOpen(value => !value)}>Another reason</Button>
+    </div>
+    {reasonOpen && <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (reason.trim()) void onRespond("Another reason", reason.trim()) }}>
+      <Textarea aria-label="Why the browser step did not work" placeholder="Describe what did not work. Do not include passwords." maxLength={2000}
+        value={reason} onChange={event => setReason(event.target.value)} disabled={submitting} />
+      <Button type="submit" size="sm" disabled={submitting || !reason.trim()}>Send reason</Button>
+    </form>}
+  </div>
+}
+
 function QuestionText({ children }: { children: string }) {
   return <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
     p: ({ children }) => <span className="block whitespace-pre-wrap">{children}</span>,
-    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer"
-      className="text-primary underline break-words" onClick={(event) => event.stopPropagation()}>{children}</a>,
+    a: ({ node: _node, ...props }) => <MessageLink {...props} />,
   }}>{children}</ReactMarkdown>
 }
 
@@ -732,10 +792,13 @@ export function UserQuestionForm({
         {question.options?.length ? <div className="space-y-1.5">
           {question.options.map((option) => {
             const checked = answer.selected.includes(option.label)
-            return <label key={option.label} className={cn('flex min-h-10 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-ring/50',
+            return <label key={option.label} className={cn('flex min-h-10 cursor-pointer gap-2.5 rounded-lg border px-3 py-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-ring/50',
+              // Single-line rows center against the row; rows with a description align the
+              // control with the first line so the extra line never pushes it off-center.
+              option.description ? 'items-start' : 'items-center',
               checked ? 'border-primary/50 bg-primary/[0.06]' : 'border-border bg-background hover:bg-muted/50', submitting && 'pointer-events-none opacity-60')}>
               <input type={question.multiSelect ? 'checkbox' : 'radio'} name={`user-question-${request.id}-${question.id}`}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-primary" checked={checked} disabled={submitting}
+                className="h-4 w-4 shrink-0 accent-primary" checked={checked} disabled={submitting}
                 onChange={(event) => {
                   const selected = question.multiSelect
                     ? event.target.checked ? [...answer.selected, option.label] : answer.selected.filter(item => item !== option.label)

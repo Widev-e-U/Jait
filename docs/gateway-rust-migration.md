@@ -1,6 +1,259 @@
 # Gateway migration to Rust
 
-## Latest frozen native checkpoint — 2026-10-23
+## Current reconciled frozen checkpoint — 2026-10-25 (232 components)
+
+The refreshed full frozen gate passes **232/376 components (61.70%)**:
+**227/370 original targets** and **5/6 newer additions**. **143 originals** and
+**1 newer addition** remain pending. This supersedes earlier live coverage counts:
+channel HTTP is now verified, while `services/chat-loops.ts` and `tools/loop-tools.ts`
+remain pending after concurrent TypeScript configured System One monitoring changes.
+Their native deterministic lifecycle and reference-only monitor specifications do
+not establish configured native monitor parity. See
+`tests/contract/reviews/native-chat-loops.md`.
+
+Formatting, strict native Clippy, 316 native library tests and 161
+differential targets passed against the recorded frozen inputs. The final audit
+found an unrecorded CommonJS dependency (`surfaces/browser-cursor.cjs`); current
+source freshness is pending a new full gate after runtime-input enumeration repair.
+Workspace outputs stayed unchanged. Evidence: `.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/232-report.json`; final source audit and count reconciliation:
+`.jait/artifacts/gateway-rust/channels-http/completion-reconciled.json`.
+All twenty isolated native/reference mutations fail their intended assertions;
+the restored channel/question/assessment targets pass (41 checks). Evidence:
+`.jait/artifacts/gateway-rust/channels-http/mutations.json`.
+Channel review: `tests/contract/reviews/native-channels-http.md`.
+
+Bun runtime compatibility repairs cover argument and URL diagnostics, empty preview
+keys, SQLite error codes and empty-result projection metadata. The focused repair
+record binds 82 checks to source/log hashes:
+`.jait/artifacts/gateway-rust/channels-http/runtime-compatibility-repairs.json`.
+Concurrent Ollama redirect and history-read adapter changes were preserved and
+validated; the history adapter earns no native component credit.
+
+Production remains TypeScript. Configured chat-loop monitor composition, credential
+service integration, supported platforms, load/soak, recovery/rollback, full
+replacement and activation gates remain open. Component coverage and reconstructed
+reference-test coverage are separate metrics. No production activation or release
+is included.
+
+
+## Agent entrypoint and architecture improvements
+
+Before selecting a port, read the [architecture decision](gateway-rust-architecture.md)
+and its [session ownership and concurrency guidance](gateway-rust-architecture.md#session-ownership-and-concurrency),
+then audit `packages/gateway-rust/native-coverage.json` and live source drift using
+the [runtime verification instructions](../packages/gateway-rust/README.md).
+The architecture review dated 2026-10-24 records existing code, proposed changes,
+primary Rust/Tokio/SQLite references and executable acceptance criteria.
+
+For concurrency work, also read the [capacity roadmap](gateway-rust-capacity.md).
+It separates subscriber capacity from active turns and execution resources, records
+current limits and proposes staged acceptance checks for R08/R29/R30. Existing
+production and compatibility gates still apply.
+
+### Long-term concurrency ambition: thousands and beyond
+
+The maintainer's goal is to support as many concurrent sessions as practical,
+including many thousands and eventually more than 10,000 where measured resources
+allow. Treat concurrency as an ongoing migration objective: **500 is an early
+validation milestone, not the destination or an architectural ceiling.** Progress
+through 500 → 1,000 → 2,500 → 5,000 → 10,000 simultaneous sessions, then extend the
+capacity curve beyond 10,000. Measure connected sessions, mixed resident sessions
+and actively streaming provider turns independently; queued turns do not count as
+simultaneously active generation.
+
+Optimize for the highest sustainable concurrency within explicit CPU, memory,
+provider and execution budgets while keeping interactive control responsive,
+owners progressing fairly and cancellation/recovery correct. Record the highest
+passing workload, hardware, resource cost and limiting factor at each stage.
+Thousands of sessions can share bounded execution capacity; CLI agents, browsers
+and scans retain separate measured budgets and authorization limits.
+
+Start with the efficient single-process local gateway. If measurements show a
+single-host limit, evaluate authorized execution nodes and, only through a separate
+architecture/recovery review, multiple gateway owners. The capacity roadmap defines
+the evidence needed for each stage. This is an unmeasured ambition, not a shipping
+capacity claim, raised default, unlimited admission policy or reason to delay the
+existing replacement gates until the final stretch target is reached.
+
+Prioritize these improvements within the existing R09–R27 domain slices:
+
+1. One owner per active session; compose admission, provider lifetime, steering,
+   approvals, cancellation and finalization behind it. Run independent sessions
+   concurrently and keep control commands responsive during provider waits.
+2. Track turn/effect tasks, preserve authority at every effect, and retain resource
+   capacity until actual cleanup finishes, including blocking and remote work.
+3. Bound queues and bytes, retain committed event ordering and replay, and test
+   slow subscribers, restart and overload.
+4. Keep SQLite writes serialized and short; separate CPU work from async I/O.
+   Add read lanes or CPU pools only when measurements justify them.
+5. Keep tools sequential by default; opt reviewed independent operations into
+   bounded concurrency with resource-conflict checks and stable result ordering.
+6. Make recovery, revision checks, typed authority, fair admission and redacted
+   queue/latency diagnostics part of the relevant port's evidence.
+
+These are design requirements and recommendations for incremental implementation,
+not completed migration components. Intentional behavior changes need an explicit
+compatibility decision and client tests. Use the architecture document's priority
+and acceptance table alongside R05–R08 and R29–R30; the historical checkpoints
+below do not certify these proposals or the current workspace. Documentation
+changes add no native or reconstructed-test credit and do not authorize cutover.
+
+## Practical concurrency delivery plan and likely pain points
+
+Planning assessment: 2026-10-24. Thousands of coordinated sessions are a plausible
+engineering ambition; sustainable active generation also depends on provider
+throughput, quotas and execution hardware. No load result establishes these targets
+yet. Use the [capacity roadmap](gateway-rust-capacity.md) for workload definitions,
+thresholds, resource budgets and artifact locations. Re-audit the live source
+before implementing any observation below; these are investigation priorities,
+not measured bottlenecks or completed migration work.
+
+### Implement in this order
+
+1. **Build the measuring harness first.** Use an isolated project-local database,
+   a deterministic barrier provider for lifecycle assertions and a real loopback
+   HTTP/SSE provider for transport measurements. Prove requested active streams
+   overlap. Measure gateway and process-tree memory, DB admission wait and service
+   time, delivery latency, control responsiveness and cancellation cleanup.
+   Include long histories, slow readers, synchronized starts and reconnect bursts.
+   Keep real provider capacity and paid integration tests separate from gateway
+   coordination results; do not load-test the live workbench.
+2. **Make one local gateway efficient.** Prioritize incremental message projection
+   alongside the harness: compare work per append as history grows and preserve
+   atomic event/projection updates and commit-before-publish. Reuse compatible
+   HTTP clients with request-scoped credentials. Compose session lifecycle under
+   one owner; admit provider streams, processes, CPU work, DB jobs and buffered
+   bytes through separate bounded budgets. Add fair scheduling across owners and
+   providers, with responsive control paths during bulk work. Preserve existing
+   authority, ordering and recovery contracts through differential tests.
+3. **Advance through measured stages.** Establish 100 and 500, then test 1,000 →
+   2,500 → 5,000 → 10,000 and beyond using the same workload definitions. Each
+   stage must preserve the reviewed latency/correctness outcomes, survive the
+   defined soak and cancellation/reconnect cycles, and stay within a predefined
+   resource budget. Publish the highest passing point and first limiting resource.
+   Optimize that bottleneck before increasing admission; failed or rejected stages
+   remain visible as unsupported. Capacity evidence remains separate from native
+   component credit and production replacement gates.
+4. **Distribute the measured bottleneck.** Add explicitly authorized execution
+   nodes for expensive tools when local CPU, process or memory budgets bind.
+   Measure their contribution separately from gateway stream capacity. Consider
+   multiple gateway owners only after a separate ownership/persistence/recovery
+   review covering exclusive session ownership, authority fencing, routing,
+   quotas and network partitions. Keep SQLite WAL on one host; shared network
+   storage is not the gateway scaling plan.
+
+### Pain points to investigate
+
+| Likely pressure point | Current evidence or scaling risk | Planned response / evidence needed |
+| --- | --- | --- |
+| Persistence amplification | Each native turn-event append calls message projection, which rebuilds that session's native message rows; long histories increase transaction work | Measure append cost against history size; implement equivalent incremental updates with a bounded recovery rebuild and differential transcript tests |
+| Resident memory | Serialized and parsed histories, tool output, stream buffers and replay can all remain live or be copied | Load context on demand, share immutable data where appropriate and bound aggregate bytes; report incremental memory per connected, resident and active session |
+| Provider throughput | Gateway concurrency cannot establish inference throughput, token/request quotas or affordable operating cost | Track provider concurrency and rate budgets separately; measure real integrations independently and expose bounded waiting/fair allocation |
+| Heavy execution | CLI agents, browsers, builds and scans consume different process, CPU, memory and node resources | Give each effect class explicit admission and cancellation limits; add authorized nodes only where measurements justify them |
+| Cleanup and recovery | Cancellation can leave child processes or uncertain external effects; reconnect/restart can expose ownership races | Retain capacity until actual cleanup completes, supervise children, replay durable events and avoid blind retries of ambiguous mutations |
+| Streaming and clients | Slow subscribers, reconnect bursts and many rendered conversations can amplify buffering and UI work | Measure fan-out and replay separately, enforce byte/lag limits and test a summarized/virtualized session overview with detailed views on demand |
+| Admission and shared resources | The reviewed Rust route defaults to 8 active turns and validates at most 128; the event bus caps sessions and total subscribers at 256 | Re-audit and redesign these limits with resource accounting and fair scheduling; raising constants alone is not evidence of sustainable capacity |
+
+Memory arithmetic illustrates why the session representation matters: 10,000
+sessions retaining 1 MiB each consume about **9.77 GiB** for those buffers alone,
+before parsed copies, connections, runtime overhead or child processes. This is
+an illustrative calculation, not a measured Jait footprint.
+
+The initial engineering priority is therefore **the isolated load harness plus
+incremental message projection**. Use their measurements to select subsequent work
+rather than assuming Rust, a larger queue or extra machines will remove the
+application's limiting resource. Supporting library semantics and primary
+references are recorded in the [capacity guide](gateway-rust-capacity.md#primary-references).
+
+## Earlier checkpoint status — 2026-10-25 (233 components)
+
+The full frozen-source native gate passes **233/376 components (61.97%)**:
+**228/370 original targets** plus **5/6 newer additions**. **142 originals** and
+**1 newer addition** remain pending (143 total). Formatting, strict Clippy,
+316 native library tests and 161 differential targets pass. Frozen sources and
+workspace outputs stayed unchanged; all recorded live fingerprints match after
+mutation restoration, with no unrecorded native runtime sources. Evidence:
+`.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/233-report.json`. Final audit and mutation evidence:
+`.jait/artifacts/gateway-rust/consent-http/completion.json` and
+`.jait/artifacts/gateway-rust/consent-http/mutations.json`.
+
+This batch adds consent HTTP over the existing native queue: owner/thread checks,
+filtered pending/count, permission order, click decisions/reasons, audit records,
+notification-only bulk approval, session-wide override/clear and partial failure
+ordering. Reserved parameter/method routing matches Fastify, including the
+before-fix regression. Eight real-TypeScript loopback comparison groups, one
+native authority/lane check and four driver transport checks pass. Fourteen
+native/reference mutations produced their intended value-assertion failures;
+the restored 13-check suite passes. Review:
+`tests/contract/reviews/native-consent-http.md`.
+
+The recovered 232-component ClawHub checkpoint also passes with exact live input
+freshness; its eight focused checks and ten caught/restored mutations remain bound
+by `tests/contract/reviews/native-store-http.md` and the store artifacts. Tests
+approve only synthetic requests and perform no registry installation or live tool
+execution. Ownership/audit and installer/registry host composition remains explicit.
+
+Production remains TypeScript. Client/platform, load, recovery/rollback, remaining
+native adapters and full replacement/activation gates remain open. Component
+coverage does not establish reference-test reconstruction freshness; equal weights
+do not estimate remaining effort. No activation, public release or version bump
+is included.
+
+## Earlier frozen native checkpoint — 2026-10-24 (231 components)
+
+The full frozen-source native gate passes **231/376 components (61.44%)**:
+**226/370 original targets** plus **5/6 newer additions**. There are **144 original
+components** and **1 newer addition** pending (145 total). Formatting, strict
+Clippy, 316 native library tests and 159 differential targets pass. Frozen
+sources and workspace outputs stayed unchanged; all recorded live fingerprints
+matched, with no unrecorded native runtime sources. Evidence:
+`.jait/artifacts/gateway-rust/runs/chat-workflow/checkpoints/231-report.json`. Final audit:
+`.jait/artifacts/gateway-rust/provider-updates/progress-final.json`.
+
+This continuation adds provider-update policy with fixed process/registry requests,
+cache and in-flight behavior, native-Claude PATH selection, timer lifecycle and
+post-update verification. Sixty-four actual-TypeScript scenarios, two native
+lifetime/concurrency checks and four driver checks pass. Fifteen bounded native/
+reference mutations produced their intended value-assertion failures; restored
+checks and the five existing TypeScript unit tests pass. TimeClip boundaries and
+extended years use the shared ECMAScript timestamp helper. Review:
+`tests/contract/reviews/native-provider-updates.md`.
+
+The gate also includes the concurrent browser-family policy, prompt and result-
+evidence reconciliation. Process, registry, filesystem and scheduler effects
+remain explicit authorized host ports. Tests install no software. Client/platform,
+load, recovery/rollback and replacement/activation gates remain open. Component
+coverage does not establish reference-test reconstruction freshness. Equal weights
+do not estimate remaining effort. Production remains TypeScript.
+
+## Previous frozen native checkpoint — 2026-10-24 (230 components)
+
+The full frozen-source native gate passes **230/376 components (61.17%)**:
+**225/370 original targets** plus **5/6 newer additions**. There are **145 original
+components** and **1 newer addition** pending (146 total). Formatting, strict
+Clippy, 316 native library tests and 158 differential targets pass. Frozen
+sources stayed unchanged and every recorded live source fingerprint matched at completion.
+Evidence: `.jait/artifacts/gateway-rust/runs/coverage-goal/checkpoints/230-report.json`.
+
+The prior sandbox-process drift is reconciled, including exact forwarding of the
+injected runner's invocation and timeout. Four additional native/reference
+mutations were caught; the restored target passes. Native provider steering now
+preserves deferred FIFO delivery, acknowledgement-owned consumption, rejection
+fallback, pause boundaries and disposal without late transcript markers.
+Twenty-three actual-TypeScript scenarios, two native task-lifetime checks and
+four driver checks pass. All 13 isolated regressions were caught and restored;
+the five existing TypeScript steering tests also pass. Review:
+`tests/contract/reviews/native-steering-dispatcher.md`. Evidence is under
+`.jait/artifacts/coverage-goal/`.
+
+Steering is dispatch policy over an authorized session queue, provider and
+supervised scheduler. This grants no full agent-loop, provider-transport or
+production-composition credit. Remaining native components, reconstructed-test
+parity, client/platform/load/recovery/rollback and replacement gates remain open.
+Equal component weights do not estimate remaining effort. Production remains
+TypeScript. Later source changes require fresh verification.
+
+## Historical frozen native checkpoint — 2026-10-23
 
 The full frozen-source native gate passes **212/370 components (57.30%)**
 in the recorded inventory, with formatting, strict Clippy, 303 native library
@@ -844,3 +1097,58 @@ projection and existing TypeScript history. Supported-platform, resource and
 cutover gates remain separate. The next application slice is authenticated chat
 streaming with disconnect/cancellation handling and an explicit production
 message projection, followed by the actual browser workflow.
+
+## Tool presentation and evidence compatibility — 2026-10-24
+
+The public project-browser controls are `browser.open`, `browser.close`,
+`browser.restart`, `browser.status`, and `browser.logs`; use the existing
+`browser.inspect` for page inspection. The managed project runner and its
+ownership, URL, node and launch protections remain internal dependencies.
+Legacy `preview.*` definitions remain executable for old clients but are omitted
+from discovery and model schemas. Recovered activation lists select the new
+names. Disable rules apply across both names; explicit canonical policies win,
+with legacy policies retained as fallback. This is an intentional discovery
+contract change, not an authorization expansion.
+
+Chat labels humanize unknown tool identifiers without renaming execution IDs.
+Completed Q&A cards display selected options, custom text and skipped answers,
+including persisted MCP envelopes. Browser coverage is in
+`tests/e2e/tool-results.spec.ts`; native Q&A payload, registry compatibility,
+policy, catalog and schema contracts compare with actual TypeScript helpers.
+
+`context.read` adds optional case-sensitive literal `query` (1–256 UTF-16 code
+units), scoped to the same owner/session and expiry as pagination. `offset` is
+the search start; `matchOffset` identifies the match; bounded surrounding text
+and `nextOffset` permit continued recovery. Missing matches are explicit.
+Large model results retain execution handles, small diagnostic/coverage fields
+and an identified head/tail excerpt; canonical UI/persisted results stay intact.
+Native context-budget and model-result contracts cover search after reload,
+Unicode, denied/expired recovery, output bounds and completion diagnostics.
+
+These changes add no native browser-engine or production-readiness credit.
+A future native browser adapter must pass the existing browser collaboration,
+visible-session, startup/stop, access-control and launch-failure tests in addition
+to these discovery and UI contracts. Production remains TypeScript. The reproducible `bun scripts/benchmark-tool-evidence.ts` check writes
+`.jait/artifacts/tool-evidence-benchmark.json`. Character
+budgets and recovery-call checks alone do not establish model-token cost savings;
+whole-task evaluation must include provider/cache usage, latency, retries and
+successful completion under representative workloads.
+
+
+## Browser handoff and question continuation compatibility — 2026-10-24
+
+Intentional correction: a question that returned a transport-level pending result
+now resumes its chat when the user answers or cancels; callers no longer have to
+send a separate chat message. Other MCP actions pause while that chat's question
+is pending. Browser Done is collected through `browser.handoff`, retaining the
+browser identity check before transferring control. Unable/cancel never grant
+agent control. Attached waits resume directly without a second wake.
+
+Native service observer parity is covered by the differential
+`gateway_rust_user_ask_resume` contracts and existing question HTTP tests. The
+native chat/MCP/browser runtime must also satisfy the production HTTP continuation,
+paused-action and visible-tab regressions documented in
+`tests/contract/reviews/native-user-ask.md` before R14/R16/R24 acceptance. This
+refresh adds no native component count or production-readiness credit. UI clients
+can collapse both prompts into a single line without losing selections, custom
+text, or their chat draft.

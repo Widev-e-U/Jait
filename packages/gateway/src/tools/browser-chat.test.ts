@@ -3,6 +3,8 @@ import { createBrowserNavigateTool } from './browser-tools.js';
 import { createSurfacesStartTool } from './surface-tools.js';
 import { createPreviewOpenTool } from './preview-tools.js';
 import { PreviewService } from '../services/preview.js';
+import { UserQuestionService } from '../services/user-questions.js';
+import { createBrowserHandoffTool } from './browser-handoff.js';
 
 function fixture() {
   const surfaces = new Map<string, any>();
@@ -29,6 +31,24 @@ function fixture() {
 }
 
 describe('chat agent browser', () => {
+  it('blocks browser actions throughout handoff and resumes only after Done', async () => {
+    const { service, tool, context, registry } = fixture();
+    const chat = context('handoff-chat');
+    await tool.execute({ url: 'https://example.com' }, chat);
+    const browser = registry.getSurface(service.get('handoff-chat')!.browserId!);
+    const questions = new UserQuestionService();
+    const handoff = createBrowserHandoffTool(service, questions);
+    const waiting = handoff.execute({ message: 'Sign in directly in the browser.' }, chat);
+    expect(service.get('handoff-chat')?.sharedWithAgent).toBe(false);
+    await expect(tool.execute({ url: 'https://example.com/next' }, chat)).rejects.toThrow(/not shared/);
+    expect(browser.navigate).toHaveBeenCalledTimes(1);
+    const [request] = questions.listPending('handoff-chat');
+    questions.submit(request.id, { answers: { browser: { selected: ['Done'], freeText: null, skipped: false } } });
+    expect(await waiting).toMatchObject({ data: { status: 'done' } });
+    await tool.execute({ url: 'https://example.com/next' }, chat);
+    expect(browser.navigate).toHaveBeenCalledTimes(2);
+  });
+
   it('opens a usable agent preview and preserves takeover across reuse and replacement', async () => {
     const { service, context } = fixture();
     const open = createPreviewOpenTool(undefined, undefined, service);

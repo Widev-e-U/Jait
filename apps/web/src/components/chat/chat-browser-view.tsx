@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Minimize2, RotateCcw, Settings2 } from 'lucide-react'
+import { Bot, Hand, Loader2, Minimize2, RotateCcw, Settings2 } from 'lucide-react'
 import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { apiFetch } from '@/lib/api-fetch'
@@ -21,11 +21,13 @@ const PANEL_COLLAPSED = { width: 160, height: 90 }
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 // The panel floats above the transcript, so its frame follows the conversation column.
-function panelBox(expanded: boolean, frame: { width: number; height: number }) {
-  if (!expanded) return { left: PANEL_INSET, top: PANEL_INSET, ...PANEL_COLLAPSED }
+function panelBox(expanded: boolean, frame: { width: number; height: number; top: number }, keyboardOpen = false) {
+  if (!expanded) return { left: PANEL_INSET, top: frame.top, ...PANEL_COLLAPSED }
   const width = Math.min(768, Math.max(PANEL_COLLAPSED.width, frame.width - PANEL_INSET * 2))
-  const height = Math.min(480, Math.max(PANEL_COLLAPSED.height, Math.round(frame.height * 0.55)))
-  return { left: Math.max(0, Math.round((frame.width - width) / 2)), top: PANEL_INSET, width, height }
+  const availableHeight = frame.height - frame.top - PANEL_INSET
+  const desiredHeight = keyboardOpen && frame.width < 768 ? availableHeight : Math.min(Math.round(frame.height * 0.55), availableHeight)
+  const height = Math.min(480, Math.max(PANEL_COLLAPSED.height, desiredHeight))
+  return { left: Math.max(0, Math.round((frame.width - width) / 2)), top: frame.top, width, height }
 }
 
 // Only gateway live views can be embedded. Page URLs remain ordinary links.
@@ -56,13 +58,15 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   }, [id])
   const [controlsContainer, setControlsContainer] = useState<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLElement>(null)
-  const [frame, setFrame] = useState({ width: 768, height: 468 })
+  const [frame, setFrame] = useState({ width: 768, height: 468, top: PANEL_INSET })
   const [fullscreen, setFullscreen] = useState(false)
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
   const optionsRef = useRef<HTMLDetailsElement>(null)
   const [state, setState] = useState<BrowserState | null>(() => id && liveViewUrl(record?.previewUrl) ? {
     sessionId: id, browserId, url: liveViewUrl(record?.previewUrl), sharedWithAgent: record?.controller === 'agent', verified: false,
   } : null)
-  const [busy, setBusy] = useState(false)
+  const [busyAction, setBusyAction] = useState<'control' | 'restart' | null>(null)
+  const busy = busyAction !== null
   const [error, setError] = useState('')
   const headers = authToken ? { Authorization: `Bearer ${authToken}` } : undefined
 
@@ -71,16 +75,23 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     const panel = panelRef.current
     const parent = panel?.offsetParent
     if (!panel || !(parent instanceof HTMLElement)) return
+    const header = document.querySelector<HTMLElement>('[data-app-header]')
     const measure = () => {
+      const parentBounds = parent.getBoundingClientRect()
+      const headerBounds = header?.getBoundingClientRect()
+      // The phone app header floats over the transcript. Keep browser controls below it.
+      const top = headerBounds && headerBounds.left < parentBounds.right && headerBounds.right > parentBounds.left
+        ? Math.max(PANEL_INSET, headerBounds.bottom - parentBounds.top + 8) : PANEL_INSET
       const width = parent.clientWidth
       const height = parent.clientHeight
-      setFrame((current) => (current.width === width && current.height === height ? current : { width, height }))
+      setFrame((current) => (current.width === width && current.height === height && current.top === top ? current : { width, height, top }))
     }
     measure()
-    if (typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(parent)
-    return () => observer.disconnect()
+    window.addEventListener('resize', measure)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(parent)
+    if (header) observer?.observe(header)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
   }, [id])
 
   // Inline geometry would win over the fullscreen sizing, so drop it while fullscreen.
@@ -110,15 +121,26 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
           sessionId: id, browserId: session.browserId, url: liveViewUrl(session.url), sharedWithAgent: session.sharedWithAgent === true, verified: true, currentUrl: session.metrics?.url ?? session.target,
         } : null)
       } catch { /* Leave the last live view available during a temporary disconnect. */ }
-      finally { if (!cancelled) timer = setTimeout(load, 3000) }
+      finally { if (!cancelled) { clearTimeout(timer); timer = setTimeout(load, 3000) } }
     }
+    const handoff = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId: string; pending: boolean }>).detail
+      if (detail?.sessionId !== id) return
+      if (detail.pending) setExpanded(true)
+      clearTimeout(timer)
+      void load()
+    }
+    window.addEventListener('jait-browser-handoff', handoff)
     void load()
-    return () => { cancelled = true; clearTimeout(timer); controller.abort() }
-  }, [id, authToken])
+    return () => {
+      cancelled = true; clearTimeout(timer); controller.abort()
+      window.removeEventListener('jait-browser-handoff', handoff)
+    }
+  }, [id, authToken, setExpanded])
 
   const setShared = async () => {
     if (!state?.verified || busy) return
-    setBusy(true); setError('')
+    setBusyAction('control'); setError('')
     try {
       const response = await apiFetch(`${getApiUrl()}/api/preview/share`, {
         method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
@@ -128,11 +150,11 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
       const { session } = await response.json()
       setState((previous) => previous ? { ...previous, sharedWithAgent: session.sharedWithAgent === true } : null)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not change browser control.') }
-    finally { setBusy(false) }
+    finally { setBusyAction(null) }
   }
   const restartBrowser = async () => {
     if (!id || busy) return
-    setBusy(true); setError('')
+    setBusyAction('restart'); setError('')
     try {
       const response = await apiFetch(`${getApiUrl()}/api/preview/restart`, {
         method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
@@ -145,22 +167,27 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
         sharedWithAgent: session.sharedWithAgent === true, verified: true,
       } : null)
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not restart the browser.') }
-    finally { setBusy(false) }
+    finally { setBusyAction(null) }
   }
   if (!id) return null
+  const agentInControl = state?.verified === true && state.sharedWithAgent
   const controlLabel = state?.sharedWithAgent ? 'Take control' : 'Share with agent'
   const controls = <>
-    <button type="button"
+    <button type="button" aria-label={controlLabel} aria-busy={busyAction === 'control'}
       title={`${state?.sharedWithAgent ? 'Agent is controlling' : 'You are controlling'} · ${controlLabel}`}
       disabled={busy || !state?.verified} onClick={() => void setShared()}
-      className="h-8 shrink-0 whitespace-nowrap rounded border px-2 hover:bg-muted disabled:opacity-50">
-      {controlLabel}
+      className={`relative flex h-8 w-8 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50 ${agentInControl ? 'border-blue-500 ring-1 ring-blue-500' : ''}`}>
+      <span className={`flex items-center justify-center ${busyAction === 'control' ? 'invisible' : ''}`}>
+        {state?.sharedWithAgent ? <Hand className="h-4 w-4 sm:hidden" /> : <Bot className="h-4 w-4 sm:hidden" />}
+        <span className="hidden sm:inline">{controlLabel}</span>
+      </span>
+      {busyAction === 'control' && <Loader2 aria-hidden="true" className="absolute h-4 w-4 animate-spin motion-reduce:animate-none" />}
     </button>
     <details ref={optionsRef} className="relative shrink-0" onKeyDown={event => {
       if (event.key === 'Escape' && optionsRef.current) { optionsRef.current.open = false; optionsRef.current.querySelector('summary')?.focus() }
     }}>
       <summary aria-label="Browser view options" title="Browser view options"
-        className="flex h-8 cursor-pointer list-none items-center rounded border px-2 hover:bg-muted [&::-webkit-details-marker]:hidden">
+        className="flex h-8 w-8 justify-center sm:w-auto cursor-pointer list-none items-center rounded border sm:px-2 hover:bg-muted [&::-webkit-details-marker]:hidden">
         <Settings2 className="h-4 w-4" />
       </summary>
       <div className="absolute right-0 top-10 z-50 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border bg-popover p-3 text-popover-foreground shadow-xl">
@@ -174,20 +201,20 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     </details>
     <button type="button" aria-label="Minimize browser" title="Minimize browser" aria-expanded={expanded}
       onClick={() => { if (optionsRef.current) optionsRef.current.open = false; setExpanded(false) }}
-      className="flex h-8 shrink-0 items-center rounded border px-2 hover:bg-muted">
+      className="flex h-8 w-8 justify-center sm:w-auto shrink-0 items-center rounded border sm:px-2 hover:bg-muted">
       <Minimize2 className="h-4 w-4" />
     </button>
   </>
   return (
-    <section ref={panelRef} aria-label="Chat browser" data-browser-panel data-browser-minimized={!expanded}
-      style={fullscreen ? undefined : panelBox(expanded, frame)}
-      className={`absolute z-30 border border-border bg-background text-xs shadow-lg ${PANEL_TRANSITION} ${expanded
+    <section ref={panelRef} aria-label="Chat browser" data-browser-panel data-browser-controller={agentInControl ? 'agent' : 'user'} data-browser-minimized={!expanded} data-browser-keyboard-open={expanded && keyboardOpen}
+      style={fullscreen ? undefined : panelBox(expanded, frame, keyboardOpen)}
+      className={`absolute z-30 border ${agentInControl ? 'border-blue-500 ring-1 ring-blue-500' : 'border-border'} bg-background text-xs shadow-lg ${PANEL_TRANSITION} ${expanded
         ? 'flex flex-col rounded-xl [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'
         : 'overflow-hidden rounded-lg'}`}>
       <div className={expanded ? 'min-h-0 flex-1 [&_[data-browser-layout]]:rounded-xl' : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
         <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls }}>
           {state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
-            hideControls={!expanded} viewOnly={state.sharedWithAgent || busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
+            hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={state.sharedWithAgent || busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
             : <p className="p-3 text-muted-foreground">No live browser is available for this chat.</p>}
         </BrowserViewLayout>
       </div>

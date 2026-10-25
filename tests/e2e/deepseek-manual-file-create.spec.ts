@@ -1,19 +1,20 @@
 /**
- * Manual-only GPT-5 E2E:
- * - Sends a prompt to /api/chat
- * - Expects the agent to execute terminal.run and create a TXT file
- * - Verifies file existence + contents
- *
- * This test is skipped by default and should not run in automated pipelines.
- * To run manually:
- *   RUN_MANUAL_GPT5=1 OPENAI_MODEL=gpt-5 npm test -- tests/gpt5-manual-file-create.spec.ts
+ * Opt-in live DeepSeek V4.1 Flash smoke test; never enabled in normal CI.
+ * Requires a gateway configured with a live Jait backend and model access.
+ * Run from the repository root:
+ *   RUN_MANUAL_DEEPSEEK=1 bun run test:e2e deepseek-manual-file-create.spec.ts
+ * Override DEEPSEEK_MODEL when the provider uses a different model identifier.
+ * Set E2E_AUTH_TOKEN when targeting an existing gateway rather than a fresh E2E stack.
  */
 import { test, expect } from '@playwright/test'
 import { mkdirSync, readFileSync, rmSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { resolve } from 'node:path'
+import { registerAgentTestUser } from './helpers/agent-user'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const RUN_MANUAL_GPT5 = process.env.RUN_MANUAL_GPT5 === '1'
+const RUN_MANUAL_DEEPSEEK = process.env.RUN_MANUAL_DEEPSEEK === '1'
+const model = process.env.DEEPSEEK_MODEL || 'deepseek/deepseek-v4.1-flash'
+const projectRoot = resolve(__dirname, '../..')
 
 type StreamEvent = {
   type?: string
@@ -39,47 +40,48 @@ function parseSseEvents(streamBody: string): StreamEvent[] {
   return events
 }
 
-test.describe('Manual GPT-5 file creation via terminal.run', () => {
-  test.skip(!RUN_MANUAL_GPT5, 'Manual-only test. Set RUN_MANUAL_GPT5=1 to run.')
+test.describe('Manual DeepSeek V4.1 Flash file creation via terminal.run', () => {
+  test.skip(!RUN_MANUAL_DEEPSEEK, 'Live-model test. Set RUN_MANUAL_DEEPSEEK=1 to run.')
+  test.setTimeout(180000)
 
-  test('creates a txt file through /api/chat using GPT-5', async ({ request }) => {
-    const model = process.env.OPENAI_MODEL || ''
-    test.skip(!/gpt-5/i.test(model), `OPENAI_MODEL must include gpt-5 (current: "${model || 'unset'}")`)
-
-    const marker = `gpt5-e2e-${Date.now()}`
-    const artifactsDir = join(process.cwd(), 'artifacts')
+  test('creates a txt file through /api/chat using DeepSeek V4.1 Flash', async ({ request }) => {
+    const marker = `deepseek-e2e-${Date.now()}`
+    const artifactsDir = resolve(__dirname, '../../.jait/artifacts/manual-deepseek')
     mkdirSync(artifactsDir, { recursive: true })
-    const filePath = join(artifactsDir, `gpt5-file-create-${marker}.txt`)
-    const escapedPath = filePath.replace(/\\/g, '\\\\').replace(/'/g, "''")
+    const filePath = resolve(artifactsDir, `file-create-${marker}.txt`)
     const expectedText = 'hello world'
-    const escapedText = expectedText.replace(/'/g, "''")
-
-    const psCommand = [
-      `$path = '${escapedPath}'`,
-      `'${escapedText}' | Set-Content -Path $path -Encoding UTF8`,
-      "if (Test-Path $path) {",
-      "  Get-Item $path | Select-Object FullName,Length | Format-List",
-      "} else {",
-      "  Write-Output ('NOT_CREATED: ' + $path)",
-      "}",
-    ].join('; ')
+    const script = `require('node:fs').writeFileSync(${JSON.stringify(filePath)}, ${JSON.stringify(expectedText)}, 'utf8')`
+    // Single-quote for the Linux gateway shell; escape embedded apostrophes.
+    const command = `node -e '${script.replace(/'/g, "'\\''")}'`
 
     const prompt = [
       'Use the terminal.run tool exactly once.',
       'Create a .txt file with exactly the content: hello world',
-      'Run this PowerShell command exactly as written:',
-      psCommand,
+      'Run this command exactly as written:',
+      command,
       'After the tool call is done, reply with DONE.',
     ].join('\n')
 
-    const sessionId = `manual-gpt5-${marker}`
+    const token = process.env.E2E_AUTH_TOKEN || await registerAgentTestUser(
+      request, API_URL, `manual-deepseek-${marker}`, 'e2e-manual-deepseek-password',
+    )
+    const headers = { Authorization: `Bearer ${token}` }
+    const created = await request.post(`${API_URL}/api/sessions`, {
+      headers,
+      data: { name: `manual-deepseek-${marker}`, projectRoot, provider: 'jait', model },
+    })
+    expect(created.ok()).toBeTruthy()
+    const { id: sessionId } = await created.json()
+    expect(sessionId).toBeTruthy()
+
     const response = await request.post(`${API_URL}/api/chat`, {
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       data: {
         sessionId,
         content: prompt,
+        provider: 'jait',
+        model,
+        projectRoot,
       },
       timeout: 120000,
     })
@@ -109,7 +111,7 @@ test.describe('Manual GPT-5 file creation via terminal.run', () => {
     expect(text).toBe(expectedText)
 
     // Keep artifact for manual verification unless explicitly requested.
-    if (process.env.CLEANUP_MANUAL_GPT5 === '1') {
+    if (process.env.CLEANUP_MANUAL_DEEPSEEK === '1') {
       rmSync(filePath, { force: true })
     } else {
       console.log(`MANUAL_ARTIFACT_FILE: ${filePath}`)

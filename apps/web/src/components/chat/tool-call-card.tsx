@@ -1,3 +1,4 @@
+import { UserQuestionResult } from './user-question-result'
 import { EmailToolView } from '@/components/email/email-tool-view'
 import { MermaidToolResult } from './mermaid-tool-result'
 import { ImageViewerContent } from './image-viewer'
@@ -16,7 +17,7 @@ import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { useGatewayImage } from '@/hooks/useGatewayImage'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { humanizeToolName, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolFilePaths, getToolImageDataUri, getToolImagePath, isAgentToolName, isMcpToolName, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
 import type { ThreadActivity } from '@/lib/agents-api'
@@ -219,7 +220,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
 function getToolMeta(tool: string) {
   const normalized = normalizeTool(tool)
   if (isSecurityToolName(normalized)) return { icon: Shield, label: SECURITY_TOOL_LABELS[normalized], color: 'text-sky-500' }
-  return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
+  return toolMeta[normalized] ?? { icon: Terminal, label: humanizeToolName(normalized), color: 'text-muted-foreground' }
 }
 
 /**
@@ -404,8 +405,8 @@ export function getToolInvocationLabels(
   if (normalized === 'image.view') {
     return { running: 'Viewing image', done: 'Viewed image' }
   }
-  if (normalized === 'preview.open') {
-    return { running: 'Opening preview', done: 'Opened preview' }
+  if (normalized === 'browser.open' || normalized === 'preview.open') {
+    return { running: 'Opening browser', done: 'Opened browser' }
   }
   if (normalized === 'jait') {
     const action = displayStr(args.action)
@@ -426,8 +427,8 @@ export function formatMcpHeaderText(
   invocationLabel: string,
   mcpLabel: { title: string | null; details: string | null },
 ): string {
-  if (mcpLabel.title && mcpLabel.details) return `${mcpLabel.title} • ${mcpLabel.details}`
-  if (mcpLabel.title) return mcpLabel.title
+  if (mcpLabel.title && mcpLabel.details) return `${humanizeToolName(mcpLabel.title)} • ${mcpLabel.details}`
+  if (mcpLabel.title) return humanizeToolName(mcpLabel.title)
   if (mcpLabel.details) return `${invocationLabel}: ${mcpLabel.details}`
   return invocationLabel
 }
@@ -1232,7 +1233,7 @@ export function getCallSummary(
   if (normalized === 'browser.screenshot') return displayStr(args.path, 'auto path')
   if (normalized === 'browser.search') return displayStr(normalizedArgs.query) || extractSiteFromText(resultMessage) || 'search'
   if (normalized === 'browser.fetch') return getUrlHost(normalizedArgs.url) ?? extractSiteFromText(resultMessage) ?? displayStr(normalizedArgs.url)
-  if (normalized === 'preview.open') return displayStr(normalizedArgs.target ?? args.target)
+  if (normalized === 'browser.open' || normalized === 'preview.open') return displayStr(normalizedArgs.target ?? args.target)
   if (normalized === 'surfaces.start') return `Start ${displayStr(args.type, 'surface')}`
   if (normalized === 'surfaces.stop') return `Stop ${displayStr(args.surfaceId, 'surface')}`
   if (normalized === 'surfaces.list') return 'List surfaces'
@@ -2081,7 +2082,7 @@ export function ToolSearchResultsView({ items }: { items: ToolSearchListItem[] }
             <div className="flex min-w-0 items-center gap-2">
               <TooltipHint content={item.name}>
               <code className="min-w-0 truncate text-[11px] font-semibold text-purple-600 dark:text-purple-400">
-                {item.name}
+                {humanizeToolName(item.name)}
               </code>
               </TooltipHint>
               <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -2252,7 +2253,7 @@ function SubAgentMission({ args }: { args: Record<string, unknown> }) {
       {allowedTools && (
         <div className="flex flex-wrap gap-1">
           {allowedTools.split(',').map((tool) => tool.trim()).filter(Boolean).map((tool) => (
-            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{tool}</code>
+            <code key={tool} className="rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-2xs text-muted-foreground">{humanizeToolName(tool)}</code>
           ))}
         </div>
       )}
@@ -3233,7 +3234,7 @@ function PendingToolLabel({
   if (!tool) return <span className="text-muted-foreground">Preparing...</span>
   return (
     <span className="text-blue-400">
-      <code className="text-xs font-mono">{tool}</code>
+      <code className="text-xs font-mono">{humanizeToolName(tool)}</code>
       <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
     </span>
   )
@@ -3446,7 +3447,7 @@ interface ToolCallCardProps {
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
-  return bodyKind === 'emailView' || bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink' || bodyKind === 'mermaidDiagram'
+  return bodyKind === 'questionAnswers' || bodyKind === 'emailView' || bodyKind === 'browserActivity' || bodyKind === 'browserScreenshot' || bodyKind === 'imageView' || bodyKind === 'security' || bodyKind === 'jaitLink' || bodyKind === 'mermaidDiagram'
 }
 
 export function isInlineToolCall(call: ToolCallInfo): boolean {
@@ -3735,7 +3736,7 @@ function ThreadActivityRow({ activity }: { activity: ThreadActivity }) {
       <Icon className={cn('mt-0.5 h-3 w-3 shrink-0', isToolStart && 'animate-spin', isToolResult ? 'text-green-500' : isError ? 'text-red-500' : 'text-muted-foreground')} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 text-2xs text-muted-foreground">
-          {tool && <code className="rounded bg-muted px-1 py-0.5 font-mono">{tool}</code>}
+          {tool && <code className="rounded bg-muted px-1 py-0.5 font-mono">{humanizeToolName(tool)}</code>}
           {role && <span>{role}</span>}
           <span className="ml-auto shrink-0">{new Date(activity.createdAt).toLocaleTimeString()}</span>
         </div>
@@ -4275,7 +4276,7 @@ function ToolCallCardInner({
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             {mcpLabel.title ? (
               <span className="min-w-0 truncate">
-                <code className="text-[11px] font-mono">{mcpLabel.title}</code>
+                <code className="text-[11px] font-mono">{humanizeToolName(mcpLabel.title)}</code>
                 {mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
                 {mcpLabel.details ? <span className="text-xs text-muted-foreground">{mcpLabel.details}</span> : null}
               </span>
@@ -4364,6 +4365,8 @@ function ToolCallCardInner({
     )
   ) : bodyKind === 'threadList' ? (
     <ThreadListView items={threadListItems} resultMessage={call.result?.message} />
+  ) : bodyKind === 'questionAnswers' ? (
+    <UserQuestionResult args={normalizedArgs} data={call.result?.data} status={call.status} message={call.result?.message} />
   ) : bodyKind === 'todoList' ? (
     <TodoToolListView
       items={todoListItems}

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ProviderEvent } from "../providers/contracts.js";
 import {
   THREAD_TITLE_PROMPT,
   generateTitleViaApi,
+  generateTitleViaTurn,
   normalizeGeneratedThreadTitle,
 } from "./thread-title.js";
 
@@ -204,5 +206,41 @@ describe("thread-title helpers", () => {
         jaitBackend: "ollama",
       }),
     ).rejects.toThrow(/spent its whole token budget reasoning|max_tokens/);
+  });
+});
+
+
+describe("thread-title provider cleanup", () => {
+  it("clears the timeout when subscribing throws", async () => {
+    vi.useFakeTimers();
+    try {
+      const provider = { onEvent: vi.fn(() => { throw new Error("subscribe failed"); }), sendTurn: vi.fn() };
+      await expect(generateTitleViaTurn(provider as unknown as Parameters<typeof generateTitleViaTurn>[0], "s", "task")).rejects.toThrow("subscribe failed");
+      expect(provider.sendTurn).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("cleans up when sendTurn throws synchronously", async () => {
+    vi.useFakeTimers();
+    try {
+      const unsubscribe = vi.fn();
+      const provider = { onEvent: vi.fn(() => unsubscribe), sendTurn: vi.fn(() => { throw new Error("send failed"); }) };
+      await expect(generateTitleViaTurn(provider as unknown as Parameters<typeof generateTitleViaTurn>[0], "s", "task")).rejects.toThrow("send failed");
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("removes the listener once when completion precedes a send rejection", async () => {
+    const unsubscribe = vi.fn();
+    let listener: (event: ProviderEvent) => void = () => {};
+    const provider = {
+      onEvent: vi.fn((fn: (event: ProviderEvent) => void) => { listener = fn; return unsubscribe; }),
+      sendTurn: vi.fn(async () => { listener({ type: "turn.completed", sessionId: "s" } as ProviderEvent); throw new Error("late rejection"); }),
+    };
+    await expect(generateTitleViaTurn(provider as unknown as Parameters<typeof generateTitleViaTurn>[0], "s", "task")).resolves.toBe("");
+    await Promise.resolve();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

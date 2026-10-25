@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { promises as fs } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { promises as fs, existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { execFileSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { VERIFY_STEPS, verifyAndActivate, activateLocal, snapshotSource, sourceFiles, digestFiles, overrideUnit } from './local-deploy.mjs';
+import { verificationSteps, VERIFY_STEPS, verifyAndActivate, activateLocal, snapshotSource, sourceFiles, digestFiles, overrideUnit } from './local-deploy.mjs';
 const artifacts=fileURLToPath(new URL('../.jait/artifacts/local-deploy-tests/',import.meta.url));
 async function fixture(t){await fs.mkdir(artifacts,{recursive:true});const root=await fs.mkdtemp(join(artifacts,'case-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));return root;}
 function git(root,args){return execFileSync('git',['-C',root,...args],{encoding:'utf8'});}
@@ -40,6 +41,57 @@ test('snapshot honors nested ignores, dirty edits and deletions without changing
   assert.equal(before,git(repo,['status','--porcelain']));assert.equal(result.sourceHash,await digestFiles(copy,sourceFiles(copy)));
   assert.equal(git(copy,['rev-parse','--show-toplevel']).trim(),copy);
 });
+test('content-checked snapshot timestamps reuse Cargo and rebuild backdated edits and redirected symlinks', {
+  skip: process.platform === 'win32' || !existsSync(join(homedir(), '.cargo/bin/cargo')),
+}, async t => {
+  const root = await fixture(t), repo = join(root, 'repo'), copy = join(root, 'copy');
+  const cacheManifest = join(root, '.jait/source-snapshot.json');
+  await fs.mkdir(join(repo, 'src'), { recursive: true });
+  git(repo, ['init', '--quiet']);
+  await fs.writeFile(join(repo, 'Cargo.toml'), '[package]\nname = "snapshot-fixture"\nversion = "0.1.0"\nedition = "2024"\n');
+  await fs.writeFile(join(repo, 'Cargo.lock'), 'version = 4\n[[package]]\nname = "snapshot-fixture"\nversion = "0.1.0"\n');
+  const program = value => 'fn main() { println!("' + value + '"); }\n';
+  await fs.writeFile(join(repo, 'src/main.rs'), program(1));
+  await fs.writeFile(join(repo, 'src/alternate.rs'), program(3));
+  await fs.writeFile(join(repo, 'src/older.rs'), program(4));
+  const backdated = new Date('2020-01-01T00:00:00Z');
+  await fs.utimes(join(repo, 'src/main.rs'), backdated, backdated);
+  git(repo, ['add', '.']);
+  git(repo, ['-c', 'user.name=Test', '-c', 'user.email=test@localhost', 'commit', '-qm', 'initial']);
+  const capture = async () => {
+    await fs.rm(copy, { recursive: true, force: true });
+    await snapshotSource(repo, copy, { cacheManifest });
+  };
+  const compile = () => {
+    const output = execFileSync(join(homedir(), '.cargo/bin/cargo'), [
+      'run', '--locked', '--offline', '--manifest-path', join(copy, 'Cargo.toml'), '--message-format=json',
+    ], {
+      cwd: copy, encoding: 'utf8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, CARGO_TARGET_DIR: join(root, '.jait/cargo-target'), CARGO_BUILD_JOBS: '1' },
+    });
+    const records = output.split('\n').flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
+    return { fresh: records.find(record => record.reason === 'compiler-artifact' && record.executable).fresh, value: output.trim().split('\n').at(-1) };
+  };
+  await capture();
+  assert.deepEqual(compile(), { fresh: false, value: '1' });
+  const timestamp = (await fs.stat(join(copy, 'src/main.rs'))).mtimeMs;
+  await capture();
+  assert.equal((await fs.stat(join(copy, 'src/main.rs'))).mtimeMs, timestamp);
+  assert.deepEqual(compile(), { fresh: true, value: '1' });
+  await fs.writeFile(join(repo, 'src/main.rs'), program(2));
+  await fs.utimes(join(repo, 'src/main.rs'), backdated, backdated);
+  await capture();
+  assert.deepEqual(compile(), { fresh: false, value: '2' });
+  await fs.unlink(join(repo, 'src/main.rs'));
+  await fs.symlink('alternate.rs', join(repo, 'src/main.rs'));
+  await capture();
+  assert.deepEqual(compile(), { fresh: false, value: '3' });
+  await fs.unlink(join(repo, 'src/main.rs'));
+  await fs.symlink('older.rs', join(repo, 'src/main.rs'));
+  await capture();
+  assert.deepEqual(compile(), { fresh: false, value: '4' });
+});
+
 test('snapshot rejects source symlinks escaping the repository',async t=>{
   const root=await fixture(t),repo=join(root,'repo');await fs.mkdir(repo);git(repo,['init','--quiet']);
   await fs.symlink('../outside',join(repo,'escape'));
@@ -99,10 +151,170 @@ test('deployment runs the entire contract suite once alongside native checks', a
   const commands = validationCommands(root, targets, true);
   const contract = fileURLToPath(new URL('../tests/contract/run.mjs', import.meta.url));
   assert.deepEqual(commands.filter(([path]) => path === contract), [[contract, 'test']]);
-  assert.deepEqual(commands.slice(0, 3).map(([, ...args]) => args), [
+  assert.deepEqual(commands[0], ['--test', fileURLToPath(new URL('../packages/gateway-rust/tooling/parallel-contracts.test.mjs', import.meta.url)), fileURLToPath(new URL('../packages/gateway-rust/tooling/progress.test.mjs', import.meta.url))]);
+  assert.deepEqual(commands.slice(1, 4).map(([, ...args]) => args), [
     ['fmt'], ['clippy', '--all-targets', '--', '-D', 'warnings'], ['test', '--lib'],
   ]);
   assert.deepEqual(validationCommands(root, targets).at(-1), [
     contract, 'test', ...targets.flatMap(target => ['--test', target]),
   ]);
+});
+
+
+// Exercise actual shard processes: an otherwise green mock cannot hide a lost
+// shard, a shared server/report directory or a surviving sibling process.
+async function isolatedBrowserFixture(t, source, shards = 2) {
+  const root = await fixture(t);
+  const script = join(root, 'browser.cjs');
+  await fs.writeFile(script, source);
+  const runner = fileURLToPath(new URL('../tests/e2e/scripts/run-isolated.mjs', import.meta.url));
+  const child = spawn(process.execPath, [runner, `--shards=${shards}`, process.execPath, script], {
+    env: { ...process.env, JAIT_ISOLATION_FIXTURE: root, FRONTEND_URL: 'http://shared.invalid', API_URL: 'http://shared.invalid' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let output = '';
+  child.stdout.on('data', bytes => { output += bytes; });
+  child.stderr.on('data', bytes => { output += bytes; });
+  t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
+  const done = new Promise((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', code => resolve({ code, output }));
+  });
+  return { root, child, done };
+}
+const shardFixturePrelude = `
+const fs = require('node:fs');
+const path = require('node:path');
+const root = process.env.JAIT_ISOLATION_FIXTURE;
+const shardArg = process.argv.find(arg => arg.startsWith('--shard='));
+const shard = Number(shardArg?.split('=')[1].split('/')[0] || 1);
+const wait = async name => {
+  const deadline = Date.now() + 5000;
+  while (!fs.existsSync(path.join(root, name))) {
+    if (Date.now() > deadline) throw Error('peer never started');
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+};
+`;
+
+test('browser shards overlap with separate ports, stacks and evidence; each keeps one worker', { timeout: 15000 }, async t => {
+  const run = await isolatedBrowserFixture(t, shardFixturePrelude + `
+(async () => {
+  const ports = ['E2E_FRONTEND_PORT', 'E2E_API_PORT'].map(key => Number(process.env[key]));
+  ports.push(Number(new URL(process.env.UI_FRONTEND_URL).port));
+  const servers = ports.map(() => require('node:net').createServer());
+  await Promise.all(servers.map((server, i) => new Promise((resolve, reject) => {
+    server.on('error', reject); server.listen(ports[i], '127.0.0.1', resolve);
+  })));
+  fs.writeFileSync(path.join(root, 'started-' + shard), JSON.stringify({ ports, args: process.argv.slice(2), frontend: process.env.FRONTEND_URL, api: process.env.API_URL, artifacts: process.env.JAIT_E2E_ARTIFACT_DIR }));
+  await wait('started-' + (shard === 1 ? 2 : 1));
+  await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve))));
+})().catch(error => { console.error(error); process.exit(1); });
+`);
+  const result = await run.done;
+  assert.equal(result.code, 0, result.output);
+  const records = await Promise.all([1, 2].map(async shard => JSON.parse(await fs.readFile(join(run.root, 'started-' + shard), 'utf8'))));
+  assert.equal(new Set(records.flatMap(record => record.ports)).size, 6);
+  assert.notEqual(records[0].artifacts, records[1].artifacts);
+  for (const [index, record] of records.entries()) {
+    assert(record.args.includes(`--shard=${index + 1}/2`));
+    assert(record.args.includes('--workers=1'));
+    assert.equal(record.frontend, ''); assert.equal(record.api, '');
+  }
+  const summary = JSON.parse(await fs.readFile(join(records[0].artifacts, '..', 'summary.json'), 'utf8'));
+  assert.equal(summary.passed, true); assert.equal(summary.results.length, 2);
+});
+
+test('a single isolated browser run retains the complete unsharded command', { timeout: 15000 }, async t => {
+  const run = await isolatedBrowserFixture(t, shardFixturePrelude + `fs.writeFileSync(path.join(root, 'args'), JSON.stringify(process.argv.slice(2)));`, 1);
+  const result = await run.done;
+  assert.equal(result.code, 0, result.output);
+  assert.deepEqual(JSON.parse(await fs.readFile(join(run.root, 'args'), 'utf8')), []);
+});
+
+async function assertProcessDrained(pid) {
+  for (let i = 0; i < 100; i++) {
+    try {
+      process.kill(pid, 0);
+      if (process.platform === 'linux' && (await fs.readFile(`/proc/${pid}/stat`, 'utf8')).split(') ')[1].startsWith('Z')) return;
+    } catch (error) { if (error.code === 'ESRCH' || error.code === 'ENOENT') return; throw error; }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.fail(`Browser descendant ${pid} survived cancellation`);
+}
+
+test('one failed browser shard cancels its sibling and signal-resistant descendants', { timeout: 15000, skip: process.platform === 'win32' }, async t => {
+  const run = await isolatedBrowserFixture(t, shardFixturePrelude + `
+(async () => {
+  if (shard === 1) { await wait('descendant'); process.exit(7); }
+  const child = require('node:child_process').spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000); process.send('ready')"], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+  child.on('message', () => fs.writeFileSync(path.join(root, 'descendant'), String(child.pid)));
+  setInterval(() => {}, 1000);
+})();
+`);
+  const result = await run.done;
+  assert.notEqual(result.code, 0, result.output);
+  const pid = Number(await fs.readFile(join(run.root, 'descendant'), 'utf8'));
+  await assertProcessDrained(pid);
+  const summaryPath = result.output.match(/summary: (.+)/)?.[1];
+  assert(summaryPath, result.output);
+  const summary = JSON.parse(await fs.readFile(summaryPath, 'utf8'));
+  assert.equal(summary.passed, false); assert.equal(summary.results.length, 2);
+});
+
+test('browser shard count is bounded before any command starts', { timeout: 15000 }, async t => {
+  const run = await isolatedBrowserFixture(t, "throw Error('must not start')", 5);
+  const result = await run.done;
+  assert.notEqual(result.code, 0); assert.match(result.output, /Expected --shards=1\.\.4/);
+});
+
+
+test('cancelling the browser runner drains both shards without passing evidence', { timeout: 15000, skip: process.platform === 'win32' }, async t => {
+  const run = await isolatedBrowserFixture(t, shardFixturePrelude + `
+fs.writeFileSync(path.join(root, 'ready-' + shard), String(process.pid));
+process.on('SIGTERM', () => {});
+setInterval(() => {}, 1000);
+`);
+  const deadline = Date.now() + 5000;
+  const pids = [];
+  for (const shard of [1, 2]) {
+    while (true) {
+      try { pids.push(Number(await fs.readFile(join(run.root, 'ready-' + shard), 'utf8'))); break; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      assert(Date.now() < deadline, 'browser shard never started');
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+  run.child.kill('SIGTERM');
+  const result = await run.done;
+  assert.equal(result.code, 143, result.output);
+  await Promise.all(pids.map(assertProcessDrained));
+  const summary = JSON.parse(await fs.readFile(result.output.match(/summary: (.+)/)[1], 'utf8'));
+  assert.equal(summary.passed, false); assert.equal(summary.results.length, 2);
+});
+
+test('explicit skip-e2e retains all remaining gates and blocks their failures', async () => {
+  const steps = verificationSteps(true);
+  assert.deepEqual(steps, VERIFY_STEPS.filter(([id]) => !['web-e2e', 'web-ui'].includes(id)));
+  assert.equal(steps.length, VERIFY_STEPS.length - 2);
+  const ran = [];
+  await verifyAndActivate({skipE2e:true, fingerprint:async()=>'same', runStep:async id=>ran.push(id), activate:async proof=>assert.equal(proof.checks.length,steps.length)});
+  assert.deepEqual(ran,steps.map(([id])=>id));
+  for (const [failure] of steps) {
+    await assert.rejects(verifyAndActivate({skipE2e:true,fingerprint:async()=>'same',runStep:async id=>{if(id===failure)throw Error('failed');},activate:async()=>assert.fail('must not activate')}));
+  }
+});
+
+
+test('deployment CLI skips E2E by default and includes it only with --e2e', () => {
+  const launcher = fileURLToPath(new URL('./local-deploy.mjs', import.meta.url));
+  const plan = (...args) => JSON.parse(execFileSync(process.execPath, [launcher, '--plan', ...args], { encoding: 'utf8' }));
+  const defaultPlan = plan();
+  assert.equal(defaultPlan.skipE2e, true);
+  assert.deepEqual(defaultPlan.checks.map(check => check.id), verificationSteps(true).map(([id]) => id));
+  assert.deepEqual(plan('--skip-e2e').checks, defaultPlan.checks);
+  const fullPlan = plan('--e2e');
+  assert.equal(fullPlan.skipE2e, false);
+  assert.deepEqual(fullPlan.checks.map(check => check.id), VERIFY_STEPS.map(([id]) => id));
+  assert.throws(() => execFileSync(process.execPath, [launcher, '--plan', '--e2e', '--skip-e2e'], { stdio: 'pipe' }), /Command failed/);
 });

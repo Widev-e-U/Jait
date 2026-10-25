@@ -401,6 +401,7 @@ function ParallelChatPanelImpl({
           : 'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background'
       }
       style={isMobile ? undefined : { flex: 'var(--chat-panel-grow, 1) 1 0%' }}
+      data-browser-chat-scope
       aria-label="Secondary chat panel"
     >
       {showHideButton && (
@@ -462,7 +463,7 @@ function ParallelChatPanelImpl({
         ))}
       </Conversation>
 
-      <div className={getChatComposerBoundaryClassName(isMobile)}>
+      <div data-chat-composer-dock className={getChatComposerBoundaryClassName(isMobile)}>
         {error && !isLoading && (
           <div className={getChatColumnClassName('mb-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive')}>
             {error}

@@ -73,3 +73,36 @@ panic behavior is not an arbitrary-JavaScript claim. Real MCP transport, user
 surface delivery and durable request persistence are separate components. New
 and resumed MCP calls are tested at the service/tool boundary; end-to-end client
 transport activation remains open. The full source-bound gate controls credit.
+
+
+### Delayed answer continuation — 2026-10-24
+
+A per-call pending result must not strand the chat when the user answers later.
+The TypeScript and native question services now expose an owner-scoped detached
+resolution observer. Only a wait that yielded with no attached waiter emits a
+wake. An attached waiter resumes itself; duplicate submissions cannot wake twice.
+The answer stays available for collection through the original tool, which is
+necessary for browser identity and control checks. Cancellation conveys no
+browser control or other permission. Callbacks contain request metadata, never
+answer values.
+
+`gateway_rust_user_ask_resume` replays submit, cancel, foreign-owner rejection,
+answer retention, one-time collection and attached-wait suppression against the
+real TypeScript service and native implementation. Both `user.ask` and
+`browser.handoff` request origins are exercised. Existing question HTTP contracts
+remain required.
+
+The production TypeScript MCP executor pauses other actions while a question is
+pending. The chat runtime wakes an idle CLI or steers an active chat/thread after
+a detached resolution, recovering via the original tool and retaining the
+previous provider/runtime selection. `chat.external-providers.test.ts` exercises
+submission through HTTP after the CLI turn has ended; `mcp-server.test.ts` verifies
+that pending questions pause actions without affecting another chat. These are
+new R14/R16/R24 acceptance requirements for native runtime wiring; service parity
+alone does not certify that wiring or browser parity.
+
+Browser clients must retain form state when collapsing prompts, show a single
+line above the composer, and never submit on collapse. Browser tab selection must
+follow the visible page and adopt new sign-in popups, so tools and live desktop
+operate on the same page. `browser-handoff.spec.ts`, `composer-prompts.spec.ts`
+and `browser-visible-tab.integration.test.ts` cover those client/runtime behaviors.

@@ -11,7 +11,8 @@ const artifacts = process.env.JAIT_STATE_DIR!;
 if (!artifacts || !resolve(artifacts).startsWith(join(root, '.jait/artifacts') + '/')) throw new Error('project-local state required');
 mkdirSync(artifacts, { recursive: true });
 if (realpathSync(artifacts) !== artifacts) throw new Error('artifact directory symlink rejected');
-setTimeout(() => { console.error('recovery bridge timed out'); process.exit(124); }, 30000).unref();
+// The importing migration bridge owns the process deadline; importing this helper
+// must not install a second watchdog that can kill unrelated messenger operations.
 process.env.NODE_ENV = 'test';
 // Never allow environment defaults to select a real database.
 delete process.env.JAIT_DB_PATH;

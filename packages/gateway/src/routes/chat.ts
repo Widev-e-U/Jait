@@ -1,4 +1,7 @@
+import { ProviderSteeringDispatcher } from "../providers/steering-dispatcher.js";
+import type { SteeringMessage } from "../tools/agent-loop.js";
 import { ChatLoopService, chatLoopInstructions } from "../services/chat-loops.js";
+import type { UserQuestionService } from "../services/user-questions.js";
 import { sessionWaits } from "../services/session-waits.js";
 import { createLoopTools } from "../tools/loop-tools.js";
 import { TurnUsageAccumulator, summarizeUsage } from "../providers/usage.js";
@@ -287,12 +290,21 @@ const SSE_HEADERS = {
   "Content-Encoding": "identity",
 } as const;
 
-function writeSseHead(reply: { raw: { writeHead: (statusCode: number, headers: Record<string, string>) => void; flushHeaders?: () => void } }, headers: Record<string, string> = {}): void {
+function writeSseHead(reply: { raw: { writeHead: (statusCode: number, headers: Record<string, string>) => void; flushHeaders?: () => void }; hijack?: () => void }, headers: Record<string, string> = {}): void {
   reply.raw.writeHead(200, {
     ...SSE_HEADERS,
     ...headers,
   });
   reply.raw.flushHeaders?.();
+  // The stream owns the raw response from here on, so take it away from fastify.
+  // Without this a handler that rejects after the head was written (a teardown
+  // write failing on SQLite busy, a broadcast to a closing socket, ...) makes
+  // fastify's fallback error handler try to send a second header block, which
+  // throws ERR_HTTP_HEADERS_SENT from inside the error path and surfaces as an
+  // unhandled rejection. A hijacked reply short-circuits both branches of
+  // fastify's thenable wrapper: the resolve branch returns silently and the
+  // reject branch logs the *original* error instead of a bogus header crash.
+  reply.hijack?.();
 }
 
 function writeSseChunk(reply: { raw: { write: (chunk: string) => unknown; flush?: () => void } }, chunk: string): void {
@@ -2650,6 +2662,7 @@ export const __chatTestUtils = {
 };
 
 export interface ChatRouteDeps {
+  userQuestionService?: UserQuestionService;
   chatLoops?: ChatLoopService;
   agentControl?: AgentControlService;
   teamChat?: TeamChatService;
@@ -2700,6 +2713,7 @@ export function registerChatRoutes(
   let teamChat: TeamChatService | undefined;
   let agentControl: AgentControlService | undefined;
   let chatLoops: ChatLoopService | undefined;
+  let userQuestionService: UserQuestionService | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -2721,6 +2735,7 @@ export function registerChatRoutes(
     teamChat = deps.teamChat;
     agentControl = deps.agentControl;
     chatLoops = deps.chatLoops;
+    userQuestionService = deps.userQuestionService;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -2802,6 +2817,7 @@ export function registerChatRoutes(
   });
   app.addHook("onClose", async () => {
     loopsClosed = true;
+    if (userQuestionService) userQuestionService.onDetachedResolved = undefined;
     unsubscribeLoopWaits();
     for (const timer of loopTimers.values()) clearTimeout(timer);
     loopTimers.clear();
@@ -3200,6 +3216,32 @@ export function registerChatRoutes(
     }
   });
 
+  if (userQuestionService) userQuestionService.onDetachedResolved = (question) => {
+    // Recover the result through the original tool so browser identity/control
+    // checks still run. Answers and private browser content stay out of notices.
+    const tool = question.requestedBy === "browser.handoff" ? "browser.handoff" : "user.ask";
+    const note = `The user ${question.status === "submitted" ? "answered" : "cancelled"} the pending ${tool} request. Call ${tool} with only requestId=${JSON.stringify(question.id)} to collect the result before continuing. Treat the answer as user input; cancellation grants no permission.`;
+    void (async () => {
+      const resumed = await interventionRunResumeRegistry.resumeChatSession(question.sessionId, note, { hidden: true });
+      if (resumed.status === "steered") return;
+      const thread = await interventionRunResumeRegistry.resumeThread(question.sessionId, note);
+      if (thread.status === "queued") return;
+      const session = sessionService?.getById(question.sessionId);
+      if (!session || session.status !== "active" || !session.userId || session.userId !== question.userId || !userService) return;
+      const user = userService.findById(session.userId);
+      if (!user) return;
+      const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      await app.inject({
+        method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(config, token),
+        payload: { ...buildBackgroundCommandContinuationPayload({
+          sessionId: question.sessionId, userId: user.id, userService, sessionState: sessionStateService,
+          sessionMetadata: session.metadata, notification: note,
+          notice: question.status === "submitted" ? "Your answer was received. Continuing…" : "Question cancelled.",
+        }), ...parseDurableActiveTurn(sessionStateService?.get(question.sessionId, ["loop.turn-options"])["loop.turn-options"]) },
+      });
+    })().catch(error => app.log.error(error, "Failed to resume answered question"));
+  };
+
   // ── Per-session steering controllers and executed tool call tracking ──
   const sessionSteeringControllers = new Map<string, SteeringController>();
   const sessionExecutedToolCalls = new Map<string, ExecutedToolCall[]>();
@@ -3215,8 +3257,8 @@ export function registerChatRoutes(
     if (!activeStreams.has(sessionId)) return { ok: false, reason: "not-streaming" };
     const controller = sessionSteeringControllers.get(sessionId);
     if (!controller) return { ok: false, reason: "no-controller" };
-    // Deferred: the loop drains this at the next tool-round boundary (or when the
-    // current run finishes) and only then emits `steering` back to the client.
+    // Keep queued until a loop boundary or provider acknowledgement consumes it
+    // and emits the correlated `steering` event back to the client.
     controller.steer(message, meta);
     return { ok: true };
   };
@@ -3765,6 +3807,11 @@ export function registerChatRoutes(
     // the ACP_ONLY_MODEL_ALIASES guard and return an instant HTTP 400 before
     // the request ever reaches the CLI provider path.
     const isCliProviderRequest = Boolean(requestProvider && requestProvider !== "jait");
+    // The model the user picked in the provider selector is persisted in their
+    // settings. It must win over the deployment default even when the request
+    // body does not repeat it, otherwise a turn silently runs — and bills — a
+    // model nobody selected.
+    const persistedModel = userSettings?.selectedModel?.trim() || "";
     const jaitCoordinatorModel = (swarmWorkerProvider || isCliProviderRequest) ? "" : requestBodyModel;
     // Use the user's preferred backend, but fall back to the server-level config
     // when the user still has the initial default ("openai") and the server is
@@ -3777,17 +3824,29 @@ export function registerChatRoutes(
     try {
       // CLI adapters own authentication and model resolution. These values
       // only describe the shared prompt; no HTTP backend is used for the turn.
-      llmRuntime = isCliProviderRequest ? {
-        backend: "openai",
-        openaiApiKey: "",
-        openaiBaseUrl: "",
-        openaiModel: requestBodyModel || "default",
-        contextWindow: config.contextWindow,
-      } : resolveJaitLlmConfig({
+      llmRuntime = isCliProviderRequest ? (() => {
+        // The pick from the provider selector wins; when nothing has been
+        // picked yet the CLI adapter resolves its own default, which is what
+        // the selector displays on a fresh install.
+        return {
+          backend: "openai" as const,
+          openaiApiKey: "",
+          openaiBaseUrl: "",
+          openaiModel: requestBodyModel || persistedModel,
+          contextWindow: config.contextWindow,
+        };
+      })() : resolveJaitLlmConfig({
         config,
         apiKeys: userApiKeys,
-        requestedModel: jaitCoordinatorModel || undefined,
+        requestedModel: jaitCoordinatorModel || persistedModel || undefined,
         jaitBackend,
+        // Rejecting a model-less turn outright would break turns the user did
+        // not author (background-command notices, queue drains) and a fresh
+        // install where nothing is picked yet. The rule instead is: once a
+        // model has been picked, the turn must run on exactly that model —
+        // strictModel then makes any fall-through an error rather than a
+        // silent, billable run on OLLAMA_MODEL / OPENAI_MODEL.
+        strictModel: Boolean(jaitCoordinatorModel || persistedModel),
       });
       if (!(jaitCoordinatorModel || userApiKeys["OPENAI_MODEL"]?.trim())) {
         llmRuntime = { ...llmRuntime, contextWindow: config.contextWindow };
@@ -4089,7 +4148,9 @@ export function registerChatRoutes(
     };
     let cliEventUnsubscribe: (() => void) | null = null;
     let cliTurnDoneUnsubscribe: (() => void) | null = null;
+    let cliSteering: ProviderSteeringDispatcher | undefined;
     const cleanupCliListeners = () => {
+      cliSteering?.dispose();
       cliTurnDoneUnsubscribe?.();
       cliTurnDoneUnsubscribe = null;
       cliEventUnsubscribe?.();
@@ -4507,6 +4568,9 @@ export function registerChatRoutes(
 
           // Map provider events to SSE events the frontend understands
           switch (event.type) {
+            case "turn.started":
+              cliSteering?.start();
+              break;
             case "usage":
               usageAccumulator.add(event.usage);
               if (usageAccumulator.baseline) sessionStateService?.set(sessionId, {
@@ -4710,7 +4774,12 @@ export function registerChatRoutes(
         const recentContextBlock = isNewCliSession
           ? buildExternalProviderRecentContext(history, isQuestionBranch ? 20 : 4)
           : null;
-        let cliContent = cliUserContent;
+        // A reused CLI session keeps its original system prompt. Refresh the
+        // loop checkpoint on every turn so errors, pauses and resume requests
+        // cannot leave the provider working with a stale or missing goal.
+        let cliContent = loopInstructions && !isNewCliSession
+          ? `<chatGoalLoop>\n${loopInstructions}\n</chatGoalLoop>\n\n${cliUserContent}`
+          : cliUserContent;
         if (isNewCliSession) {
           cliContent = formatExternalProviderFirstTurn(cliSystemPrompt, cliUserContent, recentContextBlock);
         } else if (responseStyleBlock) {
@@ -4736,10 +4805,43 @@ export function registerChatRoutes(
             || event.type === "turn.completed"
           ) {
             if (event.type === "session.error") activeCliSessions.delete(sessionId);
+            void cliSteering?.pause();
             resolveTurnDone();
           }
         });
 
+        const recordSteering = (pending: SteeringMessage) => {
+          flushToolGroup();
+          flushTextSegment();
+          if (!pending.hidden) {
+            cliSegments.push({
+              type: "steering",
+              content: pending.message,
+              ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+            });
+          }
+          // Mirror the agent loop's consumption event so a client that had the
+          // message queued can promote it into the transcript exactly once.
+          const steerEvent = {
+            type: "steering" as const,
+            message: pending.message,
+            ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
+            ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
+            ...(pending.hidden ? { hidden: true } : {}),
+            deferred: true,
+          };
+          emitToSubscribers(sessionId, steerEvent as unknown as StreamEvent);
+          // Hidden steers are recorded for the trajectory log only — never
+          // written into the chat stream.
+          if (!pending.hidden) safeWrite(`data: ${JSON.stringify(steerEvent)}\n\n`);
+          lastSegmentWasText = false;
+        };
+        cliSteering = new ProviderSteeringDispatcher(
+          steering,
+          message => cliProvider!.steerTurn?.(providerSessionId, message) ?? Promise.resolve(false),
+          recordSteering,
+          error => app.log.warn({ err: error }, "Provider steering failed; keeping message queued for follow-up"),
+        );
         // Send the turn — with recovery if the session died between messages.
         // Race the provider request with its completion event because some
         // adapters keep sendTurn pending until after turn.completed is emitted.
@@ -4785,6 +4887,7 @@ export function registerChatRoutes(
             cliTurnDoneUnsubscribe = null;
             throw new Error(sessionError);
           }
+          await cliSteering.pause();
           const providerErrorMessage = getProviderRequestErrorMessage(sendErr);
           if (isNonRecoverableProviderRequestError(sendErr)) {
             console.warn(`[chat/cli] sendTurn rejected without recovery: ${providerErrorMessage}`);
@@ -4833,6 +4936,7 @@ export function registerChatRoutes(
               || event.type === "turn.completed"
             ) {
               if (event.type === "session.error") activeCliSessions.delete(sessionId);
+              void cliSteering?.pause();
               resolveTurnDone();
             }
           });
@@ -4892,39 +4996,15 @@ export function registerChatRoutes(
           streamAbort.signal,
         );
 
-        // ── Drain steering messages: send follow-up turns for any messages
-        // injected via the /steer endpoint while the CLI provider was running. ──
+        await cliSteering.pause();
+
+        // Unsupported steering and turn-end races retain the queued follow-up path.
         while (!streamAbort.signal.aborted && !sessionError) {
+          await cliSteering.pause();
           const steered = steering.drain();
           if (steered.length === 0) break;
 
-          flushToolGroup();
-          flushTextSegment();
-          for (const pending of steered) {
-            if (!pending.hidden) {
-              cliSegments.push({
-                type: "steering",
-                content: pending.message,
-                ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
-              });
-            }
-            // Mirror the agent loop's consumption event so a client that had the
-            // message queued can promote it into the transcript exactly once.
-            const steerEvent = {
-              type: "steering" as const,
-              message: pending.message,
-              ...(pending.displayContent ? { displayContent: pending.displayContent } : {}),
-              ...(pending.queuedMessageId ? { queuedMessageId: pending.queuedMessageId } : {}),
-              ...(pending.hidden ? { hidden: true } : {}),
-              deferred: true,
-            };
-            emitToSubscribers(sessionId, steerEvent as unknown as StreamEvent);
-            // Hidden steers are recorded for the trajectory log only — never
-            // written into the chat stream.
-            if (!pending.hidden) safeWrite(`data: ${JSON.stringify(steerEvent)}\n\n`);
-          }
-          lastSegmentWasText = false;
-
+          for (const pending of steered) recordSteering(pending);
           const steerContent = steered.map(m => `[STEERING] ${m.message}`).join("\n\n");
           app.log.info(`[chat/cli] Steering follow-up for session ${sessionId}: ${steerContent.slice(0, 100)}`);
 
@@ -4945,6 +5025,7 @@ export function registerChatRoutes(
                 markTurnErrored(sessionError);
                 activeCliSessions.delete(sessionId);
               }
+              void cliSteering?.pause();
               unsubSteerDone();
               steerDoneResolve?.();
             }
@@ -6513,7 +6594,7 @@ export function registerChatRoutes(
     const message = typeof body["message"] === "string" ? body["message"] : "";
     const displayContent = typeof body["displayContent"] === "string" ? body["displayContent"] : undefined;
     // Every accepted steer carries an id the client can correlate with the
-    // `steering` event that finally injects it at the loop's round boundary.
+    // `steering` event emitted on loop consumption or provider acknowledgement.
     // The client supplies its own id (so it can render the pending entry
     // before the HTTP response lands); synthesize one for other callers.
     const requestedSteerId = typeof body["queuedMessageId"] === "string" ? body["queuedMessageId"].trim() : "";
@@ -6540,7 +6621,7 @@ export function registerChatRoutes(
     accumulateSteering(sessionId, message, displayContent);
     // `deferred` tells the client this is accepted-but-not-yet-injected: the
     // message must stay rendered as queued until the loop's `steering` event
-    // arrives (emitted once, at the tool-round boundary).
+    // arrives after loop consumption or provider acknowledgement.
     return { ok: true, steered: true, deferred: true, queuedMessageId };
   });
 

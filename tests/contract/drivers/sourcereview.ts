@@ -1083,9 +1083,12 @@ else{let secrets;try{secrets=JSON.parse(fs.readFileSync(path.join(state,'host-se
           fs.mkdirSync(target, { recursive: true }); fs.writeFileSync(path.join(target, 'old'), 'existing asset');
           fs.mkdirSync(path.dirname(bridge), { recursive: true });
           if (call.variant !== 'missing-bridge') fs.writeFileSync(bridge, 'fixture bridge');
+          for (const asset of ['browser-cursor.cjs', 'browser-cursor.d.cts']) {
+            fs.writeFileSync(path.join(root, 'src/surfaces', asset), 'fixture ' + asset);
+          }
           const result = spawnNode([subject], { env, cwd: base, encoding: 'utf8', timeout: 8000 });
           const read = (p: string) => fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
-          return { code: result.status, copied: Object.fromEntries(Object.keys(assets).map(name => [name, read(path.join(target, name))])), nested: read(path.join(target, 'nested/item')), old: read(path.join(target, 'old')), bridge: read(path.join(root, 'dist/surfaces/playwright-node-bridge.cjs')), stdout: normalize(result.stdout), missingSource: result.stderr.includes('shell integration source directory not found:'), missingBridge: result.stderr.includes('playwright-node-bridge.cjs') };
+          return { code: result.status, copied: Object.fromEntries(Object.keys(assets).map(name => [name, read(path.join(target, name))])), nested: read(path.join(target, 'nested/item')), old: read(path.join(target, 'old')), bridge: read(path.join(root, 'dist/surfaces/playwright-node-bridge.cjs')), cursor: read(path.join(root, 'dist/surfaces/browser-cursor.cjs')), cursorTypes: read(path.join(root, 'dist/surfaces/browser-cursor.d.cts')), stdout: normalize(result.stdout), missingSource: result.stderr.includes('shell integration source directory not found:'), missingBridge: result.stderr.includes('playwright-node-bridge.cjs') };
         }
         if (call.variant === 'check-stale') fs.writeFileSync(out, 'stale fixture');
         if (call.variant === 'check-current') cp.execFileSync(node, [subject], { env, cwd: base, timeout: 8000 });

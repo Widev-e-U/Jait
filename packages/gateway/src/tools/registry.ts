@@ -1,3 +1,4 @@
+import { isToolDisabled } from "./tool-names.js";
 import { rankSystemOne, systemOneEnabled } from "../services/system-one.js";
 /**
  * Tool Registry — Sprint 3.5
@@ -277,11 +278,19 @@ function normalizeToolDefinition(tool: ToolDefinition): ToolDefinition {
 
 export class ToolRegistry {
   private readonly tools = new Map<string, ToolDefinition>();
+  private readonly compatibilityTools = new Map<string, ToolDefinition>();
+
+  /** Executable for old clients, omitted from discovery and model schemas. */
+  registerCompatibility(tool: ToolDefinition): void {
+    this.tools.delete(tool.name);
+    this.compatibilityTools.set(tool.name, normalizeToolDefinition(tool));
+  }
 
   register(tool: ToolDefinition): void {
     // Names are registered verbatim. Provider alias collisions (for example the
     // deliberate `os.tool` / `os_tool` legacy pair) are legitimate here and are
     // resolved at call time by {@link fromOpenAIName}, never by throwing.
+    this.compatibilityTools.delete(tool.name);
     this.tools.set(tool.name, normalizeToolDefinition(tool));
   }
 
@@ -290,7 +299,7 @@ export class ToolRegistry {
    * actually removed, false if no tool with that name was registered.
    */
   unregister(name: string): boolean {
-    return this.tools.delete(name);
+    return this.tools.delete(name) || this.compatibilityTools.delete(name);
   }
 
   registerPluginTools(plugin: PluginDescriptor, tools: PluginToolDeclaration[]): void {
@@ -304,7 +313,7 @@ export class ToolRegistry {
   }
 
   get(name: string): ToolDefinition | undefined {
-    return this.tools.get(name);
+    return this.tools.get(name) ?? this.compatibilityTools.get(name);
   }
 
   list(): ToolDefinition[] {
@@ -316,7 +325,7 @@ export class ToolRegistry {
   }
 
   has(name: string): boolean {
-    return this.tools.has(name);
+    return this.tools.has(name) || this.compatibilityTools.has(name);
   }
 
   /** List tools filtered by tier */
@@ -340,7 +349,7 @@ export class ToolRegistry {
     const matches: RankedToolMatch[] = [];
     const fuzzyScores = new Map<string, number>();
     for (const tool of candidates) {
-      if (options.disabledTools?.has(tool.name)) continue;
+      if (isToolDisabled(tool.name, options.disabledTools)) continue;
 
       const nameTokens = new Set(tokenizeSearchText(tool.name));
       const metadataText = [
@@ -399,7 +408,7 @@ export class ToolRegistry {
     if (!systemOneEnabled(apiKeys)) return limitedFallback;
     const lexical = fallback.slice(0, 48);
     const known = new Set(lexical.map(match => match.tool.name));
-    const extras = (options.candidates ?? this.list()).filter(tool => !known.has(tool.name) && !options.disabledTools?.has(tool.name));
+    const extras = (options.candidates ?? this.list()).filter(tool => !known.has(tool.name) && !isToolDisabled(tool.name, options.disabledTools));
     const candidates = [...lexical, ...extras.map(tool => ({ tool, score: 0, matchedTerms: [] as string[] }))].slice(0, 48);
     const ranked = await rankSystemOne(apiKeys, boundedSearchText(query, MAX_SEARCH_CHARS), candidates, match => `${match.tool.name}: ${match.tool.description}`, "tool", undefined, (match, score) => { match.score = score; });
     // Identity signals no model result: preserve lexical filtering, including no matches.
@@ -423,7 +432,7 @@ export class ToolRegistry {
   /** Tools intentionally exposed to external MCP clients. */
   listForMcp(disabledTools?: Set<string>): ToolDefinition[] {
     return this.list().filter((tool) => {
-      if (disabledTools?.has(tool.name)) return false;
+      if (isToolDisabled(tool.name, disabledTools)) return false;
       const source = tool.source ?? "builtin";
       const tier = tool.tier ?? "standard";
       if (source.startsWith("plugin:")) return true;
@@ -451,7 +460,7 @@ export class ToolRegistry {
 
   /** Get tool info filtered to only enabled tools for a user */
   listInfoFiltered(disabledTools?: Set<string>): ToolInfo[] {
-    return this.listInfo().filter((t) => !disabledTools?.has(t.name));
+    return this.listInfo().filter((t) => !isToolDisabled(t.name, disabledTools));
   }
 
   /**
@@ -461,7 +470,7 @@ export class ToolRegistry {
    */
   listForLLM(disabledTools?: Set<string>): ToolDefinition[] {
     return this.list().filter((t) => {
-      if (disabledTools?.has(t.name)) return false;
+      if (isToolDisabled(t.name, disabledTools)) return false;
       const tier = t.tier ?? "standard";
       // Only core tools in the initial payload (~10 tools)
       // Standard tools are discovered via tools.search / tools.list
@@ -476,8 +485,8 @@ export class ToolRegistry {
    * The disabled check only gates what's sent to the LLM, not execution.
    */
   isExecutable(name: string, disabledTools?: Set<string>): boolean {
-    if (!this.tools.has(name)) return false;
-    if (disabledTools?.has(name)) return false;
+    if (!this.has(name)) return false;
+    if (isToolDisabled(name, disabledTools)) return false;
     return true;
   }
 
@@ -490,7 +499,7 @@ export class ToolRegistry {
     context: ToolContext,
     audit?: AuditWriter,
   ): Promise<ToolResult> {
-    const tool = this.tools.get(name);
+    const tool = this.get(name);
     if (!tool) {
       return { ok: false, message: `Unknown tool: ${name}` };
     }

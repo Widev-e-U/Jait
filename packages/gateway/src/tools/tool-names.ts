@@ -84,7 +84,13 @@ export const ToolName = {
   WebFetch: "web.fetch",
   WebSearch: "web.search",
 
-  // ── Preview ──
+  BrowserOpen: "browser.open",
+  BrowserClose: "browser.close",
+  BrowserRestart: "browser.restart",
+  BrowserStatus: "browser.status",
+  BrowserLogs: "browser.logs",
+
+  // ── Legacy preview names (execution compatibility only) ──
   PreviewStart: "preview.start",
   PreviewOpen: "preview.open",
   PreviewStop: "preview.stop",
@@ -132,3 +138,17 @@ export const ToolName = {
 
 /** Union of all known tool name values. */
 export type ToolNameValue = (typeof ToolName)[keyof typeof ToolName];
+
+/** Renaming the public family must preserve existing disable rules and policies. */
+export const BROWSER_TOOL_REPLACEMENTS: Readonly<Record<string, string>> = Object.freeze({
+  "preview.open": "browser.open", "preview.stop": "browser.close", "preview.restart": "browser.restart",
+  "preview.status": "browser.status", "preview.logs": "browser.logs", "preview.inspect": "browser.inspect",
+});
+export function toolPolicyNames(name: string): string[] {
+  const canonical = BROWSER_TOOL_REPLACEMENTS[name] ?? name;
+  const legacy = Object.keys(BROWSER_TOOL_REPLACEMENTS).find(key => BROWSER_TOOL_REPLACEMENTS[key] === canonical);
+  return legacy ? [canonical, legacy] : [canonical];
+}
+export function isToolDisabled(name: string, disabled?: Set<string>): boolean {
+  return !!disabled && toolPolicyNames(name).some(candidate => disabled.has(candidate));
+}

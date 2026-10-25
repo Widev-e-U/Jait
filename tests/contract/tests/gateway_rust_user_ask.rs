@@ -164,3 +164,17 @@ async fn user_ask_cancellation_and_unanswered_requests_match_reference() {
     assert_eq!(v["settled"], false);
     assert_eq!(v["pending"][0]["expiresAt"], Value::Null);
 }
+
+#[tokio::test]
+async fn answered_card_payload_keeps_multiselect_free_text_and_skipped_answers() {
+    let answers = json!({"target":{"selected":["Homelab","Local"],"freeText":"Only the lab 🦀","skipped":false},"later":{"selected":[],"freeText":null,"skipped":true}});
+    let result = scenario(&json!({"name":"answered card contract","input":{"questions":[
+        {"id":"target","header":"Target","question":"Where should it run?","multiSelect":true,"options":[{"label":"Homelab"},{"label":"Local"}]},
+        {"id":"later","header":"Later","question":"Anything else?"}
+    ]},"context":{"sessionId":"session","userId":"owner"},"actions":[
+        {"op":"submit","user":"foreign","value":{"answers":answers}},
+        {"op":"submit","user":"owner","value":{"answers":answers}}
+    ]})).await;
+    assert_eq!(result["result"]["data"]["answers"], answers);
+    assert_eq!(result["pending"], json!([]));
+}

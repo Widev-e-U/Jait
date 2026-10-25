@@ -39,3 +39,11 @@ pub mod reminders;
 pub mod security_workbench;
 
 pub mod code_graph;
+
+pub mod plugins;
+
+pub mod store;
+
+pub mod consent;
+
+pub mod channels;

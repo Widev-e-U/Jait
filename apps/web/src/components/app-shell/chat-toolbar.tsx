@@ -95,7 +95,10 @@ export function ChatToolbar({
   onToggleSidebar,
   onToggleTerminal,
 }: ChatToolbarProps) {
-  if ((currentView !== 'chat' && currentView !== 'threads') || (!isMobile && (viewMode !== 'manager' || !automation.selectedThread))) return null
+  if (currentView !== 'chat' && currentView !== 'threads') return null
+  // Desktop manager view only shows the toolbar once a thread is selected.
+  // Developer mode keeps it, because the preview/editor toggles live here.
+  if (!isMobile && viewMode === 'manager' && !automation.selectedThread) return null
 
   return (
     <div

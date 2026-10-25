@@ -167,6 +167,26 @@ struct Resumable {
     session_id: String,
     user_id: Option<String>,
     answer: watch::Receiver<Answer>,
+    waiters: usize,
+    yielded: bool,
+}
+struct QuestionWaitGuard {
+    entries: Arc<Mutex<Vec<Resumable>>>,
+    id: String,
+}
+impl Drop for QuestionWaitGuard {
+    fn drop(&mut self) {
+        if let Some(entry) = self
+            .entries
+            .lock()
+            .unwrap()
+            .iter_mut()
+            .find(|e| e.request_id == self.id)
+        {
+            entry.waiters -= 1;
+            entry.yielded = true;
+        }
+    }
 }
 #[derive(Clone)]
 pub struct UserQuestionService {
@@ -174,6 +194,7 @@ pub struct UserQuestionService {
     resumable: Arc<Mutex<Vec<Resumable>>>,
     clock: Clock,
     resume_wait: Duration,
+    on_detached_resolved: Arc<Mutex<Option<Observer>>>,
 }
 impl Default for UserQuestionService {
     fn default() -> Self {
@@ -197,12 +218,33 @@ impl UserQuestionService {
         on_request: Option<Observer>,
         on_resolved: Option<Observer>,
     ) -> Self {
+        let resumable: Arc<Mutex<Vec<Resumable>>> = Arc::new(Mutex::new(Vec::new()));
+        let on_detached_resolved: Arc<Mutex<Option<Observer>>> = Arc::new(Mutex::new(None));
+        let entries = resumable.clone();
+        let detached = on_detached_resolved.clone();
+        let resolved: Observer = Arc::new(move |request| {
+            if let Some(callback) = &on_resolved {
+                callback(request.clone());
+            }
+            let should_resume =
+                entries.lock().unwrap().iter().any(|entry| {
+                    entry.request_id == request.id && entry.yielded && entry.waiters == 0
+                });
+            let callback = detached.lock().unwrap().clone();
+            if should_resume && let Some(callback) = callback {
+                callback(request);
+            }
+        });
         Self {
-            registry: registry(on_request, on_resolved),
-            resumable: Arc::new(Mutex::new(Vec::new())),
+            registry: registry(on_request, Some(resolved)),
+            resumable,
             clock,
             resume_wait,
+            on_detached_resolved,
         }
+    }
+    pub fn set_on_detached_resolved(&self, callback: Option<Observer>) {
+        *self.on_detached_resolved.lock().unwrap() = callback;
     }
     pub fn resume_wait(&self) -> Duration {
         self.resume_wait
@@ -248,6 +290,8 @@ impl UserQuestionService {
             session_id: request.session_id,
             user_id: request.user_id,
             answer,
+            waiters: 0,
+            yielded: false,
         });
         handle.id
     }
@@ -261,16 +305,35 @@ impl UserQuestionService {
         session_id: &str,
         user_id: Option<&str>,
     ) -> WaitOutcome {
+        self.wait_for_answer_with_timeout(request_id, session_id, user_id, Some(self.resume_wait))
+            .await
+    }
+    /// Explicit host override: None waits until answered; Some bounds this wait
+    /// without expiring the underlying request or changing the default deadline.
+    pub async fn wait_for_answer_with_timeout(
+        &self,
+        request_id: &str,
+        session_id: &str,
+        user_id: Option<&str>,
+        yield_after: Option<Duration>,
+    ) -> WaitOutcome {
         let mut answer = {
-            let entries = self.resumable.lock().unwrap();
-            match entries.iter().find(|entry| {
+            let mut entries = self.resumable.lock().unwrap();
+            match entries.iter_mut().find(|entry| {
                 entry.request_id == request_id
                     && entry.session_id == session_id
                     && entry.user_id.as_deref() == user_id
             }) {
-                Some(entry) => entry.answer.clone(),
+                Some(entry) => {
+                    entry.waiters += 1;
+                    entry.answer.clone()
+                }
                 None => return WaitOutcome::Missing,
             }
+        };
+        let _wait = QuestionWaitGuard {
+            entries: self.resumable.clone(),
+            id: request_id.into(),
         };
         // Answers that arrived between waits resolve without arming a timer.
         if let Answer::Settled(result) = &*answer.borrow() {
@@ -278,11 +341,15 @@ impl UserQuestionService {
             self.collect(request_id);
             return WaitOutcome::Answered(result);
         }
-        let deadline = tokio::time::Instant::now() + self.resume_wait;
-        if tokio::time::timeout_at(deadline, answer.changed())
-            .await
-            .is_err()
-        {
+        let changed = if let Some(duration) = yield_after {
+            tokio::time::timeout(duration, answer.changed())
+                .await
+                .is_ok()
+        } else {
+            let _ = answer.changed().await;
+            true
+        };
+        if !changed {
             return WaitOutcome::Pending;
         }
         let settled = match &*answer.borrow() {

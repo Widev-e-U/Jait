@@ -207,3 +207,17 @@ fn scientific_and_large_integer_spellings_are_byte_exact_in_serialized_results()
         )]);
     }
 }
+
+#[test]
+fn large_terminal_failure_retains_recovery_ids_diagnostics_coverage_and_tail() {
+    let value = json!({"output":format!("build started\n{}\nERROR at completion", "noise ".repeat(5000)),"executionId":"execution-1","status":"failed","exitCode":1,"errors":["missing dependency"],"coverage":{"complete":false}});
+    compare(vec![bound(value.clone(), 1024)]);
+    let result = bound_model_data_with_limit(&value, 1024.);
+    assert_eq!(result["executionId"], "execution-1");
+    assert_eq!(result["errors"], json!(["missing dependency"]));
+    assert_eq!(result["coverage"]["complete"], false);
+    let preview = result["preview"].as_str().unwrap();
+    assert!(preview.contains("build started") && preview.contains("ERROR at completion"));
+    assert!(preview.contains("omitted middle"));
+    assert!(result.to_string().encode_utf16().count() <= 1024);
+}

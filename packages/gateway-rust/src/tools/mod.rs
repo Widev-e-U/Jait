@@ -84,3 +84,9 @@ pub mod context_evidence;
 pub mod loop_tools;
 
 pub mod code_graph;
+
+pub mod persona_agents;
+
+pub mod agent_github;
+
+pub mod sandbox_background_terminal;

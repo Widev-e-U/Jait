@@ -50,6 +50,7 @@ export async function dispatch(call:any){
     const opts={...current.options,...(current.options?.disabledTools?{disabledTools:new Set(current.options.disabledTools)}:{}),...(current.options?.candidates?{candidates:current.options.candidates.map((name:string)=>registry.get(name))}:{})};
     const disabled=new Set(current.disabled??[]);
     switch(current.op){
+     case 'compatibility':registry.registerCompatibility(make(current.item));value=null;break;
      case 'register':registry.register(make(current.item));value=null;break;
      case 'plugin':registry.registerPluginTools(current.plugin,current.tools.map(make));value=null;break;
      case 'unregister':value=registry.unregister(current.name);break;

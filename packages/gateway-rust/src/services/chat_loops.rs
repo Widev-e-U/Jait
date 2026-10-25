@@ -37,6 +37,18 @@ impl Default for LoopRuntime {
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LoopMonitor {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<Utf16Text>,
+    pub reviewed_revision: f64,
+    pub reviewed_at: Utf16Text,
+    pub criteria_passed: Vec<bool>,
+    pub progress: String,
+    pub reason: Utf16Text,
+}
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatLoop {
     pub id: Utf16Text,
     pub goal: Utf16Text,
@@ -48,6 +60,14 @@ pub struct ChatLoop {
     pub summary: Utf16Text,
     pub next_message: Utf16Text,
     pub evidence: Vec<Utf16Text>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub budget_start_iteration: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stalled_checks: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unchecked_turns: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monitor: Option<LoopMonitor>,
     pub updated_at: Utf16Text,
 }
 #[derive(Clone, Debug, Serialize)]
@@ -117,6 +137,41 @@ fn integer(doc: &JsonDocument, id: usize, minimum: f64) -> Option<f64> {
     };
     (n.is_finite() && n.fract() == 0.0 && n >= minimum).then_some(n)
 }
+fn parse_monitor(doc: &JsonDocument, id: usize) -> Option<LoopMonitor> {
+    let get = |key| field(doc, id, key);
+    let status = String::from_utf16(&text(doc, get("status")?, 0, 20, false)?.0).ok()?;
+    let progress = String::from_utf16(&text(doc, get("progress")?, 0, 20, false)?.0).ok()?;
+    if !["accepted", "rejected", "unavailable", "disabled"].contains(&status.as_str())
+        || !["progress", "stalled", "unknown"].contains(&progress.as_str())
+    {
+        return None;
+    }
+    let JsonValue::Array(values) = &doc.nodes[get("criteriaPassed")?] else {
+        return None;
+    };
+    if values.len() > 20 {
+        return None;
+    }
+    let criteria_passed = values
+        .iter()
+        .map(|id| match doc.nodes[*id] {
+            JsonValue::Boolean(value) => Some(value),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(LoopMonitor {
+        status,
+        progress,
+        criteria_passed,
+        model: match get("model") {
+            Some(id) => Some(text(doc, id, 0, 200, false)?),
+            None => None,
+        },
+        reviewed_revision: integer(doc, get("reviewedRevision")?, 0.0)?,
+        reviewed_at: text(doc, get("reviewedAt")?, 0, usize::MAX, false)?,
+        reason: text(doc, get("reason")?, 0, 2000, false)?,
+    })
+}
 fn parse_at(doc: &JsonDocument, id: usize) -> Option<ChatLoop> {
     let get = |key| field(doc, id, key);
     let status = text(doc, get("status")?, 0, usize::MAX, false)?;
@@ -135,6 +190,22 @@ fn parse_at(doc: &JsonDocument, id: usize) -> Option<ChatLoop> {
         summary: text(doc, get("summary")?, 0, 8000, false)?,
         next_message: text(doc, get("nextMessage")?, 0, 8000, false)?,
         evidence: texts(doc, get("evidence")?, 0, 20, 0, 2000, false)?,
+        budget_start_iteration: match get("budgetStartIteration") {
+            Some(id) => Some(integer(doc, id, 0.0)?),
+            None => None,
+        },
+        stalled_checks: match get("stalledChecks") {
+            Some(id) => Some(integer(doc, id, 0.0)?),
+            None => None,
+        },
+        unchecked_turns: match get("uncheckedTurns") {
+            Some(id) => Some(integer(doc, id, 0.0)?),
+            None => None,
+        },
+        monitor: match get("monitor") {
+            Some(id) => Some(parse_monitor(doc, id)?),
+            None => None,
+        },
         updated_at: text(doc, get("updatedAt")?, 0, usize::MAX, false)?,
     })
 }
@@ -392,6 +463,10 @@ impl<'a> ChatLoopService<'a> {
                 summary: Utf16Text(vec![]),
                 next_message: Utf16Text(vec![]),
                 evidence: vec![],
+                budget_start_iteration: None,
+                stalled_checks: None,
+                unchecked_turns: None,
+                monitor: None,
                 updated_at: Utf16Text::from(iso((self.runtime.clock)())?),
             },
             user,
@@ -409,6 +484,11 @@ impl<'a> ChatLoopService<'a> {
         }
         .into();
         state.checked_iteration = -1.0;
+        if action == "resume" {
+            state.budget_start_iteration = Some(state.iteration);
+            state.stalled_checks = Some(0.0);
+            state.unchecked_turns = Some(0.0);
+        }
         self.save(id, state, user)
     }
     pub fn resume_after_answer(
@@ -432,6 +512,25 @@ impl<'a> ChatLoopService<'a> {
         self.save(id, state, user).map(Some)
     }
     pub fn check(&self, id: &str, input: &Value, user: Option<&str>) -> Result<ChatLoop, String> {
+        self.check_inner(id, input, user, false)
+    }
+    /// Only the unconfigured monitor path is reconstructed here. Configured
+    /// model review remains pending native host composition in the coverage ledger.
+    pub fn check_unmonitored(
+        &self,
+        id: &str,
+        input: &Value,
+        user: Option<&str>,
+    ) -> Result<ChatLoop, String> {
+        self.check_inner(id, input, user, true)
+    }
+    fn check_inner(
+        &self,
+        id: &str,
+        input: &Value,
+        user: Option<&str>,
+        monitored: bool,
+    ) -> Result<ChatLoop, String> {
         let mut state = self
             .get(id, user)?
             .filter(|s| s.status == "running" && Some(s.revision) == input["revision"].as_f64())
@@ -445,12 +544,14 @@ impl<'a> ChatLoopService<'a> {
             .map(crate::text::js_trim)
             .filter(|s| !s.is_empty())
             .ok_or("A progress summary is required")?;
-        let next = match input.get("nextMessage") {
-            None | Some(Value::Null) => "",
-            Some(Value::String(s)) => crate::text::js_trim(s),
-            _ => return Err("input.nextMessage?.trim is not a function".into()),
+        let read_next = || -> Result<&str, String> {
+            match input.get("nextMessage") {
+                None | Some(Value::Null) => Ok(""),
+                Some(Value::String(s)) => Ok(crate::text::js_trim(s)),
+                _ => Err("input.nextMessage?.trim is not a function. (In 'input.nextMessage?.trim()', 'input.nextMessage?.trim' is undefined)".into()),
+            }
         };
-        if outcome == "continue" && next.is_empty() {
+        if outcome == "continue" && read_next()?.is_empty() {
             return Err("Define the next message before continuing".into());
         }
         let empty = vec![];
@@ -466,11 +567,40 @@ impl<'a> ChatLoopService<'a> {
         {
             return Err("Completion needs one nonblank piece of verification evidence per acceptance criterion, in order".into());
         }
+        // The reference builds nextMessage after checking completion evidence,
+        // but before schema validation of the newly assembled state.
+        let next = input
+            .get("nextMessage")
+            .and_then(Value::as_str)
+            .map(crate::text::js_trim)
+            .unwrap_or("");
         let mut issues = vec![];
-        if summary.encode_utf16().count() > 8000 {
+        if let Some(value) = input
+            .get("nextMessage")
+            .filter(|v| !v.is_null() && !v.is_string())
+        {
+            issues.push(type_issue(
+                "string",
+                Some(value),
+                vec![json!("nextMessage")],
+            ));
+        }
+        if input["summary"]
+            .as_str()
+            .unwrap_or("")
+            .encode_utf16()
+            .count()
+            > 8000
+        {
             issues.push(size_issue("string", false, 8000, vec![json!("summary")]))
         }
-        if next.encode_utf16().count() > 8000 {
+        if input["nextMessage"]
+            .as_str()
+            .unwrap_or("")
+            .encode_utf16()
+            .count()
+            > 8000
+        {
             issues.push(size_issue(
                 "string",
                 false,
@@ -504,6 +634,42 @@ impl<'a> ChatLoopService<'a> {
             })
             .collect();
         schema_result(issues)?;
+        if monitored && outcome != "waiting" {
+            let repeated = state.checked_iteration < state.iteration
+                && state.summary.0 == summary.encode_utf16().collect::<Vec<_>>()
+                && wire(&state.evidence) == wire(&evidence);
+            let stalled = if repeated {
+                state.stalled_checks.unwrap_or(0.0) + 1.0
+            } else {
+                0.0
+            };
+            state.stalled_checks = Some(stalled);
+            state.monitor = Some(LoopMonitor {
+                status: "disabled".into(),
+                model: None,
+                reviewed_revision: state.revision,
+                reviewed_at: Utf16Text::from(iso((self.runtime.clock)())?),
+                criteria_passed: vec![],
+                progress: "unknown".into(),
+                reason: Utf16Text::from(
+                    "System One is not configured; using agent evidence checks.",
+                ),
+            });
+            if outcome != "complete" && stalled >= 3.0 {
+                let reason = "Loop paused after three stalled checkpoints. Review the goal and explicitly resume.";
+                state.status = "paused".into();
+                state.checked_iteration = state.iteration;
+                state.summary = Utf16Text(
+                    format!("{reason} Last checkpoint: {summary}")
+                        .encode_utf16()
+                        .take(8000)
+                        .collect(),
+                );
+                state.next_message = Utf16Text::from(reason);
+                state.evidence = evidence;
+                return self.save(id, state, user);
+            }
+        }
         state.status = match outcome {
             "complete" => "completed",
             "waiting" => "waiting",
@@ -526,7 +692,22 @@ impl<'a> ChatLoopService<'a> {
             return Ok(None);
         };
         let checked = state.checked_iteration == state.iteration;
+        let unchecked = if checked {
+            0.0
+        } else {
+            state.unchecked_turns.unwrap_or(0.0) + 1.0
+        };
+        state.unchecked_turns = Some(unchecked);
         state.iteration += 1.0;
+        if state.status == "running"
+            && (state.iteration - state.budget_start_iteration.unwrap_or(0.0) >= 50.0
+                || unchecked >= 3.0)
+        {
+            state.status = "paused".into();
+            state.summary = Utf16Text::from(
+                "Loop paused at its turn/checkpoint limit. Review progress and explicitly resume to renew the budget.",
+            );
+        }
         if let Some(error) = error.filter(|s| !s.is_empty()) {
             state.status = "error".into();
             state.summary = Utf16Text(error.encode_utf16().take(8000).collect());
@@ -560,7 +741,29 @@ impl<'a> ChatLoopService<'a> {
     }
 }
 pub fn chat_loop_instructions(state: Option<&ChatLoop>) -> Option<Utf16Text> {
-    let s = state.filter(|s| s.status == "running")?;
+    let s = state.filter(|s| s.status != "completed")?;
+    if s.status != "running" {
+        let lines = [
+            Utf16Text::from(
+                "A saved user-authorized chat goal loop is stopped. Automatic continuation is inactive.",
+            ),
+            Utf16Text::from(format!("Goal: {}", wire(&s.goal))),
+            Utf16Text::from(format!("Acceptance criteria: {}", wire(&s.criteria))),
+            Utf16Text::from(format!(
+                "Loop status: {}; revision: {}; completed turns: {}.",
+                s.status,
+                ryu_js::Buffer::new().format(s.revision),
+                ryu_js::Buffer::new().format(s.iteration)
+            )),
+            Utf16Text::from(format!("Last checkpoint or error: {}", wire(&s.summary))),
+            Utf16Text::from(
+                "Do not silently continue this goal while leaving its loop stopped. If the latest user instruction explicitly asks to resume or continue this saved goal, discover and call loop.status, then loop.resume before working on it. After resuming, call loop.check before ending the turn; continue until every criterion is verified. Otherwise explain the saved status when relevant and leave it stopped. Background notifications and unrelated messages do not authorize resumption. Never retry provider errors automatically or bypass pending questions, approvals, security scope or tool limits.",
+            ),
+        ];
+        return Some(Utf16Text(
+            lines.into_iter().map(|s| s.0).collect::<Vec<_>>().join(&10),
+        ));
+    }
     let mut lines = vec![
         Utf16Text::from(
             "An explicit user-authorized chat goal loop is active. Work towards this goal across turns.",
@@ -573,6 +776,10 @@ pub fn chat_loop_instructions(state: Option<&ChatLoop>) -> Option<Utf16Text> {
             ryu_js::Buffer::new().format(s.iteration)
         )),
         Utf16Text::from(format!("Progress: {}", wire(&s.summary))),
+        Utf16Text::from(format!(
+            "Gateway monitor: {}. At most 50 turns per explicit resume; three stalled checkpoints or unchecked turns pause continuation. System One reviews reported evidence when configured and can reject completion or pause on review failure.",
+            wire(&s.monitor)
+        )),
     ];
     lines.push(Utf16Text::from("Before ending this turn, discover and call loop.check. Read loop.status for the current revision first. Check every criterion against actual evidence; use outcome=complete only after all criteria have passed, supplying one verification evidence entry per criterion. Otherwise use outcome=continue and write the next concrete message to yourself. If a user answer is required, use user.ask; if the turn must end awaiting input, use outcome=waiting and describe the question. Never treat missing approval as permission. Existing consent, assessment scopes, exclusions and tool limits still apply. Do not start additional agents unless the user authorized them."));
     Some(Utf16Text(

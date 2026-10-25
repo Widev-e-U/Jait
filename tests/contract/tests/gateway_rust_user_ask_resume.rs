@@ -140,12 +140,16 @@ async fn run_scenario(steps: &Value) -> Value {
     let steps = steps.as_array().expect("steps array").clone();
     for step in steps {
         match text(&step, "op").expect("op") {
+            "observeDetached" => {
+                service.set_on_detached_resolved(Some(observer("detached", events.clone())));
+                out.push(json!({"observing":true}));
+            }
             "start" => {
                 ids.push(
                     service.start_resumable(QuestionInput {
                         session_id: text(&step, "sessionId").unwrap_or_default().into(),
                         user_id: owned_text(&step, "userId"),
-                        requested_by: Some("user.ask".into()),
+                        requested_by: Some(text(&step, "requestedBy").unwrap_or("user.ask").into()),
                         title: owned_text(&step, "title"),
                         attention: owned_text(&step, "attention"),
                         questions: step
@@ -211,12 +215,25 @@ async fn run_scenario(steps: &Value) -> Value {
                 };
                 let session = text(&step, "sessionId").unwrap_or_default().to_owned();
                 let user = owned_text(&step, "userId");
+                let yield_after = match step["options"].get("yieldAfterMs") {
+                    Some(Value::Null) => None,
+                    Some(v) => Some(Duration::from_millis(v.as_u64().unwrap())),
+                    None => Some(Duration::from_millis(RESUME_WAIT_MS)),
+                };
                 let fire = step.get("fire").and_then(Value::as_bool) != Some(false);
                 let worker = service.clone();
                 let handle = tokio::spawn(async move {
                     match id {
                         Some(id) => {
-                            match worker.wait_for_answer(&id, &session, user.as_deref()).await {
+                            match worker
+                                .wait_for_answer_with_timeout(
+                                    &id,
+                                    &session,
+                                    user.as_deref(),
+                                    yield_after,
+                                )
+                                .await
+                            {
                                 WaitOutcome::Missing => json!({"status": "missing"}),
                                 WaitOutcome::Pending => json!({"status": "pending"}),
                                 WaitOutcome::Answered(result) => {
@@ -264,11 +281,24 @@ async fn run_scenario(steps: &Value) -> Value {
                     };
                     let session = text(&wait, "sessionId").unwrap_or_default().to_owned();
                     let user = owned_text(&wait, "userId");
+                    let yield_after = match wait["options"].get("yieldAfterMs") {
+                        Some(Value::Null) => None,
+                        Some(v) => Some(Duration::from_millis(v.as_u64().unwrap())),
+                        None => Some(Duration::from_millis(RESUME_WAIT_MS)),
+                    };
                     let worker = service.clone();
                     handles.push(tokio::spawn(async move {
                         match id {
                             Some(id) => {
-                                match worker.wait_for_answer(&id, &session, user.as_deref()).await {
+                                match worker
+                                    .wait_for_answer_with_timeout(
+                                        &id,
+                                        &session,
+                                        user.as_deref(),
+                                        yield_after,
+                                    )
+                                    .await
+                                {
                                     WaitOutcome::Missing => json!({"status": "missing"}),
                                     WaitOutcome::Pending => json!({"status": "pending"}),
                                     WaitOutcome::Answered(result) => {
@@ -825,4 +855,120 @@ async fn empty_and_duplicate_question_sets_still_fail_before_any_request() {
         0,
         "validation never registers a resumable request"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn delayed_question_and_browser_answers_wake_once_without_losing_results() {
+    for tool in ["user.ask", "browser.handoff"] {
+        for cancel in [false, true] {
+            let steps = json!([
+                {"op":"observeDetached"},
+                {"op":"start","sessionId":"chat","userId":"owner","requestedBy":tool},
+                {"op":"wait","request":0,"sessionId":"chat","userId":"owner"},
+                {"op":"submit","request":0,"userId":"foreign","value":{"answers":{}}},
+                {"op":if cancel { "cancel" } else { "submit" },"request":0,"userId":"owner",
+                  "value":{"answers":{"browser":{"selected":["Done"],"freeText":null,"skipped":false}}}},
+                {"op":"cancel","request":0,"userId":"owner"},
+                {"op":"wait","request":0,"sessionId":"chat","userId":"owner","fire":false},
+                {"op":"wait","request":0,"sessionId":"chat","userId":"owner","fire":false}
+            ]);
+            let expected = replay(steps.clone());
+            let actual = run_scenario(&steps).await;
+            assert_eq!(actual, expected, "{tool}, cancel={cancel}");
+            assert_eq!(actual["steps"][3]["ok"], false);
+            assert_eq!(
+                actual["events"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|event| event["kind"] == "detached")
+                    .count(),
+                1
+            );
+            assert_eq!(actual["steps"][6]["outcome"]["status"], "answered");
+            assert_eq!(actual["steps"][7]["outcome"]["status"], "missing");
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn attached_question_wait_resumes_without_a_duplicate_wake() {
+    let steps = json!([
+        {"op":"observeDetached"},
+        {"op":"start","sessionId":"chat","userId":"owner"},
+        {"op":"wait","request":0,"sessionId":"chat","userId":"owner"},
+        {"op":"concurrent","waits":[{"request":0,"sessionId":"chat","userId":"owner"}],
+          "then":{"op":"submit","request":0,"userId":"owner","value":{"answers":{}}}}
+    ]);
+    let expected = replay(steps.clone());
+    let actual = run_scenario(&steps).await;
+    assert_eq!(actual, expected);
+    assert!(
+        !actual["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "detached")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn explicit_question_wait_deadlines_and_attached_unbounded_wait_match_typescript() {
+    let steps = json!([
+        {"op":"observeDetached"},
+        {"op":"start","sessionId":"chat","userId":"owner"},
+        {"op":"wait","request":0,"sessionId":"chat","userId":"foreign","options":{"yieldAfterMs":null}},
+        {"op":"wait","request":0,"sessionId":"chat","userId":"owner","options":{"yieldAfterMs":7}},
+        {"op":"concurrent","waits":[{"request":0,"sessionId":"chat","userId":"owner","options":{"yieldAfterMs":null}}],"then":{"op":"submit","request":0,"userId":"owner","value":{"answers":{}}}},
+        {"op":"wait","request":0,"sessionId":"chat","userId":"owner","options":{"yieldAfterMs":0}},
+        {"op":"start","sessionId":"chat","userId":"owner"},
+        {"op":"wait","request":1,"sessionId":"chat","userId":"owner","options":{"yieldAfterMs":null}}
+    ]);
+    let expected = replay(steps.clone());
+    let actual = run_scenario(&steps).await;
+    assert_eq!(actual, expected);
+    assert!(
+        !actual["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event["kind"] == "detached")
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn custom_question_deadline_is_measured_and_matches_reference_timer() {
+    let reference = internal_driver::call(
+        &root(),
+        &root().join(".jait/artifacts/gateway-rust/channels-http/wait-deadline"),
+        json!({"version":1,"calls":[{"op":"nativeaskresume.timers","options":{"yieldAfterMs":7}}]}),
+        &|| false,
+    )
+    .unwrap()[0]
+        .clone();
+    assert_eq!(
+        reference,
+        json!({"scheduled":[7],"outcome":{"status":"pending"},"remaining":0})
+    );
+    let service = UserQuestionService::default();
+    let id = service.start_resumable(
+        serde_json::from_value(json!({"sessionId":"s","userId":null,"questions":[]})).unwrap(),
+    );
+    let worker = service.clone();
+    let pending = tokio::spawn(async move {
+        worker
+            .wait_for_answer_with_timeout(&id, "s", None, Some(Duration::from_millis(7)))
+            .await
+    });
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+    tokio::time::advance(Duration::from_millis(6)).await;
+    assert!(!pending.is_finished());
+    tokio::time::advance(Duration::from_millis(2)).await;
+    for _ in 0..16 {
+        tokio::task::yield_now().await;
+    }
+    assert!(pending.is_finished());
+    assert_eq!(pending.await.unwrap(), WaitOutcome::Pending);
 }

@@ -9,9 +9,44 @@ pub struct StoredHistory {
     pub scopes: Vec<Value>,
     pub runs: Vec<Value>,
 }
+/// Preserve database provenance for HTTP's uncaught storage error envelope.
+#[derive(Debug)]
+pub struct HistoryFailure {
+    pub message: String,
+    pub sqlite_code: Option<i32>,
+}
+impl From<String> for HistoryFailure {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            sqlite_code: None,
+        }
+    }
+}
+fn history_failure(error: DatabaseError) -> HistoryFailure {
+    let sqlite_code = match &error {
+        DatabaseError::Operation(inner) => match inner.downcast_ref::<rusqlite::Error>() {
+            Some(rusqlite::Error::SqliteFailure(code, _)) => Some(code.extended_code),
+            _ => None,
+        },
+        _ => None,
+    };
+    HistoryFailure {
+        message: message(error),
+        sqlite_code,
+    }
+}
 pub trait AssessmentStore: Send + Sync {
     fn load(&self) -> BoxFuture<'static, Result<StoredHistory, String>>;
     fn history(&self, operator: String) -> BoxFuture<'static, Result<StoredHistory, String>>;
+    fn history_detailed(
+        &self,
+        operator: String,
+    ) -> BoxFuture<'static, Result<StoredHistory, HistoryFailure>> {
+        let result = self.history(operator);
+        Box::pin(async move { result.await.map_err(HistoryFailure::from) })
+    }
+
     fn scope(
         &self,
         id: String,
@@ -73,12 +108,19 @@ impl AssessmentStore for SqliteAssessmentStore {
         })
     }
     fn history(&self, operator: String) -> BoxFuture<'static, Result<StoredHistory, String>> {
+        let result = self.history_detailed(operator);
+        Box::pin(async move { result.await.map_err(|e| e.message) })
+    }
+    fn history_detailed(
+        &self,
+        operator: String,
+    ) -> BoxFuture<'static, Result<StoredHistory, HistoryFailure>> {
         let db = self.database.clone();
         Box::pin(async move {
             db.run(move|db|Ok(StoredHistory{
             scopes:rows(db,"SELECT data FROM security_scopes WHERE operator_id = ? ORDER BY created_at DESC LIMIT 50",Some(&operator))?,
             runs:rows(db,"SELECT data FROM security_assessment_runs WHERE operator_id = ? ORDER BY started_at DESC LIMIT 50",Some(&operator))?,
-        })).await.map_err(message)
+        })).await.map_err(history_failure)
         })
     }
     fn scope(

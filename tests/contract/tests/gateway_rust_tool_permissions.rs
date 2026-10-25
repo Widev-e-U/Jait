@@ -238,3 +238,14 @@ fn malformed_policy_levels_are_rejected_before_dispatch() {
     p["consentLevel"] = json!("off");
     assert!(serde_json::from_value::<ToolPermission>(p).is_err());
 }
+
+#[test]
+fn renamed_browser_tools_preserve_legacy_policy_and_canonical_override_for_both_entrypoints() {
+    let legacy = json!({"toolName":"preview.open","consentLevel":"always","risk":"high","description":"Legacy restrictions","deniedPaths":["**/private/**"]});
+    let canonical = json!({"toolName":"browser.open","consentLevel":"dangerous","risk":"high","description":"Explicit override"});
+    compare(vec![
+        json!({"op":"nativepermission.resolve","name":"browser.open","entries":[["preview.open",legacy]]}),
+        json!({"op":"nativepermission.resolve","name":"preview.open","entries":[["preview.open",legacy],["browser.open",canonical]]}),
+        json!({"op":"nativepermission.resolve","name":"browser.open","entries":[["preview.open",legacy],["browser.open",canonical]]}),
+    ]);
+}

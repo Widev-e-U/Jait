@@ -5,6 +5,7 @@ import type {
   SurfaceStopInput,
   SurfaceSnapshot,
 } from "./contracts.js";
+import { clickWithVisibleCursor, type CursorPage } from "./browser-cursor.cjs";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
@@ -166,7 +167,7 @@ export interface BrowserSurfaceOptions {
   driverFactory?: (input: SurfaceStartInput) => Promise<BrowserDriver>;
 }
 
-type PlaywrightPage = {
+type PlaywrightPage = CursorPage & {
   goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
   reload: (opts?: Record<string, unknown>) => Promise<unknown>;
   click: (selector: string) => Promise<void>;
@@ -175,12 +176,13 @@ type PlaywrightPage = {
   waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
   screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
   isClosed?: () => boolean;
+  bringToFront?: () => Promise<void>;
   on?: (event: string, handler: (...args: any[]) => void) => void;
   url?: () => string;
 };
 
 type PlaywrightContext = {
-  on?: (event: string, handler: () => void) => void;
+  on?: (event: string, handler: (...args: any[]) => void) => void;
   newPage: () => Promise<PlaywrightPage>;
   pages?: () => PlaywrightPage[];
   close: () => Promise<void>;
@@ -651,6 +653,25 @@ export async function selectInitialBrowserPage<T extends { isClosed?: () => bool
   return blankPage ?? await context.newPage();
 }
 
+// Follow the tab the user actually sees, including sign-in popups and links
+// opening a new tab. Never keep automating a hidden page behind the live view.
+export async function selectVisibleBrowserPage<T extends {
+  isClosed?: () => boolean;
+  evaluate: (fn: () => { visible: boolean; focused: boolean }) => Promise<{ visible: boolean; focused: boolean }>;
+}>(pages: T[], fallback: T): Promise<T> {
+  let visiblePage: T | undefined;
+  // Multiple windows may all report focus; prefer the latest adopted page.
+  for (const candidate of [fallback, ...pages.filter(page => page !== fallback)]) {
+    if (isBrowserPageClosed(candidate)) continue;
+    try {
+      const state = await candidate.evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }));
+      if (state.visible && state.focused) return candidate;
+      if (state.visible) visiblePage ??= candidate;
+    } catch { /* A closing or navigating tab cannot be inspected yet. */ }
+  }
+  return visiblePage ?? fallback;
+}
+
 function isReusableBootstrapPageUrl(url: string | undefined): boolean {
   const normalized = url?.trim().toLowerCase();
   return normalized === "about:blank"
@@ -778,6 +799,7 @@ async function createInProcessPlaywrightDriver(
   browser.on?.("disconnected", () => { browserAvailable = false; });
   activeContext.on?.("close", () => { browserAvailable = false; });
   let activePage = page;
+  let presentingPage: Promise<void> = Promise.resolve();
   const events: BrowserRuntimeEvent[] = [];
   const consoleGuard = createConsoleFloodGuard({
     windowMs: parsePositiveIntegerEnv(process.env["BROWSER_CONSOLE_FLOOD_WINDOW_MS"], CONSOLE_FLOOD_WINDOW_MS),
@@ -824,7 +846,7 @@ async function createInProcessPlaywrightDriver(
       });
     });
     targetPage.on?.("close", () => {
-      if (targetPage !== activePage) return;
+      if (!browserAvailable || targetPage !== activePage) return;
       const openPages = activeContext.pages?.().filter((candidate) => !isBrowserPageClosed(candidate)) ?? [];
       if (openPages.length > 0) {
         activePage = openPages[0]!;
@@ -845,12 +867,28 @@ async function createInProcessPlaywrightDriver(
         });
     });
   };
+  activeContext.on?.("page", (nextPage: PlaywrightPage) => {
+    if (!browserAvailable) return;
+    activePage = nextPage;
+    attachPageEvents(nextPage);
+    presentingPage = Promise.resolve(nextPage.bringToFront?.());
+    void presentingPage.catch(() => {});
+  });
   const ensureActivePage = async (): Promise<PlaywrightPage> => {
+    await presentingPage;
+    const previousPage = activePage;
+    const visiblePage = await selectVisibleBrowserPage(activeContext.pages?.() ?? [], previousPage);
+    // Page events can run while visibility is being queried. Preserve a newer
+    // popup/close selection instead of overwriting it with the older result.
+    if (activePage === previousPage) activePage = visiblePage;
+    else await presentingPage;
     if (!isBrowserPageClosed(activePage)) {
       attachPageEvents(activePage);
+      await activePage.bringToFront?.();
       return activePage;
     }
     activePage = await selectInitialBrowserPage(activeContext);
+    await activePage.bringToFront?.();
     attachPageEvents(activePage);
     return activePage;
   };
@@ -896,7 +934,7 @@ async function createInProcessPlaywrightDriver(
     },
     async click(selector: string, signal?: AbortSignal) {
       const page = await ensureActivePage();
-      await withSignal(page.click(selector), signal);
+      await withSignal(clickWithVisibleCursor(page, selector, signal), signal);
     },
     async typeText(selector: string, text: string, signal?: AbortSignal) {
       const page = await ensureActivePage();
@@ -1293,6 +1331,7 @@ async function createInProcessPlaywrightDriver(
       return [...events];
     },
     async close() {
+      browserAvailable = false;
       await activeContext.close();
       await browser.close();
       if (liveViewSession) {

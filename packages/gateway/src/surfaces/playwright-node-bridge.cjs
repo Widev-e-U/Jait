@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 "use strict";
+const { clickWithVisibleCursor } = require("./browser-cursor.cjs");
 
 const { chromium } = require("playwright");
 const { createInterface } = require("node:readline");
@@ -189,6 +190,21 @@ async function launchWithFallback(strategies) {
   throw new Error(`Playwright launch failed after ${strategies.length} attempt(s): ${errors.join(" | ")}`);
 }
 
+async function selectVisiblePage(pages, fallback) {
+  let visiblePage;
+  // Multiple windows can all report focus (e.g. Chromium under Xvfb).
+  // Prefer the most recently adopted page when visibility is ambiguous.
+  for (const candidate of [fallback, ...pages.filter(page => page !== fallback)]) {
+    if (isPageClosed(candidate)) continue;
+    try {
+      const state = await candidate.evaluate(() => ({ visible: document.visibilityState === "visible", focused: document.hasFocus() }));
+      if (state.visible && state.focused) return candidate;
+      if (state.visible) visiblePage ??= candidate;
+    } catch { /* A closing or navigating tab cannot be inspected yet. */ }
+  }
+  return visiblePage ?? fallback;
+}
+
 async function main() {
   const cdpUrl = process.env.BROWSER_CDP_URL?.trim();
   const headless = process.env.BROWSER_HEADLESS !== "false";
@@ -289,9 +305,22 @@ async function main() {
         });
     });
   };
+  let presentingPage = Promise.resolve();
+  context.on("page", (nextPage) => {
+    page = nextPage;
+    attachPageEvents(nextPage);
+    presentingPage = presentPage(nextPage);
+    void presentingPage.catch(() => {});
+  });
   const ensurePage = async () => {
+    await presentingPage;
+    const previousPage = page;
+    const visiblePage = await selectVisiblePage(context.pages(), previousPage);
+    if (page === previousPage) page = visiblePage;
+    else await presentingPage;
     if (page && !isPageClosed(page)) {
       attachPageEvents(page);
+      await presentPage(page);
       return page;
     }
     page = await selectInitialPage(context);
@@ -320,7 +349,7 @@ async function main() {
       return null;
     },
     click: async (params) => {
-      await (await ensurePage()).click(String(params.selector || ""));
+      await clickWithVisibleCursor(await ensurePage(), String(params.selector || ""));
       return null;
     },
     typeText: async (params) => {
@@ -704,7 +733,9 @@ async function main() {
   });
 }
 
-main().catch((err) => {
+module.exports = { selectVisiblePage };
+
+if (require.main === module) main().catch((err) => {
   send({ event: "fatal", error: normalizeText(errorMessage(err)) });
   process.exit(1);
 });

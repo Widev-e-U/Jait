@@ -22,6 +22,7 @@ export type ToolCallBodyKind =
   | 'subagent'
   | 'threadList'
   | 'todoList'
+  | 'questionAnswers'
   | 'output'
   | 'security'
   | 'mermaidDiagram'
@@ -381,6 +382,14 @@ export function getToolImageDataUri(
   return null
 }
 
+/** Presentation only: execution names and persisted tool identities stay intact. */
+export function humanizeToolName(name: string): string {
+  const words = name.replace(/^functions[._]/, '').replace(/^mcp__/, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[._-]+/g, ' ').trim()
+  const acronyms: Record<string, string> = { ssh: 'SSH', api: 'API', url: 'URL', mcp: 'MCP', dns: 'DNS', tls: 'TLS', http: 'HTTP', github: 'GitHub', jait: 'Jait' }
+  return words.split(/\s+/).map(word => acronyms[word.toLowerCase()] ?? word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || 'Tool'
+}
+
 export function normalizeToolName(name: string): string {
   const raw = name.replace(/^functions[._]/, '')
   if (/^mcp__.+__diagram_render$/.test(raw)) return 'diagram.render'
@@ -571,6 +580,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'jait.terminal' || normalizedTool === 'execute'
     || normalizedTool.startsWith('ssh.') || normalizedTool === 'run.ssh' || normalizedTool === 'elevated.run'
 
+  if (normalizedTool === 'user.ask') return 'questionAnswers'
   if (input.status === 'pending') return 'pending'
   if (isTerminal) return 'terminal'
   if (input.status === 'success' && (normalizedTool === 'email.read' || (normalizedTool === 'email.view' && input.args.action === 'open'))) return 'emailView'
@@ -578,7 +588,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   if (normalizedTool === 'jait.link' && input.status === 'success') return 'jaitLink'
   if (isSecurityToolName(normalizedTool) && input.displayOutput) return 'security'
   if (['browser.navigate', 'browser.snapshot', 'browser.inspect', 'browser.click', 'browser.type', 'browser.scroll', 'browser.select', 'browser.wait', 'browser.screenshot'].includes(normalizedTool)) return 'browserActivity'
-  if (['preview.open', 'preview.status', 'preview.restart', 'preview.inspect'].includes(normalizedTool) || (normalizedTool === 'surfaces.start' && input.args.type === 'browser')) return 'browserActivity'
+  if (['browser.open', 'browser.status', 'browser.restart', 'preview.open', 'preview.status', 'preview.restart', 'preview.inspect'].includes(normalizedTool) || (normalizedTool === 'surfaces.start' && input.args.type === 'browser')) return 'browserActivity'
   // `image.view` owns its card. `getToolImagePath` reports image paths too, so
   // without this branch an image view was handed to the browser-screenshot
   // viewer, which ignores the inline data URI and fails with a

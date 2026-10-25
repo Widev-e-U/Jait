@@ -1,3 +1,4 @@
+import { MessageText } from '@/components/ui/message-text'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { TeamRoomMessage } from '@jait/shared'
 import { ArrowDown, ArrowLeft, ExternalLink, MoreHorizontal } from 'lucide-react'
@@ -21,7 +22,7 @@ export function TeamMessageAvatar({ message }: { message: TeamRoomMessage }) {
 export function TeamMessageBody({ content, members }: { content: string; members: readonly TeamMentionMember[] }) {
   const segments = segmentTeamMentions(content, members)
   return <p className="mt-1 whitespace-pre-wrap break-words text-sm">{segments.map((segment, index) => segment.kind === 'text'
-    ? <span key={index}>{segment.text}</span>
+    ? <span key={index}><MessageText>{segment.text}</MessageText></span>
     : <span key={index} className="inline-flex items-center gap-1 align-baseline" data-testid="team-mention">
         <AgentAvatar avatar={segment.member.avatar || 'Nova'} className="h-4 w-4 shrink-0" />
         <span className="font-medium text-primary">{segment.text}</span>

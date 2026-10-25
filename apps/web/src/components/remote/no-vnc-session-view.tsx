@@ -14,6 +14,7 @@ export interface NoVncSessionViewProps extends NoVncSessionOptions {
   hideControls?: boolean
   controlsContainer?: HTMLElement | null
   onLoad?: () => void
+  onKeyboardOpenChange?: (open: boolean) => void
 }
 
 export function resolveNoVncSessionUrl(source: string | null | undefined, options: NoVncSessionOptions = {}): string | null {
@@ -78,6 +79,7 @@ export function NoVncSessionView({
   hideControls = false,
   controlsContainer,
   onLoad,
+  onKeyboardOpenChange,
 }: NoVncSessionViewProps) {
   const resolvedSource = resolveNoVncSessionUrl(source, {
     viewerUrl,
@@ -103,7 +105,17 @@ export function NoVncSessionView({
     const target = new URL(resolvedSource, gateway)
     return target.origin === gateway.origin && target.pathname.startsWith('/noVNC/')
   })()
-  const src = usePreviewAccess(resolvedSource, revision)
+  // Our lite viewer accepts control changes over a checked message channel.
+  // Keep its URL (and preview grant) stable so switching control never reconnects.
+  // Start read-only until the parent applies the current, verified control state.
+  const connectionSource = tracksConnection ? resolveNoVncSessionUrl(resolvedSource, { viewOnly: true }) : resolvedSource
+  const src = usePreviewAccess(connectionSource, revision)
+  const liveViewOnly = viewOnly ?? (tracksConnection && resolvedSource ? new URL(resolvedSource, 'http://gateway').searchParams.has('view_only') : true)
+  const syncControl = useCallback(() => {
+    if (!src || !tracksConnection) return
+    iframeRef.current?.contentWindow?.postMessage({ type: 'jait-vnc-control', viewOnly: liveViewOnly }, new URL(src, window.location.href).origin)
+  }, [src, tracksConnection, liveViewOnly])
+  useEffect(syncControl, [syncControl])
   const retry = useCallback(() => {
     attempts.current = 0
     setConnection('connecting')
@@ -113,25 +125,36 @@ export function NoVncSessionView({
   useEffect(() => {
     attempts.current = 0
     setConnection('connecting')
-  }, [resolvedSource])
+  }, [connectionSource])
 
   useEffect(() => {
     if (!src || !tracksConnection) return
     const receive = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow ||
-          event.origin !== new URL(src, window.location.href).origin ||
-          event.data?.type !== 'jait-vnc-status') return
+          event.origin !== new URL(src, window.location.href).origin) return
+      if (event.data?.type === 'jait-vnc-keyboard') {
+        onKeyboardOpenChange?.(event.data.open === true && !viewOnly && !hideControls)
+        return
+      }
+      if (event.data?.type !== 'jait-vnc-status') return
       if (event.data.status === 'connected') {
+        syncControl()
         attempts.current = 0
         setConnection('connected')
-      } else if (event.data.status === 'disconnected') setConnection('disconnected')
+      } else if (event.data.status === 'disconnected') {
+        onKeyboardOpenChange?.(false)
+        setConnection('disconnected')
+      }
     }
     window.addEventListener('message', receive)
-    return () => window.removeEventListener('message', receive)
-  }, [src, tracksConnection])
+    return () => {
+      window.removeEventListener('message', receive)
+      onKeyboardOpenChange?.(false)
+    }
+  }, [src, tracksConnection, onKeyboardOpenChange, viewOnly, hideControls, syncControl])
 
   useEffect(() => {
-    if (!resolvedSource || !tracksConnection || connection === 'connected') return
+    if (!connectionSource || !tracksConnection || connection === 'connected') return
     if (connection === 'connecting') {
       const deadline = setTimeout(() => setConnection('disconnected'), 10000)
       return () => clearTimeout(deadline)
@@ -143,7 +166,7 @@ export function NoVncSessionView({
       setRevision(value => value + 1)
     }, reconnectDelayMs ?? Math.min(1000 * 2 ** attempts.current, 8000))
     return () => clearTimeout(timer)
-  }, [connection, resolvedSource, revision, tracksConnection, reconnect, reconnectDelayMs])
+  }, [connection, connectionSource, revision, tracksConnection, reconnect, reconnectDelayMs])
 
   useEffect(() => {
     const resume = () => {
@@ -177,7 +200,7 @@ export function NoVncSessionView({
         tabIndex={hideControls ? -1 : undefined}
         className={className}
         sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-        onLoad={() => { if (!tracksConnection) setConnection('connected'); onLoad?.() }}
+        onLoad={() => { syncControl(); if (!tracksConnection) setConnection('connected'); onLoad?.() }}
       />}
       {tracksConnection && connection !== 'connected' && <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-background/95 p-4 text-center text-sm">
         <p role="status">{connection === 'connecting' ? 'Connecting to browser…' : 'Browser connection interrupted.'}</p>

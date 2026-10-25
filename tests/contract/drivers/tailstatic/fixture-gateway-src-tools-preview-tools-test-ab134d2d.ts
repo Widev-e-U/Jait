@@ -1,7 +1,7 @@
 // Translated fixture from packages/gateway/src/tools/preview-tools.test.ts; expected literals are in tail_static.rs.
 import { createPreviewInspectTool, createPreviewOpenTool, createPreviewRestartTool } from "../../../../packages/gateway/src/tools/preview-tools.js";
 import type { ToolContext } from "../../../../packages/gateway/src/tools/contracts.js";
-import { buildToolSchemas } from "../../../../packages/gateway/src/tools/agent-loop.js";
+import { buildToolSchemas, buildTieredToolSchemas } from "../../../../packages/gateway/src/tools/agent-loop.js";
 import { createToolRegistry } from "../../../../packages/gateway/src/tools/index.js";
 import { SurfaceRegistry } from "../../../../packages/gateway/src/surfaces/registry.js";
 import { vi } from '../tailmock.ts';
@@ -57,8 +57,16 @@ await (async()=>{
     const schemas = buildToolSchemas(tools);
     const names = new Set(schemas.map((schema) => schema.function.name));
 
-    __jait_capture(0, (names.has("preview_open")));
-    __jait_capture(1, (names.has("preview_start")));
+    __jait_capture(0, names.has("browser_open"));
+    __jait_capture(1, names.has("preview_open"));
+    __jait_capture(2, tools.get("preview.open"));
+    __jait_capture(3, tools.list().some(tool => tool.name.startsWith("preview.")));
+    __jait_capture(4, names.has("preview_start"));
+    const resumed = buildTieredToolSchemas(tools, undefined, { activatedToolNames: ["preview.open"] });
+    __jait_capture(5, resumed.some(schema => schema.function.name === "browser_open"));
+    __jait_capture(6, resumed.some(schema => schema.function.name === "preview_open"));
+    __jait_capture(7, tools.isExecutable("browser.open", new Set(["preview.open"])));
+    __jait_capture(8, tools.isExecutable("preview.open", new Set(["browser.open"])));
   
 })();
 

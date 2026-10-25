@@ -100,6 +100,230 @@ do not create a file for every historical TypeScript helper in advance. Shared T
 schemas remain the behavioral reference; add Rust DTO mappings with contract
 checks, then automate schema/client generation after the format is established.
 
+## Session ownership and concurrency
+
+Review date: 2026-10-24. This review extends the foundation decision for agents working on R09–R27.
+The design below is the migration direction; it is not a claim that the full
+session supervisor, task tree or parallel tool scheduler exists. Keep observable
+TypeScript behavior under differential tests. A change to ordering, overload,
+disconnect, retry or recovery behavior needs an explicit compatibility decision
+and client tests; do not silently change a contract while refreshing fingerprints.
+
+### Starting points in the current code
+
+| Evidence | Existing behavior / opportunity |
+| --- | --- |
+| [TypeScript chat route](../packages/gateway/src/routes/chat.ts) | History, abort controllers, CLI provider sessions, subscribers, event buffers, flush timers and steering occupy separate maps. Consolidate lifecycle rules rather than translating every map into a shared mutex |
+| [Native turn manager](../packages/gateway-rust/src/runtime/chat_sessions.rs) | Per-session exclusion and global semaphore admission already exist. The lease spans history loading, generation, tools and persistence; it is not a complete session owner |
+| [Native chat adapter](../packages/gateway-rust/src/routes/chat.rs) | HTTP also tracks active turns, cancellation and completion. Compose this with domain ownership so HTTP, tools and background entrypoints cannot develop different lifecycle rules |
+| [Native turn coordinator](../packages/gateway-rust/src/runtime/chat_turn.rs) | Tool calls currently run sequentially with authenticated context, cancellation and bounded results. Preserve this safe default while defining which effects can overlap |
+| [Native event bus](../packages/gateway-rust/src/runtime/chat_events.rs) and [turn store](../packages/gateway-rust/src/runtime/chat_store.rs) | Committed events have durable IDs; subscription starts before replay. Preserve this ordering and deduplication when changing fan-out or ownership |
+| [Database worker](../packages/gateway-rust/src/db/worker.rs) and [blocking lane](../packages/gateway-rust/src/runtime/blocking.rs) | Bounded work admission and dedicated SQL execution are reusable foundations. Do not create another pool or worker for every session |
+
+These are source observations from this review, not new parity or performance
+results. Audit the live ledger and source fingerprints before claiming coverage.
+
+### One owner per active session
+
+Use a runtime-owned session supervisor and one owner task per active session,
+created lazily and evicted after bounded idle cleanup. A session is durable domain
+state; a browser connection is a subscriber, and a turn is a supervised unit of
+work. A provider/CLI session is a replaceable resource with its own lifetime.
+Several subscribers must not create several turns or provider sessions.
+
+The owner holds the active turn identity, lifecycle phase, provider handle,
+steering/queued-message state, cancellation handle and latest committed event
+cursor. Database rows remain authoritative for durable state. Keep the global
+registry small: authenticated identity to owner handle, not full histories or
+independent copies of every lifecycle field. Use `(owner_id, session_id)` as the
+internal key and retain effect-boundary ownership checks.
+
+```mermaid
+flowchart LR
+    Entry[HTTP / tools / jobs] --> Auth[Authenticate and authorize]
+    Auth --> Supervisor[Session supervisor and admission]
+    Supervisor --> Owner[One owner per active session]
+    Owner --> Turn[Supervised turn task]
+    Turn --> Provider[Provider adapter]
+    Turn --> Tools[Scoped tool executor]
+    Turn --> Store[Bounded SQLite worker]
+    Store --> Events[Committed events and replay]
+    Events --> Clients[Bounded subscribers]
+    Turn --> Owner
+```
+
+Use typed commands over a bounded `mpsc` mailbox, `oneshot` replies for individual
+requests and `watch` for latest status. The command names and Rust types are
+implementation choices, not a new public protocol. Do not make the owner await
+an entire provider turn inside a mailbox handler: it must continue processing
+cancel, steering, approval responses and shutdown. Run the turn as a tracked
+child and return typed progress/completion messages. Keep cancellation available
+when the ordinary mailbox is full, using a token or separately bounded control
+path; cap control requests and test starvation.
+
+Represent lifecycle with enums and checked transitions: idle, running, waiting
+for approval, cancelling, finalizing and terminal outcome. Allow at most one
+mutating turn per session while independent sessions make progress concurrently.
+Attach a generation/turn ID to callbacks; stale provider completion cannot update
+a replacement turn. Validate queued messages against the current revision before
+consuming them. Finish persistence and effect cleanup before declaring the turn
+idle and admitting its successor.
+
+Document disconnect behavior per entrypoint. Preserve existing POST stream
+cancellation and SSE replay contracts until explicitly changed. Continuing work
+after a browser disconnect is a separate product choice requiring durable
+ownership, visible status and a working cancel path. A session fork copies only
+reviewed durable conversation state; it gets new lifecycle/provider handles and
+does not inherit active loop state, cancellation or approval authority.
+
+### Where concurrency belongs
+
+| Area | Migration direction | Acceptance evidence required |
+| --- | --- | --- |
+| Independent sessions | Share the runtime and I/O clients; permit concurrent turns under global, owner and provider budgets. Avoid a global session mutex spanning awaits | Hold session A's provider open; B progresses. Concurrent sends to A follow the existing busy/queue contract and never start two turns |
+| Tools within a turn | Sequential by default. Add explicit effect/resource metadata before opting independent reads into bounded concurrency; reconcile results by original call ID/order | Two permitted reads overlap; conflicting writes and unknown tools stay ordered. Denied calls have no effect; failure/cancel leaves a terminal record for every admitted call |
+| CPU and synchronous I/O | Async for network waits; admitted blocking jobs for SQL, hashing, compression and large parsing. Use a CPU pool such as Rayon only after profiling justifies it | Saturate CPU/SQL work while health, cancel and streams remain responsive; measure actual CPU parallelism and queue wait |
+| Background work | Own durable jobs, assessments, monitors and node tasks under their domain supervisor. Propagate authorization, expiry, vantage and budgets independently of a chat subscriber | Disconnect/restart does not silently lose a job or expand its scope. Cancellation and shutdown account for its children |
+
+Concurrent futures alone do not guarantee execution on multiple CPU cores.
+`join!`/`select!` poll branches within a task; spawned Tokio tasks may execute on
+different runtime workers. Blocking work needs its own bounded execution lane.
+More tasks cannot reduce provider latency, SQLite writer serialization or remote
+rate limits by themselves.
+
+Tool metadata must include conflicting resources (repository/worktree, terminal,
+node, target, config), not just a read/write label. Reads can still consume rate
+budgets or observe inconsistent state. Preserve original consent for each effect,
+recheck policy immediately before execution, and never reorder dependent actions
+based only on a model's parallel-call suggestion. A later completion can be
+buffered within a byte budget to preserve public ordering; document any intentional
+ordering change and test cancellation during partial completion.
+
+### Capacity ambition: thousands of concurrent sessions and beyond
+
+Use the [capacity roadmap](gateway-rust-capacity.md) to distinguish connected
+sessions, active HTTP provider turns and heavyweight execution. The maintainer's
+goal is the highest sustainable concurrency, including many thousands and eventually
+more than 10,000 sessions where resources allow. Treat 500 as an early milestone;
+validate 1,000 → 2,500 → 5,000 → 10,000 and higher with separate workload curves,
+resource budgets and load/soak evidence. Keep control responsive, ownership exclusive,
+progress fair and cleanup bounded throughout.
+
+The roadmap records current source limits, DB projection/client reuse priorities,
+aggregate resource budgets and future distribution review requirements. Optimize
+the local gateway first; multiple gateway owners need a separate ownership and
+recovery decision. These targets are proposed and unmeasured; raising constants
+alone earns neither performance nor migration credit.
+
+### Further Rust recommendations
+
+1. **Own every task and resource.** Use a cancellation hierarchy from runtime to
+   domain to turn to effect, with child cancellation that does not cancel siblings
+   or parents. Supervise tasks with `JoinSet` or `TaskTracker` plus explicit error
+   observation; do not detach task handles without a lifecycle owner. An async
+   task abort, token cancellation or dropped HTTP future does not prove that a
+   child process, remote request or started blocking operation stopped. Retain
+   capacity until the actual work exits; kill/reap process trees through the
+   existing execution adapter and record uncertain completion.
+2. **Keep cancellation safe around commits.** Review every `select!`/timeout
+   boundary for partial reads, writes, lost queue position and external effects.
+   Once a transaction begins, let the worker report a definitive outcome or mark
+   it unknown; a caller timing out is not a rollback acknowledgement. Test a new
+   turn racing a prior turn's cancelled-but-finishing write. Shutdown closes
+   admission, signals children, finishes bounded persistence/cleanup and joins
+   workers within the documented process deadline. Reconcile per-domain deadlines
+   with that total deadline rather than adding them together accidentally.
+3. **Budget bytes and waiting, not just task counts.** Bound mailbox items, message
+   bytes, subscriber queues, event size, history windows, tool output, parser
+   nesting/frame sizes and retained task results. Bound queued admission as well
+   as running work. Give owners/providers fair shares so one bulk session cannot
+   starve cancellation or interactive traffic. Do not hold a CPU/DB permit while
+   waiting for a human approval; resource reservations need explicit lifetimes.
+4. **Separate durable events from live delivery.** Preserve commit-before-publish,
+   durable sequence IDs, subscribe-before-replay and cursor deduplication. A slow
+   subscriber must follow an explicit lag/disconnect/replay policy, with retained
+   history gaps visible. Do not coalesce or drop committed events. If transient
+   token deltas are coalesced, distinguish them from persisted events and preserve
+   the final transcript. Test the commit-to-publication crash window and replay
+   after restart; add an outbox only if a delivery contract requires one.
+5. **Keep SQLite's writer simple.** Reuse the bounded worker, short transactions,
+   batching and prepared statements. Add a small read-only connection lane only
+   after measured contention warrants it, retaining per-connection pragmas,
+   ownership checks and snapshot semantics. WAL permits concurrent readers with
+   a writer, but only one writer at a time. Bound read transactions and inspect
+   checkpoint/WAL growth; do not lower durability settings to meet latency goals.
+6. **Make effect authority explicit in types.** Carry server-constructed owner,
+   session, action, project root, origin, runtime mode and cancellation context
+   through provider/tool/node adapters. Extend with typed assessment scope,
+   expiry, vantage and budgets where needed. Model-supplied JSON never constructs
+   trusted authority. Use enums/newtypes at validated boundaries, domain error
+   types and explicit wire DTO conversion. Rust memory safety does not enforce
+   authorization, SSRF, redirects, DNS scope or consent freshness.
+7. **Treat retries as recovery decisions.** Give operations stable identities;
+   record started/completed/interrupted/unknown outcomes durably where recovery
+   requires it. Reconcile on restart before resuming. Do not automatically retry a
+   tool mutation or an unanswered remote effect merely because its future failed.
+   A local event log alone cannot provide exactly-once external effects. Forks,
+   steering and stale approvals must not reuse an old action's authority.
+8. **Use immutable snapshots and narrow locks.** Capture reviewed provider/tool/
+   policy configuration with a revision for each turn, while still rechecking
+   revocation and expiring authority at effects. Share bounded immutable buffers
+   (`Arc`/`Bytes` where useful) instead of cloning histories per subscriber. A
+   short low-contention `std::sync::Mutex` is appropriate for simple registries;
+   never hold it across an await. Add sharding or concurrent maps only after
+   contention measurements; a map replacement does not solve lifecycle ownership.
+9. **Keep adapters and builds deliberate.** Preserve the modular monolith and
+   explicit I/O seams; avoid an actor framework, per-session OS threads, premature
+   crate splitting, custom allocators or unsafe fast paths without evidence.
+   Review added dependency features, MSRV, target support and cancellation
+   behavior; use the locked dependency version's API. Preserve missing/null,
+   Unicode, numeric and error-envelope behavior at Serde boundaries, with shared
+   contract tests before generating client schemas.
+10. **Measure queues and failure behavior.** Propagate redacted correlation fields
+    for session/turn/action/node; track queue delay, provider wait, time to first
+    token, tool duration, DB latency, event lag, in-flight work and cleanup time.
+    Keep IDs out of unbounded metric labels and prompts/evidence/secrets out of
+    logs. Match TypeScript workloads and report tails, RSS, task/thread/FD/child
+    counts and coverage gaps. Performance claims require measurements, not the
+    presence of async Rust or additional threads.
+
+### Migration order and review evidence
+
+Do this incrementally in the existing domain slices; it does not require stopping
+all ports for a gateway rewrite. Each slice records the owner, resources, bounds,
+cancellation/cleanup behavior, compatibility impact and executable evidence.
+
+| Priority / gates | Concrete slice | Checks before claiming completion |
+| --- | --- | --- |
+| P0 · R09/R12/R13/R15 | Session supervisor and lifecycle composition around existing admission/store/events | Same-session race, cross-session progress, stale callbacks, fork isolation, steering and approval while provider waits, cancel with a full mailbox, idle eviction racing a new command |
+| P0 · R06/R15/R17/R20 | Tracked turn/effect tasks and cancellation hierarchy | Disconnect, provider hang, cancellation during SQL/process/remote work, sibling isolation, no effect after revoked/expired consent, drain deadline and zero orphan descendants |
+| P0 · R05/R10/R12/R13 | Stream and database budgets with durable replay | Slow subscriber, byte saturation, subscribe/replay boundary, duplicate/outdated cursor, crash after commit before publish, restart and retained-history gap |
+| P1 · R15/R16/R18/R21 | Explicit independent-tool scheduling and fair admission | Resource conflicts, preserved call/result ordering, bounded reorder buffer, partial failure, owner/provider quotas, cancellation before queued effects start |
+| P1 · R07/R14/R19/R22 | Recovery and revision-aware provider/node/job ownership | Remote reconnect, stale provider callback, revoked authorization, expired scheduled scope, ambiguous effect outcome, no automatic mutation retry |
+| P1 · R08/R29/R30 | Matched load and concurrency regression gates | Concurrent sessions, approvals, slow providers, CPU/DB saturation and overload; compare p95/p99, RSS, queue delay and shutdown with TypeScript |
+
+Prefer deterministic barriers, fake providers/processes and controlled clocks to
+sleep-based race tests. Retain real HTTP/SSE/WebSocket and process-level tests for
+the boundaries fakes cannot prove. Use property tests or Loom for small isolated
+state machines when useful; they do not replace differential/client/recovery
+checks. Demonstrate relevant tests fail under deliberate ordering, authorization,
+cancellation or budget mutations, then restore and rerun with fresh fingerprints.
+No documentation, scaffold or internal refactor earns additional component credit.
+
+### Primary references checked for this review
+
+These references establish library semantics. The session design and priorities
+above are recommendations for Jait inferred from those semantics and local code.
+They do not require dependency upgrades.
+
+- [Tokio shared state](https://tokio.rs/tokio/tutorial/shared-state): choosing a short mutex or an owning task, and avoiding guards across awaits.
+- [Tokio bounded channels](https://docs.rs/tokio/latest/tokio/sync/mpsc/index.html): backpressure, channel closure and draining.
+- [Tokio select](https://docs.rs/tokio/latest/tokio/macro.select.html): concurrency within one task, cancellation safety and fairness.
+- [Tokio JoinSet](https://docs.rs/tokio/latest/tokio/task/struct.JoinSet.html): completion order and abort-on-drop semantics; ordered application results need their own reconciliation.
+- [Tokio blocking work](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html): CPU admission and why started blocking work cannot be aborted.
+- [Tokio graceful shutdown](https://tokio.rs/tokio/topics/shutdown): signal, cancellation and waiting for owned tasks.
+- [SQLite WAL concurrency](https://www.sqlite.org/wal.html#concurrency): concurrent readers, one writer and checkpoint interactions.
+
 ## Performance rules
 
 1. Start serving after required local initialization. Network discovery, optional

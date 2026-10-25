@@ -1,3 +1,4 @@
+import { isToolDisabled, toolPolicyNames } from "./tool-names.js";
 import { applyContextCaching } from "../services/context-cache.js";
 import { contextBudget, contextBudgetFromJson, boundSummaryInput, captureUsageAnchor, estimateAnchoredContext, pruneToolContext, compactionPlan, shouldCommitCompaction, priceTokenUsage, type ContextBudget, type UsageAnchor, type TokenPrices } from "../services/context-budget.js";
 import { loadContextState, saveContextState, projectToolEvidence } from "./context-evidence.js";
@@ -466,22 +467,22 @@ export interface SteeringMessage extends SteeringMessageMeta {
 
 /**
  * Steering lets the user (or system) inject guidance into the agent
- * loop while it's running. The steered message gets appended to the
- * conversation as a system message before the next LLM call.
+ * loop while it's running. The native loop appends guidance before its next
+ * LLM call; external providers can accept it through their steering extension.
  *
- * Steering is deliberately *deferred*: a message handed to `steer()` while a
- * tool-call round is in flight stays pending (the client keeps rendering it as a
- * queued, not-yet-sent message) and is only drained — and only then reported via
- * a `steering` event — once that round has finished.
+ * A message stays pending until the native loop drains it or the provider
+ * acknowledges it. Only then does a `steering` event promote the queued message
+ * into the client transcript.
  */
 export class SteeringController {
   private queue: SteeringMessage[] = [];
+  private pendingListeners = new Set<() => void>();
 
   /**
    * Inject a steering message into the loop.
    *
-   * The message is only *pending* until the running tool-call round finishes
-   * and the loop reaches its next injection boundary. `queuedMessageId` lets the
+   * The message is pending until the next loop boundary or provider
+   * acknowledgement. `queuedMessageId` lets the
    * originating client match this pending entry to the queue item it renders as
    * "waiting to be sent", so the transcript marker only appears once the steer
    * was actually consumed by the loop.
@@ -493,6 +494,24 @@ export class SteeringController {
       ...(meta?.displayContent ? { displayContent: meta.displayContent } : {}),
       ...(meta?.queuedMessageId ? { queuedMessageId: meta.queuedMessageId } : {}),
     });
+    for (const listener of this.pendingListeners) listener();
+  }
+
+  /** Observe arrivals without consuming them before a provider acknowledges. */
+  onPending(listener: () => void): () => void {
+    this.pendingListeners.add(listener);
+    return () => { this.pendingListeners.delete(listener); };
+  }
+
+  peek(): SteeringMessage | undefined {
+    return this.queue[0];
+  }
+
+  consume(message: SteeringMessage): boolean {
+    const index = this.queue.indexOf(message);
+    if (index < 0) return false;
+    this.queue.splice(index, 1);
+    return true;
   }
 
   /** Drain all pending steering messages (called by the loop) */
@@ -743,6 +762,9 @@ const SEQUENTIAL_TOOLS = new Set([
   "jait.todos",
   "voice.speak",
   "maintenance.run",
+  "browser.open",
+  "browser.restart",
+  "browser.close",
   "preview.open",
   "preview.restart",
   "preview.stop",
@@ -1409,12 +1431,12 @@ export function buildTieredToolSchemas(
 
   const includedNames = new Set(tools.map((tool) => tool.name));
   const includeTool = (tool: ToolDefinition | undefined) => {
-    if (!tool || includedNames.has(tool.name) || disabledTools?.has(tool.name)) return;
+    if (!tool || includedNames.has(tool.name) || isToolDisabled(tool.name, disabledTools)) return;
     tools.push(tool);
     includedNames.add(tool.name);
   };
 
-  for (const name of options?.activatedToolNames ?? []) includeTool(registry.get(name));
+  for (const name of options?.activatedToolNames ?? []) includeTool(registry.get(toolPolicyNames(name)[0]!) ?? registry.get(name));
   if (options?.query?.trim()) {
     const selectionLimit = options.selectionLimit ?? 0;
     if (selectionLimit > 0) for (const tool of registry.selectForLLM(options.query, disabledTools, selectionLimit)) includeTool(tool);
@@ -4659,7 +4681,7 @@ export async function runAgentLoop(
                 const oaiName = toOpenAIName(match.name);
                 // In ask mode, only add read-only tools
                 if (mode === "ask" && !ASK_MODE_TOOLS.has(match.name)) continue;
-                if (disabledTools?.has(match.name)) continue;
+                if (isToolDisabled(match.name, disabledTools)) continue;
                 const discoveredSchemas = toolDefsToSchemas([{
                   name: match.name,
                   description: match.description,

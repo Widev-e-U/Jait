@@ -13,7 +13,7 @@ export function BrowserViewLayout({ addressBar, children, compact = false }: {
     <div data-browser-layout className="flex h-full min-h-0 min-w-0 flex-col bg-background">
       {addressBar && (
         <div aria-hidden={compact || undefined} inert={compact || undefined}
-          className={`grid shrink-0 overflow-hidden transition-[grid-template-rows,opacity] [transition-duration:150ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${compact ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}>
+          className={`relative z-40 grid shrink-0 transition-[grid-template-rows,opacity] [transition-duration:150ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${compact ? 'grid-rows-[0fr] overflow-hidden opacity-0' : 'grid-rows-[1fr] overflow-visible opacity-100'}`}>
           <div className="min-h-0"><BrowserAddressBar {...addressBar} toolsOpen={toolsOpen} onToggleTools={() => setToolsOpen(!toolsOpen)} /></div>
         </div>
       )}

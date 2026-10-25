@@ -354,8 +354,14 @@ impl AssessmentService {
         Err("Assessment not found".into())
     }
     pub async fn history(&self, operator: &str) -> Result<Value, String> {
+        self.history_detailed(operator).await.map_err(|e| e.message)
+    }
+    pub async fn history_detailed(
+        &self,
+        operator: &str,
+    ) -> Result<Value, super::store::HistoryFailure> {
         if let Some(store) = &self.0.store {
-            let history = store.history(operator.into()).await?;
+            let history = store.history_detailed(operator.into()).await?;
             return Ok(json!({"scopes":history.scopes,"runs":history.runs}));
         }
         let state = self.0.state.lock().await;

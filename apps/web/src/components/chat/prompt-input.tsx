@@ -1620,6 +1620,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.nativeEvent.isComposing) return
+    // Escape must dismiss the suggestion menus even while a send is in flight;
+    // the disabled-composer guard below used to swallow it and leave them open.
+    if (e.key === 'Escape' && (mentionOpen || slashOpen)) {
+      e.preventDefault()
+      e.stopPropagation()
+      setMentionOpen(false)
+      setSlashOpen(false)
+      return
+    }
     if (composerDisabled || submitLoading) return
     // Intercept undo/redo to prevent browser native undo corruption
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
@@ -2394,7 +2403,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       </div>
 
       {/* @ mention popup */}
-      <Popover open={mentionOpen}>
+      <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
         <PopoverAnchor asChild>
           <span aria-hidden className="pointer-events-none absolute left-3 top-0 h-0 w-0" />
         </PopoverAnchor>
@@ -2446,7 +2455,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       </Popover>
 
       {/* `/` slash-command (skills) popup */}
-      <Popover open={slashOpen}>
+      <Popover open={slashOpen} onOpenChange={setSlashOpen}>
         <PopoverAnchor asChild>
           <span aria-hidden className="pointer-events-none absolute left-3 top-0 h-0 w-0" />
         </PopoverAnchor>

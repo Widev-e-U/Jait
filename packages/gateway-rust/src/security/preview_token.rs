@@ -14,7 +14,7 @@ pub fn sign_preview_token_at(
     now: u64,
 ) -> Result<String, Error> {
     if secret.is_empty() {
-        return Err("Data provided to an operation does not meet requirements".into());
+        return Err("Zero-length key is not supported".into());
     }
     let mut header = Header::new(Algorithm::HS256);
     header.typ = None;

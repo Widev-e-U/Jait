@@ -699,7 +699,7 @@ pub(crate) async fn parse_body(
     }
     Err(error(
         415,
-        json!({"statusCode":415,"code":"FST_ERR_CTP_INVALID_MEDIA_TYPE","error":"Unsupported Media Type","message":format!("Unsupported Media Type: {content_type}")}),
+        json!({"statusCode":415,"code":"FST_ERR_CTP_INVALID_MEDIA_TYPE","error":"Unsupported Media Type","message":"Unsupported Media Type"}),
     ))
 }
 

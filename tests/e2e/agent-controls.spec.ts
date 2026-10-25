@@ -162,14 +162,16 @@ for (const width of [1280, 390, 320]) {
     if (width < 768) {
       await scope.getByRole('button', { name: 'Open menu', exact: true }).click()
       const drawer = page.getByRole('dialog', { name: 'Navigation' })
-      const drawerStop = drawer.getByRole('button', { name: 'Agent controls', exact: true })
-      await expect(drawerStop).toBeVisible()
+      await expect(drawer.getByRole('button', { name: 'Agents', exact: true })).toBeVisible()
+      // Account and agent controls live in the mobile header.
+      await expect(drawer.getByRole('button', { name: 'Agent controls', exact: true })).toHaveCount(0)
+      await expect(drawer.getByRole('button', { name: 'Account settings' })).toHaveCount(0)
       await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/', `agent-control-stack-drawer-${width}.png`) })
-      expect((await drawerStop.boundingBox())!.y).toBeLessThan((await drawer.getByRole('button', { name: 'Account settings' }).boundingBox())!.y)
-      await drawerStop.click()
+      await drawer.getByRole('button', { name: 'Close menu', exact: true }).click()
+      await expect(drawer).not.toBeInViewport()
+      await stop.click()
       await page.getByRole('menuitem', { name: 'Go to Agents', exact: true }).click()
       await expect(page.getByRole('heading', { name: 'Agents page', exact: true })).toBeVisible()
-      await expect(drawer).not.toBeInViewport()
     }
   })
 }
@@ -194,7 +196,6 @@ test.describe('mobile header spacing', () => {
       const micBox = (await mic.boundingBox())!
       const accountBox = (await account.boundingBox())!
       const menuBox = (await menu.boundingBox())!
-      const headerBox = (await header.boundingBox())!
       expect(micBox.height).toBe(40)
       expect(accountBox.height).toBe(40)
       expect(menuBox.height).toBe(40)

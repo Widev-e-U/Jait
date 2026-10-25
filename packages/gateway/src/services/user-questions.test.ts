@@ -92,3 +92,44 @@ describe("UserQuestionService", () => {
   });
 
 });
+
+
+describe("detached question continuation", () => {
+  it.each(["user.ask", "browser.handoff"])("wakes an idle %s once and retains its result", async (tool) => {
+    vi.useFakeTimers();
+    const service = new UserQuestionService();
+    const wake = vi.fn();
+    service.onDetachedResolved = wake;
+    const id = service.startResumable({ sessionId: "chat", userId: "owner", requestedBy: tool,
+      questions: [{ id: "browser", header: "Browser", question: "Finish in the browser" }] });
+    const wait = service.waitForAnswer(id, "chat", "owner");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(await wait).toEqual({ status: "pending" });
+    expect(wake).not.toHaveBeenCalled();
+    expect(service.submit(id, { answers: {} }, "other")).toBe(false);
+    expect(wake).not.toHaveBeenCalled();
+    const result = { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } };
+    expect(service.submit(id, result, "owner")).toBe(true);
+    expect(wake).toHaveBeenCalledTimes(1);
+    expect(wake.mock.calls[0]![0]).toMatchObject({ id, sessionId: "chat", requestedBy: tool, status: "submitted" });
+    expect(service.submit(id, result, "owner")).toBe(false);
+    expect(await service.waitForAnswer(id, "other-chat", "owner")).toEqual({ status: "missing" });
+    expect(await service.waitForAnswer(id, "chat", "owner")).toEqual({ status: "answered", result });
+    expect(wake).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes an attached wait directly without starting another turn", async () => {
+    vi.useFakeTimers();
+    const service = new UserQuestionService();
+    const wake = vi.fn();
+    service.onDetachedResolved = wake;
+    const id = service.startResumable({ sessionId: "chat", questions: [] });
+    const first = service.waitForAnswer(id, "chat");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await first;
+    const attached = service.waitForAnswer(id, "chat");
+    service.cancel(id);
+    expect(await attached).toEqual({ status: "answered", result: null });
+    expect(wake).not.toHaveBeenCalled();
+  });
+});

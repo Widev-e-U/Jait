@@ -1,3 +1,4 @@
+import type { UserQuestionService } from "../services/user-questions.js";
 import { projectToolEvidence } from "../tools/context-evidence.js";
 import { projectModelData, boundModelData } from "../tools/model-result.js";
 /**
@@ -30,6 +31,7 @@ type McpToolExecutor = (
 ) => Promise<ToolResult>;
 
 interface McpDeps {
+  userQuestionService?: UserQuestionService;
   toolRegistry: ToolRegistry;
   toolExecutor?: McpToolExecutor;
   config: AppConfig;
@@ -371,7 +373,21 @@ export function listToolsForMcp(
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
-  const { toolRegistry, toolExecutor, config, sessionService, userService, sessionState, threadService } = deps;
+  const { toolRegistry, config, sessionService, userService, sessionState, threadService } = deps;
+  const toolExecutor: McpToolExecutor = async (name, input, context) => {
+    const pending = deps.userQuestionService?.listPending(context.sessionId, context.userId)
+      .find(question => question.userId === (context.userId ?? null));
+    const args = input as { requestId?: unknown } | null;
+    const resumeTool = pending?.requestedBy === "browser.handoff" ? "browser.handoff" : "user.ask";
+    const recoveryTool = ["context.read", "tools.search", "jait.catalog"].includes(name);
+    if (pending && !recoveryTool && !(name === resumeTool && args?.requestId === pending.id)) {
+      return { ok: false,
+        message: `Waiting for the user's answer. Call ${resumeTool} with only requestId=${JSON.stringify(pending.id)}; other actions are paused until answered or cancelled.`,
+        data: { status: "pending", requestId: pending.id },
+      };
+    }
+    return deps.toolExecutor ? deps.toolExecutor(name, input, context) : toolRegistry.get(name)!.execute(input, context);
+  };
 
   // Callback for post-tool-execution side effects (e.g., thread todo activities)
   const onToolExecuted: McpToolExecutedCallback = (toolName, result, context) => {

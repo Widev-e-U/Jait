@@ -14,7 +14,6 @@ import { test, expect } from '@playwright/test'
 import { registerAgentTestUser } from './helpers/agent-user'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const supportsInteractiveExecute = process.platform === 'win32'
 
 test.beforeEach(async ({ request }) => {
   await registerAgentTestUser(request, API_URL, `terminal-${Date.now()}-${Math.random().toString(36).slice(2)}`, 'terminal-test-password')
@@ -48,6 +47,37 @@ async function createTerminal(
   }
 }
 
+/** Execute as the test user, approving only this owned session's exact echo. */
+async function executeTerminalTool(
+  request: import('@playwright/test').APIRequestContext,
+  sessionId: string,
+  command: string,
+): Promise<import('@playwright/test').APIResponse> {
+  const execution = request.post(`${API_URL}/api/tools/execute`, {
+    data: {
+      tool: 'terminal.run', input: { command, timeout: 15000 },
+      sessionId, projectRoot: process.cwd(), consentTimeoutMs: 15000,
+    },
+  })
+  let finished = false
+  void execution.then(() => { finished = true }, () => { finished = true })
+  await expect.poll(async () => {
+    if (finished) return true
+    const pending = await request.get(`${API_URL}/api/consent/pending/${sessionId}`)
+    expect(pending.ok()).toBeTruthy()
+    const { requests } = await pending.json() as { requests: Array<{ id: string; toolName: string; sessionId: string; preview: { command?: string } }> }
+    const approval = requests.find(item => item.toolName === 'terminal.run' && item.sessionId === sessionId)
+    if (!approval) return false
+    expect(approval.preview.command).toBe(command)
+    const approved = await request.post(`${API_URL}/api/consent/${approval.id}/approve`, {
+      data: { reason: 'Approve the owned E2E echo fixture command' },
+    })
+    expect(approved.ok()).toBeTruthy()
+    return true
+  }, { timeout: 10000 }).toBe(true)
+  return execution
+}
+
 test.describe('Terminal execution', () => {
   // Run sequentially within this describe — tests don't share state but
   // we avoid spawning too many terminals in parallel.
@@ -72,7 +102,6 @@ test.describe('Terminal execution', () => {
   })
 
   test('executes echo command and gets output', async ({ request }) => {
-    test.skip(!supportsInteractiveExecute, 'Interactive execute assertions are PowerShell-only in this suite.')
     const { id: terminalId } = await createTerminal(request)
 
     const res = await request.post(`${API_URL}/api/terminals/${terminalId}/execute`, {
@@ -94,7 +123,6 @@ test.describe('Terminal execution', () => {
   })
 
   test('returns structured result for failing command', async ({ request }) => {
-    test.skip(!supportsInteractiveExecute, 'Interactive execute assertions are PowerShell-only in this suite.')
     const { id: terminalId } = await createTerminal(request)
 
     // Use an invalid command that should fail across shells/platforms.
@@ -107,8 +135,9 @@ test.describe('Terminal execution', () => {
     expect(res.ok()).toBeTruthy()
 
     const body = await res.json()
-    expect(typeof body.ok).toBe('boolean')
+    expect(body.ok).toBe(false)
     expect(typeof body.exitCode).toBe('number')
+    expect(body.exitCode).not.toBe(0)
     expect(body.output).toBeTruthy()
 
     // Cleanup
@@ -116,7 +145,6 @@ test.describe('Terminal execution', () => {
   })
 
   test('terminal persists state between commands', async ({ request }) => {
-    test.skip(!supportsInteractiveExecute, 'Interactive execute assertions are PowerShell-only in this suite.')
     const { id: terminalId, shell } = await createTerminal(request)
     const powershell = /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell)
 
@@ -169,18 +197,8 @@ test.describe('Terminal execution', () => {
   })
 
   test('terminal.run tool executes and returns terminalId', async ({ request }) => {
-    test.skip(!supportsInteractiveExecute, 'Interactive execute assertions are PowerShell-only in this suite.')
-    const res = await request.post(`${API_URL}/api/tools/execute`, {
-      data: {
-        tool: 'terminal.run',
-        input: {
-          command: 'echo tool-run-test-output',
-          timeout: 15000,
-        },
-        sessionId: `e2e-tool-run-${Date.now()}`,
-        projectRoot: process.cwd(),
-      },
-    })
+    const sessionId = await createOwnedSession(request)
+    const res = await executeTerminalTool(request, sessionId, 'echo tool-run-test-output')
     expect(res.ok()).toBeTruthy()
 
     const body = await res.json()
@@ -195,27 +213,14 @@ test.describe('Terminal execution', () => {
   })
 
   test('terminal.run reuses same terminal for same session', async ({ request }) => {
-    test.skip(!supportsInteractiveExecute, 'Interactive execute assertions are PowerShell-only in this suite.')
-    const sessionId = `e2e-reuse-${Date.now()}`
+    const sessionId = await createOwnedSession(request)
 
-    const res1 = await request.post(`${API_URL}/api/tools/execute`, {
-      data: {
-        tool: 'terminal.run',
-        input: { command: 'echo cmd-1' },
-        sessionId,
-        projectRoot: process.cwd(),
-      },
-    })
+    const res1 = await executeTerminalTool(request, sessionId, 'echo cmd-1')
+    expect(res1.ok()).toBeTruthy()
     const body1 = await res1.json()
 
-    const res2 = await request.post(`${API_URL}/api/tools/execute`, {
-      data: {
-        tool: 'terminal.run',
-        input: { command: 'echo cmd-2' },
-        sessionId,
-        projectRoot: process.cwd(),
-      },
-    })
+    const res2 = await executeTerminalTool(request, sessionId, 'echo cmd-2')
+    expect(res2.ok()).toBeTruthy()
     const body2 = await res2.json()
 
     expect(body1.ok).toBe(true)

@@ -496,11 +496,22 @@ export class JaitProvider implements CliProviderAdapter {
 
   private buildLlmConfig(userId?: string, requestedModel?: string): ResolvedJaitLlmConfig {
     const userSettings = userId ? this.deps.userService?.getSettings(userId) : undefined;
+    // Sessions can reach the provider without a model (continuations, resumed
+    // threads, background turns). Derive it from the user's provider selector
+    // so a run never bills a model they did not choose; strict mode then
+    // applies only once something has actually been chosen, so a run with no
+    // selection keeps using the configured deployment default instead of
+    // failing the turn outright.
+    const selectedModel = typeof userSettings?.selectedModel === "string"
+      ? userSettings.selectedModel.trim()
+      : "";
+    const explicitModel = requestedModel?.trim() || selectedModel;
     return resolveJaitLlmConfig({
       config: this.deps.config,
       apiKeys: userSettings?.apiKeys,
-      requestedModel,
+      requestedModel: explicitModel || undefined,
       jaitBackend: userSettings?.jaitBackend,
+      strictModel: Boolean(explicitModel),
     });
   }
 

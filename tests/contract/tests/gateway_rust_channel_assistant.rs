@@ -117,7 +117,7 @@ fn all_reference_timezones_aliases_and_offsets_match_current_and_historical_seco
         .iter()
         .map(|v| v.as_str().unwrap().to_owned())
         .collect::<std::collections::BTreeSet<_>>();
-    let tz_source = include_str!("../../../packages/gateway-rust/src/scheduler/tzdata_2024a.rs");
+    let tz_source = include_str!("../../../packages/gateway-rust/src/scheduler/tzdata_2025b.rs");
     names.extend(
         tz_source
             .lines()

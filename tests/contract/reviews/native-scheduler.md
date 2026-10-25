@@ -1,7 +1,7 @@
 # Native durable scheduler
 
 Reference: `packages/gateway/src/scheduler/service.ts`.
-Implementation: `packages/gateway-rust/src/scheduler/{service,minute,tzdata_2024a}.rs`.
+Implementation: `packages/gateway-rust/src/scheduler/{service,minute,tzdata_2025b}.rs`.
 
 The native service implements persisted create/get/list/update/remove, owner and
 system-job visibility, run history, manual and scheduled triggers, five-field
@@ -29,7 +29,7 @@ all UTC wildcards deliberately preserve the source's unusual true result.
 Fail-then-pass reproductions corrected a Unicode byte-slice panic for offset text,
 Jiff accepting unknown-zone sentinels, and the mismatch between newer host zone
 databases and the reference ICU catalogue. The embedded TZif data is pinned to
-2024a, with explicit names/aliases; it does not depend on the host tzdata version.
+2025b, with explicit names/aliases; it does not depend on the host tzdata version.
 Native extended-year conversion uses representative Gregorian 400-year cycles
 outside Jiff's civil range. The differential corpus checks selected extrema, not
 every historical transition or every possible date. A future reference ICU
@@ -76,3 +76,15 @@ fix and passed after restoring that single-statement boundary. Evidence:
 `.jait/artifacts/gateway-rust/scheduler/atomic-disarm-{before,after}.log`.
 The 168 frozen gate predates this regression and has unrelated core-tool source
 drift; the next complete source-bound gate must include this correction.
+
+## Reference runtime refresh — 2026-10-25
+
+After the installed reference changed to Bun 1.4.0 / ICU 78.3, the prior bundle
+failed the existing America/Coyhaique historical comparison. IANA 2025b standard
+zone files plus backward are now pinned by archive hash and embedded as TZif.
+The scheduler and channel-assistant targets pass (23 checks), including the full
+reference/bundled name union. Newest-host data is deliberately not used: host
+backzone data changes historical aliases, and standard 2026e differs on Casablanca
+in October 2026. See src/scheduler/tzdata-README.md and the timezone-refresh.log
+in .jait/artifacts/gateway-rust/channels-http/. This refresh adds no component
+credit and requires the full frozen gate before a new checkpoint is recorded.

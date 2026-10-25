@@ -6,7 +6,7 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
   const execute = (run: (input: LoopInput, context: ToolContext) => unknown) => async (input: unknown, context: ToolContext): Promise<ToolResult> => {
     try {
       if (!context.userId || (context.threadId && context.threadId !== context.sessionId)) throw new Error("Loop tools require an authenticated chat; thread workers cannot start chat loops");
-      const data = run(input as LoopInput, context);
+      const data = await run(input as LoopInput, context);
       return { ok: true, message: "Chat loop updated.", data };
     } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "Loop operation failed" }; }
   };
@@ -29,14 +29,14 @@ export function createLoopTools(service: ChatLoopService): ToolDefinition[] {
     },
     {
       ...base, name: "loop.check", displayName: "Check loop goal",
-      description: "Evaluate the active goal before ending each turn. Continue with a concrete next message, wait for user input, or complete with one verified evidence entry per acceptance criterion. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal.",
+      description: "Evaluate the active goal before ending each turn. Continue with a concrete next message, wait for user input, or complete with one verified evidence entry per acceptance criterion. Pass the revision from loop.status; stale checks cannot restart a paused or changed goal. The gateway uses configured System One to review reported evidence, may reject completion, and pauses on review failure or repeated stalls. Inspect the returned status and monitor.",
       parameters: { type: "object", properties: {
         revision: { type: "number" }, outcome: { type: "string", enum: ["continue", "complete", "waiting"] },
         summary: { type: "string", minLength: 1, maxLength: 8000 },
         nextMessage: { type: "string", maxLength: 8000 },
         evidence: { type: "array", maxItems: 20, items: { type: "string", minLength: 1, maxLength: 2000 } },
       }, required: ["revision", "outcome", "summary"] },
-      execute: execute((input, ctx) => service.check(ctx.sessionId, input, ctx.userId)),
+      execute: execute((input, ctx) => service.checkMonitored(ctx.sessionId, input, ctx.userId, ctx.apiKeys, ctx.signal)),
     },
     ...(["pause", "resume"] as const).map(action => ({
       ...base, name: `loop.${action}`, displayName: `${action === "pause" ? "Pause" : "Resume"} chat loop`,

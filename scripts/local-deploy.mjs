@@ -22,15 +22,19 @@ export const VERIFY_STEPS = Object.freeze([
   ['lint', 'bun', ['run', 'lint']],
   ['browser-tools', 'bun', ['run', 'test:tools:browser']],
   ['rust-migration', 'bun', ['run', 'test:gateway:rust', '--full-contracts']],
-  ['web-e2e', 'node', ['tests/e2e/scripts/run-isolated.mjs', 'bun', 'run', 'test:e2e']],
-  ['web-ui', 'node', ['tests/e2e/scripts/run-isolated.mjs', 'bun', 'run', 'test:e2e:ui']],
+  ['web-e2e', 'node', ['tests/e2e/scripts/run-isolated.mjs', '--shards=2', 'bun', 'run', 'test:e2e']],
+  ['web-ui', 'node', ['tests/e2e/scripts/run-isolated.mjs', 'bun', 'run', 'test:e2e:ui', '--workers=2']],
 ]);
 
+export function verificationSteps(skipE2e = false) {
+  return VERIFY_STEPS.filter(([id]) => !skipE2e || !['web-e2e', 'web-ui'].includes(id));
+}
+
 // JavaScript reference retained for differential contracts; production uses the native controller.
-export async function verifyAndActivate({ runStep, fingerprint, activate }) {
+export async function verifyAndActivate({ runStep, fingerprint, activate, skipE2e = false }) {
   const before = await fingerprint();
   const checks = [];
-  for (const [id, command, args] of VERIFY_STEPS) {
+  for (const [id, command, args] of verificationSteps(skipE2e)) {
     await runStep(id, command, args); // rejection, signal or timeout stops the pipeline
     checks.push({ id, command, args, passed: true });
   }
@@ -85,7 +89,18 @@ async function treeFiles(root, directory = root) {
 }
 export async function treeDigest(root) { return digestFiles(root, await treeFiles(root)); }
 
-export async function snapshotSource(root, target) {
+export async function snapshotSource(root, target, { cacheManifest } = {}) {
+  let previous = { files: {} };
+  if (cacheManifest) {
+    try {
+      const saved = JSON.parse(await fs.readFile(cacheManifest, 'utf8'));
+      if (saved.version === 1 && saved.files && typeof saved.files === 'object'
+        && !Array.isArray(saved.files) && Object.values(saved.files).every(entry => entry && typeof entry === 'object')) previous = saved;
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.warn('[local-deploy] Ignoring unreadable snapshot timestamp cache');
+    }
+  }
+  const timestamps = Object.create(null);
   const files = sourceFiles(root);
   const before = await digestFiles(root, files);
   await fs.mkdir(target, { recursive: true });
@@ -99,13 +114,38 @@ export async function snapshotSource(root, target) {
       const linked=contained(root, resolve(dirname(from), link));
       if(relative(root,linked).split(sep).some(p=>IGNORED.has(p)))throw new Error('Unsafe deployment path: source symlink reaches ignored state');
       await fs.symlink(link, to);
+      timestamps[path] = { kind: 'symlink', link };
     } else {
       await fs.copyFile(from, to);
-      await fs.chmod(to, stat.mode & 0o777);
+      const mode = stat.mode & 0o777;
+      await fs.chmod(to, mode);
+      if (cacheManifest) {
+        const hash = createHash('sha256').update(await fs.readFile(to)).digest('hex');
+        const prior = previous.files[path];
+        const reuse = prior?.kind === 'file' && prior.hash === hash && prior.mode === mode
+          && Number.isSafeInteger(prior.mtimeMs) && prior.mtimeMs >= 0 && prior.mtimeMs <= Date.now();
+        const mtimeMs = reuse ? prior.mtimeMs : Date.now();
+        await fs.utimes(to, mtimeMs / 1000, mtimeMs / 1000);
+        timestamps[path] = { kind: 'file', hash, mode, mtimeMs };
+      }
     }
   }
   if (sourceFiles(root).join('\0') !== files.join('\0') || await digestFiles(root, files) !== before || await digestFiles(target, files) !== before) {
     throw new Error('Source changed while taking the snapshot; retry after edits settle');
+  }
+  if (cacheManifest) {
+    // A changed symlink can redirect a compiler input to an older file. Force fresh
+    // timestamps in that case rather than trusting the target's previous timestamp.
+    const links = entries => Object.entries(entries).filter(([, entry]) => entry.kind === 'symlink').sort();
+    if (JSON.stringify(links(previous.files)) !== JSON.stringify(links(timestamps))) {
+      const now = Date.now();
+      for (const [path, entry] of Object.entries(timestamps)) if (entry.kind === 'file') {
+        await fs.utimes(join(target, path), now / 1000, now / 1000);
+        entry.mtimeMs = now;
+      }
+    }
+    await fs.mkdir(dirname(cacheManifest), { recursive: true });
+    await fs.writeFile(cacheManifest, JSON.stringify({ version: 1, files: timestamps }) + '\n', { mode: 0o600 });
   }
   // Shadow the parent checkout: tests must never discover or mutate its .git.
   git(target, ['init', '--quiet']);
@@ -235,11 +275,15 @@ function validatePlanTarget(plan) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  if (!(argv.length === 0 || (argv.length === 1 && ['--plan','--prepare'].includes(argv[0])) || (argv.length === 2 && ['--activate','--rollback','--restore'].includes(argv[0])))) throw new Error('Usage: bun run deploy:local [--plan | --prepare]');
+  if (argv.includes('--e2e') && argv.includes('--skip-e2e')) throw new Error('Choose either --e2e or --skip-e2e');
+  const skipE2e = !argv.includes('--e2e');
+  argv = argv.filter(arg => !['--e2e', '--skip-e2e'].includes(arg));
+  if (!(argv.length === 0 || (argv.length === 1 && ['--plan','--prepare'].includes(argv[0])) || (argv.length === 2 && ['--activate','--rollback','--restore'].includes(argv[0])))) throw new Error('Usage: bun run deploy:local [--plan | --prepare] [--e2e | --skip-e2e]');
   if (['--activate','--rollback','--restore'].includes(argv[0])) {
     const planPath = resolve(argv[1]);
     const plan = JSON.parse(await fs.readFile(planPath, 'utf8'));
-    if (VERIFY_STEPS.some(([id],i) => plan.proof?.checks?.[i]?.id !== id || plan.proof.checks[i].passed !== true || JSON.stringify([plan.proof.checks[i].command,plan.proof.checks[i].args]) !== JSON.stringify(VERIFY_STEPS[i].slice(1)))) throw new Error('Missing mandatory verification evidence');
+    const required = verificationSteps(plan.skipE2e === true);
+    if (plan.proof?.checks?.length !== required.length || required.some(([id],i) => plan.proof?.checks?.[i]?.id !== id || plan.proof.checks[i].passed !== true || JSON.stringify([plan.proof.checks[i].command,plan.proof.checks[i].args]) !== JSON.stringify(required[i].slice(1)))) throw new Error('Missing mandatory verification evidence');
     if (plan.artifactRoot !== resolve(dirname(planPath), '../..')) throw new Error('Invalid activation plan location');
     contained(plan.artifactRoot, plan.runtime);
     validatePlanTarget(plan);
@@ -248,8 +292,8 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
   if (argv.includes('--plan')) {
-    console.log(JSON.stringify({ publicVersion: 'unchanged', publish: false, push: false, testsAlwaysRun: true,
-      preparation: ['frozen source snapshot', 'frozen dependencies', 'production build'], checks: VERIFY_STEPS.map(([id, command, args]) => ({ id, command, args })),
+    console.log(JSON.stringify({ publicVersion: 'unchanged', publish: false, push: false, testsAlwaysRun: !skipE2e, skipE2e,
+      preparation: ['frozen source snapshot', 'frozen dependencies', 'production build'], checks: verificationSteps(skipE2e).map(([id, command, args]) => ({ id, command, args })),
       activation: 'validated staged runtime, isolated canary, systemd handoff with health rollback', artifacts: BASE }, null, 2)); return;
   }
   if (process.platform !== 'linux') throw new Error('Local deployment currently supports the Linux systemd gateway');
@@ -267,20 +311,23 @@ export async function main(argv = process.argv.slice(2)) {
       JAIT_STATE_DIR: join(runDir, 'test-state'),
       PLAYWRIGHT_BROWSERS_PATH: join(BASE, 'browser-cache'),
       // Do not accidentally reuse a live/custom stack during acceptance tests.
-      FRONTEND_URL: '', API_URL: '', UI_FRONTEND_URL: '', PLAYWRIGHT_WORKERS: '1',
+      FRONTEND_URL: '', API_URL: '', UI_FRONTEND_URL: '', PLAYWRIGHT_WORKERS: '1', JAIT_LOCAL_VERIFY_FAIL_FAST: '1',
     }, timeoutMs: id === 'native-verification' ? 2 * 60 * 60_000 : 30 * 60_000 });
   };
   try {
+    if (skipE2e) console.log('[local-deploy] E2E and UI fixture suites skipped by default; use --e2e to include them. Other gates remain required.');
     const unit = 'jait-gateway.service';
     const service = await serviceInfo(unit);
     await fs.rm(workspace, { recursive: true, force: true });
-    const provenance = await snapshotSource(ROOT, workspace);
     const cache = join(BASE, 'verification-cache');
+    const provenance = await snapshotSource(ROOT, workspace, { cacheManifest: join(cache, 'source-snapshot.json') });
     try { await fs.rename(cache, join(workspace, '.jait')); } catch(e) { if(e.code!=='ENOENT')throw e; await fs.mkdir(join(workspace,'.jait'),{recursive:true}); }
     await runStep('dependencies', 'bun', ['install', '--frozen-lockfile']);
+    if (!skipE2e) {
     // e2e dev tooling is required even when the caller's environment looks production-like.
     await runStep('e2e-dependencies', 'npm', ['--prefix', 'tests/e2e', 'ci', '--no-audit', '--no-fund', '--include=dev'], { NODE_ENV: 'development' });
     await runStep('browser-runtime', 'node', ['tests/e2e/node_modules/playwright/cli.js', 'install', 'chromium']);
+    }
     await runStep('browser-tools-runtime', 'node', ['packages/gateway/node_modules/playwright/cli.js', 'install', 'chromium']);
     await runStep('build', 'bun', ['run', 'build']);
     // Build once, then test and deploy the exact native controller with the staged runtime.
@@ -291,7 +338,7 @@ export async function main(argv = process.argv.slice(2)) {
     await fs.mkdir(dirname(controller), {recursive:true});
     await fs.copyFile(join(nativeTarget, 'debug/jait-local-deploy'), controller);
     await fs.chmod(controller, 0o700);
-    await runStep('native-verification', controller, ['--verify', workspace, runDir]);
+    await runStep('native-verification', controller, ['--verify', workspace, runDir, ...(skipE2e ? ['--skip-e2e'] : [])]);
     const proof = JSON.parse(await fs.readFile(join(runDir, 'proof.json'), 'utf8'));
     await (async proof => {
       const buildId = `${proof.fingerprint.slice(0, 16)}-${Date.now()}`;
@@ -313,7 +360,7 @@ export async function main(argv = process.argv.slice(2)) {
       await validatePackage(gateway);
       await canary(runtime, runDir, pkg.version);
       const override = join(homedir(), '.config/systemd/user', `${unit}.d`, '90-jait-local.conf');
-      const plan = { artifactRoot: BASE, previousArgv: service.argv, unit, port: service.port, previousVersion: service.previousVersion, version: pkg.version,
+      const plan = { skipE2e, artifactRoot: BASE, previousArgv: service.argv, unit, port: service.port, previousVersion: service.previousVersion, version: pkg.version,
         buildId, runtime, runtimeHash: await treeDigest(runtime), override,
         unitText: overrideUnit(service.argv, join(runtime, 'packages/gateway/bin/jait.mjs')), provenance, proof };
       const planPath = join(runDir, 'plan.json'); await fs.writeFile(planPath, JSON.stringify(plan, null, 2), { mode: 0o600 });

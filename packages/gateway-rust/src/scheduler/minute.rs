@@ -9,13 +9,13 @@ use std::{
     collections::BTreeMap,
     sync::{LazyLock, Mutex},
 };
-#[path = "tzdata_2024a.rs"]
-mod tzdata_2024a;
-pub const TIME_ZONE_DATA_VERSION: &str = tzdata_2024a::VERSION;
+#[path = "tzdata_2025b.rs"]
+mod tzdata_2025b;
+pub const TIME_ZONE_DATA_VERSION: &str = tzdata_2025b::VERSION;
 pub(crate) fn named_zone(zone: &str) -> Option<jiff::tz::TimeZone> {
     static CACHE: LazyLock<Mutex<BTreeMap<&'static str, jiff::tz::TimeZone>>> =
         LazyLock::new(|| Mutex::new(BTreeMap::new()));
-    let &(name, start, size) = tzdata_2024a::INDEX
+    let &(name, start, size) = tzdata_2025b::INDEX
         .iter()
         .find(|(name, _, _)| name.eq_ignore_ascii_case(zone))?;
     let mut cache = CACHE.lock().ok()?;
@@ -23,7 +23,7 @@ pub(crate) fn named_zone(zone: &str) -> Option<jiff::tz::TimeZone> {
         return Some(zone.clone());
     }
     let timezone =
-        jiff::tz::TimeZone::tzif(name, tzdata_2024a::DATA.get(start..start + size)?).ok()?;
+        jiff::tz::TimeZone::tzif(name, tzdata_2025b::DATA.get(start..start + size)?).ok()?;
     cache.insert(name, timezone.clone());
     Some(timezone)
 }

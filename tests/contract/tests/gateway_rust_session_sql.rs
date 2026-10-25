@@ -100,6 +100,7 @@ fn real_sql_schema_projection_state_and_json_safe_data() {
         query("SELECT 1 AS duplicate,2 AS duplicate"),
         query("SELECT 1 AS duplicate,2 AS duplicate WHERE 0"),
         query("SELECT 1 AS '20',2 AS '2',3 AS '1',4 AS a"),
+        query("SELECT 1 AS '20',2 AS '2',3 AS '1',4 AS a WHERE 0"),
         query("SELECT x'001122' AS bytes,NULL AS absent,1.5 AS value"),
         query("SELECT 9007199254740993 AS large"),
         query("SELECT ? AS parameter"),

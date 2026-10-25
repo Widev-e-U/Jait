@@ -12,6 +12,10 @@ const gatewayTarget = process.env.JAIT_GATEWAY_URL ?? 'http://localhost:8000'
 export default defineConfig({
   plugins: [react()],
   base: '/',
+  // Concurrent acceptance stacks also need independent dependency optimizers.
+  cacheDir: process.env.JAIT_E2E_ARTIFACT_DIR
+    ? path.resolve(process.env.JAIT_E2E_ARTIFACT_DIR, 'vite-cache')
+    : undefined,
   optimizeDeps: { exclude: ['matrix-crypto-wasm-asset', 'matrix-crypto-wasm-asset?url'] },
 
   build: {

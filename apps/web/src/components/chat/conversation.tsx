@@ -345,9 +345,10 @@ export function shouldLoadOlderMessages(
   return element.scrollTop < LOAD_MORE_SCROLL_THRESHOLD_PX
 }
 
-const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
+const CONVERSATION_SCROLL_STYLE: CSSProperties = {
   WebkitOverflowScrolling: 'touch',
-  overscrollBehaviorY: 'contain',
+  // Containment alone still allows the native bounce at the bottom edge.
+  overscrollBehaviorY: 'none',
   touchAction: 'pan-y',
 }
 
@@ -955,7 +956,11 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   const updateBottomState = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    // Elastic scrolling can report positions outside the actual scroll range.
+    // Returning from bottom overscroll is not an upward reading gesture.
+    const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
+    const scrollTop = Math.max(0, Math.min(el.scrollTop, maxScrollTop))
+    const distanceFromBottom = maxScrollTop - scrollTop
     // A held new-turn reserve leaves deliberate slack below the prompt. That's
     // the feature, not the user having scrolled away, so keep reporting "at the
     // bottom" until they scroll off it themselves — otherwise the scroll-to-
@@ -969,15 +974,15 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
     // never gets stuck to the bottom again. Same tolerance as the button's, so
     // "the button is hidden" and "following the stream" can't disagree.
     const atVeryBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
-    const scrollingUp = el.scrollTop < prevScrollTopRef.current
-    prevScrollTopRef.current = el.scrollTop
+    const scrollingUp = scrollTop < prevScrollTopRef.current
+    prevScrollTopRef.current = scrollTop
 
     setIsAtBottom(nextIsAtBottom)
-    const previousMessageIndex = el.scrollTop > PREVIOUS_MESSAGE_EPSILON_PX
+    const previousMessageIndex = scrollTop > PREVIOUS_MESSAGE_EPSILON_PX
       ? findPreviousUserMessage()
       : null
     const showPreviousMessagePreview = shouldShowPreviousMessagePreview({
-      scrollTop: el.scrollTop,
+      scrollTop,
       previousMessageIndex,
       isAtBottom: nextIsAtBottom,
       stickToBottom: stickToBottomRef.current,
@@ -1426,7 +1431,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
             onScroll={updateBottomState}
             className="min-h-0 min-w-0 flex-1 overflow-y-auto scrollbar-none"
             style={{
-              ...MOBILE_SCROLL_CONTAINMENT_STYLE,
+              ...CONVERSATION_SCROLL_STYLE,
               visibility: !hasContent || initialScrollReady ? 'visible' : 'hidden',
             }}
           >

@@ -47,7 +47,7 @@ test('image viewport and portal controls never start message editing', async ({ 
 })
 
 for (const width of [390, 1280]) {
-  test(`user message controls stay within the bubble at ${width}px`, async ({ page }) => {
+  test(`user message controls stay clear of message text at ${width}px`, async ({ page }) => {
     await openFixture(page, width)
     const sent = page.getByTestId('sent')
     const bubble = sent.locator('[data-message-from="user"]').last()
@@ -56,8 +56,15 @@ for (const width of [390, 1280]) {
     await expect(controls).toBeVisible()
     const bubbleBox = (await bubble.boundingBox())!
     const controlsBox = (await controls.boundingBox())!
-    expect(controlsBox.y).toBeGreaterThanOrEqual(bubbleBox.y)
-    expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(bubbleBox.y + bubbleBox.height)
+    if (width < 768) {
+      expect(controlsBox.y).toBeGreaterThanOrEqual(bubbleBox.y)
+      expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(bubbleBox.y + bubbleBox.height)
+    } else {
+      // Desktop actions sit above the message so they do not intercept text clicks.
+      expect(controlsBox.y + controlsBox.height).toBeLessThanOrEqual(bubbleBox.y)
+      expect(controlsBox.x).toBeGreaterThanOrEqual(0)
+      expect(controlsBox.x + controlsBox.width).toBeLessThanOrEqual(width)
+    }
     if (width < 768) {
       await controls.click()
       await page.getByRole('menuitem', { name: 'Edit message', exact: true }).click()

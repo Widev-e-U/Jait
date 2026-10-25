@@ -7,7 +7,9 @@ use std::{fs, path::PathBuf, time::Duration};
 #[cfg(unix)]
 async fn execute() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.first().map(String::as_str) == Some("--verify") && args.len() == 3 {
+    if args.first().map(String::as_str) == Some("--verify")
+        && (args.len() == 3 || (args.len() == 4 && args[3] == "--skip-e2e"))
+    {
         let root = fs::canonicalize(&args[1]).map_err(|e| e.to_string())?;
         let logs = fs::canonicalize(&args[2]).map_err(|e| e.to_string())?;
         match fs::remove_file(logs.join("proof.json")) {
@@ -15,12 +17,10 @@ async fn execute() -> Result<()> {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
             Err(error) => return Err(error.to_string()),
         }
+        let steps = verification_steps_for(&root, args.len() == 4)?;
         let proof = verify(
-            &mut FilesystemVerificationHost {
-                root: root.clone(),
-                logs: logs.clone(),
-            },
-            &verification_steps(&root)?,
+            &mut FilesystemVerificationHost::new(root.clone(), logs.clone(), &steps),
+            &steps,
         )
         .await?;
         write_private(
@@ -30,7 +30,7 @@ async fn execute() -> Result<()> {
         return Ok(());
     }
     if args.len() != 2 || !["--activate", "--restore", "--rollback"].contains(&args[0].as_str()) {
-        return Err("Usage: jait-local-deploy --verify WORKSPACE LOG_DIRECTORY | --activate|--rollback|--restore PLAN".into());
+        return Err("Usage: jait-local-deploy --verify WORKSPACE LOG_DIRECTORY [--skip-e2e] | --activate|--rollback|--restore PLAN".into());
     }
     let plan_path = PathBuf::from(&args[1]);
     let plan: Plan = serde_json::from_slice(&fs::read(&plan_path).map_err(|e| e.to_string())?)

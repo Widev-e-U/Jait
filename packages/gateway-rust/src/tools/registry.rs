@@ -1,6 +1,7 @@
 //! Owned tool registration, bounded discovery and audited dispatch. Scope and
 //! consent belong to the outer executor. Ports never discover credentials or
 //! activate tools. Local futures preserve the existing lossless validator input.
+use super::tool_names::is_tool_disabled;
 use super::{
     catalog,
     core_io::HostError,
@@ -340,15 +341,41 @@ fn fail(message: impl Into<String>) -> RegistryResult {
 }
 pub struct ToolRegistry<C> {
     tools: Vec<Rc<RegisteredTool<C>>>,
+    compatibility_tools: Vec<Rc<RegisteredTool<C>>>,
     ids: IdGenerator,
 }
 impl<C: Clone> ToolRegistry<C> {
     pub fn new(ids: IdGenerator) -> Self {
-        Self { tools: vec![], ids }
+        Self {
+            tools: vec![],
+            compatibility_tools: vec![],
+            ids,
+        }
+    }
+    /// Old clients can execute these definitions; discovery exposes only canonical tools.
+    pub fn register_compatibility(&mut self, tool: Value, execute: ExecutePort<C>) {
+        let definition = normalize_tool_definition(&tool);
+        let name = definition["name"].as_str().expect("typed tool name");
+        self.tools.retain(|t| t.definition["name"] != name);
+        let slot = self
+            .compatibility_tools
+            .iter()
+            .position(|t| t.definition["name"] == name);
+        let tool = Rc::new(RegisteredTool {
+            definition,
+            execute,
+        });
+        if let Some(i) = slot {
+            self.compatibility_tools[i] = tool;
+        } else {
+            self.compatibility_tools.push(tool);
+        }
     }
     pub fn register(&mut self, tool: Value, execute: ExecutePort<C>) {
         let definition = normalize_tool_definition(&tool);
         let name = definition["name"].as_str().expect("typed tool name");
+        self.compatibility_tools
+            .retain(|t| t.definition["name"] != name);
         let slot = self.tools.iter().position(|t| t.definition["name"] == name);
         let t = Rc::new(RegisteredTool {
             definition,
@@ -363,6 +390,13 @@ impl<C: Clone> ToolRegistry<C> {
     pub fn unregister(&mut self, name: &str) -> bool {
         if let Some(i) = self.tools.iter().position(|t| t.definition["name"] == name) {
             self.tools.remove(i);
+            true
+        } else if let Some(i) = self
+            .compatibility_tools
+            .iter()
+            .position(|t| t.definition["name"] == name)
+        {
+            self.compatibility_tools.remove(i);
             true
         } else {
             false
@@ -383,6 +417,7 @@ impl<C: Clone> ToolRegistry<C> {
     pub fn get(&self, name: &str) -> Option<Rc<RegisteredTool<C>>> {
         self.tools
             .iter()
+            .chain(self.compatibility_tools.iter())
             .find(|t| t.definition["name"] == name)
             .cloned()
     }
@@ -427,7 +462,7 @@ impl<C: Clone> ToolRegistry<C> {
         let mut cache = HashMap::new();
         for tool in options.candidates.as_ref().unwrap_or(&self.tools) {
             let d = &tool.definition;
-            if options.disabled_tools.contains(field(d, "name", "")) {
+            if is_tool_disabled(field(d, "name", ""), &options.disabled_tools) {
                 continue;
             }
             let name: HashSet<_> = tokens(field(d, "name", "")).into_iter().collect();
@@ -555,7 +590,7 @@ impl<C: Clone> ToolRegistry<C> {
             .collect::<HashSet<_>>();
         for tool in options.candidates.as_ref().unwrap_or(&self.tools) {
             let name = field(&tool.definition, "name", "");
-            if !known.contains(name) && !options.disabled_tools.contains(name) {
+            if !known.contains(name) && !is_tool_disabled(name, &options.disabled_tools) {
                 candidates.push(Rc::new(RankedToolMatch {
                     tool: tool.clone(),
                     score: Cell::new(0.0),
@@ -605,7 +640,7 @@ impl<C: Clone> ToolRegistry<C> {
             .filter(|t| {
                 let d = &t.definition;
                 let name = field(d, "name", "");
-                !disabled.contains(name)
+                !is_tool_disabled(name, disabled)
                     && (field(d, "source", "").starts_with("plugin:")
                         || MCP_EXPOSED_CORE_TOOL_NAMES.contains(&name)
                         || (d["source"] == "builtin" && d["tier"] != "core"))
@@ -619,7 +654,7 @@ impl<C: Clone> ToolRegistry<C> {
             .filter(|t| {
                 t.definition["tier"] == "core"
                     && !field(&t.definition, "name", "").starts_with("os.")
-                    && !disabled.contains(field(&t.definition, "name", ""))
+                    && !is_tool_disabled(field(&t.definition, "name", ""), disabled)
             })
             .cloned()
             .collect()
@@ -658,11 +693,11 @@ impl<C: Clone> ToolRegistry<C> {
     pub fn list_info_filtered(&self, disabled: &HashSet<String>) -> Vec<Value> {
         self.list_info()
             .into_iter()
-            .filter(|t| !disabled.contains(field(t, "name", "")))
+            .filter(|t| !is_tool_disabled(field(t, "name", ""), disabled))
             .collect()
     }
     pub fn is_executable(&self, name: &str, disabled: &HashSet<String>) -> bool {
-        self.has(name) && !disabled.contains(name)
+        self.has(name) && !is_tool_disabled(name, disabled)
     }
     fn audit(
         &self,

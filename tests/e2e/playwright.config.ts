@@ -5,6 +5,8 @@ import { resolve } from 'node:path'
  * Playwright configuration for Jait E2E tests
  * @see https://playwright.dev/docs/test-configuration
  */
+// Isolated shards must never clean or overwrite another shard's evidence.
+const artifactDir = process.env.JAIT_E2E_ARTIFACT_DIR || resolve(__dirname, '../../.jait/artifacts')
 const configuredFrontendUrl = process.env.FRONTEND_URL
 const configuredApiUrl = process.env.API_URL
 const FRONTEND_URL = configuredFrontendUrl || `http://127.0.0.1:${process.env.E2E_FRONTEND_PORT || 3100}`
@@ -18,7 +20,8 @@ process.env.FRONTEND_URL = FRONTEND_URL
 
 export default defineConfig({
   testDir: '.',
-  outputDir: resolve(__dirname, '../../.jait/artifacts/playwright-results'),
+  globalSetup: resolve(__dirname, 'scripts/warm-frontend.mjs'),
+  outputDir: resolve(artifactDir, 'playwright-results'),
 
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -29,12 +32,15 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
+  /* A failed local verification already blocks activation; stop after its retries. */
+  maxFailures: process.env.JAIT_LOCAL_VERIFY_FAIL_FAST === '1' ? 1 : undefined,
+
   /* Keep local runs stable against a single shared dev stack. */
   workers: process.env.PLAYWRIGHT_WORKERS ? Number(process.env.PLAYWRIGHT_WORKERS) : 1,
 
   /* Reporter to use */
   reporter: [
-    ['html', { outputFolder: resolve(__dirname, '../../.jait/artifacts/playwright-report'), open: 'never' }],
+    ['html', { outputFolder: resolve(artifactDir, 'playwright-report'), open: 'never' }],
     ['list']
   ],
 
@@ -89,6 +95,9 @@ export default defineConfig({
     ? {
         command: 'node ./scripts/start-dev-stack.mjs',
         url: FRONTEND_URL,
+        // Containerised preview browsers reach loopback targets through
+        // host.docker.internal, so Vite must not listen on 127.0.0.1 only.
+        env: { E2E_WEB_HOST: '0.0.0.0' },
         reuseExistingServer: false,
         gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
         timeout: 120000,

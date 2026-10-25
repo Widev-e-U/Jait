@@ -306,6 +306,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     deps.toolRegistry?.register(createTeamChatTool(teamChat, deps.sessionService));
   }
   registerChatRoutes(app, config, {
+    userQuestionService: deps.userQuestionService,
     chatLoops: deps.chatLoops,
     teamChat,
     agentControl,
@@ -611,6 +612,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   // MCP SSE server for external CLI agents
   if (deps.toolRegistry) {
     registerMcpRoutes(app, {
+      userQuestionService: deps.userQuestionService,
       toolRegistry: deps.toolRegistry,
       toolExecutor: deps.toolExecutor,
       config,

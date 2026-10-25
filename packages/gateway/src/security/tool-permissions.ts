@@ -1,3 +1,4 @@
+import { toolPolicyNames } from "../tools/tool-names.js";
 /**
  * Tool Permission Model — Sprint 4.2
  *
@@ -63,10 +64,11 @@ export function resolveToolPermission(
   toolName: string,
   permissions: Map<string, ToolPermission>,
 ): ResolvedToolPermission {
-  const permission = permissions.get(toolName);
+  const permission = toolPolicyNames(toolName).map(name => permissions.get(name)).find(Boolean);
   if (!permission) return getUnknownToolPermission(toolName);
   return {
     ...permission,
+    ...(toolPolicyNames(toolName).length > 1 ? { toolName } : {}),
     knownTool: true,
     source: "profile",
   };

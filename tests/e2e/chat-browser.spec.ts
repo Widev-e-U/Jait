@@ -23,19 +23,20 @@ test('chat browser supports takeover, sign-in interaction, sharing, reload and e
   })
   // The VNC transport is isolated here; the real browser card, auth-grant hook,
   // iframe, controller buttons and API flow all run unmocked in the web app.
-  await page.route('**/noVNC/vnc_lite.html?**', route => route.fulfill({ contentType: 'text/html', body: '<label>Email<input aria-label="Email"></label><button>Sign in</button><script>window.parent.postMessage({ type: "jait-vnc-status", status: "connected" }, location.origin)</script>' }))
+  await page.route('**/noVNC/vnc_lite.html?**', route => route.fulfill({ contentType: 'text/html', body: '<label>Email<input aria-label="Email"></label><button>Sign in</button><script>window.addEventListener("message", e => { if (e.source === parent && e.data?.type === "jait-vnc-control") document.body.dataset.viewOnly = String(e.data.viewOnly) }); window.parent.postMessage({ type: "jait-vnc-status", status: "connected" }, location.origin)</script>' }))
   await page.goto('/chat-browser-repro.html')
   const frame = page.getByTitle('Agent browser')
   await expect(frame).toBeVisible()
   await expect(frame).toHaveAttribute('src', /view_only=1/)
   await page.getByRole('button', { name: /^(Share with agent|Take control)$/ }).click()
   await expect(page.getByRole('button', { name: /^(Share with agent|Take control)$/ })).toHaveText('Share with agent')
-  await expect(frame).not.toHaveAttribute('src', /view_only=/)
+  await expect(frame).toHaveAttribute('src', /view_only=1/)
+  await expect(page.frameLocator('iframe[title="Agent browser"]').locator('body')).toHaveAttribute('data-view-only', 'false')
   await page.frameLocator('iframe[title="Agent browser"]').getByRole('textbox', { name: 'Email' }).fill('test@example.com')
   await expect(page.frameLocator('iframe[title="Agent browser"]').getByRole('textbox')).toHaveValue('test@example.com')
   await page.reload()
   await expect(page.getByRole('button', { name: /^(Share with agent|Take control)$/ })).toHaveText('Share with agent')
-  await expect(frame).not.toHaveAttribute('src', /view_only=/)
+  await expect(frame).toHaveAttribute('src', /view_only=1/)
   denyShare = true
   await page.getByRole('button', { name: /^(Share with agent|Take control)$/ }).click()
   await expect(page.getByRole('alert')).toContainText('Could not change browser control')
@@ -43,6 +44,7 @@ test('chat browser supports takeover, sign-in interaction, sharing, reload and e
   denyShare = false
   await page.getByRole('button', { name: /^(Share with agent|Take control)$/ }).click()
   await expect(frame).toHaveAttribute('src', /view_only=1/)
+  await expect(page.frameLocator('iframe[title="Agent browser"]').locator('body')).toHaveAttribute('data-view-only', 'true')
   expect(writes).toEqual([false, true])
   await page.screenshot({ path: path.join(shotsDir, 'chat-browser-desktop.png'), fullPage: true })
   await page.setViewportSize({ width: 390, height: 844 })
@@ -77,13 +79,17 @@ test('one sticky browser follows the conversation and minimizes without reconnec
   await page.frameLocator('iframe[title="Agent browser"]').getByRole('textbox', { name: 'Draft' }).fill('Keep this browser session')
   const connectedGrants = grants
   const before = await panel.boundingBox()
-  expect(before!.width).toBeGreaterThan(650)
-  expect(before!.height).toBeGreaterThan(350)
   const scroll = page.locator('[data-conversation-scroll]')
   // The panel floats above the transcript rather than taking a row in the
   // column, so the chat is not pushed down: both share the same top edge and
   // the panel overlaps the transcript instead of sitting above it.
   const scrollBox = (await scroll.boundingBox())!
+  // The expanded panel is sized from the conversation frame (55% of its height,
+  // capped at 480px), so the expectation follows the frame instead of a fixed
+  // pixel value that only matched the earlier hard-coded panel size.
+  expect(before!.width).toBeGreaterThan(650)
+  expect(before!.height).toBeGreaterThan(scrollBox.height * 0.5)
+  expect(before!.height).toBeLessThanOrEqual(480)
   expect(scrollBox.y).toBeLessThanOrEqual(before!.y + 1)
   expect(before!.y).toBeLessThan(scrollBox.y + scrollBox.height)
   // The URL, refresh, tools, agent toggle, options and collapse share one header.
@@ -113,7 +119,7 @@ test('one sticky browser follows the conversation and minimizes without reconnec
   await expect.poll(async () => Math.round((await panel.boundingBox())!.height)).toBe(90)
   await expect(panel.getByRole('button')).toHaveCount(1)
   await expect(panel.locator('iframe')).toHaveCount(1)
-  await expect(frame).not.toHaveAttribute('src', /view_only=/)
+  await expect(frame).toHaveAttribute('src', /view_only=1/)
   expect(shares).toEqual([])
   await page.screenshot({ path: path.join(shotsDir, 'chat-browser-minimized.png') })
   await page.getByRole('button', { name: 'Another browser action' }).click()

@@ -11,7 +11,10 @@ test.afterEach(async ({ page }, info) => {
 
 async function mount(page: Page) {
   await page.goto('/src/e2e-fixtures/messenger.html', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: 'Messenger', exact: true })).toBeVisible({ timeout: 30_000 })
+  // The shell is a labelled region. The standalone <h1>Messenger</h1> gate was
+  // replaced by the inbox headline when the messenger layout was rebuilt, so the
+  // fixture is gated on the region that identifies the page in every state.
+  await expect(page.getByRole('region', { name: 'Messenger', exact: true })).toBeVisible({ timeout: 30_000 })
 }
 
 for (const width of [1280, 390, 320]) {

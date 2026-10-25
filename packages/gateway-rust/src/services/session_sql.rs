@@ -479,6 +479,9 @@ impl<'a> SessionSqlService<'a> {
                 }
                 count = count.saturating_add(1);
             }
+            // Empty results use statement metadata, which retains duplicate
+            // projection names. Nonempty results use the first row's own keys.
+            let columns = if count == 0 { names } else { columns };
             Ok((columns, rows, count > cap))
         })();
         let (columns, rows, truncated) = match query {

@@ -10,26 +10,66 @@ It records a local build ID, original commit and source fingerprint instead.
 bun run deploy:local --plan     # show the mandatory stages; no install or restart
 bun run deploy:local --prepare  # build, verify and stage; leave the service running
 bun run deploy:local            # verify, stage and activate locally
+bun run deploy:local --e2e     # explicitly include Chromium E2E and UI fixture suites
+bun run deploy:local --skip-e2e # compatibility flag; same as the default
 ```
 
-Every deployment runs the production build, release/artifact guards, workspace
+By default, every deployment runs the production build, release/artifact guards, workspace
 typechecking, the complete Vitest suite, workflow/deployment guard tests, lint,
-real-browser tool tests, a combined Rust migration/contract gate, the standard
-Chromium E2E suite and the separate UI fixture suite. The combined gate runs
+real-browser tool tests, and a combined Rust migration/contract gate. The standard
+Chromium E2E suite and the separate UI fixture suite run only with `--e2e`. The combined gate runs
 formatting, Clippy, native library tests and the complete contract suite once;
-that suite includes every migration contract target. There is no skip-checks or
-changed-tests-only option. Existing explicitly disabled or
+that suite includes every migration contract target. By default, only the Chromium E2E and UI fixture suites and their runtime preparation are skipped. Use `--e2e` when those suites are requested. `--skip-e2e` remains a compatibility flag; combining it with `--e2e` is rejected. The plan records `skipE2e: true` and proof lists only checks actually run. Activation validates the selected policy; all other gates, source/build binding, canary, health checks and rollback remain required. There is no general skip-checks or changed-tests-only option. Existing explicitly disabled or
 opt-in lab/hardware/browser matrices retain their repository configuration;
 passing these gates is evidence for that configuration, not a guarantee that no
 bug exists. A blocked toolchain, missing runtime or failed gate blocks deployment.
 
-The speedup comes from removing public-release work and avoiding duplicate web
-builds. Dependency/browser caches and the dedicated verification workspace's
-Rust compilation caches survive between runs. Tests themselves run each time.
+The speedup comes from removing public-release work, avoiding duplicate web
+builds, and overlapping independent verification work. The release/artifact preflight
+guards finish first, then Rust starts alongside typechecking. Once the ordinary
+checks and browser-tool checks finish, the Chromium E2E and UI fixture gates run
+in one ordered browser lane while Rust finishes in the other. Browser gates stay
+serialized to bound memory use. The E2E gate runs two Playwright shards concurrently,
+each with one worker, its own gateway, fresh database/state, frontend, ports and
+Vite dependency cache.
+The UI fixture gate explicitly uses two workers and only a frontend. Per-invocation
+reports and traces are isolated under `.jait/artifacts/playwright-shards/run-*/shard-*/`;
+`summary.json` records every shard result and elapsed time. A failing shard cancels
+and drains its sibling; all shards must pass. No tests or retries are removed.
+For a manual comparison, run `node tests/e2e/scripts/run-isolated.mjs --shards=2 bun run test:e2e`
+and compare with `--shards=1` under the same bounded 6/8 GiB memory budget. An already
+completed Rust failure prevents browser work from starting. Proof entries and
+the reported failure follow the mandatory gate order even if work finishes early.
+
+The complete Rust contract gate compiles every target once, then runs the Cargo
+test executables with three suite workers. Ordinary suites use four test threads;
+the translated suite uses eight, and source review uses four isolated review workers
+behind a single test-harness thread. This bounds those execution slots to sixteen.
+The long translated/source-review suites start first, leaving a slot for shorter suites. All discovered test targets
+remain mandatory; ignored tests keep their existing configuration, and library
+documentation tests run after successful executable tests. A failed suite or
+cancellation drains active process groups and prevents queued suites from starting.
+Build and per-suite logs, timing and completion counts are saved under
+`.jait/artifacts/contract-parallel/run-*/` inside the verification workspace.
+Progress streams into the deployment's Rust log while checks run. Source-review
+cases and independent copied-source mutation checks also run concurrently, retain
+canonical report order and still require baseline pass, mutation failure and restored
+pass for every reviewed source. Local browser verification stops after the first
+exhausted-retry failure; a passing run still executes every configured browser test.
+A failed foreground gate cancels and drains prefetched process groups before
+the controller exits; failed runs cannot issue passing proof. Dependency/browser caches and the dedicated verification workspace's
+Rust compilation caches survive between runs. Snapshot timestamps are retained
+only when file bytes and permissions match the previous snapshot; changed bytes
+receive fresh timestamps even if the checkout's timestamp was backdated. Redirected
+symlinks invalidate those timestamps. This avoids relinking every Rust test after
+copying an unchanged tree while retaining the full source/build hash checks.
+Tests themselves run each time.
 The first run may be slower because it provisions browser binaries and warms an
 isolated Rust cache. Gates run with four Vitest workers, two Cargo workers and a temporary
 6 GiB throttle / 8 GiB cap, rather than the terminal's normal 1.5/2 GiB limits.
-Each gate has a 30-minute deadline; the complete preparation has a two-hour cap.
+Non-browser gates have a 30-minute deadline. Browser gates have a one-hour deadline
+because the complete E2E suite has measured above 30 minutes before sharding; every
+configured test remains mandatory. The complete preparation has a two-hour cap.
 Progress names and log paths remain visible while commands run.
 
 The pipeline freezes tracked and non-ignored files, including uncommitted edits
@@ -89,6 +129,7 @@ Regression checks:
 
 ```bash
 bun run test:local-deploy
+node --test packages/gateway-rust/tooling/parallel-contracts.test.mjs
 node tests/contract/run.mjs test --test local_deploy_pipeline --test local_deploy_host
 ```
 
@@ -97,6 +138,11 @@ service quoting, and failure/rollback sequences with the JavaScript reference.
 Host tests invoke the actual native executable with fake build engines/systemd,
 real files and loopback health servers. They cover proof rejection, cancellation,
 process failures, signal-resistant descendants, changed builds and backup/restore.
+They also verify real gate overlap after preflight, canonical failure/proof order,
+and prefetched descendant cleanup before controller exit. Native scheduler tests
+also require real Rust/browser overlap and ordered browsers; contract-runner tests
+exercise the three-worker bound, complete discovery, failure, cancellation and
+signal-resistant descendant cleanup without invoking deployment.
 Node tests retain snapshot and launcher coverage. These checks do not restart a
 real service. Both Rust targets are mandatory supplementary checks in the full
 migration gate; they add no component credit to the migration inventory.

@@ -14,7 +14,9 @@ pub fn decode_lenient_base64(text: &str) -> Vec<u8> {
     let mut out = Vec::new();
     let mut acc: u32 = 0;
     let mut nbits: u32 = 0;
-    for &b in text.as_bytes() {
+    // Buffer decoding narrows UTF-16 code units to bytes before base64 parsing.
+    for unit in text.encode_utf16() {
+        let b = unit as u8;
         if b == b'=' {
             break;
         }

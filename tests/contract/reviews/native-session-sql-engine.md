@@ -22,7 +22,11 @@ worker dispatch does not consume the first-success metadata state; a current-
 thread Tokio test verifies pending work yields while the DB lane is held.
 
 Behavioral edge cases found and corrected by differential comparisons:
-- Bun deduplicates duplicate projection names in metadata, even with no rows.
+- The current Bun statement metadata retains duplicate projection names for
+  empty results. Nonempty results use the first row's own keys, which collapse
+  duplicates. The earlier runtime deduplicated both; the frozen gate caught the
+  changed empty-result behavior. Duplicate and numeric projections are compared
+  both with and without rows.
 - Bun row own-key enumeration retains numeric alias projection order, while
   sanitizing rows produces ordinary JavaScript integer-key ordering.
 - A permitted trailing semicolon causes Bun to prepare only the first statement,

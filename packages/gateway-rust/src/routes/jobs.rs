@@ -288,6 +288,7 @@ fn sql_error(error: &crate::db::worker::OperationError) -> Response {
         error.downcast_ref::<rusqlite::Error>()
     {
         let code = match code.extended_code {
+            1 => "SQLITE_ERROR",
             1811 => "SQLITE_CONSTRAINT_TRIGGER",
             1555 => "SQLITE_CONSTRAINT_PRIMARYKEY",
             2067 => "SQLITE_CONSTRAINT_UNIQUE",

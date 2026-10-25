@@ -18,6 +18,17 @@ describe('AssistantMarkdown', () => {
     expect(markup).not.toContain('data-streaming-text')
   })
 
+  it('keeps Jait pages and external file URLs out of the project file opener', () => {
+    const html = renderToStaticMarkup(<AssistantMarkdown
+      content="[Todo](/todo?q=fix) [Web](https://example.com/readme.md) [File](/home/jakob/jait/README.md:3)"
+      onOpenPath={() => {}} />)
+    expect(html).toContain('href="/todo?q=fix"')
+    expect(html).toContain('href="https://example.com/readme.md"')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('README.md')
+    expect(html).toContain('L3')
+  })
+
   it('highlights completed code without a debounce delay', () => {
     expect(getCodeHighlightDelay(false)).toBe(0)
     expect(getCodeHighlightDelay(true)).toBeGreaterThan(0)

@@ -18,3 +18,8 @@ The two targets execute 17 tests, including repeated subprocess transport checks
 .jait/artifacts/gateway-rust/provider-after.log
 
 Adapters use a native Send/Sync trait returning owned futures and info snapshots. Concrete ACP/CLI processes and their event protocols remain separate, unported components. The source module's ACP/Jait re-exports are satisfied by those concrete adapters later. Malformed JSON input is preserved verbatim; valid JSON containing unpaired UTF-16 surrogates or overflow-to-infinity numbers remains outside the merger's focused well-formed Unicode/finite-number contracts, consistent with existing native JSON parser limits. The canonical native-progress report controls component credit and source freshness.
+
+Current Bun reports `Invalid URL` for malformed bases and bases that cannot
+resolve `/mcp`. The unchanged failing comparison identified the previous runtime
+wording; expanded real-source checks now include malformed authorities and opaque
+URLs. Evidence: `.jait/artifacts/gateway-rust/channels-http/runtime-errors-recheck.log`.

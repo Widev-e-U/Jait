@@ -236,14 +236,7 @@ fn local_browse(env: &BrowseEnvironment, path: &Value) -> Response {
     let metadata = match fs::metadata(&target) {
         Ok(v) => v,
         Err(e) => {
-            return failure(
-                e,
-                if cfg!(target_os = "linux") {
-                    "statx"
-                } else {
-                    "stat"
-                },
-            );
+            return failure(e, "stat");
         }
     };
     if !metadata.is_dir() {

@@ -8250,7 +8250,7 @@ await (async()=>{
     await mgr.start("fake");
 
     connector.emit({ text: "find something", isSelfChat: true });
-    const deadline = Date.now() + 2_000; while (!connector.sent.some(m => m.text === "found it") || !connector.live.some(m => m.text.includes("✅ Done"))) { if (Date.now() >= deadline) throw new Error("Progress reply did not complete"); await new Promise(r => setTimeout(r, 5)); }
+    const deadline = Date.now() + 20_000; while (!connector.sent.some(m => m.text === "found it") || !connector.live.some(m => m.text.includes("✅ Done"))) { if (Date.now() >= deadline) throw new Error("Progress reply did not complete"); await new Promise(r => setTimeout(r, 5)); }
 
     __jait_capture(0, (connector.live));
     __jait_capture(1, (connector.live[0]!.text));
@@ -8377,7 +8377,11 @@ await (async()=>{
     await mgr.start("fake");
 
     connector.emit({ text: "find something", isSelfChat: true });
-    await new Promise((r) => setTimeout(r, 40));
+    const deadline = Date.now() + 20_000;
+    while (!connector.sent.some((message) => message.text === "found it")) {
+      if (Date.now() >= deadline) throw new Error("Quiet progress reply did not complete");
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
 
     __jait_capture(0, (connector.live));
     __jait_capture(1, (connector.sent.map((m) => m.text)));

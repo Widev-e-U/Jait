@@ -59,11 +59,9 @@ test.describe('mobile account avatar geometry', () => {
     const trigger = page.locator('button[aria-label="Account menu"]:visible').first()
     await expect(trigger).toBeVisible({ timeout: 20000 })
 
-    // On touch devices index.css forces `min-width: 2.5rem` (40px) on
-    // `button[aria-label]` so the tap target is big enough. The avatar inside is
-    // narrower (h-8 w-8 = 32px) and block-level, so the button has to be a
-    // centering flex container; otherwise the avatar sits flush left and leaves
-    // a visible gap on the right.
+    // The compact header uses a 32px-wide, 40px-high control around its 32px
+    // avatar. Keep its centering and height aligned with the header spacing
+    // regressions rather than the older global 40px minimum-width rule.
     const gaps = await trigger.evaluate((element) => {
       const circle = element.firstElementChild as HTMLElement | null
       if (!circle) return null
@@ -73,13 +71,18 @@ test.describe('mobile account avatar geometry', () => {
         left: inner.left - target.left,
         right: target.right - inner.right,
         targetWidth: target.width,
+        targetHeight: target.height,
+        top: inner.top - target.top,
+        bottom: target.bottom - inner.bottom,
         circleWidth: inner.width,
       }
     })
 
     expect(gaps).not.toBeNull()
-    expect(gaps!.targetWidth).toBeGreaterThanOrEqual(40)
-    expect(gaps!.circleWidth).toBeGreaterThan(0)
+    expect(gaps!.targetWidth).toBeGreaterThanOrEqual(gaps!.circleWidth)
+    expect(gaps!.targetHeight).toBeGreaterThanOrEqual(40)
+    expect(gaps!.circleWidth).toBe(32)
+    expect(Math.abs(gaps!.top - gaps!.bottom)).toBeLessThanOrEqual(1)
     expect(Math.abs(gaps!.left - gaps!.right)).toBeLessThanOrEqual(1)
   })
 })

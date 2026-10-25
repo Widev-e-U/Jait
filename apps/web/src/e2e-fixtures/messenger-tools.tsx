@@ -19,7 +19,7 @@ let snapshot: MessengerSnapshot = {
   messages: [],
 }
 const messages = [
-  { id: '$one', sender: 'Bob', body: 'Firewall ready', timestamp: 2, own: false, encrypted: true, unableToDecrypt: false, pending: false, failed: false },
+  { id: '$one', sender: 'Bob', body: new URLSearchParams(window.location.search).get('linkTest') ? '[Guide](https://example.com/guide) https://example.com/plain www.example.com [Settings](/settings?q=providers)' : 'Firewall ready', timestamp: 2, own: false, encrypted: true, unableToDecrypt: false, pending: false, failed: false },
   { id: '$two', sender: 'Alice', body: 'Hello', timestamp: 1, own: true, encrypted: true, unableToDecrypt: false, pending: false, failed: false },
 ]
 const update = (value: Partial<MessengerSnapshot>) => { snapshot = { ...snapshot, ...value }; listeners.forEach(listener => listener()) }

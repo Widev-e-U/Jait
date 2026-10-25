@@ -22,3 +22,5 @@ pub mod consent_manager;
 pub mod tool_profiles;
 
 pub mod consent_executor;
+
+pub mod sandbox_background_process;

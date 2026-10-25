@@ -21,24 +21,38 @@ const HISTORY_COUNT = Number(params.get('history') ?? 80)
 const UNSTABLE_PROPS = params.get('unstable') === '1'
 
 const controllers = new Map<string, ReadableStreamDefaultController<Uint8Array>>()
+const controllerSessions = new WeakMap<ReadableStreamDefaultController<Uint8Array>, string>()
+const snapshots = new Map<string, { content: string; streaming: boolean }>()
+function snapshot(id: string) {
+  let value = snapshots.get(id)
+  if (!value) {
+    value = { content: 'Live answer: ', streaming: true }
+    snapshots.set(id, value)
+  }
+  return value
+}
 const originalFetch = window.fetch.bind(window)
 window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
   const match = url.match(/\/api\/sessions\/(panel-\d)\/(messages|events)/)
-  if (match?.[2] === 'messages') return Promise.resolve(Response.json({
-    streaming: true, seq: 0, total: HISTORY_COUNT + 1, hasMore: false,
-    messages: [
-      ...Array.from({ length: HISTORY_COUNT }, (_, i) => ({
-        id: 'history-' + i,
-        role: i % 2 ? 'assistant' : 'user',
-        content: 'History ' + i + '\n\n' + 'Stable paragraph text for layout measurement. '.repeat(20),
-      })),
-      { id: 'live', role: 'assistant', content: 'Live answer: ', segments: [{ type: 'text', content: 'Live answer: ' }] },
-    ],
-  }))
+  if (match?.[2] === 'messages') {
+    const live = snapshot(match[1])
+    return Promise.resolve(Response.json({
+      streaming: live.streaming, seq: 0, total: HISTORY_COUNT + 1, hasMore: false,
+      messages: [
+        ...Array.from({ length: HISTORY_COUNT }, (_, i) => ({
+          id: 'history-' + i,
+          role: i % 2 ? 'assistant' : 'user',
+          content: 'History ' + i + '\n\n' + 'Stable paragraph text for layout measurement. '.repeat(20),
+        })),
+        { id: 'live', role: 'assistant', content: live.content, segments: [{ type: 'text', content: live.content }] },
+      ],
+    }))
+  }
   if (match?.[2] === 'events') return Promise.resolve(new Response(new ReadableStream<Uint8Array>({
     start(controller) {
       controllers.set(match[1], controller)
+      controllerSessions.set(controller, match[1])
       init?.signal?.addEventListener('abort', () => { controllers.delete(match[1]); controller.close() }, { once: true })
     },
   }), { headers: { 'Content-Type': 'text/event-stream' } }))
@@ -107,16 +121,28 @@ Reflect.set(window, '__forceLiveParentRenders', async (frames = 60, intervalMs =
 })
 
 const encoder = new TextEncoder()
-const sendToken = (controller: ReadableStreamDefaultController<Uint8Array>, content: string) =>
+const sendToken = (controller: ReadableStreamDefaultController<Uint8Array>, content: string) => {
+  const id = controllerSessions.get(controller)
+  if (id) snapshot(id).content += content
   controller.enqueue(encoder.encode('data: ' + JSON.stringify({ type: 'token', content }) + '\n\n'))
+}
 
-Reflect.set(window, '__streamAllPanels', async (tokens = 120, intervalMs = 8) => {
+Reflect.set(window, '__streamAllPanels', (tokens = 120, intervalMs = 8) => new Promise<void>((resolve) => {
+  // Provider production runs independently of React. Schedule the arrival times
+  // up front so a busy render queues chunks instead of slowing down the producer.
   for (let i = 0; i < tokens; i++) {
-    for (const controller of controllers.values()) sendToken(controller, 'chunk' + i + ' ')
-    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    setTimeout(() => {
+      for (const controller of controllers.values()) sendToken(controller, 'chunk' + i + ' ')
+    }, i * intervalMs)
   }
-  for (const controller of controllers.values()) controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
-})
+  setTimeout(() => {
+    for (const [id, controller] of controllers) {
+      snapshot(id).streaming = false
+      controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
+    }
+    resolve()
+  }, tokens * intervalMs)
+}))
 
 /** Stream into one panel only — used as a control proving the profiler is live. */
 Reflect.set(window, '__streamPanel', async (panelId: string, tokens = 1, intervalMs = 8) => {

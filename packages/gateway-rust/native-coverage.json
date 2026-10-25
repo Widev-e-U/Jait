@@ -1,7 +1,7 @@
 {
   "format": 1,
   "inventory": "tests/contract/coverage.json",
-  "inventory_total": 374,
+  "inventory_total": 376,
   "metric": "Equal weight per inventoried gateway source component with native implementation and reviewed focused contracts; not an estimate of effort or cutover readiness.",
   "components": [
     {
@@ -212,7 +212,7 @@
       "targets": [
         "gateway_rust_security"
       ],
-      "review": "Bidirectional HS256 tokens, exact one-hour expiry, subject/resource/purpose type boundaries, empty subjects, original secret bytes, empty-key rejection, NumericDates and critical headers; preview tokens cannot authenticate sessions and session tokens cannot authorize previews."
+      "review": "Bidirectional HS256 tokens, exact one-hour expiry, subject/resource/purpose type boundaries, empty subjects, original secret bytes, empty-key rejection, NumericDates and critical headers; preview tokens cannot authenticate sessions and session tokens cannot authorize previews. Current Bun empty-key diagnostic is Zero-length key is not supported; all eight actual-source security checks pass in channels-http/runtime-errors-recheck.log. Resource scoping and empty-key rejection remain enforced."
     },
     {
       "reference": "packages/gateway/src/security/trust-engine.ts",
@@ -851,7 +851,7 @@
     },
     {
       "reference": "packages/gateway/src/services/user-questions.ts",
-      "reference_sha256": "c2141663547d247644ed6eaf1219d60480ff541eba701849c476c2e581ba5ace",
+      "reference_sha256": "8b8939a6b219449b4288854680fa0d6cc99f37a8b072de8e59cb92ac86050cb5",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/services/input_requests.rs"
@@ -868,7 +868,7 @@
         "gateway_rust_input",
         "gateway_rust_user_ask_resume"
       ],
-      "review": "Pending insertion order; ECMAScript title trimming; nullable owners; session/user filtering; owner-checked submit/cancel; one-shot resolution and reentrant metadata callbacks; no expiry. Refreshed for resumable owner/session-bound waits, answer retention between calls, 60-second pending deadline, one-time collection and MCP tool envelopes; exact metadata, twelve refresh contract tests, three native tests and three restored mutations caught by both suites."
+      "review": "Pending insertion order; ECMAScript title trimming; nullable owners; session/user filtering; owner-checked submit/cancel; one-shot resolution and reentrant metadata callbacks; no expiry. Refreshed for resumable owner/session-bound waits, answer retention between calls, 60-second pending deadline, one-time collection and MCP tool envelopes; exact metadata, twelve refresh contract tests, three native tests and three restored mutations caught by both suites. Delayed-answer continuation refresh: detached MCP wait observer, single wake after submit/cancel, attached-wait suppression and retained owner/session-bound result collection match TypeScript. Native chat/MCP wiring remains an explicit runtime gate; no additional component credit. Per-wait deadline refresh: explicit millisecond timeout and null indefinite wait, ownership, attached-wait suppression and one-time result collection compare against actual TypeScript (20-check target). No component credit."
     },
     {
       "reference": "packages/gateway/src/services/secret-input.ts",
@@ -1253,7 +1253,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/prompts/shared-sections.ts",
-      "reference_sha256": "3bdace41ee2098249f55d75df3c1ee3352d07b2a75894387e96834d732d6f056",
+      "reference_sha256": "25b3bed0df67d1523bbb05e54043ea5b018336ed6adc3744238b72905457372e",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/prompts/mod.rs",
@@ -1272,7 +1272,7 @@
         "gateway_rust_prompts",
         "gateway_rust_terminal_execution"
       ],
-      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit."
+      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit."
     },
     {
       "reference": "packages/gateway/src/tools/prompts/xai-prompt.ts",
@@ -1636,7 +1636,7 @@
     },
     {
       "reference": "packages/gateway/src/services/background-command-continuation.ts",
-      "reference_sha256": "4611e9ba9f168b29a871691a967a09bddb08e4f790b87c22d90e5ea644d21eba",
+      "reference_sha256": "98b282e51f87862d10956ba7de727bed011e50b1fd55da93454c86c0240e8f63",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/services/background_command_continuation.rs",
@@ -1847,7 +1847,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/tool-names.ts",
-      "reference_sha256": "546ccfacb2d144925370a54c344906b006c5fcfaef30aa46f47787049b1118ae",
+      "reference_sha256": "f293fbfe5eecb507af84cb77ab3d2a2bc85dab027d94ca0f2af814562eac4fac",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/tool_names.rs"
@@ -1860,7 +1860,7 @@
       "targets": [
         "gateway_rust_runtime_tools"
       ],
-      "review": "Exhaustive native enum, canonical names, keys, reverse lookup and uniqueness compared to TypeScript."
+      "review": "Exhaustive native enum, canonical names, keys, reverse lookup and uniqueness compared to TypeScript. 2026-10-24 tool UX refresh: Canonical browser lifecycle names and legacy policy equivalence are covered by runtime metadata, registry and permission contracts."
     },
     {
       "reference": "packages/gateway/src/tools/core/todo.ts",
@@ -1882,7 +1882,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/link-tools.ts",
-      "reference_sha256": "c86427700dd8291adddc4d81a1de27e0e7fa80de60ebf2734f492b1b023a7fa4",
+      "reference_sha256": "b7ed587b54effc929fd9ab02b1e438935321d16ef1074d4f7425bae27e139e1d",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/links.rs",
@@ -1897,7 +1897,7 @@
       "targets": [
         "gateway_rust_utility_tools"
       ],
-      "review": "Internal link validation and search updates, complete metadata, query preservation, WHATWG encoding and UTF-16 length boundaries."
+      "review": "Internal link validation and search updates, complete metadata, query preservation, WHATWG encoding and UTF-16 length boundaries. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit."
     },
     {
       "reference": "packages/gateway/src/services/calendar/google.ts",
@@ -2201,7 +2201,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/model-result.ts",
-      "reference_sha256": "24a3f85883291954df8783cd44c722f0cdb8d8882474814c858f45fdf2adbf7e",
+      "reference_sha256": "00a63d672b118d53b42e129bd11c7093a1c211cd0accc4ab5fd004e6144420b8",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/model_result.rs",
@@ -2216,7 +2216,7 @@
       "targets": [
         "gateway_rust_model_result"
       ],
-      "review": "Model-only projection, top-level message deduplication, omitted versus null data, JS-compatible serialization, UTF-16 clipping with scalar execution status and surrogate-safe prefixes. Eleven differential tests, five native regressions, four mutations caught by both suites. Finite JSON/Unicode boundary; tiny budgets retain the minimum envelope as in the reference. Native library only; production model-history wiring remains separate."
+      "review": "Model-only projection, top-level message deduplication, omitted versus null data, JS-compatible serialization, UTF-16 clipping with scalar execution status and surrogate-safe prefixes. Eleven differential tests, five native regressions, four mutations caught by both suites. Finite JSON/Unicode boundary; tiny budgets retain the minimum envelope as in the reference. Native library only; production model-history wiring remains separate. 2026-10-24 tool UX refresh: Head/tail excerpts retain bounded execution handles and small diagnostics/coverage fields; tail-failure and UTF-16 differential contracts pass."
     },
     {
       "reference": "packages/gateway/src/tools/skill-discovery-tools.ts",
@@ -2704,7 +2704,7 @@
     },
     {
       "reference": "packages/gateway/src/security/tool-permissions.ts",
-      "reference_sha256": "5e3375a5562e654af275bac3206b4829b4830630f9e178386780ef7ad324c887",
+      "reference_sha256": "3f5dd50afea77ef753d139fc99bbb8059a422fb8433d162a9bbd9b3532777aa9",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/security/tool_permissions.rs"
@@ -2717,7 +2717,7 @@
       "targets": [
         "gateway_rust_tool_permissions"
       ],
-      "review": "All exported policy/consent/command/path behavior, real TypeScript differential vectors, UTF-16 and legacy case-folding repro, two caught/restored consent and denial mutations. Full gate controls credit; executor/scope activation is separate."
+      "review": "All exported policy/consent/command/path behavior, real TypeScript differential vectors, UTF-16 and legacy case-folding repro, two caught/restored consent and denial mutations. Full gate controls credit; executor/scope activation is separate. 2026-10-24 tool UX refresh: Browser renames preserve legacy policy fallback with explicit canonical precedence; permissions remain bound to the called name for consent tracking."
     },
     {
       "reference": "packages/gateway/src/security/consent-manager.ts",
@@ -3045,8 +3045,8 @@
       "native": [
         "packages/gateway-rust/src/scheduler/service.rs",
         "packages/gateway-rust/src/scheduler/minute.rs",
-        "packages/gateway-rust/src/scheduler/tzdata_2024a.rs",
-        "packages/gateway-rust/src/scheduler/scheduler-tzdata-2024a.bin",
+        "packages/gateway-rust/src/scheduler/tzdata_2025b.rs",
+        "packages/gateway-rust/src/scheduler/scheduler-tzdata-2025b.bin",
         "packages/gateway-rust/src/scheduler/mod.rs"
       ],
       "contracts": [
@@ -3057,7 +3057,7 @@
       "targets": [
         "gateway_rust_scheduler"
       ],
-      "review": "Durable SQLite CRUD/history, owner/system-job filtering, concurrent scheduling, minute/timezone matching, agent-task rewrite, one-shot success/failure/retention and timer lifecycle. Nine component contracts, two native timer checks and fourteen original tests pass; eight caught/restored mutations. Native timezone data pinned to reference ICU. Source crash/cancellation limits retained. See tests/contract/reviews/native-scheduler.md."
+      "review": "Durable SQLite CRUD/history, owner/system-job filtering, concurrent scheduling, minute/timezone matching, agent-task rewrite, one-shot success/failure/retention and timer lifecycle. Nine component contracts, two native timer checks and fourteen original tests pass; eight caught/restored mutations. Native timezone data pinned to reference ICU. Source crash/cancellation limits retained. See tests/contract/reviews/native-scheduler.md. 2026-10-25 reference runtime refresh: pinned IANA 2025b standard TZif data passes Bun 1.4.0 / ICU 78.3 comparisons, including America/Coyhaique; no host timezone fallback. Scheduler and channel-assistant targets pass (23 checks)."
     },
     {
       "reference": "packages/gateway/src/tools/core/edit.ts",
@@ -3394,7 +3394,7 @@
         "packages/gateway-rust/src/integrations/channel_assistant.rs",
         "packages/gateway-rust/src/integrations/channel-assistant-metadata.json",
         "packages/gateway-rust/src/scheduler/minute.rs",
-        "packages/gateway-rust/src/scheduler/tzdata_2024a.rs",
+        "packages/gateway-rust/src/scheduler/tzdata_2025b.rs",
         "packages/gateway-rust/src/time.rs"
       ],
       "contracts": [
@@ -3406,7 +3406,7 @@
       "targets": [
         "gateway_rust_channel_assistant"
       ],
-      "review": "tests/contract/reviews/native-channel-assistant.md: all exported constants and formatting/context/host-zone branches; real-source comparison across canonical zones and aliases, historical seconds, DST, offset syntax, extended years and TimeClip, malformed Unicode fallback, four caught/restored source mutations. Injectable host timezone discovery; connector activation remains separate."
+      "review": "tests/contract/reviews/native-channel-assistant.md: all exported constants and formatting/context/host-zone branches; real-source comparison across canonical zones and aliases, historical seconds, DST, offset syntax, extended years and TimeClip, malformed Unicode fallback, four caught/restored source mutations. Injectable host timezone discovery; connector activation remains separate. 2026-10-25 reference runtime refresh: pinned IANA 2025b standard TZif data passes Bun 1.4.0 / ICU 78.3 comparisons, including America/Coyhaique; no host timezone fallback. Scheduler and channel-assistant targets pass (23 checks)."
     },
     {
       "reference": "packages/gateway/src/surfaces/filesystem.ts",
@@ -3624,7 +3624,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/registry.ts",
-      "reference_sha256": "74103f6c72bbc4f8125b4e45af82e3e6a56fa8e6aaed22269702c97b36ad2efb",
+      "reference_sha256": "c43b8165bea53f70ec9c4830aa3f7fe3da4459d79e761966977a1b01ea3fc83c",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/registry.rs"
@@ -3637,7 +3637,7 @@
       "targets": [
         "gateway_rust_tool_registry"
       ],
-      "review": "tests/contract/reviews/native-registry.md: actual TypeScript comparisons, complete metadata/results, ordered calls and error boundaries, caught/restored mutations. Full frozen validation controls credit; caller scope/consent, transport activation and production replacement remain separate."
+      "review": "tests/contract/reviews/native-registry.md: actual TypeScript comparisons, complete metadata/results, ordered calls and error boundaries, caught/restored mutations. Full frozen validation controls credit; caller scope/consent, transport activation and production replacement remain separate. 2026-10-24 tool UX refresh: Compatibility-only registrations execute through validation/audit but stay out of discovery; old/new disable rules are equivalent and compared against TypeScript."
     },
     {
       "reference": "packages/gateway/src/tools/meta-tools.ts",
@@ -3904,7 +3904,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/context-evidence.ts",
-      "reference_sha256": "5dde7e533a59a36795e90b7087064d79f3c79f2791d5f3722e3ad351c31f4acc",
+      "reference_sha256": "ae9894ff4cba841c74bad5e59c5c1b9a4656d44e9ccde57cab6b3391af532d8a",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/context_evidence.rs"
@@ -3918,7 +3918,7 @@
       "targets": [
         "gateway_rust_context_budget"
       ],
-      "review": "Factory metadata, scoped UTF-16 evidence projection/pagination, ownership and expiry, bounded ledgers and real SQLite session-state restoration/accounting. Canonical tool records remain untouched. Feature-level parity and a combined native flow are mandatory. TypeScript loop/MCP acceptance is separately labeled reference-runtime evidence. See tests/contract/reviews/native-context-budget.md; source-bound validation is required."
+      "review": "Factory metadata, scoped UTF-16 evidence projection/pagination, ownership and expiry, bounded ledgers and real SQLite session-state restoration/accounting. Canonical tool records remain untouched. Feature-level parity and a combined native flow are mandatory. TypeScript loop/MCP acceptance is separately labeled reference-runtime evidence. See tests/contract/reviews/native-context-budget.md; source-bound validation is required. 2026-10-24 tool UX refresh: Optional bounded literal search preserves scope/expiry and returns match offsets and context after reload; search and diagnostic recovery contracts pass."
     },
     {
       "reference": "packages/gateway/src/providers/context-control.ts",
@@ -3995,6 +3995,266 @@
         "gateway_rust_graph_tools"
       ],
       "review": "All five definitions, exact metadata, trimmed project requirements, scoped owner and option forwarding, opaque execution context identity, stable ranked summaries, paths, and Error/thrown-value conversion. Forty-seven actual TypeScript comparisons and caught/restored ranking mutation. Storage/query and HTTP components are tracked separately."
+    },
+    {
+      "reference": "packages/gateway/src/routes/code-graph.ts",
+      "reference_sha256": "a30498d4df4058f4c20954e0e9a92672f6b13520c474973e075f11010b5e7172",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/routes/code_graph.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_graph_http.rs",
+        "tests/contract/drivers/nativegraphhttp.ts",
+        "tests/contract/reviews/native-code-graph-http.md"
+      ],
+      "targets": [
+        "gateway_rust_graph_http"
+      ],
+      "review": "All six HTTP endpoints: real authentication/listener, ownership and remote-node guards before service effects, path and repository metadata forwarding, exact errors/results/content type, malformed field validation order, numeric-prefix rounding, and disconnect cancellation. 75 TypeScript differential requests; four isolated guard/type/cancellation mutations caught and restored. HTTP adapter only; no service parser or production cutover credit. Full source-bound gate controls credit."
+    },
+    {
+      "reference": "packages/gateway/src/services/chat-loops.ts",
+      "reference_sha256": "f8bc460217922d90361f9860a32f21fdaf7009fb714827de7c9434f233a2848c",
+      "status": "pending",
+      "native": [
+        "packages/gateway-rust/src/services/chat_loops.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_chat_loops.rs",
+        "tests/contract/drivers/nativechatloops.ts",
+        "tests/contract/reviews/native-chat-loops.md"
+      ],
+      "targets": [
+        "gateway_rust_chat_loops"
+      ],
+      "review": "Previous deterministic lifecycle checkpoint retained below; live System One checkpoint monitoring adds model review, bounded deadlines, redaction and stale-review races that are not reconstructed in native host composition. Deterministic budgets, schema, disabled-monitor path and instructions are compared by gateway_rust_chat_loops; full component credit is withdrawn until configured-monitor parity is verified."
+    },
+    {
+      "reference": "packages/gateway/src/tools/loop-tools.ts",
+      "reference_sha256": "677cb169874feb9c67774e143b63e09627fa49d0f45a4acd055392b428bc303b",
+      "status": "pending",
+      "native": [
+        "packages/gateway-rust/src/tools/loop_tools.rs",
+        "packages/gateway-rust/src/tools/loop-tools-metadata.json"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_chat_loops.rs",
+        "tests/contract/drivers/nativechatloops.ts",
+        "tests/contract/reviews/native-chat-loops.md"
+      ],
+      "targets": [
+        "gateway_rust_chat_loops"
+      ],
+      "review": "Previous deterministic lifecycle checkpoint retained below; live System One checkpoint monitoring adds model review, bounded deadlines, redaction and stale-review races that are not reconstructed in native host composition. Deterministic budgets, schema, disabled-monitor path and instructions are compared by gateway_rust_chat_loops; full component credit is withdrawn until configured-monitor parity is verified."
+    },
+    {
+      "reference": "packages/gateway/src/routes/plugins.ts",
+      "reference_sha256": "1c9f58511666fa885e79e8298904ef7f774038b66c30d7155495143952db3b98",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/routes/plugins.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_plugin_http.rs",
+        "tests/contract/drivers/nativepluginshttp.ts",
+        "tests/contract/reviews/native-plugin-http.md"
+      ],
+      "targets": [
+        "gateway_rust_plugin_http"
+      ],
+      "review": "Actual Fastify/native loopback comparison for all eight plugin handlers, authentication before manager calls, decoded/malformed IDs and JSON, static scan-ID routing, config shallow merge, ordered rescan and caught/unhandled errors. Four isolated mutations rejected; UTF-16 string spread retains units. Manager implementation/activation and shared lone-surrogate JSON request transport remain separate gaps."
+    },
+    {
+      "reference": "packages/gateway/src/tools/persona-agent-tools.ts",
+      "reference_sha256": "8ec53e6327590fd90d245005669d31c7ee8d18c178905255e95adc3cfebe091f",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/tools/persona_agents.rs",
+        "packages/gateway-rust/src/tools/persona-agent-metadata.json"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_persona_tools.rs",
+        "tests/contract/drivers/nativepersonatools.ts"
+      ],
+      "targets": [
+        "gateway_rust_persona_tools"
+      ],
+      "review": "Actual TypeScript factory comparisons of full metadata, ordered owner/identity/service arguments, successful and failed dispatch, validation/defaults and caught/uncaught errors; isolated regressions caught and restored. See tests/contract/reviews/native-persona-tools.md. Explicit service ports retain engine policy and grant no service or production activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/tools/agent-github-tools.ts",
+      "reference_sha256": "440142987e81540ee57b3425d822a7de55c5fa347683ddd4c7e0b0c4592709d9",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/tools/agent_github.rs",
+        "packages/gateway-rust/src/tools/agent-github-metadata.json"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_agent_github_tools.rs",
+        "tests/contract/drivers/nativeagentgithub.ts"
+      ],
+      "targets": [
+        "gateway_rust_agent_github_tools"
+      ],
+      "review": "Actual TypeScript factory comparisons of full metadata, ordered owner/identity/service arguments, successful and failed dispatch, validation/defaults and caught/uncaught errors; isolated regressions caught and restored. See tests/contract/reviews/native-agent-github-tools.md. Explicit service ports retain engine policy and grant no service or production activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/services/thread-title.ts",
+      "reference_sha256": "ac783b25be3a820dac4f12aa0f1c83b6e02ebbd0d7e1c35954a50ab9ad33d889",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/services/thread_title.rs",
+        "packages/gateway-rust/src/services/thread_title_generation.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_thread_title.rs",
+        "tests/contract/drivers/nativetitle.ts",
+        "tests/contract/tests/gateway_rust_session_http.rs"
+      ],
+      "targets": [
+        "gateway_rust_thread_title",
+        "gateway_rust_session_http"
+      ],
+      "review": "Reviewed native provider/API title generation, scoped event filtering, completion/send-error ordering, subscription cleanup, exact deadline, credential/model/URL precedence, 512-token budget, response parsing and lossless UTF-16 normalization. Actual TypeScript comparisons; eight caught/restored isolated mutations. Engine-generated TypeError lexical diagnostics alone canonicalized. Review: tests/contract/reviews/native-thread-title-reconciliation.md. Host ports retain authorization, transport bounds and external cancellation; no provider/transport or activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/tools/sandbox-background-terminal.ts",
+      "reference_sha256": "9109cc8da02b77291ece4a59e141c2dec9a2b58706eb2a016f25bf7394fc9928",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/tools/sandbox_background_terminal.rs",
+        "packages/gateway-rust/src/services/background_command_monitor.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_sandbox_terminal.rs",
+        "tests/contract/drivers/nativesandboxterm.ts"
+      ],
+      "targets": [
+        "gateway_rust_sandbox_terminal"
+      ],
+      "review": "Reviewed native sandbox startup/handoff policy reusing the canonical external background monitor: pre-abort/install race, execution/startup/idle deadlines, startup-only output and cleanup, exact completion fields, scoped progress/cancel, notification suppression and capacity rejection with stop/error propagation. Actual TypeScript adapter and real TS/native monitors compared in 20 virtual-time scenarios; eight isolated mutations caught and restored. Review: tests/contract/reviews/native-sandbox-background-terminal.md. Host retains consent/scoping, bounded process execution and supervised stop/reap; no sandbox manager/process-engine/platform or activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/security/sandbox-background-process.ts",
+      "reference_sha256": "c620a78f2a3b8dbe666931e3d95835783f2b96350763fdd98fc38b52829d9638",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/security/sandbox_background_process.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_sandbox_process.rs",
+        "tests/contract/drivers/nativesandboxproc.ts"
+      ],
+      "targets": [
+        "gateway_rust_sandbox_process"
+      ],
+      "review": "Reviewed native attached sandbox process lifetime and injected-runner projection over authorized process/timer/supervision ports. Actual TypeScript comparisons cover 24 scenarios including admission cap/reuse, argv, PID framing/validation, output/UTF-16 bounds, terminal outcomes, stop escalation, late PID, dropped stop observer and cleanup deadlines/errors; eight isolated mutations caught and restored. Review: tests/contract/reviews/native-sandbox-background-process.md. Hosts retain invocation/identity/consent/scope validation, one shared admission instance, serialized Node-compatible chunk decoding and real process termination/reaping. Opaque runner stop cannot terminate it; cancelled result output preserves the reference bound limitation. No sandbox manager, Docker engine, platform or activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/services/thread-review-sync.ts",
+      "reference_sha256": "b2889b3302fa81dd69c4da79d818a59e4aca895e8cb27b3b03630da54e3d9105",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/services/thread_review_sync.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_review_sync.rs",
+        "tests/contract/drivers/nativereviewsync.ts",
+        "tests/contract/reviews/native-thread-review-sync.md"
+      ],
+      "targets": [
+        "gateway_rust_review_sync"
+      ],
+      "review": "Actual TypeScript polling policy compared in 60 scenarios across seven differential groups: candidate filters, ordered PR metadata/state/activity broadcasts, local and remote Git/forge resolution, node/platform/remote precedence, nullish fallback, error containment, interval lifetime and overlapping ticks. Two native cancellation/weak-reference lifetime checks and four driver checks pass. Nine native and two TypeScript isolated mutations fail assertions; restored suite passes. Cleanup uses an explicit authorized host scheduling port with no detached service task. Host authorization, execution admission, supervision and external effects remain separate integration gates."
+    },
+    {
+      "reference": "packages/gateway/src/providers/steering-dispatcher.ts",
+      "reference_sha256": "42be0b05a3620f5a5a6c7febde8554ac08811e5864b1589583c5ac76abffeef6",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/providers/steering_dispatcher.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_steering_dispatcher.rs",
+        "tests/contract/drivers/nativesteeringdispatch.ts",
+        "tests/contract/reviews/native-steering-dispatcher.md"
+      ],
+      "targets": [
+        "gateway_rust_steering_dispatcher"
+      ],
+      "review": "Actual dispatcher and controller compared in 23 deterministic action scripts: deferred single delivery, FIFO acknowledgements, rejected/error fallback, pause/start races and captured ack waits, disposal/unsubscribe, suppressed late transcript markers, exact object consumption after drains, Unicode and queue metadata. Two native lifetime checks cover dropped polled/unpolled tasks and explicit restart after uncertain delivery. All 13 isolated native/reference regressions caught; restored suite passes 11 checks. Host owns authorized session queue, provider transport, supervised scheduler and effect budgets; no full agent-loop, provider or production integration credit."
+    },
+    {
+      "reference": "packages/gateway/src/services/provider-updates.ts",
+      "reference_sha256": "e2368c8d84a3eb476ec51a1a1660d771d104b792de39b26c69942d2555ec45e0",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/services/provider_updates.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_provider_updates.rs",
+        "tests/contract/drivers/nativeproviderupdates.ts",
+        "tests/contract/reviews/native-provider-updates.md"
+      ],
+      "targets": [
+        "gateway_rust_provider_updates"
+      ],
+      "review": "64 actual-TypeScript scenarios compare fixed process/registry requests, PATH access/realpath and platform order, versions, cache expiry and forced overlap, error precedence, timer start/stop and post-update verification. Two native checks cover 24 concurrent callers and canceled polled/unpolled supervisors; all 15 isolated native/reference mutations caused intended value-assertion failures and the restored nine-check target passes. Host owns update consent, process/path identity, registry policy, deadlines, output limits, bounded supervision and actual cleanup; no real install, production updater integration or activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/routes/store.ts",
+      "reference_sha256": "4110b0dd17e439181ed307eb6a2e88be51a9864631ae6966f5fd0e85631f2add",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/routes/store.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_store_http.rs",
+        "tests/contract/drivers/nativestorehttp.ts"
+      ],
+      "targets": [
+        "gateway_rust_store_http"
+      ],
+      "review": "tests/contract/reviews/native-store-http.md"
+    },
+    {
+      "reference": "packages/gateway/src/routes/consent.ts",
+      "reference_sha256": "654890a5bc957e92d13bf3e47ebd0efed42ad26fd6ea8e4eb16f3da1382c784c",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/routes/consent.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_consent_http.rs",
+        "tests/contract/drivers/nativeconsenthttp.ts",
+        "tests/contract/reviews/native-consent-http.md"
+      ],
+      "targets": [
+        "gateway_rust_consent_http"
+      ],
+      "review": "Opt-in consent HTTP adapter over the existing native manager. Actual TypeScript loopback HTTP comparisons preserve ownership/thread fallback, permission order, filtered pending/count, decisions/reasons/audit, distinct notification/session bulk overrides, failure ordering and malformed inputs. Native origin/current-user and closed-lane denials precede host effects. See native-consent-http.md; production mounting and real host composition remain open."
+    },
+    {
+      "reference": "packages/gateway/src/routes/channels.ts",
+      "reference_sha256": "187075b505d2cb718e03a27b5be502f05b36b9c1caad9f95303bb72e14fafd4b",
+      "status": "verified",
+      "native": [
+        "packages/gateway-rust/src/routes/channels.rs",
+        "packages/gateway-rust/src/routes/mod.rs",
+        "packages/gateway-rust/src/integrations/channel_contracts.rs",
+        "packages/gateway-rust/src/contracts/bounded_json.rs"
+      ],
+      "contracts": [
+        "tests/contract/tests/gateway_rust_channels_http.rs",
+        "tests/contract/drivers/nativechannelshttp.ts",
+        "tests/contract/reviews/native-channels-http.md"
+      ],
+      "targets": [
+        "gateway_rust_channels_http"
+      ],
+      "review": "Actual-TypeScript HTTP comparisons: seven authenticated routes, credential redaction and token transitions/extraction, nullish/lazy QR, missing records, setup/pair/start status and catch boundaries, transient returnUrl filtering, shared record updates, host failures/thrown values, encoded IDs and malformed body/media/URL parsing. Explicit inert host ports; connector/manager and production effect composition remain separate. See native-channels-http.md and source-bound mutation/full gate evidence. Seven actual-TypeScript comparison groups include UTF-16 astral string spread and raw config preservation; object-spread helper is shared with plugin routes. Eight transport checks are repeated across both focused targets (31 total checks)."
     }
-  ]
+  ],
+  "updated_at": "2026-10-25T07:32:04.975289+00:00"
 }

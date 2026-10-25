@@ -53,11 +53,21 @@ test('closing the preview panel releases its live preview session', async ({ pag
   }, [API_URL, token] as const)
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  const previewButton = page.getByRole('button', { name: 'Preview', exact: true })
-  await expect(previewButton).toBeVisible({ timeout: 20_000 })
-  await previewButton.click()
-  await expect(previewButton).toHaveAttribute('aria-pressed', 'true')
-  await previewButton.click()
-  await expect(previewButton).toHaveAttribute('aria-pressed', 'false')
+  // The preview toggle only exists while the project workspace is open, so
+  // open the editor from the same developer toolbar first.
+  const editorToggle = page.getByRole('button', { name: 'Editor', exact: true })
+  await expect(editorToggle).toBeVisible({ timeout: 20_000 })
+  await editorToggle.click()
+
+  // The toolbar toggle exposes its state through the accessible name
+  // ("Open preview" / "Close preview"); it never carried aria-pressed.
+  const openButton = page.getByRole('button', { name: 'Open preview', exact: true })
+  await expect(openButton).toBeVisible({ timeout: 20_000 })
+  await openButton.click()
+
+  const closeButton = page.getByRole('button', { name: 'Close preview', exact: true })
+  await expect(closeButton).toBeVisible()
+  await closeButton.click()
+  await expect(openButton).toBeVisible()
   await expect.poll(() => stopCount).toBeGreaterThan(0)
 })

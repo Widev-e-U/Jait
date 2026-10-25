@@ -9,7 +9,10 @@ import { recoveryPlan } from './migration-recovery.ts';
 console.log = (...args) => console.error(...args);
 const directory = process.env.JAIT_STATE_DIR!;
 mkdirSync(directory, {recursive:true});
-setTimeout(() => { console.error('migration bridge exceeded deadline'); process.exit(124); }, 29000).unref();
+// Sits just under the Rust-side driver deadline so a hung bridge reports here first.
+// Sized for headroom: the heaviest call (messenger.recover count=50000) takes ~17.5s
+// unloaded, and the ladder runs this suite beside vitest and other cargo suites.
+setTimeout(() => { console.error('migration bridge exceeded deadline'); process.exit(124); }, 100000).unref();
 async function dispatch(call: any): Promise<unknown> {
   switch (call.op) {
     case 'recovery.plan': return recoveryPlan(call.actions);

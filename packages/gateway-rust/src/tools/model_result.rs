@@ -48,26 +48,86 @@ pub fn bound_model_data_with_limit(value: &Value, max_chars: f64) -> Value {
         "timedOut",
         "needsInteraction",
         "terminalId",
+        "executionId",
+        "status",
+        "yielded",
+        "isBackground",
+        "watched",
         "outputOffset",
         "outputEndOffset",
     ] {
         if let Some(v) = value.get(key)
             && (v.is_null() || v.is_boolean() || v.is_number() || v.is_string())
         {
-            output[key] = v.clone();
+            output[key] = v
+                .as_str()
+                .map(|s| json!(prefix(s, 128)))
+                .unwrap_or_else(|| v.clone());
         }
     }
-    let (mut low, mut high) = (0, js_len(&serialized));
+    if value.is_object() {
+        for key in [
+            "error",
+            "errors",
+            "warnings",
+            "coverage",
+            "limitations",
+            "total",
+            "count",
+            "hasMore",
+            "nextOffset",
+        ] {
+            if let Some(v) = value.get(key)
+                && js_len(&stringify(v)) as f64 <= 1024_f64.min((max_chars / 4.).floor())
+            {
+                output[key] = v.clone();
+                if js_len(&stringify(&output)) as f64 > max_chars / 2. {
+                    output.as_object_mut().unwrap().shift_remove(key);
+                }
+            }
+        }
+    }
+    let text = value
+        .get("output")
+        .and_then(Value::as_str)
+        .unwrap_or(&serialized);
+    let excerpt = |length: usize| -> String {
+        if length >= js_len(text) {
+            return text.to_owned();
+        }
+        let head = length.div_ceil(2);
+        let tail = length / 2;
+        let units: Vec<u16> = text.encode_utf16().collect();
+        let mut start = units.len() - tail;
+        if units
+            .get(start)
+            .is_some_and(|u| (0xdc00..=0xdfff).contains(u))
+        {
+            start += 1;
+        }
+        let suffix = String::from_utf16(&units[start..]).expect("scalar boundaries");
+        format!(
+            "{}{}{}",
+            prefix(text, head),
+            if max_chars < 256. {
+                "…"
+            } else {
+                "\n… [omitted middle; full evidence available] …\n"
+            },
+            suffix
+        )
+    };
+    let (mut low, mut high) = (0, js_len(text));
     while low < high {
         let mid = low + (high - low).div_ceil(2);
-        output["preview"] = json!(prefix(&serialized, mid));
+        output["preview"] = json!(excerpt(mid));
         if js_len(&stringify(&output)) as f64 <= max_chars {
             low = mid;
         } else {
             high = mid - 1;
         }
     }
-    output["preview"] = json!(prefix(&serialized, low));
+    output["preview"] = json!(if low > 0 { excerpt(low) } else { String::new() });
     output
 }
 

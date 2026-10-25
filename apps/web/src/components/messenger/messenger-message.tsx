@@ -1,3 +1,4 @@
+import { MessageText } from '@/components/ui/message-text'
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Forward, Search, Smile } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -217,7 +218,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
         {editing ? <form className="space-y-2" onSubmit={event => { event.preventDefault(); if (text.trim()) void run(async () => { await store.edit!(roomId, message.id, text); setEditing(false) }) }}>
           <textarea autoFocus aria-label="Edit message" className="min-h-24 w-full min-w-40 resize-y rounded-md border bg-background p-2 text-sm" maxLength={10000} value={text} onChange={event => setText(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !busy) setEditing(false) }} />
           <div className="flex gap-2"><Button size="sm" type="submit" disabled={busy || !text.trim()}>Save</Button><Button size="sm" variant="ghost" type="button" disabled={busy} onClick={() => setEditing(false)}>Cancel</Button></div>
-        </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}>{message.body}</p>}
+        </form> : standaloneImage ? null : <p className={'whitespace-pre-wrap break-words [overflow-wrap:anywhere] ' + (emojiOnly ? 'text-5xl leading-tight' : 'text-sm leading-[1.35]') + ' ' + (message.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{message.body}</MessageText></p>}
         {message.attachment && <MessengerAttachment key={message.attachment.url} attachment={message.attachment} large={standaloneImage} />}
         <div className={standaloneImage
           ? 'absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] leading-4 text-white shadow-sm'

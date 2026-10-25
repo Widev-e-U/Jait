@@ -76,8 +76,8 @@ export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWith
   }
 
   return (
-    <div className="shrink-0 border-b bg-muted/20 px-3 py-1.5">
-      <form className="flex items-center gap-1.5" onSubmit={event => { event.preventDefault(); void navigate() }}>
+    <div className="shrink-0 border-b bg-muted/20 px-1.5 py-1.5 sm:px-3">
+      <form data-browser-toolbar className="flex min-w-0 items-center gap-1 sm:gap-1.5" onSubmit={event => { event.preventDefault(); void navigate() }}>
         <input
           aria-label="Browser URL"
           aria-busy={busy}
@@ -89,7 +89,7 @@ export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWith
           spellCheck={false}
           autoComplete="off"
           placeholder="Enter a URL"
-          className="h-8 min-w-0 flex-1 rounded border bg-background px-2 text-sm disabled:opacity-50"
+          className="h-8 w-0 min-w-0 flex-1 rounded border bg-background px-2 text-base disabled:opacity-50 sm:h-8 sm:text-sm"
           onFocus={() => { editing.current = !sharedWithAgent }}
           onBlur={() => { editing.current = false }}
           onChange={event => { setValue(event.target.value); setError('') }}
@@ -98,19 +98,21 @@ export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWith
           }}
         />
         <button type="submit" aria-label="Go to URL" title={sharedWithAgent ? 'Take control to navigate' : 'Go to URL'}
-          disabled={disabled || busy || sharedWithAgent || !value.trim()} className="h-8 rounded border px-2 hover:bg-muted disabled:opacity-50">
+          disabled={disabled || busy || sharedWithAgent || !value.trim()} className="flex h-8 w-8 shrink-0 items-center justify-center rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
           <ArrowRight className="h-4 w-4" />
         </button>
         <button type="button" aria-label="Refresh page" title={sharedWithAgent ? 'Take control to refresh' : 'Refresh page'}
           disabled={disabled || busy || sharedWithAgent} onClick={() => void navigate(true)}
-          className="h-8 rounded border px-2 hover:bg-muted disabled:opacity-50">
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
           <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
         </button>
-        <button type="button" aria-label="Browser tools" title="Browser tools" aria-expanded={toolsOpen}
-          disabled={disabled} onClick={onToggleTools} className="flex h-8 items-center gap-1 rounded border px-2 hover:bg-muted disabled:opacity-50">
-          <Wrench className="h-4 w-4" /><span className="hidden sm:inline">Tools</span>
-        </button>
-        {controls}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <button type="button" aria-label="Browser tools" title="Browser tools" aria-expanded={toolsOpen}
+            disabled={disabled} onClick={onToggleTools} className="flex h-8 w-8 shrink-0 items-center justify-center gap-1 rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
+            <Wrench className="h-4 w-4" /><span className="hidden sm:inline">Tools</span>
+          </button>
+          {controls}
+        </div>
       </form>
       {error && <p role="alert" className="pt-1 text-xs text-destructive">{error}</p>}
     </div>

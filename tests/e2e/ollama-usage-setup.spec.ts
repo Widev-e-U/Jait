@@ -41,7 +41,10 @@ for (const width of [1280, 390]) {
     await expect(dialog.getByRole('status')).toContainText('Invalid test key')
     await input.fill('  valid-test-key  ')
     await dialog.getByRole('button', { name: 'Save and test', exact: true }).click()
-    await expect(dialog.getByRole('status')).toContainText('Connected — cloud usage is up to date.')
+    // Wording was reworded in the usage modal (ad911912/d375efaa); the status
+    // line now reports the last *reported* cloud usage rather than claiming it
+    // is already up to date.
+    await expect(dialog.getByRole('status')).toContainText('Connected — showing the last reported cloud usage.')
     await expect(input).not.toBeVisible()
   })
 }

@@ -203,7 +203,7 @@ export function AppHeader(props: AppHeaderProps) {
 
   return (
             <>
-            <header
+            <header data-app-header
               className={
                 isMobile
                   ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 px-1 h-10 rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border'

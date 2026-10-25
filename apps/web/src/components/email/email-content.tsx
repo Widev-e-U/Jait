@@ -1,3 +1,4 @@
+import { MessageText } from '@/components/ui/message-text'
 import { useMemo, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { Button } from '@/components/ui/button'
@@ -50,7 +51,7 @@ export function EmailContent({ bodyHtml, bodyText, accountId }: { bodyHtml: stri
     } catch { setImageError('External images could not be loaded.') }
     finally { setLoading(false) }
   }
-  if (!bodyHtml) return <pre className="whitespace-pre-wrap break-words font-sans text-sm">{bodyText || '(Empty message)'}</pre>
+  if (!bodyHtml) return <pre className="whitespace-pre-wrap break-words font-sans text-sm"><MessageText>{bodyText || '(Empty message)'}</MessageText></pre>
   return (
     <div className="min-w-0" data-testid="email-content">
       {prepared.urls.length > 0 && (

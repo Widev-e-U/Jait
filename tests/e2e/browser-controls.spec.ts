@@ -10,11 +10,9 @@ test.beforeEach(async ({ page }) => {
     contentType: 'text/html',
     body: '<html><body style="margin:0;background:#e0f2fe"><button style="margin:80px" id="page-button" onclick="this.textContent=\'Clicked\'">Page button</button><input aria-label="Page input"><div style="height:4000px;padding:30px">Scrollable remote page</div></body></html>',
   }))
-  await page.route('**/src/e2e-fixtures/index.html', route => route.fulfill({
-    contentType: 'text/html',
-    body: '<div id="root"></div><script type="module" src="/src/e2e-fixtures/browser-controls.tsx"></script>',
-  }))
+  // Let Vite inject the React refresh preamble before importing the fixture.
   await page.goto('/src/e2e-fixtures/index.html')
+  await page.evaluate(() => import('/src/e2e-fixtures/browser-controls.tsx'))
 })
 
 test('wheel scrolls the page without activating a mode', async ({ page }) => {

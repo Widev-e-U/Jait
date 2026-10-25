@@ -104,11 +104,14 @@ async function scenario(call: any) {
       throw new Error(`unknown action ${action.op}`);
     };
     for (const step of call.steps) {
-      if (step.op === 'start') {
+      if (step.op === 'observeDetached') {
+        service.onDetachedResolved = project('detached');
+        steps.push({ observing: true });
+      } else if (step.op === 'start') {
         ids.push(service.startResumable({
           sessionId: step.sessionId,
           userId: step.userId ?? null,
-          requestedBy: 'user.ask',
+          requestedBy: step.requestedBy ?? 'user.ask',
           title: step.title,
           attention: step.attention,
           questions: step.questions ?? [],
@@ -127,7 +130,7 @@ async function scenario(call: any) {
       } else if (step.op === 'wait') {
         const holder: any = { settled: false, outcome: null };
         const promise = service
-          .waitForAnswer(idOf(step.request), step.sessionId, step.userId ?? null)
+          .waitForAnswer(idOf(step.request), step.sessionId, step.userId ?? null, step.options)
           .then((outcome: any) => {
             holder.settled = true;
             holder.outcome = outcome;
@@ -140,7 +143,7 @@ async function scenario(call: any) {
         const holders = step.waits.map((wait: any) => {
           const holder: any = { settled: false, outcome: null };
           service
-            .waitForAnswer(idOf(wait.request), wait.sessionId, wait.userId ?? null)
+            .waitForAnswer(idOf(wait.request), wait.sessionId, wait.userId ?? null, wait.options)
             .then((outcome: any) => {
               holder.settled = true;
               holder.outcome = outcome;
@@ -180,7 +183,7 @@ async function scenario(call: any) {
 }
 
 /** Reports the deadline the real code schedules and that it is cleared again. */
-async function timers() {
+async function timers(options?:any) {
   const clock = controlledTimers();
   try {
     const service = new UserQuestionService();
@@ -190,7 +193,7 @@ async function timers() {
       requestedBy: 'user.ask',
       questions: [{ id: 'q', header: 'H', question: 'Q' }],
     });
-    const promise = service.waitForAnswer(id, 's', null);
+    const promise = service.waitForAnswer(id, 's', null, options);
     await flush();
     const scheduled = clock.timers.map((timer) => timer.delay);
     clock.fire();
@@ -204,6 +207,6 @@ async function timers() {
 
 export async function dispatch(call: any) {
   if (call.op === 'nativeaskresume.scenario') return scenario(call);
-  if (call.op === 'nativeaskresume.timers') return timers();
+  if (call.op === 'nativeaskresume.timers') return timers(call.options);
   throw new Error(`unknown nativeaskresume op ${call.op}`);
 }

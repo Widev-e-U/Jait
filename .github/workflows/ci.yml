@@ -102,4 +102,7 @@ jobs:
           path: |
             .jait/artifacts/playwright-results
             .jait/artifacts/playwright-report
+            .jait/artifacts/playwright-shards/**/playwright-results
+            .jait/artifacts/playwright-shards/**/playwright-report
+            .jait/artifacts/playwright-shards/**/summary.json
           retention-days: 7

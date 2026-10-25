@@ -108,12 +108,7 @@ pub fn build_jait_mcp_server_ref(
         .unwrap_or_else(|| format!("http://{host}:{port}"));
     let mut url = url::Url::parse(&format!("{base}/"))
         .and_then(|u| u.join("/mcp"))
-        .map_err(|_| {
-            format!(
-                "\"/mcp\" cannot be parsed as a URL against {}",
-                serde_json::to_string(&format!("{base}/")).expect("URL text")
-            )
-        })?;
+        .map_err(|_| "Invalid URL".to_owned())?;
     for name in ["sessionId", "projectRoot", "runtimeMode"] {
         if let Some(v) = context[name].as_str().filter(|s| !s.is_empty()) {
             url.query_pairs_mut().append_pair(name, v);

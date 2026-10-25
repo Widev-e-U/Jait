@@ -1,3 +1,4 @@
+import { MessageText } from '@/components/ui/message-text'
 import { useMemo } from 'react'
 import { ImageIcon } from 'lucide-react'
 import { dayDividerLabel, needsDayDivider } from '@/lib/messenger/dates'
@@ -58,7 +59,7 @@ export function MessengerStatusView({ messages }: { messages: MessengerMessage[]
             return <div key={item.id} className="space-y-2">
               {opensDay && <p data-day-divider className="mx-auto w-fit rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{dayDividerLabel(item.timestamp)}</p>}
               <article data-status-update-id={item.id} className="max-w-full rounded-xl border bg-card p-2.5 shadow-sm">
-                {item.body && <p className={'whitespace-pre-wrap break-words text-sm leading-[1.4] [overflow-wrap:anywhere] ' + (item.unableToDecrypt ? 'italic text-muted-foreground' : '')}>{item.body}</p>}
+                {item.body && <p className={'whitespace-pre-wrap break-words text-sm leading-[1.4] [overflow-wrap:anywhere] ' + (item.unableToDecrypt ? 'italic text-muted-foreground' : '')}><MessageText>{item.body}</MessageText></p>}
                 {item.attachment
                   ? <MessengerAttachment key={item.attachment.url} attachment={item.attachment} />
                   : item.unableToDecrypt

@@ -156,12 +156,12 @@ export function isGatewayRuntimePath(path) {
   return /\.(?:[cm]?js|tsx?)$/.test(path) && !path.endsWith('.d.ts') && !/\.(test|spec)\.[cm]?[jt]sx?$/.test(path);
 }
 
-function runtimePaths(root, directory) {
+export function runtimePaths(root, directory) {
   const path = resolve(root, directory);
   if (!existsSync(path)) return [];
   return readdirSync(path, { withFileTypes: true }).flatMap(entry => {
     const child = directory + '/' + entry.name;
-    if (entry.isDirectory()) return runtimePaths(root, child);
+    if (entry.isDirectory()) return entry.name === '.jait' ? [] : runtimePaths(root, child);
     return entry.isFile() && (!directory.startsWith('packages/gateway/src') || isGatewayRuntimePath(child)) ? [child] : [];
   });
 }
@@ -177,6 +177,12 @@ function checkpointPaths(root) {
   return dirs.flatMap(directory => existsSync(resolve(root, directory))
     ? readdirSync(resolve(root, directory)).filter(name => /^\d+-report\.json$/.test(name)).map(name => directory + '/' + name)
     : []);
+}
+
+/** Shared by the native gate and freshness audit, including uninventoried runtime inputs. */
+export function validationRuntimePaths(root) {
+  return ['packages/gateway-rust/src', 'packages/shared/src', 'packages/gateway/src']
+    .flatMap(path => runtimePaths(root, path));
 }
 
 export function collectProgress(root = ROOT) {
@@ -199,11 +205,7 @@ export function collectProgress(root = ROOT) {
     ledger: readJson('packages/gateway-rust/native-coverage.json'),
     inventory: readJson('tests/contract/coverage.json'),
     checkpoints,
-    currentRuntimePaths: [
-      ...runtimePaths(root, 'packages/gateway-rust/src'),
-      ...runtimePaths(root, 'packages/shared/src'),
-      ...runtimePaths(root, 'packages/gateway/src'),
-    ],
+    currentRuntimePaths: validationRuntimePaths(root),
     readBytes,
   });
 }

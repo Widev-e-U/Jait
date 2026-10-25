@@ -12,6 +12,19 @@ export const ChatLoopSchema = z.object({
   summary: z.string().max(8000),
   nextMessage: z.string().max(8000),
   evidence: z.array(z.string().max(2000)).max(20),
+  // Optional for persisted loops and clients predating gateway monitoring.
+  budgetStartIteration: z.number().int().nonnegative().optional(),
+  stalledChecks: z.number().int().nonnegative().optional(),
+  uncheckedTurns: z.number().int().nonnegative().optional(),
+  monitor: z.object({
+    status: z.enum(["accepted", "rejected", "unavailable", "disabled"]),
+    model: z.string().max(200).optional(),
+    reviewedRevision: z.number().int().nonnegative(),
+    reviewedAt: z.string(),
+    criteriaPassed: z.array(z.boolean()).max(20),
+    progress: z.enum(["progress", "stalled", "unknown"]),
+    reason: z.string().max(2000),
+  }).optional(),
   updatedAt: z.string(),
 });
 export type ChatLoop = z.infer<typeof ChatLoopSchema>;

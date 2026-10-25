@@ -46,6 +46,84 @@ fn duplicate_source_case_ids_are_rejected_before_execution() {
     assert_eq!(unique_review_ids(["one", "two"]).len(), 2);
 }
 
+// Each review has isolated subprocesses and each mutation has its own copied
+// subject. Keep result order canonical while bounding real engine concurrency.
+fn parallel_reviews<T: Sync, R: Send>(
+    items: &[T],
+    workers: usize,
+    work: impl Fn(&T) -> R + Sync,
+) -> Vec<R> {
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc,
+    };
+    let next = AtomicUsize::new(0);
+    let failed = AtomicBool::new(false);
+    let (sender, receiver) = mpsc::channel();
+    std::thread::scope(|scope| {
+        let work = &work;
+        let next = &next;
+        let failed = &failed;
+        for _ in 0..workers.clamp(1, 4).min(items.len()) {
+            let sender = sender.clone();
+            scope.spawn(move || {
+                loop {
+                    if failed.load(Ordering::Acquire) {
+                        break;
+                    }
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    if index >= items.len() {
+                        break;
+                    }
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        work(&items[index])
+                    }));
+                    if result.is_err() {
+                        failed.store(true, Ordering::Release);
+                    }
+                    sender.send((index, result)).unwrap();
+                }
+            });
+        }
+    });
+    drop(sender);
+    let mut results: Vec<_> = receiver.into_iter().collect();
+    results.sort_by_key(|(index, _)| *index);
+    let results: Vec<_> = results
+        .into_iter()
+        .map(|(_, result)| result.unwrap_or_else(|panic| std::panic::resume_unwind(panic)))
+        .collect();
+    assert_eq!(
+        results.len(),
+        items.len(),
+        "incomplete source review cannot pass"
+    );
+    results
+}
+
+#[test]
+fn parallel_reviews_overlap_and_keep_registration_order() {
+    let barrier = std::sync::Barrier::new(2);
+    let values = parallel_reviews(&[0, 1, 2, 3], 2, |value| {
+        barrier.wait();
+        value * 2
+    });
+    assert_eq!(values, [0, 2, 4, 6]);
+}
+
+#[test]
+fn parallel_reviews_propagate_failure_and_do_not_run_queued_work() {
+    let calls = std::sync::atomic::AtomicUsize::new(0);
+    let result = std::panic::catch_unwind(|| {
+        parallel_reviews(&[0, 1, 2, 3], 1, |value| {
+            calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            assert_ne!(*value, 1, "fixture failure");
+        })
+    });
+    assert!(result.is_err());
+    assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 2);
+}
+
 #[test]
 fn reviewed_sources_pass_and_reject_mutations() {
     let directory = artifacts();
@@ -144,15 +222,28 @@ fn reviewed_sources_pass_and_reject_mutations() {
     {
         hashes.insert(path.to_owned(), json!(digest(&root().join(path))));
     }
-    let mut verdicts = Vec::new();
-    for case in &cases {
+    let workers = std::env::var("JAIT_SOURCE_REVIEW_WORKERS")
+        .or_else(|_| std::env::var("RUST_TEST_THREADS"))
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(4)
+        .clamp(1, 4);
+    let verdicts = parallel_reviews(&cases, workers, |case| {
         fixture_internal_contracts::check(&root(), &directory, &|| false, case).unwrap_or_else(
             |error| panic!("{}: {error:#}; evidence {}", case.id(), directory.display()),
         );
-        verdicts.push(json!({"id":case.id(),"status":"passed"}));
-    }
-    let mut mutations = Vec::new();
-    for source in sources {
+        json!({"id":case.id(),"status":"passed"})
+    });
+    let modules: BTreeSet<_> = sources
+        .iter()
+        .map(|source| source["module"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        modules.len(),
+        sources.len(),
+        "mutation directories must be disjoint"
+    );
+    let mutations = parallel_reviews(sources, workers, |source| {
         let module = source["module"].as_str().unwrap();
         let path = source["path"].as_str().unwrap();
         let specifier = format!("../../../{path}");
@@ -293,8 +384,8 @@ process.stdout.write(JSON.stringify({version:1,results}));
         fs::write(&copy, &sandboxed).unwrap();
         fixture_internal_contracts::check(&work, &work, &|| false, case)
             .unwrap_or_else(|e| panic!("{module} restored: {e:#}"));
-        mutations.push(json!({"path":path,"case":id,"before":"passed","mutated":"assertion-failed","restored":"passed","error":error.to_string()}));
-    }
+        json!({"path":path,"case":id,"before":"passed","mutated":"assertion-failed","restored":"passed","error":error.to_string()})
+    });
     for (path, hash) in &hashes {
         assert_eq!(
             hash,

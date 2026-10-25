@@ -2,6 +2,7 @@
 from pathlib import Path
 import os
 import runpy
+import uuid
 import unittest
 from unittest.mock import patch
 
@@ -15,6 +16,32 @@ def configuration(label):
 
 
 class ValidationOutputTests(unittest.TestCase):
+    def test_changed_snapshot_sources_receive_fresh_mtimes(self):
+        config = configuration('source-copy-test')
+        directory = ROOT / '.jait/artifacts/native-validation-output-tests' / str(uuid.uuid4())
+        directory.mkdir(parents=True)
+        source, target = directory / 'source.rs', directory / 'snapshot.rs'
+        source.write_text('new source')
+        target.write_text('old source')
+        os.utime(source, (1, 1))
+        os.utime(target, (2, 2))
+        copy = config['copy_changed_source']
+        copy(source, target, config['digest'](source))
+        self.assertEqual(target.read_text(), 'new source')
+        self.assertGreater(target.stat().st_mtime_ns, 2_000_000_000)
+        before = target.stat().st_mtime_ns
+        copy(source, target, config['digest'](source))
+        self.assertEqual(target.stat().st_mtime_ns, before)
+
+    def test_generated_artifacts_are_excluded_at_every_depth(self):
+        include = configuration('source-filter-test')['is_source_path']
+        for path in ['.jait/artifacts/report.json', 'packages/gateway-rust/src/execution/.jait/artifacts/report.json', '.aws/config', 'packages/gateway/.env']:
+            with self.subTest(path=path):
+                self.assertFalse(include(Path(path)))
+        for path in ['packages/gateway-rust/src/execution/session.rs', 'packages/gateway-rust/src/scheduler/scheduler-tzdata-2025b.bin', 'packages/gateway-rust/src/assets/native.json']:
+            with self.subTest(path=path):
+                self.assertTrue(include(Path(path)))
+
     def test_default_preserves_the_existing_location(self):
         config = configuration('')
         self.assertEqual(config['OUTPUT'], ROOT / '.jait/artifacts/gateway-rust')

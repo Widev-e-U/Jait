@@ -14,6 +14,13 @@ Jait is a local-first workbench for AI-assisted network and cybersecurity. Prior
 - Keep existing path/SSRF protections intact. Implement authorized private-network checks through a dedicated scoped execution path.
 - Public documentation and marketing must distinguish shipping capabilities from planned security adapters.
 
+## Rust Gateway Migration
+- Before Rust gateway work, read `docs/gateway-rust-migration.md` for gates and `docs/gateway-rust-architecture.md`, especially **Session ownership and concurrency**, for the design and acceptance checks. Runtime commands and checkpoint evidence are in `packages/gateway-rust/README.md`.
+- For concurrency/capacity work, read `docs/gateway-rust-capacity.md`: distinguish connected sessions, active provider turns and heavyweight effects; the ambition is thousands of concurrent sessions and eventually more than 10,000 where resources allow, with 500 as an early milestone. Each stage requires measured load/soak evidence and responsive control, fair progress and bounded resources, not increased limits alone.
+- Prefer one owner per active session, bounded work across independent sessions, supervised cancellation/cleanup, durable event replay and explicit effect authority. Keep tools sequential unless reviewed independence and resource-conflict rules permit concurrency. Apply the documented direction incrementally; proposed architecture is not implemented parity.
+- Audit `packages/gateway-rust/native-coverage.json` and live source drift before choosing a port or reporting progress. Several TypeScript references can share one canonical Rust module; do not duplicate services or award scaffold/refactor credit.
+- Preserve observable contracts with differential tests. Record an explicit compatibility decision and client evidence for intentional changes to ordering, overload, disconnect, retries or recovery. Keep native component coverage, reconstructed test coverage and production readiness separate; production remains TypeScript until replacement gates pass.
+
 ## Project Structure & Module Organization
 Jait is a Bun/TypeScript monorepo.
 - `packages/gateway`: Fastify gateway, tools, surfaces, security, scheduler, memory, DB.
@@ -94,8 +101,8 @@ The workflow can also be triggered by pushing a `v*` tag directly or via `workfl
 
 Use `bun run deploy:local` for a verified local Linux/systemd deployment without
 changing public versions or pushing. `--plan` shows the gates; `--prepare` runs
-all gates and stages without restarting. Full TypeScript, Rust and browser checks
-are mandatory. Build a frozen snapshot, preserve the running service arguments,
+all gates and stages without restarting. TypeScript, Rust and browser-tool checks are mandatory. Chromium E2E and UI
+fixture suites are skipped by default; include them with `--e2e` only when the user requests them. Build a frozen snapshot, preserve the running service arguments,
 and use the independent activation controller with health rollback. See
 `docs/local-deployment.md` for evidence, limits and rollback. Public releases
 continue to use `node scripts/release.mjs`; local deployment never replaces it.

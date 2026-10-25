@@ -63,3 +63,8 @@ invalid JSON error text, nonfinite/out-of-range JSON numbers, lone UTF-16 surrog
 payloads, every legacy date form/timezone, environment/proxy/TLS errors and every
 CLI shutdown/descendant race are not certified by these fixtures. No live provider
 or account was contacted, and no production gateway configuration changed.
+
+Signed-redirect error compatibility: the installed Bun reference reports
+`TypeError` for `redirect: "error"`. The native transport preserves that error
+name and message while refusing the redirect. The owned-loopback differential
+fixture also asserts that the destination receives no signed request.

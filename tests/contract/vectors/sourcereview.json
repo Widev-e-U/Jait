@@ -2222,7 +2222,7 @@
         "op": "sourcereview.voice",
         "module": "voice",
         "input": {
-          "text": "  Hello \ud83d\ude42  "
+          "text": "  Hello 🙂  "
         }
       },
       {
@@ -2284,7 +2284,7 @@
             "spoken": [
               {
                 "sessionId": "session-a",
-                "text": "Hello \ud83d\ude42"
+                "text": "Hello 🙂"
               }
             ]
           },
@@ -2546,10 +2546,10 @@
           "",
           "",
           "abc",
-          "ab\u2026",
-          "\u2026",
-          "ab\u2026",
-          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u2026"
+          "ab…",
+          "…",
+          "ab…",
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…"
         ]
       }
     ]
@@ -2626,10 +2626,10 @@
         "value": [
           "",
           "a\nb",
-          "\u2026 (+2 more)",
-          "\u2026 (+2 more)",
-          "a\n\u2026 (+1 more)",
-          "0\n1\n2\n3\n4\n5\n6\n7\n\u2026 (+1 more)"
+          "… (+2 more)",
+          "… (+2 more)",
+          "a\n… (+1 more)",
+          "0\n1\n2\n3\n4\n5\n6\n7\n… (+1 more)"
         ]
       }
     ]
@@ -2690,9 +2690,9 @@
         "value": [
           "Loaded 0",
           "Loaded 1\nitem",
-          "\u2022 [memory-a] Remember this",
-          "\u2022 [memory-a \u00b7 reminder] Do it (tomorrow)",
-          "\u2022 [fact] a",
+          "• [memory-a] Remember this",
+          "• [memory-a · reminder] Do it (tomorrow)",
+          "• [fact] a",
           {
             "characters": 120,
             "items": 8
@@ -4643,7 +4643,7 @@
         "input": {
           "href": "/settings?tab=tools",
           "label": "Settings",
-          "search": "a & \u00fc"
+          "search": "a & ü"
         },
         "module": "link",
         "op": "sourcereview.link"
@@ -4932,7 +4932,7 @@
       },
       {
         "op": "sourcereview.mcpConfig",
-        "input": "\ufeff{}",
+        "input": "﻿{}",
         "module": "mcpConfig"
       },
       {
@@ -4967,7 +4967,7 @@
           "true",
           "[]",
           "\"text\"",
-          "\ufeff{}",
+          "﻿{}",
           "{\"features\":{\"code_mode\":{\"direct_only_tool_namespaces\":[\"mcp__jait_core\"]}}}",
           "{\"features\":{\"code_mode\":{\"direct_only_tool_namespaces\":[\"mcp__jait_core\"]}}}",
           "{\"features\":{\"code_mode\":{\"direct_only_tool_namespaces\":[\"mcp__jait_core\"]}}}",
@@ -6632,7 +6632,7 @@
       },
       {
         "op": "sourcereview.notificationNormalize",
-        "raw": "\u2022 Completed...",
+        "raw": "• Completed...",
         "module": "notification"
       },
       {
@@ -7334,7 +7334,7 @@
               "data": {
                 "runId": "run",
                 "planId": null,
-                "summary": "\u2713 types (12ms)"
+                "summary": "✓ types (12ms)"
               }
             },
             "calls": [
@@ -7359,11 +7359,11 @@
           {
             "result": {
               "ok": true,
-              "message": "1 check(s) failed \u2014 fix plan created",
+              "message": "1 check(s) failed — fix plan created",
               "data": {
                 "runId": "run2",
                 "planId": "plan",
-                "summary": "\u2713 types (12ms)\n\u2717 test (9ms)"
+                "summary": "✓ types (12ms)\n✗ test (9ms)"
               }
             },
             "calls": [
@@ -7491,7 +7491,7 @@
                     "planId": null
                   }
                 ],
-                "summary": "\u2713 Repo\n  \u2713 types"
+                "summary": "✓ Repo\n  ✓ types"
               }
             },
             "calls": [
@@ -7515,7 +7515,7 @@
           {
             "result": {
               "ok": true,
-              "message": "1/2 repo(s) have failures \u2014 fix plans created",
+              "message": "1/2 repo(s) have failures — fix plans created",
               "data": {
                 "repos": [
                   {
@@ -7531,7 +7531,7 @@
                     "planId": "plan"
                   }
                 ],
-                "summary": "\u2713 Repo\n  \u2713 types\n\n\u2717 Other\n  \u2713 types\n  \u2717 test"
+                "summary": "✓ Repo\n  ✓ types\n\n✗ Other\n  ✓ types\n  ✗ test"
               }
             },
             "calls": [
@@ -7547,7 +7547,7 @@
                 "kind": "warning",
                 "args": [
                   "Maintenance: failures found",
-                  "1/2 repo(s) have failures \u2014 fix plans created"
+                  "1/2 repo(s) have failures — fix plans created"
                 ]
               }
             ]
@@ -7698,7 +7698,7 @@
               "data": {
                 "runId": "run",
                 "planId": null,
-                "summary": "\u2713 types (12ms)"
+                "summary": "✓ types (12ms)"
               }
             },
             "calls": [
@@ -9018,7 +9018,7 @@
           {
             "result": {
               "ok": true,
-              "message": "1 cron job(s):\n\u2022 N \u2014 \"* * * * *\" \u2192 file.read [disabled]",
+              "message": "1 cron job(s):\n• N — \"* * * * *\" → file.read [disabled]",
               "data": {
                 "jobs": [
                   {
@@ -9217,7 +9217,7 @@
           {
             "result": {
               "ok": true,
-              "message": "26 cron job(s):\n\u2022 0 \u2014 \"*\" \u2192 t\n\u2022 1 \u2014 \"*\" \u2192 t\n\u2022 2 \u2014 \"*\" \u2192 t\n\u2022 3 \u2014 \"*\" \u2192 t\n\u2022 4 \u2014 \"*\" \u2192 t\n\u2022 5 \u2014 \"*\" \u2192 t\n\u2022 6 \u2014 \"*\" \u2192 t\n\u2022 7 \u2014 \"*\" \u2192 t\n\u2022 8 \u2014 \"*\" \u2192 t\n\u2022 9 \u2014 \"*\" \u2192 t\n\u2022 10 \u2014 \"*\" \u2192 t\n\u2022 11 \u2014 \"*\" \u2192 t\n\u2022 12 \u2014 \"*\" \u2192 t\n\u2022 13 \u2014 \"*\" \u2192 t\n\u2022 14 \u2014 \"*\" \u2192 t\n\u2022 15 \u2014 \"*\" \u2192 t\n\u2022 16 \u2014 \"*\" \u2192 t\n\u2022 17 \u2014 \"*\" \u2192 t\n\u2022 18 \u2014 \"*\" \u2192 t\n\u2022 19 \u2014 \"*\" \u2192 t\n\u2022 20 \u2014 \"*\" \u2192 t\n\u2022 21 \u2014 \"*\" \u2192 t\n\u2022 22 \u2014 \"*\" \u2192 t\n\u2022 23 \u2014 \"*\" \u2192 t\n\u2022 24 \u2014 \"*\" \u2192 t\n\u2026 (+1 more)",
+              "message": "26 cron job(s):\n• 0 — \"*\" → t\n• 1 — \"*\" → t\n• 2 — \"*\" → t\n• 3 — \"*\" → t\n• 4 — \"*\" → t\n• 5 — \"*\" → t\n• 6 — \"*\" → t\n• 7 — \"*\" → t\n• 8 — \"*\" → t\n• 9 — \"*\" → t\n• 10 — \"*\" → t\n• 11 — \"*\" → t\n• 12 — \"*\" → t\n• 13 — \"*\" → t\n• 14 — \"*\" → t\n• 15 — \"*\" → t\n• 16 — \"*\" → t\n• 17 — \"*\" → t\n• 18 — \"*\" → t\n• 19 — \"*\" → t\n• 20 — \"*\" → t\n• 21 — \"*\" → t\n• 22 — \"*\" → t\n• 23 — \"*\" → t\n• 24 — \"*\" → t\n… (+1 more)",
               "data": {
                 "jobs": [
                   {
@@ -9880,7 +9880,7 @@
           {
             "code": 0,
             "stdout": "",
-            "stderr": "\u26a0 apps/web/dist not found \u2014 skipping web bundle\n",
+            "stderr": "⚠ apps/web/dist not found — skipping web bundle\n",
             "index": null,
             "nested": null,
             "oldPreserved": true,
@@ -9906,7 +9906,7 @@
         "value": [
           {
             "code": 0,
-            "stdout": "\u2705 Bundled web frontend \u2192 packages/gateway/web-dist\n",
+            "stdout": "✅ Bundled web frontend → packages/gateway/web-dist\n",
             "stderr": "",
             "index": "fixture index",
             "nested": "fixture asset",
@@ -10631,7 +10631,7 @@
           {
             "result": {
               "ok": true,
-              "message": "1 active surface(s):\n\u2022 s (terminal) \u2014 running \u00b7 session 12345678",
+              "message": "1 active surface(s):\n• s (terminal) — running · session 12345678",
               "data": {
                 "surfaces": [
                   {
@@ -12528,7 +12528,7 @@
                       }
                     ]
                   },
-                  "message": "1 check(s) failed \u2014 review the plan"
+                  "message": "1 check(s) failed — review the plan"
                 }
               }
             ],
@@ -12565,7 +12565,7 @@
               [
                 "warning",
                 "Maintenance: checks failed",
-                "1 check(s) failed in Repo \u2014 fix plan created",
+                "1 check(s) failed in Repo — fix plan created",
                 "/plans/plan"
               ]
             ]
@@ -13617,7 +13617,7 @@
         "op": "sourcereview.subscriptionFetchers",
         "module": "subscriptionFetchers",
         "mode": "cookie",
-        "input": "x\u007fy"
+        "input": "xy"
       },
       {
         "op": "sourcereview.subscriptionFetchers",
@@ -14659,12 +14659,12 @@
       {
         "path": "/0/previewChars",
         "kind": "eq",
-        "value": 121
+        "value": 116
       },
       {
         "path": "/0/preview",
         "kind": "eq",
-        "value": "{\"logs\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        "value": "{\"logs\":\"xxxxxxxxxxxxxxxxxxxxxxxxxx\n… [omitted middle; full evidence available] …\nutOffset\":10,\"outputEndOffset\":20}"
       },
       {
         "path": "/0/ok",
@@ -15149,8 +15149,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15188,8 +15188,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15227,13 +15227,13 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
         ],
-        "query": "  /CAF\u00c9  ",
+        "query": "  /CAFÉ  ",
         "limit": 10
       },
       {
@@ -15266,8 +15266,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15304,8 +15304,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15342,8 +15342,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15381,8 +15381,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15420,8 +15420,8 @@
             "enabled": false
           },
           {
-            "id": "caf\u00e9",
-            "name": "Caf\u00e9",
+            "id": "café",
+            "name": "Café",
             "description": "unicode discovery",
             "enabled": true
           }
@@ -15461,8 +15461,8 @@
           ],
           [
             {
-              "id": "caf\u00e9",
-              "name": "Caf\u00e9",
+              "id": "café",
+              "name": "Café",
               "description": "unicode discovery"
             }
           ],
@@ -17554,15 +17554,17 @@
             "code": 0,
             "copied": {
               "bash.sh": "echo \"$HOME\"\n",
-              "zsh.sh": "quote \" \\ dollar $() \ud83e\udd80\n\n",
+              "zsh.sh": "quote \" \\ dollar $() 🦀\n\n",
               "pwsh.ps1": "Write-Host `literal`\r\n"
             },
             "nested": "nested asset",
             "old": "existing asset",
             "bridge": "fixture bridge",
-            "stdout": "Copied shell integration scripts \u2192 ROOT/project/packages/gateway/dist/surfaces/shell-integration\n",
+            "stdout": "Copied shell integration scripts → ROOT/project/packages/gateway/dist/surfaces/shell-integration\n",
             "missingSource": false,
-            "missingBridge": false
+            "missingBridge": false,
+            "cursor": "fixture browser-cursor.cjs",
+            "cursorTypes": "fixture browser-cursor.d.cts"
           }
         ]
       }
@@ -17599,13 +17601,15 @@
             "bridge": null,
             "stdout": "",
             "missingSource": true,
-            "missingBridge": false
+            "missingBridge": false,
+            "cursor": null,
+            "cursorTypes": null
           },
           {
             "code": 1,
             "copied": {
               "bash.sh": "echo \"$HOME\"\n",
-              "zsh.sh": "quote \" \\ dollar $() \ud83e\udd80\n\n",
+              "zsh.sh": "quote \" \\ dollar $() 🦀\n\n",
               "pwsh.ps1": "Write-Host `literal`\r\n"
             },
             "nested": "nested asset",
@@ -17613,7 +17617,9 @@
             "bridge": null,
             "stdout": "",
             "missingSource": false,
-            "missingBridge": true
+            "missingBridge": true,
+            "cursor": null,
+            "cursorTypes": null
           }
         ]
       }
@@ -17646,11 +17652,11 @@
             "exports": {
               "assets": {
                 "bash.sh": "echo \"$HOME\"\n",
-                "zsh.sh": "quote \" \\ dollar $() \ud83e\udd80\n\n",
+                "zsh.sh": "quote \" \\ dollar $() 🦀\n\n",
                 "pwsh.ps1": "Write-Host `literal`\r\n"
               },
               "bash": "echo \"$HOME\"\n",
-              "zsh": "quote \" \\ dollar $() \ud83e\udd80\n\n",
+              "zsh": "quote \" \\ dollar $() 🦀\n\n",
               "pwsh": "Write-Host `literal`\r\n"
             }
           },
@@ -17662,11 +17668,11 @@
             "exports": {
               "assets": {
                 "bash.sh": "echo \"$HOME\"\n",
-                "zsh.sh": "quote \" \\ dollar $() \ud83e\udd80\n\n",
+                "zsh.sh": "quote \" \\ dollar $() 🦀\n\n",
                 "pwsh.ps1": "Write-Host `literal`\r\n"
               },
               "bash": "echo \"$HOME\"\n",
-              "zsh": "quote \" \\ dollar $() \ud83e\udd80\n\n",
+              "zsh": "quote \" \\ dollar $() 🦀\n\n",
               "pwsh": "Write-Host `literal`\r\n"
             }
           }
@@ -17747,7 +17753,7 @@
           {
             "code": "UNKNOWN",
             "detailLength": 1201,
-            "prefix": "\u2026xxx",
+            "prefix": "…xxx",
             "suffix": "xxxxxxxx",
             "hint": null
           },
@@ -21128,14 +21134,14 @@
                         "kind": "node",
                         "name": "Gateway",
                         "status": "ready",
-                        "details": "linux \u00b7 gateway"
+                        "details": "linux · gateway"
                       },
                       {
                         "id": "node-one",
                         "kind": "node",
                         "name": "One",
                         "status": "offline",
-                        "details": "windows \u00b7 worker"
+                        "details": "windows · worker"
                       }
                     ]
                   }
@@ -22679,7 +22685,7 @@
         "input": {
           "path": "file.txt",
           "explanation": "fixture",
-          "content": "\u00e9\n"
+          "content": "é\n"
         }
       },
       {
@@ -22728,7 +22734,7 @@
               [
                 "write",
                 "file.txt",
-                "\u00e9\n"
+                "é\n"
               ]
             ]
           },
@@ -23012,7 +23018,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 1-5 of 5",
+              "message": "file.txt — lines 1-5 of 5",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23043,7 +23049,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 2-3 of 3",
+              "message": "file.txt — lines 2-3 of 3",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23074,7 +23080,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 1-1 of 2",
+              "message": "file.txt — lines 1-1 of 2",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23105,7 +23111,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 5-4 of 2",
+              "message": "file.txt — lines 5-4 of 2",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23176,7 +23182,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Directory file.txt \u2014 4 entries:\n\u2022 raw\n\u2022 src/\n\u2022 x\n\u2022 4",
+              "message": "Directory file.txt — 4 entries:\n• raw\n• src/\n• x\n• 4",
               "data": {
                 "path": "file.txt",
                 "type": "directory",
@@ -23208,7 +23214,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Directory file.txt \u2014 0 entries",
+              "message": "Directory file.txt — 0 entries",
               "data": {
                 "path": "file.txt",
                 "type": "directory",
@@ -23274,7 +23280,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 1-1 of 1",
+              "message": "file.txt — lines 1-1 of 1",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23373,7 +23379,7 @@
           "endLine": 3
         },
         "repeat": {
-          "text": "\u00e9",
+          "text": "é",
           "count": 25600,
           "suffix": "\nx\ny"
         },
@@ -23400,7 +23406,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 1-6000 of 6002",
+              "message": "file.txt — lines 1-6000 of 6002",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23435,14 +23441,14 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 1-1 of 3",
+              "message": "file.txt — lines 1-1 of 3",
               "data": {
                 "path": "file.txt",
                 "type": "file",
                 "content": {
                   "length": 25695,
-                  "first": "1\t\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9",
-                  "last": "\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\n\n[File content truncated (50KB limit). Showing lines 1-1 of 3. Use startLine=2 to continue.]"
+                  "first": "1\téééééééééé",
+                  "last": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé\n\n[File content truncated (50KB limit). Showing lines 1-1 of 3. Use startLine=2 to continue.]"
                 },
                 "totalLines": 3,
                 "startLine": 1,
@@ -23470,7 +23476,7 @@
           {
             "result": {
               "ok": true,
-              "message": "file.txt \u2014 lines 1-1 of 1",
+              "message": "file.txt — lines 1-1 of 1",
               "data": {
                 "path": "file.txt",
                 "type": "file",
@@ -23723,7 +23729,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Fetched 1/3 URLs successfully:\n\u2022 ok https://a.invalid\n\u2022 FAILED https://b.invalid\n\u2022 FAILED https://c.invalid",
+              "message": "Fetched 1/3 URLs successfully:\n• ok https://a.invalid\n• FAILED https://b.invalid\n• FAILED https://c.invalid",
               "data": {
                 "results": [
                   {
@@ -23810,7 +23816,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Fetched 0/2 URLs successfully:\n\u2022 FAILED a\n\u2022 FAILED b",
+              "message": "Fetched 0/2 URLs successfully:\n• FAILED a\n• FAILED b",
               "data": {
                 "results": [
                   {
@@ -24094,6 +24100,10 @@
                 "turn",
                 "title-session",
                 "Reply with ONLY a short task title (3-8 words). No quotes, bullets, or commentary.\n\nfixture task"
+              ],
+              [
+                "clear",
+                1
               ]
             ],
             "unsubs": 1,
@@ -27521,7 +27531,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Found 2 files matching \"*.ts\" (stopped at the 20-result limit \u2014 narrow the pattern to see the rest)",
+              "message": "Found 2 files matching \"*.ts\" (stopped at the 20-result limit — narrow the pattern to see the rest)",
               "data": {
                 "pattern": "*.ts",
                 "files": [
@@ -27655,7 +27665,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Found 1 match for \"needle\" (stopped at the 20-result limit \u2014 narrow the pattern to see the rest) (retried as regex)",
+              "message": "Found 1 match for \"needle\" (stopped at the 20-result limit — narrow the pattern to see the rest) (retried as regex)",
               "data": {
                 "pattern": "needle",
                 "matches": [
@@ -35526,7 +35536,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Network scan complete: 12 hosts found (2 with SSH, 1 running Jait Gateway)\nHosts:\n\u2022 192.0.2.1 (named) \u00b7 gateway\n\u2022 192.0.2.2 \u00b7 ssh\n\u2022 192.0.2.3\n\u2022 192.0.2.4\n\u2022 192.0.2.5\n\u2022 192.0.2.6\n\u2022 192.0.2.7\n\u2022 192.0.2.8\n\u2026 (+2 more)",
+              "message": "Network scan complete: 12 hosts found (2 with SSH, 1 running Jait Gateway)\nHosts:\n• 192.0.2.1 (named) · gateway\n• 192.0.2.2 · ssh\n• 192.0.2.3\n• 192.0.2.4\n• 192.0.2.5\n• 192.0.2.6\n• 192.0.2.7\n• 192.0.2.8\n… (+2 more)",
               "data": {
                 "subnet": "192.0.2",
                 "hosts": [
@@ -46326,7 +46336,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Retrieved 10 nodes and 1 relationships.\nTop nodes:\n\u2022 N9 (function)\n\u2022 N8 (function)\n\u2022 N7 (function)\n\u2022 N6 (function)\n\u2022 N5 (function)\n\u2022 N4 (function)\n\u2022 N3 (function)\n\u2022 N2 (function)",
+              "message": "Retrieved 10 nodes and 1 relationships.\nTop nodes:\n• N9 (function)\n• N8 (function)\n• N7 (function)\n• N6 (function)\n• N5 (function)\n• N4 (function)\n• N3 (function)\n• N2 (function)",
               "data": {
                 "nodes": [
                   {
@@ -46485,7 +46495,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Found a 1-hop path: A \u2192 B",
+              "message": "Found a 1-hop path: A → B",
               "data": {
                 "nodes": [
                   {
@@ -50159,9 +50169,9 @@
               {
                 "id": "jait://openai/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "OpenAI \u00b7 Fixture model",
+                "description": "OpenAI · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 OpenAI"
+                "group": "Local · OpenAI"
               }
             ],
             "calls": [
@@ -50202,7 +50212,7 @@
                 "id": "jait://openai/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenAI",
+                "group": "Local · OpenAI",
                 "description": "OpenAI"
               }
             ],
@@ -50246,7 +50256,7 @@
                 "id": "jait://openai/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenAI",
+                "group": "Local · OpenAI",
                 "description": "OpenAI"
               }
             ],
@@ -50294,9 +50304,9 @@
               {
                 "id": "jait://openrouter/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "OpenRouter \u00b7 Fixture model",
+                "description": "OpenRouter · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 OpenRouter"
+                "group": "Local · OpenRouter"
               }
             ],
             "calls": [
@@ -50335,9 +50345,9 @@
               {
                 "id": "jait://openrouter/local%20%2F1/router-fallback",
                 "name": "Router Fallback",
-                "description": "OpenRouter \u00b7 Static router",
+                "description": "OpenRouter · Static router",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenRouter"
+                "group": "Local · OpenRouter"
               }
             ],
             "calls": [
@@ -50379,7 +50389,7 @@
                 "id": "jait://openrouter/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenRouter",
+                "group": "Local · OpenRouter",
                 "description": "OpenRouter"
               }
             ],
@@ -50426,9 +50436,9 @@
               {
                 "id": "jait://ollama/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Ollama \u00b7 Fixture model",
+                "description": "Ollama · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Ollama"
+                "group": "Local · Ollama"
               }
             ],
             "calls": [
@@ -50471,7 +50481,7 @@
                 "id": "jait://ollama/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Ollama",
+                "group": "Local · Ollama",
                 "description": "Ollama"
               }
             ],
@@ -50517,7 +50527,7 @@
                 "id": "jait://ollama/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Ollama",
+                "group": "Local · Ollama",
                 "description": "Ollama"
               }
             ],
@@ -50567,9 +50577,9 @@
               {
                 "id": "jait://omniroute/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "OmniRoute \u00b7 Fixture model",
+                "description": "OmniRoute · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 OmniRoute"
+                "group": "Local · OmniRoute"
               }
             ],
             "calls": [
@@ -50610,7 +50620,7 @@
                 "id": "jait://omniroute/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OmniRoute",
+                "group": "Local · OmniRoute",
                 "description": "OmniRoute"
               }
             ],
@@ -50654,7 +50664,7 @@
                 "id": "jait://omniroute/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OmniRoute",
+                "group": "Local · OmniRoute",
                 "description": "OmniRoute"
               }
             ],
@@ -50702,9 +50712,9 @@
               {
                 "id": "jait://gemini/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Gemini \u00b7 Fixture model",
+                "description": "Gemini · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Gemini"
+                "group": "Local · Gemini"
               }
             ],
             "calls": [
@@ -50745,7 +50755,7 @@
                 "id": "jait://gemini/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Gemini",
+                "group": "Local · Gemini",
                 "description": "Gemini"
               }
             ],
@@ -50789,7 +50799,7 @@
                 "id": "jait://gemini/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Gemini",
+                "group": "Local · Gemini",
                 "description": "Gemini"
               }
             ],
@@ -50837,9 +50847,9 @@
               {
                 "id": "jait://anthropic/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Anthropic \u00b7 Fixture model",
+                "description": "Anthropic · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Anthropic"
+                "group": "Local · Anthropic"
               }
             ],
             "calls": [
@@ -50880,7 +50890,7 @@
                 "id": "jait://anthropic/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Anthropic",
+                "group": "Local · Anthropic",
                 "description": "Anthropic"
               }
             ],
@@ -50924,7 +50934,7 @@
                 "id": "jait://anthropic/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Anthropic",
+                "group": "Local · Anthropic",
                 "description": "Anthropic"
               }
             ],
@@ -50972,9 +50982,9 @@
               {
                 "id": "jait://grok/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Grok \u00b7 Fixture model",
+                "description": "Grok · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Grok"
+                "group": "Local · Grok"
               }
             ],
             "calls": [
@@ -51015,7 +51025,7 @@
                 "id": "jait://grok/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Grok",
+                "group": "Local · Grok",
                 "description": "Grok"
               }
             ],
@@ -51059,7 +51069,7 @@
                 "id": "jait://grok/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Grok",
+                "group": "Local · Grok",
                 "description": "Grok"
               }
             ],
@@ -51107,9 +51117,9 @@
               {
                 "id": "jait://perplexity/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Perplexity \u00b7 Fixture model",
+                "description": "Perplexity · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Perplexity"
+                "group": "Local · Perplexity"
               }
             ],
             "calls": [
@@ -51150,7 +51160,7 @@
                 "id": "jait://perplexity/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Perplexity",
+                "group": "Local · Perplexity",
                 "description": "Perplexity"
               }
             ],
@@ -51194,7 +51204,7 @@
                 "id": "jait://perplexity/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Perplexity",
+                "group": "Local · Perplexity",
                 "description": "Perplexity"
               }
             ],
@@ -51242,9 +51252,9 @@
               {
                 "id": "jait://moonshot/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Moonshot \u00b7 Fixture model",
+                "description": "Moonshot · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Moonshot"
+                "group": "Local · Moonshot"
               }
             ],
             "calls": [
@@ -51285,7 +51295,7 @@
                 "id": "jait://moonshot/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Moonshot",
+                "group": "Local · Moonshot",
                 "description": "Moonshot"
               }
             ],
@@ -51329,7 +51339,7 @@
                 "id": "jait://moonshot/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Moonshot",
+                "group": "Local · Moonshot",
                 "description": "Moonshot"
               }
             ],
@@ -51377,9 +51387,9 @@
               {
                 "id": "jait://kimi/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "Kimi \u00b7 Fixture model",
+                "description": "Kimi · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 Kimi"
+                "group": "Local · Kimi"
               }
             ],
             "calls": [
@@ -51420,7 +51430,7 @@
                 "id": "jait://kimi/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Kimi",
+                "group": "Local · Kimi",
                 "description": "Kimi"
               }
             ],
@@ -51464,7 +51474,7 @@
                 "id": "jait://kimi/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 Kimi",
+                "group": "Local · Kimi",
                 "description": "Kimi"
               }
             ],
@@ -51512,9 +51522,9 @@
               {
                 "id": "jait://vllm/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "vLLM \u00b7 Fixture model",
+                "description": "vLLM · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 vLLM"
+                "group": "Local · vLLM"
               }
             ],
             "calls": [
@@ -51555,7 +51565,7 @@
                 "id": "jait://vllm/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 vLLM",
+                "group": "Local · vLLM",
                 "description": "vLLM"
               }
             ],
@@ -51599,7 +51609,7 @@
                 "id": "jait://vllm/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 vLLM",
+                "group": "Local · vLLM",
                 "description": "vLLM"
               }
             ],
@@ -51647,9 +51657,9 @@
               {
                 "id": "jait://opencode-go/local%20%2F1/org%2Fmodel%20x",
                 "name": "Model X",
-                "description": "OpenCode Go \u00b7 Fixture model",
+                "description": "OpenCode Go · Fixture model",
                 "isDefault": false,
-                "group": "Local \u00b7 OpenCode Go"
+                "group": "Local · OpenCode Go"
               }
             ],
             "calls": [
@@ -51690,7 +51700,7 @@
                 "id": "jait://opencode-go/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenCode Go",
+                "group": "Local · OpenCode Go",
                 "description": "OpenCode Go"
               }
             ],
@@ -51734,7 +51744,7 @@
                 "id": "jait://opencode-go/local%20%2F1/selected",
                 "name": "selected",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenCode Go",
+                "group": "Local · OpenCode Go",
                 "description": "OpenCode Go"
               }
             ],
@@ -51772,7 +51782,7 @@
                 "id": "jait://openai/i/fallback",
                 "name": "Fallback",
                 "isDefault": true,
-                "group": "Local \u00b7 OpenAI",
+                "group": "Local · OpenAI",
                 "description": "OpenAI"
               }
             ],
@@ -52493,7 +52503,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Found 2 tool(s) matching \"read\". You can now call these tools directly.\n\u2022 **files.read** (score 0.88): Read files.\n\u2022 **remote.ask** (score 0.12): Ask remote.",
+              "message": "Found 2 tool(s) matching \"read\". You can now call these tools directly.\n• **files.read** (score 0.88): Read files.\n• **remote.ask** (score 0.12): Ask remote.",
               "data": {
                 "matches": [
                   {
@@ -56568,7 +56578,7 @@
           "to": "alice@example.com",
           "cc": "cc@example.com",
           "bcc": "bcc@example.com",
-          "subject": "Hello \u4e16\u754c",
+          "subject": "Hello 世界",
           "body": "Body\nnext",
           "html": false
         },
@@ -56601,7 +56611,7 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "raw": "To: alice@example.com\r\nCc: cc@example.com\r\nBcc: bcc@example.com\r\nSubject: Hello \u4e16\u754c\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody\nnext"
+                  "raw": "To: alice@example.com\r\nCc: cc@example.com\r\nBcc: bcc@example.com\r\nSubject: Hello 世界\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nBody\nnext"
                 }
               }
             ],
@@ -56623,7 +56633,7 @@
           "to": "alice@example.com",
           "cc": "cc@example.com",
           "bcc": "bcc@example.com",
-          "subject": "Hello \u4e16\u754c",
+          "subject": "Hello 世界",
           "body": "Body\nnext",
           "html": true
         },
@@ -56656,7 +56666,7 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "raw": "To: alice@example.com\r\nCc: cc@example.com\r\nBcc: bcc@example.com\r\nSubject: Hello \u4e16\u754c\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\nBody\nnext"
+                  "raw": "To: alice@example.com\r\nCc: cc@example.com\r\nBcc: bcc@example.com\r\nSubject: Hello 世界\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\nBody\nnext"
                 }
               }
             ],
@@ -76959,7 +76969,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant URL not configured. Set HA_URL in Settings \u2192 API keys."
+              "message": "Home Assistant URL not configured. Set HA_URL in Settings → API keys."
             },
             "requests": []
           }
@@ -76987,7 +76997,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile \u2192 Security) and set HA_TOKEN in Settings \u2192 API keys."
+              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile → Security) and set HA_TOKEN in Settings → API keys."
             },
             "requests": []
           }
@@ -77013,7 +77023,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant URL not configured. Set HA_URL in Settings \u2192 API keys."
+              "message": "Home Assistant URL not configured. Set HA_URL in Settings → API keys."
             },
             "requests": []
           }
@@ -77041,7 +77051,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile \u2192 Security) and set HA_TOKEN in Settings \u2192 API keys."
+              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile → Security) and set HA_TOKEN in Settings → API keys."
             },
             "requests": []
           }
@@ -77067,7 +77077,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant URL not configured. Set HA_URL in Settings \u2192 API keys."
+              "message": "Home Assistant URL not configured. Set HA_URL in Settings → API keys."
             },
             "requests": []
           }
@@ -77095,7 +77105,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile \u2192 Security) and set HA_TOKEN in Settings \u2192 API keys."
+              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile → Security) and set HA_TOKEN in Settings → API keys."
             },
             "requests": []
           }
@@ -77128,7 +77138,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant URL not configured. Set HA_URL in Settings \u2192 API keys."
+              "message": "Home Assistant URL not configured. Set HA_URL in Settings → API keys."
             },
             "requests": []
           }
@@ -77160,7 +77170,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile \u2192 Security) and set HA_TOKEN in Settings \u2192 API keys."
+              "message": "Home Assistant token not configured. Create a long-lived access token in HA (Profile → Security) and set HA_TOKEN in Settings → API keys."
             },
             "requests": []
           }
@@ -77511,7 +77521,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Fetched 3 entities from Home Assistant:\n\u2022 light.fixture = on\n\u2022 sensor.fixture",
+              "message": "Fetched 3 entities from Home Assistant:\n• light.fixture = on\n• sensor.fixture",
               "data": [
                 {
                   "entity_id": "light.fixture",
@@ -77602,7 +77612,7 @@
           {
             "result": {
               "ok": true,
-              "message": "Fetched 10 entities from Home Assistant:\n\u2022 sensor.fixture0 = 0\n\u2022 sensor.fixture1 = 1\n\u2022 sensor.fixture2 = 2\n\u2022 sensor.fixture3 = 3\n\u2022 sensor.fixture4 = 4\n\u2022 sensor.fixture5 = 5\n\u2022 sensor.fixture6 = 6\n\u2022 sensor.fixture7 = 7\n\u2026 (+2 more)",
+              "message": "Fetched 10 entities from Home Assistant:\n• sensor.fixture0 = 0\n• sensor.fixture1 = 1\n• sensor.fixture2 = 2\n• sensor.fixture3 = 3\n• sensor.fixture4 = 4\n• sensor.fixture5 = 5\n• sensor.fixture6 = 6\n• sensor.fixture7 = 7\n… (+2 more)",
               "data": [
                 {
                   "entity_id": "sensor.fixture0",
@@ -78430,7 +78440,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant returned 404 Not Found \u2014 check the path/entity."
+              "message": "Home Assistant returned 404 Not Found — check the path/entity."
             },
             "requests": [
               {
@@ -78630,7 +78640,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant returned 404 Not Found \u2014 check the path/entity."
+              "message": "Home Assistant returned 404 Not Found — check the path/entity."
             },
             "requests": [
               {
@@ -78836,7 +78846,7 @@
           {
             "result": {
               "ok": false,
-              "message": "Home Assistant returned 404 Not Found \u2014 check the path/entity."
+              "message": "Home Assistant returned 404 Not Found — check the path/entity."
             },
             "requests": [
               {
@@ -83358,7 +83368,7 @@
         "kind": "eq",
         "value": [
           {
-            "error": "Choose 1\u201316 TCP ports from 1\u201365535"
+            "error": "Choose 1–16 TCP ports from 1–65535"
           }
         ]
       }
@@ -90022,8 +90032,8 @@
               {
                 "id": "jait://ollama/cloud/cloud-model",
                 "name": "Cloud Model",
-                "group": "Instance \u00b7 Ollama Cloud",
-                "description": "Ollama \u00b7 Fixture"
+                "group": "Instance · Ollama Cloud",
+                "description": "Ollama · Fixture"
               }
             ],
             "calls": [
@@ -90072,8 +90082,8 @@
               {
                 "id": "jait://ollama/cloud/cloud-model",
                 "name": "Cloud Model",
-                "group": "Instance \u00b7 Ollama Cloud",
-                "description": "Ollama \u00b7 Fixture"
+                "group": "Instance · Ollama Cloud",
+                "description": "Ollama · Fixture"
               }
             ],
             "calls": [
@@ -90176,8 +90186,8 @@
               {
                 "id": "jait://ollama/cloud/cloud-model",
                 "name": "Cloud Model",
-                "group": "Instance \u00b7 Ollama",
-                "description": "Ollama \u00b7 Fixture"
+                "group": "Instance · Ollama",
+                "description": "Ollama · Fixture"
               }
             ],
             "calls": [
@@ -91149,7 +91159,7 @@
               {
                 "op": "update",
                 "status": "completed",
-                "output": "\u2713 Check ($MS)",
+                "output": "✓ Check ($MS)",
                 "error": null,
                 "hasPlan": false,
                 "completed": true
@@ -91218,7 +91228,7 @@
               {
                 "op": "update",
                 "status": "failed",
-                "output": "\u2717 Check ($MS)",
+                "output": "✗ Check ($MS)",
                 "error": "Check: bad\nworse",
                 "hasPlan": true,
                 "completed": true
@@ -91296,7 +91306,7 @@
               {
                 "op": "update",
                 "status": "failed",
-                "output": "\u2717 Check ($MS)",
+                "output": "✗ Check ($MS)",
                 "error": "Check: cannot execute",
                 "hasPlan": true,
                 "completed": true
@@ -91378,7 +91388,7 @@
               {
                 "op": "update",
                 "status": "completed",
-                "output": "\u2713 Check ($MS)",
+                "output": "✓ Check ($MS)",
                 "error": null,
                 "hasPlan": false,
                 "completed": true

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 async function openViewer(page: import('@playwright/test').Page) {
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.goto('/src/e2e-fixtures/index.html', { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => import('/src/e2e-fixtures/image-viewer.tsx'))
   await page.getByRole('button', { name: 'Expand image capture.svg' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()

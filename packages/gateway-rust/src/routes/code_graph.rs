@@ -133,6 +133,22 @@ fn graph_error(error: GraphError) -> Response {
     }
     response(500, json!({"error":error.message}))
 }
+// Preserve the reference's optional trim and evaluation order. Type errors
+// are framework errors; they must not be mistaken for an absent field.
+fn trimmed<'a>(value: &'a Value, expression: &str) -> Result<&'a str, Box<Response>> {
+    match value {
+        Value::Null => Ok(""),
+        Value::String(text) => Ok(js_trim(text)),
+        _ => Err(Box::new(generic(GraphError::error(format!(
+            "{expression}?.trim is not a function. (In '{expression}?.trim()', '{expression}?.trim' is undefined)"
+        ))))),
+    }
+}
+// Bun reports the inlined object expression for this reference field.
+const PROJECT_EXPRESSION: &str = r#"{
+      ...request.query && typeof request.query === "object" ? request.query : {},
+      ...request.body && typeof request.body === "object" ? request.body : {}
+    }.projectRoot"#;
 fn query_params(query: &str) -> Value {
     let mut out = json!({});
     for (key, value) in url::form_urlencoded::parse(query.as_bytes()) {
@@ -164,7 +180,14 @@ fn integer_prefix(value: &Value) -> Option<Value> {
         return None;
     }
     let n = value[..sign + count].parse::<f64>().ok()?;
-    n.is_finite().then(|| json!(n))
+    if !n.is_finite() {
+        return None;
+    }
+    // Use ECMAScript's shortest decimal representation, including values
+    // beyond the safe-integer range. Casting to an integer changes the decimal
+    // representation of rounded doubles; serde's float formatting adds `.0`
+    // or chooses a different exponent form from JSON.stringify.
+    serde_json::from_str(ryu_js::Buffer::new().format(n)).ok()
 }
 fn repository_id(project: &Value) -> Value {
     let metadata = project["metadata"]
@@ -232,12 +255,10 @@ async fn dispatch(state: CodeGraphRoutes, request: Request) -> Response {
             input[key] = value.clone();
         }
     }
-    let project = input["projectRoot"]
-        .as_str()
-        .map(js_trim)
-        .filter(|s| !s.is_empty());
-    let Some(project) = project else {
-        return response(400, json!({"error":"projectRoot is required"}));
+    let project = match trimmed(&input["projectRoot"], PROJECT_EXPRESSION) {
+        Ok("") => return response(400, json!({"error":"projectRoot is required"})),
+        Ok(project) => project,
+        Err(error) => return *error,
     };
     let projects = match state.backend.list_active_projects(user.id.clone()).await {
         Ok(projects) => projects,
@@ -277,8 +298,10 @@ async fn dispatch(state: CodeGraphRoutes, request: Request) -> Response {
             ("snapshot", Some("snapshot"))
         }
         "/api/code-graph/query" => {
-            if body["query"].as_str().is_none_or(|s| js_trim(s).is_empty()) {
-                return response(400, json!({"error":"query is required"}));
+            match trimmed(&body["query"], "body.query") {
+                Ok("") => return response(400, json!({"error":"query is required"})),
+                Err(error) => return *error,
+                _ => {}
             }
             for key in ["query", "mode", "maxNodes", "maxDepth"] {
                 if let Some(value) = body.get(key) {
@@ -288,11 +311,14 @@ async fn dispatch(state: CodeGraphRoutes, request: Request) -> Response {
             ("query", Some("result"))
         }
         "/api/code-graph/path" => {
-            if ["source", "target"]
-                .iter()
-                .any(|k| body[*k].as_str().is_none_or(|s| js_trim(s).is_empty()))
-            {
-                return response(400, json!({"error":"source and target are required"}));
+            for key in ["source", "target"] {
+                match trimmed(&body[key], &format!("body.{key}")) {
+                    Ok("") => {
+                        return response(400, json!({"error":"source and target are required"}));
+                    }
+                    Err(error) => return *error,
+                    _ => {}
+                }
             }
             for key in ["source", "target", "maxDepth"] {
                 if let Some(value) = body.get(key) {

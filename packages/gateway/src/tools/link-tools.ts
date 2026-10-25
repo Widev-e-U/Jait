@@ -4,7 +4,7 @@ import type { ToolDefinition } from "./contracts.js";
 export const jaitLinkTool: ToolDefinition<{ href: string; label: string; search?: string }> = {
   name: "jait.link",
   displayName: "Show Jait link",
-  description: "Render a clickable link in chat to where a Jait change happened, or a relevant Jait page the user requested. Call explicitly after successful changes when useful; ordinary tool calls do not render links. This only displays a link and does not navigate automatically or modify anything. Use a short descriptive label, e.g. View the updated team. Supported pages: "
+  description: "Render a clickable link in chat to where a Jait change happened, or a relevant Jait page the user requested. Optional navigation card for a relevant user-viewable result inside Jait. Ordinary Markdown links are clickable and preferred in replies; do not call this after unrelated code edits or internal task tracking. This only displays a link and does not navigate automatically or modify anything. Use a short descriptive label, e.g. View the updated team. Supported pages: "
     + JAIT_PAGE_IDS.map((id) => `${JAIT_PAGES[id].title}: ${JAIT_PAGES[id].path}`).join(", ")
     + ". Specific chats support /chat?sessionId=<id>; threads support /threads?threadId=<id>. Searchable pages support q, e.g. /emails?q=from%3Aalice or /settings?q=providers. Use search to set q with automatic URL encoding, or put parameters directly in href. jait.catalog exposes each page's supported queryParameters, including settings tab and nested search fields. Do not invent unsupported detail routes.",
   tier: "core", category: "meta", page: "chat", source: "builtin", risk: "low", defaultConsentLevel: "none",

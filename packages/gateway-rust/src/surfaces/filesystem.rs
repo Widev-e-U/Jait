@@ -80,7 +80,7 @@ impl FileSystemError {
         match error.downcast::<io::Error>() {
             Ok(error) => Self::io(
                 *error,
-                "statx",
+                "lstat",
                 Some(&guard.project_root().join(target)),
                 None,
             ),
@@ -480,7 +480,7 @@ impl FileSystemSurface {
                 let metadata = metadata(&path)?;
                 let modified: DateTime<Utc> = metadata
                     .modified()
-                    .map_err(|e| FileSystemError::io(e, "statx", Some(&path), None))?
+                    .map_err(|e| FileSystemError::io(e, "stat", Some(&path), None))?
                     .into();
                 Ok(FileReply::Value(
                     json!({"size":metadata.len(),"isDirectory":metadata.is_dir(),"modified":modified.to_rfc3339_opts(SecondsFormat::Millis,true)}),
@@ -513,7 +513,7 @@ impl FileSystemSurface {
             }
             FileOperation::DeleteDirectory(_) => {
                 let info = fs::symlink_metadata(&path)
-                    .map_err(|e| FileSystemError::io(e, "rm", Some(&path), None))?;
+                    .map_err(|e| FileSystemError::io(e, "lstat", Some(&path), None))?;
                 let result = if info.is_dir() {
                     fs::remove_dir_all(&path)
                 } else {
@@ -634,7 +634,7 @@ fn write_text(path: &Path, text: &str) -> FileSystemResult<()> {
     fs::write(path, text).map_err(|e| FileSystemError::io(e, "open", Some(path), None))
 }
 fn metadata(path: &Path) -> FileSystemResult<fs::Metadata> {
-    fs::metadata(path).map_err(|e| FileSystemError::io(e, "statx", Some(path), None))
+    fs::metadata(path).map_err(|e| FileSystemError::io(e, "stat", Some(path), None))
 }
 fn mkdir(path: &Path) -> FileSystemResult<()> {
     fs::create_dir_all(path).map_err(|e| FileSystemError::io(e, "mkdir", Some(path), None))
@@ -645,10 +645,66 @@ fn make_parent(path: &Path) -> FileSystemResult<()> {
 fn copy(src: &Path, dest: &Path) -> FileSystemResult<()> {
     let info =
         fs::symlink_metadata(src).map_err(|e| FileSystemError::io(e, "lstat", Some(src), None))?;
+    // Bun 1.4 cp checks lstat identities and type mismatches before copying.
+    // A destination symlink is distinct from its target at this stage.
+    let destination_info = fs::symlink_metadata(dest).ok();
+    let cp_error = |code: &str, message: String| FileSystemError {
+        details: json!({"name":"SystemError","message":message,"code":code,"syscall":"cp","path":dest}),
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if destination_info
+            .as_ref()
+            .is_some_and(|other| info.dev() == other.dev() && info.ino() == other.ino())
+        {
+            return Err(cp_error(
+                "ERR_FS_CP_EINVAL",
+                format!(
+                    "Invalid src or dest: cp returned EINVAL (src and dest cannot be the same) {}",
+                    dest.display()
+                ),
+            ));
+        }
+    }
+    if let Some(other) = &destination_info {
+        if info.is_dir() && !other.is_dir() {
+            return Err(cp_error(
+                "ERR_FS_CP_DIR_TO_NON_DIR",
+                format!(
+                    "Cannot overwrite non-directory with directory: cp returned EISDIR (cannot overwrite non-directory {} with directory {}) {}",
+                    dest.display(),
+                    src.display(),
+                    dest.display()
+                ),
+            ));
+        }
+        if !info.is_dir() && other.is_dir() {
+            return Err(cp_error(
+                "ERR_FS_CP_NON_DIR_TO_DIR",
+                format!(
+                    "Cannot overwrite directory with non-directory: cp returned ENOTDIR (cannot overwrite directory {} with non-directory {}) {}",
+                    dest.display(),
+                    src.display(),
+                    dest.display()
+                ),
+            ));
+        }
+    }
     if info.file_type().is_symlink() {
         #[cfg(unix)]
         {
-            std::os::unix::fs::symlink(src, dest)
+            let target = fs::read_link(src)
+                .map_err(|e| FileSystemError::io(e, "readlink", Some(src), None))?;
+            let target = if target.is_absolute() {
+                target
+            } else {
+                join_normalized(
+                    src.parent().unwrap_or(Path::new("/")),
+                    &target.to_string_lossy(),
+                )
+            };
+            std::os::unix::fs::symlink(target, dest)
                 .map_err(|e| FileSystemError::io(e, "symlink", Some(src), Some(dest)))?;
         }
         #[cfg(not(unix))]
@@ -669,17 +725,12 @@ fn copy(src: &Path, dest: &Path) -> FileSystemResult<()> {
         }
         return Ok(());
     }
-    // Bun's cp preserves a regular file copied onto the same inode (including
-    // a destination symlink/hard link). Avoid truncating it through std::fs::copy.
-    #[cfg(unix)]
+    // cp replaces a destination symlink instead of overwriting its target.
+    if destination_info
+        .as_ref()
+        .is_some_and(|info| info.file_type().is_symlink())
     {
-        use std::os::unix::fs::MetadataExt;
-        if let Ok(other) = fs::metadata(dest)
-            && info.dev() == other.dev()
-            && info.ino() == other.ino()
-        {
-            return Ok(());
-        }
+        fs::remove_file(dest).map_err(|e| FileSystemError::io(e, "unlink", Some(dest), None))?;
     }
     fs::copy(src, dest).map_err(|e| FileSystemError::io(e, "open", Some(dest), None))?;
     Ok(())

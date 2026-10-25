@@ -262,6 +262,7 @@ interface AcpSessionState {
   acpSessionId: string;
   /** Provider failures may arrive as notifications before the prompt resolves. */
   turnError?: string;
+  promptInFlight?: boolean;
   approvals: Map<string, PendingApproval>;
   initialized: InitializeResponse;
   /**
@@ -1085,6 +1086,7 @@ export class AcpProvider implements CliProviderAdapter {
     state.turnError = undefined;
     state.session.error = undefined;
     state.session.status = "running";
+    state.promptInFlight = true;
     this.emitEvent({ type: "turn.started", sessionId });
     const prompt = [
       { type: "text" as const, text: message },
@@ -1119,6 +1121,8 @@ export class AcpProvider implements CliProviderAdapter {
       state.session.error = messageText;
       this.emitEvent({ type: "session.error", sessionId, error: messageText });
       throw error;
+    } finally {
+      state.promptInFlight = false;
     }
   }
 
@@ -1147,6 +1151,24 @@ export class AcpProvider implements CliProviderAdapter {
         exitPromise: terminal.waitForCompletion(),
       });
     }
+  }
+
+  async steerTurn(sessionId: string, message: string): Promise<boolean> {
+    const state = this.getSession(sessionId);
+    // Steering is a negotiated extension, advertised beside agentCapabilities.
+    const capability = state.initialized._meta?.["steering"] as { supported?: boolean } | undefined;
+    if (capability?.supported !== true || !state.promptInFlight) return false;
+    const result = await state.connection.extMethod("_session/steering", {
+      sessionId: state.acpSessionId,
+      prompt: [{ type: "text", text: message }],
+      // Keep ownership of idle fallback: never launch an untracked detached turn.
+      _meta: { steering: { idleBehavior: "promptRequired" } },
+    });
+    if (result["outcome"] === "promptRequired") return false;
+    // Older agents may use their detached fallback despite the idle hint. That
+    // still consumed the message, so it must not be sent a second time.
+    if (result["outcome"] === "injected" || result["outcome"] === "startedNewTurn") return true;
+    throw new Error("ACP steering returned an unknown outcome");
   }
 
   async interruptTurn(sessionId: string): Promise<void> {

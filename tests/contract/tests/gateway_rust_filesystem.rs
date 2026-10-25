@@ -442,7 +442,8 @@ async fn copy_aliases_nested_symlinks_and_existing_destinations_match() {
         {"op":"copy","path":"dir","destination":"copy"},
         {"op":"copy","path":"dir","destination":"alias/descendant"},
         {"op":"copy","path":"dir/a","destination":"existing"},
-        {"op":"copy","path":"dir","destination":"existing"},{"op":"snapshot"}
+        {"op":"copy","path":"dir","destination":"existing"},
+        {"op":"copy","path":"dir/a","destination":"copy"},{"op":"snapshot"}
     ]})]).await;
 }
 

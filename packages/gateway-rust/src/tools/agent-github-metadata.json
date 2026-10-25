@@ -1,0 +1,78 @@
+[
+  {
+    "name": "agent.github",
+    "displayName": "Agent GitHub App",
+    "page": "agents",
+    "description": "Inspect and test the GitHub App connected to a persistent Jait agent. Each agent authorises as its own App bot identity instead of the user's personal account. Actions: status (list connections or one agent's connection), instructions (how to connect an App and the webhook URL to paste into GitHub), test (mint a token and verify it reaches GitHub). Use agent.github.token to obtain working credentials for a task. The App private key is never returned.",
+    "tier": "standard",
+    "category": "agent",
+    "source": "builtin",
+    "risk": "medium",
+    "defaultConsentLevel": "once",
+    "discovery": {
+      "aliases": [
+        "github app",
+        "agent github",
+        "bot identity",
+        "installation",
+        "connect github"
+      ],
+      "examples": [
+        "Is my developer agent connected to GitHub?",
+        "How do I connect a GitHub App to my reviewer agent?",
+        "Test the reviewer agent's GitHub connection"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "status",
+            "instructions",
+            "test"
+          ]
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Agent profile id. Omit to list every agent connection for the user."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "agent.github.token",
+    "displayName": "Mint agent GitHub token",
+    "page": "agents",
+    "description": "Mint a short-lived GitHub installation token for a persistent agent's own GitHub App, so this agent's commits, pushes and pull requests are authored by its App bot instead of the user. Returns the token plus its expiry; pass it as GH_TOKEN to git/gh commands. Use this on demand per task and never store it long-term.",
+    "tier": "standard",
+    "category": "agent",
+    "source": "builtin",
+    "risk": "high",
+    "defaultConsentLevel": "once",
+    "discovery": {
+      "aliases": [
+        "github token",
+        "installation token",
+        "commit as agent",
+        "push as bot"
+      ],
+      "examples": [
+        "Get me a token so I can push as the developer agent"
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "description": "Agent profile id whose App identity to mint. Omit inside that agent's own thread."
+        }
+      }
+    }
+  }
+]

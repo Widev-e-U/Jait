@@ -156,7 +156,7 @@ fn rows(db: &rusqlite::Connection) -> Value {
                         rusqlite::types::ValueRef::Integer(n) => json!(n),
                         rusqlite::types::ValueRef::Real(n) => json!(n),
                         rusqlite::types::ValueRef::Text(v) => {
-                            json!(std::str::from_utf8(v).unwrap_or(""))
+                            json!(String::from_utf8_lossy(v))
                         }
                         _ => panic!("fixture type"),
                     };

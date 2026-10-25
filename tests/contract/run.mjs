@@ -34,11 +34,30 @@ const cargoArgs = sourceReview
   : [Object.hasOwn(binaryModes, mode) ? 'run' : mode, '--locked', '--manifest-path', manifest,
     ...(Object.hasOwn(binaryModes, mode) ? ['--bin', binaryModes[mode], '--', ...args]
       : mode === 'run' ? ['--', ...args] : args)]
-const child = spawn(cargo, cargoArgs, {
-  cwd: root,
-  stdio: 'inherit',
-  env: { ...process.env, CARGO_TARGET_DIR: buildArtifacts, CARGO_BUILD_JOBS: '2', CARGO_TERM_PROGRESS_WHEN: 'never', CARGO_TERM_COLOR: 'never' },
-})
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal))
-child.on('error', error => { console.error(error.message); process.exitCode = 1 })
-child.on('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0) })
+if (mode === 'test' && args.length === 0) {
+  const { parallelContracts } = await import('../../packages/gateway-rust/tooling/parallel-contracts.mjs')
+  const controller = new AbortController()
+  const interrupt = () => controller.abort(new Error('Contract run interrupted'))
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, interrupt)
+  try {
+    process.exitCode = await parallelContracts({
+      cargo, manifest, target: buildArtifacts, root,
+      env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: 'never', CARGO_TERM_COLOR: 'never' },
+      signal: controller.signal,
+    }) ? 0 : 1
+  } catch (error) {
+    console.error(error.message)
+    process.exitCode = 1
+  } finally {
+    for (const signal of ['SIGINT', 'SIGTERM']) process.off(signal, interrupt)
+  }
+} else {
+  const child = spawn(cargo, cargoArgs, {
+    cwd: root,
+    stdio: 'inherit',
+    env: { ...process.env, CARGO_TARGET_DIR: buildArtifacts, CARGO_BUILD_JOBS: '2', CARGO_TERM_PROGRESS_WHEN: 'never', CARGO_TERM_COLOR: 'never' },
+  })
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal))
+  child.on('error', error => { console.error(error.message); process.exitCode = 1 })
+  child.on('exit', (code, signal) => { process.exitCode = code ?? (signal ? 1 : 0) })
+}

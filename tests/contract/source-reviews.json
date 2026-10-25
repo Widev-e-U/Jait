@@ -1115,7 +1115,7 @@
     {
       "module": "modelResult",
       "path": "packages/gateway/src/tools/model-result.ts",
-      "review": "Model-bound payloads drop terminal echoes (terminalOutputAnsi always; terminalOutput only when a canonical output exists) while UI data keeps them; oversized envelopes truncate to valid JSON with bounded binary-search previews, intact UTF-16 pairs, and retained execution/evidence scalars; message-deduplicated serialization stays bounded.",
+      "review": "Model-bound payloads drop terminal echoes (terminalOutputAnsi always; terminalOutput only when a canonical output exists) while UI data keeps them; oversized envelopes truncate to valid JSON with bounded binary-search head/tail previews with an explicit omission marker, intact UTF-16 pairs, and retained execution/evidence scalars; message-deduplicated serialization stays bounded.",
       "case_ids": [
         "internal.sourcereview.model-result-projection",
         "internal.sourcereview.model-result-bounds"
@@ -1206,7 +1206,7 @@
     {
       "module": "copyShellScript",
       "path": "packages/gateway/scripts/copy-shell-integration.mjs",
-      "review": "Execute the production script under Node in an isolated package tree and unrelated CWD; recursively copy literal shell bytes, nested assets and browser bridge, preserve existing target files, and observe missing source/bridge failure order. Linux filesystem only.",
+      "review": "Execute the production script under Node in an isolated package tree and unrelated CWD; recursively copy literal shell bytes, nested assets, browser bridge and browser cursor runtime/declaration bytes, preserve existing target files, and observe missing source/bridge failure order. Linux filesystem only.",
       "case_ids": [
         "internal.sourcereview.copy-shell-assets-and-bridge",
         "internal.sourcereview.copy-shell-missing-assets"
@@ -4468,7 +4468,7 @@
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_345_3",
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_377_3"
       ],
-      "review": "Reviewed current-session validation, project/target normalization, open/start alias, stable target persistence and UI state broadcasts, failed-start hiding, stop/restart/status handling, sharing-gated events/log projections and inspect screenshot omission/control checks. Original Rust-owned fake-service fixtures assert schema alias visibility, exact start/broadcast/state payloads and MCP session routing, failure-panel state, screenshot opt-in/error count and restart success. Mutation persists transient preview URL instead of stable user target and must fail the exact UI/state payload assertion; restoration passes. No real preview, browser, screenshot, external website or UI command is sent. Stop/status/log filters/caps, absent services/sessions, browser-control refusal and failures, every sharing/metrics branch, real process lifecycle and UI/platform integration remain gaps.",
+      "review": "Reviewed current-session validation, project/target normalization, open/start alias, stable target persistence and UI state broadcasts, failed-start hiding, stop/restart/status handling, sharing-gated events/log projections and inspect screenshot omission/control checks. Original Rust-owned fake-service fixtures assert schema alias visibility, exact start/broadcast/state payloads and MCP session routing, failure-panel state, screenshot opt-in/error count and restart success. Mutation persists transient preview URL instead of stable user target and must fail the exact UI/state payload assertion; restoration passes. No real preview, browser, screenshot, external website or UI command is sent. Stop/status/log filters/caps, absent services/sessions, browser-control refusal and failures, every sharing/metrics branch, real process lifecycle and UI/platform integration remain gaps. The schema case now checks canonical browser tool naming, hidden legacy execution aliases, resumed activation and per-name execution authority with nine Rust assertions.",
       "mutation": {
         "find": "const stableTarget = preview.target ?? target ?? null;",
         "replace": "const stableTarget = preview.url ?? null;",

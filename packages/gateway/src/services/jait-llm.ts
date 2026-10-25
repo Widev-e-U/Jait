@@ -98,6 +98,12 @@ export interface ResolveJaitLlmOptions {
   apiKeys?: Record<string, string>;
   requestedModel?: string;
   jaitBackend?: JaitBackend | null;
+  /**
+   * Interactive turns set this so a missing model fails loudly instead of
+   * falling through to a backend default (OLLAMA_MODEL / OPENAI_MODEL).
+   * Non-interactive utilities (titles, commit messages) leave it off.
+   */
+  strictModel?: boolean;
 }
 
 export interface ResolvedJaitLlmConfig extends LLMConfig {
@@ -179,6 +185,20 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
   if (routedModel && !routedInstance) {
     throw new JaitConfigError(
       `Jait backend instance "${routedModel.instanceId}" is no longer configured. Pick a model from an available backend instance.`,
+    );
+  }
+
+  // Interactive turns must run on the model the user selected in the provider
+  // selector. Without this guard a model-less turn falls through to
+  // OLLAMA_MODEL / OPENAI_MODEL and silently runs — and bills — a model nobody
+  // picked. Strict callers refuse the turn instead of guessing.
+  const explicitModel = routedModel?.model
+    || routedInstance?.model
+    || options.requestedModel?.trim()
+    || "";
+  if (options.strictModel && !explicitModel) {
+    throw new JaitConfigError(
+      "No model is selected for this turn. Pick a model in the provider selector and send again — Jait will not fall back to a backend default model.",
     );
   }
 

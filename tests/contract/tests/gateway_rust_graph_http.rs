@@ -204,6 +204,11 @@ async fn all_service_parameters_responses_and_graph_errors_match_reference() {
         "?maxNodes=1e2",
         "?maxNodes=Infinity",
         "?maxNodes=1&maxNodes=2",
+        "?maxNodes=%EF%BB%BF%2B12tail",
+        "?maxNodes=-0",
+        "?maxNodes=0x20",
+        "?maxNodes=9007199254740993",
+        "?maxNodes=9223372036854775000",
     ] {
         let suffix = limit
             .strip_prefix('?')
@@ -238,6 +243,55 @@ async fn all_service_parameters_responses_and_graph_errors_match_reference() {
         }
     }
     steps.extend([json!({"method":"POST","path":"/api/code-graph/query","user":"owner","body":{"projectRoot":"/repo","query":" "}}),json!({"method":"POST","path":"/api/code-graph/path","user":"owner","body":{"projectRoot":"/repo","source":"A"}}),json!({"method":"POST","path":"/api/code-graph/path","user":"owner","body":{"projectRoot":"/repo","source":"A","target":"B"},"result":null})]);
+    compare(json!({"projects":[project()],"steps":steps})).await;
+}
+
+#[tokio::test]
+async fn malformed_field_types_and_duplicate_roots_match_without_service_effects() {
+    let mut steps = vec![];
+    for value in [json!(true), json!(7), json!([]), json!({}), Value::Null] {
+        steps.push(json!({"method":"POST","path":"/api/code-graph/index","user":"owner","body":{"projectRoot":value}}));
+        for field in ["query", "source", "target"] {
+            let route = if field == "query" { "query" } else { "path" };
+            let mut body = json!({"projectRoot":"/repo","query":"Auth","source":"A","target":"B"});
+            body[field] = value.clone();
+            steps.push(json!({"method":"POST","path":format!("/api/code-graph/{route}"),"user":"owner","body":body}));
+        }
+    }
+    steps.push(json!({"method":"GET","path":"/api/code-graph?projectRoot=/repo&projectRoot=/repo","user":"owner"}));
+    compare(json!({"projects":[project()],"steps":steps})).await;
+}
+
+#[tokio::test]
+async fn root_normalization_repository_metadata_and_validation_order_match() {
+    let mut steps = vec![];
+    for (supplied, stored) in [
+        (" /repo/// ", "/repo"),
+        ("C:\\REPO\\", "c:/repo"),
+        ("repo/../repo", "repo/../repo/"),
+        ("/repo/./child", "/repo/./child"),
+    ] {
+        steps.push(json!({"method":"POST","path":"/api/code-graph/index","user":"owner","body":{"projectRoot":supplied},"projects":[{"rootPath":stored,"nodeId":"gateway"}],"result":{"ok":true}}));
+    }
+    for metadata in [
+        "{}",
+        "null",
+        "[]",
+        "broken",
+        r#"{"repositoryId":" chosen ","repoId":"ignored"}"#,
+        r#"{"repositoryId":null,"repoId":" fallback "}"#,
+        r#"{"repositoryId":"  ","repoId":"ignored"}"#,
+        r#"{"repositoryId":7,"repoId":"ignored"}"#,
+    ] {
+        steps.push(json!({"method":"POST","path":"/api/code-graph/index","user":"owner","body":{"projectRoot":"/repo"},"projects":[{"rootPath":"/repo","metadata":metadata}],"result":{"ok":true}}));
+    }
+    // Project ownership and remote checks run before query validation.
+    steps.push(json!({"method":"POST","path":"/api/code-graph/query","user":"owner","body":{"projectRoot":"/absent","query":7}}));
+    steps.push(json!({"method":"POST","path":"/api/code-graph/query","user":"owner","body":{"projectRoot":"/repo","query":7},"projects":[{"rootPath":"/repo","nodeId":"node-a"}]}));
+    // A missing source short-circuits the invalid target's trim operation.
+    steps.push(json!({"method":"POST","path":"/api/code-graph/path","user":"owner","body":{"projectRoot":"/repo","source":" ","target":7}}));
+    // The synchronous getIndex call uses the framework error envelope.
+    steps.push(json!({"method":"GET","path":"/api/code-graph?projectRoot=/repo","user":"owner","error":"index lookup failed"}));
     compare(json!({"projects":[project()],"steps":steps})).await;
 }
 
