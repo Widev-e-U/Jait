@@ -11,7 +11,7 @@
   ],
   "summary": {
     "test_files": 346,
-    "test_declarations": 2924,
+    "test_declarations": 2926,
     "runtime_source_files": 376,
     "source_files_without_direct_test_import": 104,
     "rust_verified_declarations": 2557,
@@ -47000,13 +47000,13 @@
     },
     {
       "path": "packages/gateway/src/surfaces/remote-terminal.test.ts",
-      "fingerprint": "9f7cfbd5d7ab1fea",
+      "fingerprint": "8502409bb394a887",
       "lane": "native-integrations",
       "direct_source_imports": [
         "packages/gateway/src/surfaces/remote-terminal.ts",
         "packages/gateway/src/ws.ts"
       ],
-      "declaration_count": 9,
+      "declaration_count": 11,
       "cases": [
         {
           "id": "packages/gateway/src/surfaces/remote-terminal.test.ts:26:3",
@@ -47196,6 +47196,34 @@
           ],
           "boundary": "public-behavior-or-isolated-protocol-fixture",
           "parity_review": "Reviewed declaration: forwards input, resize, output replay, and stop through the remote node.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: f1552ceaac8713f4e4458b36264b207549a9f92b5ec173246ba01947f5f5b32a.\n4 source assertion site(s); observed repetition counts by Rust slot: [1, 1, 1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(fakeWs.fireAndForgetCalls).toEqual([\n      { nodeId: \"node-1\", op: \"input\", params: { terminalId: \"term-remote\", data: \"pwd\\r\" } },\n      { nodeId: \"node-1\", op: \"resize\", params: { terminalId: \"term-remote\", cols: 80, rows: 24 } },\n    ])\n[1] expect(surface.getRecentOutput()).toBe(\"/remote/project\\r\\n\")\n[2] expect(onOutput).toHaveBeenCalledWith(\"/remote/project\\r\\n\")\n[3] expect(fakeWs.proxyCalls.at(-1)).toMatchObject({\n      nodeId: \"node-1\",\n      op: \"stop\",\n      params: { terminalId: \"term-remote\" },\n    })\nSetup consists of 1 preserved lexical declaration/effect(s), in matched initialization order. 0 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic identity cases remain pending. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-next/focused-runs/tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_190_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+        },
+        {
+          "id": "packages/gateway/src/surfaces/remote-terminal.test.ts:222:3",
+          "line": 222,
+          "column": 3,
+          "name": "recognizes bracketed paste separately from shell prompt readiness",
+          "suite": [
+            "remote shell readiness"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/surfaces/remote-terminal.test.ts:235:3",
+          "line": 235,
+          "column": 3,
+          "name": "notifies remaining observers once per exit even when one throws",
+          "suite": [
+            "remote terminal exit observers"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
       ]
     },
