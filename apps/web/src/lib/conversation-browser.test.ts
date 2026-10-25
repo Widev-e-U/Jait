@@ -14,6 +14,11 @@ describe('conversation browser selection', () => {
   it('ignores other sessions, unrelated tools, and malformed history', () => {
     expect(findConversationBrowser([{ toolCalls: [navigate, null, { tool: 'terminal.run' }] }, { toolCalls: {} }], 'chat-b')).toBeNull()
   })
+  it('ignores preview results whose top-level session belongs to another chat', () => {
+    const foreignPreview = { tool: 'preview.open', result: { data: { sessionId: 'chat-a', url: data.browserSession.previewUrl } } }
+    expect(findConversationBrowser([{ toolCalls: [foreignPreview] }], 'chat-b')).toBeNull()
+    expect(findConversationBrowser([{ toolCalls: [foreignPreview] }], 'chat-a')).toEqual({ data: foreignPreview.result.data })
+  })
   it('uses the latest browser after a restart', () => {
     const restarted = { ...data, browserId: 'browser-b' }
     expect(findConversationBrowser([{ toolCalls: [navigate, { tool: 'preview.restart', result: { data: restarted } }] }], 'chat-a')).toEqual({ data: restarted })

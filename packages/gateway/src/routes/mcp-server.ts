@@ -60,6 +60,8 @@ interface McpResponse {
 
 interface McpToolContextOverrides {
   sessionId?: string;
+  /** Legacy unbound MCP clients may infer a chat; interactive browsers must not. */
+  sessionIdInferred?: boolean;
   threadId?: string;
   projectRoot?: string;
   userId?: string;
@@ -244,6 +246,7 @@ async function resolveMcpToolContext(
             return {
               ...overrides,
               sessionId: session.id,
+              sessionIdInferred: true,
               projectRoot: overrides.projectRoot ?? session.projectPath ?? undefined,
               userId: user.id,
             };
@@ -256,6 +259,7 @@ async function resolveMcpToolContext(
       return inferExecutionBackedToolContext({
         ...authBackedOverrides,
         sessionId: session.id,
+        sessionIdInferred: true,
         projectRoot: authBackedOverrides.projectRoot ?? session.projectPath ?? undefined,
       }, sessionService, userService, sessionState, threadService);
     }
@@ -704,6 +708,22 @@ export async function handleMcpRequest(
           id: request.id ?? null,
           result: {
             content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
+            isError: true,
+          },
+        };
+      }
+
+      // Browser control and handoff belong to a specific conversation. The
+      // legacy last-active fallback can change whenever another chat is used,
+      // so it cannot provide authority to open or control an interactive browser.
+      const startsBrowser = tool.name === "surfaces.start"
+        && (args as Record<string, unknown>)["type"] === "browser";
+      if (contextOverrides.sessionIdInferred && (tool.category === "browser" || startsBrowser)) {
+        return {
+          jsonrpc: "2.0",
+          id: request.id ?? null,
+          result: {
+            content: [{ type: "text", text: "Browser tools require an explicit sessionId for the originating chat. Reconnect using this chat's session-scoped MCP URL or x-jait-session-id; the last-active chat cannot be used for browser control or handoff." }],
             isError: true,
           },
         };

@@ -29,6 +29,50 @@ afterEach(async () => {
 });
 
 describe("mcp-server", () => {
+  it.each([false, true])("requires browser calls to bind their chat instead of borrowing last-active (authenticated=%s)", async (authenticated) => {
+    const owner = "browser-owner";
+    const personal = { id: "personal-chat", userId: owner, projectPath: null };
+    const project = { id: "project-chat", userId: owner, projectPath: "/project" };
+    let active = project;
+    const sessionService = {
+      lastActive: vi.fn(() => active),
+      getById: vi.fn((id: string) => id === personal.id ? personal : project),
+    } as unknown as SessionService;
+    const execute = vi.fn(async (_input: unknown, context: ToolContext) => ({
+      ok: true, message: "browser opened", data: { sessionId: context.sessionId },
+    }));
+    const registry = new ToolRegistry();
+    for (const name of ["browser.navigate", "browser.handoff", "preview.open", "surfaces.start"]) {
+      registry.register({ name, description: "Browser session routing test", tier: "standard",
+        category: name === "surfaces.start" ? "surfaces" : "browser", source: "builtin",
+        parameters: { type: "object", properties: {} }, execute });
+    }
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, { toolRegistry: registry, sessionService,
+      config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as AppConfig });
+    const headers = authenticated
+      ? { authorization: `Bearer ${await signAuthToken({ id: owner, username: owner }, "test-secret")}` } : {};
+    for (const endpoint of ["/mcp", "/mcp/sse"]) {
+      for (const name of ["browser_navigate", "browser_handoff", "preview_open", "surfaces_start"]) {
+        const payload = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: { type: "browser" } } };
+        const unbound = await app.inject({ method: "POST", url: endpoint, headers, payload });
+        expect(unbound.json()).toMatchObject({ result: { isError: true } });
+        expect(JSON.stringify(unbound.json())).toContain("explicit sessionId");
+        expect(execute).not.toHaveBeenCalled();
+        // A newer project conversation, or switching the last-active chat, must
+        // never move browser actions or their handoff away from this personal chat.
+        for (const selected of [project, personal, project]) {
+          active = selected;
+          const bound = await app.inject({ method: "POST", url: `${endpoint}?sessionId=${personal.id}`, headers, payload });
+          expect(bound.json()).toMatchObject({ result: { isError: false } });
+          expect(execute.mock.calls.at(-1)?.[1].sessionId).toBe(personal.id);
+        }
+        execute.mockClear();
+      }
+    }
+  });
+
   it("keeps a user question resumable across MCP call deadlines", async () => {
     vi.useFakeTimers();
     try {

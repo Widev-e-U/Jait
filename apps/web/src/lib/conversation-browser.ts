@@ -37,7 +37,7 @@ export function findConversationBrowser(
       const data = record(record(call.result)?.data)
       const browserSession = record(data?.browserSession)
       // Tool results from another chat must never select that chat's browser.
-      if (sessionId && typeof browserSession?.sessionId === 'string' && browserSession.sessionId !== sessionId) continue
+      if (sessionId && [browserSession?.sessionId, data?.sessionId].some(id => typeof id === 'string' && id !== sessionId)) continue
       const tool = normalizeToolName(call.tool.replace(/^(?:functions[._])?mcp[._]+jait(?:_core)?[._]+/, '').replace(/_/g, '.'))
       if (!browserSession && !tool.startsWith('browser.') && !['preview.open', 'preview.status', 'preview.restart', 'preview.inspect'].includes(tool)
         && !(tool === 'surfaces.start' && record(call.args)?.type === 'browser')) continue
