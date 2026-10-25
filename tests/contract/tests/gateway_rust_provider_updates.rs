@@ -462,7 +462,7 @@ async fn cancelled_supervisor_releases_inflight_even_before_first_poll() {
         assert_eq!(pending.len(), 3);
         if poll {
             for task in pending {
-                drop(task.now_or_never());
+                let _ = task.now_or_never();
             }
         } else {
             drop(pending);

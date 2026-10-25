@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { createServer as createNetServer } from "node:net";
 import { createServer as createTlsServer } from "node:tls";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -103,10 +104,33 @@ describe("TLS observations", () => {
     expect(result.evidence[0]?.facts.expired).toBe(false);
     expect(result.rules.some(rule => rule.ruleId === "tls.gateway-trust")).toBe(true);
     expect(JSON.stringify(result)).not.toContain("PRIVATE KEY");
+    let hsts = false;
+    const httpsPort = await listen(createHttpsServer({ key: await readFile(join(directory, "key.pem")), cert: await readFile(join(directory, "cert.pem")) }, (_request, response) => {
+      if (hsts) response.setHeader("Strict-Transport-Security", "max-age=3600");
+      response.end("discard this fixture body");
+    }));
+    const missingHsts = await checkHttp("127.0.0.1", httpsPort, true, signal());
+    expect(missingHsts.conclusive).toBe(true);
+    expect(missingHsts.rules.some(rule => rule.ruleId === "http.hsts")).toBe(true);
+    hsts = true;
+    const fixedHsts = await checkHttp("127.0.0.1", httpsPort, true, signal());
+    expect(fixedHsts.rules.some(rule => rule.ruleId === "http.hsts")).toBe(false);
+    expect(fixedHsts.evidence[0]?.facts).toMatchObject({ transport: "https", hstsEnabled: true, bodyRetained: false });
     const wrong = await checkTls("127.0.0.1", port, "other.invalid", signal());
     expect(wrong.rules.some(rule => rule.ruleId === "tls.identity")).toBe(true);
     const now = Date.now(); vi.spyOn(Date, "now").mockReturnValue(now + 3 * 86400_000);
     const expired = await checkTls("127.0.0.1", port, "localhost", signal());
     expect(expired.rules.some(rule => rule.ruleId === "tls.expired")).toBe(true);
+  });
+});
+
+
+describe("HTTP connection failure", () => {
+  it("reports a socket failure as inconclusive without fabricated evidence", async () => {
+    const port = await listen(createNetServer(socket => socket.destroy()));
+    const result = await checkHttp("127.0.0.1", port, false, signal());
+    expect(result.conclusive).toBe(false);
+    expect(result.evidence).toEqual([]);
+    expect(result.coverageGaps).toContain("HTTP request failed");
   });
 });

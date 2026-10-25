@@ -116,7 +116,8 @@ async fn native(test: &Value) -> Value {
     let events: Cell<Vec<Value>> = Cell::default();
     let pauses: Cell<Vec<Value>> = Cell::default();
     let scheduled: Cell<Vec<Task>> = Cell::default();
-    let held: Cell<Vec<Option<oneshot::Sender<Result<bool, HostError>>>>> = Cell::default();
+    type SteeringReply = oneshot::Sender<Result<bool, HostError>>;
+    let held: Cell<Vec<Option<SteeringReply>>> = Cell::default();
     let mut active = FuturesUnordered::new();
     let responses = test["responses"].as_array().cloned().unwrap_or_default();
     let next = AtomicUsize::new(0);

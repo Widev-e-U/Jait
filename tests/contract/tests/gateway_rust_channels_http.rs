@@ -100,7 +100,7 @@ impl ChannelHost for Host {
         Ok(self.config.lock().unwrap().clone())
     }
     fn set_config(&self, id: &str, patch: ChannelFields) -> ChannelResult<ChannelFields> {
-        self.effect("setConfig", normalized(&(id, &patch)))?;
+        self.effect("setConfig", normalized((id, &patch)))?;
         let mut config = self.config.lock().unwrap();
         config.extend(patch);
         Ok(config.clone())

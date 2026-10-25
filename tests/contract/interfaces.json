@@ -16108,7 +16108,7 @@
     },
     {
       "path": "packages/gateway/src/routes/mcp-server.ts",
-      "fingerprint": "e3acc6d2f599f2fc",
+      "fingerprint": "2aa835a092edce7b",
       "migration_owner": "R04-http",
       "status": "pending",
       "required_test_ids": [],
@@ -16116,15 +16116,15 @@
       "interface_ids": [
         "packages/gateway/src/routes/mcp-server.ts#dependency:1336",
         "packages/gateway/src/routes/mcp-server.ts#dependency:533",
-        "packages/gateway/src/routes/mcp-server.ts#route:16739",
-        "packages/gateway/src/routes/mcp-server.ts#route:19657",
-        "packages/gateway/src/routes/mcp-server.ts#route:19862",
-        "packages/gateway/src/routes/mcp-server.ts#route:19912",
-        "packages/gateway/src/routes/mcp-server.ts#route:20221",
-        "packages/gateway/src/routes/mcp-server.ts#route:21596",
-        "packages/gateway/src/routes/mcp-server.ts#tool:25108"
+        "packages/gateway/src/routes/mcp-server.ts#route:16927",
+        "packages/gateway/src/routes/mcp-server.ts#route:19845",
+        "packages/gateway/src/routes/mcp-server.ts#route:20050",
+        "packages/gateway/src/routes/mcp-server.ts#route:20100",
+        "packages/gateway/src/routes/mcp-server.ts#route:20409",
+        "packages/gateway/src/routes/mcp-server.ts#route:21784",
+        "packages/gateway/src/routes/mcp-server.ts#tool:25296"
       ],
-      "claims_fingerprint": "a050fbc61f815dd3",
+      "claims_fingerprint": "e317de03c1dc8bd5",
       "claims": [
         {
           "id": "packages/gateway/src/routes/mcp-server.ts#dependency:1336",
@@ -16155,11 +16155,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#route:16739",
+          "id": "packages/gateway/src/routes/mcp-server.ts#route:16927",
           "kind": "route",
           "name": "/mcp",
-          "start": 16739,
-          "end": 17255,
+          "start": 16927,
+          "end": 17443,
           "fingerprint": "145143a7c7223f75",
           "details": {
             "methods": "GET",
@@ -16173,11 +16173,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#route:19657",
+          "id": "packages/gateway/src/routes/mcp-server.ts#route:19845",
           "kind": "route",
           "name": "/mcp",
-          "start": 19657,
-          "end": 19698,
+          "start": 19845,
+          "end": 19886,
           "fingerprint": "aff50edcb4d25dfa",
           "details": {
             "methods": "POST",
@@ -16191,11 +16191,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#route:19862",
+          "id": "packages/gateway/src/routes/mcp-server.ts#route:20050",
           "kind": "route",
           "name": "/mcp/sse",
-          "start": 19862,
-          "end": 19907,
+          "start": 20050,
+          "end": 20095,
           "fingerprint": "0d3aa9b99b70c7b4",
           "details": {
             "methods": "POST",
@@ -16209,11 +16209,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#route:19912",
+          "id": "packages/gateway/src/routes/mcp-server.ts#route:20100",
           "kind": "route",
           "name": "/mcp",
-          "start": 19912,
-          "end": 20029,
+          "start": 20100,
+          "end": 20217,
           "fingerprint": "cd2a1c5c113f1005",
           "details": {
             "methods": "DELETE",
@@ -16227,11 +16227,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#route:20221",
+          "id": "packages/gateway/src/routes/mcp-server.ts#route:20409",
           "kind": "route",
           "name": "/mcp/sse",
-          "start": 20221,
-          "end": 21476,
+          "start": 20409,
+          "end": 21664,
           "fingerprint": "0b22fbbd2446cc87",
           "details": {
             "methods": "GET",
@@ -16245,11 +16245,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#route:21596",
+          "id": "packages/gateway/src/routes/mcp-server.ts#route:21784",
           "kind": "route",
           "name": "/mcp/messages",
-          "start": 21596,
-          "end": 23014,
+          "start": 21784,
+          "end": 23202,
           "fingerprint": "8d1c3fcf0500339c",
           "details": {
             "methods": "POST",
@@ -16263,11 +16263,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.ts#tool:25108",
+          "id": "packages/gateway/src/routes/mcp-server.ts#tool:25296",
           "kind": "tool",
           "name": "<dynamic>",
-          "start": 25108,
-          "end": 25672,
+          "start": 25296,
+          "end": 25860,
           "fingerprint": "4623ba047bb521ea",
           "details": {
             "name_expression": "tool.name.replace(/\\./g, \"_\")",

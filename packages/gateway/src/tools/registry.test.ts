@@ -325,3 +325,38 @@ describe("bounded tool discovery", () => {
     }
   });
 });
+
+
+describe("public browser lifecycle tools", () => {
+  it("registers browser handoffs only with both services and retains preview compatibility", () => {
+    const registry = createToolRegistry(new SurfaceRegistry(), { userQuestionService: {}, previewService: {} } as any);
+    expect(registry.get("browser.handoff")).toBeDefined();
+    for (const [legacy, canonical] of [["preview.open", "browser.open"], ["preview.stop", "browser.close"], ["preview.restart", "browser.restart"], ["preview.status", "browser.status"], ["preview.logs", "browser.logs"]]) {
+      expect(registry.get(canonical)?.execute).toBe(registry.get(legacy)?.execute);
+      expect(registry.get(canonical)?.description).not.toMatch(/preview\.(open|stop|restart|status|logs)/);
+    }
+    expect(registry.get("preview.inspect")).toBeDefined();
+    expect(createToolRegistry(new SurfaceRegistry(), { userQuestionService: {} } as any).get("browser.handoff")).toBeUndefined();
+  });
+});
+
+describe("GitHub tool identity wiring", () => {
+  it("defaults to the owning persona only inside that user's thread", async () => {
+    const service = { list: vi.fn(() => []), get: vi.fn(() => null), publicBaseUrl: () => "https://jait.invalid", webhookSecret: () => undefined };
+    const threads = { getById: vi.fn(() => ({ userId: "owner", personaAgentId: "persona" })), getPersonaAgent: vi.fn(() => ({ id: "persona" })) };
+    const registry = createToolRegistry(new SurfaceRegistry(), { agentGithubAppService: service, threadService: threads } as any);
+    const tool = registry.get("agent.github")!;
+    const own = await tool.execute({ action: "status" }, { ...context(), userId: "owner", threadId: "thread" });
+    expect(own.data).toMatchObject({ currentAgentId: "persona" });
+    expect(service.get).toHaveBeenCalledWith("owner", "persona");
+    service.get.mockClear();
+    const other = await tool.execute({ action: "status" }, { ...context(), userId: "other", threadId: "thread" });
+    expect(other.data).toMatchObject({ currentAgentId: null });
+    expect(service.get).not.toHaveBeenCalled();
+    const chat = await tool.execute({ action: "status" }, { ...context(), userId: "owner" });
+    expect(chat.data).toMatchObject({ currentAgentId: null });
+    threads.getPersonaAgent.mockReturnValueOnce(null as any);
+    const deleted = await tool.execute({ action: "status" }, { ...context(), userId: "owner", threadId: "thread" });
+    expect(deleted.data).toMatchObject({ currentAgentId: null });
+  });
+});
