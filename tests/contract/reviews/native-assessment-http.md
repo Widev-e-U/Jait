@@ -19,9 +19,6 @@ Contracts cover anonymous/deleted callers, owner isolation, cookie/origin rules,
 bodies, missing runs, cancellation, unavailable project database, absent/foreign/
 deleted project sessions, cross-owner projects, remote metadata/project nodes,
 invalid/null persisted metadata, relative path escape and SQLite read failure.
-SQLite failure responses match the pinned Bun 1.3.10 reference: HTTP 500 with
-statusCode, error and message, without an additional string code. The differential
-comparison retains all error fields so runtime drift fails visibly.
 Request body fields never supply the project root or bypass the session lookup.
 Bound SQL retains session owner, live session and project-owner predicates.
 Generic HTTP transport/unknown-route/platform fallback behavior is not credited

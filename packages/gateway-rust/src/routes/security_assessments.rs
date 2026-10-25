@@ -136,12 +136,30 @@ async fn handle(State(state): State<SecurityAssessmentRoutes>, request: Request)
         if method == Method::GET {
             return match service.history_detailed(&user.id).await {
                 Ok(history) => response(200, history),
-                // Bun 1.3.10 (the pinned reference runtime) exposes errno, but
-                // no string code for SQLite errors. Fastify therefore omits it.
-                Err(failure) => response(
-                    500,
-                    json!({"statusCode":500,"error":"Internal Server Error","message":failure.message}),
-                ),
+                Err(failure) => {
+                    let code = failure.sqlite_code.and_then(|code| match code {
+                        1 => Some("SQLITE_ERROR"),
+                        5 => Some("SQLITE_BUSY"),
+                        6 => Some("SQLITE_LOCKED"),
+                        8 => Some("SQLITE_READONLY"),
+                        10 => Some("SQLITE_IOERR"),
+                        11 => Some("SQLITE_CORRUPT"),
+                        13 => Some("SQLITE_FULL"),
+                        14 => Some("SQLITE_CANTOPEN"),
+                        17 => Some("SQLITE_SCHEMA"),
+                        18 => Some("SQLITE_TOOBIG"),
+                        19 => Some("SQLITE_CONSTRAINT"),
+                        21 => Some("SQLITE_MISUSE"),
+                        23 => Some("SQLITE_AUTH"),
+                        26 => Some("SQLITE_NOTADB"),
+                        _ => None,
+                    });
+                    let mut body = json!({"statusCode":500,"error":"Internal Server Error","message":failure.message});
+                    if let Some(code) = code {
+                        body["code"] = json!(code);
+                    }
+                    response(500, body)
+                }
             };
         }
         let Some(scope_id) = body.get("scopeId").and_then(Value::as_str) else {

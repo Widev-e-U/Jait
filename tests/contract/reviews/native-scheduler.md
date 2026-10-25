@@ -88,3 +88,8 @@ backzone data changes historical aliases, and standard 2026e differs on Casablan
 in October 2026. See src/scheduler/tzdata-README.md and the timezone-refresh.log
 in .jait/artifacts/gateway-rust/channels-http/. This refresh adds no component
 credit and requires the full frozen gate before a new checkpoint is recorded.
+
+The Rust gateway contract workflow now pins that same Bun 1.4.0 reference.
+Bun 1.3.10 / ICU 75.1 rejects America/Coyhaique and is not compatible with this
+reviewed timezone bundle. The reference runtime is part of the contract, including
+SQLite error fields; do not normalize away differences between runtime versions.
