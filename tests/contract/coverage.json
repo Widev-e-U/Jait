@@ -11,7 +11,7 @@
   ],
   "summary": {
     "test_files": 346,
-    "test_declarations": 2923,
+    "test_declarations": 2924,
     "runtime_source_files": 376,
     "source_files_without_direct_test_import": 104,
     "rust_verified_declarations": 2557,
@@ -16853,7 +16853,7 @@
     },
     {
       "path": "packages/gateway/src/routes/mcp-server.test.ts",
-      "fingerprint": "a8d5c5917e45eff8",
+      "fingerprint": "7423335a16fd3069",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/config.ts",
@@ -16872,11 +16872,25 @@
         "packages/gateway/src/tools/team-chat-tools.ts",
         "packages/gateway/src/tools/user-question-tools.ts"
       ],
-      "declaration_count": 23,
+      "declaration_count": 24,
       "cases": [
         {
           "id": "packages/gateway/src/routes/mcp-server.test.ts:32:3",
           "line": 32,
+          "column": 3,
+          "name": "requires browser calls to bind their chat instead of borrowing last-active (authenticated=%s)",
+          "suite": [
+            "mcp-server"
+          ],
+          "declaration": "it.each([false, true])",
+          "parameterized": true,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
+        },
+        {
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:76:3",
+          "line": 76,
           "column": 3,
           "name": "keeps a user question resumable across MCP call deadlines",
           "suite": [
@@ -16896,8 +16910,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:60:3",
-          "line": 60,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:104:3",
+          "line": 104,
           "column": 3,
           "name": "pauses MCP actions until this chat's question is answered or cancelled",
           "suite": [
@@ -16910,8 +16924,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:88:3",
-          "line": 88,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:132:3",
+          "line": 132,
           "column": 3,
           "name": "keeps essential tools in a dedicated core MCP catalog",
           "suite": [
@@ -16931,8 +16945,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:147:3",
-          "line": 147,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:191:3",
+          "line": 191,
           "column": 3,
           "name": "exposes only non-core builtin tools and allowlisted core tools over MCP",
           "suite": [
@@ -16952,8 +16966,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:289:3",
-          "line": 289,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:333:3",
+          "line": 333,
           "column": 3,
           "name": "advertises human-friendly tool titles to MCP clients",
           "suite": [
@@ -16973,8 +16987,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:317:3",
-          "line": 317,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:361:3",
+          "line": 361,
           "column": 3,
           "name": "builds the MCP callback base URL from forwarded headers",
           "suite": [
@@ -16994,8 +17008,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:329:3",
-          "line": 329,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:373:3",
+          "line": 373,
           "column": 3,
           "name": "falls back to the incoming host header before config defaults",
           "suite": [
@@ -17015,8 +17029,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:339:3",
-          "line": 339,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:383:3",
+          "line": 383,
           "column": 3,
           "name": "serves initialize over streamable HTTP MCP",
           "suite": [
@@ -17036,8 +17050,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:387:3",
-          "line": 387,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:431:3",
+          "line": 431,
           "column": 3,
           "name": "serves streamable HTTP initialize on legacy /mcp/sse POST configs",
           "suite": [
@@ -17057,8 +17071,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:429:3",
-          "line": 429,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:473:3",
+          "line": 473,
           "column": 3,
           "name": "streams MCP tool progress over the streamable HTTP response",
           "suite": [
@@ -17078,8 +17092,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:478:3",
-          "line": 478,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:522:3",
+          "line": 522,
           "column": 3,
           "name": "routes MCP terminal calls through the configured tool executor",
           "suite": [
@@ -17099,8 +17113,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:529:3",
-          "line": 529,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:573:3",
+          "line": 573,
           "column": 3,
           "name": "accepts initialized notifications over streamable HTTP MCP",
           "suite": [
@@ -17120,8 +17134,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:558:3",
-          "line": 558,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:602:3",
+          "line": 602,
           "column": 3,
           "name": "passes session, project, and provider overrides into MCP tool context",
           "suite": [
@@ -17141,8 +17155,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:628:3",
-          "line": 628,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:672:3",
+          "line": 672,
           "column": 3,
           "name": "forwards MCP tool output chunks to the request progress callback",
           "suite": [
@@ -17162,8 +17176,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:662:3",
-          "line": 662,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:706:3",
+          "line": 706,
           "column": 3,
           "name": "rejects tool calls when no session can be resolved",
           "suite": [
@@ -17183,8 +17197,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:704:3",
-          "line": 704,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:748:3",
+          "line": 748,
           "column": 3,
           "name": "uses the authenticated user's last active session for MCP tool calls",
           "suite": [
@@ -17204,8 +17218,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:779:3",
-          "line": 779,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:823:3",
+          "line": 823,
           "column": 3,
           "name": "uses the global last active session for unauthenticated local MCP tool calls",
           "suite": [
@@ -17225,8 +17239,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:854:3",
-          "line": 854,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:898:3",
+          "line": 898,
           "column": 3,
           "name": "passes the authenticated user into MCP tool context when a session override is provided",
           "suite": [
@@ -17246,8 +17260,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:913:3",
-          "line": 913,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:957:3",
+          "line": 957,
           "column": 3,
           "name": "uses MCP URL query params as tool context overrides",
           "suite": [
@@ -17267,8 +17281,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:983:3",
-          "line": 983,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1027:3",
+          "line": 1027,
           "column": 3,
           "name": "uses MCP tool arguments as context overrides",
           "suite": [
@@ -17288,8 +17302,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1068:3",
-          "line": 1068,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1112:3",
+          "line": 1112,
           "column": 3,
           "name": "infers provider, model, and runtime mode from the referenced session state",
           "suite": [
@@ -17309,8 +17323,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1162:3",
-          "line": 1162,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1206:3",
+          "line": 1206,
           "column": 3,
           "name": "resolves a worker's owner and execution context through %s",
           "suite": [
@@ -17335,8 +17349,8 @@
           "parity_review": "Original and regenerated Rust matcher rules for all existing declarations are identical; moved line IDs now reference the current test source. New resumable question assertions preserve pending IDs across repeated call deadlines, owner/session refusal, late answer collection, cancellation and timer cleanup. Fresh complete source-bound TypeScript reference evidence passed. Declaration equivalence only; runtime source and native Rust migration acceptance remain separate."
         },
         {
-          "id": "packages/gateway/src/routes/mcp-server.test.ts:1250:3",
-          "line": 1250,
+          "id": "packages/gateway/src/routes/mcp-server.test.ts:1294:3",
+          "line": 1294,
           "column": 3,
           "name": "persists and broadcasts todo_list updates for MCP todo calls",
           "suite": [
@@ -69817,7 +69831,7 @@
     },
     {
       "path": "packages/gateway/src/routes/mcp-server.ts",
-      "fingerprint": "137b10baf1eddf9f",
+      "fingerprint": "2aa835a092edce7b",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/mcp-server-image.test.ts",
