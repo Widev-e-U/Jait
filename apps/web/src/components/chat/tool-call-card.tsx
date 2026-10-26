@@ -1,3 +1,4 @@
+import { coalesceQuestionCalls } from './user-question-calls'
 import { UserQuestionResult } from './user-question-result'
 import { EmailToolView } from '@/components/email/email-tool-view'
 import { MermaidToolResult } from './mermaid-tool-result'
@@ -350,7 +351,7 @@ export function getToolInvocationLabels(
     return { running: 'Updating tasks', done: 'Updated tasks' }
   }
   if (normalized === 'user.ask') {
-    return { running: 'Asking a question', done: 'Asked a question' }
+    return { running: 'Waiting for your answer', done: 'Question answered' }
   }
   if (normalized === 'skill') {
     const names = displayStr(args.skills)
@@ -3899,6 +3900,7 @@ function ToolCallCardInner({
   hideTopConnector = false,
   hideBottomConnector = false,
 }: ToolCallCardProps) {
+  call = coalesceQuestionCalls([call])[0]
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   // Cards created mid-stream (pending/running) mount open underneath the
@@ -4792,6 +4794,7 @@ function TopLevelToolCall({
 }
 
 function ToolCallGroupInner({ calls, collapsible, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: ToolCallGroupProps) {
+  calls = coalesceQuestionCalls(calls)
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
@@ -4970,6 +4973,7 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
 }
 
 function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, threadControlThreads, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt, onApprovalResponse }: AgentToolCallWrapperProps) {
+  calls = coalesceQuestionCalls(calls)
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())

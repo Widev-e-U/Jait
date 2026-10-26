@@ -5,25 +5,30 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** Native, MCP structuredContent, and persisted MCP text envelopes. Never execute content. */
-export function questionAnswerData(value: unknown, depth = 0): Record<string, unknown> | undefined {
+export function questionResultData(value: unknown, depth = 0): Record<string, unknown> | undefined {
   if (depth > 6) return undefined
   if (typeof value === 'string') {
-    try { return questionAnswerData(JSON.parse(value), depth + 1) } catch { return undefined }
+    try { return questionResultData(JSON.parse(value), depth + 1) } catch { return undefined }
   }
   const data = record(value)
   if (!data) return undefined
-  if (record(data.answers)) return data
+  if (record(data.answers) || (data.status === 'pending' && typeof data.requestId === 'string') || (data.ok === false && typeof data.message === 'string')) return data
   for (const key of ['data', 'result', 'structuredContent']) {
-    const found = questionAnswerData(data[key], depth + 1)
+    const found = questionResultData(data[key], depth + 1)
     if (found) return found
   }
   if (Array.isArray(data.content)) {
     for (const item of data.content) {
-      const found = questionAnswerData(record(item)?.text, depth + 1)
+      const found = questionResultData(record(item)?.text, depth + 1)
       if (found) return found
     }
   }
   return undefined
+}
+
+export function questionAnswerData(value: unknown): Record<string, unknown> | undefined {
+  const result = questionResultData(value)
+  return record(result?.answers) ? result : undefined
 }
 
 export function UserQuestionResult({ args, data, status, message }: {

@@ -1,3 +1,4 @@
+import { coalesceQuestionCalls } from './user-question-calls'
 import { Fragment, type ReactNode } from 'react'
 import { AlertTriangle, ArrowRight, Loader2, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -107,6 +108,8 @@ export function AssistantBody({
 }: AssistantBodyProps) {
   const hasText = segments.some((s) => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
 
+  const visibleToolCalls = coalesceQuestionCalls(toolCalls ?? [])
+
   return (
     <div className={cn('relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]', className)}>
       {segments.map((seg, i) => {
@@ -114,7 +117,7 @@ export function AssistantBody({
 
         if (seg.type === 'toolGroup') {
           const callIds = Array.isArray(seg.callIds) ? seg.callIds : []
-          const calls = (toolCalls ?? []).filter((tc) => callIds.includes(tc.callId))
+          const calls = visibleToolCalls.filter((tc) => callIds.includes(tc.callId))
           // Collapse completed tool groups that are followed by text
           const followedByText = segments.slice(i + 1).some(s => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
           node = calls.length > 0 ? (

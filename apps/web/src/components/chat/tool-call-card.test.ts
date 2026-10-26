@@ -892,8 +892,8 @@ describe('getCallSummary', () => {
     }
     expect(getCallSummary('user.ask', args)).toBe('Inter-agent interaction model (+1 more)')
     expect(getToolInvocationLabels('user.ask', args)).toEqual({
-      running: 'Asking a question',
-      done: 'Asked a question',
+      running: 'Waiting for your answer',
+      done: 'Question answered',
     })
   })
 
