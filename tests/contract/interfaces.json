@@ -29972,7 +29972,7 @@
     },
     {
       "path": "packages/gateway/src/services/subscription-usage-fetchers.ts",
-      "fingerprint": "60330ce8e679dbf6",
+      "fingerprint": "f1d884b301abd9d6",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -29980,15 +29980,15 @@
       "interface_ids": [
         "packages/gateway/src/services/subscription-usage-fetchers.ts#dependency:0"
       ],
-      "claims_fingerprint": "6185b21c1adea016",
+      "claims_fingerprint": "11f614e570efc64b",
       "claims": [
         {
           "id": "packages/gateway/src/services/subscription-usage-fetchers.ts#dependency:0",
           "kind": "dependency",
-          "name": "htmlparser2",
+          "name": "node:module",
           "start": 0,
-          "end": 54,
-          "fingerprint": "1b73b158ffc500c4",
+          "end": 44,
+          "fingerprint": "80fe6a96f41b6e8a",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
           },
