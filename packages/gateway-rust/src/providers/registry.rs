@@ -106,9 +106,18 @@ pub fn build_jait_mcp_server_ref(
         .filter(|s| !s.is_empty())
         .map(String::from)
         .unwrap_or_else(|| format!("http://{host}:{port}"));
-    let mut url = url::Url::parse(&format!("{base}/"))
-        .and_then(|u| u.join("/mcp"))
-        .map_err(|_| "Invalid URL".to_owned())?;
+    let base_text = format!("{base}/");
+    let mut url = match url::Url::parse(&base_text) {
+        Ok(parsed) => parsed
+            .join("/mcp")
+            .map_err(|_| "\"/mcp\" cannot be parsed as a URL.".to_owned())?,
+        Err(_) => {
+            return Err(format!(
+                "\"/mcp\" cannot be parsed as a URL against {}",
+                serde_json::to_string(&base_text).expect("URL text")
+            ));
+        }
+    };
     for name in ["sessionId", "projectRoot", "runtimeMode"] {
         if let Some(v) = context[name].as_str().filter(|s| !s.is_empty()) {
             url.query_pairs_mut().append_pair(name, v);
