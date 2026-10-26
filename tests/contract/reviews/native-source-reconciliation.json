@@ -666,8 +666,8 @@
     },
     {
       "path": "packages/gateway/src/services/sessions.ts",
-      "sha256": "1db6ecbcaacde0b7bc5934e2da204643e63b76ab1175eb00ab65c5b31eca4462",
-      "review": "Session CRUD, nullable updates, optional owner filters, project and personal scopes, list limits, monotonic activity, observed viewed acknowledgements, metadata/error UTF-16 handling, immutable history forks and transactional rollback compared against disposable production SQLite. Library operations require caller authorization; session HTTP and streaming remain unported. Legacy malformed metadata and UTF-16 truncation retain reference behavior. Nullable legacy name/status columns and invalid activity errors are covered.",
+      "sha256": "f7e0684329a85a9741bd1eb400abb51a0169cba9b82b7ee8d62657c81ee9f4cb",
+      "review": "Session CRUD, nullable updates, optional owner filters, project and personal scopes, list limits, monotonic activity, observed viewed acknowledgements, metadata/error UTF-16 handling, immutable history forks and transactional rollback compared against disposable production SQLite. Library operations require caller authorization; session HTTP and streaming remain unported. Legacy malformed metadata and UTF-16 truncation retain reference behavior. Nullable legacy name/status columns and invalid activity errors are covered. Reference refresh 2026-10-22: question forks delete loop metadata without changing the parent. Failing-before/passing-after regression and existing session contracts pass. See tests/contract/reviews/native-session-freshness.md.",
       "cases": [
         {
           "id": "session_crud_scope_filters_limits_moves_and_nullable_patches_match_reference",
@@ -706,6 +706,11 @@
         },
         {
           "id": "session_nullable_legacy_rows_and_invalid_activity_remain_observable",
+          "source": "tests/contract/tests/gateway_rust_sessions.rs",
+          "target": "gateway_rust_sessions"
+        },
+        {
+          "id": "question_fork_drops_parent_loop_state_and_preserves_parent_metadata",
           "source": "tests/contract/tests/gateway_rust_sessions.rs",
           "target": "gateway_rust_sessions"
         }
@@ -1675,8 +1680,8 @@
     },
     {
       "path": "packages/gateway/src/services/user-questions.ts",
-      "sha256": "c2141663547d247644ed6eaf1219d60480ff541eba701849c476c2e581ba5ace",
-      "review": "Pending insertion order; ECMAScript title trimming; nullable owners; session/user filtering; owner-checked submit/cancel; one-shot resolution and reentrant metadata callbacks; no expiry. Refreshed for resumable owner/session-bound waits, answer retention between calls, 60-second pending deadline, one-time collection and MCP tool envelopes; exact metadata, twelve refresh contract tests, three native tests and three restored mutations caught by both suites.",
+      "sha256": "8b8939a6b219449b4288854680fa0d6cc99f37a8b072de8e59cb92ac86050cb5",
+      "review": "Pending insertion order; ECMAScript title trimming; nullable owners; session/user filtering; owner-checked submit/cancel; one-shot resolution and reentrant metadata callbacks; no expiry. Refreshed for resumable owner/session-bound waits, answer retention between calls, 60-second pending deadline, one-time collection and MCP tool envelopes; exact metadata, twelve refresh contract tests, three native tests and three restored mutations caught by both suites. Delayed-answer continuation refresh: detached MCP wait observer, single wake after submit/cancel, attached-wait suppression and retained owner/session-bound result collection match TypeScript. Native chat/MCP wiring remains an explicit runtime gate; no additional component credit. Per-wait deadline refresh: explicit millisecond timeout and null indefinite wait, ownership, attached-wait suppression and one-time result collection compare against actual TypeScript (20-check target). No component credit.",
       "cases": [
         {
           "id": "questions_preserve_order_filters_defaults_and_owner_resolution",
@@ -1727,6 +1732,86 @@
           "id": "secret_timer_retains_registry_until_expiry_and_concurrent_resolutions_are_atomic",
           "source": "tests/contract/tests/gateway_rust_input.rs",
           "target": "gateway_rust_input"
+        },
+        {
+          "id": "metadata_is_exactly_the_constructor_definition",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "pending_wait_retains_answer_until_collected_once",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "waits_are_bound_to_the_exact_session_and_owner",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "cancellation_between_waits_retains_the_request",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "concurrent_waits_share_one_answer",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "cancelled_request_reports_cancellation_not_an_answer",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "mcp_new_request_is_resumable_and_rejects_questions_on_resume",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "resume_after_answer_is_collected_and_then_missing",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "non_mcp_calls_keep_plain_ask_semantics",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "optional_fields_default_without_breaking_old_inputs",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "deadline_is_sixty_seconds_and_cleared_after_answering",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "empty_and_duplicate_question_sets_still_fail_before_any_request",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "delayed_question_and_browser_answers_wake_once_without_losing_results",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "attached_question_wait_resumes_without_a_duplicate_wake",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "explicit_question_wait_deadlines_and_attached_unbounded_wait_match_typescript",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
+        },
+        {
+          "id": "custom_question_deadline_is_measured_and_matches_reference_timer",
+          "source": "tests/contract/tests/gateway_rust_user_ask_resume.rs",
+          "target": "gateway_rust_user_ask_resume"
         }
       ]
     },
@@ -2625,8 +2710,8 @@
     },
     {
       "path": "packages/gateway/src/tools/prompts/shared-sections.ts",
-      "sha256": "c6a7e740b1f8c37d1a67e6c030db0c06093854e06f57e9fe1ef6f12f84cc0a3b",
-      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review.",
+      "sha256": "25b3bed0df67d1523bbb05e54043ea5b018336ed6adc3744238b72905457372e",
+      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit.",
       "cases": [
         {
           "id": "every_model_resolver_and_branch_has_exact_prompt_and_reminder_text",
@@ -2667,6 +2752,16 @@
           "id": "global_instruction_file_precedence_tilde_errors_and_utf8_match",
           "source": "tests/contract/tests/gateway_rust_prompts.rs",
           "target": "gateway_rust_prompts"
+        },
+        {
+          "id": "native_wait_policy_matches_real_reference_and_never_lifts_execution_deadline",
+          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
+          "target": "gateway_rust_terminal_execution"
+        },
+        {
+          "id": "production_terminal_tool_yields_inspects_cancels_and_notifies_without_rerunning",
+          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
+          "target": "gateway_rust_terminal_execution"
         }
       ]
     },
@@ -3143,7 +3238,7 @@
     },
     {
       "path": "packages/gateway/src/services/background-command-continuation.ts",
-      "sha256": "4611e9ba9f168b29a871691a967a09bddb08e4f790b87c22d90e5ea644d21eba",
+      "sha256": "98b282e51f87862d10956ba7de727bed011e50b1fd55da93454c86c0240e8f63",
       "review": "Real TypeScript contracts for cron/manifest validation, UUID actions and continuation selection/callback lifecycles, including deferred callback replacement; five restored mutations. See native-helpers.md.",
       "cases": [
         {
@@ -3178,6 +3273,11 @@
         },
         {
           "id": "replacing_a_resume_callback_during_await_preserves_both_invocations",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "chat_resume_options_forward_missing_empty_false_and_hidden_without_changing_identity",
           "source": "tests/contract/tests/gateway_rust_helpers.rs",
           "target": "gateway_rust_helpers"
         }
@@ -3185,8 +3285,8 @@
     },
     {
       "path": "packages/gateway/src/services/intervention-run-resume.ts",
-      "sha256": "48e85cd712ecd7d20960263e1fb67c292918b7dc80d95f2abf638e15874e1a0c",
-      "review": "Real TypeScript contracts for cron/manifest validation, UUID actions and continuation selection/callback lifecycles, including deferred callback replacement; five restored mutations. See native-helpers.md.",
+      "sha256": "d50226d6689f041f92d0b92ae463ca449897b3ae98ee2801bffdd0795692a571",
+      "review": "Real TypeScript contracts for callback lifecycle/identity and replacement across await, plus ChatResumeOptions missing/empty/false/true forwarding with thread isolation; two additional caught/restored mutations for the 2026-10-22 source update. See native-helpers.md.",
       "cases": [
         {
           "id": "cron_checks_five_fields_ranges_steps_safe_integers_and_js_whitespace",
@@ -3220,6 +3320,11 @@
         },
         {
           "id": "replacing_a_resume_callback_during_await_preserves_both_invocations",
+          "source": "tests/contract/tests/gateway_rust_helpers.rs",
+          "target": "gateway_rust_helpers"
+        },
+        {
+          "id": "chat_resume_options_forward_missing_empty_false_and_hidden_without_changing_identity",
           "source": "tests/contract/tests/gateway_rust_helpers.rs",
           "target": "gateway_rust_helpers"
         }
@@ -3491,8 +3596,8 @@
     },
     {
       "path": "packages/gateway/src/tools/tool-names.ts",
-      "sha256": "546ccfacb2d144925370a54c344906b006c5fcfaef30aa46f47787049b1118ae",
-      "review": "Exhaustive native enum, canonical names, keys, reverse lookup and uniqueness compared to TypeScript.",
+      "sha256": "f293fbfe5eecb507af84cb77ab3d2a2bc85dab027d94ca0f2af814562eac4fac",
+      "review": "Exhaustive native enum, canonical names, keys, reverse lookup and uniqueness compared to TypeScript. 2026-10-24 tool UX refresh: Canonical browser lifecycle names and legacy policy equivalence are covered by runtime metadata, registry and permission contracts.",
       "cases": [
         {
           "id": "canonical_names_and_runtime_metadata_match_reference_without_duplicate_names",
@@ -3945,8 +4050,8 @@
     },
     {
       "path": "packages/gateway/src/services/background-command-monitor.ts",
-      "sha256": "64bf9d4bb5249ec11e566475d7495496666c4d1640d93482feffcee47a5c7fd6",
-      "review": "Native terminal watcher and external completion lifecycle with injectable clock/timers/surface. Differential state transitions, shared admission, handler ownership, expiry and suppression; reproduced and fixed cancellation during output in reference and native. Seven focused monitor tests, four transport checks, three restored mutations and strict Clippy. Provider transport and production wake-up wiring remain separate. Focused behavior and residual limits: tests/contract/reviews/native-bg-monitor.md.",
+      "sha256": "e0bf81762fc3bd54274af6e8d763dcfa3ce8417fb2e6d4e5d3695f2dbffda4a5",
+      "review": "Native terminal watcher and external completion lifecycle with injectable clock/timers/surface. Differential state transitions, shared admission, handler ownership, expiry and suppression; reproduced and fixed cancellation during output in reference and native. Seven focused monitor tests, four transport checks, three restored mutations and strict Clippy. Provider transport and production wake-up wiring remain separate. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit.",
       "cases": [
         {
           "id": "marker_chunks_sentinel_priority_grace_deadline_and_duplicate_suppression",
@@ -3982,6 +4087,41 @@
           "id": "cancellation_from_another_thread_wins_during_output_callback",
           "source": "tests/contract/tests/gateway_rust_bg_monitor.rs",
           "target": "gateway_rust_bg_monitor"
+        },
+        {
+          "id": "tracked_progress_cancellation_scope_stale_identity_and_completed_retention",
+          "source": "tests/contract/tests/gateway_rust_bg_monitor.rs",
+          "target": "gateway_rust_bg_monitor"
+        },
+        {
+          "id": "execution_deadline_stops_once_notifies_as_timeout_and_retains_partial_output",
+          "source": "tests/contract/tests/gateway_rust_bg_monitor.rs",
+          "target": "gateway_rust_bg_monitor"
+        },
+        {
+          "id": "external_execution_progress_cancellation_and_timeout_completion",
+          "source": "tests/contract/tests/gateway_rust_bg_monitor.rs",
+          "target": "gateway_rust_bg_monitor"
+        },
+        {
+          "id": "initial_completion_marker_is_not_lost_at_foreground_handoff",
+          "source": "tests/contract/tests/gateway_rust_bg_monitor.rs",
+          "target": "gateway_rust_bg_monitor"
+        },
+        {
+          "id": "shell_exit_finishes_without_a_prompt_or_command_marker_and_detaches_once",
+          "source": "tests/contract/tests/gateway_rust_bg_monitor.rs",
+          "target": "gateway_rust_bg_monitor"
+        },
+        {
+          "id": "native_wait_policy_matches_real_reference_and_never_lifts_execution_deadline",
+          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
+          "target": "gateway_rust_terminal_execution"
+        },
+        {
+          "id": "production_terminal_tool_yields_inspects_cancels_and_notifies_without_rerunning",
+          "source": "tests/contract/tests/gateway_rust_terminal_execution.rs",
+          "target": "gateway_rust_terminal_execution"
         }
       ]
     },
