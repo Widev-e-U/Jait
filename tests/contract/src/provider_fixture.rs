@@ -102,7 +102,10 @@ impl LocalProvider {
                             peer.ip().is_loopback(),
                             "provider accepted non-loopback peer"
                         );
-                        let request = read_request(&mut stream, &cancelled, request_limit)?;
+                        let Some(request) = read_request(&mut stream, &cancelled, request_limit)?
+                        else {
+                            break;
+                        };
                         let body: serde_json::Value =
                             serde_json::from_slice(&request.body).unwrap_or_default();
                         let notification = chat
@@ -195,7 +198,7 @@ fn read_request(
     stream: &mut TcpStream,
     stop: &AtomicBool,
     request_limit: usize,
-) -> Result<RecordedRequest> {
+) -> Result<Option<RecordedRequest>> {
     stream.set_read_timeout(Some(Duration::from_millis(100)))?;
     let deadline = Instant::now() + Duration::from_secs(2);
     let mut bytes = Vec::new();
@@ -203,7 +206,11 @@ fn read_request(
     let mut head_end = None;
     let mut length = None;
     loop {
-        ensure!(!stop.load(Ordering::SeqCst), "provider request cancelled");
+        // finish() may stop the fixture while a background notification is
+        // being read. Requested shutdown is cleanup, not a provider failure.
+        if stop.load(Ordering::SeqCst) {
+            return Ok(None);
+        }
         ensure!(
             Instant::now() < deadline,
             "provider request exceeded 2 seconds"
@@ -272,13 +279,57 @@ fn read_request(
                     let (key, value) = line.split_once(':').context("malformed request header")?;
                     headers.insert(key.to_ascii_lowercase(), value.trim().into());
                 }
-                return Ok(RecordedRequest {
+                return Ok(Some(RecordedRequest {
                     method,
                     path,
                     headers,
                     body: bytes[end..].into(),
-                });
+                }));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn connected_streams() -> Result<(TcpStream, TcpStream)> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let client = TcpStream::connect(listener.local_addr()?)?;
+        let (server, _) = listener.accept()?;
+        Ok((client, server))
+    }
+
+    #[test]
+    fn requested_shutdown_abandons_an_incomplete_background_request() -> Result<()> {
+        let (mut client, mut server) = connected_streams()?;
+        client.write_all(b"POST /v1/chat/completions HTTP/1.1\r\nContent-Length: 100\r\n\r\n{")?;
+        let stop = AtomicBool::new(true);
+        assert!(read_request(&mut server, &stop, 1024)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn active_fixture_still_rejects_malformed_request_framing() -> Result<()> {
+        let (mut client, mut server) = connected_streams()?;
+        client.write_all(b"POST / HTTP/1.1\r\nContent-Length: 0\r\nContent-Length: 0\r\n\r\n")?;
+        let error = read_request(&mut server, &AtomicBool::new(false), 1024)
+            .err()
+            .expect("malformed request must fail");
+        assert!(error.to_string().contains("duplicate content-length"));
+        Ok(())
+    }
+
+    #[test]
+    fn shutdown_still_refuses_missing_scripted_requests() -> Result<()> {
+        let fixture = LocalProvider::start_chat(vec![Reply::json(200, serde_json::json!({}))])?;
+        let error = fixture.finish().err().expect("missing requests must fail");
+        assert!(
+            error
+                .to_string()
+                .contains("provider request count differs from script")
+        );
+        Ok(())
     }
 }
