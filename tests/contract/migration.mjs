@@ -1,4 +1,4 @@
-import { completeCases } from './migration-report.mjs'
+import { completeCases, targetCases } from './migration-report.mjs'
 import { flowCoverage, flowMarkdown } from './flow-report.mjs'
 // Same contract targets, explicit backend selection, source-bound reviewable results.
 import { spawn } from 'node:child_process'
@@ -85,14 +85,7 @@ try{
       continue
     }
     const run=await command(test,['test','--test',test,'--','--test-threads=2'])
-    const cases=[...run.output.matchAll(/^test ([\w:]+) \.\.\. (ok|FAILED)$/gm)]
-    for(const [,id,status] of cases){
-      // Repeated fixture argv unit tests are harness checks, not application cases.
-      if(id.includes('::backend::tests::') || id.startsWith('stream_oracle_'))continue
-      const missing=status==='FAILED' && new RegExp(`---- ${id} stdout ----[\\s\\S]*?(?=\\n---- |\\nfailures:|$)`).exec(run.output)?.[0].includes('missing backend implementation:')
-      results.push({id:`${test}/${id}`,status:status==='ok'?'passed':missing?'blocked':'failed'})
-    }
-    if(!cases.length || (run.exit!==0 && cases.every(c=>c[2]==='ok')))results.push({id:`${test}/setup`,status:'failed',reason:'target did not complete successfully'})
+    results.push(...targetCases(test,run))
   }
 }catch(error){setupError=error.message}
 try { results=completeCases(inventory.cases,results) } catch(error) {setupError=error.message}
