@@ -2632,7 +2632,7 @@
     },
     {
       "reference": "packages/gateway/src/services/subscription-usage-fetchers.ts",
-      "reference_sha256": "275be643bd98a98b479f97fa945d45732aefd67d4a7a4b6d35c843593e80a8ab",
+      "reference_sha256": "98a242c2c300fe93d1a985c2f1a1630615a70d850bc2c8b4bf5cec70b7d38502",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/services/subscription_usage_fetchers.rs",

@@ -864,3 +864,51 @@ async fn native_transport_sends_the_headers_and_honours_both_redirect_modes() {
         );
     }
 }
+
+// Exercise the real mixed SDK/parser import graph in fresh Bun processes. This
+// startup path previously failed with require() async module for htmlparser2.
+#[test]
+fn usage_parser_and_matrix_sdk_share_a_synchronous_module_boundary() {
+    use std::{
+        fs,
+        process::{Command, Stdio},
+        thread,
+        time::{Duration, Instant},
+    };
+    let directory = lane_dir().join(format!("import-loader-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&directory).expect("import loader artifacts");
+    let script = "import {parseOllamaSettingsUsage} from './src/services/subscription-usage-fetchers.ts'; import {MatrixClient} from './src/services/messenger-matrix-runtime.ts'; if(typeof parseOllamaSettingsUsage!=='function'||typeof MatrixClient!=='function')throw new Error('missing real exports'); process.exit(0);";
+    let bun = std::env::var("JAIT_CONTRACT_BUN").unwrap_or_else(|_| "bun".into());
+    for trial in 0..8 {
+        let log = directory.join(format!("{trial}.log"));
+        let output = fs::File::create(&log).expect("startup log");
+        let mut child = Command::new(&bun)
+            .args(["--no-env-file", "--eval", script])
+            .current_dir(root().join("packages/gateway"))
+            .stdin(Stdio::null())
+            .stdout(output.try_clone().unwrap())
+            .stderr(output)
+            .spawn()
+            .expect("Bun import graph");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let status = loop {
+            if let Some(status) = child.try_wait().expect("import graph status") {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!(
+                    "Bun import graph exceeded five seconds; inspect {}",
+                    log.display()
+                );
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        assert!(
+            status.success(),
+            "Bun import graph failed; inspect {}",
+            log.display()
+        );
+    }
+}

@@ -73,3 +73,22 @@ the reference returns null. Bounding the calendar year to the TimeClip range
 before calendar arithmetic fixes both without weakening the assertion.
 Evidence: `.jait/artifacts/gateway-rust/subscription-extreme-year-before.log` and
 `subscription-extreme-year-after.log`. They remain in the differential matrix.
+
+
+## Bun shared-parser loading compatibility — 2026-10-26
+
+The TypeScript reference now obtains htmlparser2 through Node createRequire,
+matching the synchronous boundary used by matrix-bot-sdk/sanitize-html. This
+avoids Bun 1.4.0's mixed import/require loader race (oven-sh/bun#33180), observed
+in both chat-flow startup and isolated evaluation startup during full deployment
+verification. No parser, transport, response-bound, cleanup or date behavior changed.
+The fixture-only preload was removed in favor of fixing the shared reference.
+
+All 27 subscription differential/transport tests and 10 chat-flow tests pass.
+The new startup contract loads the real usage-parser and Matrix SDK exports in
+eight fresh, bounded Bun processes. The seven parser unit tests and isolated
+evaluation-gateway test also pass. Logs: `.jait/artifacts/usage-import-contracts.log`
+and `.jait/artifacts/usage-import-focused.log` in the browser-handoff delivery
+checkout. The reference fingerprint was reviewed after these checks; native code,
+frozen baselines and component credit remain unchanged. A full source-bound gate
+is still required for deployment.
