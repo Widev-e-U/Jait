@@ -403,6 +403,10 @@ export class AcpProvider implements CliProviderAdapter {
     const env = providerType === "codex"
       ? {
           ...baseEnv,
+          // codex-acp otherwise drops session/new MCP servers whose names are
+          // already in saved config. A saved unbound Jait URL must never replace
+          // the originating chat's scoped URL (including account aliases).
+          DISABLE_MCP_CONFIG_FILTERING: "true",
           CODEX_CONFIG: mergeJaitCodexConfig(config.env?.["CODEX_CONFIG"] ?? process.env.CODEX_CONFIG),
         }
       : baseEnv;
