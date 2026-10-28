@@ -26,3 +26,45 @@ pub fn is_shell_prompt_line(line: &str, shell: &str) -> bool {
     }
     USER_PROMPT.is_match(line) || PATH_PROMPT.is_match(line) || HOST_PROMPT.is_match(line)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_powershell_executables() {
+        assert!(is_powershell_shell("pwsh"));
+        assert!(is_powershell_shell("/usr/bin/pwsh"));
+        assert!(is_powershell_shell("C:\\Program Files\\PowerShell\\pwsh.exe"));
+        assert!(is_powershell_shell("/usr/bin/powershell.exe"));
+        assert!(!is_powershell_shell("/bin/bash"));
+        assert!(!is_powershell_shell("mypwsh"));
+    }
+
+    #[test]
+    fn recognises_common_posix_prompts() {
+        assert!(is_shell_prompt_line("user@host:~$", "/bin/bash"));
+        assert!(is_shell_prompt_line("root@box:/etc#", "/bin/sh"));
+        assert!(is_shell_prompt_line("/home/jakob/project$", "/bin/zsh"));
+        assert!(is_shell_prompt_line("~/src%", "/bin/zsh"));
+        assert!(is_shell_prompt_line("project$", "/bin/sh"));
+        assert!(is_shell_prompt_line("  user@host:~$  ", "/bin/bash"));
+    }
+
+    #[test]
+    fn recognises_powershell_prompts_only_for_powershell() {
+        assert!(is_shell_prompt_line("PS C:\\Users\\me>", "pwsh"));
+        // TS `/^PS .+?>/` needs a space after PS, so the bare "PS>" is not a prompt.
+        assert!(!is_shell_prompt_line("PS>", "powershell.exe"));
+        assert!(is_shell_prompt_line("PS /home/me>", "powershell.exe"));
+        assert!(!is_shell_prompt_line("PS C:\\Users\\me>", "/bin/bash"));
+    }
+
+    #[test]
+    fn unrelated_output_is_not_a_prompt() {
+        assert!(!is_shell_prompt_line("", "/bin/bash"));
+        assert!(!is_shell_prompt_line("   ", "/bin/bash"));
+        assert!(!is_shell_prompt_line("total 12", "/bin/bash"));
+        assert!(!is_shell_prompt_line("C:\\Users\\me>", "/bin/bash"));
+    }
+}

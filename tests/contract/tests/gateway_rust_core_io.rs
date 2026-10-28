@@ -129,7 +129,7 @@ async fn execute_preserves_factory_wiring_context_errors_and_all_forwarded_field
         Some(json!(false)),
         Some(json!(true)),
     ] {
-        let mut input = json!({"command":"printf '%s' '$literal'","explanation":"display only","goal":"display only","terminalId":"id","timeout":0,"yieldTimeMs":25,"cwd":"../scope","sandbox":true,"sandboxMountMode":"read-only","unknown":42});
+        let mut input = json!({"command":"printf '%s' '$literal'","explanation":"display only","goal":"display only","terminalId":"id","timeout":0,"yieldTimeMs":25,"cwd":"../scope","sandbox":true,"sandboxMountMode":"read-only","nodeId":"device-windows","unknown":42});
         if let Some(v) = background {
             input["isBackground"] = v;
         }

@@ -222,11 +222,11 @@ export function AppHeader(props: AppHeaderProps) {
           {/* Left: Logo + mobile mic */}
           <div className={`flex items-center shrink-0 ${isMobile ? 'gap-0 h-10' : 'gap-1'}`} style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <span className={isMobile
-              ? `ml-2 h-10 w-5 shrink-0 items-center justify-center ${agentControl ? 'hidden min-[360px]:flex' : 'flex'}`
+              ? `ml-2 h-10 w-5 shrink-0 items-center justify-center ${agentControl ? 'hidden min-[470px]:flex' : 'flex'}`
               : 'inline-flex shrink-0'}>
               <JaitIcon size={20} />
             </span>
-            <VoiceMicButtonMobile {...voiceControlProps} />
+            <VoiceMicButtonMobile {...voiceControlProps} compactWithAgents={isMobile && Boolean(agentControl)} />
             {isMobile && agentControl}
           </div>
 
@@ -247,6 +247,7 @@ export function AppHeader(props: AppHeaderProps) {
             <VoiceActiveControls
               setVoiceOverlayOpen={setVoiceOverlayOpen}
               voiceAssistant={voiceAssistant}
+              startVoiceSession={voiceControlProps.startVoiceSession}
               isMobile={isMobile}
               isDesktop={isDesktop}
               activeProjectTitle={activeProjectTitle}

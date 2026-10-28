@@ -28961,7 +28961,7 @@ fn tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_49_3() {
     tail_assertions::check(
         r#"gateway-src-tools-repo-proposal-tools-test-e17a49aa"#,
         r#"tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_49_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"jait.todos"},{"matcher":"toBe","negate":false,"expected":"core"},{"matcher":"toContain","negate":false,"expected":"update"},{"matcher":"toBeDefined","negate":false}]"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"jait.todos"},{"matcher":"toContain","negate":false,"expected":"persistent repository follow-ups"},{"matcher":"toContain","negate":false,"expected":"current chat’s temporary plan"},{"matcher":"toBe","negate":false,"expected":"core"},{"matcher":"toContain","negate":false,"expected":"update"},{"matcher":"toBeDefined","negate":false}]"#,
     );
 }
 
@@ -31197,13 +31197,13 @@ fn tailstatic_packages_gateway_src_voice_assistant_background_test_ts_93_3() {
     );
 }
 
-// packages/gateway/src/voice-assistant/service.test.ts:14:3: tells the voice model to default to the normal agent for real questions
+// packages/gateway/src/voice-assistant/service.test.ts:14:3: tells the voice model when to answer locally and when to escalate
 #[test]
 fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_14_3() {
     tail_assertions::check(
         r#"gateway-src-voice-assistant-service-test-55e03c50"#,
         r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_14_3"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"Default to ask_agent_about_request for almost every real question from the user."},{"matcher":"toContain","negate":false,"expected":"you MUST call ask_agent_about_request before answering."}]"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"Answer locally and instantly for: greetings"},{"matcher":"toContain","negate":false,"expected":"Escalate with ask_agent_about_request for:"},{"matcher":"toContain","negate":false,"expected":"You decide whether to escalate; Jait decides which model answers."}]"#,
     );
 }
 

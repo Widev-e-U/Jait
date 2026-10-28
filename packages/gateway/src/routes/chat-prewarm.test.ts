@@ -132,6 +132,41 @@ async function harness(provider: CliProviderAdapter, name: string) {
 }
 
 describe("CLI provider pre-warm", () => {
+  it("replaces an expired conversation process and restores its saved chat context", async () => {
+    const provider = new SlowStartProvider();
+    let alive = true;
+    const tracked = Object.assign(provider, { hasSession: () => alive });
+    const h = await harness(tracked, "idle-expiry-followup");
+    try {
+      await h.chat({ content: "Remember the fixture uses UTF-8" });
+      alive = false;
+      const originalStart = provider.startSession.getMockImplementation()!;
+      provider.startSession.mockImplementation(async options => {
+        const session = await originalStart(options);
+        alive = true;
+        return session;
+      });
+      const response = await h.chat({ content: "Continue the fixture" });
+      expect(response.statusCode).toBe(200);
+      expect(provider.startSession).toHaveBeenCalledTimes(2);
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("Remember the fixture uses UTF-8");
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("Continue the fixture");
+    } finally { await h.close(); }
+  });
+
+  it("replaces an expired prewarm instead of reporting it warm", async () => {
+    const provider = new SlowStartProvider();
+    let alive = true;
+    const h = await harness(Object.assign(provider, { hasSession: () => alive }), "idle-expiry-prewarm");
+    try {
+      await h.prewarm();
+      alive = false;
+      const result = await h.prewarm();
+      expect(result.json()).toMatchObject({ status: "started" });
+      expect(provider.startSession).toHaveBeenCalledTimes(2);
+    } finally { await h.close(); }
+  });
+
   it("moves the provider bootstrap off the first message", { timeout: 30_000 }, async () => {
     const provider = new SlowStartProvider();
     const h = await harness(provider, "prewarm-first-message");

@@ -22,6 +22,7 @@ import {
   getSessionSecretRequest,
   type SecretInputRequest,
 } from '@/lib/secret-input'
+import { TooltipHint } from '@/components/ui/tooltip'
 const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
 
@@ -47,7 +48,7 @@ export function InputPromptCard({ title, kind, children, testId, urgent = false,
         <button type="button" className={cn('flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/30', !collapsed && 'border-b border-border/60')}
           aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed(value => !value)}>
           <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium leading-5" title={title}>{title}</span>
+          <TooltipHint content={title}><span className="min-w-0 flex-1 truncate text-xs font-medium leading-5">{title}</span></TooltipHint>
           {urgent && <Badge variant="warning" className="px-1.5 py-0 text-[10px]">Urgent</Badge>}
           <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground', collapsed && '-rotate-90')} aria-hidden="true" />
         </button>

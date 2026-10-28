@@ -46,6 +46,7 @@ export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createUserAskTool } from "./user-question-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
+  createBrowserOpenTool,
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInspectTool,
@@ -205,6 +206,7 @@ import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createUserAskTool } from "./user-question-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
+  createBrowserOpenTool,
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInspectTool,
@@ -318,6 +320,8 @@ export interface ToolRegistryDeps {
   hooks?: HookBus;
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
+  computerSessions?: import("../services/computer-control.js").ComputerControlSessionService;
+  screenShareControl?: import("../services/screen-share-control.js").ScreenShareControlCoordinator;
   config?: AppConfig;
   threadMcpConfig?: { host: string; port: number };
   threadService?: ThreadService;
@@ -448,7 +452,7 @@ export function createToolRegistry(
   tools.register(createOsQueryTool());
   tools.register(createOsInstallTool());
   if (deps.ws) {
-    for (const tool of createComputerTools(deps.ws)) tools.register(tool);
+    for (const tool of createComputerTools(deps.ws, deps.computerSessions, deps.screenShare)) tools.register(tool);
   }
 
   // Surface self-control tools
@@ -622,7 +626,7 @@ export function createToolRegistry(
   }
 
   if (deps.screenShare) {
-    tools.register(createScreenShareTool(deps.screenShare, deps.ws));
+    tools.register(createScreenShareTool(deps.screenShare, deps.ws, deps.screenShareControl));
     tools.register(createScreenCaptureTool(deps.screenShare));
     tools.register(createScreenRecordTool(deps.screenShare));
     tools.register(createOsTool(deps.screenShare, "os.tool"));
@@ -643,9 +647,10 @@ export function createToolRegistry(
   for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService, deps.ws)) {
     tools.register(tool);
   }
-  // Keep the managed project runner internally, with one public browser tool family.
+  // Legacy preview calls retain the managed project runner. New browser opens load a URL directly.
+  tools.registerCompatibility(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
+  tools.register(createBrowserOpenTool(surfaceRegistry, deps.previewService));
   const browserLifecycle = [
-    [createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService), "browser.open"],
     [createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService), "browser.close"],
     [createPreviewRestartTool(deps.previewService), "browser.restart"],
     [createPreviewStatusTool(deps.previewService), "browser.status"],

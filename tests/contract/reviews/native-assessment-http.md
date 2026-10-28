@@ -36,3 +36,10 @@ The assertion failures and source restoration are recorded under
 `.jait/artifacts/gateway-rust/assessment-http-draft/`. The restored differential
 contracts, strict Clippy and full source-bound gate control component credit.
 No model-generated draft is accepted as parity evidence.
+
+Runtime compatibility update (2026-10-26): the frozen gate pins Bun 1.4.0 /
+ICU 78.3 for the channel timezone corpus. Its Fastify SQLite failure response
+includes `code: "SQLITE_ERROR"`; native history failure serialization now preserves
+that typed missing-table code. The existing dropped-table differential regression
+checks the complete response, including code, without normalization. Bun 1.3.10
+omitted this code and is not the current gate reference runtime.

@@ -50,6 +50,39 @@ pub struct CatalogueModel {
     pub reasoning_effort_supported: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group: Option<Utf16Text>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pricing: Option<ModelPricing>,
+}
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelPricing {
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_pricing_number"
+    )]
+    pub prompt_per_m_tok: Option<f64>,
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_pricing_number"
+    )]
+    pub completion_per_m_tok: Option<f64>,
+}
+/// Preserve JSON.stringify's number spelling, including -0 -> 0. A finite
+/// parsed price can overflow during scaling; Some(infinity) stays a present null,
+/// whereas an unusable input is None and the field is omitted.
+fn serialize_pricing_number<S: serde::Serializer>(
+    value: &Option<f64>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match value {
+        Some(value) if value.is_finite() => {
+            let mut buffer = ryu_js::Buffer::new();
+            let raw: &serde_json::value::RawValue =
+                serde_json::from_str(buffer.format(*value)).map_err(serde::ser::Error::custom)?;
+            raw.serialize(serializer)
+        }
+        _ => serializer.serialize_none(),
+    }
 }
 #[derive(Clone, Debug)]
 pub struct CatalogueError(pub String);
@@ -515,6 +548,7 @@ pub fn map_ollama_cloud_catalogue(data: &Value) -> ModelsResult {
             is_default: None,
             reasoning_effort_supported: None,
             group: Some(Utf16Text::from(OLLAMA_CLOUD_GROUP)),
+            pricing: None,
         });
     }
     Ok(models)
@@ -558,6 +592,40 @@ fn js_string(value: &Value) -> Result<String, CatalogueError> {
             .join(","),
         Value::Object(map) if map.contains_key("toString") => return Err(malformed()),
         Value::Object(_) => "[object Object]".into(),
+    })
+}
+fn openrouter_per_million(value: Option<&Value>) -> Result<Option<f64>, CatalogueError> {
+    let Some(value) = value.filter(|v| truthy(v)) else {
+        return Ok(None);
+    };
+    let text = js_string(value)?;
+    let text = js_trim(&text);
+    static PREFIX: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let prefix = PREFIX.get_or_init(|| {
+        regex::Regex::new(r"^[+-]?(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?").unwrap()
+    });
+    let Some(matched) = prefix.find(text) else {
+        return Ok(None);
+    };
+    let parsed = matched.as_str().parse::<f64>().unwrap_or(f64::NAN);
+    if !parsed.is_finite() || parsed < 0.0 {
+        return Ok(None);
+    }
+    // Keep both binary64 multiplications in reference order. After rejecting
+    // negative inputs, Rust's ties-away round matches Math.round (including -0).
+    Ok(Some((parsed * 1_000_000.0 * 1e6).round() / 1e6))
+}
+fn openrouter_pricing(row: &Value) -> Result<Option<ModelPricing>, CatalogueError> {
+    let pricing = field(row, "pricing")?.filter(|v| !v.is_null());
+    let prompt = openrouter_per_million(pricing.and_then(|v| v.get("prompt")))?;
+    let completion = openrouter_per_million(pricing.and_then(|v| v.get("completion")))?;
+    Ok(if prompt.is_some() || completion.is_some() {
+        Some(ModelPricing {
+            prompt_per_m_tok: prompt,
+            completion_per_m_tok: completion,
+        })
+    } else {
+        None
     })
 }
 pub fn omniroute_max_models(raw: Option<&str>) -> f64 {
@@ -620,6 +688,7 @@ fn model(
         is_default: None,
         reasoning_effort_supported: reasoning,
         group: None,
+        pricing: None,
     }
 }
 pub fn map_catalogue(
@@ -769,7 +838,11 @@ pub fn map_catalogue(
                 .transpose()?
         };
         let effort = reasoning(id.as_ref())?;
-        result.push(model(id, name, description, Some(effort)));
+        let mut entry = model(id, name, description, Some(effort));
+        if kind == CatalogueKind::OpenRouter {
+            entry.pricing = openrouter_pricing(row)?;
+        }
+        result.push(entry);
     }
     Ok(result)
 }
@@ -777,6 +850,150 @@ pub fn map_catalogue(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn openrouter_price_prefix_rounding_and_shape() {
+        use serde_json::json;
+        let mapped = map_catalogue(
+            CatalogueKind::OpenRouter,
+            &json!({"data":[{"id":"vendor/model","pricing":{"prompt":"0.000002"}}]}),
+            150.0,
+            &AcpCollation::default(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(&mapped[0]).unwrap()["pricing"],
+            json!({"promptPerMTok":2})
+        );
+        let p = openrouter_pricing(
+            &json!({"pricing":{"prompt":"  0.0000012345678extra", "completion":"2e-6more"}}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(p).unwrap(),
+            json!({"promptPerMTok":1.234568,"completionPerMTok":2})
+        );
+        let p = openrouter_pricing(&json!({"pricing":{"prompt":"0", "completion":"-1"}}))
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::to_value(p).unwrap(), json!({"promptPerMTok":0}));
+        assert!(
+            openrouter_pricing(&json!({"pricing":{"prompt":"Infinity", "completion":"bad"}}))
+                .unwrap()
+                .is_none()
+        );
+        let p =
+            openrouter_pricing(&json!({"pricing":{"prompt":"1e+broken", "completion":".5e-6"}}))
+                .unwrap()
+                .unwrap();
+        assert_eq!(
+            serde_json::to_value(p).unwrap(),
+            json!({"promptPerMTok":1000000,"completionPerMTok":0.5})
+        );
+        let p = openrouter_pricing(&json!({"pricing":{"prompt":"1e300"}}))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(p).unwrap(),
+            json!({"promptPerMTok":null})
+        );
+    }
+    #[test]
+    fn openrouter_pricing_coercion_and_rejected_inputs() {
+        use serde_json::json;
+        for value in [json!(0), json!(false), json!(null), json!(""), json!([])] {
+            assert!(openrouter_per_million(Some(&value)).unwrap().is_none());
+        }
+        // Arrays are truthy and parseFloat first coerces them to strings.
+        assert_eq!(
+            openrouter_per_million(Some(&json!([0]))).unwrap(),
+            Some(0.0)
+        );
+        assert_eq!(
+            openrouter_per_million(Some(&json!([["2e-6extra"]]))).unwrap(),
+            Some(2.0)
+        );
+        assert_eq!(
+            openrouter_per_million(Some(&json!([1, 2]))).unwrap(),
+            Some(1_000_000.0)
+        );
+        assert!(openrouter_per_million(Some(&json!({"toString": null}))).is_err());
+        assert!(
+            openrouter_per_million(Some(&json!({"valueOf": null})))
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            openrouter_per_million(Some(&json!("\u{feff}\u{00a0}2e-6"))).unwrap(),
+            Some(2.0)
+        );
+        assert!(
+            openrouter_per_million(Some(&json!("\u{0085}2e-6")))
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn openrouter_pricing_half_steps_and_underflow() {
+        use serde_json::json;
+        for (input, expected) in [
+            ("0.0000000000004999999999999999", 0.0),
+            ("0.0000000000005", 0.000001),
+            ("0.0000000000005000000000000001", 0.000001),
+            ("0.0000000000015", 0.000002),
+            ("0.0000000000025", 0.000003),
+        ] {
+            assert_eq!(
+                openrouter_per_million(Some(&json!(input))).unwrap(),
+                Some(expected),
+                "{input}"
+            );
+        }
+        for input in ["-0", "-1e-999"] {
+            assert_eq!(
+                openrouter_per_million(Some(&json!(input)))
+                    .unwrap()
+                    .unwrap()
+                    .to_bits(),
+                (-0.0_f64).to_bits()
+            );
+        }
+        assert!(
+            openrouter_per_million(Some(&json!("-5e-324")))
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn openrouter_pricing_json_tokens_and_overflow_presence() {
+        use serde_json::json;
+        for (input, wire) in [
+            ("-0", r#"{"promptPerMTok":0}"#),
+            ("0.000002", r#"{"promptPerMTok":2}"#),
+            ("0.0000000000005", r#"{"promptPerMTok":0.000001}"#),
+            ("1e15", r#"{"promptPerMTok":1e+21}"#),
+            ("1e300", r#"{"promptPerMTok":null}"#),
+        ] {
+            let pricing = openrouter_pricing(&json!({"pricing":{"prompt":input}}))
+                .unwrap()
+                .unwrap();
+            assert_eq!(serde_json::to_string(&pricing).unwrap(), wire, "{input}");
+        }
+        assert!(
+            openrouter_pricing(&json!({"pricing":{"prompt":"1e309"}}))
+                .unwrap()
+                .is_none()
+        );
+        let pricing = openrouter_pricing(&json!({"pricing":{"prompt":"1e300","completion":"bad"}}))
+            .unwrap()
+            .unwrap();
+        assert!(pricing.prompt_per_m_tok.unwrap().is_infinite());
+        assert!(pricing.completion_per_m_tok.is_none());
+    }
 
     const DAEMON_URL: &str = "http://localhost:11434";
     const LOCAL_TAGS: &str = r#"{"models":[{"name":"llama3.2:latest","details":{"family":"llama","parameter_size":"3B"}}]}"#;
@@ -1006,6 +1223,7 @@ mod tests {
             is_default: None,
             reasoning_effort_supported: None,
             group: None,
+            pricing: None,
         }];
         let cloud = map_ollama_cloud_catalogue(&serde_json::from_str(CLOUD_TAGS).unwrap())
             .expect("cloud catalogue");

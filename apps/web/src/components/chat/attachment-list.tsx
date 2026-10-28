@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
 import { cn } from '@/lib/utils'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export function collectAttachments(attachments?: ChatAttachment[] | string[], segments?: UserMessageSegment[]): ChatAttachment[] {
   const result: ChatAttachment[] = (attachments ?? []).filter((item): item is ChatAttachment => typeof item === 'object' && item !== null && typeof item.mimeType === 'string' && typeof item.data === 'string')
@@ -34,7 +35,7 @@ export function AttachmentList({ attachments, onRemove, className }: {
           {attachment.pastedText && <span className="shrink-0 text-muted-foreground">{attachment.pastedText.lineCount} lines</span>}
         </>
         const chipClass = 'flex min-w-0 max-w-full items-center gap-1.5 px-1.5 py-1 text-left hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-        return <div key={`${attachment.name}-${index}`} className="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded border border-border/70 bg-muted/30 text-xs text-foreground" title={attachment.name}>
+        return <TooltipHint key={`${attachment.name}-${index}`} content={attachment.name}><div className="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded border border-border/70 bg-muted/30 text-xs text-foreground">
           {isImage ? <Dialog>
             <DialogTrigger asChild><button type="button" className={chipClass} aria-label={`Expand image ${attachment.name}`}>{label}</button></DialogTrigger>
             <ImageViewerContent src={src} alt={attachment.name} />
@@ -43,7 +44,7 @@ export function AttachmentList({ attachments, onRemove, className }: {
             <PopoverContent className="w-[min(600px,90vw)]" align="start"><p className="mb-2 text-sm font-medium">{attachment.name}</p><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-xs">{attachment.pastedText.text}</pre></PopoverContent>
           </Popover> : <a className={chipClass} href={src} download={attachment.name} aria-label={`Download ${attachment.name}`}>{label}</a>}
           {onRemove && <button type="button" className="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label={`Remove ${attachment.name}`} onClick={() => onRemove(attachment.name)}><X className="h-3.5 w-3.5" /></button>}
-        </div>
+        </div></TooltipHint>
       })}
     </div>
   )

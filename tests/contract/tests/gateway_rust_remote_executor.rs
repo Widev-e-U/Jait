@@ -159,6 +159,10 @@ async fn compare(cases: Vec<Value>) {
                 )
                 .await
                 .map(|v| json!(v)),
+                Some("target") => Ok::<Value, HostError>(resolve_call_node_target(
+                    test["tool"].as_str().unwrap(),
+                    &test["input"],
+                )),
                 _ => {
                     create_remote_tool_executor(
                         ws,
@@ -189,6 +193,38 @@ async fn compare(cases: Vec<Value>) {
             assert_eq!(a, e, "case {:?}", batch[index]);
         }
     }
+}
+#[tokio::test]
+async fn node_target_strips_node_id_pins_aliases_locally_and_rejects_gateway_only_tools() {
+    let mut cases = vec![];
+    for tool in [
+        "execute",
+        "terminal.run",
+        "jait.terminal",
+        "file.write",
+        "os.query",
+        "memory.search",
+        "cron.add",
+    ] {
+        for input in [
+            json!(null),
+            json!("x"),
+            json!([1, 2]),
+            json!({}),
+            json!({"nodeId": "device-windows", "command": "whoami"}),
+            json!({"nodeId": "  device-windows  ", "command": "whoami"}),
+            json!({"nodeId": "", "command": "whoami"}),
+            json!({"nodeId": "   ", "command": "whoami"}),
+            json!({"nodeId": 7, "command": "whoami"}),
+            json!({"nodeId": "gateway", "command": "whoami"}),
+            json!({"nodeId": "GATEWAY", "command": "whoami"}),
+            json!({"nodeId": " Local ", "command": "whoami"}),
+            json!({"nodeId": "this", "command": "whoami"}),
+        ] {
+            cases.push(json!({"kind":"target","tool":tool,"input":input}));
+        }
+    }
+    compare(cases).await;
 }
 #[tokio::test]
 async fn timeout_policy_is_finite_capped_and_background_requires_exact_true() {

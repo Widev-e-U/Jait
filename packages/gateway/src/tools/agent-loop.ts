@@ -240,6 +240,52 @@ export function formatLLMError(status: number, responseText: string): string {
 }
 
 /**
+ * Whether a provider HTTP error is a plain rate limit — a "come back shortly"
+ * that will clear on its own — rather than a condition the user has to fix.
+ *
+ * Quota exhaustion also arrives as `429`, but retrying it just stalls the turn
+ * and then ends in the identical error, so it is deliberately excluded and
+ * still surfaces as an actionable message.
+ */
+export function isRetryableRateLimit(status: number, responseText: string): boolean {
+  if (status !== 429) return false;
+  let parsed: { error?: { message?: string; type?: string; code?: string } | string } | undefined;
+  try { parsed = JSON.parse(responseText); } catch { /* not JSON */ }
+  const errObj = typeof parsed?.error === "object" && parsed?.error !== null ? parsed.error : undefined;
+  const serverMsg = typeof parsed?.error === "string" ? parsed.error : errObj?.message;
+  const code = errObj?.code ?? errObj?.type;
+  if (code === "insufficient_quota" || code === "billing_hard_limit_reached") return false;
+  if (serverMsg && /quota|billing|out of credits?/i.test(serverMsg)) return false;
+  return true;
+}
+
+/**
+ * `Retry-After` in milliseconds when the provider sent one. The header is
+ * either delay-seconds or an HTTP date; anything unparseable is ignored so the
+ * caller falls back to its own exponential backoff.
+ */
+export function parseRetryAfterMs(header: string | null | undefined): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const asDate = Date.parse(trimmed);
+  if (!Number.isNaN(asDate)) return Math.max(0, asDate - Date.now());
+  return null;
+}
+
+/**
+ * Backoff before re-issuing a rate-limited round: the provider's own
+ * `Retry-After` when it gave one, otherwise exponential (2s, 4s, 8s, 16s, 30s),
+ * always clamped to the ceiling so a turn cannot silently stall for minutes.
+ */
+export function rateLimitBackoffMs(attempt: number, retryAfterMs: number | null): number {
+  const backoff = retryAfterMs ?? RATE_LIMIT_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  return Math.min(Math.max(backoff, 0), RATE_LIMIT_RETRY_MAX_DELAY_MS);
+}
+
+/**
  * Turn a transport-level failure into something a user can act on.
  *
  * A backend that never answers throws from `fetch` rather than returning a
@@ -475,6 +521,8 @@ export interface SteeringMessage extends SteeringMessageMeta {
  * into the client transcript.
  */
 export class SteeringController {
+  constructor(readonly turnId: string = randomUUID()) {}
+
   private queue: SteeringMessage[] = [];
   private pendingListeners = new Set<() => void>();
 
@@ -2139,6 +2187,22 @@ const MAX_EMPTY_RESPONSE_RETRIES = 2;
 const MAX_TRANSPORT_RETRIES = 2;
 /** Base backoff between transport retries; scales linearly with the attempt. */
 const TRANSPORT_RETRY_BASE_DELAY_MS = 2_000;
+/**
+ * Max times a `429 Too Many Requests` response is retried within a turn without
+ * consuming the round budget.
+ *
+ * A rate limit is a "come back in a moment", not a failure of the turn: the
+ * provider accepted the request in principle and simply wants it later. Ending
+ * the turn with an error card makes the user re-send the same prompt by hand,
+ * which is exactly what causes the next 429. So back off and re-issue the same
+ * round instead. Exhausted quota (`insufficient_quota`) is *not* retried — it
+ * will not clear in seconds and would only stall the turn.
+ */
+const MAX_RATE_LIMIT_RETRIES = 5;
+/** First backoff after a 429; doubles per attempt (2s, 4s, 8s, 16s, 30s). */
+const RATE_LIMIT_RETRY_BASE_DELAY_MS = 2_000;
+/** Ceiling for a single 429 backoff, including a provider `Retry-After`. */
+const RATE_LIMIT_RETRY_MAX_DELAY_MS = 30_000;
 /** Max times a malformed repeating generation is discarded and resampled. */
 const MAX_REPETITION_RECOVERIES = 3;
 /**
@@ -3320,6 +3384,14 @@ export async function runAgentLoop(
    * retried without consuming a round — see the catch around the LLM fetch.
    */
   let transportRetries = 0;
+  /**
+   * Consecutive `429` responses retried without consuming a round — see the
+   * `!response.ok` branch. Reset as soon as a round is accepted, so the budget
+   * applies to a *streak* of rate limiting rather than to the whole turn (a
+   * long turn that gets throttled at round 5 and again at round 40 keeps its
+   * full budget each time).
+   */
+  let rateLimitRetries = 0;
   /** Swarm mode: has the coordinator delegated anything to a specialist yet? */
   let swarmHasDelegated = false;
   /** Swarm mode: direct read/search-style tool calls made before any delegation. */
@@ -3416,7 +3488,10 @@ export async function runAgentLoop(
       const steered = steering.drain();
       for (const pending of steered) {
         const msg = pending.message;
-        history.push({ role: "system", content: `[STEERING] ${msg}` });
+        // User steering retains user authority; internal notices remain system guidance.
+        history.push(pending.hidden
+          ? { role: "system", content: `[STEERING] ${msg}` }
+          : { role: "user", content: msg });
         if (!pending.hidden) {
           segments.push({
             type: "steering",
@@ -3657,11 +3732,45 @@ export async function runAgentLoop(
           continue;
         }
 
+        // ── Rate-limit recovery (back off, re-issue the same round) ──
+        // A 429 means "accepted, but later". Surfacing it as an error card ends
+        // a turn that the provider was willing to serve, and the user's retry
+        // is what re-triggers the limit. So wait out the window — honouring the
+        // provider's `Retry-After` when sent — and send the identical request
+        // again. Nothing is replayed into history and no round is consumed.
+        if (isRetryableRateLimit(response.status, errText) && rateLimitRetries < MAX_RATE_LIMIT_RETRIES) {
+          rateLimitRetries++;
+          const retryAfterMs = parseRetryAfterMs(response.headers?.get?.("retry-after"));
+          const waitMs = rateLimitBackoffMs(rateLimitRetries, retryAfterMs);
+          log.warn(
+            `LLM rate limited (429) on round ${round} — retrying in ${waitMs}ms `
+              + `(attempt ${rateLimitRetries}/${MAX_RATE_LIMIT_RETRIES}${retryAfterMs !== null ? ", provider Retry-After" : ""})`,
+          );
+          // Stay quiet on the first attempt: a short wait then a normal answer
+          // is not worth interrupting the transcript over.
+          if (rateLimitRetries > 1) {
+            onEvent?.({
+              type: "steering",
+              message: `Rate limited by the model provider — retrying in ${Math.round(waitMs / 1000)}s (attempt ${rateLimitRetries}/${MAX_RATE_LIMIT_RETRIES})…`,
+            });
+          }
+          await sleepUntilAborted(waitMs, abort.signal);
+          if (abort.signal.aborted) {
+            return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, persisted };
+          }
+          // Restore per-attempt state the rejected round already consumed.
+          forceFinalAnswer = answerOnlyRound || forceFinalAnswer;
+          quarantinedToolNames = roundQuarantinedToolNames;
+          round--;
+          continue;
+        }
+
         const friendlyMessage = formatLLMError(response.status, errText);
         onEvent?.({ type: "error", message: friendlyMessage, status: response.status });
         return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, persisted };
       }
 
+      rateLimitRetries = 0;
       const reader = response.body?.getReader();
       if (!reader) {
         onEvent?.({ type: "error", message: "No response body from LLM" });
@@ -4965,7 +5074,10 @@ export async function runAgentLoop(
       // UI waits for before promoting the queued message into the transcript.
       for (const pending of steered) {
         const msg = pending.message;
-        history.push({ role: "system", content: `[STEERING] ${msg}` });
+        // User steering retains user authority; internal notices remain system guidance.
+        history.push(pending.hidden
+          ? { role: "system", content: `[STEERING] ${msg}` }
+          : { role: "user", content: msg });
         if (!pending.hidden) {
           segments.push({
             type: "steering",

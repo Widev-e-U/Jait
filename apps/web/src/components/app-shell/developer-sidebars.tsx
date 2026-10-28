@@ -202,6 +202,7 @@ export function DeveloperSidebars({
 
       {showSidebar && sidebarView === 'projects' && !isMobile && (
         <aside
+          data-browser-sidebar
           ref={sidebarRef}
           tabIndex={-1}
           onBlur={onBlur}

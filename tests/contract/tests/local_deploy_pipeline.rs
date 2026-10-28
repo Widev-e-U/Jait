@@ -192,6 +192,7 @@ fn plan(fixture: &Fixture) -> Plan {
         .collect();
     Plan {
         skip_e2e: false,
+        skip_tests: false,
         artifact_root: base.clone(),
         previous_argv: argv.clone(),
         unit: "jait-gateway.service".into(),
@@ -533,4 +534,49 @@ fn skip_e2e_is_explicit_and_cannot_drop_other_required_evidence() {
     let mut incomplete = proof.clone();
     incomplete.checks.remove(0);
     assert!(validate_proof(&incomplete, &reduced).is_err());
+}
+
+#[test]
+fn fast_local_policy_requires_exact_selected_evidence() {
+    let fast = verification_steps_with_policy(&root(), true, true).unwrap();
+    assert_eq!(
+        fast.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        vec!["release-guard", "artifact-paths", "typecheck", "lint"]
+    );
+    let proof = Proof {
+        fingerprint: "a".repeat(64),
+        checks: fast
+            .iter()
+            .map(|s| Check {
+                step: s.clone(),
+                passed: true,
+            })
+            .collect(),
+    };
+    validate_proof(&proof, &fast).unwrap();
+    assert!(validate_proof(&proof, &verification_steps_for(&root(), true).unwrap()).is_err());
+    let mut incomplete = proof.clone();
+    incomplete.checks.pop();
+    assert!(validate_proof(&incomplete, &fast).is_err());
+    let with_e2e = verification_steps_with_policy(&root(), false, true).unwrap();
+    assert_eq!(with_e2e.len(), fast.len() + 2);
+    assert!(with_e2e.iter().any(|s| s.id == "web-e2e"));
+
+    let fixture = Fixture::new();
+    let mut candidate = plan(&fixture);
+    candidate.skip_e2e = true;
+    candidate.skip_tests = true;
+    candidate.proof.checks = verification_steps_with_policy(&candidate.runtime, true, true)
+        .unwrap()
+        .into_iter()
+        .map(|step| Check { step, passed: true })
+        .collect();
+    let path = fixture.0.join("runs/one/plan.json");
+    let home = fixture.0.join("home");
+    validate_plan(&candidate, &path, &home).unwrap();
+    candidate.skip_tests = false;
+    assert!(validate_plan(&candidate, &path, &home).is_err());
+    let mut old_plan = serde_json::to_value(&candidate).unwrap();
+    old_plan.as_object_mut().unwrap().remove("skipTests");
+    assert!(!serde_json::from_value::<Plan>(old_plan).unwrap().skip_tests);
 }

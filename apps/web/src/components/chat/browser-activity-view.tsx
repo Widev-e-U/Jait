@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { CheckCircle2, ExternalLink, Globe, Loader2, MousePointer2, XCircle } from 'lucide-react'
 import { getBrowserActivity } from '@/lib/browser-activity'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export function BrowserActivityView({ tool, args, data, status, output, children }: {
   tool: string
@@ -25,11 +26,13 @@ export function BrowserActivityView({ tool, args, data, status, output, children
         </span>
       </div>
       {activity.url && (
-        <a href={activity.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2 text-muted-foreground hover:text-foreground" title={activity.url}>
-          <span className="min-w-0 flex-1 truncate font-mono">{activity.url}</span>
-          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
-          <span className="sr-only">Open page</span>
-        </a>
+        <TooltipHint content={activity.url}>
+          <a href={activity.url} target="_blank" rel="noopener noreferrer" className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2 text-muted-foreground hover:text-foreground">
+            <span className="min-w-0 flex-1 truncate font-mono">{activity.url}</span>
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="sr-only">Open page</span>
+          </a>
+        </TooltipHint>
       )}
       {activity.target && (
         <div className="flex items-start gap-2 px-3 py-2">

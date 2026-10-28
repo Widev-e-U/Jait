@@ -187,3 +187,48 @@ impl Drop for ParserGroup {
         self.kill();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn unsupported_shells_pass_through() {
+        assert!(
+            command_syntax_error("if true; then", "/bin/fish")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_shell_executable_passes_through() {
+        assert!(
+            command_syntax_error("if true; then", "/nonexistent/definitely-not-a-shell/bash")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn bash_accepts_valid_and_rejects_incomplete_input() {
+        if !Path::new("/bin/bash").exists() {
+            return;
+        }
+        assert!(
+            command_syntax_error("echo ok", "/bin/bash")
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            command_syntax_error("if true; then", "/bin/bash")
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+}

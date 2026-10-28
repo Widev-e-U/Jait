@@ -214,13 +214,14 @@ export class MessengerStore {
     const mime = typeof content.info?.mimetype === 'string' ? content.info.mimetype : 'application/octet-stream'
     return {
       id, sender: room.getMember(event.getSender() ?? '')?.name ?? event.getSender() ?? 'Unknown',
+      ...(event.getSender() ? { senderId: event.getSender()! } : {}),
       body: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted' ? 'Unable to decrypt this message. Verify this device or import room keys.' : String(content.body ?? ''),
       timestamp: Number.isFinite(event.getTs()) && Math.abs(event.getTs()) <= 8.64e15 ? event.getTs() : 0, own: event.getSender() === this.session?.userId,
       encrypted: event.isEncrypted(), unableToDecrypt: event.isDecryptionFailure() || event.getType() === 'm.room.encrypted',
       pending: event.status === 'sending' || event.status === 'queued' || event.status === 'encrypting',
       failed: event.status === 'not_sent',
       ...(typeof attachment === 'string' && attachment.startsWith('mxc://') ? { attachment: {
-        url: attachment, name: String(content.body ?? 'Attachment'), mime,
+        url: attachment, name: String(typeof content.filename === 'string' ? content.filename : content.body ?? 'Attachment'), mime,
         image: content.msgtype === 'm.image' && ['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(mime),
         size: typeof content.info?.size === 'number' ? content.info.size : undefined,
         file: content.file,
@@ -360,6 +361,7 @@ export class MessengerStore {
     this.notifiedEvents.set(room.roomId, notified)
     await triggerSystemNotification({
       id: 'matrix:' + id, title: room.name, body: 'New message',
+      independentOfAttention: true,
       link: '/messenger?roomId=' + encodeURIComponent(room.roomId),
       markReadLink: messengerReadLink(room.roomId, id, this.session!.userId, this.session!.homeserver),
     }).catch(() => {})

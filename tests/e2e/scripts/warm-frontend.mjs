@@ -8,8 +8,17 @@ export default async function warmFrontend(config) {
   const browser = await chromium.launch()
   try {
     const page = await browser.newPage()
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    page.on('requestfailed', request => errors.push(`${request.url()}: ${request.failure()?.errorText}`))
     await page.goto(baseURL, { waitUntil: 'domcontentloaded', timeout: 90_000 })
-    await page.waitForFunction(() => Boolean(document.querySelector('#root')?.firstElementChild), undefined, { timeout: 10_000 })
+    // Cold Vite transforms can continue after DOMContentLoaded, especially on CI.
+    try {
+      await page.waitForFunction(() => Boolean(document.querySelector('#root')?.firstElementChild), undefined, { timeout: 60_000 })
+    } catch (error) {
+      if (errors.length) console.error('Frontend warm-up errors:', errors.join('\n'))
+      throw error
+    }
   } finally {
     await browser.close()
   }

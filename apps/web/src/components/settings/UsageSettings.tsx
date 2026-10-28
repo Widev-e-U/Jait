@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { getApiUrl } from '@/lib/gateway-url'
 import { describeResetCredits, describeUsageReset, quotaLabel, type UsageResetCredits } from '@/lib/usage-resets'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 
@@ -135,12 +136,13 @@ export function UsageSettings({ token }: { token: string | null }) {
               <div key={account.id} className="space-y-3">
                 <div className="text-sm font-medium">{account.label}</div>
                 {resetCredits && (
-                  <p
-                    title={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}
-                    className="text-xs text-emerald-600 dark:text-emerald-400"
-                  >
-                    ↺ {resetCredits.text}
-                  </p>
+                  <TooltipHint content={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}>
+                    <p
+                      className="text-xs text-emerald-600 dark:text-emerald-400"
+                    >
+                      ↺ {resetCredits.text}
+                    </p>
+                  </TooltipHint>
                 )}
                 {accountRows.length === 0 && (
                   <p className="text-xs text-muted-foreground">No usage reported yet.</p>
@@ -175,9 +177,11 @@ function UsageRow({ row }: { row: ProviderUsageSnapshot }) {
         <span className="tabular-nums text-muted-foreground">
           {pct !== null ? `${pct}% used` : row.status ?? '—'}
           {reset && (
-            <span title={reset.title}>
-              {' · '}{reset.text}{reset.estimated ? ' · est.' : ''}
-            </span>
+            <TooltipHint content={reset.title}>
+              <span>
+                {' · '}{reset.text}{reset.estimated ? ' · est.' : ''}
+              </span>
+            </TooltipHint>
           )}
         </span>
       </div>

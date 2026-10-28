@@ -1,5 +1,6 @@
 import type { ScreenShareService } from "@jait/screen-share";
 import type { WsControlPlane } from "../ws.js";
+import type { ScreenShareControlCoordinator } from "../services/screen-share-control.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface ScreenShareInput {
@@ -26,7 +27,7 @@ interface OsToolInput {
   };
 }
 
-export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsControlPlane): ToolDefinition<ScreenShareInput> {
+export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsControlPlane, control?: ScreenShareControlCoordinator): ToolDefinition<ScreenShareInput> {
   return {
     name: "screen.share",
     description:
@@ -54,7 +55,7 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
       },
       required: ["action"],
     },
-    async execute(input): Promise<ToolResult> {
+    async execute(input, ctx?: ToolContext): Promise<ToolResult> {
       if (input.action === "list-devices") {
         const state = screenShare.getState();
         const webDevices = state.devices.filter((d) => d.platform === "web");
@@ -109,25 +110,64 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
         const viewerDeviceIds = ws
           ? (input.viewerDeviceIds ?? ws.getConnectedDeviceIds().filter((id) => id !== hostDeviceId))
           : (input.viewerDeviceIds ?? []);
-        const state = screenShare.startShare({ hostDeviceId, viewerDeviceIds });
+        // Agent-initiated shares are always chat-scoped and always need the
+        // node's consent before capture starts.
+        const chatId = ctx?.sessionId;
+        if (!chatId?.trim()) return { ok: false, message: "An authenticated chat is required to request a screen share." };
+        const previous = screenShare.getSessionForChat(chatId);
+        if (previous && control) {
+          await control.stopForShare(previous.id);
+          if (previous.nodeId) await control.stopForNode(previous.nodeId, chatId, false);
+        }
+        const state = screenShare.startShare({
+          hostDeviceId,
+          viewerDeviceIds,
+          chatId: chatId ?? null,
+          nodeId: hostDeviceId,
+          initiatedBy: "agent",
+          requireConsent: true,
+          reason: "The agent wants to view this screen in the chat.",
+        });
 
         // Tell the host device to begin screen capture via WS
         // and open the Screen Share panel in the viewer's UI
         if (ws) {
-          ws.sendScreenShareStartRequest(state.id, hostDeviceId, viewerDeviceIds);
+          const stopped = previous ? screenShare.getSession(previous.id) : null;
+          if (stopped?.status === "idle") ws.broadcastScreenShareState(stopped);
+          ws.sendScreenShareStartRequest(state.id, hostDeviceId, viewerDeviceIds, {
+            chatId: chatId ?? null,
+            nodeId: state.nodeId ?? hostDeviceId,
+            initiatedBy: "agent",
+            requireConsent: true,
+            reason: state.reason ?? null,
+          });
           ws.broadcastScreenShareState(state);
-          ws.sendUICommand({ command: "screen-share.open", data: { sessionId: state.id, targetDeviceId: hostDeviceId } });
+          ws.sendUICommand(
+            { command: "screen-share.open", data: { sessionId: state.id, targetDeviceId: hostDeviceId, chatId: chatId ?? null } },
+            chatId,
+          );
         }
 
         return {
           ok: true,
-          message: `Connecting to remote device "${hostDeviceId}". The remote device will start sharing its screen. The Screen Share panel has been opened automatically.`,
+          message: state.pendingApproval
+            ? `Requested screen access to "${hostDeviceId}". Waiting for the device to approve the share.`
+            : `Connecting to remote device "${hostDeviceId}". The remote device will start sharing its screen. The Screen Share panel has been opened automatically.`,
           data: state,
         };
       }
 
       if (input.action === "disconnect") {
-        return { ok: true, message: "Screen viewing session ended.", data: screenShare.stopShare() };
+        const chatId = ctx?.sessionId;
+        if (!chatId?.trim()) return { ok: false, message: "An authenticated chat is required to stop a screen share." };
+        const owned = screenShare.getSessionForChat(chatId);
+        if (owned && control) {
+          await control.stopForShare(owned.id);
+          if (owned.nodeId) await control.stopForNode(owned.nodeId, chatId, false);
+        }
+        const stopped = owned ? screenShare.stopShare(owned.id) : null;
+        if (stopped && ws) ws.broadcastScreenShareState(stopped);
+        return { ok: true, message: "Screen viewing session ended.", data: stopped };
       }
 
       return { ok: false, message: `Unknown action: ${String(input.action)}` };

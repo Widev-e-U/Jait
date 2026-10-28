@@ -396,8 +396,10 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       const session = await response.json() as ProjectSession
       if (session.projectId) {
         setProjects((prev) => prev.map((project) => (
-          project.id === session.projectId && !project.sessions.some((entry) => entry.id === session.id)
-            ? { ...project, sessions: [session, ...project.sessions] }
+          project.id === session.projectId
+            ? { ...project, sessions: project.sessions.some((entry) => entry.id === session.id)
+              ? project.sessions.map((entry) => entry.id === session.id ? session : entry)
+              : [session, ...project.sessions] }
             : project
         )))
       } else {
@@ -409,6 +411,23 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
       return null
     }
   }, [onLoginRequired, token])
+
+  const refreshActiveSession = useCallback(async () => {
+    const sessionId = activeSessionIdRef.current
+    if (sessionId) await loadSession(sessionId)
+  }, [loadSession])
+
+  // Mobile browsers suspend background connections and can miss chat.updated.
+  // Recover authoritative metadata (including the goal) on selection and return.
+  useEffect(() => {
+    if (!activeSessionId || !token) return
+    void refreshActiveSession()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshActiveSession()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [activeSessionId, token, refreshActiveSession])
 
   const searchChats = useCallback(async (query: string) => {
     const normalized = query.trim()
@@ -1366,6 +1385,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
     fetchProjects,
     loadProject,
     loadSession,
+    refreshActiveSession,
     searchChats,
     searchProjects,
     createProject,

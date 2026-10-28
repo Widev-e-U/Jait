@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { filterEmojiRows, type EmojiRow } from '@/lib/messenger/emoji-search'
 import { cn } from '@/lib/utils'
+import { DelegatedTooltip } from '@/components/ui/delegated-tooltip'
 
 /** WhatsApp Web shows a short hover row before letting you open the full picker. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const
@@ -39,6 +40,7 @@ export function EmojiPickerPanel({
   actionLabel?: string
   className?: string
 }) {
+  const panelRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState('')
   const [data, setData] = useState<EmojiData>({ groups: [], emojis: [] })
   const [loaded, setLoaded] = useState(false)
@@ -64,13 +66,14 @@ export function EmojiPickerPanel({
   }, [data, rows])
 
   return (
-    <div className={cn('flex min-h-0 flex-col gap-2', className)}>
+    <div ref={panelRef} className={cn('flex min-h-0 flex-col gap-2', className)}>
+      <DelegatedTooltip containerRef={panelRef} />
       {!needle && (
         <div className="flex items-center gap-1 rounded-lg border bg-muted/50 p-1">
           {QUICK_REACTIONS.map(emoji => (
             <Button
               key={emoji} type="button" variant="ghost" size="icon"
-              aria-label={actionLabel + ' ' + emoji} title={actionLabel + ' ' + emoji}
+              aria-label={actionLabel + ' ' + emoji} data-tooltip={actionLabel + ' ' + emoji}
               className="h-8 w-8 rounded-full text-lg leading-none"
               onClick={() => onSelect(emoji)}
             >
@@ -102,7 +105,7 @@ export function EmojiPickerPanel({
                   {group.items.map(row => (
                     <Button
                       key={`${row[0]}-${row[1]}`} type="button" variant="ghost" size="icon"
-                      aria-label={row[1]} title={row[1]}
+                      aria-label={row[1]} data-tooltip={row[1]}
                       className="h-8 w-8 text-lg leading-none"
                       onClick={() => onSelect(row[0])}
                     >

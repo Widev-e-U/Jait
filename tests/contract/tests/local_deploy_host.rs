@@ -182,6 +182,7 @@ async fn production_controller_writes_backup_activates_and_restores_using_fake_s
     let hash = tree_digest(&runtime).unwrap();
     let plan = Plan {
         skip_e2e: false,
+        skip_tests: false,
         artifact_root: base.clone(),
         previous_argv: expected.clone(),
         unit: "jait-gateway.service".into(),
@@ -481,5 +482,54 @@ esac
             stat.is_empty() || stat.split(") ").nth(1).unwrap().starts_with('Z'),
             "{name} still executing after controller exit: {stat}"
         );
+    }
+}
+
+#[test]
+fn native_fast_cli_omits_test_processes_and_retains_lint_failures() {
+    for fail in [false, true] {
+        let fixture = Fixture::new();
+        let workspace = fixture.0.join("workspace");
+        let logs = fixture.0.join("logs");
+        let bin = fixture.0.join("bin");
+        for path in [workspace.join(".github/scripts"), logs.clone(), bin.clone()] {
+            fs::create_dir_all(path).unwrap();
+        }
+        let engine = "#!/bin/sh\ncase \"$*\" in *test*|*--test*) exit 90;; *lint*) if [ \"$FAIL_LINT\" = yes ]; then exit 7; fi;; esac\n";
+        for name in ["bun", "node"] {
+            executable(&bin.join(name), engine);
+        }
+        let output = Command::new(binary())
+            .args([
+                "--verify",
+                workspace.to_str().unwrap(),
+                logs.to_str().unwrap(),
+                "--skip-e2e",
+                "--skip-tests",
+            ])
+            .env("PATH", &bin)
+            .env("FAIL_LINT", if fail { "yes" } else { "no" })
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.success(),
+            !fail,
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(logs.join("proof.json").exists(), !fail);
+        if !fail {
+            let proof: Proof =
+                serde_json::from_slice(&fs::read(logs.join("proof.json")).unwrap()).unwrap();
+            validate_proof(
+                &proof,
+                &verification_steps_with_policy(&workspace, true, true).unwrap(),
+            )
+            .unwrap();
+            assert!(
+                validate_proof(&proof, &verification_steps_for(&workspace, true).unwrap()).is_err()
+            );
+            assert_eq!(proof.checks.len(), 4);
+        }
     }
 }

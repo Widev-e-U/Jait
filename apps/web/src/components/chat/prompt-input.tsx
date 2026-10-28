@@ -8,6 +8,7 @@ import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, Copy, Check
 import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider, TooltipHint } from '@/components/ui/tooltip'
+import { DelegatedTooltip } from '@/components/ui/delegated-tooltip'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import {
   DropdownMenu,
@@ -93,6 +94,8 @@ interface PromptInputProps {
   onSubmit: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   /** Editors retain their draft until the parent finishes saving and closes them. */
   clearOnSubmit?: boolean
+  /** Optional label for the submit action in an editor. */
+  submitLabel?: string
   onStop?: () => void
   /** Queue a message while the agent is busy. */
   onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
@@ -858,6 +861,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onChange,
   onSubmit,
   clearOnSubmit = true,
+  submitLabel,
   onStop,
   onQueue,
   onSteer,
@@ -2183,10 +2187,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     <TooltipHint side="bottom" content={submitLoading ? 'Loading chat' : undefined}>
       <Button
         type="button"
-        size="icon"
+        size={submitLabel ? "sm" : "icon"}
         className={sendButtonClass}
         disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
-        aria-label="Send message"
+        aria-label={submitLabel ?? "Send message"}
         onClick={() => {
           const el = editableRef.current
           const chips = el ? getChipFiles(el) : []
@@ -2199,7 +2203,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       >
         {submitLoading
           ? <Loader2 className="h-4 w-4 animate-spin" />
-          : <ArrowUp className="h-4 w-4" />}
+          : submitLabel ?? <ArrowUp className="h-4 w-4" />}
       </Button>
     </TooltipHint>
   ) : (
@@ -2394,6 +2398,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             )}
             style={{ wordBreak: 'break-word' }}
           />
+          <DelegatedTooltip containerRef={editableRef} side="bottom" />
         </div>
         {isMessenger && (
           <div className="flex max-w-[60%] shrink-0 items-center justify-end gap-0.5 pb-0.5">

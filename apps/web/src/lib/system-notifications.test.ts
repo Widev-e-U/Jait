@@ -183,6 +183,24 @@ describe('normalizeSystemNotification', () => {
     expect(toastInfo).toHaveBeenCalledWith('Approval needed', { description: 'terminal.run wants to run' })
   })
 
+  it('delivers locally generated Messenger alerts when another surface owns attention events', async () => {
+    const notify = vi.fn(async () => {})
+    vi.stubGlobal('window', {
+      jaitDesktop: { notify },
+      Capacitor: undefined,
+    } as unknown as Window & typeof globalThis)
+    setNativeNotificationsEnabled(false)
+
+    await triggerSystemNotification({
+      id: 'matrix:message-1',
+      title: 'Messenger',
+      body: 'New message',
+      independentOfAttention: true,
+    })
+
+    expect(notify).toHaveBeenCalledOnce()
+  })
+
   it('closes the browser notification when the request is answered elsewhere', async () => {
     NotificationMock.permission = 'granted'
 

@@ -21,6 +21,7 @@
  */
 
 import { execFileSync } from 'node:child_process'
+import { runReleaseTests } from './release-tests.mjs'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 // Gateway is the release source of truth; the rest are published when they change.
@@ -448,6 +449,9 @@ function main() {
         dirtySource,
     )
   }
+
+  // Required before changing versions or creating a release commit, including --skip-checks.
+  runReleaseTests()
 
   // Any failure between here and the commit restores every touched file, so a
   // failed release never leaves a half-applied version bump behind.

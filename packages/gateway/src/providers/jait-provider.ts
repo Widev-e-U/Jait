@@ -7,6 +7,7 @@
  */
 
 import { resolve, isAbsolute, sep } from "node:path";
+import { SteeringController } from "../tools/agent-loop.js";
 import { ExecutionGuard } from "../services/execution-guard.js";
 import { EventEmitter } from "node:events";
 import type { AppConfig } from "../config.js";
@@ -115,6 +116,7 @@ interface JaitSessionState {
   }>;
   currentTurnAbort?: AbortController;
   currentTurn?: Promise<void>;
+  steering?: SteeringController;
   contextRounds?: LlmContextFlowRound[];
   activatedToolNames: Set<string>;
   sandboxContainerName?: string;
@@ -294,19 +296,21 @@ export class JaitProvider implements CliProviderAdapter {
     if (!state) {
       throw new Error(`Unknown Jait session: ${sessionId}`);
     }
-    if (state.currentTurn) {
+    if (state.currentTurnAbort) {
       throw new Error("A turn is already in progress for this Jait session.");
     }
 
     const abort = new AbortController();
     state.currentTurnAbort = abort;
+    const steering = new SteeringController();
+    state.steering = steering;
     state.contextRounds = [];
     state.turnError = undefined;
     // An explicit new turn may resume after the recorded dependency was fixed.
     if (!state.executionGuard || state.executionGuard.stopReason) state.executionGuard = new ExecutionGuard(undefined,
       this.deps.threadService.getById(state.threadId)?.kind === "delivery" ? Number.POSITIVE_INFINITY : 120);
     state.history.push({ role: "user", content: message });
-    this.emit({ type: "turn.started", sessionId });
+    this.emit({ type: "turn.started", sessionId, turnId: steering.turnId });
 
     const turnPromise = (async () => {
       let streamedAssistantContent = "";
@@ -378,7 +382,10 @@ export class JaitProvider implements CliProviderAdapter {
           },
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
+          steering,
         );
+        // The sampling loop has ended; do not accept input during compaction or completion.
+        state.steering = undefined;
 
         if (state.turnError || state.executionGuard?.stopReason) {
           throw new Error(state.turnError ?? state.executionGuard!.stopReason);
@@ -425,6 +432,7 @@ export class JaitProvider implements CliProviderAdapter {
         state.executionGuard = undefined;
         this.emit({ type: "turn.completed", sessionId });
       } catch (error) {
+        state.steering = undefined;
         const message = error instanceof Error ? error.message : String(error);
         flushStreamedAssistantMessage();
         this.flushContextRounds(sessionId, state);
@@ -438,6 +446,7 @@ export class JaitProvider implements CliProviderAdapter {
         const current = this.sessions.get(sessionId);
         if (current) {
           current.sandboxLastUsedAt = Date.now();
+          current.steering = undefined;
           current.currentTurn = undefined;
           current.currentTurnAbort = undefined;
         }
@@ -446,6 +455,15 @@ export class JaitProvider implements CliProviderAdapter {
 
     state.currentTurn = turnPromise;
     await turnPromise;
+  }
+
+  async steerTurn(sessionId: string, message: string, expectedTurnId?: string): Promise<boolean> {
+    const state = this.sessions.get(sessionId);
+    const steering = state?.steering;
+    if (!steering || state?.currentTurnAbort?.signal.aborted || !message.trim()) return false;
+    if (expectedTurnId !== undefined && expectedTurnId !== steering.turnId) return false;
+    steering.steer(message);
+    return true;
   }
 
   async interruptTurn(sessionId: string): Promise<void> {
@@ -674,6 +692,9 @@ export class JaitProvider implements CliProviderAdapter {
           callId: event.call_id,
           data: event.data,
         });
+        break;
+      case "steering":
+        if (!event.hidden) this.emit({ type: "activity", sessionId, kind: "steering", summary: event.message, payload: event });
         break;
       case "error":
         this.emit({ type: "activity", sessionId, kind: "error", summary: event.message });

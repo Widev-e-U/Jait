@@ -28,7 +28,7 @@ for (const width of [390, 1280]) {
     })
     await page.keyboard.type('Edited queue text')
     await expect(editing.locator('[data-attachment-list]')).toBeVisible()
-    await editing.getByRole('button', { name: 'Send message', exact: true }).click()
+    await editing.getByRole('button', { name: 'Save changes', exact: true }).click()
     await expect(queue.getByText('Edited queue text', { exact: true })).toBeVisible()
     await queue.getByRole('button', { name: 'Expand image photo.png' }).click()
     await expect(page.getByRole('dialog')).toBeVisible()

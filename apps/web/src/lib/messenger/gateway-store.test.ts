@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MessengerMessage, MessengerSnapshot } from './model'
 
 vi.mock('@/lib/gateway-url', () => ({ getApiUrl: () => 'http://gateway.test:8000' }))
@@ -6,6 +6,7 @@ vi.mock('@/lib/auth-token', () => ({ getAuthToken: () => 'token' }))
 vi.mock('@/lib/system-notifications', () => ({ triggerSystemNotification: vi.fn(async () => {}) }))
 
 const { GatewayMessengerStore } = await import('./gateway-store')
+const { triggerSystemNotification } = await import('@/lib/system-notifications')
 
 const ROOM_ID = '!room:test'
 
@@ -26,9 +27,9 @@ function message(overrides: Partial<MessengerMessage> = {}): MessengerMessage {
 
 function snapshot(messages: MessengerMessage[]): MessengerSnapshot {
   return {
-    status: 'connected',
+    status: 'ready',
     error: null,
-    session: { homeserver: 'https://matrix.test', userId: '@me:test', deviceId: 'DEVICE', accessToken: 'secret', cryptoStore: 'memory' },
+    session: { homeserver: 'https://matrix.test', userId: '@me:test', deviceId: 'DEVICE' },
     rooms: [{ id: ROOM_ID, name: 'Room', service: 'Matrix', network: 'Matrix', unread: 0, membership: 'join', encrypted: false, timestamp: 1_000, preview: 'earlier' }],
     messages,
     selectedRoomId: ROOM_ID,
@@ -148,4 +149,126 @@ it('never uses a local echo id when marking the room read', async () => {
   const reads = gateway.sends.filter(send => send.body?.action === 'read')
   expect(reads.length).toBeGreaterThan(0)
   expect(reads.every(read => !String(read.body?.eventId ?? '').startsWith('~local:'))).toBe(true)
+})
+
+describe('gateway Messenger notifications', () => {
+  let storage: Storage
+  let browser: Window
+  let remote: MessengerSnapshot
+  let stores: InstanceType<typeof GatewayMessengerStore>[]
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.mocked(triggerSystemNotification).mockClear()
+    const values = new Map<string, string>()
+    storage = {
+      get length() { return values.size },
+      clear: () => values.clear(),
+      getItem: key => values.get(key) ?? null,
+      key: index => [...values.keys()][index] ?? null,
+      removeItem: key => { values.delete(key) },
+      setItem: (key, value) => { values.set(key, String(value)) },
+    }
+    browser = Object.assign(new EventTarget(), { localStorage: storage }) as unknown as Window
+    vi.stubGlobal('window', browser)
+    vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => true })
+    remote = snapshot([])
+    stores = []
+    vi.stubGlobal('fetch', vi.fn(async () => json({ snapshot: remote })))
+  })
+
+  afterEach(() => {
+    stores.forEach(store => store.dispose())
+    vi.useRealTimers()
+  })
+
+  async function start(owner = 'owner') {
+    const store = new GatewayMessengerStore(owner)
+    stores.push(store)
+    await store.resume()
+    return store
+  }
+
+  async function poll() {
+    await vi.advanceTimersByTimeAsync(2_000)
+  }
+
+  it('persists the preference per account and restores it without notifying about old unread messages', async () => {
+    const first = await start()
+    await first.enableNotifications(true)
+    first.dispose()
+    remote = { ...remote, rooms: [{ ...remote.rooms[0]!, unread: 2 }] }
+    const restored = await start()
+    expect(restored.getSnapshot().notifications).toBe(true)
+    expect(triggerSystemNotification).not.toHaveBeenCalled()
+
+    restored.dispose()
+    remote = { ...remote, session: { ...remote.session!, userId: '@other:test' } }
+    const other = await start()
+    expect(other.getSnapshot().notifications).toBe(false)
+
+    remote = snapshot([])
+    const otherOwner = await start('different-jait-user')
+    expect(otherOwner.getSnapshot().notifications).toBe(false)
+  })
+
+  it('leaves notifications disabled when browser permission is denied', async () => {
+    const notification = { requestPermission: vi.fn(async () => 'denied') }
+    Object.assign(browser, { Notification: notification })
+    vi.stubGlobal('Notification', notification)
+    const store = await start()
+
+    await expect(store.enableNotifications(true)).rejects.toThrow('Allow notifications')
+    expect(store.getSnapshot().notifications).toBe(false)
+    expect(storage.length).toBe(0)
+  })
+
+  it('honors preference changes in another tab', async () => {
+    const store = await start()
+    await store.enableNotifications(true)
+    const key = storage.key(0)!
+    storage.setItem(key, '0')
+    const event = new Event('storage')
+    Object.defineProperties(event, {
+      storageArea: { value: storage },
+      key: { value: key },
+      newValue: { value: '0' },
+    })
+    browser.dispatchEvent(event)
+    expect(store.getSnapshot().notifications).toBe(false)
+  })
+
+  it('notifies for a new unread conversation, and suppresses a focused conversation', async () => {
+    const store = await start()
+    await store.enableNotifications(true)
+    remote = {
+      ...remote,
+      rooms: [
+        ...remote.rooms,
+        { ...remote.rooms[0]!, id: '!new:test', name: 'New conversation', timestamp: 2_000, unread: 1 },
+      ],
+    }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
+    expect(triggerSystemNotification).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'New conversation',
+      independentOfAttention: true,
+      link: '/messenger?roomId=!new%3Atest',
+    }))
+
+    store.setVisibleRoom(ROOM_ID)
+    remote = { ...remote, rooms: remote.rooms.map(room => room.id === ROOM_ID ? { ...room, timestamp: 3_000, unread: 1 } : room) }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('detects unread messages received while the gateway was reconnecting', async () => {
+    const store = await start()
+    await store.enableNotifications(true)
+    remote = { ...remote, status: 'reconnecting' }
+    await poll()
+    remote = { ...remote, status: 'ready', rooms: remote.rooms.map(room => ({ ...room, timestamp: 2_000, unread: 1 })) }
+    await poll()
+    expect(triggerSystemNotification).toHaveBeenCalledTimes(1)
+  })
 })

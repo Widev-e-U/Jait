@@ -81,7 +81,10 @@ fn reference(call: Value) -> Value {
 fn string<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str)
 }
-fn compare(mut call: Value) {
+fn compare(call: Value) {
+    compare_native(call);
+}
+fn compare_native(mut call: Value) -> Value {
     call["op"] = json!("nativechatloops.sequence");
     let expected = reference(call.clone());
     let db = rusqlite::Connection::open_in_memory().unwrap();
@@ -137,6 +140,12 @@ fn compare(mut call: Value) {
     };
     let mut service = ChatLoopService::new(&db, runtime.clone());
     let mut results = vec![];
+    let mut reviews = vec![];
+    let mut review_index = 0;
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
     for step in call["steps"].as_array().unwrap() {
         let id = string(step, "id").unwrap_or("chat");
         let user = string(step, "user");
@@ -147,13 +156,20 @@ fn compare(mut call: Value) {
                 "control"=>loop_view(&service.control(id,step["action"].as_str().unwrap(),user)?),
                 "answer"=>optional(service.resume_after_answer(id,step["requestId"].as_str().unwrap(),user)?),
                 "check"=>loop_view(&service.check(id,&step["input"],user)?),
+                "monitored"=>loop_view(&run_monitored(&service, id, user, &step["input"], step, &call, &executor, &mut reviews, &mut review_index)?),
                 "finish"=>optional(service.finish_turn(id,string(step,"error"),step["cancelled"]==true)?),
                 "running"=>json!(service.running()?.into_iter().map(|s|json!({"sessionId":units(&s.session_id),"loop":loop_view(&s.r#loop)})).collect::<Vec<_>>()),
                 "instructions"=>chat_loops::chat_loop_instructions(service.get(id,user)?.as_ref()).map(|v|json!(v.0)).unwrap_or(Value::Null),
                 "tool"=>{
-                    let c=&step["context"];let context=LoopContext{session_id:string(c,"sessionId").unwrap_or(id).into(),user_id:string(c,"userId").map(str::to_owned),thread_id:string(c,"threadId").map(str::to_owned)};
+                    let c=&step["context"];let context=LoopContext{session_id:string(c,"sessionId").unwrap_or(id).into(),user_id:string(c,"userId").map(str::to_owned),thread_id:string(c,"threadId").map(str::to_owned),api_keys:c.get("apiKeys").map(|k| serde_json::from_value(k.clone()).unwrap())};
                     let input=step.get("input").cloned().unwrap_or(json!({}));
-                    let result=loop_tools::execute(step["name"].as_str().unwrap(),&input,&context,&service);
+                    let result=if step["name"] == "loop.check" && c.get("apiKeys").is_some() && context.user_id.is_some() && context.thread_id.as_deref().is_none_or(|t| t.is_empty() || t == context.session_id) {
+                        let mut configured = call.clone(); configured["monitor"]["keys"] = c["apiKeys"].clone();
+                        match run_monitored(&service, &context.session_id, context.user_id.as_deref(), &input, step, &configured, &executor, &mut reviews, &mut review_index) {
+                            Ok(state) => loop_tools::LoopToolResult{ok:true,message:"Chat loop updated.".into(),data:Some(Some(state))},
+                            Err(message) => loop_tools::LoopToolResult{ok:false,message,data:None},
+                        }
+                    } else { loop_tools::execute(step["name"].as_str().unwrap(),&input,&context,&service) };
                     let mut value=json!({"ok":result.ok,"message":units(&result.message)});
                     if let Some(data)=result.data{value["data"]=optional(data);}
                     value
@@ -173,7 +189,33 @@ fn compare(mut call: Value) {
         .prepare("SELECT id,user_id,status,metadata FROM sessions ORDER BY id")
         .unwrap();
     let sessions:Vec<Value>=query.query_map([],|row|Ok(json!({"id":row.get::<_,String>(0)?,"user_id":row.get::<_,Option<String>>(1)?,"status":row.get::<_,Option<String>>(2)?,"metadata":row.get::<_,Option<String>>(3)?}))).unwrap().map(Result::unwrap).collect();
-    let actual = json!({"results":results,"events":*events.lock().unwrap(),"sessions":sessions});
+    let mut actual =
+        json!({"results":results,"events":*events.lock().unwrap(),"sessions":sessions});
+    if call.get("monitor").is_some() {
+        actual["reviews"] = json!(reviews);
+    }
+    if call["monitor"]["compact"] == true {
+        let compact: Vec<Value> = actual["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                if r.get("error").is_some() {
+                    r.clone()
+                } else if r["value"].is_null() {
+                    json!({"value":null})
+                } else {
+                    let mut value = json!({"status":r["value"]["status"]});
+                    if let Some(m) = r["value"].get("monitor") {
+                        value["monitor"] = m.clone();
+                    }
+                    json!({"value":value})
+                }
+            })
+            .collect();
+        actual = json!({"reviews":reviews,"results":compact});
+    }
+    let returned = expected.clone();
     let actual = numeric(actual);
     let expected = numeric(expected);
     assert!(
@@ -181,6 +223,7 @@ fn compare(mut call: Value) {
         "{}",
         first_difference(&actual, &expected, "$")
     );
+    returned
 }
 fn first_difference(a: &Value, b: &Value, path: &str) -> String {
     if let (Some(a), Some(b)) = (a.as_object(), b.as_object()) {
@@ -510,8 +553,43 @@ fn persisted_monitor_metadata_and_bounds_match_shared_schema() {
     }
 }
 
-// Migration acceptance specifications: these exercise the live TS service through
-// the Rust harness. They intentionally do not award configured-monitor native parity.
+// Differential monitor contracts run the same decisions through the native
+// service and live TypeScript service with controlled model results.
+#[allow(clippy::too_many_arguments)]
+fn run_monitored(
+    service: &ChatLoopService<'_>,
+    id: &str,
+    user: Option<&str>,
+    input: &Value,
+    step: &Value,
+    call: &Value,
+    executor: &tokio::runtime::Runtime,
+    reviews: &mut Vec<Value>,
+    index: &mut usize,
+) -> Result<ChatLoop, String> {
+    let prepared = service.prepare_review(id, input, user)?;
+    let keys: std::collections::HashMap<String, String> = call["monitor"]["keys"]
+        .as_object()
+        .map(|o| {
+            o.iter()
+                .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let reviewed = executor.block_on(prepared.review_with(Some(&keys), |state, questions| {
+        reviews.push(json!({"state":serde_json::from_str::<Value>(&state).unwrap(),"questions":questions,"hasDeadline":true}));
+        if step["during"] == "pause" {service.control(id,"pause",user).unwrap();}
+        if step["during"] == "replace" {service.goal(id,Some(&json!("Replacement goal")),Some(&json!(["Replacement criterion"])),user).unwrap();}
+        let response = call["monitor"]["responses"].get(*index).cloned(); *index += 1;
+        async move {
+            match response {
+                Some(v) if v.get("error").is_none() => Ok(v),
+                _ => Err("Missing fixture verdict".into()),
+            }
+        }
+    }));
+    service.commit_review(reviewed)
+}
 fn monitor_verdict(passed: bool, progress: bool) -> Value {
     json!({"model":"contract-monitor","answers":{
         "progress":{"type":"choice","choice":if progress {"progress"} else {"stalled"},"confidence":0.95},
@@ -523,7 +601,7 @@ fn monitor_check(revision: u64, outcome: &str) -> Value {
     json!({"op":"monitored","user":"owner","input":{"revision":revision,"outcome":outcome,"summary":format!("Checkpoint {revision}"),"evidence":["Test exit 0","Build exit 0"],"nextMessage":"Inspect results"}})
 }
 fn monitor_reference(steps: Vec<Value>, responses: Vec<Value>) -> Value {
-    reference(
+    compare_native(
         json!({"op":"nativechatloops.sequence","monitor":{"keys":{"SYSTEM_ONE_API_KEY":"fixture-secret"},"responses":responses},"steps":steps}),
     )
 }
@@ -656,7 +734,7 @@ fn monitor_waiting_and_oversized_state_skip_model_review() {
     let large = json!({"op":"goal","user":"owner","input":{"goal":"Fix","criteria":vec!["x".repeat(2000);20]}});
     let mut check = monitor_check(1, "complete");
     check["input"]["evidence"] = json!(vec!["Reported verification"; 20]);
-    let result = reference(
+    let result = compare_native(
         json!({"op":"nativechatloops.sequence","monitor":{"compact":true,"keys":{"SYSTEM_ONE_API_KEY":"fixture-secret"},"responses":[]},"steps":[large,check]}),
     );
     assert_eq!(checkpoint(&result, 1)["status"], units("paused"));
@@ -685,4 +763,223 @@ fn monitor_tool_dispatch_awaits_review_and_persists_verdict_on_restart() {
         units("rejected")
     );
     assert_eq!(result["reviews"].as_array().unwrap().len(), 1);
+}
+
+struct HeldLoopDecision {
+    entered: tokio::sync::Notify,
+    release: tokio::sync::Notify,
+    request: Mutex<Option<jait_gateway::services::system_one::DecisionRequest>>,
+    response: Value,
+}
+impl jait_gateway::services::system_one::DecisionTransport for HeldLoopDecision {
+    fn send<'a>(
+        &'a self,
+        request: jait_gateway::services::system_one::DecisionRequest,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        jait_gateway::services::system_one::DecisionHttpResponse,
+                        String,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            *self.request.lock().unwrap() = Some(request);
+            self.entered.notify_one();
+            self.release.notified().await;
+            Ok(jait_gateway::services::system_one::DecisionHttpResponse {
+                status: 200,
+                body: Ok(self.response.clone()),
+            })
+        })
+    }
+}
+#[tokio::test]
+async fn composed_monitor_keeps_sql_responsive_and_enforces_cancellation_deadline_and_races() {
+    use jait_gateway::{
+        db::worker::DatabaseWorker,
+        services::{
+            sessions::CreateSession,
+            system_one::{Cancellation, SystemOne},
+        },
+        tools::loop_tools::MonitoredLoopTools,
+    };
+    use std::{collections::HashMap, num::NonZeroU16, time::Duration};
+    for mode in [
+        "accepted", "rejected", "pause", "replace", "cancel", "deadline",
+    ] {
+        let connection = rusqlite::Connection::open_in_memory().unwrap();
+        db::migrate_database(&connection).unwrap();
+        let database = DatabaseWorker::new(connection, NonZeroU16::new(4).unwrap()).unwrap();
+        let id = database
+            .run(|db| {
+                let session = SessionService::new(db).create(CreateSession {
+                    user_id: Some("owner".into()),
+                    ..Default::default()
+                })?;
+                ChatLoopService::new(db, LoopRuntime::default())
+                    .goal(
+                        &session.id,
+                        Some(&json!("Verify owned work")),
+                        Some(&json!(["Test passed", "Build passed"])),
+                        Some("owner"),
+                    )
+                    .map_err(std::io::Error::other)?;
+                Ok(session.id)
+            })
+            .await
+            .unwrap();
+        let peer = Arc::new(HeldLoopDecision {
+            entered: tokio::sync::Notify::new(),
+            release: tokio::sync::Notify::new(),
+            request: Mutex::new(None),
+            response: monitor_verdict(mode != "rejected", true),
+        });
+        let tools = Arc::new(MonitoredLoopTools {
+            database: database.clone(),
+            runtime: LoopRuntime::default(),
+            engine: Arc::new(SystemOne::new(peer.clone())),
+        });
+        let context = LoopContext {
+            session_id: id.clone(),
+            user_id: Some("owner".into()),
+            thread_id: None,
+            api_keys: Some(HashMap::from([
+                ("SYSTEM_ONE_API_KEY".into(), "fixture-secret".into()),
+                ("SYSTEM_ONE_TIMEOUT_MS".into(), "60000".into()),
+            ])),
+        };
+        // Permission failures must return before the reviewer can see checkpoint data.
+        for invalid in [
+            LoopContext {
+                user_id: None,
+                ..context.clone()
+            },
+            LoopContext {
+                thread_id: Some("worker".into()),
+                ..context.clone()
+            },
+            LoopContext {
+                user_id: Some("other".into()),
+                ..context.clone()
+            },
+        ] {
+            let denied = tools
+                .execute(
+                    "loop.check",
+                    &monitor_check(1, "complete")["input"],
+                    &invalid,
+                    None,
+                )
+                .await;
+            assert!(!denied.ok);
+            assert!(peer.request.lock().unwrap().is_none());
+        }
+        let cancellation = Cancellation::default();
+        let task = tokio::spawn({
+            let tools = tools.clone();
+            let context = context.clone();
+            let signal = cancellation.clone();
+            async move {
+                tools
+                    .execute(
+                        "loop.check",
+                        &monitor_check(1, "complete")["input"],
+                        &context,
+                        Some(&signal),
+                    )
+                    .await
+            }
+        });
+        tokio::time::timeout(Duration::from_secs(1), peer.entered.notified())
+            .await
+            .unwrap();
+        let saved = tokio::time::timeout(
+            Duration::from_secs(1),
+            database.run({
+                let id = id.clone();
+                move |db| {
+                    Ok(ChatLoopService::new(db, LoopRuntime::default())
+                        .get(&id, Some("owner"))
+                        .unwrap()
+                        .unwrap())
+                }
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(saved.status, "running");
+        assert!(saved.monitor.is_none());
+        match mode {
+            "pause" => {
+                assert!(
+                    tools
+                        .execute("loop.pause", &json!({}), &context, None)
+                        .await
+                        .ok
+                );
+            }
+            "replace" => {
+                assert!(
+                    tools
+                        .execute(
+                            "loop.goal",
+                            &json!({"goal":"Replacement","criteria":["fresh evidence"]}),
+                            &context,
+                            None
+                        )
+                        .await
+                        .ok
+                );
+            }
+            "cancel" => cancellation.abort("fixture cancellation with private diagnostic"),
+            _ => {}
+        }
+        if !matches!(mode, "cancel" | "deadline") {
+            peer.release.notify_one();
+        }
+        let result = tokio::time::timeout(Duration::from_secs(6), task)
+            .await
+            .unwrap()
+            .unwrap();
+        if matches!(mode, "pause" | "replace") {
+            assert!(!result.ok);
+            assert!(result.message.contains("changed"));
+        } else {
+            assert!(result.ok, "{mode}: {}", result.message);
+            let state = result.data.unwrap().unwrap();
+            assert_eq!(
+                state.status,
+                match mode {
+                    "accepted" => "completed",
+                    "rejected" => "running",
+                    _ => "paused",
+                }
+            );
+            assert_eq!(
+                state.monitor.unwrap().status,
+                match mode {
+                    "accepted" => "accepted",
+                    "rejected" => "rejected",
+                    _ => "unavailable",
+                }
+            );
+            assert!(!String::from_utf16_lossy(&state.summary.0).contains("private diagnostic"));
+        }
+        database.shutdown().await.unwrap();
+    }
+}
+#[test]
+fn monitor_redaction_preserves_ecmascript_whitespace_boundaries_and_overlapping_secrets() {
+    let mut check = monitor_check(1, "complete");
+    check["input"]["summary"] = json!(
+        "key-extended key https://user:password@host Bearer\u{feff}private Bearer\u{85}kept ℬearer public"
+    );
+    let mut call = json!({"monitor":{"keys":{"SYSTEM_ONE_API_KEY":"fixture-secret","ACCESS_TOKEN":"key-extended","OTHER_SECRET":"keyx"},"responses":[monitor_verdict(true,true)]},"steps":[goal(),check]});
+    call["monitor"]["keys"]["SHORT_KEY"] = json!("key-");
+    compare(call);
 }

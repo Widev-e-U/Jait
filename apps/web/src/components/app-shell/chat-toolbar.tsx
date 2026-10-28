@@ -96,9 +96,9 @@ export function ChatToolbar({
   onToggleTerminal,
 }: ChatToolbarProps) {
   if (currentView !== 'chat' && currentView !== 'threads') return null
-  // Desktop manager view only shows the toolbar once a thread is selected.
-  // Developer mode keeps it, because the preview/editor toggles live here.
-  if (!isMobile && viewMode === 'manager' && !automation.selectedThread) return null
+  // Desktop developer controls are already available in the workspace.
+  // Only selected manager threads need this extra toolbar on desktop.
+  if (!isMobile && (viewMode !== 'manager' || !automation.selectedThread)) return null
 
   return (
     <div

@@ -3,12 +3,10 @@ import type { ChatAttachment } from '@/hooks/useChat'
 import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { createUserMessageEditSubmission } from './message-edit'
-import { getMessageEditPromptClassName, getUserMessageEditComposerShellClassName, getMobileUserMessageEditTop } from './message-edit-layout'
-import { useIsMobile } from '@/hooks/useIsMobile'
+import { getMessageEditPromptClassName } from './message-edit-layout'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowRight, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Lock, LockOpen, Pencil, Square, X } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -117,12 +115,6 @@ function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number 
   )
 }
 
-// Virtual transcript rows use transforms. Keep the floating mobile editor
-// attached to the viewport rather than that row's containing block.
-function QueueEditSurface({ mobile, children }: { mobile: boolean; children: ReactNode }) {
-  return mobile ? createPortal(children, document.body) : children
-}
-
 /* ── Inline-editable queued message row ─────────────────────────────── */
 
 function QueueItem({
@@ -168,8 +160,6 @@ function QueueItem({
   const [draftSegments, setDraftSegments] = useState<UserMessageSegment[]>(item.displaySegments ?? [{ type: 'text', text: item.displayContent ?? item.content }])
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<PromptInputHandle>(null)
-  const isMobile = useIsMobile()
-  const [mobileEditTop, setMobileEditTop] = useState<number | null>(null)
   const showActions = editing || !dragActive
   const { cardRef, anchorToggle } = useToolCardToggleAnchor('top')
   const toggleCollapsed = () => {
@@ -180,16 +170,7 @@ function QueueItem({
   useEffect(() => {
     if (!editing) return
     inputRef.current?.focus()
-    if (!isMobile) return
-    const updateTop = () => setMobileEditTop(getMobileUserMessageEditTop(window.visualViewport, window.innerHeight))
-    updateTop()
-    window.visualViewport?.addEventListener('resize', updateTop)
-    window.visualViewport?.addEventListener('scroll', updateTop)
-    return () => {
-      window.visualViewport?.removeEventListener('resize', updateTop)
-      window.visualViewport?.removeEventListener('scroll', updateTop)
-    }
-  }, [editing, isMobile])
+  }, [editing])
 
   // Keep draft in sync if the item changes externally
   useEffect(() => {
@@ -232,11 +213,12 @@ function QueueItem({
       className={cn(
         'group flex items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70',
         iconOnly && 'relative gap-1 pl-2 pr-1 py-2',
+        editing && 'border-primary/30 bg-background p-3',
         dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
       )}
     >
       {/* Position indicator */}
-      <TooltipHint content={collapsed ? 'Expand queued message' : 'Collapse queued message'}>
+      {!editing && <TooltipHint content={collapsed ? 'Expand queued message' : 'Collapse queued message'}>
       <button
         type="button"
         data-no-drag="true"
@@ -253,7 +235,7 @@ function QueueItem({
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </button>
-      </TooltipHint>
+      </TooltipHint>}
 
       {onReorder && !editing && !item.pendingSteer && (
         <TooltipHint content="Drag to reorder">
@@ -269,7 +251,7 @@ function QueueItem({
       )}
 
       {/* Content: read-only or editable */}
-      <div className={cn('flex-1 min-w-0', iconOnly && editing && 'pt-6')}>
+      <div className="flex-1 min-w-0">
         {!editing && (
           <span className={cn('mb-0.5 flex items-center gap-1.5', iconOnly && 'mb-3')}>
             {item.pendingSteer ? (
@@ -301,24 +283,25 @@ function QueueItem({
         )}
         {!editing && <AttachmentList attachments={collectAttachments(item.attachments, item.displaySegments)} className="mb-1.5" />}
         {editing ? (
-          <QueueEditSurface mobile={isMobile}>
-          <div data-no-drag="true" data-queue-editor className={getUserMessageEditComposerShellClassName()}
-            style={isMobile && mobileEditTop != null ? { top: mobileEditTop } : undefined}
+          <div data-no-drag="true" data-queue-editor
             onKeyDown={event => {
               if (event.key === 'Escape' && !saving) { event.stopPropagation(); cancelEdit() }
             }}>
+            <div className="mb-2 flex items-center gap-2 text-2xs font-medium uppercase tracking-wider text-primary/70">
+              <ListPlus className="h-3.5 w-3.5" /> {index === 0 ? "Next" : `Queued #${index + 1}`}
+              <span className="ml-auto inline-flex items-center gap-1 text-muted-foreground"><Pencil className="h-3 w-3" /> Editing</span>
+            </div>
             <PromptInput ref={inputRef} draftStateKey={`queue-edit:${item.id}`} value={draft}
               segments={draftSegments}
               initialAttachments={collectAttachments(item.attachments, item.displaySegments)}
               onChange={value => { setDraft(value); setDraftSegments(inputRef.current?.getSegments() ?? []) }}
               onSubmit={(_files, attachments, segments) => { void commitEdit(attachments, segments) }}
-              disabled={saving} controlsDisabled={saving} placeholder="Edit message..."
+              disabled={saving} controlsDisabled={saving} clearOnSubmit={false} submitLabel="Save changes" placeholder="Edit message..."
               availableFiles={[]}
-              footerTrailingContent={<Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-lg"
-                disabled={saving} onClick={cancelEdit} aria-label="Cancel editing message"><X className="h-3.5 w-3.5" /></Button>}
+              footerTrailingContent={<Button type="button" variant="ghost" size="sm"
+                disabled={saving} onClick={cancelEdit} aria-label="Cancel editing message">Cancel</Button>}
               className={getMessageEditPromptClassName()} />
           </div>
-          </QueueEditSurface>
         ) : collapsed ? (
           <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} className="block w-full min-w-0 text-left text-foreground"><span className={cn('block', iconOnly ? 'line-clamp-2 break-words' : 'truncate')}>{item.displayContent ?? item.content}</span></button>
         ) : (

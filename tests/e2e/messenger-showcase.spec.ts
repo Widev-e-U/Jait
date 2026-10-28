@@ -25,9 +25,9 @@ test('capture showcase screenshots', async ({ page }) => {
     ],
     messagesByRoom: {
       '!status:test': [
-        { ...base, id: '$s1', sender: 'Bob', body: 'Morning run', own: false, timestamp: yesterday + 43_200_000 },
-        { ...base, id: '$s2', sender: 'Bob', body: 'Sunset', own: false, timestamp: today + 3_600_000, attachment: { url: 'mxc://test/sunset', name: 'sunset.png', mime: 'image/png', image: true } },
-        { ...base, id: '$s3', sender: 'Carol', body: 'New job!', own: false, timestamp: today + 7_200_000 },
+        { ...base, id: '$s1', sender: 'Bob', body: 'Morning run', own: false, timestamp: Date.now() - 36 * 60 * 60_000 },
+        { ...base, id: '$s2', sender: 'Bob', body: 'Sunset', own: false, timestamp: Date.now() - 60_000, attachment: { url: 'mxc://test/sunset', name: 'sunset.png', mime: 'image/png', image: true } },
+        { ...base, id: '$s3', sender: 'Carol', body: 'New job!', own: false, timestamp: Date.now() - 30_000 },
       ],
       '!room:test': [
         { ...base, id: '$one', sender: 'Bob', body: 'Incoming message', own: false, timestamp: yesterday + 43_200_000, reactions: [{ key: '❤️', count: 1, own: false, senders: ['Bob'] }] },
@@ -49,6 +49,7 @@ test('capture showcase screenshots', async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/src/e2e-fixtures/messenger-gateway.html?roomId=%21status%3Atest', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('[aria-label="Status updates"]')).toBeVisible()
+    await page.getByRole('button', { name: 'View status from Bob' }).click()
     await expect(page.locator('[data-status-update-id="$s2"] img')).toBeVisible()
     await page.screenshot({ path: shot('showcase-status-' + width) })
   }

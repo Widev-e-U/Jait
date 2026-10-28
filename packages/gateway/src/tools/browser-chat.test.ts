@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBrowserNavigateTool } from './browser-tools.js';
+import { createBrowserInspectTool, createBrowserNavigateTool } from './browser-tools.js';
 import { createSurfacesStartTool } from './surface-tools.js';
 import { createPreviewOpenTool } from './preview-tools.js';
 import { PreviewService } from '../services/preview.js';
@@ -11,11 +11,13 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -97,14 +99,21 @@ describe('chat agent browser', () => {
   it('shows surfaces.start browsers in the chat and reuses the same browser', async () => {
     const { registry, service, context } = fixture();
     const tool = createSurfacesStartTool(registry as any, service);
-    const a = await tool.execute({ type: 'browser' }, context('chat-a'));
-    const b = await tool.execute({ type: 'browser' }, context('chat-a'));
+    const a = await tool.execute({ type: 'browser', url: 'https://example.com/one' }, context('chat-a'));
+    const b = await tool.execute({ type: 'browser', url: 'https://example.com/two' }, context('chat-a'));
+    expect(registry.getSurface(a.data!.id as string).navigate).toHaveBeenLastCalledWith('https://example.com/two', undefined);
     expect(a.data?.browserSession).toMatchObject({ sessionId: 'chat-a', controller: 'agent' });
     expect(a.data?.id).toBe(b.data?.id);
     expect(registry.startSurface).toHaveBeenCalledTimes(1);
     service.setSharedWithAgent('chat-a', false);
-    expect((await tool.execute({ type: 'browser' }, context('chat-a'))).ok).toBe(false);
+    expect((await tool.execute({ type: 'browser', url: 'https://example.com/three' }, context('chat-a'))).ok).toBe(false);
     expect(registry.startSurface).toHaveBeenCalledTimes(1);
+  });
+  it('does not create a blank browser when an inspection runs before navigation', async () => {
+    const { registry, service, context } = fixture();
+    const inspect = createBrowserInspectTool(registry as any, service);
+    await expect(inspect.execute({}, context('chat-a'))).rejects.toThrow(/browser.open with a URL/);
+    expect(registry.startSurface).not.toHaveBeenCalled();
   });
   it('deduplicates simultaneous browser starts', async () => {
     const { registry, tool, context } = fixture();
@@ -115,11 +124,26 @@ describe('chat agent browser', () => {
     expect(a.data?.browserId).toBe(b.data?.browserId);
     expect(registry.startSurface).toHaveBeenCalledTimes(1);
   });
+  it('recovers an idle browser with its page and takeover state', async () => {
+    const { service, tool, context, registry } = fixture();
+    await tool.execute({ url: 'https://example.com/page' }, context('idle-chat'));
+    service.setSharedWithAgent('idle-chat', false);
+    const browserId = service.get('idle-chat')!.browserId!;
+    expect(await service.suspendIdleAgentBrowser(browserId)).toBe(true);
+    expect(service.get('idle-chat')).toMatchObject({ status: 'stopped', target: 'https://example.com/page' });
+    const [first, second] = await Promise.all([service.restart('idle-chat'), service.restart('idle-chat')]);
+    expect(first).toMatchObject({ status: 'ready', sharedWithAgent: false });
+    expect(second?.browserId).toBe(first?.browserId);
+    expect(registry.getSurface(browserId).navigate).toHaveBeenCalledWith('https://example.com/page');
+    expect(registry.startSurface).toHaveBeenCalledTimes(2);
+  });
+
   it('restarts an agent browser without creating a project server or dropping takeover', async () => {
-    const { service, tool, context } = fixture();
+    const { service, tool, context, registry } = fixture();
     await tool.execute({ url: 'https://example.com' }, context('chat-a'));
     service.setSharedWithAgent('chat-a', false);
     expect(await service.restart('chat-a')).toMatchObject({ origin: 'agent', sharedWithAgent: false, processId: null });
+    expect(registry.getSurface(service.get('chat-a')!.browserId!).navigate).toHaveBeenCalledWith('https://example.com');
     await expect(tool.execute({ url: 'https://example.com' }, context('chat-a'))).rejects.toThrow(/not shared/);
   });
 

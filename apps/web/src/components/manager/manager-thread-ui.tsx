@@ -377,18 +377,19 @@ function ThreadExecutionTime({ createdAt }: { createdAt: string }) {
   return (
     <>
       <span className="shrink-0" aria-hidden="true">·</span>
-      <time
-        dateTime={createdAt}
-        title={`Started ${startedAt.toLocaleString()}`}
-        className="shrink-0 whitespace-nowrap tabular-nums"
-      >
-        {startedAt.toLocaleString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })}
-      </time>
+      <TooltipHint content={`Started ${startedAt.toLocaleString()}`}>
+        <time
+          dateTime={createdAt}
+          className="shrink-0 whitespace-nowrap tabular-nums"
+        >
+          {startedAt.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </time>
+      </TooltipHint>
     </>
   )
 }

@@ -502,7 +502,9 @@ export function shouldRenderToolCall(call: ToolCallInfo): boolean {
     ? call.result.data as Record<string, unknown>
     : undefined
   const mcpLabel = isMcpToolName(normalizedTool) ? getMcpToolLabel(call.args, resultData) : null
-  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title) ?? normalizedTool
+  const displayTool = getJaitMcpToolName(normalizedTool, mcpLabel?.title, call.args) ?? normalizedTool
+
+  if (displayTool === 'terminal.execution' && getJaitMcpToolArgs(call.args).action === 'inspect') return false
 
   if (displayTool === 'skill') {
     const skills = call.args.skills ?? resultData?.names ?? resultData?.skills
@@ -1234,7 +1236,7 @@ export function getCallSummary(
   if (normalized === 'browser.screenshot') return displayStr(args.path, 'auto path')
   if (normalized === 'browser.search') return displayStr(normalizedArgs.query) || extractSiteFromText(resultMessage) || 'search'
   if (normalized === 'browser.fetch') return getUrlHost(normalizedArgs.url) ?? extractSiteFromText(resultMessage) ?? displayStr(normalizedArgs.url)
-  if (normalized === 'browser.open' || normalized === 'preview.open') return displayStr(normalizedArgs.target ?? args.target)
+  if (normalized === 'browser.open' || normalized === 'preview.open') return displayStr(normalizedArgs.url ?? args.url ?? normalizedArgs.target ?? args.target)
   if (normalized === 'surfaces.start') return `Start ${displayStr(args.type, 'surface')}`
   if (normalized === 'surfaces.stop') return `Stop ${displayStr(args.surfaceId, 'surface')}`
   if (normalized === 'surfaces.list') return 'List surfaces'

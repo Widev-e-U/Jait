@@ -2,9 +2,8 @@
 //! The host retains owner checks, key storage, bounded network access and token policy.
 use super::core_io::HostError;
 use crate::services::calendar::{js_text, truthy};
-use futures_util::future::BoxFuture;
 use serde_json::{Value, json};
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 pub fn metadata() -> &'static Value {
     static DATA: LazyLock<Value> = LazyLock::new(|| {
@@ -13,22 +12,7 @@ pub fn metadata() -> &'static Value {
     });
     &DATA
 }
-#[derive(Clone, Debug)]
-pub enum GithubOperation {
-    Initialize,
-    CurrentAgent {
-        user: String,
-        thread: Option<String>,
-    },
-    List(String),
-    Get(String, String),
-    PublicBaseUrl,
-    WebhookSecret(String, String),
-    Test(String, String),
-    ResolveEnv(String, String),
-}
-pub type GithubPort =
-    Arc<dyn Fn(GithubOperation) -> BoxFuture<'static, Result<Value, HostError>> + Send + Sync>;
+pub use crate::services::agent_github_port::{GithubOperation, GithubPort};
 pub struct GithubTools {
     pub port: GithubPort,
     pub has_current_agent: bool,

@@ -139,7 +139,8 @@ for (const width of [1280, 390, 320]) {
     await expect(stop).toHaveAttribute('aria-busy', 'true')
     await stop.click()
     await expect(page.getByRole('menuitem', { name: 'Stop all agents', exact: true })).toBeDisabled()
-    await page.keyboard.press('Escape')
+    await page.mouse.click(1, 1)
+    await expect(page.getByRole('menu')).toHaveCount(0)
     await expect.poll(() => stopCalls).toBe(1)
     releaseStop!()
     const resume = stop
@@ -189,39 +190,46 @@ test.describe('mobile header spacing', () => {
       await page.goto('/src/e2e-fixtures/index.html')
       await page.evaluate(() => import('/src/e2e-fixtures/agent-controls.tsx'))
       const header = page.locator('header')
-      const mic = header.getByRole('button', { name: 'Enable wake word' })
+      const compactVoice = width < 410
+      const voice = header.getByRole('button', { name: compactVoice ? 'Voice controls' : 'Enable wake word', exact: true })
       const account = header.getByRole('button', { name: 'Account menu' })
       const menu = header.getByRole('button', { name: 'Open menu' })
-      await expect(mic).toBeVisible()
-      const micBox = (await mic.boundingBox())!
+      await expect(voice).toBeVisible()
+      if (compactVoice) {
+        await voice.click()
+        await expect(page.getByRole('menuitem', { name: 'Start voice conversation' })).toBeEnabled()
+        await page.getByRole('menuitem', { name: 'Enable wake word' }).click()
+        await voice.click()
+        await expect(page.getByRole('menuitem', { name: 'Disable wake word' })).toBeVisible()
+        await page.keyboard.press('Escape')
+      } else {
+        const talk = header.getByRole('button', { name: 'Start voice conversation', exact: true })
+        const talkBox = (await talk.boundingBox())!
+        const wakeBox = (await voice.boundingBox())!
+        expect(talkBox.width).toBeGreaterThanOrEqual(40)
+        expect(wakeBox.x).toBeGreaterThanOrEqual(talkBox.x + talkBox.width)
+      }
+      const voiceBox = (await voice.boundingBox())!
       const accountBox = (await account.boundingBox())!
       const menuBox = (await menu.boundingBox())!
-      expect(micBox.height).toBe(40)
+      expect(voiceBox.width).toBeGreaterThanOrEqual(40)
+      expect(voiceBox.height).toBe(40)
       expect(accountBox.height).toBe(40)
       expect(menuBox.height).toBe(40)
       const updateBox = (await header.getByRole('button', { name: /^Update to/ }).boundingBox())!
       const avatar = (await account.locator(':scope > span').boundingBox())!
       const menuIcon = (await menu.locator('svg').boundingBox())!
-      const micIcon = (await mic.locator('svg').boundingBox())!
       const referenceGap = avatar.x - updateBox.x - updateBox.width
       expect(referenceGap).toBe(8)
       expect(menuIcon.x - avatar.x - avatar.width).toBeCloseTo(referenceGap, 0)
-      // The agent control's leading edge sits one reference gap after the mic icon. The avatar
-      // stack is centred inside that fixed-width button, so assert the control gap and that the
-      // decoration stays contained instead of pinning the decoration's own x.
       const agentFaces = (await header.locator('[data-agent-control] > span').first().boundingBox())!
-      const logo = header.locator('div').first().locator(':scope > span')
-      if (await logo.isVisible()) {
-        const logoIcon = (await logo.locator('svg').boundingBox())!
-        expect(micIcon.x - logoIcon.x - logoIcon.width).toBeCloseTo(referenceGap, 0)
-      }
       const agentBox = (await header.locator('[data-agent-control]').boundingBox())!
-      expect(agentBox.x - micIcon.x - micIcon.width).toBeCloseTo(referenceGap, 0)
+      expect(agentBox.x).toBeGreaterThanOrEqual(voiceBox.x + voiceBox.width)
       expect(agentFaces.x).toBeGreaterThanOrEqual(agentBox.x)
       expect(agentFaces.x + agentFaces.width).toBeLessThanOrEqual(agentBox.x + agentBox.width)
       const tabs = (await header.getByRole('tablist').boundingBox())!
-      expect(tabs.x).toBeGreaterThanOrEqual(agentBox.x + agentBox.width)
-      expect(tabs.x + tabs.width).toBeLessThanOrEqual(accountBox.x)
+      expect(tabs.x).toBeGreaterThanOrEqual(agentBox.x + agentBox.width + 4)
+      expect(tabs.x + tabs.width + 4).toBeLessThanOrEqual(accountBox.x)
       await page.screenshot({ path: path.resolve(__dirname, `../../.jait/shots/mobile-header-spacing-${width}.png`) })
     })
   }

@@ -11,6 +11,7 @@ import { providerIcon } from '@/components/icons/provider-icons'
 import { describeResetCredits, describeUsageReset, quotaLabel, type UsageResetCredits } from '@/lib/usage-resets'
 
 import { getUsageSummary, subscribeUsageSummary, refreshUsageSummary } from '@/lib/usage-summary-store'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 interface UsageQuotaSnapshot {
   accountId: string
@@ -98,10 +99,12 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         {quota.usagePeriod && <span>{formatDateTime(quota.usagePeriod.from)} – {formatDateTime(quota.usagePeriod.until)}</span>}
         {reset && (
-          <span title={reset.title}>
-            {reset.text}
-            {reset.estimated ? ' · est.' : ''}
-          </span>
+          <TooltipHint content={reset.title}>
+            <span>
+              {reset.text}
+              {reset.estimated ? ' · est.' : ''}
+            </span>
+          </TooltipHint>
         )}
         <span>Updated {formatDateTime(quota.updatedAt)}</span>
         {quota.activityCost && <span>Cost {quota.activityCost}</span>}
@@ -138,12 +141,13 @@ function ProfileUsage({ profile, retry, loading }: { profile: UsageProfile; retr
             <p className="truncate text-xs text-muted-foreground">{profile.accountLabel}</p>
           )}
           {resetCredits && (
-            <p
-              title={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}
-              className="text-xs text-emerald-600 dark:text-emerald-400"
-            >
-              ↺ {resetCredits.text}
-            </p>
+            <TooltipHint content={`${resetCredits.title}\nSpend a reset in the provider's app to clear your limits immediately.`}>
+              <p
+                className="text-xs text-emerald-600 dark:text-emerald-400"
+              >
+                ↺ {resetCredits.text}
+              </p>
+            </TooltipHint>
           )}
         </div>
         {plan && (

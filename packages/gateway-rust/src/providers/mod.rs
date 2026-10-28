@@ -28,6 +28,15 @@ pub mod remote_cli;
 
 pub mod openai_stream;
 
+pub mod copilot;
+
 pub mod context_control;
 
 pub mod steering_dispatcher;
+
+pub mod acp_provider;
+
+pub mod jait_provider;
+pub mod ollama_stream;
+pub mod contracts;
+pub mod index;

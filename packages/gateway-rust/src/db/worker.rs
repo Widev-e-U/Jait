@@ -53,6 +53,7 @@ struct Inner {
 #[derive(Clone)]
 pub struct DatabaseWorker {
     inner: Arc<Inner>,
+    job_guard: Option<Arc<dyn Send + Sync>>,
 }
 
 impl DatabaseWorker {
@@ -70,12 +71,22 @@ impl DatabaseWorker {
                 let _ = finished.send(true);
             })?;
         Ok(Self {
+            job_guard: None,
             inner: Arc::new(Inner {
                 sender: Mutex::new(Some(sender)),
                 finished: completion,
                 thread: Mutex::new(Some(thread)),
             }),
         })
+    }
+
+    /// Retain an admission lease through queued/started SQL even if its caller
+    /// drops the future. Shares the existing connection, thread and mailbox.
+    pub fn with_job_guard(&self, guard: Arc<dyn Send + Sync>) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            job_guard: Some(Arc::new((self.job_guard.clone(), guard))),
+        }
     }
 
     /// Jobs cancelled before dispatch are skipped. Once started, a transaction can
@@ -85,6 +96,7 @@ impl DatabaseWorker {
         operation: impl FnOnce(&Connection) -> Result<T, OperationError> + Send + 'static,
     ) -> Result<T, DatabaseError> {
         let (response, receive) = oneshot::channel();
+        let guard = self.job_guard.clone();
         let job: Job = Box::new(move |connection| {
             if response.is_closed() {
                 return;
@@ -93,6 +105,10 @@ impl DatabaseWorker {
                 Ok(result) => result.map_err(DatabaseError::Operation),
                 Err(_) => Err(DatabaseError::WorkerPanicked),
             };
+            // SQL and captured work have finished. Release job admission before
+            // waking the caller, so a completed call can admit its successor.
+            // Cancelled jobs still hold the guard until this completion point.
+            drop(guard);
             let _ = response.send(result);
         });
         {
@@ -292,6 +308,55 @@ mod tests {
             Err(DatabaseError::WorkerPanicked)
         ));
         assert_eq!(worker.run(|_| Ok(42)).await.unwrap(), 42);
+        worker.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod guarded_tests {
+    use super::*;
+    use std::time::Duration;
+    #[tokio::test]
+    async fn started_cancelled_job_retains_nested_guards_through_commit() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE counter(value INTEGER)")
+            .unwrap();
+        let worker = DatabaseWorker::new(c, NonZeroU16::new(2).unwrap()).unwrap();
+        let outer = Arc::new(());
+        let inner = Arc::new(());
+        let weak_outer = Arc::downgrade(&outer);
+        let weak_inner = Arc::downgrade(&inner);
+        let scoped = worker.with_job_guard(outer).with_job_guard(inner);
+        let (entered, started) = oneshot::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            scoped
+                .run(move |c| {
+                    entered.send(()).unwrap();
+                    wait.recv_timeout(Duration::from_secs(5)).unwrap();
+                    c.execute("INSERT INTO counter VALUES(42)", [])?;
+                    Ok(())
+                })
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), started)
+            .await
+            .unwrap()
+            .unwrap();
+        task.abort();
+        let _ = task.await;
+        assert!(weak_outer.upgrade().is_some());
+        assert!(weak_inner.upgrade().is_some());
+        release.send(()).unwrap();
+        assert_eq!(
+            worker
+                .run(|c| Ok(c.query_row("SELECT value FROM counter", [], |r| r.get::<_, i64>(0))?))
+                .await
+                .unwrap(),
+            42
+        );
+        assert!(weak_outer.upgrade().is_none());
+        assert!(weak_inner.upgrade().is_none());
         worker.shutdown().await.unwrap();
     }
 }

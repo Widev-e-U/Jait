@@ -727,7 +727,7 @@ export function DeveloperChatWorkspace({
   }
 
   const loop = readChatLoop(sessionMetadata)
-  const showLoopInGutter = !isMobile && getChatTranscriptColumnLeft(chatPanelWidth, false) >= 232
+  const useNarrowGoalLayout = !isMobile && getChatTranscriptColumnLeft(chatPanelWidth, false) >= 232
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
 
   return (
@@ -751,7 +751,8 @@ export function DeveloperChatWorkspace({
             </div>
           )}
           {!showDebugPanel && loop && activeSessionId && (
-            <div data-testid="chat-goal-overlay" className={`pointer-events-none absolute z-30 bg-transparent ${showLoopInGutter ? 'top-12 left-2 w-52 max-h-[calc(100%-64px)] overflow-y-auto' : 'top-2 left-4 right-4'}`}>
+            // Align wide-screen goals with the chat column so long cards can cover the composer.
+            <div data-testid="chat-goal-overlay" className={`pointer-events-none absolute z-40 flex flex-col items-start bg-transparent ${useNarrowGoalLayout ? 'top-12 left-[max(0.5rem,calc((100%_-_56rem)/2))] w-52 max-h-[calc(100%-64px)]' : 'top-2 left-4 right-4 max-h-[calc(100%-16px)]'}`}>
               <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
           )}

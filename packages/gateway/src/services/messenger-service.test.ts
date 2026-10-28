@@ -118,6 +118,39 @@ describe('Messenger homeserver validation', () => {
 });
 
 
+describe('Messenger status broadcasts', () => {
+  it.each([
+    ['WhatsApp Status Broadcast', ''],
+    ['WhatsApp', 'Status updates from your contacts'],
+  ])('projects status room metadata and preserves sender IDs and captions (%s)', async (name, topic) => {
+    const { c } = setup();
+    await c.sync({ rooms: { join: { '!status:test': {
+      state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name } },
+        { type: 'm.room.topic', state_key: '', content: { topic } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', membership: 'join' } },
+      ] },
+      timeline: { events: [{
+        event_id: '$story', type: 'm.room.message', sender: '@bob:test', origin_server_ts: Date.now(),
+        content: { msgtype: 'm.image', body: 'Evening sky', filename: 'sky.png', url: 'mxc://test/sky', info: { mimetype: 'image/png' } },
+      }] },
+    } } } });
+    const snapshot = c.snapshot('!status:test');
+    expect(snapshot.rooms.find((room: any) => room.id === '!status:test')).toMatchObject({ status: true, kind: 'status', topic });
+    expect(snapshot.messages).toMatchObject([{ sender: 'Bob', senderId: '@bob:test', body: 'Evening sky', attachment: { name: 'sky.png', image: true } }]);
+
+    await c.sync({ rooms: { join: { '!status:test': {
+      state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name: 'General chat' } },
+        { type: 'm.room.topic', state_key: '', content: { topic: 'Ordinary conversation' } },
+      ] }, timeline: { events: [] },
+    } } } });
+    const updated = c.snapshot('!status:test').rooms.find((room: any) => room.id === '!status:test');
+    expect(updated.status).toBeUndefined();
+    expect(updated.kind).not.toBe('status');
+  });
+});
+
 describe('Messenger bridged service detection', () => {
   it.each(['go.mau.fi/mautrix-teams', 'msteams', 'teams', 'microsoft-teams'])('recognizes Teams metadata after joining an invitation (%s)', async protocol => {
     const { c } = setup();

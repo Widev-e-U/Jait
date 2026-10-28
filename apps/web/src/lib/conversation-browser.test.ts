@@ -8,6 +8,10 @@ describe('conversation browser selection', () => {
   it('selects one live browser across turns and actions without session metadata', () => {
     expect(findConversationBrowser([{ toolCalls: [navigate] }, { toolCalls: [{ tool: 'browser.click' }, { tool: 'browser.snapshot' }] }], 'chat-a')).toEqual({ data })
   })
+  it('does not leave a blank browser panel after a failed opening', () => {
+    expect(findConversationBrowser([{ toolCalls: [{ tool: 'browser.open', result: { ok: false, message: 'Invalid URL' } }] }], 'chat-a')).toBeNull()
+    expect(findConversationBrowser([{ toolCalls: [navigate, { tool: 'browser.open', result: { ok: false } }] }], 'chat-a')).toEqual({ data })
+  })
   it('recognizes a running browser call before its result arrives', () => {
     expect(findConversationBrowser([{ toolCalls: [{ tool: 'functions.mcp__jait_core__browser_navigate' }] }], 'chat-a')).toEqual({ data: undefined })
   })
@@ -23,15 +27,13 @@ describe('conversation browser selection', () => {
     const restarted = { ...data, browserId: 'browser-b' }
     expect(findConversationBrowser([{ toolCalls: [navigate, { tool: 'preview.restart', result: { data: restarted } }] }], 'chat-a')).toEqual({ data: restarted })
   })
-  it('hides the browser once the user sends their next message', () => {
+  it('keeps the browser after the user sends another message', () => {
     const turn = [{ role: 'user', toolCalls: null }, { role: 'assistant', toolCalls: [navigate] }, { role: 'user', toolCalls: null }]
-    expect(findConversationBrowser(turn, 'chat-a')).toBeNull()
+    expect(findConversationBrowser(turn, 'chat-a')).toEqual({ data })
   })
-  it('does not carry the previous turn browser into the new turn', () => {
-    // The new turn only clicks: no data of its own, so the previous turn's
-    // navigation must not leak in and resurrect the panel.
+  it('retains browser metadata across turns', () => {
     const turn = [{ role: 'assistant', toolCalls: [navigate] }, { role: 'user' }, { role: 'assistant', toolCalls: [{ tool: 'browser.click' }] }]
-    expect(findConversationBrowser(turn, 'chat-a')).toEqual({ data: undefined })
+    expect(findConversationBrowser(turn, 'chat-a')).toEqual({ data })
   })
   it('keeps the browser while only system notices arrive', () => {
     // System notices reuse role 'user' but are not turns.

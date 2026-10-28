@@ -5,3 +5,9 @@
 pub mod channel_assistant;
 pub mod channel_contracts;
 pub mod os_control;
+
+pub mod skills;
+
+pub mod clawhub;
+
+pub mod whatsapp;

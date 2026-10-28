@@ -95,9 +95,11 @@ await (async()=>{
     });
 
     __jait_capture(0, (tool.name));
-    __jait_capture(1, (tool.tier));
-    __jait_capture(2, (tool.parameters.properties.action.enum));
-    __jait_captureType(3, (tool.parameters.properties.todoId));
+    __jait_capture(1, (tool.description));
+    __jait_capture(2, (tool.description));
+    __jait_capture(3, (tool.tier));
+    __jait_capture(4, (tool.parameters.properties.action.enum));
+    __jait_captureType(5, (tool.parameters.properties.todoId));
   
 })();
 

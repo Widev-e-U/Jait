@@ -40,6 +40,7 @@ import { ManagerMode } from '@/components/manager/manager-mode'
 import { AgentsPage } from '@/components/manager/agents-page'
 
 import { useScreenShare } from '@/hooks/useScreenShare'
+import { ScreenShareProvider } from '@/hooks/screen-share-context'
 import { useTerminals, useAvailableShells, terminalBelongsToProject, resolveProjectActiveTerminalId, resolveProjectTerminalSelection } from '@/components/terminal'
 import type { TerminalViewHandle } from '@/components/terminal'
 import type { ProjectFile, ProjectPanelHandle, ProjectTabsState } from '@/components/project'
@@ -528,8 +529,10 @@ function App() {
     handleConnectionRestart
   } = useUpdateChecker({ token, isDesktop, appPlatform, apiUrl: API_URL })
 
+  const refreshActiveSessionRef = useRef<() => Promise<void>>(async () => {})
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
     if (connected) {
+      void refreshActiveSessionRef.current()
       // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
       void automationRefreshRef.current()
       // Re-hydrate the open thread — activities are fetched once per selection and
@@ -598,6 +601,7 @@ function App() {
     fetchProjects,
     loadProject,
     loadSession,
+    refreshActiveSession,
     searchChats,
     searchProjects,
     searchResults,
@@ -630,6 +634,7 @@ function App() {
     setInputValue(draft?.text ?? '')
     setInputSegments(draft?.segments)
   }, [activeSessionId, inputSegments, inputValueRef, setInputSegments, setInputValue])
+  refreshActiveSessionRef.current = refreshActiveSession
   fetchProjectsRef.current = fetchProjects
   useEffect(() => {
     setPrimaryChatPanelHidden(false)
@@ -4868,15 +4873,8 @@ function App() {
   const wakeWord = useWakeWord({
     enabled: wakeWordEnabled && isAuthenticated && !voiceRecording && !voiceOverlayOpen,
     lang: navigator.language,
-    onCommand: () => {
-      // When the user says "Hey Jait <command>", start the voice session.
-      // The command will be picked up by the mic once the session opens.
-      startVoiceSession()
-    },
-    onWakeWordDetected: () => {
-      // Just the wake word — start voice session immediately
-      startVoiceSession()
-    },
+    token,
+    onActivate: startVoiceSession,
   })
 
   const voiceControlProps = {
@@ -4886,6 +4884,8 @@ function App() {
     wakeWordEnabled,
     toggleWakeWord,
     voiceAssistant,
+    startVoiceSession,
+    canStartVoice: isAuthenticated,
     isDesktop,
     activeProjectTitle: activeProjectRecord?.title ?? null,
   }
@@ -5242,6 +5242,7 @@ function App() {
   }
 
   return (
+    <ScreenShareProvider value={screenShare}>
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         {showNodePermissionsGate && <NodePermissionsGate token={token} onFirstRunComplete={() => setNodePermissionSetupReady(true)} onOpenNodeSettings={(nodeId) => {
@@ -5533,7 +5534,7 @@ function App() {
                 />
               </div>
             ) : (
-              <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
+              <div data-browser-workspace className={`relative flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
                 <div className={isMobile ? 'contents' : chatCollapsed ? 'relative flex min-h-0 flex-1 min-w-0' : 'relative flex min-h-0 shrink-0'}>
                   {viewMode === 'developer' && (
                     <DeveloperSidebars
@@ -6070,6 +6071,7 @@ function App() {
 
       {/* Voice overlay removed — voice controls are now inline in the header */}
     </TooltipProvider>
+    </ScreenShareProvider>
   )
 }
 

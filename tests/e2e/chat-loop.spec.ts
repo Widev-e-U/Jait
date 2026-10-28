@@ -1,6 +1,50 @@
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
+for (const personal of [false, true]) {
+  test(`mobile goal recovers missed updates for ${personal ? 'personal' : 'project'} chats`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 850 })
+    const session = {
+      id: 'recover-chat', projectId: personal ? null : 'recover-project', name: 'Recover goal',
+      status: 'active', metadata: null as string | null, createdAt: '2026-10-26T10:00:00Z',
+      lastActiveAt: '2026-10-26T10:00:00Z', viewedAt: null, projectPath: null,
+    }
+    const project = { id: 'recover-project', sessions: [session] }
+    let sessionReads = 0
+    await page.route('**/api/**', async route => {
+      const path = new URL(route.request().url()).pathname
+      const data = path === '/api/projects/last-active' ? { project: personal ? null : project, session }
+        : path === '/api/projects' ? { projects: personal ? [] : [project], hasMore: false }
+        : path === '/api/sessions' ? { sessions: personal ? [session] : [] }
+        : path === '/api/sessions/recover-chat' ? (sessionReads++, session)
+        : {}
+      await route.fulfill({ json: data })
+    })
+    await page.goto('/src/e2e-fixtures/goal-recovery.html')
+    await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+    await expect.poll(() => sessionReads).toBeGreaterThan(0)
+    const trigger = page.getByRole('button', { name: 'Expand goal card' })
+    await expect(trigger).toHaveCount(0)
+    session.metadata = JSON.stringify({ loop: {
+      id: 'recovered-loop', goal: 'Finish the saved migration', criteria: ['Verify parity'],
+      status: 'running', iteration: 7, revision: 9, checkedIteration: 6, summary: '',
+      nextMessage: '', evidence: [], updatedAt: '2026-10-26T11:00:00Z',
+    } })
+    // A loop started on another device while this mobile client was asleep.
+    await page.getByRole('button', { name: 'Reconnect chat' }).click()
+    await expect(trigger).toBeVisible()
+    await trigger.click()
+    const card = page.getByRole('region', { name: 'Chat loop goal' })
+    await expect(card).toContainText('Finish the saved migration')
+    await expect(card.getByRole('status')).toHaveText('running')
+    session.metadata = session.metadata.replace('"running"', '"paused"')
+    // Returning from a mobile app background also refreshes the saved status.
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+    await expect(card.getByRole('status')).toHaveText('paused')
+    await expect(page.getByTestId('session-count')).toHaveText('1')
+  })
+}
+
 for (const width of [390, 1280]) {
   test(`goal card controls, evidence and sidebar status at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 850 })
@@ -173,5 +217,52 @@ for (const width of [390, 900, 1440]) {
     await expect(overlay).toHaveCount(0)
     expect((await scroll.boundingBox())!.y).toBe(transcriptTop)
     expect((await previous.boundingBox())!.y).toBe(previousTop)
+  })
+}
+
+for (const width of [390, 1440]) {
+  test(`long expanded goal scrolls to its controls at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 660 })
+    let pauseRequests = 0
+    await page.route('**/api/**', route => {
+      if (new URL(route.request().url()).pathname.endsWith('/loop') && route.request().method() === 'POST') pauseRequests++
+      return route.fulfill({ json: { providers: [], models: [], skills: [], agents: [], projects: [], sessions: [] } })
+    })
+    await page.goto('/src/e2e-fixtures/queue-edit-workspace.html?goal=long')
+    // This fixture-only control sits in the lower corner used by the goal card.
+    await page.getByRole('button', { name: 'Toggle goal overlay' }).evaluate(el => el.remove())
+    if (width < 768) await page.getByRole('button', { name: 'Expand goal card' }).click()
+    const card = page.getByTestId('loop-goal-card')
+    await card.locator('summary').click()
+    await expect.poll(() => card.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true)
+    await card.hover()
+    await page.mouse.wheel(0, 10000)
+    await expect.poll(() => card.evaluate(el => el.scrollHeight - el.clientHeight - el.scrollTop)).toBeLessThan(2)
+    await expect(card.getByText('Criterion 20:', { exact: false })).toBeInViewport()
+    const pause = card.getByRole('button', { name: 'Pause goal loop' })
+    await expect(pause).toBeInViewport()
+    const bounds = (await card.boundingBox())!
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(660)
+    // The card must cover the input itself and receive pointer input there.
+    const composerBounds = (await page.getByTestId('chat-composer').boundingBox())!
+    const overlap = {
+      left: Math.max(bounds.x, composerBounds.x),
+      top: Math.max(bounds.y, composerBounds.y),
+      right: Math.min(bounds.x + bounds.width, composerBounds.x + composerBounds.width),
+      bottom: Math.min(bounds.y + bounds.height, composerBounds.y + composerBounds.height),
+    }
+    expect(overlap.right - overlap.left, 'card should overlap the input horizontally').toBeGreaterThan(0)
+    expect(overlap.bottom - overlap.top, 'card should overlap the input vertically').toBeGreaterThan(0)
+    const cardReceivesOverlap = await page.evaluate(
+      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-testid="loop-goal-card"]')),
+      { x: (overlap.left + overlap.right) / 2, y: (overlap.top + overlap.bottom) / 2 },
+    )
+    expect(cardReceivesOverlap).toBe(true)
+    await pause.click({ timeout: 3000 })
+    await expect.poll(() => pauseRequests).toBe(1)
+    await card.getByRole('button', { name: 'Collapse goal card' }).click()
+    const composer = page.getByRole('textbox', { name: 'Message' })
+    await composer.click()
+    await expect(composer).toBeFocused()
   })
 }

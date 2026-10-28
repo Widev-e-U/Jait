@@ -3,6 +3,7 @@ import type { MessengerPresence } from '@/lib/messenger/model'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cachedAvatarBlob } from '@/lib/messenger/avatar-cache'
 import { useMessenger } from './messenger-provider'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 /** Initials keep the header stable while the image loads, or when no avatar exists. */
 function initials(name: string) {
@@ -120,10 +121,9 @@ export function MessengerPeerAvatar({ name, mxcUrl, presence = 'unknown', size =
     {url
       ? <img src={url} alt="" className={'h-full w-full object-cover ' + roundClass} />
       : <span className="truncate px-1">{fallback ?? initials(name)}</span>}
-    {withPresence && <span
+    {withPresence && <TooltipHint content={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}><span
       data-presence-dot={presence}
-      title={presence === 'online' ? 'Online' : presence === 'unavailable' ? 'Away' : 'Offline'}
       className={'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ' + DOT[presence]}
-    />}
+    /></TooltipHint>}
   </span>
 }

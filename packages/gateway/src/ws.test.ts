@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import WebSocket from "ws";
 import * as jose from "jose";
 import { WsControlPlane } from "./ws.js";
+import { ScreenShareService } from "@jait/screen-share";
 import type { AppConfig } from "./config.js";
 import { backgroundCommandMonitor } from "./services/background-command-monitor.js";
 import type { BackgroundCommandResult } from "./services/background-command-monitor.js";
@@ -57,11 +58,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -69,11 +72,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -520,44 +525,51 @@ describe("WsControlPlane", () => {
   });
 
   describe("multi-device synchronization", () => {
-    it("relays screen-share offers to other devices but not back to sender", async () => {
+    it("relays screen-share signals only between approved session participants", async () => {
       const token = await createToken("user-screen-share");
-
-      const host = openWs(port, { token });
-      await waitForOpen(host.ws);
-      await host.collector.next();
-      await new Promise((r) => setTimeout(r, 100));
-      host.ws.send(JSON.stringify({ type: "subscribe", sessionId: "session-share", deviceId: "host-device" }));
-      await host.collector.next();
-
-      const viewer = openWs(port, { token });
-      await waitForOpen(viewer.ws);
-      await viewer.collector.next();
-      await new Promise((r) => setTimeout(r, 100));
-      viewer.ws.send(JSON.stringify({ type: "subscribe", sessionId: "session-share", deviceId: "viewer-device" }));
-      await viewer.collector.next();
-
-      host.ws.send(
-        JSON.stringify({
-          type: "screen-share:offer",
-          payload: {
-            sessionId: "session-share",
-            hostDeviceId: "host-device",
-            viewerDeviceId: "viewer-device",
-            sdp: { type: "offer", sdp: "fake-sdp" },
-          },
-        }),
-      );
-
-      const relayed = await viewer.collector.next();
-      expect(relayed.type).toBe("screen-share:offer");
-      expect(relayed.payload.sdp.sdp).toBe("fake-sdp");
-
-      const senderEcho = await host.collector.maybeNext(500);
-      expect(senderEcho).toBeNull();
-
-      host.ws.close();
-      viewer.ws.close();
+      const screenShare = new ScreenShareService();
+      for (const id of ["host-device", "viewer-device", "outsider-device"]) {
+        screenShare.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = screenShare.startShare({
+        hostDeviceId: "host-device", viewerDeviceIds: ["viewer-device"],
+        initiatedBy: "agent", requireConsent: true,
+      });
+      plane.screenShareSessionLookup = (id) => screenShare.getSession(id);
+      const connect = async (deviceId: string) => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", sessionId: "chat", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("host-device");
+      const viewer = await connect("viewer-device");
+      const outsider = await connect("outsider-device");
+      const offer = (id = session.id) => JSON.stringify({ type: "screen-share:offer", payload: {
+        sessionId: id, hostDeviceId: "host-device", sdp: "fake-sdp",
+      } });
+      try {
+        host.ws.send(offer());
+        expect(await viewer.collector.maybeNext(200)).toBeNull(); // Await host consent.
+        screenShare.resolveApproval(session.id, true);
+        outsider.ws.send(offer());
+        expect(await viewer.collector.maybeNext(200)).toBeNull(); // A non-member cannot inject signals.
+        host.ws.send(offer());
+        const relayed = await viewer.collector.next();
+        expect(relayed.type).toBe("screen-share:offer");
+        expect(relayed.payload.sdp).toBe("fake-sdp");
+        expect(await host.collector.maybeNext(200)).toBeNull();
+        expect(await outsider.collector.maybeNext(200)).toBeNull();
+        host.ws.send(offer("unknown-session"));
+        expect(await viewer.collector.maybeNext(200)).toBeNull();
+        screenShare.stopShare(session.id);
+        host.ws.send(offer());
+        expect(await viewer.collector.maybeNext(200)).toBeNull();
+      } finally {
+        host.ws.close(); viewer.ws.close(); outsider.ws.close();
+      }
     });
 
     it("reports UI state updates with fallback to subscribed session and sender client id", async () => {

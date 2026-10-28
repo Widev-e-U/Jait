@@ -68,7 +68,7 @@ test('React, remove reaction, and edit own message', async ({ page }) => {
   await own.hover()
   await own.getByRole('button', { name: 'React to message' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'React with 👍' }).click()
-  const reaction = own.locator('[data-reaction-pills]').getByRole('button', { name: 'You', exact: true })
+  const reaction = own.locator('[data-reaction-pills]').getByRole('button', { name: '👍 reaction by You', exact: true })
   await expect(reaction).toHaveAttribute('aria-pressed', 'true')
   await expect(reaction).toContainText('👍')
   await reaction.click()

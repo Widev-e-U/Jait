@@ -12,7 +12,7 @@
   },
   {
     "name": "surfaces.start",
-    "description": "Start a new surface of the given type (terminal, filesystem, browser)",
+    "description": "Start a surface. For a browser, provide an HTTP/HTTPS URL to load immediately.",
     "tier": "standard",
     "category": "surfaces",
     "source": "builtin",
@@ -35,10 +35,38 @@
         "projectRoot": {
           "type": "string",
           "description": "Working directory for the surface"
+        },
+        "url": {
+          "type": "string",
+          "description": "Required HTTP/HTTPS URL for a browser surface",
+          "minLength": 1,
+          "pattern": "\\S"
         }
       },
       "required": [
         "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "browser"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "url"
+            ]
+          }
+        }
       ]
     }
   },

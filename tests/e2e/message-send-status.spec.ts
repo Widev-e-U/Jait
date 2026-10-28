@@ -45,7 +45,7 @@ for (const width of [320, 393, 1280]) {
     const statuses = page.getByTestId('user-message-send-status')
     await expect(statuses).toHaveCount(3)
     await expect(statuses.first().locator('.lucide-check')).toHaveCount(1)
-    await expect(statuses.first()).toHaveAttribute('title', 'Pending delivery')
+    await expect(statuses.first()).toContainText('Pending delivery')
     for (let index = 0; index < 3; index++) {
       const bubble = page.getByTestId(`message-${index}`).locator('[data-message-from="user"]').last()
       await page.getByTestId(`message-${index}`).locator('[data-message-from="user"]').first().hover({ position: { x: 1, y: 1 } })
@@ -114,7 +114,7 @@ for (const width of [320, 393, 1280]) {
     await page.getByRole('button', { name: 'Confirm sent', exact: true }).click()
     await expect(statuses.first()).toHaveAttribute('data-send-state', 'sent')
     await expect(statuses.first().locator('.lucide-check-check')).toHaveCount(1)
-    await expect(statuses.first()).toHaveAttribute('title', 'Accepted by Jait')
+    await expect(statuses.first()).toContainText('Accepted by Jait')
     if (width < 768) await openMenuFromStatus(page)
     expect(await geometry(page)).toEqual(baseline)
     if (width < 768) expect(await mobileMenuGeometry(page)).toEqual(menus)

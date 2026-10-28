@@ -1,0 +1,158 @@
+[
+  {
+    "name": "ssh.run",
+    "description": "Run a command on a remote Linux server over SSH. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password. Set sudo:true to run the command with elevated privileges — the sudo password is collected through a secure user-only prompt (never sent to the model) and can be remembered per host, mirroring elevated.run.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "high",
+    "defaultConsentLevel": "always",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Remote host or IP address"
+        },
+        "username": {
+          "type": "string",
+          "description": "Remote SSH username"
+        },
+        "command": {
+          "type": "string",
+          "description": "Command to run on the remote host"
+        },
+        "port": {
+          "type": "number",
+          "description": "SSH port, default 22"
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Execution timeout in milliseconds, default 30000"
+        },
+        "authMethod": {
+          "type": "string",
+          "enum": [
+            "password",
+            "key"
+          ],
+          "description": "Authentication method. Defaults to key. Password uses a user-only secret prompt."
+        },
+        "strictHostKeyChecking": {
+          "type": "boolean",
+          "description": "Whether OpenSSH should enforce known_hosts checking, default true"
+        },
+        "sudo": {
+          "type": "boolean",
+          "description": "Run the command with sudo on the remote host. The sudo password is requested through a secure user-only prompt (never sent to the model) and is remembered per host for the session."
+        },
+        "sudoUser": {
+          "type": "string",
+          "description": "Optional target user for sudo (sudo -u). Defaults to root."
+        }
+      },
+      "required": [
+        "host",
+        "username",
+        "command"
+      ]
+    }
+  },
+  {
+    "name": "ssh.session.start",
+    "description": "Start a persistent SSH PTY session to a remote Linux server. Uses key auth by default so it never asks for a password in chat unless authMethod is explicitly set to password.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "high",
+    "defaultConsentLevel": "always",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Remote host or IP address"
+        },
+        "username": {
+          "type": "string",
+          "description": "Remote SSH username"
+        },
+        "port": {
+          "type": "number",
+          "description": "SSH port, default 22"
+        },
+        "authMethod": {
+          "type": "string",
+          "enum": [
+            "password",
+            "key"
+          ],
+          "description": "Authentication method. Defaults to key. Password uses a user-only secret prompt."
+        },
+        "strictHostKeyChecking": {
+          "type": "boolean",
+          "description": "Whether OpenSSH should enforce known_hosts checking, default true"
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Startup timeout in milliseconds, default 30000"
+        }
+      },
+      "required": [
+        "host",
+        "username"
+      ]
+    }
+  },
+  {
+    "name": "ssh.session.run",
+    "description": "Run a command inside an existing persistent SSH PTY session created by ssh.session.start. Shell state such as cwd and environment is preserved between calls.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "high",
+    "defaultConsentLevel": "always",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sshSessionId": {
+          "type": "string",
+          "description": "SSH session ID returned by ssh.session.start"
+        },
+        "command": {
+          "type": "string",
+          "description": "Command to run in the remote SSH shell"
+        },
+        "timeoutMs": {
+          "type": "number",
+          "description": "Execution timeout in milliseconds, default 30000"
+        }
+      },
+      "required": [
+        "sshSessionId",
+        "command"
+      ]
+    }
+  },
+  {
+    "name": "ssh.session.close",
+    "description": "Close a persistent SSH PTY session created by ssh.session.start.",
+    "tier": "standard",
+    "category": "network",
+    "source": "builtin",
+    "risk": "medium",
+    "defaultConsentLevel": "once",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sshSessionId": {
+          "type": "string",
+          "description": "SSH session ID returned by ssh.session.start"
+        }
+      },
+      "required": [
+        "sshSessionId"
+      ]
+    }
+  }
+]

@@ -1,6 +1,6 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
+import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
@@ -511,41 +511,21 @@ export function SessionSelector({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex h-[35px] shrink-0 items-center gap-2 px-2.5 border-b">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1">
-          {searchLoading && normalizedSearchQuery
-            ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-            : <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder={searchLabel}
-            aria-label={searchLabel}
-            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-        {view === 'chats' ? (
-          onNewPersonalSession && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md p-1" aria-label="New personal chat" onClick={onNewPersonalSession}>
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">New personal chat</TooltipContent>
-        </Tooltip>
-          )
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-md p-1" onClick={onCreateProject}>
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">New project</TooltipContent>
-          </Tooltip>
-        )}
+      {/* The search field is the whole row: no side padding, no trailing
+          action buttons. New projects and chats are created from the section
+          headers below. */}
+      <div className="flex h-[35px] shrink-0 items-center gap-1.5 border-b bg-muted/60 px-2.5">
+        {searchLoading && normalizedSearchQuery
+          ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+          : <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder={searchLabel}
+          aria-label={searchLabel}
+          className="h-full min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+        />
       </div>
 
       {loading ? (
@@ -600,21 +580,20 @@ export function SessionSelector({
                 <span className="text-2xs font-medium text-muted-foreground">
                   {view === 'projects' ? 'Projects' : 'Projects & Chats'}
                 </span>
-                {view === 'combined' && onNewPersonalSession && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="ml-1 h-6 w-6 rounded-md p-1"
-                        aria-label="New personal chat" onClick={onNewPersonalSession}
-                      >
-                        <MessageSquare className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">New personal chat</TooltipContent>
-                  </Tooltip>
-                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-1 h-6 w-6 shrink-0 rounded-md p-1"
+                      aria-label="New project"
+                      onClick={onCreateProject}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">New project</TooltipContent>
+                </Tooltip>
               </div>
             )}
             <div ref={paneContainerRef} className="flex min-h-0 flex-1 flex-col">
@@ -1173,6 +1152,22 @@ export function SessionSelector({
                 }}
                   >
                     <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
+                    {onNewPersonalSession && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="ml-1 h-6 w-6 shrink-0 rounded-md p-1"
+                            aria-label="New personal chat"
+                            onClick={onNewPersonalSession}
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">New personal chat</TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="space-y-0.5 px-1.5 pb-1.5">

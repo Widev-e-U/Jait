@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { apiFetch } from '@/lib/api-fetch'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export function BrowserToolsPanel({ sessionId, authToken }: { sessionId: string; authToken?: string | null }) {
   const [revision, setRevision] = useState(0)
@@ -46,10 +47,12 @@ export function BrowserToolsPanel({ sessionId, authToken }: { sessionId: string;
     <section aria-label="Browser tools" className="flex h-full min-h-0 w-[min(32rem,50%)] shrink-0 flex-col overflow-hidden border-l bg-background text-xs">
       <div className="flex items-center justify-between border-b px-3 py-1.5">
         <span className="font-medium">Chrome DevTools</span>
-        <button type="button" aria-label="Reconnect Chrome DevTools" title="Reconnect Chrome DevTools"
-          className="rounded p-1.5 hover:bg-muted" onClick={() => setRevision(value => value + 1)}>
-          <RefreshCw className="h-3.5 w-3.5" />
-        </button>
+        <TooltipHint content="Reconnect Chrome DevTools">
+          <button type="button" aria-label="Reconnect Chrome DevTools"
+            className="rounded p-1.5 hover:bg-muted" onClick={() => setRevision(value => value + 1)}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </TooltipHint>
       </div>
       {error ? <p role="alert" className="p-3 text-destructive">{error}</p>
         : url ? <iframe title="Chrome DevTools" src={url} className="min-h-0 w-full flex-1 border-0" referrerPolicy="no-referrer" />

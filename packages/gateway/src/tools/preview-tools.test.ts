@@ -23,14 +23,23 @@ describe("createPreviewOpenTool", () => {
     expect(tools.isExecutable("preview.open", new Set(["browser.open"]))).toBe(false);
   });
 
-  it("opens the visible browser through the canonical registry with the original session and project scope", async () => {
-    const start = vi.fn().mockResolvedValue({ id: "browser-session", sessionId: "owned", status: "ready", target: "5173", mode: "local", logs: [], browserEvents: [] });
-    const tools = createToolRegistry(new SurfaceRegistry(), { previewService: { start } as any });
+  it("requires a URL and opens it through the canonical browser tool", async () => {
+    const registry = new SurfaceRegistry();
+    const surface = { id: "browser-owned", type: "browser", state: "running", sessionId: "owned",
+      getLiveViewInfo: () => ({ novncUrl: "live" }),
+      navigate: vi.fn().mockResolvedValue({ url: "https://example.com/path", title: "Example", text: "Loaded", elements: [] }) };
+    vi.spyOn(registry, "getSurface").mockReturnValue(undefined);
+    const start = vi.spyOn(registry, "startSurface").mockResolvedValue(surface as any);
+    const tools = createToolRegistry(registry);
     const context: ToolContext = { sessionId: "owned", userId: "owner", actionId: "action", projectRoot: "/project", requestedBy: "assistant" };
-    expect((await tools.execute("browser.open", { target: "5173" }, context)).ok).toBe(true);
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "owned", projectRoot: "/project", target: "5173", agentInitiated: true }));
-    expect((await tools.execute("browser.open", { target: "5173" }, { ...context, sessionId: "" })).ok).toBe(false);
-    expect(start).toHaveBeenCalledTimes(1);
+    expect(tools.get("browser.open")?.parameters.required).toContain("url");
+    expect((await tools.execute("browser.open", {}, context)).ok).toBe(false);
+    expect((await tools.execute("browser.open", { url: "about:blank" }, context)).ok).toBe(false);
+    expect(start).not.toHaveBeenCalled();
+    expect((await tools.execute("browser.open", { url: "https://example.com/path" }, context)).ok).toBe(true);
+    expect(start).toHaveBeenCalledWith("browser", "browser-owned", { sessionId: "owned", projectRoot: "/project", userId: "owner", requireLiveView: true });
+    expect(surface.navigate).toHaveBeenCalledWith("https://example.com/path", undefined);
+    expect((await tools.execute("browser.open", { url: "https://example.com/path" }, { ...context, sessionId: "" })).ok).toBe(false);
   });
 
   it("starts a managed preview and broadcasts panel state", async () => {

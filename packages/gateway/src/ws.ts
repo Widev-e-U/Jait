@@ -97,8 +97,8 @@ export function nodeCapabilityForTool(
   args: Record<string, unknown> = {},
 ): NodeCapability | undefined {
   if (tool === "computer.session") return args.action === "stop" ? undefined : "input";
-  if (tool === "computer.act") return "input";
   if (tool === "computer.observe") return "screen";
+  if (tool.startsWith("computer.")) return "input";
   if (/^(terminal|shell|command)\./.test(tool)) return "terminal";
   if (/^(file|fs|read|write|search)\./.test(tool)) return "filesystem";
   if (/^(browser|web)\./.test(tool)) return "browser";
@@ -950,47 +950,43 @@ export class WsControlPlane {
       case "screen-share:offer": {
         const offer = msg.payload as ScreenShareOffer | undefined;
         if (offer) {
-          console.log(`[screen-share] WS offer from client.device=${client.deviceId} host=${offer.hostDeviceId}`);
-          // Offer is sent BY the host; relay to all viewers (everyone except the host)
-          for (const c of this.clients.values()) {
-            if (c.deviceId === client.deviceId) continue;
-            if (c.ws.readyState !== 1) continue;
-            console.log(`[screen-share]   → relaying offer to device=${c.deviceId}`);
-            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
-          }
+          console.log(`[screen-share] WS offer from client.device=${client.deviceId} host=${offer.hostDeviceId} session=${offer.sessionId?.slice(0, 8)}`);
+          // Offer is sent BY the host; relay only to this session's viewers.
+          this.relayShareSignal(offer.sessionId, client.deviceId, msg);
         }
         break;
       }
       case "screen-share:answer": {
         const answer = msg.payload as ScreenShareAnswer | undefined;
         if (answer) {
-          console.log(`[screen-share] WS answer from client.device=${client.deviceId} viewer=${answer.viewerDeviceId}`);
-          // Answer is sent BY the viewer; relay to all non-sender (host)
-          for (const c of this.clients.values()) {
-            if (c.deviceId === client.deviceId) continue;
-            if (c.ws.readyState !== 1) continue;
-            console.log(`[screen-share]   → relaying answer to device=${c.deviceId}`);
-            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
-          }
+          console.log(`[screen-share] WS answer from client.device=${client.deviceId} viewer=${answer.viewerDeviceId} session=${answer.sessionId?.slice(0, 8)}`);
+          // Answer is sent BY the viewer; relay only to this session's host.
+          this.relayShareSignal(answer.sessionId, client.deviceId, msg);
         }
         break;
       }
       case "screen-share:ice-candidate": {
         const ice = msg.payload as ScreenShareIceCandidate | undefined;
         if (ice) {
-          // Relay ICE to all non-sender
-          for (const c of this.clients.values()) {
-            if (c.deviceId === client.deviceId) continue;
-            if (c.ws.readyState !== 1) continue;
-            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
-          }
+          // ICE is relayed only within the session: connection details never
+          // reach clients that are not part of this share.
+          this.relayShareSignal(ice.sessionId, client.deviceId, msg);
         }
         break;
       }
       case "screen-share:start-request": {
-        const startReq = msg.payload as { hostDeviceId: string; sessionId?: string; viewerDeviceIds?: string[] } | undefined;
+        const startReq = msg.payload as {
+          hostDeviceId: string;
+          sessionId?: string;
+          viewerDeviceIds?: string[];
+          chatId?: string | null;
+          nodeId?: string | null;
+          initiatedBy?: "user" | "agent";
+          requireConsent?: boolean;
+          reason?: string | null;
+        } | undefined;
         if (startReq) {
-          console.log(`[screen-share] WS start-request relay from device=${client.deviceId} → host=${startReq.hostDeviceId}`);
+          console.log(`[screen-share] WS start-request relay from device=${client.deviceId} → host=${startReq.hostDeviceId} chat=${startReq.chatId ?? "-"}`);
           const denied = this.permissionDeniedError(startReq.hostDeviceId, "screen");
           if (denied) {
             this.send(client.ws, {
@@ -1532,6 +1528,11 @@ export class WsControlPlane {
   onScreenShareStart?: (hostDeviceId: string, viewerDeviceIds?: string[]) => void;
   /** Callback when a screen-share stop is requested via WS */
   onScreenShareStop?: (sessionId: string) => void;
+  /**
+   * Resolves a share session so signaling can be delivered to its members
+   * only. Wired to the screen-share service at startup.
+   */
+  screenShareSessionLookup?: (sessionId: string) => ScreenShareSessionState | null;
   /** Callback when a remote node sends a provider event (token, tool.start, etc.) */
   onRemoteProviderEvent?: (sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void;
   /** Callback when a remote node emits interactive terminal output. */
@@ -1617,14 +1618,66 @@ export class WsControlPlane {
   }
 
   /**
+   * Tell every surface who is driving the shared screen right now. This is UI
+   * state only — it carries no SDP or ICE, so broadcasting it is safe and lets
+   * the chat panel and the host window agree on the handoff.
+   */
+  broadcastScreenShareControlHandoff(sessionId: string, controlOwner: "user" | "agent") {
+    this.broadcastAll({
+      type: "screen-share:control-handoff" as WsEvent["type"],
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: { sessionId, controlOwner },
+    });
+  }
+
+  /** Relay SDP/ICE only between approved, active participants of this share. */
+  private relayShareSignal(sessionId: string | null | undefined, fromDeviceId: string | null, msg: { type: string; payload?: unknown }) {
+    const session = sessionId ? this.screenShareSessionLookup?.(sessionId) : null;
+    if (!session || session.status !== "sharing" || session.pendingApproval || !fromDeviceId) return;
+    const viewers = new Set(session.viewers.map((viewer) => viewer.deviceId));
+    const isHost = fromDeviceId === session.hostDeviceId;
+    if (!isHost && !viewers.has(fromDeviceId)) return;
+    const payload = msg.payload as Record<string, unknown> | undefined;
+    if (msg.type === "screen-share:offer" && (!isHost || payload?.hostDeviceId !== fromDeviceId)) return;
+    if (msg.type === "screen-share:answer" && (isHost || payload?.viewerDeviceId !== fromDeviceId)) return;
+    if (msg.type === "screen-share:ice-candidate" && payload?.fromDeviceId !== fromDeviceId) return;
+
+    for (const client of this.clients.values()) {
+      if (!client.deviceId || client.deviceId === fromDeviceId || client.ws.readyState !== 1) continue;
+      const recipientIsHost = client.deviceId === session.hostDeviceId;
+      if (msg.type === "screen-share:offer" ? !viewers.has(client.deviceId)
+        : msg.type === "screen-share:answer" ? !recipientIsHost
+        : !recipientIsHost && !viewers.has(client.deviceId)) continue;
+      this.send(client.ws, {
+        type: msg.type as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: msg.payload,
+      });
+    }
+  }
+
+  /**
    * Send a screen-share start-request to the host and viewer devices only.
    * Used by tools/routes when the session is created server-side and the host
    * device needs to be told to begin capture (and viewers to prepare).
    */
-  sendScreenShareStartRequest(sessionId: string, hostDeviceId: string, viewerDeviceIds?: string[]) {
+  sendScreenShareStartRequest(
+    sessionId: string,
+    hostDeviceId: string,
+    viewerDeviceIds?: string[],
+    extras?: {
+      chatId?: string | null;
+      nodeId?: string | null;
+      initiatedBy?: "user" | "agent";
+      requireConsent?: boolean;
+      reason?: string | null;
+    },
+  ) {
     const targets = new Set<string>([hostDeviceId, ...(viewerDeviceIds ?? [])]);
     const allDeviceIds = [...this.clients.values()].map(c => c.deviceId).filter(Boolean);
-    console.log(`[screen-share] sendScreenShareStartRequest: session=${sessionId.slice(0, 8)} host=${hostDeviceId} viewers=[${(viewerDeviceIds ?? []).join(',')}] connected=[${allDeviceIds.join(',')}]`);
+    console.log(`[screen-share] sendScreenShareStartRequest: session=${sessionId.slice(0, 8)} host=${hostDeviceId} viewers=[${(viewerDeviceIds ?? []).join(',')}] connected=[${allDeviceIds.join(',')}] chat=${extras?.chatId ?? '-'} initiatedBy=${extras?.initiatedBy ?? 'user'}`);
     let sentCount = 0;
     for (const client of this.clients.values()) {
       if (client.ws.readyState !== 1) continue;
@@ -1635,7 +1688,7 @@ export class WsControlPlane {
         type: "screen-share:start-request" as WsEvent["type"],
         sessionId: "",
         timestamp: new Date().toISOString(),
-        payload: { sessionId, hostDeviceId, viewerDeviceIds },
+        payload: { sessionId, hostDeviceId, viewerDeviceIds, ...extras },
       });
     }
     console.log(`[screen-share]   sent to ${sentCount} client(s)`);

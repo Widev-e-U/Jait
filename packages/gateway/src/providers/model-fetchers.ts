@@ -175,17 +175,27 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
     });
     if (!res.ok) return openRouterCache?.models ?? [];
     const data = (await res.json()) as {
-      data?: Array<{ id: string; name?: string; description?: string }>;
+      data?: Array<{
+        id: string;
+        name?: string;
+        description?: string;
+        pricing?: { prompt?: string; completion?: string };
+      }>;
     };
     const models: ProviderModelInfo[] = (data.data ?? [])
       .filter((m) => m.id && !m.id.includes(":free"))
       .slice(0, OPENROUTER_MAX_MODELS)
-      .map((m) => ({
-        id: m.id,
-        name: m.name || m.id.split("/").pop() || m.id,
-        description: m.description?.slice(0, 80),
-        reasoningEffortSupported: supportsReasoningEffort(m.id),
-      }));
+      .map((m) => {
+        const pricing = parseOpenRouterPricing(m.pricing);
+        const info: ProviderModelInfo = {
+          id: m.id,
+          name: m.name || m.id.split("/").pop() || m.id,
+          description: m.description?.slice(0, 80),
+          reasoningEffortSupported: supportsReasoningEffort(m.id),
+        };
+        if (pricing) info.pricing = pricing;
+        return info;
+      });
     openRouterCache = { models, fetchedAt: Date.now() };
     return models;
   } catch (err) {
@@ -194,6 +204,29 @@ async function doFetchOpenRouterModels(apiKey: string): Promise<ProviderModelInf
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * OpenRouter publishes USD per *token* as decimal strings; convert to the
+ * per-1M-token shape used elsewhere. Returns undefined when the payload has no
+ * usable numbers, so callers see "price unknown" instead of a fake zero.
+ */
+function parseOpenRouterPricing(
+  pricing?: { prompt?: string; completion?: string },
+): ProviderModelInfo["pricing"] | undefined {
+  const perMillion = (value?: string): number | undefined => {
+    if (!value) return undefined;
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+    return Math.round(parsed * 1_000_000 * 1e6) / 1e6;
+  };
+  const promptPerMTok = perMillion(pricing?.prompt);
+  const completionPerMTok = perMillion(pricing?.completion);
+  if (promptPerMTok === undefined && completionPerMTok === undefined) return undefined;
+  const result: NonNullable<ProviderModelInfo["pricing"]> = {};
+  if (promptPerMTok !== undefined) result.promptPerMTok = promptPerMTok;
+  if (completionPerMTok !== undefined) result.completionPerMTok = completionPerMTok;
+  return result;
 }
 
 /** Fetch the OpenAI (or OpenAI-compatible) catalogue. Returns [] on any non-OK response. */

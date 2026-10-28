@@ -2160,13 +2160,17 @@ dependencies = [
 name = "jait-desktop-glue"
 version = "0.1.782"
 dependencies = [
+ "base64 0.22.1",
+ "chrono",
  "dirs 5.0.1",
+ "image",
  "jait-desktop-core",
  "parking_lot",
  "serde",
  "serde_json",
  "tokio",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

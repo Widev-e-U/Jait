@@ -657,16 +657,17 @@ function MessageInner({
   const compactMobileActions = isMobile && isUser && !messenger
   const mobileStatusRow = compactMobileActions && canCopyMessage && messageActionItems.length > 0
   const sendStatus = showSendStatus ? (
-    <span
-      className="pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
-      title={sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}
-      aria-live="polite"
-      data-testid="user-message-send-status"
-      data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
-    >
-      {sendState === 'sent' ? <CheckCheck aria-hidden="true" className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4 translate-x-[1.33px]" />}
-      <span className="sr-only">{sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}</span>
-    </span>
+    <TooltipHint content={sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}>
+      <span
+        className="pointer-events-none flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground"
+        aria-live="polite"
+        data-testid="user-message-send-status"
+        data-send-state={sendState === 'sending' ? 'sending' : 'sent'}
+      >
+        {sendState === 'sent' ? <CheckCheck aria-hidden="true" className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4 translate-x-[1.33px]" />}
+        <span className="sr-only">{sendState === 'sending' ? 'Pending delivery' : 'Accepted by Jait'}</span>
+      </span>
+    </TooltipHint>
   ) : null
 
 
@@ -681,7 +682,7 @@ function MessageInner({
           className={cn(
             'absolute z-10',
             getMobileMessageActionsPositionClassName(isUser, outsideBubble),
-            compactMobileActions && '-right-0.5 bottom-[2.67px]',
+            compactMobileActions && 'right-0 bottom-[2.67px]',
           )}
         >
           <DropdownMenu>
@@ -992,7 +993,7 @@ function MessageInner({
                   <div className="relative w-fit max-w-full space-y-2">
                     {messenger && <div className="flex flex-wrap items-center gap-2 text-2xs text-muted-foreground">
                       <span className="max-w-48 truncate font-medium">{messenger.sender}</span>
-                      <time title={new Date(messenger.timestamp).toLocaleString()} dateTime={new Date(messenger.timestamp).toISOString()}>{new Date(messenger.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                      <TooltipHint content={new Date(messenger.timestamp).toLocaleString()}><time dateTime={new Date(messenger.timestamp).toISOString()}>{new Date(messenger.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
                       {messenger.pending && <span>Sending…</span>}
                       {messenger.failed && <span className="text-destructive">Not sent</span>}
                     </div>}

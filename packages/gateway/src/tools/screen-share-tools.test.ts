@@ -8,7 +8,12 @@ const context = { sessionId: "screen-tests", actionId: "screen-action", projectR
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -29,9 +34,49 @@ describe("screen.share", () => {
   it("requests sharing from the selected host and opens the viewer", async () => {
     const f = fixture();
     expect((await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, context)).ok).toBe(true);
-    expect(f.service.startShare).toHaveBeenCalledWith({ hostDeviceId: "host", viewerDeviceIds: ["viewer"] });
-    expect(f.ws.sendScreenShareStartRequest).toHaveBeenCalledWith("share-1", "host", ["viewer"]);
-    expect(f.ws.sendUICommand).toHaveBeenCalledWith({ command: "screen-share.open", data: { sessionId: "share-1", targetDeviceId: "host" } });
+    // Agent-initiated shares are owned by the requesting chat and always need
+    // explicit consent from the node before capture starts.
+    expect(f.service.startShare).toHaveBeenCalledWith({
+      hostDeviceId: "host",
+      viewerDeviceIds: ["viewer"],
+      chatId: "screen-tests",
+      nodeId: "host",
+      initiatedBy: "agent",
+      requireConsent: true,
+      reason: "The agent wants to view this screen in the chat.",
+    });
+    expect(f.ws.sendScreenShareStartRequest).toHaveBeenCalledWith("share-1", "host", ["viewer"], {
+      chatId: "screen-tests",
+      nodeId: "host",
+      initiatedBy: "agent",
+      requireConsent: true,
+      reason: "The agent wants to view this screen in the chat.",
+    });
+    // The panel is opened inside the owning chat, not gateway-wide.
+    expect(f.ws.sendUICommand).toHaveBeenCalledWith(
+      { command: "screen-share.open", data: { sessionId: "share-1", targetDeviceId: "host", chatId: "screen-tests" } },
+      "screen-tests",
+    );
+  });
+  it("stops and announces an older share before asking the host to replace it", async () => {
+    const f = fixture();
+    f.service.getSessionForChat.mockReturnValue({ id: "old" });
+    f.service.getSession.mockReturnValue({ id: "old", status: "idle" });
+    const result = await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, context);
+    expect(result.ok).toBe(true);
+    expect(f.ws.broadcastScreenShareState.mock.calls[0]?.[0]).toMatchObject({ id: "old", status: "idle" });
+    expect(f.ws.broadcastScreenShareState.mock.invocationCallOrder[0]).toBeLessThan(f.ws.sendScreenShareStartRequest.mock.invocationCallOrder[0]!);
+  });
+  it("binds capture to the selected host rather than the agent execution node", async () => {
+    const f = fixture();
+    await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, { ...context, executionNodeId: "other-node" });
+    expect(f.service.startShare).toHaveBeenCalledWith(expect.objectContaining({ nodeId: "host" }));
+  });
+  it("requires an owning chat for agent capture", async () => {
+    const f = fixture();
+    const result = await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, { ...context, sessionId: "" });
+    expect(result.ok).toBe(false);
+    expect(f.service.startShare).not.toHaveBeenCalled();
   });
   it("requires a target before starting capture", async () => {
     const f = fixture();
@@ -40,8 +85,10 @@ describe("screen.share", () => {
   });
   it("disconnects the active share", async () => {
     const f = fixture();
-    expect((await createScreenShareTool(f.screenShare).execute({ action: "disconnect" }, context)).ok).toBe(true);
-    expect(f.service.stopShare).toHaveBeenCalledOnce();
+    f.service.getSessionForChat.mockReturnValue({ id: "owned-share" });
+    expect((await createScreenShareTool(f.screenShare, f.control).execute({ action: "disconnect" }, context)).ok).toBe(true);
+    expect(f.service.stopShare).toHaveBeenCalledWith("owned-share");
+    expect(f.ws.broadcastScreenShareState).toHaveBeenCalledOnce();
   });
 });
 describe.each([

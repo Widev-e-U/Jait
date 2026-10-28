@@ -107,17 +107,12 @@ pub fn build_jait_mcp_server_ref(
         .map(String::from)
         .unwrap_or_else(|| format!("http://{host}:{port}"));
     let base_text = format!("{base}/");
-    let mut url = match url::Url::parse(&base_text) {
-        Ok(parsed) => parsed
-            .join("/mcp")
-            .map_err(|_| "\"/mcp\" cannot be parsed as a URL.".to_owned())?,
-        Err(_) => {
-            return Err(format!(
-                "\"/mcp\" cannot be parsed as a URL against {}",
-                serde_json::to_string(&base_text).expect("URL text")
-            ));
-        }
-    };
+    // Bun/JSC raises a single `TypeError: Invalid URL` both for an unparsable
+    // base and for a relative resolution against a non-hierarchical base
+    // (`mailto:`), so both failure modes collapse to that one message.
+    let mut url = url::Url::parse(&base_text)
+        .and_then(|parsed| parsed.join("/mcp"))
+        .map_err(|_| "Invalid URL".to_owned())?;
     for name in ["sessionId", "projectRoot", "runtimeMode"] {
         if let Some(v) = context[name].as_str().filter(|s| !s.is_empty()) {
             url.query_pairs_mut().append_pair(name, v);

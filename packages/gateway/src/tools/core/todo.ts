@@ -50,8 +50,8 @@ export function createTodoTool(): ToolDefinition<TodoInput> {
     name: "todo",
     displayName: "Todo",
     description:
-      "Manage a structured todo list for tracking multi-step tasks. " +
-      "Provide the COMPLETE list each time.",
+      "Track the current chat’s temporary plan; it is not saved to the Todo page. " +
+      "Provide the COMPLETE list each time. Use jait.todos for persistent repository follow-ups.",
     tier: "core",
     category: "meta",
     source: "builtin",

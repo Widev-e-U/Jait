@@ -48,11 +48,11 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("use the todo tool even if you are operating through an external or CLI provider");
     expect(prompt).toContain("first discover and use Jait memory or prior session search tools");
     expect(prompt).toContain("If the user asks to open, switch, or use a project or repo");
-    expect(prompt).toContain("attach to an existing local target when available");
-    expect(prompt).toContain("The live preview is a controllable browser session.");
+    expect(prompt).toContain("use an existing development server or start the project");
+    expect(prompt).toContain("The live browser is controllable.");
     expect(prompt).toContain("use `browser.inspect`, `browser.status`, and `browser.*` tools");
-    expect(prompt).toContain("Do not tell the user that browser tools cannot control the previewed browser unless a tool call fails");
-    expect(prompt).toContain("If `browser.open` fails, then fall back to opening the localhost URL directly in the browser surface.");
+    expect(prompt).toContain("Do not tell the user that browser tools cannot control the browser unless a tool call fails");
+    expect(prompt).toContain("Call `browser.open` with that HTTP/HTTPS URL to load it immediately");
     expect(prompt).toContain("This guidance still applies when you are operating through an external or CLI provider inside Jait.");
     expect(prompt).toContain("You are working in the project: /tmp/project");
   });

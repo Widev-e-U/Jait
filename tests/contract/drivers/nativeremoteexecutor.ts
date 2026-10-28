@@ -1,5 +1,5 @@
 /** Real router and path helper, scripted WS/local execution only. No command runs. */
-import {createRemoteToolExecutor,proxyTimeoutMs,resolveRemoteNodeForSession} from '../../../packages/gateway/src/tools/remote-executor.ts';
+import {createRemoteToolExecutor,proxyTimeoutMs,resolveCallNodeTarget,resolveRemoteNodeForSession} from '../../../packages/gateway/src/tools/remote-executor.ts';
 export async function dispatch(call:any){
  const output=[];
  for(const test of call.cases){
@@ -22,6 +22,7 @@ export async function dispatch(call:any){
    let result;
    if(test.kind==='timeout')result=proxyTimeoutMs(test.tool,test.input);
    else if(test.kind==='resolve')result=resolveRemoteNodeForSession(ws as any,test.path,test.projectNodeId);
+   else if(test.kind==='target')result=resolveCallNodeTarget(test.tool,test.input);
    else result=await createRemoteToolExecutor({ws:ws as any,localExecutor},test.node??null)(test.tool,test.input,context as any,test.options);
    output.push({result,events,chunks});
   } catch(error){output.push({thrown:error instanceof Error?{error:error.message}:{value:error},events,chunks});}

@@ -70,6 +70,8 @@ export interface MessengerRoomPeer {
 export interface MessengerMessage {
   id: string
   sender: string
+  /** Stable Matrix user ID, when available, for distinguishing contacts with the same name. */
+  senderId?: string
   body: string
   timestamp: number
   own: boolean
@@ -88,6 +90,11 @@ export interface MessengerMessage {
     size?: number
     file?: Record<string, unknown>
   }
+}
+
+/** Detect the pseudo-room used by the WhatsApp bridge for status updates. */
+export function isStatusRoom(room: { name?: string | null; topic?: string | null }): boolean {
+  return /status broadcast/i.test(String(room.name ?? '')) || /status updates from your contacts/i.test(String(room.topic ?? ''))
 }
 
 /** Beyond plain chats: WhatsApp stories, and team-platform hubs (spaces) with their channels. */

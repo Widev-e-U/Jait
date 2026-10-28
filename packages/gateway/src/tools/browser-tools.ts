@@ -151,6 +151,8 @@ async function ensureBrowserSurface(
   context: ToolContext,
   browserId?: string,
   collaboration?: BrowserCollaborationService,
+  allowStart = false,
+  requireLiveView = false,
 ): Promise<BrowserSurface> {
   const previewSession = resolveActivePreviewSession(collaboration, context);
   assertPreviewBrowserSelection(previewSession, browserId);
@@ -158,6 +160,7 @@ async function ensureBrowserSurface(
   if (previewSession?.browserId) {
     const preview = registry.getSurface(previewSession.browserId);
     if (preview?.type === "browser" && preview.state === "running") {
+      if (requireLiveView && !(preview as BrowserSurface).getLiveViewInfo()) throw new Error("The browser did not expose a live view.");
       return preview as BrowserSurface;
     }
     throw new Error(
@@ -171,12 +174,14 @@ async function ensureBrowserSurface(
     throw new Error("This browser belongs to another chat. Open a browser in the current chat.");
   }
   if (surface?.type !== "browser" || surface.state !== "running") {
+    if (!allowStart) throw new Error("No browser is open for this chat. Use browser.open with a URL first.");
     let pending = browserStarts.get(registry);
     if (!pending) { pending = new Map(); browserStarts.set(registry, pending); }
     let starting = pending.get(id);
     if (!starting) {
       starting = registry.startSurface("browser", id, {
         sessionId: context.sessionId, projectRoot: context.projectRoot, userId: context.userId,
+        ...(requireLiveView ? { requireLiveView: true } : {}),
       });
       pending.set(id, starting);
     }
@@ -184,6 +189,7 @@ async function ensureBrowserSurface(
     finally { if (pending.get(id) === starting) pending.delete(id); }
   }
   if (surface.type !== "browser") throw new Error(`Surface '${id}' is not a browser surface`);
+  if (requireLiveView && !(surface as BrowserSurface).getLiveViewInfo()) throw new Error("The browser did not expose a live view.");
   if (context.sessionId) collaboration?.attachAgentBrowser?.(context.sessionId, surface as BrowserSurface, context.projectRoot);
   collaboration?.assertAgentControl(surface.id);
   return surface as BrowserSurface;
@@ -244,6 +250,7 @@ function buildSnapshotPayload(
 export function createBrowserNavigateTool(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
+  requireLiveView = false,
 ): ToolDefinition<BrowserNavigateInput> {
   return {
     name: "browser.navigate",
@@ -261,17 +268,40 @@ export function createBrowserNavigateTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      const url = typeof input.url === "string" ? input.url.trim() : "";
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error();
+      } catch {
+        return { ok: false, message: "A valid HTTP or HTTPS URL is required to open the browser." };
+      }
       const previewSession = resolveActivePreviewSession(collaboration, context);
       assertPreviewBrowserSelection(previewSession, input.browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
-      const snapshot = await surface.navigate(input.url, context.signal);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration, true, requireLiveView || Boolean(context.sessionId && collaboration));
+      const snapshot = await surface.navigate(url, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
         message: `Navigated to ${snapshot.url}`,
         data: buildSnapshotPayload(surface.id, snapshot, session),
       };
+    },
+  };
+}
+
+export function createBrowserOpenTool(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+): ToolDefinition<BrowserNavigateInput> {
+  const tool = createBrowserNavigateTool(registry, collaboration, true);
+  return {
+    ...tool,
+    name: "browser.open",
+    description: "Open the required HTTP/HTTPS URL immediately in the live browser for this chat. Start a project server separately before opening its URL.",
+    async execute(input, context) {
+      if (!context.sessionId?.trim()) return { ok: false, message: "A valid chat session is required to open a browser." };
+      return tool.execute(input, context);
     },
   };
 }

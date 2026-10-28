@@ -136,7 +136,7 @@ export function ModeSidebar({ items, navigationItems = [], bottomItems = [], hea
   }
 
   return (
-    <aside aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
+    <aside data-browser-sidebar aria-label="Workspace sidebar" className={`flex ${collapsed ? 'w-14' : 'w-56'} shrink-0 flex-col overflow-hidden border-r bg-background px-2 py-3 transition-[width] duration-150 ease-out motion-reduce:transition-none`}>
       <div className={`mb-3 flex shrink-0 ${collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between'} px-1`}>
         {collapsed ? (
           <Tooltip>

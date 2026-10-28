@@ -11,7 +11,7 @@ describe("VoiceAssistantService", () => {
     delete process.env["OPENAI_REALTIME_SEMANTIC_EAGERNESS"];
   });
 
-  it("tells the voice model to default to the normal agent for real questions", () => {
+  it("tells the voice model when to answer locally and when to escalate", () => {
     const service = new VoiceAssistantService({
       config: loadConfig(),
       verifyToken: async () => ({ id: "u1", username: "Alice" }),
@@ -19,8 +19,9 @@ describe("VoiceAssistantService", () => {
 
     const instructions = (service as any).buildInstructions("Alice") as string;
 
-    expect(instructions).toContain("Default to ask_agent_about_request for almost every real question from the user.");
-    expect(instructions).toContain("you MUST call ask_agent_about_request before answering.");
+    expect(instructions).toContain("Answer locally and instantly for: greetings");
+    expect(instructions).toContain("Escalate with ask_agent_about_request for:");
+    expect(instructions).toContain("You decide whether to escalate; Jait decides which model answers.");
   });
 
   it("configures Realtime voice and semantic VAD defaults", () => {

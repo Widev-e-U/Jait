@@ -50,7 +50,7 @@ for (const width of [390, 1280]) {
     await expect.poll(() => liveRequests).toBe(3)
     await page.clock.runFor(10 * 60_000)
     expect(liveRequests).toBe(3)
-    await page.locator('body').dispatchEvent('pointerdown')
+    await page.locator('body').dispatchEvent('pointerdown', { bubbles: true })
     await expect.poll(() => liveRequests).toBe(4)
   })
 }

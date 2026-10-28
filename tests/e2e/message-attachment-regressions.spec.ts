@@ -102,7 +102,7 @@ for (const width of [390, 1280]) {
     await editing.getByRole('button', { name: 'Remove notes.txt' }).click()
     await editor.press('End')
     await page.keyboard.type(' changed')
-    await editing.getByRole('button', { name: 'Send message', exact: true }).click()
+    await editing.getByRole('button', { name: 'Save changes', exact: true }).click()
     await expect(editor).toHaveCount(0)
     const saved = JSON.parse((await page.getByTestId('queue-state').textContent())!)[0]
     expect(saved.attachments.map((item: { name: string }) => item.name)).toEqual(['second.png'])

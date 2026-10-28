@@ -33,7 +33,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
       requestedBy: "test",
     });
 
-    await tools.execute("screen.share", {
+    const share = await tools.execute("screen.share", {
       action: "start",
       hostDeviceId: "host-1",
       viewerDeviceIds: ["viewer-1"],
@@ -62,10 +62,15 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
       } | null;
     };
     expect(payload.devices).toHaveLength(2);
-    expect(payload.activeSession?.hostDeviceId).toBe("host-1");
-    expect(payload.activeSession?.viewers[0]?.deviceId).toBe("viewer-1");
-    expect(payload.activeSession?.controllerDeviceId).toBe("viewer-1");
-    expect(payload.activeSession?.capabilities.remoteInput).toBe(true);
+    // Agent-initiated shares are owned by their chat and await host approval.
+    expect(share.ok).toBe(true);
+    expect(payload.activeSession).toBeNull();
+    const scopedSession = screenShare.getSessionForChat("s1");
+    expect(scopedSession?.pendingApproval).toBe(true);
+    expect(scopedSession?.hostDeviceId).toBe("host-1");
+    expect(scopedSession?.viewers[0]?.deviceId).toBe("viewer-1");
+    expect(scopedSession?.controllerDeviceId).toBe("viewer-1");
+    expect(scopedSession?.capabilities.remoteInput).toBe(true);
   });
 
   it("keeps P2P under 100ms and falls back to TURN when degraded", async () => {

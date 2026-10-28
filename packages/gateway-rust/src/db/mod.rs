@@ -29,3 +29,9 @@ pub fn migrate_database(connection: &Connection) -> Result<(), MigrationError> {
     })?;
     Ok(())
 }
+
+pub mod schema;
+
+pub mod sqlite_shim;
+
+pub mod index;

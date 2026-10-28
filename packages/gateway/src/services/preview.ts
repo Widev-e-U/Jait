@@ -137,6 +137,7 @@ export class PreviewService {
   private readonly sessions = new Map<string, InternalPreviewSession>();
   private nextLogId = 1;
   private readonly runner: PreviewRunner;
+  private readonly restartingSessions = new Map<string, Promise<PreviewSession | null>>();
   private readonly startingSessions = new Map<string, Promise<PreviewSession>>();
   private devToolsRevisions = new Map<string, number>();
   private _onSessionChanged: ((session: PreviewSession) => void) | null = null;
@@ -310,14 +311,50 @@ export class PreviewService {
     }
   }
 
+  /** Release an idle agent browser while retaining its last page for chat recovery. */
+  async suspendIdleAgentBrowser(browserId: string): Promise<boolean> {
+    const session = [...this.sessions.values()].find((item) => item.browserId === browserId && item.origin === "agent");
+    const browser = this.surfaceRegistry.getSurface(browserId) as BrowserSurface | undefined;
+    if (!session || session.terminating || !browser || browser.state !== "running") return false;
+    const url = (await browser.inspect()).snapshot.url;
+    if (!/^https?:\/\//i.test(url) || this.sessions.get(session.sessionId) !== session || session.terminating) return false;
+    session.target = url;
+    await this.surfaceRegistry.stopSurface(browserId, "browser idle timeout");
+    if (this.sessions.get(session.sessionId) === session) {
+      session.status = "stopped";
+      session.url = null;
+      session.remoteBrowser = null;
+      this.notifyChanged(session);
+    }
+    return true;
+  }
+
   async restart(sessionId: string): Promise<PreviewSession | null> {
+    const pending = this.restartingSessions.get(sessionId);
+    if (pending) return pending;
+    const operation = this.restartSession(sessionId);
+    this.restartingSessions.set(sessionId, operation);
+    try { return await operation; }
+    finally { if (this.restartingSessions.get(sessionId) === operation) this.restartingSessions.delete(sessionId); }
+  }
+
+  private async restartSession(sessionId: string): Promise<PreviewSession | null> {
     const existing = this.sessions.get(sessionId);
     if (!existing) return null;
     if (existing.origin === "agent") {
       const shared = existing.sharedWithAgent;
+      const previous = existing.browserId ? this.surfaceRegistry.getSurface(existing.browserId) as BrowserSurface | undefined : undefined;
+      const currentUrl = previous?.state === "running" ? (await previous.inspect()).snapshot.url : existing.target;
+      if (!currentUrl || !/^https?:\/\//i.test(currentUrl)) throw new Error("Cannot restart the browser without a current HTTP/HTTPS page. Open a URL first.");
       await this.stop(sessionId);
-      const browser = await this.surfaceRegistry.startSurface("browser", existing.browserId!, { sessionId, projectRoot: existing.projectRoot ?? process.cwd() });
-      this.attachAgentBrowser(sessionId, browser as BrowserSurface, existing.projectRoot ?? undefined, shared);
+      const browser = await this.surfaceRegistry.startSurface("browser", existing.browserId!, { sessionId, projectRoot: existing.projectRoot ?? process.cwd(), requireLiveView: true }) as BrowserSurface;
+      try {
+        await browser.navigate(currentUrl);
+        this.attachAgentBrowser(sessionId, browser, existing.projectRoot ?? undefined, shared);
+      } catch (error) {
+        await this.surfaceRegistry.stopSurface(browser.id, "browser-restart-failed").catch(() => {});
+        throw error;
+      }
       return this.get(sessionId);
     }
     return this.start({

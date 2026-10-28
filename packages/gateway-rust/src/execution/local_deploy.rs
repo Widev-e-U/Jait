@@ -9,10 +9,10 @@ use std::{
     path::{Path, PathBuf},
     process::Stdio,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::{process::Command, task::JoinHandle};
 
@@ -125,9 +125,24 @@ pub fn verification_steps(root: &Path) -> Result<Vec<Step>> {
         ),
     ])
 }
-/// Explicit local deployment exception; the default policy continues to run every gate.
+/// Compatibility policy for callers that require all non-E2E gates.
 pub fn verification_steps_for(root: &Path, skip_e2e: bool) -> Result<Vec<Step>> {
+    verification_steps_with_policy(root, skip_e2e, false)
+}
+pub fn verification_steps_with_policy(
+    root: &Path,
+    skip_e2e: bool,
+    skip_tests: bool,
+) -> Result<Vec<Step>> {
     let mut steps = verification_steps(root)?;
+    if skip_tests {
+        steps.retain(|step| {
+            !matches!(
+                step.id.as_str(),
+                "unit-tests" | "workflow-tests" | "browser-tools" | "rust-migration"
+            )
+        });
+    }
     if skip_e2e {
         steps.retain(|step| !matches!(step.id.as_str(), "web-e2e" | "web-ui"));
     }
@@ -148,6 +163,9 @@ pub struct Proof {
 pub trait VerificationHost {
     async fn fingerprint(&mut self) -> Result<String>;
     async fn run(&mut self, step: &Step) -> Result<()>;
+    async fn validate_inputs(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 pub async fn verify(host: &mut impl VerificationHost, steps: &[Step]) -> Result<Proof> {
     let before = host.fingerprint().await?;
@@ -162,6 +180,7 @@ pub async fn verify(host: &mut impl VerificationHost, steps: &[Step]) -> Result<
     if host.fingerprint().await? != before {
         return Err("Verified source/build changed during checks; refusing deployment".into());
     }
+    host.validate_inputs().await?;
     Ok(Proof {
         fingerprint: before,
         checks,
@@ -192,16 +211,28 @@ fn err(error: impl std::fmt::Display) -> String {
 
 /// Hash path, permissions and bytes, matching the launcher, without following symlinks.
 pub fn tree_digest(root: &Path) -> Result<String> {
-    fn collect(root: &Path, dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    digest_tree(root, false)
+}
+
+fn digest_tree(root: &Path, dependencies: bool) -> Result<String> {
+    fn collect(
+        root: &Path,
+        dir: &Path,
+        files: &mut Vec<PathBuf>,
+        dependencies: bool,
+    ) -> Result<()> {
         for entry in fs::read_dir(dir).map_err(err)? {
             let entry = entry.map_err(err)?;
             let name = entry.file_name();
             let name = name.to_str().ok_or("Non-UTF8 deployment filename")?;
-            if [".git", ".jait", "node_modules"].contains(&name) || name.ends_with(".tsbuildinfo") {
+            if [".git", ".jait"].contains(&name)
+                || (!dependencies && name == "node_modules")
+                || name.ends_with(".tsbuildinfo")
+            {
                 continue;
             }
             if entry.file_type().map_err(err)?.is_dir() {
-                collect(root, &entry.path(), files)?;
+                collect(root, &entry.path(), files, dependencies)?;
             } else {
                 files.push(entry.path().strip_prefix(root).map_err(err)?.to_owned());
             }
@@ -209,7 +240,7 @@ pub fn tree_digest(root: &Path) -> Result<String> {
         Ok(())
     }
     let mut files = Vec::new();
-    collect(root, root, &mut files)?;
+    collect(root, root, &mut files, dependencies)?;
     files.sort_by(|a, b| {
         // JavaScript sorts UTF-16 code units.
         a.to_str()
@@ -230,6 +261,18 @@ pub fn tree_digest(root: &Path) -> Result<String> {
             .map_err(err)?,
         );
         if stat.is_symlink() {
+            if dependencies {
+                let target = fs::canonicalize(&full).map_err(err)?;
+                let relative = target
+                    .strip_prefix(root)
+                    .map_err(|_| "External symlink prevents verification reuse")?;
+                if relative.components().any(|part| {
+                    let name = part.as_os_str().to_string_lossy();
+                    name == ".git" || name == ".jait" || name.ends_with(".tsbuildinfo")
+                }) {
+                    return Err("Symlink to unhashed inputs prevents verification reuse".into());
+                }
+            }
             hash.update(
                 fs::read_link(full)
                     .map_err(err)?
@@ -295,6 +338,8 @@ pub fn override_unit(argv: &[String], entry: &str) -> Result<String> {
 pub struct Plan {
     #[serde(default)]
     pub skip_e2e: bool,
+    #[serde(default)]
+    pub skip_tests: bool,
     pub artifact_root: PathBuf,
     pub previous_argv: Vec<String>,
     pub unit: String,
@@ -348,7 +393,7 @@ pub fn validate_plan(plan: &Plan, plan_path: &Path, home: &Path) -> Result<()> {
     }
     validate_proof(
         &plan.proof,
-        &verification_steps_for(&plan.runtime, plan.skip_e2e)?,
+        &verification_steps_with_policy(&plan.runtime, plan.skip_e2e, plan.skip_tests)?,
     )?;
     if !valid_hash(&plan.runtime_hash) || plan.runtime_hash != plan.proof.fingerprint {
         return Err("Runtime is not bound to verification evidence".into());
@@ -507,12 +552,66 @@ async fn run_logged_cancellable(
     outcome
 }
 
+// Only deterministic, local checks may reuse a pass. Guards and browser checks
+// observe external/runtime state and always run again.
+fn resumable(step: &Step) -> bool {
+    matches!(
+        step.id.as_str(),
+        "typecheck" | "unit-tests" | "lint" | "rust-migration"
+    )
+}
+#[derive(Clone, Serialize, Deserialize)]
+struct SavedPasses {
+    version: u8,
+    key: String,
+    completed_at: u64,
+    run: PathBuf,
+    checks: Vec<Check>,
+}
+#[derive(Clone)]
+struct Resume {
+    key: String,
+    context: String,
+    saved: Option<SavedPasses>,
+    completed: Arc<Mutex<Vec<Step>>>,
+}
+fn now_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+fn resume_key(root: &Path, context: &str) -> Result<String> {
+    let mut hash = Sha256::new();
+    hash.update(b"jait-verification-resume-v1\0");
+    hash.update(context);
+    hash.update(digest_tree(root, true)?);
+    Ok(hex::encode(hash.finalize()))
+}
+impl Resume {
+    fn reused(&self, step: &Step) -> Option<&SavedPasses> {
+        self.saved.as_ref().filter(|saved| {
+            resumable(step)
+                && saved
+                    .checks
+                    .iter()
+                    .any(|check| check.passed && check.step == *step)
+        })
+    }
+    fn record(&self, step: &Step) {
+        if resumable(step) {
+            self.completed.lock().unwrap().push(step.clone());
+        }
+    }
+}
+
 pub struct FilesystemVerificationHost {
     pub root: PathBuf,
     pub logs: PathBuf,
     cancel: Cancel,
     pending: Vec<Step>,
     running: BTreeMap<String, JoinHandle<Result<()>>>,
+    resume: Option<Resume>,
 }
 impl FilesystemVerificationHost {
     /// Prefetched stages start only after the preflight pair has finished, so the
@@ -529,7 +628,98 @@ impl FilesystemVerificationHost {
             cancel: Cancel::default(),
             pending,
             running: BTreeMap::new(),
+            resume: None,
         }
+    }
+    /// The launcher supplies tool/environment identity after frozen installation.
+    /// Missing, corrupt or unsupported context disables reuse, never verification.
+    pub fn enable_resume(&mut self) {
+        let setup = || -> Result<Resume> {
+            let value: serde_json::Value = serde_json::from_slice(
+                &fs::read(self.root.join(".jait/verification-context.json")).map_err(err)?,
+            )
+            .map_err(err)?;
+            let context = value["key"]
+                .as_str()
+                .filter(|key| valid_hash(key))
+                .ok_or("Missing verification context")?
+                .to_owned();
+            let key = resume_key(&self.root, &context)?;
+            let saved: Option<SavedPasses> = if value["fresh"] == true {
+                None
+            } else {
+                fs::read(self.root.join(".jait/verification-passes.json"))
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice::<SavedPasses>(&bytes).ok())
+                    .filter(|saved| {
+                        saved.version == 1
+                            && saved.key == key
+                            && saved.completed_at <= now_seconds()
+                            && now_seconds() - saved.completed_at < 24 * 60 * 60
+                    })
+            };
+            Ok(Resume {
+                key,
+                context,
+                saved,
+                completed: Arc::default(),
+            })
+        };
+        match setup() {
+            Ok(resume) => self.resume = Some(resume),
+            Err(error) => eprintln!("[local-deploy] Verification reuse unavailable: {error}"),
+        }
+    }
+    /// Called after all subprocesses drain, including on a failed attempt. A
+    /// changing source/dependency tree cannot publish reusable partial success.
+    pub fn save_passes(&self) -> Result<()> {
+        let Some(resume) = &self.resume else {
+            return Ok(());
+        };
+        if resume_key(&self.root, &resume.context)? != resume.key {
+            eprintln!("[local-deploy] Inputs changed; successful stages will not be reused");
+            return Ok(());
+        }
+        let mut checks = resume
+            .saved
+            .as_ref()
+            .map(|saved| saved.checks.clone())
+            .unwrap_or_default();
+        for step in resume.completed.lock().unwrap().iter() {
+            checks.retain(|check| check.step.id != step.id);
+            checks.push(Check {
+                step: step.clone(),
+                passed: true,
+            });
+        }
+        let saved = SavedPasses {
+            version: 1,
+            key: resume.key.clone(),
+            completed_at: resume
+                .saved
+                .as_ref()
+                .map_or_else(now_seconds, |saved| saved.completed_at),
+            run: self.logs.clone(),
+            checks,
+        };
+        let path = self.root.join(".jait/verification-passes.json");
+        let pending = path.with_extension("pending");
+        fs::write(&pending, serde_json::to_vec(&saved).map_err(err)?).map_err(err)?;
+        fs::rename(pending, path).map_err(err)
+    }
+    fn reuse(&self, step: &Step) -> Result<bool> {
+        let Some(saved) = self.resume.as_ref().and_then(|resume| resume.reused(step)) else {
+            return Ok(false);
+        };
+        let message = format!(
+            "[local-deploy] {} reused successful verification from {}; key {}\n",
+            step.id,
+            saved.run.display(),
+            saved.key
+        );
+        eprint!("{message}");
+        fs::write(self.log_path(step), message).map_err(err)?;
+        Ok(true)
     }
     fn log_path(&self, step: &Step) -> PathBuf {
         self.logs.join(format!("{}.log", step.id))
@@ -549,7 +739,12 @@ impl FilesystemVerificationHost {
                 .is_some_and(|handle| !handle.is_finished());
         let mut previous_browser = None;
         for step in std::mem::take(&mut self.pending) {
-            if step.id == current {
+            if step.id == current
+                || self
+                    .resume
+                    .as_ref()
+                    .is_some_and(|resume| resume.reused(&step).is_some())
+            {
                 continue;
             }
             let browser = matches!(step.id.as_str(), "web-e2e" | "web-ui");
@@ -582,6 +777,8 @@ impl FilesystemVerificationHost {
                 self.cancel.clone(),
             );
             let timeout = verification_timeout(&step.id);
+            let receipt = self.resume.clone();
+            let completed_step = step.clone();
             self.running.insert(
                 step.id.clone(),
                 tokio::spawn(async move {
@@ -593,6 +790,11 @@ impl FilesystemVerificationHost {
                     let result =
                         run_logged_cancellable(&command, &args, &root, &log, timeout, Some(cancel))
                             .await;
+                    if result.is_ok()
+                        && let Some(receipt) = receipt
+                    {
+                        receipt.record(&completed_step);
+                    }
                     if let Some(completion) = completion {
                         let _ = completion.send(result.is_ok());
                     }
@@ -608,12 +810,28 @@ impl Drop for FilesystemVerificationHost {
     }
 }
 impl VerificationHost for FilesystemVerificationHost {
+    async fn validate_inputs(&mut self) -> Result<()> {
+        if let Some(resume) = &self.resume
+            && resume_key(&self.root, &resume.context)? != resume.key
+        {
+            return Err("Verification inputs changed during checks; refusing deployment".into());
+        }
+        Ok(())
+    }
     async fn fingerprint(&mut self) -> Result<String> {
         tree_digest(&self.root)
     }
     async fn run(&mut self, step: &Step) -> Result<()> {
         self.start_prefetch(&step.id);
-        let result = if let Some(handle) = self.running.remove(&step.id) {
+        let result = if let Err(error) = self.reuse(step) {
+            Err(error)
+        } else if self
+            .resume
+            .as_ref()
+            .is_some_and(|resume| resume.reused(step).is_some())
+        {
+            Ok(())
+        } else if let Some(handle) = self.running.remove(&step.id) {
             handle
                 .await
                 .map_err(|error| format!("{} stage aborted: {error}", step.id))
@@ -634,6 +852,12 @@ impl VerificationHost for FilesystemVerificationHost {
             )
             .await
         };
+        if result.is_ok()
+            && let Some(resume) = &self.resume
+            && resume.reused(step).is_none()
+        {
+            resume.record(step);
+        }
         if result.is_err() {
             // The CLI exits immediately on failure. Keep its runtime alive until
             // every prefetched stage has torn down its entire process group.

@@ -118,12 +118,13 @@ function JobRow({
               )}
             </div>
             {job.prompt && (
-              <div
-                className="mt-0.5 hidden max-w-[28rem] truncate text-xs italic text-muted-foreground xl:block"
-                title={job.prompt}
-              >
-                "{job.prompt}"
-              </div>
+              <TooltipHint content={job.prompt}>
+                <div
+                  className="mt-0.5 hidden max-w-[28rem] truncate text-xs italic text-muted-foreground xl:block"
+                >
+                  "{job.prompt}"
+                </div>
+              </TooltipHint>
             )}
           </div>
         </div>
@@ -143,12 +144,13 @@ function JobRow({
       {/* Next run */}
       <td className="hidden whitespace-nowrap px-3 py-2 align-middle sm:table-cell">
         {nextRun ? (
-          <span
-            className="text-xs text-muted-foreground"
-            title={`Next run: ${nextRun.toLocaleString()}`}
-          >
-            {formatRelativeTime(nextRun)}
-          </span>
+          <TooltipHint content={`Next run: ${nextRun.toLocaleString()}`}>
+            <span
+              className="text-xs text-muted-foreground"
+            >
+              {formatRelativeTime(nextRun)}
+            </span>
+          </TooltipHint>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
         )}
@@ -176,12 +178,13 @@ function JobRow({
               {recentRun.status === 'running' && 'Running'}
             </div>
             {recentRun.started_at && (
-              <div
-                className="mt-0.5 text-xs text-muted-foreground"
-                title={new Date(recentRun.started_at).toLocaleString()}
-              >
-                {formatTimeAgo(recentRun.started_at)}
-              </div>
+              <TooltipHint content={new Date(recentRun.started_at).toLocaleString()}>
+                <div
+                  className="mt-0.5 text-xs text-muted-foreground"
+                >
+                  {formatTimeAgo(recentRun.started_at)}
+                </div>
+              </TooltipHint>
             )}
           </div>
         ) : (

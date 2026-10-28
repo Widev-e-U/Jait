@@ -1,4 +1,5 @@
 pub mod calendar;
+pub mod command_output_filters;
 pub mod conversation;
 pub mod list_preview;
 
@@ -63,6 +64,8 @@ pub mod registry;
 
 pub mod team_chat;
 
+pub mod project_message;
+
 pub mod meta_tools;
 
 pub mod messenger;
@@ -90,3 +93,33 @@ pub mod persona_agents;
 pub mod agent_github;
 
 pub mod sandbox_background_terminal;
+
+pub mod email_tools;
+
+pub mod channel_tools;
+
+pub mod os_tools;
+pub mod preview_tools;
+pub mod redeploy_tools;
+pub mod sandbox_tools;
+pub mod screen_share_tools;
+pub mod screenshot_tools;
+pub mod skill_tools;
+pub mod ssh_tools;
+pub mod terminal_tools;
+pub mod thread_tools;
+
+pub mod homeassistant_tools;
+
+pub mod computer_tools;
+
+pub mod browser_tools;
+
+pub mod os_control_tools;
+pub mod elevated_tools;
+pub mod project_tools;
+pub mod contracts;
+pub mod mcp_bridge;
+pub mod agent_tools;
+pub mod agent_acp_runner;
+pub mod index;

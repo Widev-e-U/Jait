@@ -12,6 +12,7 @@ import { getPersonalChatNodeId, chatNotificationLink, notificationPreview } from
 import { Buffer } from "node:buffer";
 import { createHash, randomUUID } from "node:crypto";
 import { hostname } from "node:os";
+import { cliSessionIdle } from "../providers/session-idle.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { inferContextWindow, type AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
@@ -1750,7 +1751,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
-  | { type: "request"; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
+  | { type: "request"; turnId?: string; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -3525,7 +3526,10 @@ export function registerChatRoutes(
 
     await settlePendingCliSessionStart(sessionId);
     const cached = activeCliSessions.get(sessionId);
-    if (cached) {
+    if (cached && cached.provider.hasSession?.(cached.providerSessionId) === false) {
+      activeCliSessions.delete(sessionId);
+    }
+    if (cached && activeCliSessions.has(sessionId)) {
       // Already warm for these settings, or holding a real conversation we must
       // not restart. Either way the turn path handles it.
       // `workingDirectory` is only set by this route, so a session started by a
@@ -3721,6 +3725,8 @@ export function registerChatRoutes(
         return reply.status(202).send({ ok: true, skipped: "loop-changed" });
       }
     }
+
+    if (!systemNotification && !isQueuedDrainRequest) cliSessionIdle.recordUserMessage(sessionId);
 
     // A direct user reply releases a loop's explicit question checkpoint.
     // Paused loops require an explicit resume and never restart on ordinary chat.
@@ -3963,10 +3969,11 @@ export function registerChatRoutes(
     // The in-memory activeStreams set disappears on process death. Persist a
     // compact marker before recording the turn so startup can distinguish an
     // interrupted run from a normally completed chat and resume it.
+    const activeTurnId = randomUUID();
     if (sessionStateService) {
       const activeTurn: DurableActiveTurn = {
         personaAgentId: personaProfile?.id ?? null,
-        turnId: randomUUID(),
+        turnId: activeTurnId,
         startedAt: new Date().toISOString(),
         mode: chatMode,
         responseStyle,
@@ -4245,6 +4252,7 @@ export function registerChatRoutes(
     // `request` push — the gateway is the single source for turn boundaries.
     const requestEvent: StreamEvent = {
       type: "request",
+      turnId: activeTurnId,
       ...(persona ? { persona } : {}),
       content,
       ...(queuedMessageId ? { queuedMessageId } : {}),
@@ -4286,7 +4294,7 @@ export function registerChatRoutes(
       ?? (requestProvider === "jait" && config.llmProvider === "openai" ? "OpenAI" : "Ollama");
 
     // Create steering controller for this session
-    const steering = new SteeringController();
+    const steering = new SteeringController(activeTurnId);
     sessionSteeringControllers.set(sessionId, steering);
     unregisterInterventionResume = interventionRunResumeRegistry.registerChatSession(sessionId, (message, options) => {
       if (!activeStreams.has(sessionId)) return { status: "not-running" as const };
@@ -4435,6 +4443,7 @@ export function registerChatRoutes(
 
         if (
           cachedCliSession
+          && cachedCliSession.provider.hasSession?.(cachedCliSession.providerSessionId) !== false
           && (cachedCliSession.awaitingFirstTurn || cachedCliSession.personaFingerprint === personaFingerprint)
           && cachedCliSession.providerId === requestProvider
           && cachedCliSession.runtimeMode === runtimeMode
@@ -5331,6 +5340,8 @@ export function registerChatRoutes(
             steering,
           ), streamAbort.signal);
         } finally {
+          // The model loop has ended; persistence/compaction is not a steerable turn.
+          if (sessionSteeringControllers.get(sessionId) === steering) sessionSteeringControllers.delete(sessionId);
           if (injectedMemoryMessage) {
             const index = history.indexOf(injectedMemoryMessage);
             if (index >= 0) history.splice(index, 1);
@@ -6239,6 +6250,7 @@ export function registerChatRoutes(
         type: "snapshot",
         messages: snapshotMessages,
         streaming: isStreaming,
+        turnId: sessionSteeringControllers.get(sessionId)?.turnId,
         seq: sessionStreamSeq.get(sessionId) ?? 0,
         total,
         hasMore,
@@ -6604,25 +6616,34 @@ export function registerChatRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message is required" });
     }
 
-    if (!activeStreams.has(sessionId)) {
+    if (!activeStreams.has(sessionId) || sessionAbortControllers.get(sessionId)?.signal.aborted) {
       return reply.status(409).send({ error: "CONFLICT", details: "No active stream for this session — steering only works during streaming" });
     }
 
     const controller = sessionSteeringControllers.get(sessionId);
     if (!controller) {
-      return reply.status(404).send({ error: "NOT_FOUND", details: "No steering controller for this session" });
+      return reply.status(409).send({ error: "CONFLICT", details: "No active turn for this session" });
+    }
+
+    const expectedTurnId = body["expectedTurnId"];
+    if (expectedTurnId !== undefined && (typeof expectedTurnId !== "string" || !expectedTurnId.trim())) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "expectedTurnId must be a non-empty string" });
+    }
+    if (expectedTurnId !== undefined && expectedTurnId !== controller.turnId) {
+      return reply.status(409).send({ error: "CONFLICT", details: "Active turn does not match expectedTurnId" });
     }
 
     const meta: SteeringMessageMeta = {
       ...(displayContent ? { displayContent } : {}),
       queuedMessageId,
     };
+    cliSessionIdle.recordUserMessage(sessionId);
     controller.steer(message, meta);
     accumulateSteering(sessionId, message, displayContent);
     // `deferred` tells the client this is accepted-but-not-yet-injected: the
     // message must stay rendered as queued until the loop's `steering` event
     // arrives after loop consumption or provider acknowledgement.
-    return { ok: true, steered: true, deferred: true, queuedMessageId };
+    return { ok: true, steered: true, deferred: true, queuedMessageId, turnId: controller.turnId };
   });
 
   // ══ GET /api/sessions/:sessionId/plan — Get pending plan ═══════════

@@ -100,3 +100,50 @@ pub mod chat_loops;
 pub mod thread_review_sync;
 
 pub mod provider_updates;
+
+pub mod agent_github_port;
+
+pub mod agent_github_apps;
+
+pub mod agent_github_challenge;
+
+pub mod opencode_go_fetch;
+
+pub mod screen_share;
+pub mod screen_share_signaling;
+
+pub mod live_view_manager;
+
+pub mod database_retention;
+
+pub mod disk_janitor;
+
+pub mod maintenance;
+
+pub mod mobile_push;
+
+pub mod messenger_service;
+
+pub mod primary_link;
+
+pub mod preview_runner;
+
+pub mod preview_process;
+
+pub mod thread_router;
+
+pub mod project_search;
+
+pub mod project_watcher;
+
+pub mod provider_accounts;
+
+pub mod provider_usage;
+
+pub mod jait_llm;
+
+pub mod git_forge;
+
+pub mod git_forge_http;
+
+pub mod github_pull_requests;

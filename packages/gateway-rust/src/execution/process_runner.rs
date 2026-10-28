@@ -20,6 +20,22 @@ use tokio::{
     sync::{Notify, Semaphore},
 };
 
+/// Maximum number of `spawn` attempts for transient kernel refusals.
+const SPAWN_ATTEMPTS: u32 = 8;
+
+/// Transient refusals that a short bounded retry of the unchanged command resolves.
+#[cfg(unix)]
+fn is_transient_spawn_error(error: &io::Error) -> bool {
+    // ETXTBSY: the executable is momentarily open for writing, e.g. a script that was just
+    // written by a concurrent task. EAGAIN: the kernel briefly refused the fork.
+    matches!(error.raw_os_error(), Some(26) | Some(11))
+}
+
+#[cfg(not(unix))]
+fn is_transient_spawn_error(_error: &io::Error) -> bool {
+    false
+}
+
 #[derive(Clone, Debug)]
 pub struct ProcessRequest {
     pub argv: Vec<String>,
@@ -37,6 +53,21 @@ pub struct ProcessResult {
     pub timed_out: bool,
     pub cancelled: bool,
     pub truncated: bool,
+}
+/// Raw stdout/stderr share one byte budget and preserve whitespace.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CapturedProcessResult {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub exit_code: Option<i32>,
+    pub timed_out: bool,
+    pub cancelled: bool,
+    pub truncated: bool,
+}
+struct Completion {
+    display: ProcessResult,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
 }
 #[derive(Default)]
 struct CancellationState {
@@ -80,11 +111,34 @@ impl ProcessPool {
     }
     /// Execute only after the enclosing policy/consent boundary authorizes this exact request.
     /// An aborted future kills the owned child/group; cancellation is checked before spawn.
+    pub async fn run_captured(
+        &self,
+        request: ProcessRequest,
+        cancellation: ProcessCancellation,
+    ) -> io::Result<CapturedProcessResult> {
+        let result = self.run_inner(request, cancellation, true).await?;
+        Ok(CapturedProcessResult {
+            stdout: result.stdout,
+            stderr: result.stderr,
+            exit_code: result.display.exit_code,
+            timed_out: result.display.timed_out,
+            cancelled: result.display.cancelled,
+            truncated: result.display.truncated,
+        })
+    }
     pub async fn run(
         &self,
         request: ProcessRequest,
         cancellation: ProcessCancellation,
     ) -> io::Result<ProcessResult> {
+        Ok(self.run_inner(request, cancellation, false).await?.display)
+    }
+    async fn run_inner(
+        &self,
+        request: ProcessRequest,
+        cancellation: ProcessCancellation,
+        raw: bool,
+    ) -> io::Result<Completion> {
         if request.argv.is_empty()
             || request.argv[0].is_empty()
             || request.argv.iter().any(|s| s.contains('\0'))
@@ -103,11 +157,25 @@ impl ProcessPool {
             ));
         }
         if cancellation.is_cancelled() {
-            return Ok(empty_result(false, true));
+            return Ok(Completion {
+                display: empty_result(false, true),
+                stdout: vec![],
+                stderr: vec![],
+            });
         }
-        let _permit = self.permits.clone().try_acquire_owned().map_err(|_| {
-            io::Error::new(io::ErrorKind::WouldBlock, "process capacity unavailable")
-        })?;
+        let _permit = tokio::select! {
+            biased;
+            _ = cancellation.wait_cancelled() => {
+                return Ok(Completion {
+                    display: empty_result(false, true),
+                    stdout: vec![],
+                    stderr: vec![],
+                });
+            }
+            permit = self.permits.clone().acquire_owned() => permit.map_err(|_| {
+                io::Error::new(io::ErrorKind::BrokenPipe, "process pool closed")
+            })?,
+        };
         let mut command = Command::new(&request.argv[0]);
         command
             .args(&request.argv[1..])
@@ -128,7 +196,31 @@ impl ProcessPool {
             command.as_std_mut().process_group(0);
         }
         // A command-not-found is returned without platform-dependent error text or argv leakage.
-        let mut child = command.spawn()?;
+        // Spawning is retried a bounded number of times for transient kernel refusals (a freshly
+        // written executable is briefly ETXTBSY while another task still holds it open, and fork
+        // can return EAGAIN under momentary resource pressure). The permit stays held and
+        // cancellation is honoured between attempts, so the bounded contract is unchanged.
+        let mut attempt = 0u32;
+        let mut child = loop {
+            match command.spawn() {
+                Ok(child) => break child,
+                Err(error) if is_transient_spawn_error(&error) && attempt + 1 < SPAWN_ATTEMPTS => {
+                    attempt += 1;
+                    tokio::select! {
+                        biased;
+                        _ = cancellation.wait_cancelled() => {
+                            return Ok(Completion {
+                                display: empty_result(false, true),
+                                stdout: vec![],
+                                stderr: vec![],
+                            });
+                        }
+                        _ = tokio::time::sleep(Duration::from_millis(5 * u64::from(attempt))) => {}
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        };
         #[cfg(unix)]
         let group = OwnedGroup(child.id().expect("spawned child") as i32);
         let stdout = child.stdout.take().expect("piped stdout");
@@ -143,8 +235,8 @@ impl ProcessPool {
         {
             let complete = async {
                 tokio::try_join!(
-                    read_output(stdout, output.clone(), request.output_limit),
-                    read_output(stderr, output.clone(), request.output_limit),
+                    read_output(stdout, output.clone(), request.output_limit, raw, false),
+                    read_output(stderr, output.clone(), request.output_limit, raw, true),
                     async move {
                         if let (Some(mut pipe), Some(input)) = (stdin, request.input) {
                             // EPIPE is normal if the child intentionally closes its input early.
@@ -185,9 +277,9 @@ impl ProcessPool {
             // Reap the direct child before releasing its concurrency permit.
             child.wait().await?.code()
         };
-        let captured = output.lock().unwrap();
+        let mut captured = output.lock().unwrap();
         let text = crate::text::js_trim(&captured.text);
-        Ok(ProcessResult {
+        let display = ProcessResult {
             output: if text.is_empty() {
                 "(no output)".into()
             } else {
@@ -197,6 +289,11 @@ impl ProcessPool {
             timed_out,
             cancelled,
             truncated: captured.truncated,
+        };
+        Ok(Completion {
+            display,
+            stdout: std::mem::take(&mut captured.stdout),
+            stderr: std::mem::take(&mut captured.stderr),
         })
     }
 }
@@ -212,12 +309,16 @@ fn empty_result(timed_out: bool, cancelled: bool) -> ProcessResult {
 #[derive(Default)]
 struct CapturedOutput {
     text: String,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
     truncated: bool,
 }
 async fn read_output(
     mut pipe: impl AsyncRead + Unpin,
     output: Arc<Mutex<CapturedOutput>>,
     limit: usize,
+    raw: bool,
+    stderr: bool,
 ) -> io::Result<()> {
     let mut buffer = [0; 8192];
     loop {
@@ -226,6 +327,17 @@ async fn read_output(
             return Ok(());
         }
         let mut captured = output.lock().unwrap();
+        if raw {
+            let remaining = limit.saturating_sub(captured.stdout.len() + captured.stderr.len());
+            let keep = n.min(remaining);
+            captured.truncated |= keep < n;
+            if stderr {
+                captured.stderr.extend_from_slice(&buffer[..keep]);
+            } else {
+                captured.stdout.extend_from_slice(&buffer[..keep]);
+            }
+            continue;
+        }
         let text = String::from_utf8_lossy(&buffer[..n]);
         // Keep the tail, as terminal completion output does; continue draining to prevent deadlock.
         // Count decoded UTF-8 bytes, so hostile invalid bytes cannot expand beyond the cap.
@@ -264,5 +376,79 @@ impl OwnedGroup {
 impl Drop for OwnedGroup {
     fn drop(&mut self) {
         self.kill();
+    }
+}
+
+#[cfg(all(test, unix))]
+mod captured_tests {
+    use super::*;
+    fn request(script: &str, limit: usize) -> ProcessRequest {
+        ProcessRequest {
+            argv: vec!["/bin/sh".into(), "-c".into(), script.into()],
+            cwd: PathBuf::from("/"),
+            environment: HashMap::new(),
+            input: None,
+            timeout: Duration::from_secs(2),
+            output_limit: limit,
+        }
+    }
+    #[tokio::test]
+    async fn raw_streams_preserve_whitespace_and_legacy_display() {
+        let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
+        let result = pool
+            .run_captured(
+                request("printf '  raw \\t\\n'; printf 'stderr\\n' >&2", 128),
+                ProcessCancellation::default(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.stdout, b"  raw \t\n");
+        assert_eq!(result.stderr, b"stderr\n");
+        assert_eq!(result.exit_code, Some(0));
+        assert!(!result.truncated);
+        let legacy = pool
+            .run(
+                request("printf '  value  \\n'", 128),
+                ProcessCancellation::default(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(legacy.output, "value");
+    }
+    #[tokio::test]
+    async fn raw_streams_share_one_budget_and_honor_cancellation() {
+        let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
+        let result = pool
+            .run_captured(
+                request("printf '%0500d' 0; printf '%0500d' 0 >&2", 128),
+                ProcessCancellation::default(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.stdout.len() + result.stderr.len(), 128);
+        assert!(result.truncated);
+        let cancel = ProcessCancellation::default();
+        cancel.cancel();
+        let result = pool
+            .run_captured(request("exit 99", 128), cancel)
+            .await
+            .unwrap();
+        assert!(result.cancelled);
+        assert_eq!(result.exit_code, None);
+        assert!(result.stdout.is_empty());
+        let mut req = request("sleep 5", 128);
+        req.timeout = Duration::from_millis(40);
+        let result = pool
+            .run_captured(req, ProcessCancellation::default())
+            .await
+            .unwrap();
+        assert!(result.timed_out);
+        assert_eq!(
+            pool.run_captured(request("printf done", 128), ProcessCancellation::default())
+                .await
+                .unwrap()
+                .stdout,
+            b"done"
+        );
     }
 }

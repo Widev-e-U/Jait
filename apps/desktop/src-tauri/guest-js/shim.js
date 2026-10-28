@@ -287,7 +287,7 @@
     var question = String(o.title || 'Share screen?')
       + (o.message ? '\n\n' + String(o.message) : '');
     var accepted = false;
-    try { accepted = window.confirm(question); } catch (e) { accepted = true; }
+    try { accepted = window.confirm(question); } catch (e) { accepted = false; }
     return Promise.resolve({ accepted: !!accepted });
   }
   // the legacy desktop shell's desktopCapturer source list has no Tauri equivalent in the

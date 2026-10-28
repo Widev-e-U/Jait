@@ -8,7 +8,7 @@
 
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { createBrowserInspectTool } from "./browser-tools.js";
+import { createBrowserNavigateTool } from "./browser-tools.js";
 import type { PreviewService } from "../services/preview.js";
 import { formatEllipsedList } from "./list-preview.js";
 
@@ -45,12 +45,13 @@ interface SurfaceStartInput {
   type: string;
   sessionId?: string;
   projectRoot?: string;
+  url?: string;
 }
 
 export function createSurfacesStartTool(registry: SurfaceRegistry, previewService?: PreviewService): ToolDefinition<SurfaceStartInput> {
   return {
     name: "surfaces.start",
-    description: "Start a new surface of the given type (terminal, filesystem, browser)",
+    description: "Start a surface. For a browser, provide an HTTP/HTTPS URL to load immediately.",
     tier: "standard",
     category: "surfaces",
     source: "builtin",
@@ -60,14 +61,16 @@ export function createSurfacesStartTool(registry: SurfaceRegistry, previewServic
         type: { type: "string", description: "Surface type to start", enum: ["terminal", "filesystem", "browser"] },
         sessionId: { type: "string", description: "Session to attach the surface to" },
         projectRoot: { type: "string", description: "Working directory for the surface" },
+        url: { type: "string", description: "Required HTTP/HTTPS URL for a browser surface", minLength: 1, pattern: "\\S" },
       },
       required: ["type"],
+      allOf: [{ if: { properties: { type: { type: "string", enum: ["browser"] } }, required: ["type"] }, then: { required: ["url"] } }],
     },
     async execute(input: SurfaceStartInput, context: ToolContext): Promise<ToolResult> {
       try {
-        if (input.type === "browser" && previewService) {
+        if (input.type === "browser") {
           if (input.sessionId && input.sessionId !== context.sessionId) throw new Error("Open a browser in the current chat.");
-          const result = await createBrowserInspectTool(registry, previewService).execute({}, {
+          const result = await createBrowserNavigateTool(registry, previewService).execute({ url: input.url ?? "" }, {
             ...context, projectRoot: input.projectRoot ?? context.projectRoot,
           });
           const data = result.data as Record<string, unknown> | undefined;

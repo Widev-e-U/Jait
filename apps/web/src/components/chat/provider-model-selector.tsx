@@ -1265,7 +1265,7 @@ export function ProviderModelSelector({
               onLogout={() => { void runProviderAction(entry, 'logout') }}
             >
               <div className="flex min-w-0 items-center">
-                <TooltipHint side="left" content={!entry.isAvailable && entry.reason ? entry.reason : entry.description}>
+                <TooltipHint side="left" content={[entry.label, !entry.isAvailable && entry.reason ? entry.reason : entry.description].filter(Boolean).join(" — ")}>
                 <button
                   type="button"
                   role="option"
@@ -1284,7 +1284,7 @@ export function ProviderModelSelector({
                     : <Icon className="mt-0.5 h-4 w-4 shrink-0" />}
                   <div className="min-w-0 flex-1">
                     <div className={cn('flex min-w-0 items-center gap-1.5 font-medium', isMobile ? 'flex-wrap text-xs' : 'text-sm')}>
-                      <span className="min-w-0 max-w-full truncate" title={entry.label}>{entry.label}</span>
+                      <span className="min-w-0 max-w-full truncate">{entry.label}</span>
                       {!entry.isAvailable && (
                         <span className="flex min-w-0 items-center gap-0.5 truncate text-2xs text-destructive/80">
                           <AlertTriangle className="h-3 w-3" />
@@ -1440,28 +1440,29 @@ export function ProviderModelSelector({
                       className="px-1 py-1.5"
                       style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${virtualRow.start}px)` }}
                     >
-                      <button
-                        type="button"
-                        aria-expanded={!row.collapsed}
-                        onClick={() => toggleSectionCollapsed(row.key)}
-                        title={row.collapsed ? `Expand ${row.label}` : `Collapse ${row.label}`}
-                        className={cn(
-                          'flex w-full items-center gap-2 bg-transparent px-1.5 py-1 text-left transition-colors',
-                          'hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        )}
-                      >
-                        <ChevronDown
-                          aria-hidden="true"
-                          className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', row.collapsed && '-rotate-90')}
-                        />
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
-                          <HeaderIcon className="h-3.5 w-3.5" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{row.label}</span>
-                        <span className="shrink-0 px-1.5 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground">
-                          {row.modelCount}
-                        </span>
-                      </button>
+                      <TooltipHint content={row.collapsed ? `Expand ${row.label}` : `Collapse ${row.label}`}>
+                        <button
+                          type="button"
+                          aria-expanded={!row.collapsed}
+                          onClick={() => toggleSectionCollapsed(row.key)}
+                          className={cn(
+                            'flex w-full items-center gap-2 bg-transparent px-1.5 py-1 text-left transition-colors',
+                            'hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                          )}
+                        >
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', row.collapsed && '-rotate-90')}
+                          />
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center text-foreground">
+                            <HeaderIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{row.label}</span>
+                          <span className="shrink-0 px-1.5 py-0.5 text-3xs font-medium tabular-nums text-muted-foreground">
+                            {row.modelCount}
+                          </span>
+                        </button>
+                      </TooltipHint>
                     </div>
                   )
                 }
@@ -1751,29 +1752,30 @@ function ModelRow({
         {selected && <Check className="h-3.5 w-3.5 text-primary" />}
         {!mobile && <Kbd keys={quickJumpIndex !== null ? [String(quickJumpIndex)] : []} emptyLabel="" />}
         {onToggleFavorite && (
-          <button
-            type="button"
-            data-favorite-toggle="true"
-            aria-label={isFavorite ? `Remove ${formatModelDisplayLabel(model.name)} from favorites` : `Add ${formatModelDisplayLabel(model.name)} to favorites`}
-            aria-pressed={isFavorite}
-            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-            onClick={stopPropagation ? (event) => {
-              event.stopPropagation()
-              event.preventDefault()
-              onToggleFavorite(model)
-            } : () => onToggleFavorite(model)}
-            className={cn(
-              'inline-flex h-6 w-6 items-center justify-center rounded-sm transition-colors',
-              // Hover-reveal is a pointer luxury: on touch the star must always
-              // be visible or favorites cannot be managed at all.
-              mobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-              isFavorite
-                ? 'opacity-100 text-amber-500 hover:text-amber-400'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
-          </button>
+          <TooltipHint content={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
+            <button
+              type="button"
+              data-favorite-toggle="true"
+              aria-label={isFavorite ? `Remove ${formatModelDisplayLabel(model.name)} from favorites` : `Add ${formatModelDisplayLabel(model.name)} to favorites`}
+              aria-pressed={isFavorite}
+              onClick={stopPropagation ? (event) => {
+                event.stopPropagation()
+                event.preventDefault()
+                onToggleFavorite(model)
+              } : () => onToggleFavorite(model)}
+              className={cn(
+                'inline-flex h-6 w-6 items-center justify-center rounded-sm transition-colors',
+                // Hover-reveal is a pointer luxury: on touch the star must always
+                // be visible or favorites cannot be managed at all.
+                mobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                isFavorite
+                  ? 'opacity-100 text-amber-500 hover:text-amber-400'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              <Star className={cn('h-3.5 w-3.5', isFavorite && 'fill-current')} />
+            </button>
+          </TooltipHint>
         )}
       </span>
     </div>

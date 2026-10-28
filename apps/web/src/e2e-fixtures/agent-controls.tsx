@@ -14,6 +14,7 @@ function Harness() {
   const control = useAgentControl({ token: 'fixture' })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [agentsPage, setAgentsPage] = useState(false)
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(false)
   const [viewMode, setViewMode] = useState<'manager' | 'developer'>('manager')
   const mobile = window.innerWidth < 768
   const renderControl = (collapsed: boolean, placement: 'sidebar' | 'header' = 'sidebar') => <AgentControlButton state={control.state}
@@ -30,7 +31,7 @@ function Harness() {
       setShowLoginDialog={noop} setShowProject={noop} setShowProjectEditor={noop} setViewMode={setViewMode}
       setVoiceOverlayOpen={noop} showScreenShare={false} themeMode="system" updateApplying={false}
       updateAwaitingRestart={false} updateInfo={{ hasUpdate: true, latestVersion: '1.2.3', currentVersion: '1.2.2' }} releases={[]} user={{ username: 'Jakob' }} userInitial="J"
-      viewMode={viewMode} voiceAssistant={{}} voiceControlProps={{ wakeWord: { isSupported: true, isListening: false }, toggleWakeWord: noop }}
+      viewMode={viewMode} voiceAssistant={{}} voiceControlProps={{ wakeWord: { isSupported: true, isListening: false }, wakeWordEnabled, toggleWakeWord: () => setWakeWordEnabled(enabled => !enabled), startVoiceSession: noop, canStartVoice: true }}
       voiceOverlayOpen={false} activeProjectTitle={null} />}
     <main className={`flex min-h-0 flex-1 ${mobile ? 'pt-14' : ''}`}>
       {!mobile && <AppNavigationSidebar account={account} currentView="agents" viewMode="manager"

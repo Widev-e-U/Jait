@@ -47,3 +47,36 @@ pub mod store;
 pub mod consent;
 
 pub mod channels;
+
+pub mod agent_github_apps;
+
+pub mod screen_share;
+
+pub mod email;
+
+pub mod project;
+
+pub mod projects;
+
+pub mod threads;
+
+pub mod git;
+
+pub mod repositories;
+
+pub mod plans;
+
+pub mod repo_proposals;
+
+pub mod pull_requests;
+
+pub mod preview;
+
+pub mod network;
+
+pub mod mcp_server;
+pub mod mobile;
+pub mod providers;
+pub mod terminals;
+pub mod browser_devtools;
+pub mod voice;

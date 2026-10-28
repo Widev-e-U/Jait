@@ -10,6 +10,8 @@ serde_json.workspace = true
 uuid.workspace = true
 dirs.workspace = true
 parking_lot.workspace = true
+chrono.workspace = true
+base64.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
 # System clipboard only when the host shell opts in (Wayland/X11 need it at runtime).
 arboard = { version = "3", optional = true }
@@ -17,3 +19,8 @@ arboard = { version = "3", optional = true }
 [features]
 default = []
 clipboard = ["dep:arboard"]
+# Off until the screen-share capture binding and end-to-end control path are complete.
+experimental-computer-control = []
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_LibraryLoader", "Win32_System_Ole", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+image = { version = "0.25", default-features = false, features = ["png"] }

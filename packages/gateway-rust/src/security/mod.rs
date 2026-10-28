@@ -24,3 +24,10 @@ pub mod tool_profiles;
 pub mod consent_executor;
 
 pub mod sandbox_background_process;
+
+pub mod sandbox_manager;
+
+pub mod engines;
+pub mod host_software;
+pub mod protocols;
+pub mod index;

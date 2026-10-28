@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowRight, RefreshCw, Wrench } from 'lucide-react'
 import { apiFetch } from '@/lib/api-fetch'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export interface BrowserAddressBarProps {
   sessionId: string
@@ -78,39 +79,46 @@ export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWith
   return (
     <div className="shrink-0 border-b bg-muted/20 px-1.5 py-1.5 sm:px-3">
       <form data-browser-toolbar className="flex min-w-0 items-center gap-1 sm:gap-1.5" onSubmit={event => { event.preventDefault(); void navigate() }}>
-        <input
-          aria-label="Browser URL"
-          aria-busy={busy}
-          title={sharedWithAgent ? 'Take control to navigate' : 'Enter a URL and press Enter'}
-          type="text"
-          value={value}
-          readOnly={sharedWithAgent}
-          disabled={disabled || busy}
-          spellCheck={false}
-          autoComplete="off"
-          placeholder="Enter a URL"
-          className="h-8 w-0 min-w-0 flex-1 rounded border bg-background px-2 text-base disabled:opacity-50 sm:h-8 sm:text-sm"
-          onFocus={() => { editing.current = !sharedWithAgent }}
-          onBlur={() => { editing.current = false }}
-          onChange={event => { setValue(event.target.value); setError('') }}
-          onKeyDown={event => {
-            if (event.key === 'Escape') { setValue(latestUrl.current); setError(''); event.currentTarget.blur() }
-          }}
-        />
-        <button type="submit" aria-label="Go to URL" title={sharedWithAgent ? 'Take control to navigate' : 'Go to URL'}
-          disabled={disabled || busy || sharedWithAgent || !value.trim()} className="flex h-8 w-8 shrink-0 items-center justify-center rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
-          <ArrowRight className="h-4 w-4" />
-        </button>
-        <button type="button" aria-label="Refresh page" title={sharedWithAgent ? 'Take control to refresh' : 'Refresh page'}
-          disabled={disabled || busy || sharedWithAgent} onClick={() => void navigate(true)}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
-        </button>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-          <button type="button" aria-label="Browser tools" title="Browser tools" aria-expanded={toolsOpen}
-            disabled={disabled} onClick={onToggleTools} className="flex h-8 w-8 shrink-0 items-center justify-center gap-1 rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
-            <Wrench className="h-4 w-4" /><span className="hidden sm:inline">Tools</span>
+        <TooltipHint content={sharedWithAgent ? 'Take control to navigate' : 'Enter a URL and press Enter'}>
+          <input
+            aria-label="Browser URL"
+            aria-busy={busy}
+            type="text"
+            value={value}
+            readOnly={sharedWithAgent}
+            disabled={disabled || busy}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder="Enter a URL"
+            className="h-8 w-0 min-w-0 flex-1 rounded border bg-background px-2 text-base disabled:opacity-50 sm:h-8 sm:text-sm"
+            onFocus={() => { editing.current = !sharedWithAgent }}
+            onBlur={() => { editing.current = false }}
+            onChange={event => { setValue(event.target.value); setError('') }}
+            onKeyDown={event => {
+              if (event.key === 'Escape') { setValue(latestUrl.current); setError(''); event.currentTarget.blur() }
+            }}
+          />
+        </TooltipHint>
+        <TooltipHint content={sharedWithAgent ? 'Take control to navigate' : 'Go to URL'}>
+          <button type="submit" aria-label="Go to URL"
+            disabled={disabled || busy || sharedWithAgent || !value.trim()} className="flex h-8 w-8 shrink-0 items-center justify-center rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
+            <ArrowRight className="h-4 w-4" />
           </button>
+        </TooltipHint>
+        <TooltipHint content={sharedWithAgent ? 'Take control to refresh' : 'Refresh page'}>
+          <button type="button" aria-label="Refresh page"
+            disabled={disabled || busy || sharedWithAgent} onClick={() => void navigate(true)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
+          </button>
+        </TooltipHint>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <TooltipHint content="Browser tools">
+            <button type="button" aria-label="Browser tools" aria-expanded={toolsOpen}
+              disabled={disabled} onClick={onToggleTools} className="flex h-8 w-8 shrink-0 items-center justify-center gap-1 rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50">
+              <Wrench className="h-4 w-4" /><span className="hidden sm:inline">Tools</span>
+            </button>
+          </TooltipHint>
           {controls}
         </div>
       </form>

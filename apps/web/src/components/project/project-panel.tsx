@@ -5963,6 +5963,7 @@ export const ProjectPanel = forwardRef<ProjectPanelHandle, ProjectPanelProps>(fu
       {/* File explorer pane */}
       {showTreeProp && !tabMaximized && !panel.collapsed && (
       <div
+        data-browser-sidebar
         className={cn(
           'border-r bg-background transition-colors flex flex-col overflow-hidden',
           showEditorProp ? 'shrink-0' : 'flex-1 min-w-0',

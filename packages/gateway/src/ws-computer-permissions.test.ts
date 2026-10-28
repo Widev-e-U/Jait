@@ -6,6 +6,10 @@ describe("computer node capability routing", () => {
     expect(nodeCapabilityForTool("computer.session", { action: "start" })).toBe("input");
     expect(nodeCapabilityForTool("computer.act", { action: "click" })).toBe("input");
     expect(nodeCapabilityForTool("computer.observe", {})).toBe("screen");
+    expect(nodeCapabilityForTool("computer.geometry", {})).toBe("input");
+    expect(nodeCapabilityForTool("computer.clipboard.read", {})).toBe("input");
+    expect(nodeCapabilityForTool("computer.clipboard.write", {})).toBe("input");
+    expect(nodeCapabilityForTool("computer.future-action", {})).toBe("input");
     expect(nodeCapabilityForTool("computer.session", { action: "stop" })).toBeUndefined();
   });
 

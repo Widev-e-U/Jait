@@ -26,6 +26,7 @@ import {
 } from './messenger-matrix-runtime.js';
 import {
   messengerCommandSchema,
+  isStatusRoom,
   type MessengerSession,
   type MessengerSnapshot,
   type MessengerRoom,
@@ -454,6 +455,7 @@ class Connection {
           sender: String(
             member?.content?.displayname ?? e.sender ?? 'Unknown',
           ).slice(0, 512),
+          ...(e.sender ? { senderId: e.sender } : {}),
           body: failed
             ? 'Unable to decrypt this message. Restore encrypted history keys for the gateway device.'
             : String(c.body ?? ''),
@@ -474,7 +476,7 @@ class Connection {
             ? {
                 attachment: {
                   url: attachment,
-                  name: String(c.body ?? 'Attachment'),
+                  name: String(typeof c.filename === 'string' ? c.filename : c.body ?? 'Attachment'),
                   mime,
                   image:
                     c.msgtype === 'm.image' &&
@@ -661,6 +663,16 @@ class Connection {
           )?.content.displayname ??
           id;
         room.summary.name = String(room.summary.name).slice(0, 512);
+        const topic = room.states.find((e) => e.type === 'm.room.topic')?.content?.topic;
+        if (typeof topic === 'string') room.summary.topic = topic.slice(0, 512);
+        else delete room.summary.topic;
+        if (isStatusRoom(room.summary)) {
+          room.summary.status = true;
+          room.summary.kind = 'status';
+        } else {
+          delete room.summary.status;
+          if (room.summary.kind === 'status') delete room.summary.kind;
+        }
         room.summary.encrypted = room.states.some(
           (e) => e.type === 'm.room.encryption',
         );

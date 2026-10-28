@@ -19,7 +19,7 @@ import { attentionKey, getPersonalChatNodeId, mergeSavedProjectLayout, resolvePr
 import { shouldSyncProjectSurfaceUi } from "./surfaces/project-ui-sync.js";
 import { createToolRegistry, type ToolRegistryDeps } from "./tools/index.js";
 import { notifySessionsOfGatewayRestart } from "./routes/chat.js";
-import { createRemoteToolExecutor, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
+import { createRemoteToolExecutor, resolveCallNodeTarget, resolveRemoteNodeForSession } from "./tools/remote-executor.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
 import { MemoryEngine } from "./memory/service.js";
@@ -30,6 +30,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { version: GATEWAY_VERSION } = require("../package.json") as { version: string };
+
 import { ConsentManager } from "./security/consent-manager.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
@@ -47,6 +48,8 @@ import { DeviceRegistry } from "./services/device-registry.js";
 import { MobilePushService } from "./services/mobile-push.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
+import { ComputerControlSessionService } from "./services/computer-control.js";
+import { ScreenShareControlCoordinator } from "./services/screen-share-control.js";
 import { ThreadService } from "./services/threads.js";
 import { RepositoryService } from "./services/repositories.js";
 import { PlanService } from "./services/plans.js";
@@ -484,6 +487,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // Tool registry — Sprint 3 + Sprint 10
   const voiceService = new VoiceService();
   const screenShare = new ScreenShareService();
+  const computerSessions = new ComputerControlSessionService();
+  const screenShareControl = new ScreenShareControlCoordinator(screenShare, computerSessions, ws);
   // Late-bound Fastify app: the registry is built before createServer() runs,
   // so tools that inject into their own HTTP API resolve it lazily.
   let httpAppRef: import("fastify").FastifyInstance | undefined;
@@ -499,6 +504,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     hooks,
     voiceService,
     screenShare,
+    computerSessions,
+    screenShareControl,
     ws,
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
@@ -701,14 +708,30 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       : undefined;
     const projectPath = projectRecord?.rootPath ?? sessionRecord?.projectPath;
     const personalNodeId = getPersonalChatNodeId(sessionRecord);
+
+    // Per-call device targeting: a chat whose project lives on this machine can
+    // still hand a terminal/filesystem call to another connected device (e.g.
+    // the user's Windows PC) by passing nodeId. The target must be a node the
+    // caller may use, and gateway-only tools are rejected rather than silently
+    // running locally.
+    const callTarget = resolveCallNodeTarget(toolName, input);
+    if (callTarget.error) return { ok: false, message: callTarget.error };
+    const remoteTargetId = callTarget.nodeId;
+    const forcesLocal = callTarget.forcesLocal;
+    if (remoteTargetId && !ws.canAccessNode?.(remoteTargetId, context.userId ?? null)) {
+      return { ok: false, message: "The selected node does not belong to this user" };
+    }
+    const effectiveInput = remoteTargetId || forcesLocal ? callTarget.input : input;
     if (personalNodeId && personalNodeId !== "gateway" && !ws.canAccessNode?.(personalNodeId, context.userId ?? null)) {
       return { ok: false, message: "The selected node does not belong to this user" };
     }
     // Keep an explicit device binding even when it is offline. The proxy then
     // reports unavailability instead of executing on another machine.
-    const remoteNodeId = personalNodeId
-      ? personalNodeId === "gateway" ? null : personalNodeId
-      : resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId);
+    const remoteNodeId = remoteTargetId ?? (forcesLocal
+      ? null
+      : personalNodeId
+        ? personalNodeId === "gateway" ? null : personalNodeId
+        : resolveRemoteNodeForSession(ws, projectPath ?? undefined, projectRecord?.nodeId));
     const executor = createRemoteToolExecutor(
       {
         ws,
@@ -716,7 +739,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       },
       remoteNodeId,
     );
-    return executor(toolName, input, personalNodeId && personalNodeId !== "gateway"
+    const runsOffProjectMachine = Boolean(remoteTargetId)
+      || Boolean(personalNodeId && personalNodeId !== "gateway");
+    return executor(toolName, effectiveInput, runsOffProjectMachine
       ? { ...context, projectRoot: "." }
       : context);
   };
@@ -1177,6 +1202,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     voiceService,
     toolExecutor,
     screenShare,
+    screenShareControl,
     threadService,
     repoService,
     planService,
@@ -1391,12 +1417,18 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     console.log(`Screen share start-request relayed for host: ${hostDeviceId}`);
   };
   ws.onScreenShareStop = (sessionId) => {
-    const session = screenShare.stopShare();
+    const existing = screenShare.getSession(sessionId);
+    void screenShareControl.stopForShare(sessionId);
+    if (existing?.nodeId && existing.chatId) void screenShareControl.stopForNode(existing.nodeId, existing.chatId, false);
+    const session = screenShare.stopShare(sessionId);
     if (session) {
       ws.broadcastScreenShareState(session);
       console.log(`Screen share stopped: ${sessionId}`);
     }
   };
+  // Signaling is scoped to the members of one share session so SDP/ICE never
+  // reaches unrelated clients.
+  ws.screenShareSessionLookup = (sessionId) => screenShare.getSession(sessionId) ?? null;
 
   // When a desktop/mobile FsNode registers, auto-claim legacy repos that have
   // no deviceId, are not present on the gateway, and match the node platform.
@@ -1565,9 +1597,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
             console.error(`Failed to stop idle preview browser ${browser.id}:`, err),
           );
         } else {
-          surfaceRegistry.stopSurface(browser.id, "browser idle timeout").catch((err) =>
-            console.error(`Failed to stop idle browser ${browser.id}:`, err),
-          );
+          previewService.suspendIdleAgentBrowser(browser.id).then((suspended) => {
+            if (!suspended) return surfaceRegistry.stopSurface(browser.id, "browser idle timeout");
+          }).catch((err) => console.error(`Failed to stop idle browser ${browser.id}:`, err));
         }
       }
 

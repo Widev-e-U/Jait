@@ -1,0 +1,40 @@
+[
+  {
+    "name": "screen.share",
+    "description": "Connect to a remote device and view its screen, or manage remote screen viewing sessions. Use 'list-devices' to discover connected devices. The response distinguishes the user's local device (the browser they are chatting from — platform 'web') from remote devices (Desktop desktop, mobile, etc.). Only remote devices are valid targets for 'connect'. Use 'connect' with a targetDeviceId to view that device's screen remotely. Use 'disconnect' to end the current viewing session.",
+    "tier": "standard",
+    "category": "screen",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["connect", "disconnect", "list-devices", "start"],
+          "description": "Action to perform. Use 'list-devices' to discover devices, 'connect'/'start' to view a remote screen, 'disconnect' to stop."
+        },
+        "targetDeviceId": {
+          "type": "string",
+          "description": "Device ID to connect to and view its screen. Required for 'connect'."
+        }
+      },
+      "required": ["action"]
+    }
+  },
+  {
+    "name": "screen.capture",
+    "description": "Capture a point-in-time screenshot from active screen source.",
+    "tier": "standard",
+    "category": "screen",
+    "source": "builtin",
+    "parameters": { "type": "object", "properties": {} }
+  },
+  {
+    "name": "screen.record",
+    "description": "Start recording an active screen share session for audit/playback.",
+    "tier": "standard",
+    "category": "screen",
+    "source": "builtin",
+    "parameters": { "type": "object", "properties": {} }
+  }
+]

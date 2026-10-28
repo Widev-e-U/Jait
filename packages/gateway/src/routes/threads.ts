@@ -27,6 +27,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
+import { cliSessionIdle } from "../providers/session-idle.js";
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
@@ -766,7 +767,7 @@ export function registerThreadRoutes(
       }
 
       if (event.type === "session.completed" && threadService.getById(threadId)?.status !== "error") {
-        threadService.markCompleted(threadId);
+        threadService.markCompletedAndClearSession(threadId);
         broadcastThreadStatus(threadId, "completed");
         void drainQueuedThreadMessages();
         void persistThreadDiffStats(threadId);
@@ -1320,6 +1321,9 @@ export function registerThreadRoutes(
     if (refuseWhenHalted(reply, authUser.id, "start-thread")) return;
 
     const recovering = request.headers["x-jait-thread-recovery"] === recoveryToken;
+    if (!recovering && request.headers["x-jait-thread-automatic"] !== recoveryToken) {
+      cliSessionIdle.recordUserMessage(id);
+    }
     const providerId = thread.providerId as ProviderId;
     // Resolve working directory — the stored path may come from a
     // different device/OS (e.g. Windows path on a Linux gateway).
@@ -1528,7 +1532,7 @@ export function registerThreadRoutes(
           const response = await app.inject({
             method: "POST",
             url: `/api/threads/${id}/send`,
-            headers: { authorization: `Bearer ${token}` },
+            headers: { authorization: `Bearer ${token}`, "x-jait-thread-automatic": recoveryToken },
             payload: { message },
           });
           if (response.statusCode >= 400) {
@@ -1905,6 +1909,16 @@ export function registerThreadRoutes(
     const thread = getOwnedThread(id, authUser.id);
     if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (!thread.providerSessionId) {
+      if (thread.status === "completed") {
+        // An expired process is recreated using /start's saved-history replay.
+        const restarted = await app.inject({
+          method: "POST",
+          url: `/api/threads/${id}/start`,
+          headers: request.headers,
+          payload: body,
+        });
+        return reply.status(restarted.statusCode).type("application/json").send(restarted.body);
+      }
       return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
     if (thread.status === "running") {
@@ -1913,6 +1927,8 @@ export function registerThreadRoutes(
 
     const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
+
+    if (request.headers["x-jait-thread-automatic"] !== recoveryToken) cliSessionIdle.recordUserMessage(id);
 
     // A parked turn unsubscribes its terminal event handler. Reattach before
     // resuming so the repaired task can record progress and completion.
@@ -1985,6 +2001,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "CONFLICT", details: "No running thread session to steer" });
     }
 
+    cliSessionIdle.recordUserMessage(id);
     const attempt = await interventionRunResumeRegistry.resumeThread(id, message);
     if (attempt.status === "not-running") {
       return reply.status(409).send({ error: "CONFLICT", details: "No running thread session to steer" });

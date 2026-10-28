@@ -1,0 +1,73 @@
+[
+  {
+    "name": "screenshot.capture",
+    "description": "Capture a headless browser screenshot (PNG) of a URL, local HTML file, or the running dev frontend ('dev') and return the saved PNG path. The image already renders inline in chat; do not call image.view afterward or display the same image again. Use this to visually show the user UI state, designs, or layout issues.",
+    "tier": "standard",
+    "category": "screen",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "URL (http/https), the literal 'dev' (the frontend dev server), or a local HTML file path."
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional output PNG path. Defaults to .jait/shots/screenshot-<timestamp>.png"
+        },
+        "width": {
+          "type": "number",
+          "description": "Viewport width (default 1280)"
+        },
+        "height": {
+          "type": "number",
+          "description": "Viewport height (default 800)"
+        },
+        "mobile": {
+          "type": "boolean",
+          "description": "Pixel-5-ish mobile viewport (393x851, DPR 3)"
+        },
+        "dark": {
+          "type": "boolean",
+          "description": "Emulate prefers-color-scheme: dark"
+        },
+        "fullPage": {
+          "type": "boolean",
+          "description": "Capture the full scrollable page (default true)"
+        },
+        "selector": {
+          "type": "string",
+          "description": "Crop to the first element matching this CSS selector"
+        },
+        "waitMs": {
+          "type": "number",
+          "description": "Extra settle delay in ms after load (default 500)"
+        },
+        "waitForSelector": {
+          "type": "string",
+          "description": "CSS selector to wait for (visible) before capturing"
+        },
+        "click": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "CSS selector to click before capturing"
+          },
+          "description": "Click these elements before capturing (in order)."
+        },
+        "fill": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "'selector:text' pair"
+          },
+          "description": "Fill inputs before capturing. Each item is 'cssSelector:text'."
+        }
+      },
+      "required": [
+        "target"
+      ]
+    }
+  }
+]

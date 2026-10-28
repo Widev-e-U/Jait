@@ -1,0 +1,50 @@
+{
+  "name": "project.message",
+  "displayName": "Message Another Project",
+  "description": "Start a chat in a DIFFERENT Jait project and post a message to it, kicking off a new agent turn there. Use this to hand off work or notify the agent running in another project — e.g. \"go tell the agent in project X that the deploy failed.\" Resolves the target project by projectId or projectRoot (creating it if it doesn't exist yet). When called from a live chat, THAT chat is used: it is assigned to the project and the turn runs in it (queued while the current turn is still streaming) — no new chat is created. Only background callers (cron) create a new chat in the project.",
+  "tier": "standard",
+  "category": "gateway",
+  "source": "builtin",
+  "risk": "medium",
+  "defaultConsentLevel": "once",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "description": "Target project ID. If omitted, projectRoot is used to resolve or create the project."
+      },
+      "projectRoot": {
+        "type": "string",
+        "description": "Absolute folder path of the target project. Used to resolve/create the project when projectId is omitted."
+      },
+      "message": {
+        "type": "string",
+        "description": "Message to post into the chat in the target project — starts an agent turn there."
+      },
+      "title": {
+        "type": "string",
+        "description": "Title for a newly created chat. Ignored when an existing chat is reused (that chat keeps its name)."
+      },
+      "providerId": {
+        "type": "string",
+        "description": "Agent provider for a newly created chat (e.g. 'codex', 'claude-code', 'jait'). Only used when a new chat is created."
+      },
+      "model": {
+        "type": "string",
+        "description": "Model override for a newly created chat. Only used when a new chat is created."
+      },
+      "runtimeMode": {
+        "type": "string",
+        "enum": [
+          "full-access",
+          "supervised"
+        ],
+        "description": "Runtime mode for a newly created chat. Only used when a new chat is created."
+      }
+    },
+    "required": [
+      "message"
+    ]
+  }
+}

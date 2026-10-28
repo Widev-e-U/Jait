@@ -3,7 +3,7 @@ import path from 'node:path'
 import { expect, test } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://127.0.0.1:8100'
-const PROJECT_ROOT = path.resolve(process.cwd(), '../..')
+const PROJECT_ROOT = path.resolve(__dirname, '../..')
 
 test('closing the preview panel releases its live preview session', async ({ page, request }) => {
   test.setTimeout(90_000)
@@ -51,7 +51,7 @@ test('closing the preview panel releases its live preview session', async ({ pag
     localStorage.setItem('jait-gateway-url', gatewayUrl)
     localStorage.setItem('jait-auth-token', authToken)
   }, [API_URL, token] as const)
-  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.goto(`/?projectId=${encodeURIComponent(project.id)}&sessionId=${encodeURIComponent(session.id)}`, { waitUntil: 'domcontentloaded' })
 
   // The preview toggle only exists while the project workspace is open, so
   // open the editor from the same developer toolbar first.

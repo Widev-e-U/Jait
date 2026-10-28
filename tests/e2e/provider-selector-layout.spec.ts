@@ -34,7 +34,8 @@ for (const width of [320, 390, 1280]) {
     await expect(name).toBeVisible()
     await expect.poll(() => name.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     await expect(page.getByText(/^Current:/)).toHaveCount(0)
-    const group = models.getByTitle('Collapse Codex', { exact: true })
+    const group = models.getByRole('button').filter({ hasText: 'Codex' })
+    await expect(group).toHaveAttribute('aria-expanded', 'true')
     await expect(group).toBeVisible()
     expect(await group.evaluate(element => {
       const style = getComputedStyle(element)

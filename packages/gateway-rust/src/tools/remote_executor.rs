@@ -28,6 +28,44 @@ const REMOTE_TOOLS: &[&str] = &[
 fn terminal(name: &str) -> bool {
     matches!(name, "execute" | "terminal.run" | "jait.terminal")
 }
+/// Aliases that mean "run on the gateway machine that hosts this process".
+const LOCAL_NODE_ALIASES: &[&str] = &["gateway", "local", "this"];
+/// Resolve an explicit per-call device target from `nodeId`.
+///
+/// A chat belongs to one project, but a single call may still be aimed at a
+/// different connected device. Gateway-only tools are rejected instead of being
+/// silently executed locally, so a typo cannot look like a successful remote run.
+/// Returning node selection here grants no authority: the caller still passes the
+/// resolved id through the same node-permission check as a session binding.
+pub fn resolve_call_node_target(tool: &str, input: &Value) -> Value {
+    let requested = input
+        .get("nodeId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let Some(node_id) = requested else {
+        return json!({"nodeId": Value::Null, "forcesLocal": false, "input": input});
+    };
+    let mut rest = input.clone();
+    if let Some(object) = rest.as_object_mut() {
+        object.remove("nodeId");
+    }
+    let lower = node_id.to_lowercase();
+    if LOCAL_NODE_ALIASES.contains(&lower.as_str()) {
+        return json!({"nodeId": Value::Null, "forcesLocal": true, "input": rest});
+    }
+    if !REMOTE_TOOLS.contains(&tool) {
+        return json!({
+            "nodeId": Value::Null,
+            "forcesLocal": false,
+            "input": rest,
+            "error": format!(
+                "Tool '{tool}' cannot run on another device. Only terminal and filesystem tools accept a nodeId target."
+            ),
+        });
+    }
+    json!({"nodeId": node_id, "forcesLocal": false, "input": rest})
+}
 pub fn proxy_timeout_ms(name: &str, input: &Value, policy: &TimeoutPolicy) -> f64 {
     if terminal(name) && input["isBackground"] != true {
         policy.resolve(input.get("timeout")).milliseconds + 30_000.0

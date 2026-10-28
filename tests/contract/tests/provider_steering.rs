@@ -189,3 +189,34 @@ fn hidden_completion_guidance_is_delivered_without_entering_chat_history() {
     assert!(!result["events"].to_string().contains(secret));
     assert!(!result["history"].to_string().contains(secret));
 }
+
+#[test]
+fn stale_or_malformed_turn_target_is_rejected_before_provider_delivery() {
+    let result = scenario(
+        json!({"meta":{"steering":{"supported":true}}}),
+        json!([
+            {"message":"stale guidance", "expectedTurnId":"previous-turn"},
+            {"message":"invalid guidance", "expectedTurnId":42},
+            {"message":"blank target", "expectedTurnId":" "},
+            message()
+        ]),
+        1,
+    );
+    assert_done(&result);
+    let responses = result["responses"].as_array().unwrap();
+    assert_eq!(responses[0]["status"], 409);
+    assert_eq!(responses[1]["status"], 400);
+    assert_eq!(responses[2]["status"], 400);
+    assert_eq!(responses[3]["status"], 200);
+    assert!(
+        responses[3]["body"]["turnId"]
+            .as_str()
+            .is_some_and(|id| !id.is_empty())
+    );
+    assert_eq!(rows(&result, "steer").len(), 1);
+    assert_eq!(steering_events(&result).len(), 1);
+    assert_eq!(
+        rows(&result, "steer")[0]["params"]["prompt"][0]["text"],
+        "[STEERING] change direction"
+    );
+}

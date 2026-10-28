@@ -197,6 +197,7 @@ export function NoVncSessionView({
         key={`${src}:${revision}`}
         src={src}
         title={title}
+        allow="clipboard-read; clipboard-write"
         tabIndex={hideControls ? -1 : undefined}
         className={className}
         sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"

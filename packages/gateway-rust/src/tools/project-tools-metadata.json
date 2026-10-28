@@ -1,0 +1,76 @@
+[
+  {
+    "name": "project.create",
+    "description": "Create a project, or return the existing project for a folder when projectRoot is supplied. Projects group chat sessions under a title and an optional filesystem root.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Human readable project title" },
+        "projectRoot": { "type": "string", "description": "Absolute folder that owns the project; reusing an existing folder reuses its project" },
+        "nodeId": { "type": "string", "description": "Node that owns the folder; defaults to the local gateway" },
+        "parentId": { "type": "string", "description": "Optional parent project id" },
+        "instructions": { "type": "string", "description": "Optional instructions shown to agents inside the project" }
+      },
+      "required": ["title"]
+    },
+    "risk": "write",
+    "consent": false
+  },
+  {
+    "name": "project.list",
+    "description": "List active projects owned by the caller, newest activity first, with their root folder and node.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Optional case-insensitive filter over title, root folder and description" },
+        "limit": { "type": "number", "description": "Maximum number of projects to return (1-100, default 20)" }
+      }
+    },
+    "risk": "read",
+    "consent": false
+  },
+  {
+    "name": "project.assign_repository",
+    "description": "Attach a git repository to a project so agents can address it by repository id.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "Project id" },
+        "repositoryId": { "type": "string", "description": "Repository id to attach" }
+      },
+      "required": ["projectId", "repositoryId"]
+    },
+    "risk": "write",
+    "consent": false
+  },
+  {
+    "name": "project.move",
+    "description": "Move a project under a different parent project, or to the project root when parentId is null.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "Project to move" },
+        "parentId": { "type": ["string", "null"], "description": "New parent project id, or null for the top level" },
+        "title": { "type": "string", "description": "Optional new title applied after the move" }
+      },
+      "required": ["projectId"]
+    },
+    "risk": "write",
+    "consent": false
+  },
+  {
+    "name": "project.transfer",
+    "description": "Move a project to a different node and folder. Any repository attachment is cleared because repository ids are node scoped.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string", "description": "Project to transfer" },
+        "nodeId": { "type": "string", "description": "Destination node id" },
+        "targetRootPath": { "type": "string", "description": "Absolute folder on the destination node" }
+      },
+      "required": ["projectId", "nodeId", "targetRootPath"]
+    },
+    "risk": "write",
+    "consent": true
+  }
+]

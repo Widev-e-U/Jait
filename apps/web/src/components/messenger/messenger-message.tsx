@@ -12,6 +12,7 @@ import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
 import { ForwardDialog } from './messenger-forward-dialog'
 import { useMessenger } from './messenger-provider'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 export function MessengerAttachment({ attachment, large = false }: {
   attachment: NonNullable<MessengerMessage['attachment']>
@@ -88,11 +89,13 @@ function ReactionBar({ open, onPick, onSearch, disabled, align }: {
       className="grid h-7 w-7 place-items-center rounded-full text-base leading-none transition hover:scale-110 hover:bg-muted disabled:opacity-40"
     >{emoji}</button>)}
     <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
-    <button
-      type="button" disabled={disabled} aria-label="React to message" title="Search emoji"
-      onClick={onSearch}
-      className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition hover:bg-muted disabled:opacity-40"
-    ><Search className="h-3.5 w-3.5" /></button>
+    <TooltipHint content="Search emoji">
+      <button
+        type="button" disabled={disabled} aria-label="React to message"
+        onClick={onSearch}
+        className="grid h-7 w-7 place-items-center rounded-full text-muted-foreground transition hover:bg-muted disabled:opacity-40"
+      ><Search className="h-3.5 w-3.5" /></button>
+    </TooltipHint>
   </div>
 }
 
@@ -225,7 +228,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           : 'mt-0.5 flex flex-wrap items-center justify-end gap-x-1.5 gap-y-1 text-[10px] leading-4 text-muted-foreground'}>
           {message.edited && <span>Edited</span>}
           {message.pending && <span>Sending…</span>}{message.failed && <span className="text-destructive">Not sent</span>}
-          <time title={new Date(message.timestamp).toLocaleString()} dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+          <TooltipHint content={new Date(message.timestamp).toLocaleString()}><time dateTime={new Date(message.timestamp).toISOString()}>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></TooltipHint>
           {message.own && !message.pending && !message.failed && <MessageReadStatus inline readers={message.readBy ?? []} />}
           <DropdownMenu><DropdownMenuTrigger asChild>
             <button type="button" disabled={unavailable} aria-label="Message options" className="-mr-1 mt-px rounded p-0.5 text-muted-foreground/70 transition hover:bg-background/60 hover:text-muted-foreground disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" /></button>
@@ -245,12 +248,12 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
           (message.own ? 'justify-end pr-1 ' : 'justify-start pl-1 ') +
           (pillsOverlap ? '-mt-3 ' : 'mt-1 ')}
       >
-        {(message.reactions ?? []).map(reaction => <button
-          key={reaction.key}
+        {(message.reactions ?? []).map(reaction => <TooltipHint key={reaction.key} content={reaction.senders.join(', ')}><button
+
           type="button"
           disabled={unavailable || !store.react}
           aria-pressed={reaction.own}
-          title={reaction.senders.join(', ')}
+          aria-label={`${reaction.key} reaction${reaction.count === 1 ? '' : 's'}${reaction.senders.length ? ` by ${reaction.senders.join(', ')}` : ''}`}
           onClick={() => react(reaction.key)}
           className={'inline-flex h-6 shrink-0 select-none items-center justify-center rounded-full border text-center text-[11px] shadow-sm backdrop-blur transition active:scale-95 ' +
             (reaction.count > 1 ? 'min-w-6 gap-1 px-1.5 ' : 'w-6 p-0 ') +
@@ -263,7 +266,7 @@ export function MessengerBubble({ message, roomId, disabled, variant = 'chat', g
             text={reaction.count}
             className={'font-medium tabular-nums ' + (reaction.own ? 'text-foreground/80' : 'text-muted-foreground')}
           />}
-        </button>)}
+        </button></TooltipHint>)}
       </div>}
       {store.react && <ReactionBar
         open={pressed} disabled={disabled || busy} align={message.own ? 'right' : 'left'}

@@ -103,6 +103,34 @@ class MockThreadProvider implements CliProviderAdapter {
 }
 
 describe("CLI execution safeguards", () => {
+  it("reopens a retired session on a follow-up and replays saved thread history", async () => {
+    const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const thread = service.create({ userId: "user-1", title: "Idle fixture", providerId: "codex", workingDirectory: process.cwd() });
+    const provider = new MockThreadProvider();
+    const registry = new ProviderRegistry(); registry.register(provider);
+    const app = Fastify(); const config = loadConfig();
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry });
+    try {
+      const headers = await authHeader(config.jwtSecret, "user-1");
+      const first = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`, headers,
+        payload: { message: "Remember the parser accepts UTF-8", titleTask: "" } });
+      expect(first.statusCode).toBe(200);
+      await waitFor(() => provider.sendTurn.mock.calls.length === 1);
+      const sessionId = service.getById(thread.id)!.providerSessionId!;
+      provider.emit({ type: "turn.completed", sessionId });
+      provider.emit({ type: "session.completed", sessionId });
+      expect(service.getById(thread.id)?.providerSessionId).toBeNull();
+      const followup = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/send`, headers,
+        payload: { message: "Continue with the parser", titleTask: "" } });
+      expect(followup.statusCode).toBe(200);
+      await waitFor(() => provider.sendTurn.mock.calls.length === 2);
+      expect(provider.startSessionCalls).toHaveLength(2);
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("Remember the parser accepts UTF-8");
+      expect(provider.sendTurn.mock.calls[1]?.[1]).toContain("Continue with the parser");
+    } finally { await app.close(); sqlite.close(); }
+  });
+
   it.each(["quota", "environment"])("keeps %s failure terminal despite late provider completion", async failure => {
     const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
     const threadService = new ThreadService(db);

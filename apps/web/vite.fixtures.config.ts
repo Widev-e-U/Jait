@@ -15,6 +15,8 @@ export default defineConfig({
       'src/e2e-fixtures/browser-controls.tsx',
       'src/e2e-fixtures/messenger-tools.tsx',
       'src/e2e-fixtures/agent-controls.tsx',
+      'src/e2e-fixtures/voice-controls.tsx',
+      'src/e2e-fixtures/agent-github-connection.tsx',
       'src/e2e-fixtures/agents-graph-layout.tsx',
       'src/e2e-fixtures/sidebar-overflow.tsx',
       'src/e2e-fixtures/message-attachment-regressions.tsx',

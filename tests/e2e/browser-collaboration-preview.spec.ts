@@ -142,9 +142,11 @@ test.describe('browser and preview integration', () => {
       await expect(page.getByRole('textbox', { name: 'Browser URL' })).toHaveAttribute('readonly', '')
       await expect(page.getByRole('button', { name: 'Refresh page', exact: true })).toBeDisabled()
       await expect(viewer).toHaveAttribute('src', /view_only=1/)
+      // Control changes are sent to the existing viewer; keep its connection alive.
+      await viewer.evaluate(element => { (element as HTMLElement).dataset.e2eConnection = 'original' })
       await page.getByRole('button', { name: 'Take control', exact: true }).click()
       await expect(page.getByRole('button', { name: 'Share with agent', exact: true })).toBeEnabled()
-      await expect(viewer).not.toHaveAttribute('src', /view_only=1/)
+      await expect(viewer).toHaveAttribute('data-e2e-connection', 'original')
       await expect(canvas).toBeVisible()
       // Taking control enables page input immediately. The local fixture
       // focuses this field; key input travels through VNC.
@@ -153,8 +155,10 @@ test.describe('browser and preview integration', () => {
       await page.keyboard.type('live-browser-takeover')
       await page.reload()
       await expect(page.getByRole('button', { name: 'Share with agent', exact: true })).toBeEnabled()
-      await expect(viewer).not.toHaveAttribute('src', /view_only=1/)
       await expect.poll(hasDesktopPixels).toBe(true)
+      await expect(page.frameLocator('iframe[title="Agent browser"]').locator('#status')).toHaveText(/Connected to/)
+      await canvas.focus()
+      await page.keyboard.type('-after-reload')
       await mkdir(SHOTS_DIR, { recursive: true })
       await page.screenshot({ path: resolve(SHOTS_DIR, 'compact-browser-takeover.png') })
       await page.getByRole('button', { name: 'Share with agent', exact: true }).click()
@@ -162,7 +166,7 @@ test.describe('browser and preview integration', () => {
       const typedResponse = await request.post(`${API_URL}/api/tools/execute`, {
         data: { tool: 'browser.inspect', input: {}, sessionId, projectRoot: PROJECT_ROOT },
       })
-      expect(JSON.stringify(await typedResponse.json())).toContain('live-browser-takeover')
+      expect(JSON.stringify(await typedResponse.json())).toContain('live-browser-takeover-after-reload')
 
       const unshareResponse = await request.post(`${API_URL}/api/preview/share`, {
         headers: { Authorization: `Bearer ${token}` },

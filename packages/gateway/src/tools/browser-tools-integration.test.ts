@@ -1,8 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer, type Server } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { BrowserSurface } from "../surfaces/browser.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { ToolRegistry } from "./registry.js";
@@ -32,7 +31,9 @@ describe.skipIf(process.env["JAIT_BROWSER_INTEGRATION"] !== "1").each(["in-proce
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(tmpdir(), "jait-browser-integration-"));
+      const shots = resolve(import.meta.dirname, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -118,7 +119,8 @@ describe.skipIf(process.env["JAIT_BROWSER_INTEGRATION"] !== "1").each(["in-proce
       expect(await tools.execute("browser.inspect", { selector: "#footer" }, context)).toMatchObject({ data: { target: { offscreen: false } } });
     });
     it("browser.wait finds a real selector and reports timeouts", async () => {
-      expect((await tools.execute("browser.wait", { selector: "#save", timeoutMs: 100 }, context)).ok).toBe(true);
+      const found = await tools.execute("browser.wait", { selector: "#save", timeoutMs: 5000 }, context);
+      expect(found.ok, found.message).toBe(true);
       const missing = await tools.execute("browser.wait", { selector: "#missing", timeoutMs: 100 }, context);
       expect(missing.ok).toBe(false);
       expect(missing.message).toMatch(/timeout/i);

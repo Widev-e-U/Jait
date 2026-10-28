@@ -368,6 +368,36 @@ describe('SessionSelector', () => {
     expect(getSessionContextMenuPosition(100, 300, 400, 400, 240)).toEqual({ left: 100, top: 152, })
   })
 
+  it('creates projects and personal chats from their section headers', () => {
+    const markup = renderToStaticMarkup(
+      <SessionSelector
+        projects={[createProject()]}
+        activeProjectId="project-1"
+        onSelectProject={() => {}}
+        onCreateProject={() => {}}
+        onNewPersonalSession={() => {}}
+        onRemoveProject={() => {}}
+        onChangeDirectory={() => {}}
+      />
+    )
+
+    const searchField = markup.indexOf('type="search"')
+    const projectsHeader = markup.indexOf('Projects &amp; Chats')
+    const newProject = markup.indexOf('aria-label="New project"')
+    const personalHeader = markup.indexOf('Personal chats')
+    const newPersonalChat = markup.indexOf('aria-label="New personal chat"')
+
+    // The search field owns its whole row — no trailing + button anymore.
+    expect(searchField).toBeGreaterThan(-1)
+    expect(projectsHeader).toBeGreaterThan(searchField)
+    expect(markup.slice(searchField, projectsHeader)).not.toContain('<button')
+
+    // One + sits with "Projects & Chats", the other with "Personal chats".
+    expect(newProject).toBeGreaterThan(projectsHeader)
+    expect(personalHeader).toBeGreaterThan(newProject)
+    expect(newPersonalChat).toBeGreaterThan(personalHeader)
+  })
+
   describe('folder tree', () => {
     function folder(id: string, title: string, overrides: Partial<ProjectRecord> = {}): ProjectRecord {
       return {

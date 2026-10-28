@@ -32,6 +32,7 @@ uuid = { version = "1.0", features = ["v4"] }
 debug = 0
 
 [dev-dependencies]
+hmac = "0.12"
 jiff = { version = "0.2.35", default-features = false, features = ["std", "tzdb-bundle-always"] }
 base64 = "0.22"
 ed25519-dalek = "2"

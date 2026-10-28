@@ -15,6 +15,10 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod computer_control;
+#[cfg(all(windows, feature = "experimental-computer-control"))]
+mod computer_windows;
+
 use jait_desktop_core as core;
 use parking_lot::Mutex;
 use serde_json::{json, Value};
@@ -122,6 +126,7 @@ pub struct HostState {
     handles: Mutex<HashMap<String, core::runner::RunnerHandle>>,
     resolver: Mutex<Arc<dyn core::runner::CommandResolver>>,
     provider_login_processes: Mutex<HashMap<String, Child>>,
+    computer_control: Arc<computer_control::ComputerControl>,
     sinks: Mutex<Vec<HostSink>>,
     /// Overrides default keyring-backed credentials for tests / hosts without
     /// an OS credential store.
@@ -161,9 +166,90 @@ impl HostState {
             handles: Mutex::new(HashMap::new()),
             resolver: Mutex::new(Arc::new(core::runner::PathCommandResolver)),
             provider_login_processes: Mutex::new(HashMap::new()),
+            computer_control: Arc::new(computer_control::ComputerControl::default()),
             sinks: Mutex::new(Vec::new()),
             credential_backend: Mutex::new(CredentialBackend::Keyring),
         }
+    }
+
+
+    #[cfg(all(windows, feature = "experimental-computer-control"))]
+    fn computer_op(&self, op: &str, params: &Value, meta: &Value) -> Value {
+        use chrono::{DateTime, Utc};
+        let now = || Utc::now().timestamp_millis();
+        let owner = meta.get("sessionId").and_then(Value::as_str).unwrap_or("");
+        let id = params.get("sessionId").and_then(Value::as_str).unwrap_or("");
+        let result: Result<Value, String> = (|| {
+            match op {
+                "computer.revoke" => {
+                    self.computer_control.revoke();
+                    Ok(json!({}))
+                }
+                "computer.session" => match params.get("action").and_then(Value::as_str) {
+                    Some("stop") => {
+                        self.computer_control.stop(id, owner);
+                        Ok(json!({}))
+                    }
+                    Some("start") => {
+                        let expiry = params.get("expiresAt").and_then(Value::as_str)
+                            .ok_or("Control expiry is required")?;
+                        let expiry = DateTime::parse_from_rfc3339(expiry).map_err(|_| "Invalid control expiry")?.timestamp_millis();
+                        let ticket = self.computer_control.begin(id, owner, expiry, now()).map_err(str::to_owned)?;
+                        let allowed = computer_windows::confirm();
+                        self.computer_control.finish(ticket, allowed, now()).map_err(str::to_owned)?;
+                        let control = self.computer_control.clone();
+                        std::thread::spawn(move || {
+                            while control.is_current(ticket, Utc::now().timestamp_millis()) {
+                                if computer_windows::abort_pressed() {
+                                    control.revoke_generation(ticket);
+                                    break;
+                                }
+                                std::thread::sleep(Duration::from_millis(100));
+                            }
+                        });
+                        Ok(json!({}))
+                    }
+                    _ => Err("Unsupported computer session action".into()),
+                },
+                "computer.geometry" => self.computer_control.with_active(id, owner, now(), computer_windows::geometry),
+                "computer.observe" => self.computer_control.with_active(id, owner, now(), computer_windows::observe),
+                "computer.clipboard.read" => self.computer_control.with_active(id, owner, now(), || {
+                    computer_windows::ensure_geometry(params)?;
+                    computer_windows::clipboard_read()
+                }),
+                "computer.clipboard.write" => {
+                    let text = params.get("text").and_then(Value::as_str).ok_or("Clipboard text is required")?;
+                    self.computer_control.with_active(id, owner, now(), || {
+                        computer_windows::ensure_geometry(params)?;
+                        computer_windows::clipboard_write(text)
+                    })
+                }
+                "computer.act" => {
+                    let delay = params.get("waitAfterMs").and_then(Value::as_u64).unwrap_or(0);
+                    if delay > 10_000 { return Err("waitAfterMs must be at most 10000".into()) }
+                    self.computer_control.with_active(id, owner, now(), || {
+                        computer_windows::ensure_geometry(params)?;
+                        computer_windows::act(params)
+                    })?;
+                    if delay > 0 { std::thread::sleep(Duration::from_millis(delay)); }
+                    if params.get("includeScreenshot").and_then(Value::as_bool) == Some(false) {
+                        Ok(json!({}))
+                    } else {
+                        self.computer_control.with_active(id, owner, now(), computer_windows::observe)
+                    }
+                }
+                _ => Err("Unsupported computer operation".into()),
+            }
+        })();
+        match result {
+            Ok(data) => tool_ok("Computer operation completed.", data),
+            Err(error) => tool_err(error),
+        }
+    }
+
+    /// Revoke local desktop control immediately, including a pending approval.
+    pub fn revoke_computer_control(&self) {
+        self.computer_control.revoke();
     }
 
     /// Test/alt-host hook: use an in-memory credential store.
@@ -742,6 +828,11 @@ impl HostState {
                 let params = arg(1);
                 let meta = arg(2);
                 match op.as_str() {
+                    "computer.capabilities" => Ok(tool_ok("", json!({ "input": false, "observe": false }))),
+                    #[cfg(all(windows, feature = "experimental-computer-control"))]
+                    "computer.session" | "computer.act" | "computer.observe" | "computer.geometry" | "computer.revoke" | "computer.clipboard.read" | "computer.clipboard.write" => {
+                        Ok(self.computer_op(&op, &params, &meta))
+                    }
                     // ── Shell ────────────────────────────────────────────
                     // Legacy shell parity (the shell's `desktop:tool-op execute` handler):
                     // the foreground envelope is `{ ok, message }` where message

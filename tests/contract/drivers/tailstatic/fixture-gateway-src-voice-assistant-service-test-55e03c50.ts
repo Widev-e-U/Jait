@@ -65,6 +65,7 @@ await (async()=>{
 
     __jait_capture(0, (instructions));
     __jait_capture(1, (instructions));
+    __jait_capture(2, (instructions));
   
 })();
 

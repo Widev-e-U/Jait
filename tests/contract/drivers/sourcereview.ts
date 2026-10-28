@@ -1159,7 +1159,7 @@ else{let secrets;try{secrets=JSON.parse(fs.readFileSync(path.join(state,'host-se
     const {mock}=await import('bun:test');const calls:unknown[]=[];
     (globalThis as any).__jaitSurfaceReview={call,calls};
     mock.module(new URL('packages/gateway/src/tools/browser-tools.ts',new URL('../../../', import.meta.url)).pathname,()=>({
-      createBrowserInspectTool(){return {async execute(input:unknown,context:any){const f=(globalThis as any).__jaitSurfaceReview;f.calls.push(['inspect',input,context.sessionId,context.projectRoot]);return f.call.inspectResult??{ok:true,message:'inspected',data:{browserId:'browser',extra:7}};}};}
+      createBrowserNavigateTool(){return {async execute(input:unknown,context:any){const f=(globalThis as any).__jaitSurfaceReview;f.calls.push(['navigate',input,context.sessionId,context.projectRoot]);return f.call.inspectResult??{ok:true,message:'navigated',data:{browserId:'browser',extra:7}};}};}
     }));
     mock.module(new URL('packages/gateway/src/db/uuidv7.ts',new URL('../../../', import.meta.url)).pathname,()=>({uuidv7(){return 'fixed';}}));
     const registry={

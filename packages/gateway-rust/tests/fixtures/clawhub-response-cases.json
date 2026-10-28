@@ -1,0 +1,531 @@
+[
+  {
+    "name": "search-missing",
+    "method": "search",
+    "response": {},
+    "expected": []
+  },
+  {
+    "name": "search-null-results",
+    "method": "search",
+    "response": {
+      "results": null
+    },
+    "expected": []
+  },
+  {
+    "name": "search-empty",
+    "method": "search",
+    "response": {
+      "results": []
+    },
+    "expected": []
+  },
+  {
+    "name": "search-primitive",
+    "method": "search",
+    "response": false,
+    "expected": []
+  },
+  {
+    "name": "search-array-envelope",
+    "method": "search",
+    "response": [],
+    "expected": []
+  },
+  {
+    "name": "search-sparse",
+    "method": "search",
+    "response": {
+      "results": [
+        {
+          "slug": "sparse",
+          "futureField": true
+        }
+      ]
+    },
+    "expected": [
+      {
+        "slug": "sparse",
+        "futureField": true
+      }
+    ]
+  },
+  {
+    "name": "search-missing-optionals",
+    "method": "search",
+    "response": {
+      "results": [
+        {
+          "score": 0.5
+        }
+      ]
+    },
+    "expected": [
+      {
+        "score": 0.5
+      }
+    ]
+  },
+  {
+    "name": "search-explicit-nulls",
+    "method": "search",
+    "response": {
+      "results": [
+        {
+          "slug": null,
+          "displayName": null,
+          "summary": null,
+          "version": null,
+          "score": null,
+          "updatedAt": null
+        }
+      ]
+    },
+    "expected": [
+      {
+        "slug": null,
+        "displayName": null,
+        "summary": null,
+        "version": null,
+        "score": null,
+        "updatedAt": null
+      }
+    ]
+  },
+  {
+    "name": "search-unknown-fields",
+    "method": "search",
+    "response": {
+      "results": [
+        {
+          "slug": "valid",
+          "score": 0.5,
+          "futureField": {
+            "a": [
+              1,
+              null,
+              false
+            ]
+          },
+          "__proto__": {
+            "untrusted": true
+          }
+        }
+      ]
+    },
+    "expected": [
+      {
+        "slug": "valid",
+        "score": 0.5,
+        "futureField": {
+          "a": [
+            1,
+            null,
+            false
+          ]
+        },
+        "__proto__": {
+          "untrusted": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "search-drifted-types",
+    "method": "search",
+    "response": {
+      "results": [
+        {
+          "slug": 42,
+          "displayName": [],
+          "summary": false,
+          "version": {},
+          "score": "high",
+          "updatedAt": "today"
+        }
+      ]
+    },
+    "expected": [
+      {
+        "slug": 42,
+        "displayName": [],
+        "summary": false,
+        "version": {},
+        "score": "high",
+        "updatedAt": "today"
+      }
+    ]
+  },
+  {
+    "name": "search-untyped-elements",
+    "method": "search",
+    "response": {
+      "results": [
+        null,
+        false,
+        42,
+        "remote",
+        [
+          1,
+          2
+        ]
+      ]
+    },
+    "expected": [
+      null,
+      false,
+      42,
+      "remote",
+      [
+        1,
+        2
+      ]
+    ]
+  },
+  {
+    "name": "search-non-array-results",
+    "method": "search",
+    "response": {
+      "results": {
+        "future": true
+      }
+    },
+    "expected": {
+      "future": true
+    },
+    "rustError": true
+  },
+  {
+    "name": "search-null-envelope",
+    "method": "search",
+    "response": null,
+    "typescriptError": true,
+    "rustError": true
+  },
+  {
+    "name": "list-missing",
+    "method": "list",
+    "response": {},
+    "expected": {}
+  },
+  {
+    "name": "list-null",
+    "method": "list",
+    "response": null,
+    "expected": null
+  },
+  {
+    "name": "list-unknown",
+    "method": "list",
+    "response": {
+      "futureField": {
+        "retained": true
+      }
+    },
+    "expected": {
+      "futureField": {
+        "retained": true
+      }
+    }
+  },
+  {
+    "name": "list-primitive",
+    "method": "list",
+    "response": 17,
+    "expected": 17
+  },
+  {
+    "name": "list-array",
+    "method": "list",
+    "response": [],
+    "expected": []
+  },
+  {
+    "name": "detail-missing",
+    "method": "detail",
+    "response": {},
+    "expected": {}
+  },
+  {
+    "name": "detail-null",
+    "method": "detail",
+    "response": null,
+    "expected": null
+  },
+  {
+    "name": "detail-unknown",
+    "method": "detail",
+    "response": {
+      "futureField": {
+        "retained": true
+      }
+    },
+    "expected": {
+      "futureField": {
+        "retained": true
+      }
+    }
+  },
+  {
+    "name": "detail-primitive",
+    "method": "detail",
+    "response": 17,
+    "expected": 17
+  },
+  {
+    "name": "detail-array",
+    "method": "detail",
+    "response": [],
+    "expected": []
+  },
+  {
+    "name": "list-items-only",
+    "method": "list",
+    "response": {
+      "items": [
+        {
+          "slug": "sparse",
+          "unknown": true
+        }
+      ]
+    },
+    "expected": {
+      "items": [
+        {
+          "slug": "sparse",
+          "unknown": true
+        }
+      ]
+    }
+  },
+  {
+    "name": "list-null-fields",
+    "method": "list",
+    "response": {
+      "items": null,
+      "nextCursor": null
+    },
+    "expected": {
+      "items": null,
+      "nextCursor": null
+    }
+  },
+  {
+    "name": "list-drifted-types",
+    "method": "list",
+    "response": {
+      "items": {
+        "future": true
+      },
+      "nextCursor": 10
+    },
+    "expected": {
+      "items": {
+        "future": true
+      },
+      "nextCursor": 10
+    }
+  },
+  {
+    "name": "list-empty-cursor",
+    "method": "list",
+    "response": {
+      "items": [],
+      "nextCursor": ""
+    },
+    "expected": {
+      "items": [],
+      "nextCursor": ""
+    }
+  },
+  {
+    "name": "detail-version-missing",
+    "method": "detail",
+    "response": {
+      "latestVersion": {
+        "createdAt": 1,
+        "changelog": "future"
+      }
+    },
+    "expected": {
+      "latestVersion": {
+        "createdAt": 1,
+        "changelog": "future"
+      }
+    }
+  },
+  {
+    "name": "detail-version-null",
+    "method": "detail",
+    "response": {
+      "latestVersion": {
+        "version": null
+      }
+    },
+    "expected": {
+      "latestVersion": {
+        "version": null
+      }
+    }
+  },
+  {
+    "name": "detail-version-wrong-type",
+    "method": "detail",
+    "response": {
+      "latestVersion": {
+        "version": 42
+      }
+    },
+    "expected": {
+      "latestVersion": {
+        "version": 42
+      }
+    }
+  },
+  {
+    "name": "detail-latest-null",
+    "method": "detail",
+    "response": {
+      "skill": null,
+      "latestVersion": null,
+      "owner": null
+    },
+    "expected": {
+      "skill": null,
+      "latestVersion": null,
+      "owner": null
+    }
+  },
+  {
+    "name": "detail-full",
+    "method": "detail",
+    "response": {
+      "skill": {
+        "slug": "safe",
+        "stats": {
+          "downloads": 2
+        },
+        "unknown": true
+      },
+      "latestVersion": {
+        "version": "1.2",
+        "createdAt": 1,
+        "future": false
+      },
+      "owner": {
+        "handle": null
+      },
+      "futureRoot": [
+        1
+      ]
+    },
+    "expected": {
+      "skill": {
+        "slug": "safe",
+        "stats": {
+          "downloads": 2
+        },
+        "unknown": true
+      },
+      "latestVersion": {
+        "version": "1.2",
+        "createdAt": 1,
+        "future": false
+      },
+      "owner": {
+        "handle": null
+      },
+      "futureRoot": [
+        1
+      ]
+    }
+  },
+  {
+    "name": "packages-array",
+    "method": "packages",
+    "response": [
+      {
+        "name": "plugin",
+        "future": true
+      },
+      null,
+      12
+    ],
+    "expected": [
+      {
+        "name": "plugin",
+        "future": true
+      },
+      null,
+      12
+    ]
+  },
+  {
+    "name": "packages-missing",
+    "method": "packages",
+    "response": {},
+    "expected": []
+  },
+  {
+    "name": "packages-null-items",
+    "method": "packages",
+    "response": {
+      "items": null
+    },
+    "expected": []
+  },
+  {
+    "name": "packages-empty",
+    "method": "packages",
+    "response": {
+      "items": []
+    },
+    "expected": []
+  },
+  {
+    "name": "packages-wrapped",
+    "method": "packages",
+    "response": {
+      "items": [
+        {
+          "future": 1
+        }
+      ],
+      "extra": true
+    },
+    "expected": [
+      {
+        "future": 1
+      }
+    ]
+  },
+  {
+    "name": "packages-primitive",
+    "method": "packages",
+    "response": false,
+    "expected": []
+  },
+  {
+    "name": "packages-string",
+    "method": "packages",
+    "response": "remote",
+    "expected": []
+  },
+  {
+    "name": "packages-non-array-items",
+    "method": "packages",
+    "response": {
+      "items": "future"
+    },
+    "expected": "future",
+    "rustError": true
+  },
+  {
+    "name": "packages-null-envelope",
+    "method": "packages",
+    "response": null,
+    "typescriptError": true,
+    "rustError": true
+  }
+]

@@ -3,7 +3,7 @@ import { getApiUrl } from '@/lib/gateway-url';
 import { getAuthToken } from '@/lib/auth-token';
 import { triggerSystemNotification } from '@/lib/system-notifications';
 import { messengerReadLink } from './notification-actions';
-import type { MessengerSnapshot, MessengerMessage } from './model';
+import type { MessengerSnapshot, MessengerMessage, MessengerRoom } from './model';
 
 /** Id prefix for messages that only exist locally until the gateway confirms. */
 const LOCAL_ECHO_PREFIX = '~local:';
@@ -27,7 +27,9 @@ export class GatewayMessengerStore implements MessengerStoreApi {
   private requestGeneration = 0;
   private visible: string | null = null;
   private started = false;
-  private loaded = false;
+  private notificationKey: string | null = null;
+  /** Last ready snapshot for this account, retained across reconnections. */
+  private notificationRooms: Map<string, MessengerRoom> | null = null;
   private pausedReads = new Set<string>();
   private activeSearch = '';
   /**
@@ -54,7 +56,24 @@ export class GatewayMessengerStore implements MessengerStoreApi {
       this.publish({});
     }
   }
-  constructor(_owner: string) {}
+  private onStorage = (event: StorageEvent) => {
+    try {
+      if (event.storageArea === window.localStorage &&
+          event.key === this.notificationKey && this.notificationKey) {
+        this.publish({ notifications: event.newValue === '1' });
+      }
+    } catch { /* Storage may be unavailable. */ }
+  };
+  constructor(private owner: string) {}
+  private preferenceKey(session: MessengerSnapshot['session']) {
+    if (!session) return null;
+    return 'jait.messenger.notifications.' +
+      [this.owner, session.homeserver, session.userId].map(encodeURIComponent).join('.');
+  }
+  private readNotificationPreference(key: string | null) {
+    if (!key) return false;
+    try { return window.localStorage.getItem(key) === '1'; } catch { return false; }
+  }
   subscribe = (listener: () => void) => {
     this.remoteListeners.add(listener);
     return () => {
@@ -181,12 +200,17 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     );
     if (this.stopped || generation !== this.requestGeneration) return;
     const snapshot: MessengerSnapshot = result.snapshot;
-    if (this.loaded && this.remoteSnapshot.notifications) {
+    const key = this.preferenceKey(snapshot.session);
+    const sameAccount = key !== null && key === this.notificationKey;
+    const notifications = sameAccount
+      ? this.remoteSnapshot.notifications
+      : this.readNotificationPreference(key);
+    if (!sameAccount) this.notificationRooms = null;
+    if (snapshot.status === 'ready' && key && this.notificationRooms && notifications) {
       for (const room of snapshot.rooms) {
-        const old = this.remoteSnapshot.rooms.find((r) => r.id === room.id);
+        const old = this.notificationRooms.get(room.id);
         if (
-          !old ||
-          room.timestamp <= old.timestamp ||
+          (old && room.timestamp <= old.timestamp) ||
           !room.unread ||
           (this.visible === room.id &&
             document.visibilityState === 'visible' &&
@@ -198,6 +222,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
           id: 'matrix-room:' + room.id,
           title: room.name,
           body: 'New message',
+          independentOfAttention: true,
           link: '/messenger?roomId=' + encodeURIComponent(room.id),
           ...(message && snapshot.selectedRoomId === room.id && snapshot.session
             ? {
@@ -214,7 +239,10 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     }
     if (this.activeSearch)
       void this.refreshSearch(this.activeSearch).catch(() => {});
-    this.loaded = true;
+    if (snapshot.status === 'ready' && key) {
+      this.notificationRooms = new Map(snapshot.rooms.map(room => [room.id, room]));
+    }
+    this.notificationKey = key;
     if (roomId) this.roomCache.set(roomId, snapshot.messages);
     this.publish({
       ...snapshot,
@@ -222,12 +250,13 @@ export class GatewayMessengerStore implements MessengerStoreApi {
         ? this.withOptimistic(roomId, snapshot.messages)
         : snapshot.messages,
       selectedRoomId: roomId,
-      notifications: this.remoteSnapshot.notifications,
+      notifications,
     });
   }
   async resume() {
     if (this.started) return;
     this.started = true;
+    if (typeof window !== 'undefined') window.addEventListener('storage', this.onStorage);
     const poll = async () => {
       try {
         await this.refreshRemote();
@@ -347,6 +376,8 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     return this.searchResults;
   }
   async enableNotifications(enabled: boolean) {
+    const key = this.notificationKey;
+    if (!key) throw new Error('Connect to Matrix first.');
     if (
       enabled &&
       'Notification' in window &&
@@ -354,6 +385,8 @@ export class GatewayMessengerStore implements MessengerStoreApi {
       (await Notification.requestPermission()) !== 'granted'
     )
       throw new Error('Allow notifications in your device settings first.');
+    if (key !== this.notificationKey) throw new Error('The Matrix account changed.');
+    try { window.localStorage.setItem(key, enabled ? '1' : '0'); } catch { /* Keep the preference for this session. */ }
     this.publish({ notifications: enabled });
   }
   async sendAttachment(roomId: string, file: File) {
@@ -402,6 +435,7 @@ export class GatewayMessengerStore implements MessengerStoreApi {
     await this.refreshRemote();
   }
   dispose() {
+    if (typeof window !== 'undefined') window.removeEventListener('storage', this.onStorage);
     this.stopped = true;
     ++this.requestGeneration;
     clearTimeout(this.pollTimer);

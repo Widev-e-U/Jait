@@ -1,0 +1,31 @@
+[
+  {
+    "name": "agent.spawn",
+    "description": "Launch a sub-agent to handle a complex, multi-step task autonomously. The sub-agent gets its own conversation and tool set, runs independently, and returns a single result. Use this for research, code search, multi-file analysis, or any task that requires several tool calls to complete. Several calls in the SAME reply run concurrently — one visible sub-agent each — so delegate independent work as parallel calls rather than one at a time.",
+    "tier": "standard",
+    "category": "agent",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "description": "The task prompt — what should the sub-agent accomplish?"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short user-visible description of the sub-agent's mission (shown in UI)."
+        },
+        "details": {
+          "type": "string",
+          "description": "Optional detailed instructions, context, or constraints for the sub-agent."
+        },
+        "allowedTools": {
+          "type": "string",
+          "description": "Comma-separated tool names the sub-agent may use. Defaults to a safe read-only subset if omitted. Example: 'file.read,file.list,terminal.run,web.search'"
+        }
+      },
+      "required": ["prompt", "description"]
+    }
+  }
+]

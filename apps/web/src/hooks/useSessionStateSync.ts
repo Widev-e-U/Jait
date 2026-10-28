@@ -132,10 +132,14 @@ export function useSessionStateSync({
     if (activeSessionId && token && !wsFullStateReceivedRef.current) return
     const payload = messageQueue.length > 0 ? messageQueue : null
     const serialized = `${activeSessionId ?? ''}:${JSON.stringify(payload)}`
+    // Consume server echoes even when their value matches our last write.
+    // Otherwise the flag survives deduplication and swallows the next local edit.
+    const suppressed = consumeSuppressedUiSync('queued_messages')
     if (serialized === prevQueuePayloadRef.current) return
     prevQueuePayloadRef.current = serialized
-    if (consumeSuppressedUiSync('queued_messages')) return
-    setSavedQueuedMessages(payload)
+    if (suppressed) return
+    // A queued message must survive reload without waiting for the debounce.
+    setSavedQueuedMessages(payload, { immediate: true })
     sendUIState('queued_messages', payload, activeSessionId)
   }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId, consumeSuppressedUiSync, token, wsFullStateReceivedRef])
 

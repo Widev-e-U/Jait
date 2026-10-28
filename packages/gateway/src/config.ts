@@ -71,8 +71,27 @@ export interface AppConfig {
   whisperUrl: string;
   /** OpenAI model for the real-time voice assistant (Realtime API). */
   realtimeModel: string;
+  /**
+   * Speech-to-text model the realtime session uses for its live transcript.
+   * Overridable so a rename on the provider side never needs a code change.
+   */
+  realtimeTranscribeModel: string;
   /** Voice used by the real-time assistant (alloy, echo, shimmer, etc.). */
   realtimeVoice: string;
+  /**
+   * Delegate model *and* reasoning effort are derived at runtime from the
+   * models this install can actually reach, their published prices, and the
+   * reasoning efforts each backend advertises (see voice-assistant/
+   * tier-catalog.ts). There is deliberately nothing pinned here: pins go stale.
+   */
+  /**
+   * Blocking budget for a spoken escalation answer. When the delegate is still
+   * working after this many milliseconds, the call is promoted to a background
+   * task so the live conversation is not left in silence.
+   */
+  voiceEscalationAsyncMs: number;
+  /** Delay before speaking a filler acknowledgement while a delegate runs. */
+  voiceEscalationFillerMs: number;
   /**
    * Hint string passed to the speech-to-text (STT) layer to bias recognition
    * toward domain-specific proper nouns. This fixes common mishearings such as
@@ -180,8 +199,16 @@ export function loadConfig(): AppConfig {
     hookSecret,
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
-    realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-realtime-2.1",
+    // Unversioned alias so the live model always tracks OpenAI's latest GA
+    // realtime release instead of a pinned version.
+    realtimeModel: process.env["OPENAI_REALTIME_MODEL"]?.trim() || "gpt-realtime",
+    realtimeTranscribeModel:
+      process.env["OPENAI_REALTIME_TRANSCRIBE_MODEL"]?.trim() || "gpt-4o-transcribe",
     realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
+    voiceEscalationAsyncMs:
+      parseInt(process.env["JAIT_VOICE_ESCALATION_ASYNC_MS"] ?? "0", 10) || 12_000,
+    voiceEscalationFillerMs:
+      parseInt(process.env["JAIT_VOICE_ESCALATION_FILLER_MS"] ?? "0", 10) || 2_500,
     sttPrompt:
       process.env["JAIT_STT_PROMPT"]?.trim() ??
       "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",

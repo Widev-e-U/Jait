@@ -1,6 +1,7 @@
 export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 
-import type { MessengerSession, MessengerPresence, MessengerReadReceipt, MessengerRoomKind } from '@jait/shared'
+import { isStatusRoom, type MessengerSession, type MessengerPresence, type MessengerReadReceipt, type MessengerRoomKind } from '@jait/shared'
+export { isStatusRoom } from '@jait/shared'
 export type { MessengerSession, MessengerMessage, MessengerPresence, MessengerRoom, MessengerRoomKind, MessengerRoomPeer, MessengerSnapshot, MessengerReadReceipt } from '@jait/shared'
 
 export function normalizeHomeserver(input: string): string {
@@ -42,16 +43,6 @@ export function messengerError(error: unknown): string {
   if (code === 'M_LIMIT_EXCEEDED') return 'Your homeserver is rate limiting requests. Wait a moment and try again.'
   // Server messages and request URLs can contain secrets. Do not surface raw SDK errors.
   return 'Matrix could not complete the request. Check the homeserver address, connection, and account permissions.'
-}
-
-/**
- * Bridged networks expose stories/statuses as one pseudo-chat. Mautrix names it
- * "WhatsApp Status Broadcast" and topics it "…status updates from your contacts".
- */
-export function isStatusRoom(room: { name?: string | null; topic?: string | null }): boolean {
-  const name = String(room?.name ?? '')
-  const topic = String(room?.topic ?? '')
-  return /status broadcast/i.test(name) || /status updates from your contacts/i.test(topic)
 }
 
 /** Services whose rooms are organized as teams/workspaces containing channels. */

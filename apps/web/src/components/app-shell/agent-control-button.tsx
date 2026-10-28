@@ -30,7 +30,7 @@ export function AgentControlButton({ state, runningCount, avatars = [], pending,
   const faces = (avatars.length ? avatars : PERSONA_AVATARS).slice(0, 3)
   const members = faces.map((avatar, index) => ({ id: `agent-${index}`, name: avatar, avatar }))
   return (
-    <div className={cn('min-w-0 shrink-0', collapsed && (header ? 'w-16' : 'w-10'), !header && (compactSidebar ? 'mb-3' : 'mb-2'))}>
+    <div className={cn('min-w-0 shrink-0', collapsed && (header ? 'w-14 min-[360px]:w-16' : 'w-10'), !header && (compactSidebar ? 'mb-3' : 'mb-2'))}>
       <DropdownMenu>
         <Tooltip>
           <TooltipTrigger asChild>

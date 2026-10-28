@@ -145,6 +145,39 @@ impl Gateway {
         self.router = self.router.merge(routes.router());
         self
     }
+    /// Explicit screen-share lifecycle composition; does not start media capture.
+    pub fn with_screen_share(mut self, routes: routes::screen_share::ScreenShareRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Terminal control routes; the supplied control adapter owns process spawning policy.
+    pub fn with_terminals(mut self, routes: routes::terminals::TerminalRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Preview devtools routes; requires an explicit asset source, no implicit bundle reads.
+    pub fn with_browser_devtools(
+        mut self,
+        routes: routes::browser_devtools::BrowserDevToolsState,
+    ) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Voice session routes; transcription HTTP and settings remain explicit adapters.
+    pub fn with_voice(mut self, routes: routes::voice::VoiceRoutes) -> Self {
+        self.router = self.router.merge(routes.router());
+        self
+    }
+    /// Provider account/usage routes over explicitly supplied provider adapters.
+    pub fn with_providers(mut self, routes: routes::providers::ProviderRoutes) -> Self {
+        self.router = self.router.merge(routes::providers::router(routes));
+        self
+    }
+    /// MCP server routes; tool exposure and authentication stay caller-controlled.
+    pub fn with_mcp_server(mut self, routes: routes::mcp_server::McpRoutes) -> Self {
+        self.router = self.router.merge(routes::mcp_server::router(routes));
+        self
+    }
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
         self.listener.local_addr()
     }

@@ -109,7 +109,7 @@ test.describe('WS UI reactions for project and preview tools', () => {
     const projectBody = await openProject.json() as { ok: boolean }
     expect(projectBody.ok).toBe(true)
 
-    await expect(page.getByRole('button', { name: 'Toggle projects sidebar', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Hide editor', exact: true })).toBeVisible()
 
     const openPreview = await request.post(`${API_URL}/api/tools/execute`, {
       data: {

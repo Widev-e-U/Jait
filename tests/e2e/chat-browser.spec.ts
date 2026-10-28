@@ -195,3 +195,102 @@ test('the first browser tool opens the large panel automatically', async ({ page
   await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBeGreaterThan(650)
   await expect(page.getByTitle('Agent browser')).toHaveCount(1)
 })
+
+test('browser window moves and resizes within chat and restores after filling the panel', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.route('**/api/preview/session/chat-fixture', route => route.fulfill({ json: { session: { status: 'ready', url: '/noVNC/vnc_lite.html?path=api/live-view/6080/websockify', sharedWithAgent: true } } }))
+  await page.route('**/api/preview/access', route => route.fulfill({ json: { url: route.request().postDataJSON().source } }))
+  await page.route('**/noVNC/vnc_lite.html?**', route => route.fulfill({ contentType: 'text/html', body: '<h1>Browser window</h1>' }))
+  await page.goto('/chat-browser-repro.html')
+  const panel = page.getByRole('region', { name: 'Chat browser', exact: true })
+  await expect(panel).toHaveAttribute('data-browser-controller', 'agent')
+  await expect(page.getByTitle('Agent browser')).toBeVisible()
+  await page.frameLocator('iframe[title="Agent browser"]').locator('html').evaluate(el => el.setAttribute('data-window-marker', 'same-browser'))
+  await panel.evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished)) })
+  const initial = (await panel.boundingBox())!
+  const resize = (await panel.locator('[data-browser-resize="se"]').boundingBox())!
+  await page.mouse.move(resize.x + 4, resize.y + 4)
+  await page.mouse.down()
+  await page.mouse.move(resize.x - 156, resize.y - 66, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(async () => Math.abs((await panel.boundingBox())!.width - (initial.width - 160))).toBeLessThan(2)
+  const smaller = (await panel.boundingBox())!
+  const handle = (await panel.getByRole('button', { name: 'Move browser', exact: true }).boundingBox())!
+  await page.mouse.move(handle.x + 80, handle.y + handle.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + 140, handle.y + handle.height / 2 + 50, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(async () => Math.abs((await panel.boundingBox())!.x - (smaller.x + 60))).toBeLessThan(2)
+  const moved = (await panel.boundingBox())!
+  await panel.getByRole('button', { name: 'Fill chat panel', exact: true }).click()
+  await expect(panel).toHaveAttribute('data-browser-maximized', 'true')
+  const parent = await panel.evaluate(el => { const p = el.offsetParent!; const b = p.getBoundingClientRect(); return { width: p.clientWidth, height: p.clientHeight, x: b.x, y: b.y } })
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.height)).toBe(parent.height)
+  const filled = (await panel.boundingBox())!
+  expect(filled.width).toBe(parent.width)
+  expect(filled.x).toBe(parent.x)
+  expect(filled.y).toBe(parent.y)
+  await panel.getByRole('button', { name: 'Restore browser size', exact: true }).click()
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(moved.width))
+  expect(Math.round((await panel.boundingBox())!.x)).toBe(Math.round(moved.x))
+  await expect(page.frameLocator('iframe[title="Agent browser"]').locator('html')).toHaveAttribute('data-window-marker', 'same-browser')
+  const border = panel.locator('[data-browser-border]')
+  await expect(border).toHaveCSS('border-bottom-width', '2px')
+  await expect(border).toHaveCSS('pointer-events', 'none')
+  await page.screenshot({ path: path.resolve(shotsDir, 'chat-browser-window.png') })
+  await panel.getByRole('button', { name: 'Fill chat panel', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(panel).toHaveAttribute('data-browser-maximized', 'false')
+})
+
+
+test('browser can cover the project and composer while staying clear of the sidebar', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.route('**/api/preview/session/chat-fixture', route => route.fulfill({ json: { session: { status: 'ready', url: '/noVNC/vnc_lite.html?path=api/live-view/6080/websockify', sharedWithAgent: true } } }))
+  await page.route('**/api/preview/access', route => route.fulfill({ json: { url: route.request().postDataJSON().source } }))
+  await page.route('**/noVNC/vnc_lite.html?**', route => route.fulfill({ contentType: 'text/html', body: '<h1>Browser window</h1>' }))
+  await page.goto('/chat-browser-repro.html?workspace')
+  const panel = page.getByRole('region', { name: 'Chat browser', exact: true })
+  await expect(page.getByTitle('Agent browser')).toBeVisible()
+  await expect(panel.locator('xpath=..')).toHaveAttribute('data-browser-workspace-overlay', 'true')
+  await panel.evaluate(async el => { await Promise.all(el.getAnimations().map(animation => animation.finished)) })
+  const handle = panel.getByRole('button', { name: 'Move browser', exact: true })
+  const sidebar = (await page.getByTestId('fixture-sidebar').boundingBox())!
+  const project = (await page.getByTestId('fixture-project').boundingBox())!
+  const composer = (await page.getByRole('textbox', { name: 'Chat draft' }).boundingBox())!
+  const initial = (await panel.boundingBox())!
+  const grip = (await handle.boundingBox())!
+  await page.mouse.move(grip.x + 50, grip.y + grip.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(grip.x + 50 + sidebar.x + sidebar.width + 20 - initial.x, grip.y + grip.height / 2 + composer.y + composer.height - 20 - (initial.y + initial.height), { steps: 10 })
+  await page.mouse.up()
+  await expect.poll(async () => (await panel.boundingBox())!.x).toBeLessThan(project.x + project.width / 2)
+  await expect.poll(async () => (await panel.boundingBox())!.y + (await panel.boundingBox())!.height).toBeGreaterThan(composer.y)
+  const moved = (await panel.boundingBox())!
+  expect(moved.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width)
+  const onTop = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-browser-panel]') !== null, {
+    x: Math.max(moved.x + 10, composer.x + 10), y: Math.max(moved.y + 35, composer.y + 5),
+  })
+  expect(onTop).toBe(true)
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-testid="fixture-sidebar"]') !== null, { x: sidebar.x + 10, y: sidebar.y + 40 })).toBe(true)
+})
+
+test('returning to a chat recovers its idle browser and control state', async ({ page }) => {
+  let stopped = true
+  let restarts = 0
+  const live = { sessionId: 'chat-fixture', browserId: 'browser-chat-fixture', status: 'ready', origin: 'agent', target: 'https://example.com/page', url: '/noVNC/vnc_lite.html?path=api/live-view/6080/websockify', sharedWithAgent: false }
+  await page.route('**/api/preview/session/chat-fixture', route => route.fulfill({ json: { session: stopped ? { ...live, status: 'stopped', url: null } : live } }))
+  await page.route('**/api/preview/restart', route => { restarts++; stopped = false; return route.fulfill({ json: { session: live } }) })
+  await page.route('**/api/preview/access', route => route.fulfill({ json: { url: route.request().postDataJSON().source } }))
+  await page.route('**/noVNC/vnc_lite.html?**', route => route.fulfill({ contentType: 'text/html', body: '<script>parent.postMessage({type:"jait-vnc-status",status:"connected"}, location.origin)</script>' }))
+  await page.goto('/chat-browser-repro.html')
+  await expect(page.getByTitle('Agent browser')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Share with agent' })).toBeVisible()
+  expect(restarts).toBe(1)
+  await page.getByRole('button', { name: 'Send user message' }).click()
+  await page.getByRole('button', { name: 'Switch chat' }).click()
+  await expect(page.getByTitle('Agent browser')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Switch chat' }).click()
+  await expect(page.getByTitle('Agent browser')).toBeVisible()
+  expect(restarts).toBe(1)
+})

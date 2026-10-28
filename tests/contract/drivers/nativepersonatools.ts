@@ -17,7 +17,7 @@ async function factory(){
   }}]});
   if(!built.success)throw Error(built.logs.join('\n'));
   const code=await built.outputs[0].text();
-  const path=new URL('../../../.jait/artifacts/gateway-rust/persona-tools/fixtures/'+createHash('sha256').update(code).digest('hex')+'.mjs',import.meta.url);
+  const path=new URL('../../../.jait/artifacts/gateway-rust/persona-tools/fixtures/'+createHash('sha256').update(code).digest('hex')+'-'+process.pid+'.mjs',import.meta.url);
   await Bun.write(path,code);return import(path.href);
  })();
 }

@@ -49,8 +49,10 @@ test('a dropped browser connection reconnects with a fresh scoped grant and pres
   await page.getByRole('button', { name: 'Take control', exact: true }).click()
   await expect(browser.getByText('Remote browser connected')).toBeVisible()
   await expect.poll(async () => frame() ? Boolean(await frame().evaluate(() => (window as any).__rfb?.viewOnly)) : true).toBe(false)
+  // Changing control uses the existing connection; the next outage needs a new grant.
+  expect(accessRequests).toBe(2)
   await frame().evaluate(() => (window as any).__rfb.loseConnection())
-  await expect.poll(() => accessRequests).toBe(4)
+  await expect.poll(() => accessRequests).toBe(3)
   await expect(browser.getByText('Remote browser connected')).toBeVisible()
   expect(Boolean(await frame().evaluate(() => (window as any).__rfb.viewOnly))).toBe(false)
   await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/browser-recovery.png') })

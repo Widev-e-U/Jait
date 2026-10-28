@@ -164,29 +164,26 @@ async fn compare(cases: Vec<Value>) {
                     )),
                 );
             }
-            let browser: Option<HostPort<Value>> = if test["preview"] == true {
-                let events = events.clone();
-                let config = test["inspect"].clone();
-                Some(Arc::new(move |_, input, ctx| {
-                    events
-                        .lock()
-                        .unwrap()
-                        .push(json!({"op":"inspect","input":input,"context":ctx}));
-                    let result = if let Some(s) = config["error"].as_str() {
-                        Err(HostError::Error(s.into()))
-                    } else if let Some(v) = config.get("thrown") {
-                        Err(HostError::Thrown(v.clone()))
-                    } else {
-                        Ok(config
-                            .get("response")
-                            .cloned()
-                            .unwrap_or(json!({"ok":false,"message":"no browser"})))
-                    };
-                    Box::pin(async move { result })
-                }))
-            } else {
-                None
-            };
+            let events_for_browser = events.clone();
+            let config = test["navigate"].clone();
+            let preview = test["preview"] == true;
+            let browser: Option<HostPort<Value>> = Some(Arc::new(move |method, input, ctx| {
+                events_for_browser
+                    .lock()
+                    .unwrap()
+                    .push(json!({"op":method,"input":input,"context":ctx,"preview":preview}));
+                let result = if let Some(s) = config["error"].as_str() {
+                    Err(HostError::Error(s.into()))
+                } else if let Some(v) = config.get("thrown") {
+                    Err(HostError::Thrown(v.clone()))
+                } else {
+                    Ok(config
+                        .get("response")
+                        .cloned()
+                        .unwrap_or(json!({"ok":false,"message":"no browser"})))
+                };
+                Box::pin(async move { result })
+            }));
             let tools = SurfaceTools::new(registry, browser).with_id_source(Arc::new(|| ID.into()));
             let mut outcomes = vec![];
             for op in test["ops"].as_array().into_iter().flatten() {
@@ -247,18 +244,22 @@ async fn real_registry_start_stop_list_defaults_failures_and_preview_match() {
     }
     for input in [
         json!({"type":"browser"}),
-        json!({"type":"browser","sessionId":"current-session","projectRoot":"/override"}),
+        json!({"type":"browser","url":"https://example.com/a","sessionId":"current-session","projectRoot":"/override"}),
+        json!({"type":"browser","url":null}),
+        json!({"type":"browser","url":""}),
         json!({"type":"browser","sessionId":"other"}),
         json!({"type":"browser","sessionId":"","projectRoot":""}),
     ] {
-        for inspect in [
+        for navigate in [
             json!({"response":{"ok":true,"message":"ready","data":{"browserId":"browser-existing","url":"http://owned","id":"overridden","metadata":{"overridden":true}},"extra":42}}),
             json!({"response":{"ok":false,"message":"denied","data":{"browserId":"browser-existing"}}}),
             json!({"response":{"ok":true,"message":"no surface","data":{"browserId":"missing"}}}),
             json!({"error":"scope denied"}),
             json!({"thrown":null}),
         ] {
-            cases.push(json!({"preview":true,"instances":[{"id":"browser-existing","type":"browser","state":"running","sessionId":"current-session"}],"inspect":inspect,"ops":[{"op":"start","input":input,"context":context}]}));
+            for preview in [true, false] {
+                cases.push(json!({"preview":preview,"instances":[{"id":"browser-existing","type":"browser","state":"running","sessionId":"current-session"}],"navigate":navigate,"ops":[{"op":"start","input":input,"context":context}]}));
+            }
         }
     }
     compare(cases).await;

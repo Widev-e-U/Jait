@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { NodeState } from "@jait/shared";
+import type { ScreenShareService } from "@jait/screen-share";
 import { ComputerControlSessionService } from "../services/computer-control.js";
 import type { WsControlPlane } from "../ws.js";
 import { createComputerTools } from "./computer-tools.js";
@@ -52,7 +53,7 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
 }
 
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
@@ -80,6 +81,25 @@ describe("computer tools", () => {
       expect.objectContaining({ nodeId: "old-windows", available: false, reason: expect.stringContaining("Desktop update required") }),
       expect.objectContaining({ nodeId: "linux-a", available: false }),
     ]));
+  });
+
+  it("blocks agent input when the shared computer belongs to the viewer", async () => {
+    const f = setup();
+    const share = { chatId: "chat-a", controlOwner: "user", pendingApproval: false, status: "sharing" };
+    const screenShare = { getSessionsForNode: () => [share] } as unknown as ScreenShareService;
+    const tools = new Map(createComputerTools(f.ws, f.sessions, screenShare).map(item => [item.name, item] as const));
+    const sessionTool = tool<{ action: "start"; nodeId: string }>(tools, "computer.session");
+    expect((await sessionTool.execute({ action: "start", nodeId: "windows-a" }, context)).ok).toBe(false);
+    expect(f.proxyToolOp).not.toHaveBeenCalled();
+    share.controlOwner = "agent";
+    const started = await sessionTool.execute({ action: "start", nodeId: "windows-a" }, context);
+    expect(started.ok).toBe(true);
+    const sessionId = (started.data as { session: { id: string } }).session.id;
+    share.controlOwner = "user";
+    const count = f.proxyToolOp.mock.calls.length;
+    const action = await tool<Record<string, unknown>>(tools, "computer.act").execute({ sessionId, action: "move", x: 1, y: 1 }, context);
+    expect(action.ok).toBe(false);
+    expect(f.proxyToolOp).toHaveBeenCalledTimes(count);
   });
 
   it("starts a target-side session and routes actions through its node", async () => {

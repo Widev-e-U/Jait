@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verificationSteps, VERIFY_STEPS, verifyAndActivate, activateLocal, snapshotSource, sourceFiles, digestFiles, overrideUnit } from './local-deploy.mjs';
+import { verificationContext, verificationContextKey, main, verificationSteps, VERIFY_STEPS, verifyAndActivate, activateLocal, snapshotSource, sourceFiles, digestFiles, overrideUnit } from './local-deploy.mjs';
 const artifacts=fileURLToPath(new URL('../.jait/artifacts/local-deploy-tests/',import.meta.url));
 async function fixture(t){await fs.mkdir(artifacts,{recursive:true});const root=await fs.mkdtemp(join(artifacts,'case-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));return root;}
 function git(root,args){return execFileSync('git',['-C',root,...args],{encoding:'utf8'});}
@@ -311,10 +311,91 @@ test('deployment CLI skips E2E by default and includes it only with --e2e', () =
   const plan = (...args) => JSON.parse(execFileSync(process.execPath, [launcher, '--plan', ...args], { encoding: 'utf8' }));
   const defaultPlan = plan();
   assert.equal(defaultPlan.skipE2e, true);
-  assert.deepEqual(defaultPlan.checks.map(check => check.id), verificationSteps(true).map(([id]) => id));
+  assert.deepEqual(defaultPlan.checks.map(check => check.id), verificationSteps(true, true).map(([id]) => id));
   assert.deepEqual(plan('--skip-e2e').checks, defaultPlan.checks);
-  const fullPlan = plan('--e2e');
+  const fullPlan = plan('--tests', '--e2e');
   assert.equal(fullPlan.skipE2e, false);
   assert.deepEqual(fullPlan.checks.map(check => check.id), VERIFY_STEPS.map(([id]) => id));
   assert.throws(() => execFileSync(process.execPath, [launcher, '--plan', '--e2e', '--skip-e2e'], { stdio: 'pipe' }), /Command failed/);
+});
+
+
+test('verification context binds environment and tools without storing their values', () => {
+  const tools = [['/tools/bun', '1.0', 'binary-hash']];
+  const env = { PATH: '/tools', CI: '1', SECRET: 'private', JAIT_STATE_DIR: '/run/one' };
+  const key = verificationContextKey(env, tools, '/run/one');
+  assert.match(key, /^[a-f0-9]{64}$/);
+  assert.equal(key, verificationContextKey({ ...env, JAIT_STATE_DIR: '/run/two' }, tools, '/run/two'));
+  assert.equal(key, verificationContextKey(Object.fromEntries(Object.entries(env).reverse()), tools, '/run/one'));
+  for (const change of [{ CI: '0' }, { SECRET: 'changed' }, { PATH: '/other' }, { JAIT_STATE_DIR: '/custom' }]) {
+    assert.notEqual(key, verificationContextKey({ ...env, ...change }, tools, '/run/one'));
+  }
+  assert.notEqual(key, verificationContextKey(env, [['/tools/bun', '1.1', 'binary-hash']], '/run/one'));
+  assert.notEqual(key, verificationContextKey(env, [['/tools/bun', '1.0', 'new-binary']], '/run/one'));
+});
+test('deployment plan exposes reuse and fresh override while retaining all gates', async () => {
+  const original = console.log;
+  let plan;
+  console.log = value => { plan = JSON.parse(value); };
+  try {
+    await main(['--plan']);
+    assert.equal(plan.verificationReuse, true);
+    assert.equal(plan.skipE2e, true);
+    assert.equal(plan.checks.length, verificationSteps(true, true).length);
+    await main(['--plan', '--fresh', '--tests', '--e2e']);
+    assert.equal(plan.verificationReuse, false);
+    assert.equal(plan.testsAlwaysRun, true);
+    assert.equal(plan.checks.length, VERIFY_STEPS.length);
+  } finally { console.log = original; }
+});
+
+test('verification identity detects executable bytes and inherited tool configuration', async t => {
+  const root = await fixture(t);
+  const bin = join(root, 'bin');
+  const workspace = join(root, 'workspace');
+  await fs.mkdir(bin);
+  await fs.mkdir(workspace);
+  for (const name of ['bun', 'node', 'npm', 'cargo', 'rustc', 'rustfmt']) {
+    await fs.writeFile(join(bin, name), '#!/bin/sh\necho version-1\n', { mode: 0o700 });
+  }
+  const env = { PATH: `${bin}:/usr/bin:/bin`, CARGO: join(bin, 'cargo'), RUSTC: join(bin, 'rustc'), RUSTFMT: join(bin, 'rustfmt'), CARGO_HOME: join(root, 'cargo-home') };
+  const first = await verificationContext(env, workspace, 'state');
+  assert.equal(first, await verificationContext(env, workspace, 'state'));
+  await fs.writeFile(join(bin, 'bun'), '#!/bin/sh\necho version-1\n# different binary bytes\n');
+  assert.notEqual(first, await verificationContext(env, workspace, 'state'));
+  const second = await verificationContext(env, workspace, 'state');
+  await fs.mkdir(join(root, '.cargo'));
+  await fs.writeFile(join(root, '.cargo/config.toml'), '[build]\njobs = 1\n');
+  assert.notEqual(second, await verificationContext(env, workspace, 'state'));
+  await fs.unlink(join(bin, 'rustfmt'));
+  await assert.rejects(verificationContext(env, workspace, 'state'));
+});
+
+
+test('fast local policy skips test suites but retains static gates and selected E2E policy', async () => {
+  const ids = verificationSteps(true, true).map(([id]) => id);
+  assert.deepEqual(ids, ['release-guard', 'artifact-paths', 'typecheck', 'lint']);
+  assert(verificationSteps(false, true).some(([id]) => id === 'web-e2e'));
+  const ran = [];
+  await verifyAndActivate({skipE2e:true,skipTests:true,fingerprint:async()=>'same',runStep:async id=>ran.push(id),activate:async proof=>assert.deepEqual(proof.checks.map(c=>c.id),ids)});
+  assert.deepEqual(ran, ids);
+  for (const failure of ids) {
+    await assert.rejects(verifyAndActivate({skipE2e:true,skipTests:true,fingerprint:async()=>'same',runStep:async id=>{if(id===failure)throw Error('failed');},activate:async()=>assert.fail('must not activate')}));
+  }
+});
+
+test('release prerequisites include skipped tests and stop on failure', async () => {
+  const { RELEASE_TEST_STEPS, runReleaseTests } = await import('./release-tests.mjs');
+  assert.deepEqual(RELEASE_TEST_STEPS.map(([id])=>id), ['unit-tests','workflow-tests','browser-tools','rust-migration']);
+  assert.deepEqual(RELEASE_TEST_STEPS.at(-1).slice(1), ['bun',['run','test:gateway:rust','--full-contracts']]);
+  const ran=[];
+  runReleaseTests((command,args)=>ran.push([command,args]));
+  assert.deepEqual(ran.slice(1), RELEASE_TEST_STEPS.map(([,command,args])=>[command,args]));
+  for(let failure=0;failure<ran.length;failure++) {
+    let calls=0;
+    assert.throws(()=>runReleaseTests(()=>{if(calls++===failure)throw Error('failed');}),/failed/);
+    assert.equal(calls,failure+1);
+  }
+  const source=await fs.readFile(new URL('./release.mjs',import.meta.url),'utf8');
+  assert(source.indexOf('  runReleaseTests()') < source.indexOf('    for (const change of release.changes)'));
 });

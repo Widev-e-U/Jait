@@ -148,6 +148,7 @@ export interface ServerDeps {
   ) => Promise<ToolResult>;
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
+  screenShareControl?: import("./services/screen-share-control.js").ScreenShareControlCoordinator;
   threadService?: ThreadService;
   repoService?: RepositoryService;
   planService?: PlanService;
@@ -413,7 +414,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerNetworkRoutes(app, deps.ws, deps.sqlite, deps.providerRegistry, deps.secretInputService, deps.surfaceRegistry);
 
   if (deps.screenShare && deps.ws) {
-    registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws });
+    registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws, control: deps.screenShareControl, config, access });
   }
 
   registerFilesystemRoutes(app, deps.ws);

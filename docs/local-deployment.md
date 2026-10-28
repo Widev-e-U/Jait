@@ -10,22 +10,55 @@ It records a local build ID, original commit and source fingerprint instead.
 bun run deploy:local --plan     # show the mandatory stages; no install or restart
 bun run deploy:local --prepare  # build, verify and stage; leave the service running
 bun run deploy:local            # verify, stage and activate locally
+bun run deploy:local --tests   # include unit, workflow, browser-tool and full Rust checks
 bun run deploy:local --e2e     # explicitly include Chromium E2E and UI fixture suites
 bun run deploy:local --skip-e2e # compatibility flag; same as the default
+bun run deploy:local --fresh    # rerun verification without reusing saved passes
 ```
 
-By default, every deployment runs the production build, release/artifact guards, workspace
-typechecking, the complete Vitest suite, workflow/deployment guard tests, lint,
-real-browser tool tests, and a combined Rust migration/contract gate. The standard
-Chromium E2E suite and the separate UI fixture suite run only with `--e2e`. The combined gate runs
-formatting, Clippy, native library tests and the complete contract suite once;
-that suite includes every migration contract target. By default, only the Chromium E2E and UI fixture suites and their runtime preparation are skipped. Use `--e2e` when those suites are requested. `--skip-e2e` remains a compatibility flag; combining it with `--e2e` is rejected. The plan records `skipE2e: true` and proof lists only checks actually run. Activation validates the selected policy; all other gates, source/build binding, canary, health checks and rollback remain required. There is no general skip-checks or changed-tests-only option. Existing explicitly disabled or
-opt-in lab/hardware/browser matrices retain their repository configuration;
-passing these gates is evidence for that configuration, not a guarantee that no
-bug exists. A blocked toolchain, missing runtime or failed gate blocks deployment.
+Every deployment requires the production build, release/artifact guards, workspace
+typechecking and lint. Unit, workflow/deployment, browser-tool and Rust migration/contract
+tests are skipped by default; explicitly include them with `--tests`. Chromium E2E
+and UI fixture suites remain independently opt-in with `--e2e`. Use both flags for
+all suites. Browser test runtimes are prepared only for selected suites.
+The opted-in Rust gate runs formatting, Clippy, native library tests and the
+complete contract suite once. These tests are mandatory prerequisites of
+`node scripts/release.mjs` before any version edits, release commit or push;
+`--skip-checks` does not bypass these test prerequisites. Dry runs do not run tests.
+CI retains its existing checks.
+
+The plan records `skipTests` and `skipE2e`; proof lists only selected checks that
+passed. Activation requires exactly the evidence selected by that plan. Old plans
+without `skipTests` continue to require tests. Source/build binding, canary, health
+checks and rollback remain required. `--skip-e2e` remains a compatibility flag;
+combining it with `--e2e` is rejected. Existing opt-in lab/hardware matrices retain
+their configuration. A skipped suite provides no passing test evidence.
+
+Successful local verification stages survive a later gate failure. Reuse is limited
+to typecheck, Vitest, lint and the Rust migration/contract gate, and expires after
+24 hours from the original pass (retries do not extend it). The conservative key
+covers the entire frozen source/build tree, installed dependency bytes, file modes
+and symlink targets, selected Bun/Node/npm/Rust tool identities, discovered
+Cargo/rustfmt/Bun configuration and environment.
+Only the launcher's fresh isolated test-state directory is normalized. A change
+invalidates the saved passes for the whole tree; command or argument changes also
+force that stage to rerun. External symlinks or links into unhashed caches disable
+reuse. Missing/corrupt records or unavailable identity checks run the gates normally.
+Dependency drift during verification blocks proof, including when a stage was reused.
+
+Release/artifact guards, dependency installation, production/controller builds,
+package validation, canary, health and rollback checks run on every attempt.
+Selected workflow/deployment, browser-tool and E2E/UI checks always run when opted in. `--fresh` forces verification to run again while retaining compiler caches.
+Saved passes live in `.jait/verification-passes.json` within the verification cache;
+per-run stage logs identify reuse and its originating run. No environment values
+are saved in that record. Only completed successful stages are recorded, after
+all child processes drain and input stability is checked. Abrupt termination
+before records are saved can lose that attempt's progress. This is a local
+optimization, not a portable or externally trusted attestation. A complete timed
+deployment comparison is still required before claiming a particular speedup.
 
 The speedup comes from removing public-release work, avoiding duplicate web
-builds, and overlapping independent verification work. The release/artifact preflight
+builds, reusing unchanged successful checks, and overlapping independent verification work. The release/artifact preflight
 guards finish first, then Rust starts alongside typechecking. Once the ordinary
 checks and browser-tool checks finish, the Chromium E2E and UI fixture gates run
 in one ordered browser lane while Rust finishes in the other. Browser gates stay

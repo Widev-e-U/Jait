@@ -10,7 +10,9 @@ import { getChatTranscriptColumnClassName } from './message-edit-layout'
 import { estimateMessageHeight, estimateMessageHeightFromMessage } from '@/lib/pretext-height'
 import { TooltipHint } from '@/components/ui/tooltip'
 import { ChatBrowserView } from './chat-browser-view'
+import { ChatScreenShareView } from './chat-screen-share-view'
 import { findConversationBrowser } from '@/lib/conversation-browser'
+import { findConversationScreenShare } from '@/lib/conversation-screen-share'
 
 interface ConversationProps {
   variant?: 'assistant' | 'messenger'
@@ -1411,12 +1413,18 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   // Park the floating controls just left of the minimap rail rather than on top
   // of it — a click meant for a button would otherwise scrub the transcript.
   const browser = useMemo(() => variant === 'assistant' ? findConversationBrowser(messageEstimateInputs ?? [], sessionId) : null, [variant, messageEstimateInputs, sessionId])
+  // A screen share is only shown in the chat that owns it; shares owned by other
+  // conversations (or gateway-wide shares) never render here.
+  const screenShare = useMemo(() => variant === 'assistant' ? findConversationScreenShare(messageEstimateInputs ?? [], sessionId) : null, [variant, messageEstimateInputs, sessionId])
   const floatingControlInset = (showMinimap ? MINIMAP_RAIL_WIDTH_PX : 0) + FLOATING_CONTROL_GAP_PX
   const previousMessagePreview = getPreviousMessagePreview(messageContents, previousUserMessageIndex)
 
   return (
     <AIConversation className={cn('relative flex min-h-0 flex-1 flex-col overflow-hidden', className)}>
       {browser && <ChatBrowserView key={sessionId ?? 'conversation-browser'} data={browser.data} sessionId={sessionId} authToken={authToken} autoOpen />}
+      {screenShare && sessionId && (
+        <ChatScreenShareView key={screenShare.sessionId} chatId={sessionId} authToken={authToken} />
+      )}
       {/* The minimap and transcript share one row below the browser. Its full
           height must not consume the transcript's space in the outer column. */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden" data-conversation-viewport>

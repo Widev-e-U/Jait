@@ -17,6 +17,8 @@ import {
   NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
 import { desktopOperationError } from '@/lib/desktop-operation-error'
+import { desktopComputerControlAvailable, desktopScreenShareControlAvailable } from '@/lib/desktop-computer-capabilities'
+import { hostedScreenShareCapture } from '@/lib/hosted-screen-share-capture'
 import { applyTerminalExecutionEvent } from '@/lib/tool-terminal-live'
 import { invalidateTerminalSnapshot } from '@/lib/terminal-snapshot'
 import { ChatNotificationSync } from '@/lib/chat-notification-sync'
@@ -60,10 +62,10 @@ const DESKTOP_NODE_TOOLS = [
   'search',
   'file.search',
   'os.query',
-  'computer.session',
-  'computer.observe',
-  'computer.act',
 ]
+
+const DESKTOP_COMPUTER_TOOLS = ['computer.session', 'computer.observe', 'computer.act']
+const DESKTOP_SHARE_CONTROL_TOOLS = ['computer.geometry', 'computer.share.capture', 'computer.clipboard.read', 'computer.clipboard.write']
 
 // ── Device / platform helpers ───────────────────────────────────────
 
@@ -656,6 +658,15 @@ export function useUICommands(opts: UseUICommandsOptions) {
     const { requestId, tool, args, sessionId, projectRoot, backgroundId } = payload
     try {
       const platform = detectPlatform()
+      if (platform === 'desktop' && tool === 'computer.share.capture') {
+        const shareId = typeof args.shareSessionId === 'string' ? args.shareSessionId : ''
+        const capture = hostedScreenShareCapture.inspect(shareId, sessionId ?? '')
+        ws.send(JSON.stringify({ type: 'tool.op-response', payload: { requestId,
+          result: capture ? { ok: true, message: 'Active monitor capture verified.', data: capture }
+            : { ok: false, message: 'No matching active monitor capture.' },
+        } }))
+        return
+      }
       if (platform === 'desktop' && window.jaitDesktop?.toolOp) {
         const result = await window.jaitDesktop.toolOp(
           tool,
@@ -822,6 +833,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
             const providers = providerStatuses
               .filter((provider) => provider.installed && provider.authenticated !== false)
               .map((provider) => provider.id)
+            const computerControl = detectPlatform() === 'desktop' && await desktopComputerControlAvailable(window.jaitDesktop)
+            const shareControl = computerControl && await desktopScreenShareControlAvailable(window.jaitDesktop)
             const nodeMsg = JSON.stringify({
               type: 'node.hello',
               payload: {
@@ -832,8 +845,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 protocolVersion: NODE_PROTOCOL_VERSION,
                 capabilities: {
                   providers,
-                  surfaces: ['filesystem', 'terminal', 'computer'],
-                  tools: DESKTOP_NODE_TOOLS,
+                  surfaces: ['filesystem', 'terminal', ...(computerControl ? ['computer'] : [])],
+                  tools: [...DESKTOP_NODE_TOOLS, ...(computerControl ? DESKTOP_COMPUTER_TOOLS : []), ...(shareControl ? DESKTOP_SHARE_CONTROL_TOOLS : [])],
                   screenShare: true,
                   voice: false,
                   preview: false,

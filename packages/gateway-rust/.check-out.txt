@@ -1,0 +1,46 @@
+EXIT_MARKER_START
+    Blocking waiting for file lock on build directory
+    Checking jait-gateway v0.1.0 (/home/jakob/jait/packages/gateway-rust)
+src/tools/browser_tools.rs:1756:31: error: expected one of `:`, `@`, or `|`, found `)`: expected one of `:`, `@`, or `|`
+src/tools/browser_tools.rs:1756:33: error: `->` is not valid syntax for field accesses and method calls
+src/tools/browser_tools.rs:1756:46: error: labels cannot use keyword names
+src/tools/browser_tools.rs:1756:48: error: expected `while`, `for`, `loop` or `{` after a label: expected `while`, `for`, `loop` or `{` after a label
+src/tools/browser_tools.rs:1756:48: error: expected one of `.`, `:`, `;`, `?`, `for`, `loop`, `while`, `}`, or an operator, found `,`: expected one of 9 possible tokens
+src/tools/os_control_tools.rs:25:5: error[E0433]: cannot find module or crate `futures` in this scope: use of unresolved module or unlinked crate `futures`
+src/tools/elevated_tools.rs:23:5: error[E0433]: cannot find module or crate `futures` in this scope: use of unresolved module or unlinked crate `futures`
+src/routes/terminals.rs:19:36: error[E0603]: struct import `AuthUser` is private: private struct import
+src/routes/voice.rs:32:36: error[E0603]: struct import `AuthUser` is private: private struct import
+src/routes/terminals.rs:234:36: error[E0308]: mismatched types: expected `String`, found `Uuid`
+src/routes/terminals.rs:229:17: error[E0308]: mismatched types: expected `Result<_, Box<dyn Error + Send + Sync>>`, found `Result<(), Error>`
+src/routes/voice.rs:473:44: error[E0277]: the size for values of type `dyn ScopedTranscriptionHttp` cannot be known at compilation time: doesn't have a size known at compile-time
+src/routes/voice.rs:473:26: error[E0277]: the size for values of type `dyn ScopedTranscriptionHttp` cannot be known at compilation time: doesn't have a size known at compile-time
+src/routes/voice.rs:473:67: error[E0277]: the size for values of type `dyn ScopedTranscriptionHttp` cannot be known at compilation time: doesn't have a size known at compile-time
+src/tools/browser_tools.rs:720:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:725:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:726:74: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:781:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:786:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:787:74: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:858:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:863:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:864:73: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:919:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:924:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:925:76: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:1220:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:1223:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:1224:67: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:1377:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:1380:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:1381:68: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:1599:40: error[E0308]: mismatched types: expected `&Value`, found `Value`
+src/tools/browser_tools.rs:1604:24: error[E0609]: no field `valid` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/tools/browser_tools.rs:1605:79: error[E0609]: no field `errors` on type `std::result::Result<ValidationResult, ValidationException>`: unknown field
+src/routes/terminals.rs:581:26: error[E0599]: no method named `replace` found for struct `Uuid` in the current scope: method not found in `Uuid`
+src/tools/computer_tools.rs:232:54: error[E0599]: the method `to_string` exists for reference `&Utf16Text`, but its trait bounds were not satisfied: method cannot be called on `&Utf16Text` due to unsatisfied trait bounds
+src/tools/os_control_tools.rs:337:40: error[E0599]: the method `to_string` exists for reference `&Utf16Text`, but its trait bounds were not satisfied: method cannot be called on `&Utf16Text` due to unsatisfied trait bounds
+src/tools/elevated_tools.rs:224:36: error[E0599]: the method `to_string` exists for reference `&Utf16Text`, but its trait bounds were not satisfied: method cannot be called on `&Utf16Text` due to unsatisfied trait bounds
+src/routes/browser_devtools.rs:529:40: warning: unused variable: `body`: help: try ignoring the field: `body: _`
+warning: `jait-gateway` (lib) generated 1 warning
+error: could not compile `jait-gateway` (lib) due to 39 previous errors; 1 warning emitted
+EXIT=101

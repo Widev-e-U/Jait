@@ -1265,6 +1265,8 @@ interface TerminalRunInput {
   isBackground?: boolean;
   sandbox?: boolean;
   sandboxMountMode?: SandboxMountMode;
+  /** Run on another connected device instead of the project's machine. */
+  nodeId?: string;
 }
 
 interface TerminalStreamInput {
@@ -1300,7 +1302,9 @@ export function createTerminalRunTool(
       "Multi-line scripts, pipes, and complex syntax all work unchanged. " +
       "Returns completed output or, after a short initial wait, partial output and a tracked execution ID. Long commands continue with automatic completion notification. Use terminal.execution to inspect or cancel. " +
       "Agent commands are automatically prefixed with pager/editor-disabling variables (PAGER=cat, LESS=-FRX, GIT_EDITOR=true, GIT_MERGE_AUTOEDIT=no, …), so pagers and editors never capture the terminal; " +
-      "if a pager still appears (e.g. `less -S` typed explicitly), it is detected and dismissed with `q` automatically without affecting the user's own keystrokes.",
+      "if a pager still appears (e.g. `less -S` typed explicitly), it is detected and dismissed with `q` automatically without affecting the user's own keystrokes. " +
+      "Set nodeId to run the command on another connected device (for example a Windows PC) instead of the machine that hosts the project; the command then runs with that device's working directory. " +
+      "nodeId \"gateway\" forces execution on the gateway itself. Only terminal and filesystem tools accept a nodeId target.",
     tier: "standard",
     category: "terminal",
     source: "builtin",
@@ -1308,6 +1312,7 @@ export function createTerminalRunTool(
       type: "object",
       properties: {
         command: { type: "string", description: "The shell command to execute" },
+        nodeId: { type: "string", description: "Run on this connected device instead of the project's machine (e.g. a Windows PC). Use computer.targets to discover device ids; \"gateway\" forces the gateway itself." },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
         timeout: { type: "number", description: "Execution deadline in ms: default 3600000, maximum 86400000. Expiry stops the execution. This is separate from yieldTimeMs; 0 or negative uses the default." },
         yieldTimeMs: { type: "number", description: "Initial wait in ms before returning a running execution: default 10000, maximum 30000. Zero yields immediately. The process continues until completion, cancellation, or timeout." },
@@ -1754,7 +1759,8 @@ export function createJaitTerminalTool(
       "Use terminal.execution to inspect progress or cancel. timeout is a separate process deadline (1 hour default, 24 hour maximum); do not rerun a running command. " +
       "Set isBackground: true for a startup snapshot, useful for servers, " +
       "watchers, and daemons. Background calls return a startup output snapshot after a brief idle wait; Jait notifies you when they finish. Continue independent work or end your turn to await completion; do not send another command to a busy terminal. " +
-      "Agent commands are automatically hardened against pagers/editors (PAGER=cat, GIT_EDITOR=true, …), so `git log`, man pages, and commit/rebase editors can never wedge the call.",
+      "Agent commands are automatically hardened against pagers/editors (PAGER=cat, GIT_EDITOR=true, …), so `git log`, man pages, and commit/rebase editors can never wedge the call. " +
+      "Set nodeId to run on another connected device such as a Windows PC (see computer.targets for ids); \"gateway\" forces the gateway itself.",
   };
 }
 

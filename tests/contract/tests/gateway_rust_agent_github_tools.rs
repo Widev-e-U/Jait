@@ -32,6 +32,21 @@ struct ScriptedPort {
 impl ScriptedPort {
     fn invoke(&mut self, operation: GithubOperation) -> Result<Value, HostError> {
         let (name, args) = match operation {
+            GithubOperation::BeginInstallation(..) => {
+                panic!("installation URL issuance is HTTP-only")
+            }
+            GithubOperation::BeginSetup { .. }
+            | GithubOperation::SaveManual { .. }
+            | GithubOperation::AttachInstallation(..)
+            | GithubOperation::Verify(..)
+            | GithubOperation::Disconnect(..)
+            | GithubOperation::ReadState(..)
+            | GithubOperation::CompleteSetup(..)
+            | GithubOperation::CompleteCallback(..)
+            | GithubOperation::FindByAppId(..)
+            | GithubOperation::FindByInstallationId(..) => {
+                panic!("tool attempted HTTP-only operation")
+            }
             GithubOperation::Initialize => ("initialize", json!([])),
             GithubOperation::CurrentAgent { user, thread } => {
                 let mut context = json!({"userId":user});

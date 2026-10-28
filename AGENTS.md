@@ -53,6 +53,7 @@ Run from repository root unless noted.
 - Components: PascalCase for React component files and exports.
 - Prefer explicit, descriptive names (`sessionService`, not `ss`).
 - Keep shared contracts in `packages/shared` and reuse instead of duplicating types.
+- For Jait web UI tooltips, use the shared shadcn/Radix tooltip in `apps/web/src/components/ui/tooltip.tsx`, as used by the chat input. Do not use native `title` hover tooltips or image `alt` text as a tooltip. Preserve accessible names, image alt text, and iframe titles where they serve accessibility.
 
 ## Testing Guidelines
 - Unit tests: colocate as `*.test.ts` under `packages/*/src` or `apps/*/src`.
@@ -101,8 +102,11 @@ The workflow can also be triggered by pushing a `v*` tag directly or via `workfl
 
 Use `bun run deploy:local` for a verified local Linux/systemd deployment without
 changing public versions or pushing. `--plan` shows the gates; `--prepare` runs
-all gates and stages without restarting. TypeScript, Rust and browser-tool checks are mandatory. Chromium E2E and UI
-fixture suites are skipped by default; include them with `--e2e` only when the user requests them. Build a frozen snapshot, preserve the running service arguments,
+the selected gates and stages without restarting. Build, typecheck, lint and activation health checks are mandatory. Unit, workflow,
+browser-tool and Rust migration/contract tests are skipped by default; include them
+with `--tests` when requested. Chromium E2E and UI fixture suites are independently
+opt-in with `--e2e`. Unit, workflow, browser-tool and full Rust checks are mandatory
+prerequisites of `node scripts/release.mjs` before version edits, commit and push. Build a frozen snapshot, preserve the running service arguments,
 and use the independent activation controller with health rollback. See
 `docs/local-deployment.md` for evidence, limits and rollback. Public releases
 continue to use `node scripts/release.mjs`; local deployment never replaces it.

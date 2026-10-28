@@ -1,5 +1,7 @@
 import { compactProviderContext, type ProviderContextState } from "./context-control.js";
 import { parseAcpUsage } from "./usage.js";
+import { cliSessionIdle } from "./session-idle.js";
+import { stopSessionProcess } from "./session-process.js";
 import { spawn, execFile, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
@@ -924,6 +926,7 @@ export class AcpProvider implements CliProviderAdapter {
 
     const child = spawn(this.config.command, this.config.args, {
       cwd: options.workingDirectory,
+      detached: process.platform !== "win32",
       stdio: ["pipe", "pipe", "pipe"],
       env,
       shell: needsShell(this.config.command),
@@ -951,6 +954,7 @@ export class AcpProvider implements CliProviderAdapter {
     }, stream);
 
     child.once("exit", (code, signal) => {
+      cliSessionIdle.forget(sessionId);
       const current = this.sessions.get(sessionId);
       if (!current) return;
       current.session.status = current.session.status === "completed" ? "completed" : "interrupted";
@@ -1050,7 +1054,7 @@ export class AcpProvider implements CliProviderAdapter {
       }
     } catch (error) {
       this.contextControls.delete(sessionId);
-      child.kill();
+      stopSessionProcess(child);
       throw error;
     }
 
@@ -1069,24 +1073,17 @@ export class AcpProvider implements CliProviderAdapter {
       piProvisionCleanup,
     };
     this.sessions.set(sessionId, state);
+    if (this.providerType === "codex") {
+      cliSessionIdle.watch(sessionId, options.threadId,
+        () => !!state.promptInFlight || state.approvals.size > 0,
+        () => this.stopSession(sessionId));
+    }
     this.emitEvent({ type: "session.started", sessionId });
     return session;
   }
 
   async sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void> {
     const state = this.getSession(sessionId);
-    if (state.contextControl) await compactProviderContext(state.contextControl, async command => {
-      try {
-        const result = await withTimeout(state.connection.prompt({ sessionId: state.acpSessionId, prompt: [{ type: "text", text: command }] }), 60_000);
-        const usage = parseAcpUsage(result.usage, uuidv7());
-        if (usage) this.emitEvent({ type: "usage", sessionId, usage });
-        const failure = readAcpSessionFailure(result._meta);
-        if (failure || result.stopReason === "cancelled") throw new Error(failure ?? "Context compaction cancelled");
-      } catch (error) {
-        await withTimeout(state.connection.cancel({ sessionId: state.acpSessionId }), 2_000).catch(() => {});
-        throw error;
-      }
-    });
     state.turnError = undefined;
     state.session.error = undefined;
     state.session.status = "running";
@@ -1106,6 +1103,18 @@ export class AcpProvider implements CliProviderAdapter {
     ];
 
     try {
+      if (state.contextControl) await compactProviderContext(state.contextControl, async command => {
+        try {
+          const result = await withTimeout(state.connection.prompt({ sessionId: state.acpSessionId, prompt: [{ type: "text", text: command }] }), 60_000);
+          const usage = parseAcpUsage(result.usage, uuidv7());
+          if (usage) this.emitEvent({ type: "usage", sessionId, usage });
+          const failure = readAcpSessionFailure(result._meta);
+          if (failure || result.stopReason === "cancelled") throw new Error(failure ?? "Context compaction cancelled");
+        } catch (error) {
+          await withTimeout(state.connection.cancel({ sessionId: state.acpSessionId }), 2_000).catch(() => {});
+          throw error;
+        }
+      });
       const result = await state.connection.prompt({
         sessionId: state.acpSessionId,
         prompt,
@@ -1201,18 +1210,23 @@ export class AcpProvider implements CliProviderAdapter {
     this.emitter.removeAllListeners();
   }
 
+  hasSession(sessionId: string): boolean {
+    return this.sessions.has(sessionId);
+  }
+
   async stopSession(sessionId: string): Promise<void> {
     const state = this.sessions.get(sessionId);
     if (!state) return;
+    cliSessionIdle.forget(sessionId);
+    this.sessions.delete(sessionId);
+    this.contextControls.delete(sessionId);
+    state.session.status = "completed";
+    state.session.completedAt = new Date().toISOString();
     await withTimeout(
       state.connection.closeSession?.({ sessionId: state.acpSessionId }) ?? Promise.resolve(),
       2_000,
     ).catch(() => {});
-    state.session.status = "completed";
-    state.session.completedAt = new Date().toISOString();
-    state.child.kill();
-    this.sessions.delete(sessionId);
-    this.contextControls.delete(sessionId);
+    stopSessionProcess(state.child);
     state.piProvisionCleanup?.();
     this.emitEvent({ type: "session.completed", sessionId });
   }

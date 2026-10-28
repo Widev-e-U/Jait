@@ -21,10 +21,11 @@ import type { SttProvider } from '@/hooks/useAuth'
 import { appendTranscript } from '@/lib/transcript-merge'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useMessenger } from './messenger-provider'
-import { MAX_ATTACHMENT_BYTES, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
+import { MAX_ATTACHMENT_BYTES, isStatusRoom, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
 import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
 import { CenteredBadgeText } from './centered-badge-text'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 function ConnectionForm() {
   const { store, snapshot } = useMessenger()
@@ -92,6 +93,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const mobile = useIsMobile()
   const roomId = snapshot.selectedRoomId
   const room = snapshot.rooms.find(room => room.id === roomId)
+  const statusRoom = !!room && (room.status || room.kind === 'status' || isStatusRoom(room))
   const draft = roomId ? drafts[roomId] ?? '' : ''
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
@@ -146,9 +148,11 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium leading-4">{channel ? '#' + item.name : item.name}</span>
-            <span className="max-w-[55%] shrink-0 truncate text-2xs leading-4 text-muted-foreground" title={[item.service, item.team || item.network, item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
-              {item.service}{item.team || item.network ? ' · ' + (item.team || item.network) : ''}{item.membership === 'invite' ? ' · Invitation' : ''}
-            </span>
+            <TooltipHint content={[item.service, item.team || item.network, item.membership === 'invite' ? 'Invitation' : ''].filter(Boolean).join(' · ')}>
+              <span className="max-w-[55%] shrink-0 truncate text-2xs leading-4 text-muted-foreground">
+                {item.service}{item.team || item.network ? ' · ' + (item.team || item.network) : ''}{item.membership === 'invite' ? ' · Invitation' : ''}
+              </span>
+            </TooltipHint>
           </span>
           <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{item.preview}</span>
         </span>
@@ -175,7 +179,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
     let cancelled = false
     const markRead = () => {
       void automaticReadAllowed().then(allowed => {
-        if (!cancelled && allowed && document.visibilityState === 'visible' && document.hasFocus()) return store.markRead(roomId, undefined, true)
+        if (!cancelled && ready && room && !statusRoom && allowed && document.visibilityState === 'visible' && document.hasFocus()) return store.markRead(roomId, undefined, true)
       }).catch(() => {})
     }
     markRead()
@@ -187,7 +191,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
       window.removeEventListener('focus', markRead)
       document.removeEventListener('visibilitychange', markRead)
     }
-  }, [store, roomId, snapshot.messages.at(-1)?.id, ready])
+  }, [store, roomId, room?.id, snapshot.messages.at(-1)?.id, ready, statusRoom])
 
   useEffect(() => {
     if (!snapshot.session) setDrafts({})
@@ -278,7 +282,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
               <SelectTrigger aria-label="Filter by service" className="h-9 w-auto max-w-[9rem] shrink-0 gap-1.5 px-2.5 text-xs font-medium"><SelectValue /></SelectTrigger>
               <SelectContent align="end" className="min-w-[8rem]">{services.map(item => <SelectItem key={item} value={item} className="text-xs">{item}</SelectItem>)}</SelectContent>
             </Select>
-            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setPane('options')} aria-label="Connections" title="Connections"><Settings2 className="h-4 w-4" /></Button>
+            <TooltipHint content="Connections"><Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setPane('options')} aria-label="Connections"><Settings2 className="h-4 w-4" /></Button></TooltipHint>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {search && <div aria-label="Message search results" className="border-b">
@@ -307,13 +311,12 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
             {rooms.length === 0 && <div className="space-y-2 p-5 text-sm text-muted-foreground"><p>{snapshot.rooms.length ? 'No matching conversations.' : 'Your conversations will appear here as Matrix syncs.'}</p>{!snapshot.rooms.length && <Button variant="outline" size="sm" onClick={() => setPane('options')}>Connect a bridge</Button>}</div>}
           </div>
         </aside>
-        <main onPointerDown={() => { if (roomId && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} onKeyDown={() => { if (roomId && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} className={(roomId ? 'flex ' : 'hidden md:flex ') + 'min-h-0 min-w-0 flex-1 flex-col'}>
+        <main onPointerDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} onKeyDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} className={(roomId ? 'flex ' : 'hidden md:flex ') + 'min-h-0 min-w-0 flex-1 flex-col'}>
           {!room ? <div className="m-auto max-w-sm space-y-2 p-6 text-center text-muted-foreground"><MessageCircle className="mx-auto h-10 w-10 text-primary/60" /><h2 className="font-medium text-foreground">Your personal inbox</h2><p className="text-sm">{roomId ? 'Waiting for this conversation to sync. Use Back to choose another.' : 'Choose a conversation to read and reply as yourself.'}</p>{roomId && <Button variant="outline" size="sm" onClick={() => selectRoom(null)}>Back to conversations</Button>}</div> : <>
-            <div className="flex h-14 shrink-0 items-center gap-3 border-b px-3"><Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => selectRoom(null)} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button><MessengerPeerAvatar name={room.peer?.name || room.name} mxcUrl={room.peer?.avatarUrl ?? room.avatarUrl} presence={room.peer?.presence} /><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold">{room.kind === 'channel' ? '#' + room.name : room.name}</h2><p className="truncate text-xs text-muted-foreground">{room.kind === 'channel' ? [room.team, room.service].filter(Boolean).join(' · ') : [presenceLabel(room.peer?.presence, room.peer?.lastActiveAgo), room.service, room.network].filter(Boolean).join(' · ')}</p></div>{roomMenu(room, 'Conversation options')}{room.encrypted && <span title="Encrypted Matrix room"><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Encrypted room" /></span>}</div>
+            <div className="flex h-14 shrink-0 items-center gap-3 border-b px-3"><Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => selectRoom(null)} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button><MessengerPeerAvatar name={room.peer?.name || room.name} mxcUrl={room.peer?.avatarUrl ?? room.avatarUrl} presence={room.peer?.presence} /><div className="min-w-0 flex-1"><h2 className="truncate text-sm font-semibold">{room.kind === 'channel' ? '#' + room.name : room.name}</h2><p className="truncate text-xs text-muted-foreground">{room.kind === 'channel' ? [room.team, room.service].filter(Boolean).join(' · ') : [presenceLabel(room.peer?.presence, room.peer?.lastActiveAgo), room.service, room.network].filter(Boolean).join(' · ')}</p></div>{roomMenu(room, 'Conversation options')}{room.encrypted && <TooltipHint content="Encrypted Matrix room"><span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Encrypted room" /></span></TooltipHint>}</div>
             {room.kind === 'channel' && room.topic && <p data-channel-topic className="truncate border-b bg-muted/30 px-3 py-1 text-xs text-muted-foreground">{room.topic}</p>}
             {search && <div role="status" className="flex shrink-0 items-center gap-2 border-b bg-muted/40 px-3 py-1 text-xs text-muted-foreground"><span className="truncate">Showing {messages.length} matching {messages.length === 1 ? 'message' : 'messages'}</span><button type="button" className="ml-auto shrink-0 underline" onClick={() => setSearch('')}>Clear search</button></div>}
-            {room.status ? <MessengerStatusView messages={messages} />
-              : room.membership === 'invite' ? <div className="m-auto space-y-4 p-6 text-center"><p>You have been invited to this conversation.</p><div className="flex justify-center gap-2"><Button disabled={!ready || busy} onClick={() => void act(() => store.join(room.id))}>Accept invitation</Button><Button variant="outline" disabled={!ready || busy} onClick={() => void act(() => store.leave(room.id))}>Decline</Button></div></div> : <>
+            {room.membership === 'invite' ? <div className="m-auto space-y-4 p-6 text-center"><p>You have been invited to this conversation.</p><div className="flex justify-center gap-2"><Button disabled={!ready || busy} onClick={() => void act(() => store.join(room.id))}>Accept invitation</Button><Button variant="outline" disabled={!ready || busy} onClick={() => void act(() => store.leave(room.id))}>Decline</Button></div></div> : statusRoom ? <MessengerStatusView key={room.id} messages={messages} hasEarlier={!!snapshot.hasEarlier && ready} loadingEarlier={loadingHistory} onLoadEarlier={() => void loadEarlier()} /> : <>
               <Conversation
                 key={room.id}
                 variant="messenger"

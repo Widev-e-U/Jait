@@ -66,3 +66,39 @@ and pass source-bound migration gates before claiming native parity. No componen
 credit or fingerprint has been refreshed for this test-only addition.
 
 Validation: `gateway_rust_chat_loops` passes 24 tests (seven new monitor specifications); `gateway_rust_system_one` passes 25 tests. Log: `.jait/artifacts/loop-monitor-rust-contracts.log`.
+
+
+## Configured native monitor — 2026-10-26
+
+The native service now implements configured review through an owned checkpoint:
+`prepare_review` validates scope/revision/input on the database worker, `review`
+uses the existing `SystemOne` evaluator outside SQL, and `commit_review` checks
+scope/revision again before saving. `MonitoredLoopTools` composes both database
+phases with the evaluator. Credentials come from the authenticated `LoopContext`,
+not tool input or an ambient process environment. The synchronous compatibility
+adapter explicitly refuses configured checks rather than skipping review.
+
+The seven earlier reference specifications now compare native and actual
+TypeScript results, emitted review state/questions, broadcasts and persisted
+metadata. Cases cover each criterion's 0.8 confidence threshold, rejected and
+missing answers, unavailable review, exact secret/Bearer/URL scrubbing, stalled
+checkpoints, resume, oversized review, waiting, pause/replacement races and
+restart. Additional differential redaction covers ECMAScript whitespace and
+overlapping credential strings; lone UTF-16 units stay reversible while scanning.
+The 24,000-unit state bound rejects oversized input without truncation. Model
+names are sliced at 200 UTF-16 units and provider diagnostics are not persisted.
+
+A native composition contract uses the real SystemOne evaluator and a held
+transport. Accepted/rejected responses, pause and replacement during I/O,
+authenticated owner/thread admission, caller cancellation and the five-second
+review deadline are exercised. A second SQL operation completes while review is
+held, proving review does not occupy the shared SQL worker. No external model or
+live database is accessed. Focused evidence: 26 chat-loop checks, 25 System One
+checks and 8 messenger-history checks in
+`.jait/artifacts/gateway-rust/agent-messenger-history/loop-monitor-final-focused.log`.
+Strict native Clippy passes in `loop-monitor-clippy3.log` in that directory.
+
+These are component/service and dispatch contracts. Production host activation,
+process shutdown/load/soak behavior and the remaining 370-component replacement
+gates remain separate. Production remains TypeScript. Full snapshot validation
+must pass before this batch is reported as a new completed migration checkpoint.

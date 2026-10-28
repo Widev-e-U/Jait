@@ -1,0 +1,251 @@
+{
+  "name": "thread.control",
+  "description": "Control agent threads end-to-end: create/list/update/delete threads, run them in parallel, send turns, stop/interrupt, and create pull requests with direct links. Threads have two kinds: delivery threads are user-owned work items that can be completed, resumed, reviewed, and used to create PRs; delegation threads are helper/sub-agent tasks that auto-finish after one turn and cannot create PRs. Creating or starting a thread requires a non-empty prompt. Scheduled jobs should create delivery threads with detach=true so the scheduler returns after dispatching the turn.",
+  "tier": "standard",
+  "category": "agent",
+  "source": "builtin",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "action": {
+        "type": "string",
+        "description": "Action: list, get, create, create_many, update, delete, start, send, stop, interrupt, approve, activities, create_pr.",
+        "enum": [
+          "list",
+          "get",
+          "create",
+          "create_many",
+          "update",
+          "delete",
+          "start",
+          "send",
+          "stop",
+          "interrupt",
+          "approve",
+          "activities",
+          "create_pr"
+        ]
+      },
+      "threadId": {
+        "type": "string",
+        "description": "Thread ID for thread-specific actions."
+      },
+      "sessionId": {
+        "type": "string",
+        "description": "Optional session filter or session assignment on create."
+      },
+      "title": {
+        "type": "string",
+        "description": "Thread title (create/update)."
+      },
+      "providerId": {
+        "type": "string",
+        "description": "Optional provider override for create/create_many."
+      },
+      "model": {
+        "type": "string",
+        "description": "Optional provider model."
+      },
+      "runtimeMode": {
+        "type": "string",
+        "enum": [
+          "full-access",
+          "supervised"
+        ],
+        "description": "Execution mode for thread runs."
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "delivery",
+          "delegation"
+        ],
+        "description": "Thread kind. Use delivery for user-owned work that can be reviewed, resumed, merged, or turned into a PR. Use delegation for helper/sub-agent work; delegation threads auto-finish after one turn and cannot create PRs."
+      },
+      "workingDirectory": {
+        "type": "string",
+        "description": "Working directory for the thread."
+      },
+      "personaAgentId": {
+        "type": "string",
+        "description": "Agent profile to link to the thread."
+      },
+      "skillIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Skills pinned to the thread."
+      },
+      "branch": {
+        "type": "string",
+        "description": "Git branch metadata for the thread."
+      },
+      "prompt": {
+        "type": "string",
+        "description": "Required prompt for create/start/send. Prefer this over `message`; `message` is kept as a backward-compatible alias."
+      },
+      "message": {
+        "type": "string",
+        "description": "Backward-compatible alias for `prompt`."
+      },
+      "attachments": {
+        "type": "array",
+        "description": "Optional attachments for provider sendTurn.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "start": {
+        "type": "boolean",
+        "description": "For create/create_many: auto-start thread(s) after creation. Requires `prompt`."
+      },
+      "detach": {
+        "type": "boolean",
+        "description": "Return after dispatching the first turn instead of waiting for provider.sendTurn. Use true for scheduled/cron-created delivery threads so the job creates a normal user-visible thread without blocking the scheduler. Scheduler-triggered starts detach automatically."
+      },
+      "autoStopAfterTurn": {
+        "type": "boolean",
+        "description": "Stop the provider session and clear resumability after the first turn completes. Delegation threads always do this. Leave false for normal delivery threads that the user may review, resume, merge, or delete later."
+      },
+      "timeoutMinutes": {
+        "type": "number",
+        "description": "Maximum runtime before stopping the provider session. Scheduler-triggered starts default to 240 minutes."
+      },
+      "threads": {
+        "type": "array",
+        "description": "For create_many: array of thread specs to create in one call.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "providerId": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "runtimeMode": {
+              "type": "string",
+              "enum": [
+                "full-access",
+                "supervised"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "delivery",
+                "delegation"
+              ]
+            },
+            "workingDirectory": {
+              "type": "string"
+            },
+            "branch": {
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            },
+            "start": {
+              "type": "boolean"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "detach": {
+              "type": "boolean"
+            },
+            "autoStopAfterTurn": {
+              "type": "boolean"
+            },
+            "timeoutMinutes": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        }
+      },
+      "requestId": {
+        "type": "string",
+        "description": "Approval request ID for approve action."
+      },
+      "approved": {
+        "type": "boolean",
+        "description": "Approval decision (default true)."
+      },
+      "limit": {
+        "type": "number",
+        "description": "Max activities to return (default 100, max 500)."
+      },
+      "prUrl": {
+        "type": "string",
+        "description": "PR URL metadata for update."
+      },
+      "prNumber": {
+        "type": "number",
+        "description": "PR number metadata for update."
+      },
+      "prTitle": {
+        "type": "string",
+        "description": "PR title metadata for update."
+      },
+      "prBaseBranch": {
+        "type": "string",
+        "description": "PR base branch metadata for update."
+      },
+      "prState": {
+        "type": "string",
+        "enum": [
+          "creating",
+          "open",
+          "closed",
+          "merged"
+        ],
+        "description": "PR state metadata for update."
+      },
+      "cwd": {
+        "type": "string",
+        "description": "Repo path for create_pr action. Defaults to thread working directory."
+      },
+      "gitAction": {
+        "type": "string",
+        "enum": [
+          "commit",
+          "commit_push",
+          "commit_push_pr"
+        ],
+        "description": "Git stacked action for create_pr (default commit_push_pr)."
+      },
+      "commitMessage": {
+        "type": "string",
+        "description": "Commit/PR title override for create_pr."
+      },
+      "baseBranch": {
+        "type": "string",
+        "description": "Base branch for PR creation."
+      },
+      "featureBranch": {
+        "type": "boolean",
+        "description": "Whether to create a feature branch before committing."
+      }
+    },
+    "required": [
+      "action"
+    ]
+  }
+}

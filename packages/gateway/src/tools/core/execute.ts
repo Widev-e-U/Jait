@@ -41,6 +41,8 @@ interface ExecuteInput {
   sandbox?: boolean;
   /** Sandbox mount mode when sandbox is enabled */
   sandboxMountMode?: "none" | "read-only" | "read-write";
+  /** Run on another connected device instead of this chat's machine */
+  nodeId?: string;
 }
 
 export function createExecuteTool(
@@ -58,7 +60,8 @@ export function createExecuteTool(
       "Run a shell command in a persistent terminal visible to the user. " +
       "Commands yield after a short initial wait with partial output, terminalId and executionId; completion resumes you automatically. Inspect progress or cancel with terminal.execution; do not rerun a running command. " +
       "Every command is bounded by a finite timeout — 1 hour by default; you may raise `timeout` (up to 24 hours), but the guard can never be disabled. " +
-      "Set isBackground: true for an earlier startup snapshot, useful for servers and watchers.",
+      "Set isBackground: true for an earlier startup snapshot, useful for servers and watchers. " +
+      "By default commands run on the machine that owns this chat's project. Pass nodeId to run on another connected device (for example a Windows PC); use computer.targets to list node ids, and nodeId \"gateway\" to force execution on the gateway host.",
     tier: "core",
     category: "terminal",
     source: "builtin",
@@ -102,6 +105,10 @@ export function createExecuteTool(
           type: "string",
           description: "Sandbox mount mode: none, read-only, read-write.",
           enum: ["none", "read-only", "read-write"],
+        },
+        nodeId: {
+          type: "string",
+          description: "Run on another connected device by node id (see computer.targets). \"gateway\" forces the gateway host, which is the default here.",
         },
       },
       required: ["command", "explanation"],

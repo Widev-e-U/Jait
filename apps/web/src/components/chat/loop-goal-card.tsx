@@ -74,9 +74,11 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
     return () => observer.disconnect()
   }, [compact])
 
+  // Shrink within the overlay and scroll the interactive card itself so long
+  // criteria keep their controls reachable, including by dragging the scrollbar.
   return (
     <div ref={frameRef} role={compact ? undefined : 'region'} aria-label={compact ? undefined : 'Chat loop goal'} data-testid="loop-goal-card"
-      className={`pointer-events-auto max-w-full overflow-hidden border bg-card/95 text-xs shadow-sm backdrop-blur-sm ${compact ? 'rounded-full' : 'rounded-xl'} ${GOAL_TRANSITION}`}
+      className={`pointer-events-auto min-h-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain border bg-card/95 text-xs shadow-sm backdrop-blur-sm ${compact ? 'rounded-full' : 'rounded-xl'} ${GOAL_TRANSITION}`}
       style={box ?? { width: compact ? 'max-content' : '100%' }}>
       <div ref={contentRef} className={compact ? 'px-3 py-1.5' : 'p-3'}>
         <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-controls={contentId} aria-label={collapsed ? 'Expand goal card' : 'Collapse goal card'} className={`flex w-full items-center rounded text-left text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'gap-1.5' : 'gap-2'}`}>

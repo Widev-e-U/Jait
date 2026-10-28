@@ -12,7 +12,7 @@ export interface UseVoiceSessionResult {
   voiceOverlayOpen: boolean
   setVoiceOverlayOpen: (open: boolean) => void
   voiceAssistant: ReturnType<typeof useVoiceAssistant>
-  startVoiceSession: () => void
+  startVoiceSession: (initialText?: string) => void
   /** Speaks a summary of a finished thread; no-op unless the voice overlay is open. */
   announceThreadResult: (completedThread: AgentThread) => Promise<void>
 }
@@ -68,10 +68,11 @@ export function useVoiceSession({ token }: UseVoiceSessionOptions): UseVoiceSess
     }
   }, [])
 
-  const startVoiceSession = useCallback(() => {
+  const startVoiceSession = useCallback((initialText?: string) => {
+    if (!token) return
+    void voiceAssistant.connect(initialText)
     setVoiceOverlayOpen(true)
-    void voiceAssistant.connect()
-  }, [voiceAssistant])
+  }, [token, voiceAssistant])
 
   return {
     voiceOverlayOpen,

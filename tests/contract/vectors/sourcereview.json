@@ -10753,7 +10753,8 @@
         "action": "start",
         "input": {
           "type": "browser",
-          "projectRoot": "/custom"
+          "projectRoot": "/custom",
+          "url": "https://example.com/"
         },
         "preview": true,
         "browser": true,
@@ -10786,8 +10787,10 @@
             },
             "calls": [
               [
-                "inspect",
-                {},
+                "navigate",
+                {
+                  "url": "https://example.com/"
+                },
                 "current",
                 "/custom"
               ],
@@ -10808,7 +10811,8 @@
         "op": "sourcereview.surfaceTools",
         "action": "start",
         "input": {
-          "type": "browser"
+          "type": "browser",
+          "url": "https://example.com/"
         },
         "preview": true,
         "inspectResult": {
@@ -10821,7 +10825,8 @@
         "op": "sourcereview.surfaceTools",
         "action": "start",
         "input": {
-          "type": "browser"
+          "type": "browser",
+          "url": "https://example.com/"
         },
         "preview": true,
         "inspectResult": {
@@ -10846,8 +10851,10 @@
             },
             "calls": [
               [
-                "inspect",
-                {},
+                "navigate",
+                {
+                  "url": "https://example.com/"
+                },
                 "current",
                 "/fixture"
               ],
@@ -10867,8 +10874,10 @@
             },
             "calls": [
               [
-                "inspect",
-                {},
+                "navigate",
+                {
+                  "url": "https://example.com/"
+                },
                 "current",
                 "/fixture"
               ],
@@ -11984,7 +11993,11 @@
                   "viewerDeviceIds": [
                     "1",
                     "v"
-                  ]
+                  ],
+                  "chatId": null,
+                  "nodeId": null,
+                  "initiatedBy": "user",
+                  "requireConsent": false
                 }
               ],
               [
@@ -12001,7 +12014,14 @@
                 [
                   "1",
                   "v"
-                ]
+                ],
+                {
+                  "chatId": null,
+                  "nodeId": null,
+                  "initiatedBy": "user",
+                  "reason": null,
+                  "requireConsent": false
+                }
               ],
               [
                 "control",
@@ -12188,7 +12208,11 @@
               [
                 "start",
                 {
-                  "hostDeviceId": "h"
+                  "hostDeviceId": "h",
+                  "chatId": null,
+                  "nodeId": null,
+                  "initiatedBy": "user",
+                  "requireConsent": false
                 }
               ]
             ]
@@ -63047,8 +63071,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63102,8 +63129,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63158,8 +63188,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63213,8 +63246,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63269,8 +63305,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63326,8 +63365,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63382,8 +63424,11 @@
               "hookSecret": "fixture-hook",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63438,8 +63483,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63495,8 +63543,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "https://primary.fixture",
               "primaryToken": "fixture-token",
@@ -63550,8 +63601,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63605,8 +63659,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63660,8 +63717,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63715,8 +63775,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -63771,8 +63834,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "https://primary.fixture",
               "primaryToken": "",
@@ -63827,8 +63893,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "https://primary.fixture",
               "primaryToken": "",
@@ -63883,8 +63952,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "https://primary.fixture",
               "primaryToken": "",
@@ -63939,8 +64011,11 @@
               "hookSecret": "GENERATED_SECRET",
               "heartbeatCron": "* * * * *",
               "whisperUrl": "http://localhost:8178",
-              "realtimeModel": "gpt-realtime-2.1",
+              "realtimeModel": "gpt-realtime",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "alloy",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "Jait (the assistant's name, pronounced like 'jate'), Hey Jait",
               "primaryGateway": "",
               "primaryToken": "",
@@ -64014,7 +64089,10 @@
               "heartbeatCron": "0 * * * *",
               "whisperUrl": "http://w.fixture",
               "realtimeModel": "voice-model",
+              "realtimeTranscribeModel": "gpt-4o-transcribe",
               "realtimeVoice": "shimmer",
+              "voiceEscalationAsyncMs": 12000,
+              "voiceEscalationFillerMs": 2500,
               "sttPrompt": "fixture prompt",
               "primaryGateway": "",
               "primaryToken": "",

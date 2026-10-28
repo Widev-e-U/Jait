@@ -186,6 +186,12 @@ export interface AgentGithubAppConnection {
 export interface AgentGithubAppState {
   connection: AgentGithubAppConnection | null
   webhookSecretAvailable: boolean
+  installationFlow?: 'stateful'
+}
+
+export interface AgentGithubAppInstallationStart {
+  state: string
+  installUrl: string
 }
 
 export interface AgentGithubAppSetupStart {
@@ -499,7 +505,23 @@ export class AgentsApi {
   async getAgentGithubApp(agentId: string): Promise<AgentGithubAppState> {
     const res = await fetch(this.githubAppPath(agentId), { headers: this.getHeaders() })
     if (!res.ok) throw await this.githubAppError(res, `Failed to read the GitHub App connection: ${res.statusText}`)
-    return res.json() as Promise<AgentGithubAppState>
+    const state = await res.json() as AgentGithubAppState
+    // Only an explicit server capability selects the native issuance flow.
+    return { connection: state.connection, webhookSecretAvailable: state.webhookSecretAvailable,
+      ...(res.headers.get('x-jait-github-installation-flow') === 'stateful' ? { installationFlow: 'stateful' as const } : {}) }
+  }
+
+  async startAgentGithubAppInstallation(agentId: string): Promise<AgentGithubAppInstallationStart> {
+    const res = await fetch(this.githubAppPath(agentId, '/installation-url'), { method: 'POST', headers: this.getHeaders() })
+    if (!res.ok) throw await this.githubAppError(res, `Failed to start the GitHub App installation: ${res.statusText}`)
+    const result = await res.json() as AgentGithubAppInstallationStart
+    const url = new URL(result.installUrl)
+    if (typeof result.state !== 'string' || !result.state || url.origin !== 'https://github.com'
+      || url.username || url.password || url.hash || !/^\/apps\/[a-zA-Z0-9-]+\/installations\/new$/.test(url.pathname)
+      || [...url.searchParams.keys()].length !== 1 || url.searchParams.get('state') !== result.state) {
+      throw new Error('Invalid GitHub installation URL')
+    }
+    return result
   }
 
   /** Register a brand-new App through GitHub's manifest flow for this agent. */

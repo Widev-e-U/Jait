@@ -28,6 +28,7 @@ import {
   agentTaskPrompt, newPersonaAgentDraft, normalizePersonaAvatar, PERSONA_AGENTS_STORAGE_KEY,
   PERSONA_AVATARS, readPersonaAgentDrafts, type PersonaAgentDraft, type PersonaTask,
 } from '@/lib/persona-agents'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 type AgentTab = 'chat' | 'runs' | 'skills' | 'tools' | 'profile'
 const AGENT_VIEW_KEY = 'jait.agents.activeView'
@@ -447,7 +448,7 @@ export function AgentsPage({ token, repositories, availableSkills, threads, onOp
     </div>
     {current && <aside aria-label="Agent details" className={`${chatFullscreen ? 'absolute inset-0' : 'absolute inset-y-0 right-0 w-full sm:w-[min(560px,50%)]'} z-20 flex min-h-0 flex-col border-l bg-background shadow-xl`}>
       <div className="shrink-0 border-b px-3 py-2">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2"><Button variant="ghost" size="sm" onClick={() => { setChatFullscreen(false); setCreating(null); setSelectedId(null); setConversationThreadId(null) }}><ArrowLeft className="mr-1 h-4 w-4" /> All agents</Button><div className="flex items-center gap-1">{selected && tab === 'chat' && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setChatFullscreen((value) => !value)} aria-label={chatFullscreen ? 'Exit full screen' : 'Full screen chat'} title={chatFullscreen ? 'Exit full screen' : 'Full screen chat'}>{chatFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</Button>}{selected && <Button variant="ghost" size="icon" className="h-8 w-8" disabled={busy} onClick={() => { setDeleteName(''); setDeleteOpen(true) }} aria-label="Delete agent"><Trash2 className="h-4 w-4" /></Button>}</div></div>
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2"><Button variant="ghost" size="sm" onClick={() => { setChatFullscreen(false); setCreating(null); setSelectedId(null); setConversationThreadId(null) }}><ArrowLeft className="mr-1 h-4 w-4" /> All agents</Button><div className="flex items-center gap-1">{selected && tab === 'chat' && <TooltipHint content={chatFullscreen ? 'Exit full screen' : 'Full screen chat'}><Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setChatFullscreen((value) => !value)} aria-label={chatFullscreen ? 'Exit full screen' : 'Full screen chat'}>{chatFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</Button></TooltipHint>}{selected && <Button variant="ghost" size="icon" className="h-8 w-8" disabled={busy} onClick={() => { setDeleteName(''); setDeleteOpen(true) }} aria-label="Delete agent"><Trash2 className="h-4 w-4" /></Button>}</div></div>
         <div className="mx-auto mt-1 flex max-w-5xl items-center gap-2"><AgentAvatar avatar={current.avatar} running={activeChatStatus === 'running'} className="h-8 w-8" /><div className="min-w-0"><h2 className="truncate text-base font-semibold">{creating ? 'Create agent' : current.name}</h2><p className="truncate text-sm text-muted-foreground">{creating ? 'Set up your agent' : current.persona || 'Ask about their work or assign a task'}</p></div></div>
       </div>
       {creating ? <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"><div className="mx-auto max-w-2xl space-y-5">

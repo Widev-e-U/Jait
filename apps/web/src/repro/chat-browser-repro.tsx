@@ -12,6 +12,7 @@ const call: ToolCallInfo = {
 const fixture = Reflect.get(window, '__chatBrowserFixture') as { sessionId: string; call: ToolCallInfo; initiallyUnused?: boolean; messageCount?: number } | undefined
 function BrowserChatFixture() {
   const mobileHeader = new URLSearchParams(location.search).has('mobile-header')
+  const workspace = new URLSearchParams(location.search).has('workspace')
   const [started, setStarted] = useState(!fixture?.initiallyUnused)
   const [extraActions, setExtraActions] = useState(0)
   const [otherChat, setOtherChat] = useState(false)
@@ -25,7 +26,7 @@ function BrowserChatFixture() {
     ...Array.from({ length: userSends }, (_, index) => ({ id: `user-${index}`, role: 'user' as const, content: `User message ${index}`, toolCalls: [] })),
     ...Array.from({ length: extraActions }, (_, index) => ({ id: `action-${index}`, content: '', toolCalls: [{ ...firstCall, callId: `click-${index}`, tool: 'browser.click', args: { selector: '#next' } }] })),
   ] : [{ id: 'intro', content: 'Open a page in the browser to begin.', toolCalls: [] }]
-  return <TooltipProvider><main data-browser-chat-scope className="mx-auto flex h-screen max-w-3xl flex-col p-4">
+  const chat = <main data-browser-chat-scope className="mx-auto flex h-screen w-full max-w-3xl flex-col p-4">
     {mobileHeader && <header data-app-header className="fixed inset-x-2 top-2 z-40 h-10 rounded-2xl border bg-background">Mobile app header</header>}
     {!mobileHeader && <h1 className="mb-4 text-xl">Browser in chat</h1>}
     <div className={mobileHeader ? 'hidden' : 'flex gap-3 pb-2'}>
@@ -39,6 +40,11 @@ function BrowserChatFixture() {
       </div>)}
     </Conversation>
     <div data-chat-composer-dock>{handoff.inlinePrompt}<textarea aria-label="Chat draft" defaultValue="Keep my draft" /></div>
-  </main></TooltipProvider>
+  </main>
+  return <TooltipProvider>{workspace ? <div data-browser-workspace className="relative flex h-screen overflow-hidden">
+    <aside data-browser-sidebar data-testid="fixture-sidebar" className="w-48 shrink-0 border-r bg-muted">Sidebar</aside>
+    <section data-testid="fixture-project" className="w-72 shrink-0 border-r bg-muted/50">Project panel</section>
+    {chat}
+  </div> : chat}</TooltipProvider>
 }
 createRoot(document.getElementById('root')!).render(<BrowserChatFixture />)

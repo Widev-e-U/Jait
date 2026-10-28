@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { SecurityWorkbench } from './security-workbench'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TooltipHint } from '@/components/ui/tooltip'
 
 const API_URL = getApiUrl()
 
@@ -324,7 +325,7 @@ function NodeDetail({ node, onClose, onDeploy, resources, onSelect, expanded, on
               {node.addresses.length > 0 && <div><span className="text-muted-foreground">Addresses</span><div className="break-all font-mono text-xs">{node.addresses.join(', ')}</div></div>}
               {node.facts.map(fact => <div key={fact.label} className="space-y-1">
                 <div className="text-xs text-muted-foreground">{fact.label}</div>
-                <div className="break-all text-xs" title={fact.value}>{fact.value}</div>
+                <TooltipHint content={fact.value}><div className="break-all text-xs">{fact.value}</div></TooltipHint>
               </div>)}
               <div className="text-xs text-muted-foreground">Observed {new Date(node.observedAt).toLocaleString()}</div>
               {node.kind === 'group' && <>

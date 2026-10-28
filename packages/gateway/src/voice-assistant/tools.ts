@@ -17,6 +17,8 @@ import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { CliProviderAdapter, ProviderEvent, ProviderId, RuntimeMode } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { AppConfig } from "../config.js";
+import { planVoiceEscalation } from "./router.js";
+import { buildVoiceCatalogue } from "./tier-catalog.js";
 import { hostname, platform, cpus, totalmem, freemem } from "node:os";
 
 export interface BackgroundTask {
@@ -475,14 +477,18 @@ const saveMemory: VoiceTool = {
   },
 };
 
+const PROMOTE_SENTINEL = Symbol("voice-escalation-promoted");
+
 const askAgentAboutRequest: VoiceTool = {
   schema: {
     type: "function",
     name: "ask_agent_about_request",
     description:
-      "Ask a regular Jait agent for the answer. Default to this for most non-trivial user questions. " +
-      "Use it whenever the user asks what something is, how it works, why it happened, what an error means, " +
-      "what Jait/threads/tools/providers/projects are doing, or wants a deeper explanation than the voice assistant should invent.",
+      "Escalate a question to the user's own configured Jait agents when it is beyond a quick spoken answer. " +
+      "Escalate for: current project/thread/tool/provider state you cannot see, running or changing something in a repo, " +
+      "multi-step reasoning, comparisons, design decisions, or anything the user needs checked rather than remembered. " +
+      "Answer locally and instantly for: greetings, acknowledgements, short factual recall, restating what was just said, " +
+      "and simple conversational replies. You decide whether to escalate; Jait decides which model tier answers.",
     parameters: {
       type: "object",
       properties: {
@@ -505,6 +511,21 @@ const askAgentAboutRequest: VoiceTool = {
           description:
             "Set true to run this in the background and be notified when it finishes, so you can keep talking while Jait works. Use for research, analysis, or any task likely to take a while. Defaults to false.",
         },
+        tier: {
+          type: "string",
+          enum: ["fast", "deep", "auto"],
+          description:
+            "Which model tier should answer. Leave as 'auto' (default): Jait routes cheap questions to the fast tier and hard ones to the deep tier. " +
+            "Force 'deep' only when the user explicitly wants maximum quality or asks for the strongest model.",
+        },
+        model: {
+          type: "string",
+          description: "Optional explicit model override. Rarely needed; prefer 'tier'.",
+        },
+        reasoningEffort: {
+          type: "string",
+          description: "Optional reasoning effort override for the delegated model (e.g. minimal, low, medium, high).",
+        },
       },
       required: ["question"],
     },
@@ -515,18 +536,83 @@ const askAgentAboutRequest: VoiceTool = {
     const question = String(args["question"] ?? "").trim();
     if (!question) return "No question provided.";
 
-    const providerResolution = resolveVoiceAgentProvider(deps, args["provider"]);
+    // The live model decides *whether* to escalate; this router decides *where*:
+    // the cheap fast tier, or the user's strongest configured model.
+    const requestedTier = args["tier"];
+    // What is *actually* installed and priced on this Jait install, not a static
+    // config list: the catalogue probes the real backends (cached briefly).
+    const catalogue = await buildVoiceCatalogue({
+      config: deps.config,
+      apiKeys: deps.userApiKeys,
+    }).catch(() => undefined);
+    const route = await planVoiceEscalation({
+      question,
+      explicitTier:
+        requestedTier === "fast" || requestedTier === "deep" ? requestedTier : undefined,
+      apiKeys: deps.userApiKeys,
+      catalogue,
+    });
+    // Empty target => the catalogue knows nothing; thread defaults decide.
+    const tierTarget = route.target ?? {};
+
+    const explicitModel =
+      typeof args["model"] === "string" && args["model"].trim() ? args["model"].trim() : undefined;
+    const explicitEffort =
+      typeof args["reasoningEffort"] === "string" && args["reasoningEffort"].trim()
+        ? args["reasoningEffort"].trim()
+        : undefined;
+
+    // An explicit provider arg always wins; otherwise the tier's provider (if
+    // any) wins, and thread defaults fill whatever is still missing.
+    const explicitProvider = args["provider"] !== undefined && args["provider"] !== null;
+    const requestedProvider = args["provider"] ?? tierTarget.providerId;
+    let providerResolution = resolveVoiceAgentProvider(deps, requestedProvider);
+    // A routed tier is a hint, never a hard dependency: if the provider it named
+    // cannot serve this gateway, keep the turn alive on the thread defaults
+    // instead of turning routing into a spoken error.
+    let routedModel = tierTarget.model;
+    const routedProvider = providerResolution.providerId
+      ? deps.providerRegistry.get(providerResolution.providerId)
+      : undefined;
+    if (!explicitProvider && requestedProvider && (!providerResolution.providerId || !routedProvider)) {
+      providerResolution = resolveVoiceAgentProvider(deps, undefined);
+      // The model came from another provider's catalogue; do not cross-assign it.
+      routedModel = undefined;
+    }
     if (!providerResolution.providerId) {
       return providerResolution.error ?? "No regular agent provider is available.";
     }
 
-    const provider = deps.providerRegistry.get(providerResolution.providerId);
+    let provider = deps.providerRegistry.get(providerResolution.providerId);
     if (!provider) return `Provider '${providerResolution.providerId}' is not available.`;
 
-    const available = await provider.checkAvailability();
+    let available = await provider.checkAvailability();
+    if (!available && !explicitProvider) {
+      const fallbackResolution = resolveVoiceAgentProvider(deps, undefined);
+      if (
+        fallbackResolution.providerId &&
+        fallbackResolution.providerId !== providerResolution.providerId
+      ) {
+        const fallbackProvider = deps.providerRegistry.get(fallbackResolution.providerId);
+        if (fallbackProvider && (await fallbackProvider.checkAvailability())) {
+          providerResolution = fallbackResolution;
+          provider = fallbackProvider;
+          routedModel = undefined;
+          available = true;
+        }
+      }
+    }
     if (!available) {
       return `Provider '${providerResolution.providerId}' is not available: ${provider.info.unavailableReason ?? "unknown reason"}`;
     }
+    // `providerResolution` is reassigned by the fallbacks above, which drops any
+    // earlier narrowing; assert the id once here so it is a plain string below.
+    const resolvedProviderId = providerResolution.providerId;
+    if (!resolvedProviderId) return "No regular agent provider is available.";
+
+    // Explicit args win, then the routed tier, then the thread defaults.
+    const model = explicitModel ?? routedModel ?? providerResolution.model;
+    const reasoningEffort = explicitEffort ?? (routedModel ? tierTarget.reasoningEffort : undefined);
 
     const workingDirectory = typeof args["workingDirectory"] === "string" && args["workingDirectory"].trim()
       ? args["workingDirectory"].trim()
@@ -537,8 +623,9 @@ const askAgentAboutRequest: VoiceTool = {
       userId: deps.userId,
       sessionId: "voice-assistant",
       title: `Voice helper: ${question.slice(0, 60)}`,
-      providerId: providerResolution.providerId,
-      model: providerResolution.model,
+      providerId: resolvedProviderId,
+      model,
+      reasoningEffort,
       runtimeMode: providerResolution.runtimeMode,
       kind: "delegation",
       workingDirectory,
@@ -551,7 +638,8 @@ const askAgentAboutRequest: VoiceTool = {
         threadId: thread.id,
         workingDirectory,
         mode: providerResolution.runtimeMode,
-        model: providerResolution.model,
+        model,
+        reasoningEffort,
         mcpServers: deps.providerRegistry.buildJaitMcpServerRefs(
           { host: deps.config.host, port: deps.config.port },
           undefined,
@@ -575,7 +663,7 @@ const askAgentAboutRequest: VoiceTool = {
         return runBackgroundDelegation(
           deps,
           provider,
-          providerResolution.providerId,
+          resolvedProviderId,
           thread,
           session.id,
           question,
@@ -585,7 +673,37 @@ const askAgentAboutRequest: VoiceTool = {
 
       const answerPromise = waitForDelegatedAgentAnswer(provider, session.id, timeoutMs);
       await provider.sendTurn(session.id, formatAgentQuestion(question));
-      const answer = await answerPromise;
+
+      // GPT-Live style: the voice turn never stays blocked past the async
+      // budget. If the tier is still working, promote to a background task and
+      // answer immediately instead of leaving the user in silence.
+      const asyncBudget = deps.config.voiceEscalationAsyncMs;
+      const canPromote = Boolean(deps.backgroundTasks && deps.onBackgroundTaskComplete);
+      let promoteTimer: ReturnType<typeof setTimeout> | undefined;
+      const answerOrPromote = await Promise.race<string | typeof PROMOTE_SENTINEL>([
+        answerPromise,
+        new Promise<typeof PROMOTE_SENTINEL>((resolve) => {
+          promoteTimer = setTimeout(() => resolve(PROMOTE_SENTINEL), Math.max(1_000, asyncBudget));
+        }),
+      ]).finally(() => {
+        if (promoteTimer) clearTimeout(promoteTimer);
+      });
+
+      if (answerOrPromote === PROMOTE_SENTINEL && canPromote) {
+        backgroundDispatched = true;
+        return runBackgroundDelegation(
+          deps,
+          provider,
+          resolvedProviderId,
+          thread,
+          session.id,
+          question,
+          Math.max(1_000, timeoutMs - asyncBudget),
+          answerPromise,
+        );
+      }
+
+      const answer = answerOrPromote === PROMOTE_SENTINEL ? await answerPromise : answerOrPromote;
 
       deps.threadService.addActivity(thread.id, "message", answer.slice(0, 500), {
         role: "assistant",
@@ -630,6 +748,7 @@ async function runBackgroundDelegation(
   sessionId: string,
   question: string,
   timeoutMs: number,
+  pendingAnswer?: Promise<string>,
 ): Promise<string> {
   const manager = deps.backgroundTasks!;
   const onBackgroundTaskComplete = deps.onBackgroundTaskComplete!;
@@ -657,8 +776,10 @@ async function runBackgroundDelegation(
   // is not blocked.
   void (async () => {
     try {
-      const answerPromise = waitForDelegatedAgentAnswer(provider, sessionId, timeoutMs);
-      await provider.sendTurn(sessionId, formatAgentQuestion(question));
+      const answerPromise = pendingAnswer ?? waitForDelegatedAgentAnswer(provider, sessionId, timeoutMs);
+      if (!pendingAnswer) {
+        await provider.sendTurn(sessionId, formatAgentQuestion(question));
+      }
       const answer = await answerPromise;
       if (!task.cancelled) {
         threadService.addActivity(thread.id, "message", answer.slice(0, 500), {

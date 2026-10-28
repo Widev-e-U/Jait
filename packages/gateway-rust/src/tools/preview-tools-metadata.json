@@ -1,0 +1,141 @@
+[
+  {
+    "name": "preview.start",
+    "description": "Create the complete live preview flow for the current project. Use this tool when you want preview handled end-to-end: attach to an existing local target or start the project if needed, create the dedicated browser session, and expose the live VNC/noVNC preview.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Optional local preview target such as 3000 or http://127.0.0.1:8765/"
+        },
+        "command": {
+          "type": "string",
+          "description": "Optional explicit preview command to run inside the project"
+        },
+        "port": {
+          "type": "number",
+          "description": "Optional preferred preview port"
+        },
+        "projectRoot": {
+          "type": "string",
+          "description": "Optional project root override for the preview session"
+        },
+        "frameworkHint": {
+          "type": "string",
+          "description": "Optional framework hint (vite, next, nuxt, astro, remix) to improve auto-detection"
+        }
+      }
+    }
+  },
+  {
+    "name": "preview.open",
+    "description": "Create the complete live preview flow for the current project. Use this tool when you want preview handled end-to-end: attach to an existing local target or start the project if needed, create the dedicated browser session, and expose the live VNC/noVNC preview.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Optional local preview target such as 3000 or http://127.0.0.1:8765/"
+        },
+        "command": {
+          "type": "string",
+          "description": "Optional explicit preview command to run inside the project"
+        },
+        "port": {
+          "type": "number",
+          "description": "Optional preferred preview port"
+        },
+        "projectRoot": {
+          "type": "string",
+          "description": "Optional project root override for the preview session"
+        },
+        "frameworkHint": {
+          "type": "string",
+          "description": "Optional framework hint (vite, next, nuxt, astro, remix) to improve auto-detection"
+        }
+      }
+    }
+  },
+  {
+    "name": "preview.stop",
+    "description": "Stop the active live preview flow and clean up its browser session and any managed preview process",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "preview.restart",
+    "description": "Restart the active preview session (stops old process, starts fresh, re-attaches browser)",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "preview.status",
+    "description": "Get the current status of the managed preview session including URL, mode, errors, and browserId for use with browser.click/type/etc.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "preview.logs",
+    "description": "Read recent server and browser logs from the active preview session. Returns process stdout/stderr, browser console messages, page errors, and failed network requests.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "sinceId": {
+          "type": "number",
+          "description": "Only return log entries with an ID greater than this value (for incremental reads)"
+        },
+        "stream": {
+          "type": "string",
+          "description": "Filter to a specific stream: stdout, stderr, system, or all (default: all)",
+          "enum": [
+            "stdout",
+            "stderr",
+            "system",
+            "all"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "preview.inspect",
+    "description": "Inspect the active preview and return its browserId, interactive elements with CSS selectors (for browser.click/type), DOM snapshot, browser events/errors, and optionally a screenshot. Use the returned browserId and element selectors with browser.* tools to interact with the preview.",
+    "tier": "standard",
+    "category": "browser",
+    "source": "builtin",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "screenshot": {
+          "type": "boolean",
+          "description": "Whether to include a base64 screenshot (default: false)"
+        }
+      }
+    }
+  }
+]

@@ -12,6 +12,8 @@ export interface SystemNotificationInput extends NotificationContext {
   level?: 'info' | 'success' | 'warning' | 'error'
   includeToast?: boolean
   markReadLink?: string
+  /** Locally produced events have no gateway-selected native notification owner. */
+  independentOfAttention?: boolean
 }
 
 type BrowserNotificationCtor = typeof Notification
@@ -213,7 +215,7 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
 
   // Another surface on this machine owns the system toast — show the in-app
   // toast only, so the user is told once per device rather than once per client.
-  if (!nativeNotificationsEnabled) {
+  if (!nativeNotificationsEnabled && !notif.independentOfAttention) {
     emitToast(notif)
     return
   }

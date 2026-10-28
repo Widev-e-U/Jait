@@ -37,3 +37,42 @@ pub fn is_valid_cron_expression(cron: &str) -> bool {
             in_range(field)
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_wildcards_steps_lists_ranges_and_plain_fields() {
+        assert!(is_valid_cron_expression("* * * * *"));
+        assert!(is_valid_cron_expression("*/5 0 1 1 0"));
+        assert!(is_valid_cron_expression("1,2,3 0-6 1-28 1-12 0-6"));
+        assert!(is_valid_cron_expression(" 0  12  31  12  6 "));
+    }
+
+    #[test]
+    fn rejects_wrong_field_counts() {
+        assert!(!is_valid_cron_expression(""));
+        assert!(!is_valid_cron_expression("* * * *"));
+        assert!(!is_valid_cron_expression("* * * * * *"));
+    }
+
+    #[test]
+    fn rejects_out_of_range_and_malformed_fields() {
+        assert!(!is_valid_cron_expression("60 * * * *"));
+        assert!(!is_valid_cron_expression("* 24 * * *"));
+        assert!(!is_valid_cron_expression("* * 0 * *"));
+        assert!(!is_valid_cron_expression("* * * 13 *"));
+        assert!(!is_valid_cron_expression("* * * * 7"));
+        assert!(!is_valid_cron_expression("5-1 * * * *"));
+        assert!(!is_valid_cron_expression("*/0 * * * *"));
+        assert!(!is_valid_cron_expression("*/ * * * *"));
+        assert!(!is_valid_cron_expression("abc * * * *"));
+        assert!(!is_valid_cron_expression("1,,2 * * * *"));
+    }
+
+    #[test]
+    fn rejects_over_long_expressions() {
+        assert!(!is_valid_cron_expression(&"*".repeat(257)));
+    }
+}
