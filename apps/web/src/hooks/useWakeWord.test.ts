@@ -28,6 +28,8 @@ afterEach(() => { mocks.effects = []; mocks.fetch.mockReset(); vi.useRealTimers(
 function setup(onActivate: (text: string) => void) {
   vi.stubGlobal('window', { SpeechRecognition: Recognition })
   vi.stubGlobal('navigator', { language: 'en-US' })
+  // React hooks are mocked in this test harness.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useWakeWord({ enabled: true, token: 'token', onActivate })
   return mocks.effects.map(effect => effect()).find(value => typeof value === 'function') as () => void
 }

@@ -137,12 +137,14 @@ pub fn build_index(
         root,
         options,
         &Operation::new(options.budgets.duration, cancel),
+        false,
     )
 }
 pub(crate) fn scan(
     root: &ProjectRoot,
     options: &IndexOptions,
     operation: &Operation,
+    skip_hidden: bool,
 ) -> Result<ProjectIndex> {
     operation.check()?;
     root.check_identity()?;
@@ -163,61 +165,65 @@ pub(crate) fn scan(
         coverage.directories += 1;
         let mut scopes = (*inherited).clone();
         if !options.include_ignored_files {
-            let path = if directory.is_empty() {
-                ".gitignore".into()
-            } else {
-                format!("{directory}/.gitignore")
-            };
-            let remaining = options
-                .budgets
-                .max_read_bytes
-                .saturating_sub(coverage.ignore_bytes);
-            if remaining > 0 {
-                match root.read(
-                    &path,
-                    remaining.min(64 * 1024),
-                    None,
-                    operation,
-                    &mut coverage.ignore_bytes,
-                ) {
-                    Ok(bytes) => {
-                        let text = std::str::from_utf8(&bytes).map_err(|_| {
-                            Error::Input("project ignore file must be UTF-8".into())
-                        })?;
-                        let (rules, limited) = ignore::parse(text);
-                        coverage.ignore_rules += rules.len();
-                        if coverage.ignore_rules > 512 {
-                            return Err(Error::Input(
-                                "project ignore rule count exceeds budget".into(),
-                            ));
+            for name in [".gitignore", ".ignore"] {
+                let path = if directory.is_empty() {
+                    name.to_owned()
+                } else {
+                    format!("{directory}/{name}")
+                };
+                let remaining = options
+                    .budgets
+                    .max_read_bytes
+                    .saturating_sub(coverage.ignore_bytes);
+                if remaining > 0 {
+                    match root.read(
+                        &path,
+                        remaining.min(64 * 1024),
+                        None,
+                        operation,
+                        &mut coverage.ignore_bytes,
+                    ) {
+                        Ok(bytes) => {
+                            let text = std::str::from_utf8(&bytes).map_err(|_| {
+                                Error::Input("project ignore file must be UTF-8".into())
+                            })?;
+                            let (rules, limited) = ignore::parse(text);
+                            coverage.ignore_rules += rules.len();
+                            if coverage.ignore_rules > 512 {
+                                return Err(Error::Input(
+                                    "project ignore rule count exceeds budget".into(),
+                                ));
+                            }
+                            if limited {
+                                return Err(Error::Input(
+                                    "project ignore rules are invalid or exceed budget".into(),
+                                ));
+                            }
+                            if scopes.iter().map(|s| s.rules.len()).sum::<usize>() + rules.len()
+                                <= 256
+                            {
+                                scopes.push(IgnoreScope {
+                                    base: directory.clone(),
+                                    higher_priority: name == ".ignore",
+                                    rules,
+                                });
+                            } else {
+                                return Err(Error::Input(
+                                    "project ignore rules exceed scope budget".into(),
+                                ));
+                            }
                         }
-                        if limited {
+                        Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(error @ (Error::Cancelled | Error::TimedOut)) => return Err(error),
+                        Err(_) => {
                             return Err(Error::Input(
-                                "project ignore rules are invalid or exceed budget".into(),
-                            ));
-                        }
-                        if scopes.iter().map(|s| s.rules.len()).sum::<usize>() + rules.len() <= 256
-                        {
-                            scopes.push(IgnoreScope {
-                                base: directory.clone(),
-                                rules,
-                            });
-                        } else {
-                            return Err(Error::Input(
-                                "project ignore rules exceed scope budget".into(),
+                                "project ignore file is unreadable or exceeds budget".into(),
                             ));
                         }
                     }
-                    Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error @ (Error::Cancelled | Error::TimedOut)) => return Err(error),
-                    Err(_) => {
-                        return Err(Error::Input(
-                            "project ignore file is unreadable or exceeds budget".into(),
-                        ));
-                    }
+                } else {
+                    return Err(Error::Input("project ignore bytes exceed budget".into()));
                 }
-            } else {
-                return Err(Error::Input("project ignore bytes exceed budget".into()));
             }
         }
         let scopes = Arc::new(scopes);
@@ -242,6 +248,9 @@ pub(crate) fn scan(
         for name in names {
             operation.check()?;
             coverage.entries_examined += 1;
+            if skip_hidden && name.starts_with('.') {
+                continue;
+            }
             let relative = if directory.is_empty() {
                 name
             } else {

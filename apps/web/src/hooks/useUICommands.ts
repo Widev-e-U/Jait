@@ -668,6 +668,15 @@ export function useUICommands(opts: UseUICommandsOptions) {
         return
       }
       if (platform === 'desktop' && window.jaitDesktop?.toolOp) {
+        // Screen-control effects are bound to the capture that the local UI
+        // is still presenting. The gateway's earlier check alone can become
+        // stale while an operation is in flight.
+        if (tool.startsWith('computer.') && 'shareSessionId' in args) {
+          const shareId = typeof args.shareSessionId === 'string' ? args.shareSessionId : ''
+          if (!hostedScreenShareCapture.inspect(shareId, sessionId ?? '')) {
+            throw new Error('No matching active monitor capture.')
+          }
+        }
         const result = await window.jaitDesktop.toolOp(
           tool,
           args,
@@ -744,6 +753,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       const ws = wsRef.current
       if (!ws) return
       ws.onclose = null
+      if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
       ws.close()
       wsRef.current = null
       currentSessionRef.current = null
@@ -877,6 +887,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
       ws.onmessage = handleMessage
 
       ws.onclose = () => {
+        // A remote controller must re-authorize after the node link drops.
+        if (detectPlatform() === 'desktop') void window.jaitDesktop?.toolOp?.('computer.revoke', {}, {}).catch(() => {})
         wsRef.current = null
         currentSessionRef.current = null
         onConnectionStateChangeRef.current?.({ connected: false, reconnected: false })

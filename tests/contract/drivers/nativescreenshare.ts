@@ -21,7 +21,11 @@ export async function dispatch(call:any){
  try{
   migrateDatabase(sqlite);sqlite.exec("INSERT INTO users(id,username,password_hash,created_at,updated_at)VALUES('owner','alice','fixture','old','old'),('other','bob','fixture','old','old')");
   for(const device of call.devices??[])service.registerDevice(device);
-  app=await createServer({...loadConfig(),jwtSecret:'screen-share-fixture',logLevel:'silent' as const},{sqlite,userService:new UserService(db),screenShare:service,ws});
+  // Chat ownership is fixture-controlled; this exercises the real route's
+  // access boundary without creating unrelated chat/runtime dependencies.
+  const sessionService:any={getById:(id:string,user:string)=>user==='owner' && !(call.missingChats??[]).includes(id) && !(call.threadChats??[]).includes(id)?{id,userId:user}:undefined};
+  const threadService:any=call.threadChats?{getById:(id:string)=>(call.threadChats as string[]).includes(id)?{id,userId:'owner'}:undefined}:undefined;
+  app=await createServer({...loadConfig(),jwtSecret:'screen-share-fixture',logLevel:'silent' as const},{sqlite,userService:new UserService(db),sessionService,threadService,screenShare:service,ws});
   const base=await app.listen({host:'127.0.0.1',port:0});const responses=[];const vars:Record<string,string>={};
   const replace=(v:any):any=>typeof v==='string'?Object.entries(vars).reduce((text,[key,value])=>text.replaceAll(`$${key}`,value),v):Array.isArray(v)?v.map(replace):v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([key,value])=>[key,replace(value)])):v;
   for(const source of call.steps){

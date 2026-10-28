@@ -1082,11 +1082,15 @@ export function useChat(
         const startedContent = startedTurnContentRef.current
         const wasLocallySent = (() => {
           const pending = localPendingSendRef.current
-          if (!pending) return false
-          if (Date.now() - pending.at > LOCAL_SEND_TURN_START_TOLERANCE_MS) return false
-          return startedContent !== null && safeTrim(pending.content) === startedContent
+          if (!pending || isReplay) return false
+          if (Date.now() - pending.at > LOCAL_SEND_TURN_START_TOLERANCE_MS) {
+            localPendingSendRef.current = null
+            return false
+          }
+          if (startedContent === null || safeTrim(pending.content) !== startedContent) return false
+          localPendingSendRef.current = null
+          return true
         })()
-        localPendingSendRef.current = null
 
         const queueBefore = messageQueueRef.current
         const drainedItem = startedContent !== null
@@ -1491,7 +1495,9 @@ export function useChat(
             ...prev,
             isLoading: false,
             isLoadingHistory: false,
-            error: 'Connection lost. Reconnect attempts exhausted.',
+            error: reason === 'replay'
+              ? 'Unable to recover the chat event stream. Reload the session to refresh its history.'
+              : 'Connection lost. Reconnect attempts exhausted.',
           }))
         },
       })
@@ -1534,10 +1540,9 @@ export function useChat(
               isLoadingHistory: false,
               error: isTransientConnectionError(error) ? TRANSIENT_CONNECTION_MESSAGE : prev.error,
             }))
-            // Subscribe anyway. Live events still render, and the
-            // subscription's own retry ladder keeps working the connection —
-            // without a snapshot position it just starts from "now".
-            subscribe(null)
+            // Without a snapshot cursor, subscribing from the current head can
+            // silently skip the very events needed to reconstruct this turn.
+            setState(prev => ({ ...prev, isLoading: false, error: 'Unable to recover the chat history. Reload the session to try again.' }))
             return
           }
           setState(prev => ({ ...prev, isLoadingHistory: false }))
@@ -1780,6 +1785,15 @@ export function useChat(
       }))
     }
 
+    // The subscription can receive the start before POST headers arrive.
+    // Publish the marker before sending so that fast turns do not duplicate
+    // the optimistic user message. Clear only our own marker on rejection.
+    const pendingSend = { content, at: Date.now() }
+    localPendingSendRef.current = pendingSend
+    const clearPendingSend = () => {
+      if (localPendingSendRef.current === pendingSend) localPendingSendRef.current = null
+    }
+
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
@@ -1811,6 +1825,7 @@ export function useChat(
       if (response.status === 401) {
         const data = await response.json().catch(() => ({})) as { detail?: string }
         if (data.detail === 'login_required' || data.detail === 'limit_reached') {
+          clearPendingSend()
           const detail = data.detail
           const owned = releasePlaceholder()
           setState(prev => ({
@@ -1842,6 +1857,7 @@ export function useChat(
       // arrive on `/events` for it, so this is the one response body still
       // worth reading — and it is already complete, so `.text()` suffices.
       if (response.status === 202) {
+        clearPendingSend()
         const queued = parseQueuedChatResponse(await response.text())?.message as Partial<QueuedChatMessage> | undefined
         dropOptimisticPair()
         setState(prev => ({ ...prev, isLoading: false }))
@@ -1869,10 +1885,6 @@ export function useChat(
       // carried is already on this session's subscription, and the gateway
       // keeps producing the turn after a client close.
       void response.body?.cancel().catch(() => {})
-      // The turn was accepted and this client initiated it (directly or via a
-      // client-side queue drain): the optimistic user bubble is already on
-      // screen, so the turn-start event must not append another one.
-      localPendingSendRef.current = { content, at: Date.now() }
       // The prompt is durably accepted: retire its "sending" indicator. The
       // subscription owns the assistant bubble from here on.
       setState(prev => ({
@@ -1883,6 +1895,7 @@ export function useChat(
       }))
       return 'sent'
     } catch (error) {
+      clearPendingSend()
       const transientConnectionError = isTransientConnectionError(error)
       const errorMessage = transientConnectionError
         ? TRANSIENT_CONNECTION_MESSAGE

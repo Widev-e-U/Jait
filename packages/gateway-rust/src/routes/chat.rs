@@ -148,6 +148,7 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/cancel", post(cancel_path))
             .route("/api/sessions/{id}/messages", get(messages))
             .route("/api/sessions/{id}/stream", get(super::chat_events::stream))
+            .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
     }
     /// Cancel and drain before shutting down the shared auth/database worker.
@@ -272,15 +273,51 @@ pub(crate) async fn owned_session(
         Err(_) => Err(Box::new(auth::internal_error())),
     }
 }
+// These fields carry semantics that the native turn does not yet implement.
+// Reject their presence, including null or empty values: omission can select a
+// server default while an explicit value can express provider or security intent.
+const UNSUPPORTED_CHAT_OPTIONS: &[&str] = &[
+    "personaAgentId",
+    "queuedMessageId",
+    "mode",
+    "provider",
+    "runtimeMode",
+    "responseStyle",
+    "model",
+    "reasoningEffort",
+    "displaySegments",
+    "attachments",
+    "_queuedDrain",
+    "_queuedMessageId",
+    "_systemNotification",
+    "_systemNotice",
+    "_recoveryAttempts",
+    "_loopRevision",
+];
+
+fn parse_chat_request(value: Value) -> Result<ChatBody, Box<Response>> {
+    if let Some(object) = value.as_object() {
+        if let Some(option) = UNSUPPORTED_CHAT_OPTIONS
+            .iter()
+            .find(|key| object.contains_key(**key))
+        {
+            return Err(Box::new(response(
+                400,
+                json!({
+                    "error": "UNSUPPORTED_CHAT_OPTION", "option": option
+                }),
+            )));
+        }
+    }
+    serde_json::from_value(value)
+        .map_err(|_| Box::new(response(400, json!({"error":"INVALID_CHAT_REQUEST"}))))
+}
 async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     let user = match auth::require_user(&state.auth, request.headers()).await {
         Ok(user) => user,
         Err(error) => return *error,
     };
-    let input = match body(&state, request).await.and_then(|value| {
-        serde_json::from_value::<ChatBody>(value)
-            .map_err(|_| Box::new(response(400, json!({"error":"INVALID_CHAT_REQUEST"}))))
-    }) {
+    let input = match body(&state, request).await.and_then(parse_chat_request) {
         Ok(input) => input,
         Err(error) => return *error,
     };
@@ -321,6 +358,11 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         Ok(store) => store,
         Err(_) => return auth::internal_error(),
     };
+    if store.check_stream_capacity().await.is_err() {
+        return response(503, json!({"error":"CHAT_STREAM_CAPACITY_UNAVAILABLE"}));
+    }
+    // Keep the previous failure visible if preparation or capacity checks fail.
+    state.events.clear_failure(&input.session_id);
     let context = ToolExecutionContext {
         user_id: user.id,
         session_id: input.session_id.clone(),
@@ -335,8 +377,22 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     // The terminal frame has its own bounded slot, so a full token channel
     // cannot discard completion/error after cancellation.
     let (terminal_sender, terminal_receiver) = oneshot::channel();
-    let sink = event_sink(sender.clone(), cancellation.clone(), state.limits.clone());
+    let serial = Arc::new(tokio::sync::Mutex::new(()));
+    let sink_closed = Arc::new(AtomicBool::new(false));
+    let delivery_failed = Arc::new(AtomicBool::new(false));
+    let stream_failed = Arc::new(AtomicBool::new(false));
+    let sink = event_sink(
+        sender.clone(),
+        cancellation.clone(),
+        state.limits.clone(),
+        store.clone(),
+        serial.clone(),
+        sink_closed.clone(),
+        delivery_failed.clone(),
+        stream_failed.clone(),
+    );
     let manager = state.manager.clone();
+    let events = state.events.clone();
     let session_id = input.session_id;
     tokio::spawn(async move {
         let _lease = lease;
@@ -351,22 +407,36 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
                 sink,
             })
             .await;
-        let event = match result {
-            Ok(outcome) => {
-                json!({"type":"done","session_id":session_id,"prompt_count":null,"remaining_prompts":null,"rounds":outcome.rounds})
+        let _serial = serial.lock().await;
+        sink_closed.store(true, Ordering::Release);
+        let event = if stream_failed.load(Ordering::Acquire) {
+            json!({"type":"error","message":"Chat stream could not be persisted"})
+        } else {
+            match result {
+                Ok(outcome) => {
+                    json!({"type":"done","session_id":session_id,"prompt_count":null,"remaining_prompts":null,"rounds":outcome.rounds})
+                }
+                Err(SessionTurnError::Turn(TurnError::Cancelled)) => {
+                    json!({"type":"done","session_id":session_id,"cancelled":true,"prompt_count":null,"remaining_prompts":null})
+                }
+                Err(error) => json!({"type":"error","message":public_error(&error)}),
             }
-            Err(SessionTurnError::Turn(TurnError::Cancelled)) => {
-                json!({"type":"done","session_id":session_id,"cancelled":true,"prompt_count":null,"remaining_prompts":null})
-            }
-            Err(error) => json!({"type":"error","message":public_error(&error)}),
         };
-        let terminal = format!("data: {event}\n\n");
-        let _ = terminal_sender.send(terminal);
+        let persisted = store.append_stream_terminal(event.clone()).await.is_ok();
+        let terminal = if !persisted {
+            let failure = json!({"type":"error","message":"Chat stream could not be persisted"});
+            events.publish_failure(&session_id, &context.user_id, failure.to_string());
+            failure
+        } else if delivery_failed.load(Ordering::Acquire) {
+            json!({"type":"replay_required"})
+        } else {
+            event
+        };
+        let _ = terminal_sender.send(format!("data: {terminal}\n\n"));
         drop(sender);
     });
     let stream = ChatStream {
         receiver,
-        cancellation,
         terminal: Some(terminal_receiver),
         ready_terminal: None,
     };
@@ -397,6 +467,11 @@ fn event_sink(
     sender: mpsc::Sender<String>,
     cancellation: ProcessCancellation,
     limits: ChatLimits,
+    store: SqliteTurnStore,
+    serial: Arc<tokio::sync::Mutex<()>>,
+    closed: Arc<AtomicBool>,
+    delivery_failed: Arc<AtomicBool>,
+    stream_failed: Arc<AtomicBool>,
 ) -> EventSink {
     let bytes = Arc::new(AtomicUsize::new(0));
     Arc::new(move |event| {
@@ -404,7 +479,16 @@ fn event_sink(
         let cancellation = cancellation.clone();
         let bytes = bytes.clone();
         let limits = limits.clone();
+        let store = store.clone();
+        let serial = serial.clone();
+        let closed = closed.clone();
+        let delivery_failed = delivery_failed.clone();
+        let stream_failed = stream_failed.clone();
         Box::pin(async move {
+            let _serial = serial.lock().await;
+            if closed.load(Ordering::Acquire) || cancellation.is_cancelled() {
+                return Err("Chat stream cancelled".into());
+            }
             let data = format!("data: {event}\n\n");
             if data.len() > limits.event_bytes
                 || bytes
@@ -415,16 +499,32 @@ fn event_sink(
                     })
                     .is_err()
             {
+                stream_failed.store(true, Ordering::Release);
                 cancellation.cancel();
                 return Err("Chat stream limit reached".into());
             }
-            tokio::select! {biased;_=cancellation.wait_cancelled()=>Err("Chat stream cancelled".into()),result=tokio::time::timeout(limits.send_timeout,sender.send(data))=>match result{Ok(Ok(()))=>Ok(()),_=>{cancellation.cancel();Err("Chat stream consumer unavailable".into())}}}
+            if store.append_stream_event(event).await.is_err() {
+                stream_failed.store(true, Ordering::Release);
+                cancellation.cancel();
+                return Err("Chat stream could not be persisted".into());
+            }
+            if !delivery_failed.load(Ordering::Acquire) {
+                let delivered = tokio::select! {
+                    biased;
+                    _ = cancellation.wait_cancelled() => return Err("Chat stream cancelled".into()),
+                    result = tokio::time::timeout(limits.send_timeout, sender.send(data)) =>
+                        matches!(result, Ok(Ok(()))),
+                };
+                if !delivered {
+                    delivery_failed.store(true, Ordering::Release);
+                }
+            }
+            Ok(())
         })
     })
 }
 struct ChatStream {
     receiver: mpsc::Receiver<String>,
-    cancellation: ProcessCancellation,
     terminal: Option<oneshot::Receiver<String>>,
     ready_terminal: Option<String>,
 }
@@ -450,11 +550,6 @@ impl Stream for ChatStream {
                 },
             },
         }
-    }
-}
-impl Drop for ChatStream {
-    fn drop(&mut self) {
-        self.cancellation.cancel();
     }
 }
 async fn cancel(State(state): State<ChatRoutes>, request: Request) -> Response {

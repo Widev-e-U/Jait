@@ -161,7 +161,7 @@ impl ScreenShareService {
             "transport":{"iceConnectionState":if viewers.is_empty(){"checking"}else{"connected"},"routeMode":"p2p","avgLatencyMs":if viewers.is_empty(){0}else{45},"relayActive":false},"updatedAt":now(),
             "chatId":options.chat_id,"nodeId":options.node_id,"initiatedBy":if options.initiated_by_agent {"agent"} else {"user"},
             "controlOwner":if options.initiated_by_agent {"agent"} else {"user"},
-            "pendingApproval":options.initiated_by_agent && options.require_consent,"reason":options.reason});
+            "pendingApproval":options.require_consent,"reason":options.reason});
         let id = session["id"].as_str().expect("native id").to_owned();
         if let Some(chat) = session["chatId"].as_str().filter(|chat| !chat.is_empty()) {
             self.chats.insert(chat.to_owned(), id.clone());
@@ -195,6 +195,26 @@ impl ScreenShareService {
         // The TS service updates the session map, not its legacy global state, here.
         self.sessions.insert(id.to_owned(), session.clone());
         Ok(session)
+    }
+    /// Remove one viewer while keeping the host capture and other peers alive.
+    pub fn remove_viewer(&mut self, id: &str, device_id: &str) -> Result<Value, String> {
+        let mut session = self.session(id).ok_or("Unknown active share session.")?;
+        if session["status"] == "idle" {
+            return Err("Unknown active share session.".into());
+        }
+        if session["hostDeviceId"] == device_id {
+            return Err("The host cannot leave as a viewer.".into());
+        }
+        let viewers = session["viewers"].as_array_mut().expect("native viewers");
+        if !viewers.iter().any(|viewer| viewer["deviceId"] == device_id) {
+            return Ok(session);
+        }
+        viewers.retain(|viewer| viewer["deviceId"] != device_id);
+        if session["controllerDeviceId"] == device_id {
+            session["controllerDeviceId"] = Value::Null;
+        }
+        session["updatedAt"] = json!(now());
+        Ok(self.save(session))
     }
     pub fn stop(&mut self) -> Value {
         self.stop_session(None)

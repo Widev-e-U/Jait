@@ -81,6 +81,11 @@ pub trait TurnPersistence: Send + Sync {
     ) -> BoxFuture<'_, Result<(), String>> {
         Box::pin(async { Ok(()) })
     }
+    /// Revalidate authority immediately before starting a new external effect.
+    /// This is a point-in-time check, not an atomic fence against revocation.
+    fn check_authority(&self) -> BoxFuture<'_, Result<(), String>> {
+        self.check_capacity(0, 0, 0)
+    }
     fn append(&self, event: TurnEvent) -> BoxFuture<'_, Result<(), String>>;
 }
 pub trait TurnProvider: Send + Sync {
@@ -253,6 +258,13 @@ impl TurnCoordinator<'_> {
             // Worst-case JSON escaping remains below the store's 1 MiB event cap.
             let snapshot_budget = snapshot_budget.min(128 * 1024);
             let (round_sink, partial) = partial_sink(sink.clone(), snapshot_budget);
+            bounded(
+                self.persistence.check_authority(),
+                &context.cancellation,
+                deadline,
+            )
+            .await?
+            .map_err(TurnError::Persistence)?;
             let result = bounded(
                 self.provider
                     .stream(body, &context.cancellation, round_sink),
@@ -427,6 +439,20 @@ impl TurnCoordinator<'_> {
                             false,
                             "Tool was not executed because event delivery stopped",
                         )
+                    } else if let Err(error) = bounded(
+                        self.persistence.check_authority(),
+                        &context.cancellation,
+                        deadline,
+                    )
+                    .await
+                    .and_then(|result| result.map_err(TurnError::Persistence))
+                    {
+                        cleanup_deadline = Some(Instant::now() + Duration::from_secs(5));
+                        stop = Some(error);
+                        ToolResult::message(
+                            false,
+                            "Tool was not executed because session authority could not be verified",
+                        )
                     } else {
                         match bounded(
                             self.tools.execute(&tool.name, &input, &execution_context),
@@ -509,7 +535,7 @@ impl TurnCoordinator<'_> {
         {
             return Err(TurnError::HistoryLimit);
         }
-        // Do not cancel a durable write midway; storage itself must bound admission.
+        // A timed-out write may still commit; the session manager must retain its lease.
         tokio::time::timeout_at(deadline, self.persistence.append(event))
             .await
             .map_err(|_| TurnError::TimedOut)?
@@ -643,6 +669,7 @@ mod tests {
         events: Mutex<Vec<TurnEvent>>,
         fail: AtomicBool,
         reject_capacity: AtomicBool,
+        revoked: AtomicBool,
     }
     impl TurnPersistence for Store {
         fn check_capacity(
@@ -654,6 +681,15 @@ mod tests {
             Box::pin(async {
                 if self.reject_capacity.load(Ordering::SeqCst) {
                     Err("quota".into())
+                } else {
+                    Ok(())
+                }
+            })
+        }
+        fn check_authority(&self) -> BoxFuture<'_, Result<(), String>> {
+            Box::pin(async {
+                if self.revoked.load(Ordering::SeqCst) {
+                    Err("revoked".into())
                 } else {
                     Ok(())
                 }
@@ -795,6 +831,32 @@ mod tests {
             tool_calls: calls,
             ..ParsedStream::default()
         }
+    }
+    #[tokio::test]
+    async fn revocation_at_tool_start_prevents_execution() {
+        let provider = Provider::new(vec![reply(vec![call("c", "file_read", "{}")])]);
+        let tools = Tools::new(ToolResult::message(true, "unexpected"));
+        let store = Arc::new(Store::default());
+        let revoking_store = store.clone();
+        let sink: EventSink = Arc::new(move |event| {
+            if event["type"] == "tool_start" {
+                revoking_store.revoked.store(true, Ordering::SeqCst);
+            }
+            Box::pin(async { Ok(()) })
+        });
+        let result = TurnCoordinator {
+            config: config(),
+            provider: &provider,
+            tools: &tools,
+            persistence: &*store,
+        }
+        .run(vec![], "hello".into(), &context(), sink)
+        .await;
+        assert_eq!(
+            result.unwrap_err(),
+            TurnError::Persistence("revoked".into())
+        );
+        assert!(tools.calls.lock().unwrap().is_empty());
     }
     #[tokio::test]
     async fn continues_tool_round_with_durable_events_and_server_context() {

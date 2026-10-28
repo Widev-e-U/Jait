@@ -70,6 +70,30 @@ async fn compare(mut call: Value) {
     let connection = db::open_database(&fixture.join("state.sqlite")).unwrap();
     db::migrate_database(&connection).unwrap();
     connection.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at)VALUES('owner','alice','fixture','old','old'),('other','bob','fixture','old','old')").unwrap();
+    // Match the reference fixture: every named chat belongs to owner unless
+    // a test explicitly declares it missing. This uses real native ownership.
+    let missing: Vec<&str> = call["missingChats"].as_array().into_iter().flatten()
+        .filter_map(Value::as_str).collect();
+    let threads: Vec<&str> = call["threadChats"].as_array().into_iter().flatten()
+        .filter_map(Value::as_str).collect();
+    for step in call["steps"].as_array().into_iter().flatten() {
+        let from_body = step["body"]["chatId"].as_str();
+        let from_path = step["path"].as_str().and_then(|path| path.strip_prefix("/api/screen-share/chat/"));
+        for chat in [from_body, from_path].into_iter().flatten() {
+            if chat.is_empty() || missing.contains(&chat) { continue; }
+            if threads.contains(&chat) {
+                connection.execute(
+                    "INSERT OR IGNORE INTO agent_threads(id,user_id,title,provider_id,created_at,updated_at) VALUES(?1,'owner','fixture','fixture','old','old')",
+                    [chat],
+                ).unwrap();
+            } else {
+                connection.execute(
+                    "INSERT OR IGNORE INTO sessions(id,user_id,name,created_at,last_active_at) VALUES(?1,'owner','fixture','old','old')",
+                    [chat],
+                ).unwrap();
+            }
+        }
+    }
     let auth = AuthState::new(connection, "screen-share-fixture".into()).unwrap();
     let mut service = ScreenShareService::default();
     for device in call["devices"].as_array().into_iter().flatten() {
@@ -251,9 +275,8 @@ fn step(method: &str, path: &str, body: Value) -> Value {
 fn get(path: &str) -> Value {
     json!({"method":"GET","path":format!("/api/screen-share/{path}"),"user":"owner"})
 }
-// These chat-owned routes were added to the TypeScript reference after the
-// original native review. Keep this differential gate explicitly pending until
-// the Rust adapter implements them; do not award migration credit for it.
+// The chat-owned routes were added after the original native review. These
+// differential checks do not by themselves establish full migration parity.
 #[tokio::test]
 async fn chat_owned_share_route_validation_and_unknown_sessions() {
     compare(json!({"steps":[
@@ -294,6 +317,66 @@ async fn chat_sessions_join_approval_handoff_and_stop_are_isolated() {
         get("chat/chat-a"),
         get("chat/chat-b"),
         step("POST", "join", json!({"sessionId":"$a","viewerDeviceId":"viewer"})),
+    ]})).await;
+}
+
+// Both implementations must reject another user before reading or changing a share.
+#[tokio::test]
+async fn chat_owned_share_rejects_other_user() {
+    let mut start = step("POST", "start", json!({"hostDeviceId":"host","chatId":"private",
+        "viewerDeviceIds":["viewer"],"initiatedBy":"agent"}));
+    start["bind"] = json!("share");
+    let mut replace = step("POST", "start", json!({"hostDeviceId":"host","chatId":"private"}));
+    replace["user"] = json!("other");
+    let mut lookup = get("chat/private");
+    lookup["user"] = json!("other");
+    let mut join = step("POST", "join", json!({"sessionId":"$share","viewerDeviceId":"viewer"}));
+    join["user"] = json!("other");
+    let mut handoff = step("POST", "handoff", json!({"sessionId":"$share","chatId":"private","controlOwner":"user"}));
+    handoff["user"] = json!("other");
+    let mut transfer = step("POST", "transfer-control", json!({"sessionId":"$share","controllerDeviceId":"viewer"}));
+    transfer["user"] = json!("other");
+    let mut approval = step("POST", "approve", json!({"sessionId":"$share","approved":true}));
+    approval["user"] = json!("other");
+    let mut leave = step("POST", "leave", json!({"sessionId":"$share","viewerDeviceId":"viewer"}));
+    leave["user"] = json!("other");
+    let mut stop = step("POST", "stop", json!({"sessionId":"$share"}));
+    stop["user"] = json!("other");
+    compare(json!({"devices":[device("host","desktop"),device("viewer","web")],
+        "steps":[start,replace,lookup,join,handoff,transfer,approval,leave,stop,get("chat/private")]})).await;
+}
+
+#[tokio::test]
+async fn chat_ownership_covers_threads_and_missing_chats() {
+    let mut start = step("POST", "start", json!({"hostDeviceId":"host","chatId":"thread-chat"}));
+    start["bind"] = json!("share");
+    let mut other = get("chat/thread-chat");
+    other["user"] = json!("other");
+    compare(json!({"threadChats":["thread-chat"],"missingChats":["absent"],
+        "devices":[device("host","desktop")],"steps":[
+            start, other, get("chat/thread-chat"), get("chat/absent"),
+            step("POST", "start", json!({"hostDeviceId":"host","chatId":"absent"})),
+            get("chat/thread-chat")
+        ]})).await;
+}
+
+// Leaving removes one viewer, preserves the other, and rejects a host or
+// stopped share. The injected ports do not yet model a native control lease.
+#[tokio::test]
+async fn viewer_leave_keeps_other_viewers_and_host_capture() {
+    let mut start = step("POST", "start", json!({"hostDeviceId":"host","chatId":"chat-a",
+        "viewerDeviceIds":["viewer-a","viewer-b"]}));
+    start["bind"] = json!("share");
+    compare(json!({"devices":[device("host","desktop"),device("viewer-a","web"),device("viewer-b","web")],"steps":[
+        start,
+        step("POST", "leave", json!({"sessionId":"$share","viewerDeviceId":"host"})),
+        step("POST", "leave", json!({"sessionId":"$share","viewerDeviceId":"viewer-a"})),
+        get("chat/chat-a"),
+        step("POST", "leave", json!({"sessionId":"$share","viewerDeviceId":"viewer-a"})),
+        step("POST", "leave", json!({"sessionId":"missing","viewerDeviceId":"viewer-b"})),
+        step("POST", "leave", json!({"sessionId":"$share"})),
+        step("POST", "stop", json!({"sessionId":"$share"})),
+        step("POST", "leave", json!({"sessionId":"$share","viewerDeviceId":"viewer-b"}))
     ]})).await;
 }
 

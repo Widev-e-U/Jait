@@ -76,6 +76,7 @@ impl ScreenShareRoutes {
             .route("/api/screen-share/approve", post(handle))
             .route("/api/screen-share/handoff", post(handle))
             .route("/api/screen-share/join", post(handle))
+            .route("/api/screen-share/leave", post(handle))
             .route("/api/screen-share/stop", post(handle))
             .route("/api/screen-share/transfer-control", post(handle))
             .route("/api/screen-share/capture", post(handle))
@@ -152,13 +153,99 @@ fn uncaught(error: ScreenShareError) -> Response {
         }
     }
 }
+// Read chat ownership through the database worker, never while holding the
+// screen-share domain lock. Both chats and persistent agent threads can own a
+// share, matching the TypeScript ControlAccess policy.
+async fn authorize_chat(
+    auth: &AuthState,
+    chat_id: &str,
+    user_id: &str,
+) -> Result<(), Response> {
+    let chat = chat_id.to_owned();
+    let user = user_id.to_owned();
+    let allowed = auth
+        .with_database(move |db| {
+            let allowed = db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1 AND user_id=?2) OR EXISTS(SELECT 1 FROM agent_threads WHERE id=?1 AND user_id=?2)",
+                rusqlite::params![chat, user],
+                |row| row.get::<_, bool>(0),
+            )?;
+            Ok(allowed)
+        })
+        .await;
+    match allowed {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(response(404, json!({"error":"Chat not found."}))),
+        Err(_) => Err(auth::internal_error()),
+    }
+}
+
+// Determine the owning chat only after the route's earlier input checks would
+// pass. Session ids and their chat bindings are immutable, so this snapshot is
+// safe to authorize before reacquiring the lock for the state transition.
+fn chat_for_request(service: &ScreenShareService, path: &str, body: &Value) -> Option<String> {
+    if path == "/api/screen-share/start" {
+        let host = field(body, "hostDeviceId").ok()?;
+        array(body, "viewerDeviceIds").ok()?;
+        if host.is_empty() {
+            return None;
+        }
+        // The reference coerces these fields before it checks authorization.
+        for key in ["chatId", "nodeId", "reason"] {
+            if let Some(value) = body.get(key).filter(|v| crate::services::calendar::truthy(v)) {
+                string(value).ok()?;
+            }
+        }
+        let value = body.get("chatId").filter(|v| crate::services::calendar::truthy(v))?;
+        let chat = js_trim(&string(value).ok()?).to_owned();
+        return (!chat.is_empty()).then_some(chat);
+    }
+    let id = field(body, "sessionId").ok()?;
+    if id.is_empty() {
+        return None;
+    }
+    match path {
+        "/api/screen-share/approve" | "/api/screen-share/stop" => {}
+        "/api/screen-share/handoff" => {
+            field(body, "chatId").ok()?;
+            if body["controlOwner"] != "agent" && body["controlOwner"] != "user" {
+                return None;
+            }
+        }
+        "/api/screen-share/join" | "/api/screen-share/leave" => {
+            if field(body, "viewerDeviceId").ok()?.is_empty() {
+                return None;
+            }
+            if path.ends_with("/leave")
+                && service.session(&id).is_none_or(|s| s["status"] == "idle")
+            {
+                return None;
+            }
+        }
+        "/api/screen-share/transfer-control" => {
+            if field(body, "controllerDeviceId").ok()?.is_empty() {
+                return None;
+            }
+        }
+        _ => return None,
+    }
+    service.session(&id)?["chatId"]
+        .as_str()
+        .filter(|chat| !chat.is_empty())
+        .map(str::to_owned)
+}
+
 async fn chat(
     State(state): State<ScreenShareRoutes>,
     Path(chat_id): Path<String>,
     request: Request,
 ) -> Response {
-    if let Err(error) = auth::require_user(&state.auth, request.headers()).await {
-        return *error;
+    let user = match auth::require_user(&state.auth, request.headers()).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
+    if let Err(error) = authorize_chat(&state.auth, &chat_id, &user.id).await {
+        return error;
     }
     let service = match state.service.lock() {
         Ok(service) => service,
@@ -177,14 +264,24 @@ fn start_options(session: &Value) -> Value {
 
 async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Response {
     let headers = request.headers().clone();
-    if let Err(error) = auth::require_user(&state.auth, &headers).await {
-        return *error;
-    }
+    let user = match auth::require_user(&state.auth, &headers).await {
+        Ok(user) => user,
+        Err(error) => return *error,
+    };
     let path = request.uri().path().to_owned();
     let body = match auth::parse_body(request.into_body(), &headers).await {
         Ok(body) => body,
         Err(error) => return *error,
     };
+    let chat = match state.service.lock() {
+        Ok(service) => chat_for_request(&service, &path, &body),
+        Err(_) => return auth::internal_error(),
+    };
+    if let Some(chat_id) = chat {
+        if let Err(error) = authorize_chat(&state.auth, &chat_id, &user.id).await {
+            return error;
+        }
+    }
     // No await under this domain lock. The host supplies synchronous bounded
     // enqueue ports, preserving per-request state/broadcast/start ordering.
     let mut service = match state.service.lock() {
@@ -241,7 +338,8 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
             let chat_id = parsed!(optional("chatId"));
             let node_id = parsed!(optional("nodeId"));
             let initiated_by_agent = body["initiatedBy"] == "agent";
-            let require_consent = initiated_by_agent || body["requireConsent"] == true;
+            let require_consent = chat_id.as_ref().is_some_and(|chat| !chat.is_empty())
+                || initiated_by_agent || body["requireConsent"] == true;
             // The reference currently forwards reason to the host but does not store it for this route.
             let reason = match body
                 .get("reason")
@@ -369,12 +467,7 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
                     .map_err(ScreenShareError::Message)?;
                 invoke(ScreenShareEffect::Broadcast(session.clone()))?;
                 if session["pendingApproval"] != true && session["status"] == "sharing" {
-                    let viewers = session["viewers"]
-                        .as_array()
-                        .expect("native viewers")
-                        .iter()
-                        .filter_map(|v| v["deviceId"].as_str().map(str::to_owned))
-                        .collect();
+                    let viewers = vec![viewer.clone()];
                     let mut options = start_options(&session);
                     options["requireConsent"] = json!(false);
                     invoke(ScreenShareEffect::StartRequest {
@@ -389,6 +482,26 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
             match result {
                 Ok(session) => response(200, json!({"ok":true,"session":session})),
                 Err(error) => caught(error, "Cannot join this screen share."),
+            }
+        }
+        "/api/screen-share/leave" => {
+            let id = parsed!(field(&body, "sessionId"));
+            let viewer = parsed!(field(&body, "viewerDeviceId"));
+            if id.is_empty() || viewer.is_empty() {
+                return response(400, json!({"error":"sessionId and viewerDeviceId are required."}));
+            }
+            if service.session(&id).is_none_or(|session| session["status"] == "idle") {
+                return response(404, json!({"error":"Unknown active share session."}));
+            }
+            let result = service.remove_viewer(&id, &viewer)
+                .map_err(ScreenShareError::Message)
+                .and_then(|session| {
+                    invoke(ScreenShareEffect::Broadcast(session.clone()))?;
+                    Ok(session)
+                });
+            match result {
+                Ok(session) => response(200, json!({"ok":true,"session":session})),
+                Err(error) => caught(error, "Could not leave the share."),
             }
         }
         "/api/screen-share/stop" => {

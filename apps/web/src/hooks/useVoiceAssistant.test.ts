@@ -47,6 +47,8 @@ function setup(getUserMedia: () => Promise<unknown>) {
   vi.stubGlobal('AudioWorkletNode', Worklet)
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  // React hooks are mocked in this test harness.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   return useVoiceAssistant({ authToken: 'token' })
 }
 

@@ -23,5 +23,8 @@ export class ScreenShareIceBuffer {
     }
   }
 
-  clear(): void { this.pending.clear() }
+  clear(key?: string): void {
+    if (key === undefined) this.pending.clear()
+    else this.pending.delete(key)
+  }
 }

@@ -38,7 +38,7 @@ lockfile. A decision in this table is not a claim that its integration exists.
 | --- | --- | --- |
 | Language/build | Stable Rust, edition 2024, minimum 1.98; Cargo workspace | Existing toolchain contract. Native binary; Node/Bun are development/reference-test tools only |
 | Async I/O | Tokio 1.x | Existing runtime; one shared runtime for sockets, timers and tasks |
-| HTTP/server | Axum 0.8 on Hyper; Tower / tower-http middleware | Axum is present. Adopt middleware per contract; HTTP/WS/SSE share the same server |
+| HTTP/server | Axum 0.8 on Hyper; Tower / tower-http middleware | Axum is present. Use Axum WebSocket support for the WebSocket control plane; HTTP, WebSockets and SSE share the same server. WebSocket integration remains planned. Adopt middleware per contract |
 | Data/wire formats | Serde + serde_json | Present; preserve exact naming, missing/null distinctions and error shapes. Typed DTOs at new boundaries |
 | Storage | rusqlite 0.40 with bundled SQLite + backup | Present; reuse SQL/migrations, WAL, foreign keys and existing files. Keep SQL explicit; no ORM/second SQLite stack |
 | Outbound HTTP/TLS | reqwest with rustls, native certificate roots | Selected for adapters; harness already uses reqwest. Reuse pooled clients per policy, disable implicit proxies/redirects for scoped requests, validate resolved destinations. No ambient trust or proxy inheritance without explicit policy |

@@ -107,7 +107,7 @@ export interface SessionEventSubscriptionOptions {
    */
   onReconnect?: (attempt: number, delayMs: number) => void
   /** Terminal failure: auth rejected, session gone, or retries exhausted. */
-  onFatal?: (reason: 'unauthorized' | 'not-found' | 'exhausted' | 'error', error?: unknown) => void
+  onFatal?: (reason: 'unauthorized' | 'not-found' | 'exhausted' | 'error' | 'replay', error?: unknown) => void
   fetchImpl?: typeof fetch
   /** Injected for tests; defaults to jittered exponential backoff. */
   reconnectDelay?: (attempt: number) => number
@@ -160,6 +160,10 @@ export function openSessionEventSubscription(
   } = options
 
   let lastEventId = options.lastEventId ?? null
+  // A replay boundary may be paginated, but repeated boundaries at the same
+  // cursor can also mean a corrupt or oversized stored frame.
+  let replayCursor: string | null | undefined
+  let stalledReplays = 0
   let closed = false
   let attempts = 0
   let controller: AbortController | null = null
@@ -237,7 +241,14 @@ export function openSessionEventSubscription(
           return
         }
         if (!parsed || typeof parsed !== 'object') return
-        onEvent(parsed as Record<string, unknown>)
+        const event = parsed as Record<string, unknown>
+        if (event.type === 'replay_required') {
+          stalledReplays = replayCursor === lastEventId ? stalledReplays + 1 : 1
+          replayCursor = lastEventId
+          if (stalledReplays >= 3) fail('replay')
+          return
+        }
+        onEvent(event)
       })
 
       while (true) {
@@ -251,6 +262,10 @@ export function openSessionEventSubscription(
         // a parked-but-healthy hidden tab sees these every ~15s.
         lastActivityAt = now()
         feed(decoder.decode(value, { stream: true }))
+        if (closed) {
+          void reader.cancel()
+          return
+        }
       }
       // `/events` never ends on its own, so a clean end-of-body is a dropped
       // connection (proxy idle timeout, server restart). Reconnect and replay.

@@ -489,6 +489,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   const screenShare = new ScreenShareService();
   const computerSessions = new ComputerControlSessionService();
   const screenShareControl = new ScreenShareControlCoordinator(screenShare, computerSessions, ws);
+  ws.onNodeDisconnected = (nodeId) => screenShareControl.nodeDisconnected(nodeId);
   // Late-bound Fastify app: the registry is built before createServer() runs,
   // so tools that inject into their own HTTP API resolve it lazily.
   let httpAppRef: import("fastify").FastifyInstance | undefined;

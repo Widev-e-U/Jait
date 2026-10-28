@@ -69,8 +69,9 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
     const chatId = body["chatId"] ? String(body["chatId"]).trim() : null;
     const nodeId = body["nodeId"] ? String(body["nodeId"]).trim() : null;
     const initiatedBy = body["initiatedBy"] === "agent" ? "agent" : "user";
-    // A conversation may only ever *ask* the machine's user for a capture.
-    const requireConsent = initiatedBy === "agent" || body["requireConsent"] === true;
+    // Caller-provided "initiatedBy" is not proof of a local user gesture.
+    // Every chat-owned capture must be approved at the sharing device.
+    const requireConsent = Boolean(chatId) || initiatedBy === "agent" || body["requireConsent"] === true;
     const reason = body["reason"] ? String(body["reason"]) : null;
 
     if (!hostDeviceId) {
@@ -78,7 +79,7 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
     }
 
     try {
-      if (chatId && deps.control && deps.config && deps.access) {
+      if (chatId && deps.config && deps.access) {
         const user = await requireAuth(request, reply, deps.config.jwtSecret);
         if (!user) return;
         if (!deps.access.session(chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
@@ -119,6 +120,11 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
   /** The live share owned by a chat, so the chat panel can attach to it. */
   app.get("/api/screen-share/chat/:chatId", async (request, reply) => {
     const { chatId } = request.params as { chatId: string };
+    if (deps.config && deps.access) {
+      const user = await requireAuth(request, reply, deps.config.jwtSecret);
+      if (!user) return;
+      if (!deps.access.session(chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
+    }
     const session = screenShare.getSessionForChat(chatId);
     if (!session) return reply.code(404).send({ error: "No active share for this chat." });
     return { session };
@@ -134,6 +140,11 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
     try {
       const existing = screenShare.getSession(sessionId);
       if (!existing) return reply.code(404).send({ error: "Unknown share session." });
+      if (existing.chatId && deps.config && deps.access) {
+        const user = await requireAuth(request, reply, deps.config.jwtSecret);
+        if (!user) return;
+        if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
+      }
       if (existing.status !== "sharing" || (!approved && !existing.pendingApproval)) {
         return reply.code(409).send({ error: "Screen share approval is no longer pending." });
       }
@@ -166,6 +177,11 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
       if (!existing) {
         return reply.code(404).send({ error: "Unknown share session." });
       }
+      if (existing.chatId && deps.config && deps.access) {
+        const user = await requireAuth(request, reply, deps.config.jwtSecret);
+        if (!user) return;
+        if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
+      }
       // A share owned by a chat may only be driven by that chat. Without this
       // check any chat panel (or the floating viewer) could reassign control of
       // another conversation's screen.
@@ -176,11 +192,6 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
         return reply.code(409).send({ error: "Screen share is not active and approved." });
       }
       if (deps.control && existing.controlOwner !== controlOwner && existing.chatId) {
-        if (deps.config && deps.access) {
-          const user = await requireAuth(request, reply, deps.config.jwtSecret);
-          if (!user) return;
-          if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
-        }
         await deps.control.stopForShare(sessionId);
         if (existing.nodeId) await deps.control.stopForNode(existing.nodeId, existing.chatId);
       }
@@ -208,7 +219,7 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
     if (!existing) {
       return reply.code(404).send({ error: "Unknown share session." });
     }
-    if (existing.chatId && deps.control && deps.config && deps.access) {
+    if (existing.chatId && deps.config && deps.access) {
       const user = await requireAuth(request, reply, deps.config.jwtSecret);
       if (!user) return;
       if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
@@ -225,7 +236,7 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
         ws.sendScreenShareStartRequest(
           session.id,
           session.hostDeviceId,
-          session.viewers.map((viewer) => viewer.deviceId),
+          [viewerDeviceId],
           {
             chatId: session.chatId,
             nodeId: session.nodeId,
@@ -246,16 +257,40 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
     }
   });
 
+  // Leaving closes only this viewer's peer and control seat, not the share.
+  app.post("/api/screen-share/leave", async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const sessionId = String(body["sessionId"] ?? "").trim();
+    const viewerDeviceId = String(body["viewerDeviceId"] ?? "").trim();
+    if (!sessionId || !viewerDeviceId) return reply.code(400).send({ error: "sessionId and viewerDeviceId are required." });
+    const existing = screenShare.getSession(sessionId);
+    if (!existing || existing.status === "idle") return reply.code(404).send({ error: "Unknown active share session." });
+    if (existing.chatId && deps.config && deps.access) {
+      const user = await requireAuth(request, reply, deps.config.jwtSecret);
+      if (!user) return;
+      if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
+    }
+    try {
+      const session = screenShare.removeViewer(sessionId, viewerDeviceId);
+      const stopping = deps.control?.stopForViewer(sessionId, viewerDeviceId);
+      ws.broadcastScreenShareState(session);
+      await stopping;
+      return { ok: true, session: screenShare.getSession(sessionId) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : "Could not leave the share." });
+    }
+  });
+
   app.post("/api/screen-share/stop", async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const sessionId = body["sessionId"] ? String(body["sessionId"]).trim() : undefined;
     const existing = sessionId ? screenShare.getSession(sessionId) : screenShare.getState().activeSession;
-    if (existing && deps.control && existing.chatId) {
-      if (deps.config && deps.access) {
-        const user = await requireAuth(request, reply, deps.config.jwtSecret);
-        if (!user) return;
-        if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
-      }
+    if (existing?.chatId && deps.config && deps.access) {
+      const user = await requireAuth(request, reply, deps.config.jwtSecret);
+      if (!user) return;
+      if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
+    }
+    if (existing?.chatId && deps.control) {
       await deps.control.stopForShare(existing.id);
       if (existing.nodeId) await deps.control.stopForNode(existing.nodeId, existing.chatId, false);
     }
@@ -271,6 +306,12 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
 
     if (!controllerDeviceId) {
       return reply.code(400).send({ error: "controllerDeviceId is required." });
+    }
+    const existing = sessionId ? screenShare.getSession(sessionId) : screenShare.getState().activeSession;
+    if (existing?.chatId && deps.config && deps.access) {
+      const user = await requireAuth(request, reply, deps.config.jwtSecret);
+      if (!user) return;
+      if (!deps.access.session(existing.chatId, user.id)) return reply.code(404).send({ error: "Chat not found." });
     }
 
     try {

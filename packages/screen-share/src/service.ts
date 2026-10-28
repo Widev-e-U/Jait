@@ -121,10 +121,10 @@ export class ScreenShareService {
       chatId,
       nodeId: input.nodeId ?? null,
       initiatedBy,
-      // A person sharing their own screen keeps control; an agent-requested
-      // capture starts with the agent driving but flagged for host approval.
+      // A person sharing their own screen keeps control; agent requests start
+      // with the agent as controller. Consent applies independently to either.
       controlOwner: initiatedBy === "agent" ? "agent" : "user",
-      pendingApproval: Boolean(input.requireConsent) && initiatedBy === "agent",
+      pendingApproval: Boolean(input.requireConsent),
       reason: input.reason ?? null,
     };
 
@@ -174,6 +174,23 @@ export class ScreenShareService {
       updatedAt: new Date().toISOString(),
     };
     this.sessions.set(session.id, updated);
+    return updated;
+  }
+
+  /** Detach one viewer without stopping the host or other viewers. */
+  removeViewer(sessionId: string, deviceId: string): ScreenShareSessionState {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status === "idle") throw new Error("Unknown active share session.");
+    if (deviceId === session.hostDeviceId) throw new Error("The host cannot leave as a viewer.");
+    if (!session.viewers.some((viewer) => viewer.deviceId === deviceId)) return session;
+    const updated: ScreenShareSessionState = {
+      ...session,
+      viewers: session.viewers.filter((viewer) => viewer.deviceId !== deviceId),
+      controllerDeviceId: session.controllerDeviceId === deviceId ? null : session.controllerDeviceId,
+      updatedAt: new Date().toISOString(),
+    };
+    this.sessions.set(session.id, updated);
+    if (this.activeSession?.id === session.id) this.activeSession = updated;
     return updated;
   }
 

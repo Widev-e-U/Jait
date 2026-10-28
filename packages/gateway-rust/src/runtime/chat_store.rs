@@ -12,6 +12,10 @@ use std::sync::Arc;
 const EVENT_TYPE: &str = "rust.chat.message";
 const MAX_EVENT_BYTES: usize = 1024 * 1024;
 const MAX_HISTORY_EVENTS: usize = 512;
+const STREAM_EVENT_TYPE: &str = "rust.chat.stream";
+const MAX_STREAM_EVENTS: i64 = 8192;
+const MAX_STREAM_BYTES: i64 = 16 * 1024 * 1024;
+const MAX_STREAM_EVENT_BYTES: usize = 64 * 1024;
 const MAX_HISTORY_BYTES: usize = 8 * 1024 * 1024;
 
 /// Construct only after HTTP authentication. Neither identity comes from model arguments.
@@ -81,8 +85,78 @@ impl SqliteTurnStore {
         }).await.map_err(|_| "Turn history could not be loaded".into())
     }
 
+    /// Check space for one maximum-size ordinary frame and a terminal frame.
+    /// Call under the session lease before starting provider effects. This is not
+    /// a cross-process reservation and does not reserve an entire turn's output.
+    pub(crate) async fn check_stream_capacity(&self) -> Result<(), String> {
+        let owner = self.owner.clone();
+        let session = self.session.clone();
+        self.auth.with_database(move |db| {
+            let tx = db.unchecked_transaction()?;
+            require_owner(&tx, &owner, &session)?;
+            let (count, bytes): (i64, i64) = tx.query_row(
+                "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
+                params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            if count > MAX_STREAM_EVENTS - 2 || bytes > MAX_STREAM_BYTES - 2 * MAX_STREAM_EVENT_BYTES as i64 {
+                return Err("Stored stream has insufficient capacity".into());
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.map_err(|_| "Stream capacity could not be admitted".into())
+    }
+
+    /// Append an ordinary client frame while retaining one terminal frame slot.
+    pub(crate) async fn append_stream_event(&self, event: Value) -> Result<(), String> {
+        self.append_stream_frame(event, false).await
+    }
+
+    /// Append a final done/error frame, which may use the reserved slot.
+    pub(crate) async fn append_stream_terminal(&self, event: Value) -> Result<(), String> {
+        self.append_stream_frame(event, true).await
+    }
+
+    async fn append_stream_frame(&self, event: Value, terminal: bool) -> Result<(), String> {
+        let kind = event.get("type").and_then(Value::as_str);
+        if !event.is_object() || kind.is_none() || matches!(kind, Some("done" | "error")) != terminal {
+            return Err("Invalid stream event".into());
+        }
+        let data = serde_json::to_string(&event).map_err(|_| "Stream event could not be encoded")?;
+        if data.len() > MAX_STREAM_EVENT_BYTES {
+            return Err("Stream event exceeds persistence limit".into());
+        }
+        let owner = self.owner.clone();
+        let session = self.session.clone();
+        let events = self.events.clone();
+        self.auth.with_database(move |db| {
+            let tx = db.unchecked_transaction()?;
+            require_owner(&tx, &owner, &session)?;
+            let (count, bytes): (i64, i64) = tx.query_row(
+                "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
+                params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            let reserve_count = if terminal { 0 } else { 1 };
+            let reserve_bytes = if terminal { 0 } else { MAX_STREAM_EVENT_BYTES as i64 };
+            if count >= MAX_STREAM_EVENTS - reserve_count || bytes + data.len() as i64 > MAX_STREAM_BYTES - reserve_bytes {
+                return Err("Stored stream exceeds persistence limits".into());
+            }
+            let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [&session], |row| row.get(0))?;
+            tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session, next, STREAM_EVENT_TYPE, data, chrono::Utc::now().timestamp_millis()])?;
+            tx.commit()?;
+            let _ = events.publish_serialized(&session, next, data);
+            Ok(())
+        }).await.map_err(|_| "Stream event could not be persisted".into())
+    }
+
     async fn append_event(&self, event: TurnEvent) -> Result<(), String> {
-        let publish_event = event.clone();
+        let start = match &event {
+            TurnEvent::User { content } => Some(serde_json::to_string(&json!({"type":"request","content":content}))
+                .map_err(|_| "Stream event could not be encoded")?),
+            _ => None,
+        };
+        if start.as_ref().is_some_and(|data| data.len() > MAX_STREAM_EVENT_BYTES) {
+            return Err("Stream event exceeds persistence limit".into());
+        }
         let payload = serde_json::to_string(&json!({"version":1,"event":event}))
             .map_err(|_| "Turn event could not be encoded")?;
         if payload.len() > MAX_EVENT_BYTES {
@@ -103,12 +177,20 @@ impl SqliteTurnStore {
             let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [&session], |row| row.get(0))?;
             let now = chrono::Utc::now();
             tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next,EVENT_TYPE,payload,now.timestamp_millis()])?;
+            if let Some(data) = &start {
+                let (count, bytes): (i64, i64) = tx.query_row(
+                    "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
+                    params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
+                )?;
+                if count >= MAX_STREAM_EVENTS - 1 || bytes + data.len() as i64 > MAX_STREAM_BYTES - MAX_STREAM_EVENT_BYTES as i64 {
+                    return Err("Stored stream exceeds persistence limits".into());
+                }
+                tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next+1,STREAM_EVENT_TYPE,data,now.timestamp_millis()])?;
+            }
             tx.execute("UPDATE sessions SET last_active_at=? WHERE id=? AND user_id=?", params![now.to_rfc3339_opts(chrono::SecondsFormat::Millis,true),session,owner])?;
             super::chat_projection::project_log(&tx,&session)?;
             tx.commit()?;
-            // Fan out only after the append is durable; a subscriber may resume
-            // from this `log_id` and its replay is guaranteed to include it.
-            let _ = events.publish(&session, next, &publish_event);
+            if let Some(data) = start { let _ = events.publish_serialized(&session, next + 1, data); }
             Ok(())
         }).await.map_err(|_| "Turn event could not be persisted".into())
     }
@@ -163,6 +245,7 @@ fn require_owner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::chat_events::{Frame, Message};
     use crate::{
         db,
         providers::openai_stream::{OpenAiFunction, OpenAiToolCall},
@@ -185,6 +268,169 @@ mod tests {
     fn store(auth: &AuthState) -> SqliteTurnStore {
         SqliteTurnStore::new(auth.clone(), "owner".into(), "session".into()).unwrap()
     }
+    #[tokio::test]
+    async fn stream_events_are_owner_checked_durable_and_separate_from_history() {
+        let path = artifact_database();
+        let auth = open(&path);
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus.clone());
+        let other = SqliteTurnStore::new(auth.clone(), "other".into(), "session".into())
+            .unwrap()
+            .with_events(bus);
+        assert!(
+            other
+                .append_stream_event(json!({"type":"token","content":"no"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            adapter
+                .append_stream_event(json!({"content":"missing type"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            adapter
+                .append_stream_event(
+                    json!({"type":"token","content":"x".repeat(MAX_STREAM_EVENT_BYTES)})
+                )
+                .await
+                .is_err()
+        );
+        adapter
+            .append_stream_event(json!({"type":"token","content":"yes"}))
+            .await
+            .unwrap();
+        let Message::Durable(frame) = receiver.try_recv().unwrap() else { panic!("expected durable frame") };
+        assert_eq!(frame.log_id, 1);
+        assert_eq!(
+            serde_json::from_str::<Value>(&frame.data).unwrap()["content"],
+            "yes"
+        );
+        assert!(adapter.load().await.unwrap().is_empty());
+        auth.shutdown().await.unwrap();
+        let restarted = open(&path);
+        let payload: String = restarted
+            .with_database(|db| {
+                Ok(db.query_row(
+                    "SELECT payload FROM session_events WHERE session_id='session' AND type=?",
+                    [STREAM_EVENT_TYPE],
+                    |row| row.get(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&payload).unwrap()["content"],
+            "yes"
+        );
+        restarted.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_history_and_request_frame_commit_together() {
+        let auth = open(Path::new(":memory:"));
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus);
+        adapter.append(TurnEvent::User { content: "history".into() }).await.unwrap();
+        let Message::Durable(start) = receiver.try_recv().unwrap() else { panic!("expected request") };
+        assert_eq!(start.log_id, 2);
+        assert_eq!(serde_json::from_str::<Value>(&start.data).unwrap()["content"], "history");
+        adapter.append_stream_event(json!({"type":"token","content":"visible"})).await.unwrap();
+        let Message::Durable(frame) = receiver.try_recv().unwrap() else { panic!("expected durable frame") };
+        assert_eq!(frame.log_id, 3);
+        assert_eq!(serde_json::from_str::<Value>(&frame.data).unwrap()["content"], "visible");
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn full_stream_rejects_without_deleting_or_publishing() {
+        let auth = open(Path::new(":memory:"));
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus);
+        auth.with_database(|db| {
+            let tx = db.unchecked_transaction()?;
+            {
+                let mut insert = tx.prepare("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,?,?,0)")?;
+                for id in 1..=MAX_STREAM_EVENTS {
+                    insert.execute(params![id, STREAM_EVENT_TYPE, r#"{"type":"token"}"#])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.unwrap();
+        assert!(adapter.append_stream_terminal(json!({"type":"done"})).await.is_err());
+        assert!(matches!(receiver.try_recv(), Err(tokio::sync::broadcast::error::TryRecvError::Empty)));
+        let (count, first, last): (i64, i64, i64) = auth.with_database(|db| {
+            Ok(db.query_row("SELECT count(*),min(log_id),max(log_id) FROM session_events WHERE session_id='session' AND type=?", [STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?)
+        }).await.unwrap();
+        assert_eq!((count, first, last), (MAX_STREAM_EVENTS, 1, MAX_STREAM_EVENTS));
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stream_reserves_terminal_slot_and_preflight_checks_ownership() {
+        let auth = open(Path::new(":memory:"));
+        let bus = EventBus::new();
+        let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
+        let adapter = store(&auth).with_events(bus);
+        assert!(adapter.check_stream_capacity().await.is_ok());
+        let other = SqliteTurnStore::new(auth.clone(), "other".into(), "session".into()).unwrap();
+        assert!(other.check_stream_capacity().await.is_err());
+        assert!(adapter.append_stream_event(json!({"type":"done"})).await.is_err());
+        assert!(adapter.append_stream_terminal(json!({"type":"token"})).await.is_err());
+        auth.with_database(|db| {
+            let tx = db.unchecked_transaction()?;
+            {
+                let mut insert = tx.prepare("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,?,?,0)")?;
+                for id in 1..MAX_STREAM_EVENTS {
+                    insert.execute(params![id, STREAM_EVENT_TYPE, r#"{"type":"token"}"#])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.unwrap();
+        assert!(adapter.check_stream_capacity().await.is_err());
+        assert!(adapter.append_stream_event(json!({"type":"token"})).await.is_err());
+        assert!(matches!(receiver.try_recv(), Err(tokio::sync::broadcast::error::TryRecvError::Empty)));
+        adapter.append_stream_terminal(json!({"type":"error"})).await.unwrap();
+        let Message::Durable(Frame { log_id, .. }) = receiver.try_recv().unwrap() else { panic!("expected durable frame") };
+        assert_eq!(log_id, MAX_STREAM_EVENTS);
+        assert!(adapter.append_stream_terminal(json!({"type":"done"})).await.is_err());
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn stream_byte_limit_preserves_terminal_reserve() {
+        let auth = open(Path::new(":memory:"));
+        let adapter = store(&auth);
+        auth.with_database(|db| {
+            let empty = serde_json::to_string(&json!({"type":"token","content":""}))?;
+            let payload = serde_json::to_string(&json!({"type":"token","content":"x".repeat(MAX_STREAM_EVENT_BYTES - empty.len())}))?;
+            assert_eq!(payload.len(), MAX_STREAM_EVENT_BYTES);
+            let tx = db.unchecked_transaction()?;
+            {
+                let mut insert = tx.prepare("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES('session',?,?,?,0)")?;
+                for id in 1..=(MAX_STREAM_BYTES / MAX_STREAM_EVENT_BYTES as i64 - 1) {
+                    insert.execute(params![id, STREAM_EVENT_TYPE, payload])?;
+                }
+            }
+            tx.commit()?;
+            Ok(())
+        }).await.unwrap();
+        assert!(adapter.check_stream_capacity().await.is_err());
+        assert!(adapter.append_stream_event(json!({"type":"token"})).await.is_err());
+        adapter.append_stream_terminal(json!({"type":"error"})).await.unwrap();
+        let bytes: i64 = auth.with_database(|db| {
+            Ok(db.query_row("SELECT sum(length(CAST(payload AS BLOB))) FROM session_events WHERE session_id='session' AND type=?", [STREAM_EVENT_TYPE], |row| row.get(0))?)
+        }).await.unwrap();
+        assert!(bytes <= MAX_STREAM_BYTES);
+        auth.shutdown().await.unwrap();
+    }
+
     #[tokio::test]
     async fn complete_tool_history_survives_restart_and_shared_log_sequence() {
         let path = artifact_database();
@@ -229,7 +475,7 @@ mod tests {
             })
             .await
             .unwrap();
-        assert_eq!(ids, vec![40, 41, 42, 43, 44]);
+        assert_eq!(ids, vec![40, 41, 42, 43, 44, 45]);
         auth.shutdown().await.unwrap();
         let restarted = open(&path);
         assert_eq!(store(&restarted).load().await.unwrap(), events);

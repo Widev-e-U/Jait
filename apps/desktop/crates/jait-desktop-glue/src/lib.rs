@@ -828,7 +828,10 @@ impl HostState {
                 let params = arg(1);
                 let meta = arg(2);
                 match op.as_str() {
-                    "computer.capabilities" => Ok(tool_ok("", json!({ "input": false, "observe": false }))),
+                    "computer.capabilities" => {
+                        let available = cfg!(all(windows, feature = "experimental-computer-control"));
+                        Ok(tool_ok("", json!({ "input": available, "observe": available, "shareControl": available })))
+                    },
                     #[cfg(all(windows, feature = "experimental-computer-control"))]
                     "computer.session" | "computer.act" | "computer.observe" | "computer.geometry" | "computer.revoke" | "computer.clipboard.read" | "computer.clipboard.write" => {
                         Ok(self.computer_op(&op, &params, &meta))

@@ -1,11 +1,14 @@
 //! Candidate desktop parent-pipe lifecycle. This module is deliberately not wired
 //! into a production entrypoint. The owner must be retained until `run` returns.
 //!
-//! The runtime completion future must own and join its runtime work, observe the
-//! stop receiver, and finish only after cleanup. No task is spawned here. Dropping
-//! a `run` future is safe: input parsing, startup, and completion remain owned by
-//! the candidate. Dropping the candidate itself abandons that responsibility.
-use std::{future::Future, io, pin::Pin};
+//! Startup and completion must supervise and join their own work, observe stop,
+//! and finish only after cleanup. No task is spawned here. Dropping a `run`
+//! future preserves all state; dropping the owner abandons that responsibility.
+//! A shutdown deadline is reported once, without dropping either future. The caller
+//! must retain and drive the owner or deliberately decide how to handle a stuck
+//! process. This differs from Node's forced exit and is not host integration or
+//! full Node parity; the host's own kill deadline and launch behavior still apply.
+use std::{future::Future, io, pin::Pin, time::Duration};
 use tokio::{
     io::{AsyncRead, ReadBuf},
     sync::watch,
@@ -25,6 +28,8 @@ pub struct DesktopParentPipe<R, F> {
     completion: Option<Lifecycle>,
     stop: watch::Sender<bool>,
     stopping: bool,
+    shutdown_timeout: Duration,
+    deadline: Option<Pin<Box<tokio::time::Sleep>>>,
     error: Option<io::Error>,
     line_len: usize,
     line_matches: bool,
@@ -38,19 +43,23 @@ where
     R: AsyncRead + Unpin,
     F: FnMut(&str) -> io::Result<()>,
 {
+    /// Both factories receive the same stop signal and must supervise their work.
+    /// The deadline begins at the first stop request, including errors and EOF.
     /// `completion` must supervise the runtime and react to the supplied watch
     /// receiver. The synchronous readiness callback must write the entire marker
     /// or return an error; it must not re-enter this owner.
-    pub fn new<S, C, MakeCompletion>(
+    pub fn new<S, C, MakeStartup, MakeCompletion>(
         input: R,
         port: u16,
-        startup: S,
+        make_startup: MakeStartup,
         make_completion: MakeCompletion,
         ready: F,
+        shutdown_timeout: Duration,
     ) -> Self
     where
         S: Future<Output = io::Result<()>> + Send + 'static,
         C: Future<Output = io::Result<()>> + Send + 'static,
+        MakeStartup: FnOnce(watch::Receiver<bool>) -> S,
         MakeCompletion: FnOnce(watch::Receiver<bool>) -> C,
     {
         let (stop, receiver) = watch::channel(false);
@@ -58,10 +67,12 @@ where
             input,
             ready,
             port,
-            startup: Some(Box::pin(startup)),
+            startup: Some(Box::pin(make_startup(receiver.clone()))),
             completion: Some(Box::pin(make_completion(receiver))),
             stop,
             stopping: false,
+            shutdown_timeout,
+            deadline: None,
             error: None,
             line_len: 0,
             line_matches: true,
@@ -75,6 +86,7 @@ where
         if !self.stopping {
             self.stopping = true;
             self.stop.send_replace(true);
+            self.deadline = Some(Box::pin(tokio::time::sleep(self.shutdown_timeout)));
         }
     }
 
@@ -120,7 +132,10 @@ where
 
     /// Drive startup, parent control and supervised completion. Cancelling this
     /// borrow does not drop any of them. On failure, request stop and retain the
-    /// first error until startup and supervised cleanup have both completed.
+    /// first error until startup and supervised cleanup have both completed. If
+    /// the shutdown deadline expires, return `TimedOut` once while retaining
+    /// both futures and the first error. Calling `run` again continues cleanup
+    /// without a second deadline. The caller owns any escalation policy.
     pub async fn run(&mut self) -> io::Result<()> {
         if self.finished {
             return Err(io::Error::other("desktop lifecycle already completed"));
@@ -133,30 +148,43 @@ where
                     None => Ok(()),
                 };
             }
+            // Keep input on the stack instead of allocating for each read.
+            #[allow(clippy::large_enum_variant)]
             enum Event {
                 Input(io::Result<usize>, [u8; READ_SIZE]),
-                Startup(io::Result<()>),
+                Startup(io::Result<()>, Option<io::Result<()>>),
                 Completion(io::Result<()>),
+                Deadline,
             }
             let event = std::future::poll_fn(|cx| {
                 use std::task::Poll;
                 let mut poll_lifecycle = |cx: &mut std::task::Context<'_>| {
-                    if let Some(startup) = &mut self.startup {
-                        if let Poll::Ready(result) = startup.as_mut().poll(cx) {
-                            return Some(Event::Startup(result));
-                        }
+                    // A completed runtime takes precedence over readiness when
+                    // both are observable in the same poll.
+                    if let Some(completion) = &mut self.completion
+                        && let Poll::Ready(result) = completion.as_mut().poll(cx)
+                    {
+                        return Some(Event::Completion(result));
                     }
-                    if let Some(completion) = &mut self.completion {
-                        if let Poll::Ready(result) = completion.as_mut().poll(cx) {
-                            return Some(Event::Completion(result));
-                        }
+                    if let Some(startup) = &mut self.startup
+                        && let Poll::Ready(result) = startup.as_mut().poll(cx)
+                    {
+                        // Startup can itself make completion ready. Recheck
+                        // before publishing readiness, without repolling startup.
+                        let completion = self.completion.as_mut().and_then(|completion| {
+                            match completion.as_mut().poll(cx) {
+                                Poll::Ready(result) => Some(result),
+                                Poll::Pending => None,
+                            }
+                        });
+                        return Some(Event::Startup(result, completion));
                     }
                     None
                 };
-                if self.input_budget >= INPUT_BUDGET || self.stopping {
-                    if let Some(event) = poll_lifecycle(cx) {
-                        return Poll::Ready(event);
-                    }
+                if (self.input_budget >= INPUT_BUDGET || self.stopping)
+                    && let Some(event) = poll_lifecycle(cx)
+                {
+                    return Poll::Ready(event);
                 }
                 if !self.stopping {
                     let mut bytes = [0; READ_SIZE];
@@ -172,15 +200,28 @@ where
                         Poll::Pending => {}
                     }
                 }
-                if self.input_budget < INPUT_BUDGET && !self.stopping {
-                    if let Some(event) = poll_lifecycle(cx) {
-                        return Poll::Ready(event);
-                    }
+                if self.input_budget < INPUT_BUDGET
+                    && !self.stopping
+                    && let Some(event) = poll_lifecycle(cx)
+                {
+                    return Poll::Ready(event);
+                }
+                if let Some(deadline) = &mut self.deadline
+                    && deadline.as_mut().poll(cx).is_ready()
+                {
+                    return Poll::Ready(Event::Deadline);
                 }
                 Poll::Pending
             })
             .await;
             match event {
+                Event::Deadline => {
+                    self.deadline = None;
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "desktop shutdown deadline exceeded; cleanup remains owned",
+                    ));
+                }
                 Event::Input(Ok(0), _) => self.request_stop(),
                 Event::Input(Ok(n), bytes) => {
                     self.input_budget = self.input_budget.saturating_add(n);
@@ -190,9 +231,16 @@ where
                     }
                 }
                 Event::Input(Err(error), _) => self.fail(error),
-                Event::Startup(result) => {
+                Event::Startup(result, completion) => {
                     self.input_budget = 0;
                     self.startup = None;
+                    if let Some(completion) = completion {
+                        self.completion = None;
+                        match completion {
+                            Err(error) => self.fail(error),
+                            Ok(()) => self.request_stop(),
+                        }
+                    }
                     match result {
                         Ok(()) if !self.stopping => {
                             if let Err(error) =
@@ -228,15 +276,15 @@ mod tests {
     };
     use tokio::{io::AsyncWriteExt, sync::oneshot, time::timeout};
 
-    fn supervisor(mut stop: watch::Receiver<bool>) -> impl Future<Output = io::Result<()>> + Send {
-        async move {
-            while !*stop.borrow_and_update() {
-                stop.changed().await.map_err(io::Error::other)?;
-            }
-            Ok(())
+    async fn supervisor(mut stop: watch::Receiver<bool>) -> io::Result<()> {
+        while !*stop.borrow_and_update() {
+            stop.changed().await.map_err(io::Error::other)?;
         }
+        Ok(())
     }
-    fn output() -> (Arc<Mutex<Vec<String>>>, impl FnMut(&str) -> io::Result<()>) {
+    type CapturedOutput = Arc<Mutex<Vec<String>>>;
+
+    fn output() -> (CapturedOutput, impl FnMut(&str) -> io::Result<()>) {
         let result = Arc::new(Mutex::new(Vec::new()));
         let captured = result.clone();
         (result, move |s| {
@@ -249,7 +297,14 @@ mod tests {
     async fn exact_lines_ignored_input_and_ready_then_stop() {
         let (mut parent, child) = tokio::io::duplex(128);
         let (seen, ready) = output();
-        let mut owner = DesktopParentPipe::new(child, 1234, async { Ok(()) }, supervisor, ready);
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            |_| async { Ok(()) },
+            supervisor,
+            ready,
+            Duration::from_secs(1),
+        );
         parent.write_all(b"stopx\n stop\r\nSTOP\n").await.unwrap();
         assert!(
             timeout(Duration::from_millis(10), owner.run())
@@ -270,12 +325,13 @@ mod tests {
             let mut owner = DesktopParentPipe::new(
                 child,
                 1234,
-                async {
+                |_| async {
                     rx.await.unwrap();
                     Ok(())
                 },
                 supervisor,
                 ready,
+                Duration::from_secs(1),
             );
             if eof {
                 drop(parent);
@@ -301,7 +357,7 @@ mod tests {
         let mut owner = DesktopParentPipe::new(
             child,
             1234,
-            async { Ok(()) },
+            |_| async { Ok(()) },
             move |mut stop: watch::Receiver<bool>| async move {
                 while !*stop.borrow_and_update() {
                     stop.changed().await.unwrap();
@@ -310,6 +366,7 @@ mod tests {
                 Ok(())
             },
             ready,
+            Duration::from_secs(1),
         );
         parent.write_all(b"st").await.unwrap();
         assert!(
@@ -335,8 +392,14 @@ mod tests {
             parent.write_all(input).await.unwrap();
             drop(parent);
             let (seen, ready) = output();
-            let mut owner =
-                DesktopParentPipe::new(child, 4321, async { Ok(()) }, supervisor, ready);
+            let mut owner = DesktopParentPipe::new(
+                child,
+                4321,
+                |_| async { Ok(()) },
+                supervisor,
+                ready,
+                Duration::from_secs(1),
+            );
             owner.run().await.unwrap();
             assert!(seen.lock().unwrap().is_empty());
         }
@@ -347,7 +410,14 @@ mod tests {
         let (mut parent, child) = tokio::io::duplex(8192);
         parent.write_all(&vec![b'x'; 6000]).await.unwrap();
         let (seen, ready) = output();
-        let mut owner = DesktopParentPipe::new(child, 1234, async { Ok(()) }, supervisor, ready);
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            |_| async { Ok(()) },
+            supervisor,
+            ready,
+            Duration::from_secs(1),
+        );
         assert!(
             timeout(Duration::from_millis(10), owner.run())
                 .await
@@ -367,7 +437,7 @@ mod tests {
         let mut owner = DesktopParentPipe::new(
             child,
             1234,
-            async { Err(io::Error::other("startup")) },
+            |_| async { Err(io::Error::other("startup")) },
             move |mut stop: watch::Receiver<bool>| async move {
                 while !*stop.borrow_and_update() {
                     stop.changed().await.unwrap();
@@ -376,6 +446,7 @@ mod tests {
                 Ok(())
             },
             ready,
+            Duration::from_secs(1),
         );
         assert!(
             timeout(Duration::from_millis(10), owner.run())
@@ -385,5 +456,105 @@ mod tests {
         clean_tx.send(()).unwrap();
         assert_eq!(owner.run().await.unwrap_err().to_string(), "startup");
         assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn completion_precedes_simultaneous_startup() {
+        let (_parent, child) = tokio::io::duplex(128);
+        let (seen, ready) = output();
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            |_| async { Ok(()) },
+            |_| async { Err(io::Error::other("runtime failed")) },
+            ready,
+            Duration::from_secs(1),
+        );
+        assert_eq!(owner.run().await.unwrap_err().to_string(), "runtime failed");
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn startup_can_make_completion_ready_before_marker() {
+        let (_parent, child) = tokio::io::duplex(128);
+        let (tx, rx) = oneshot::channel();
+        let (seen, ready) = output();
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            move |_| async move {
+                tx.send(()).unwrap();
+                Ok(())
+            },
+            move |_| async move {
+                rx.await.unwrap();
+                Err(io::Error::other("runtime failed"))
+            },
+            ready,
+            Duration::from_secs(1),
+        );
+        assert_eq!(owner.run().await.unwrap_err().to_string(), "runtime failed");
+        assert!(seen.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn stop_reaches_startup_and_cleanup_survives_deadline_and_cancel() {
+        let (mut parent, child) = tokio::io::duplex(128);
+        let (observed_tx, observed_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let (seen, ready) = output();
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            move |mut stop: watch::Receiver<bool>| async move {
+                while !*stop.borrow_and_update() {
+                    stop.changed().await.unwrap();
+                }
+                observed_tx.send(()).unwrap();
+                release_rx.await.unwrap();
+                Ok(())
+            },
+            supervisor,
+            ready,
+            Duration::from_millis(40),
+        );
+        parent.write_all(b"stop\n").await.unwrap();
+        assert!(
+            timeout(Duration::from_millis(10), owner.run())
+                .await
+                .is_err()
+        );
+        observed_rx.await.unwrap();
+        assert_eq!(
+            owner.run().await.unwrap_err().kind(),
+            io::ErrorKind::TimedOut
+        );
+        assert!(seen.lock().unwrap().is_empty());
+        release_tx.send(()).unwrap();
+        owner.run().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn deadline_preserves_first_failure_for_later_cleanup() {
+        let (_parent, child) = tokio::io::duplex(128);
+        let (release_tx, release_rx) = oneshot::channel();
+        let (_, ready) = output();
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            move |_| async move {
+                release_rx.await.unwrap();
+                Ok(())
+            },
+            |_| async { Err(io::Error::other("runtime failed")) },
+            ready,
+            Duration::from_millis(10),
+        );
+        assert_eq!(
+            owner.run().await.unwrap_err().kind(),
+            io::ErrorKind::TimedOut
+        );
+        release_tx.send(()).unwrap();
+        assert_eq!(owner.run().await.unwrap_err().to_string(), "runtime failed");
     }
 }

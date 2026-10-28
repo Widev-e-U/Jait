@@ -180,6 +180,52 @@ describe('session event subscription health', () => {
     subscription.close()
   })
 
+  it('resumes replay pages and stops repeated boundaries without progress', async () => {
+    const connections: FakeConnection[] = []
+    const headers: Array<Record<string, string>> = []
+    const scheduled: Array<() => void> = []
+    const events: Array<Record<string, unknown>> = []
+    const fatal: string[] = []
+    const subscription = openSessionEventSubscription({
+      url: '/api/sessions/s1/events', lastEventId: '1',
+      onEvent: event => { events.push(event) },
+      onFatal: reason => { fatal.push(reason) },
+      fetchImpl: (async (_url, init) => {
+        headers.push(init?.headers as Record<string, string>)
+        const connection = makeConnection()
+        connections.push(connection)
+        return connection.reply
+      }) as unknown as typeof fetch,
+      scheduleRetry: fn => { scheduled.push(fn) }, reconnectDelay: () => 0,
+    })
+    await settle()
+    connections[0].push('id: 2\ndata: {"type":"token"}\n\ndata: {"type":"replay_required"}\n\n')
+    connections[0].end()
+    await settle()
+    scheduled.shift()?.()
+    await settle()
+    expect(headers[1]['Last-Event-ID']).toBe('2')
+    connections[1].push('id: 3\ndata: {"type":"token"}\n\ndata: {"type":"replay_required"}\n\n')
+    connections[1].end()
+    await settle()
+    scheduled.shift()?.()
+    await settle()
+    for (let i = 2; i < 4; i += 1) {
+      connections[i].push('data: {"type":"replay_required"}\n\n')
+      await settle()
+      if (i < 3) {
+        connections[i].end()
+        await settle()
+        scheduled.shift()?.()
+        await settle()
+      }
+    }
+    expect(events).toEqual([{ type: 'token' }, { type: 'token' }])
+    expect(fatal).toEqual(['replay'])
+    expect(subscription.getHealth().state).toBe('closed')
+    expect(scheduled).toHaveLength(0)
+  })
+
   it('a fatal status closes the subscription', async () => {
     const fatal: Array<{ reason: unknown }> = []
 

@@ -66,6 +66,8 @@ export interface OsToolNetworkShareState {
 export interface ScreenShareOffer {
   sessionId: string;
   hostDeviceId: string;
+  /** The viewer for this peer connection. Required when a share has multiple viewers. */
+  toDeviceId?: string;
   sdp: string;
 }
 
@@ -78,6 +80,8 @@ export interface ScreenShareAnswer {
 export interface ScreenShareIceCandidate {
   sessionId: string;
   fromDeviceId: string;
+  /** Destination peer. Host candidates require this when there are multiple viewers. */
+  toDeviceId?: string;
   candidate: string;
   sdpMid: string | null;
   sdpMLineIndex: number | null;

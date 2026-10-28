@@ -5,7 +5,8 @@ import { API_URL } from '@/lib/gateway-url'
 import { useScreenShare, type ScreenShareHandle } from '@/hooks/useScreenShare'
 import { useScreenShareContext } from '@/hooks/screen-share-context'
 import { useScreenShareControl } from '@/hooks/useScreenShareControl'
-import { screenSharePoint } from '@/lib/screen-share-pointer'
+import { screenShareContentRect, screenSharePoint } from '@/lib/screen-share-pointer'
+import { ScreenShareTouchPointer } from '@/lib/screen-share-touch'
 import type { ScreenShareSessionState } from '@jait/shared'
 
 interface ChatScreenShareViewProps {
@@ -48,6 +49,8 @@ function ChatScreenSharePanel({
   const [loaded, setLoaded] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const attachRequestedRef = useRef<string | null>(null)
+  const touchPointerRef = useRef(new ScreenShareTouchPointer())
+  const [touchCursor, setTouchCursor] = useState<{ left: number; top: number } | null>(null)
 
   const headers = useMemo(() => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -85,6 +88,21 @@ function ChatScreenSharePanel({
 
   const point = (element: HTMLVideoElement, clientX: number, clientY: number) =>
     screenSharePoint(element.getBoundingClientRect(), element.videoWidth, element.videoHeight, clientX, clientY)
+
+  const touchContent = (element: HTMLVideoElement) => {
+    const bounds = element.getBoundingClientRect()
+    const image = screenShareContentRect(bounds, element.videoWidth, element.videoHeight)
+    return image ? { ...image, offsetLeft: image.left - bounds.left, offsetTop: image.top - bounds.top } : null
+  }
+  const showTouchCursor = (element: HTMLVideoElement, position: { x: number; y: number }) => {
+    const image = touchContent(element)
+    if (image) setTouchCursor({ left: image.offsetLeft + position.x * image.width, top: image.offsetTop + position.y * image.height })
+  }
+
+  useEffect(() => {
+    touchPointerRef.current.reset()
+    setTouchCursor(null)
+  }, [session?.id, control.active])
 
   // ── Attach as viewer once the host is actually sharing ────────────
   useEffect(() => {
@@ -161,19 +179,52 @@ function ChatScreenSharePanel({
             className={`h-full w-full object-contain ${control.active ? 'cursor-crosshair' : ''}`}
             tabIndex={control.active ? 0 : -1}
             aria-label={control.active ? 'Interactive shared screen' : 'Shared screen'}
+            style={{ touchAction: control.active ? 'none' : undefined }}
             onPointerMove={(event) => {
               if (!control.active) return
+              if (event.pointerType === 'touch') {
+                const image = touchContent(event.currentTarget)
+                if (!image) return
+                const position = touchPointerRef.current.move(event.pointerId, event.clientX, event.clientY, image.width, image.height)
+                if (position) {
+                  event.preventDefault()
+                  showTouchCursor(event.currentTarget, position)
+                  control.send({ action: 'move', ...position }, true)
+                }
+                return
+              }
               const position = point(event.currentTarget, event.clientX, event.clientY)
               if (position) control.send({ action: 'move', ...position }, true)
             }}
             onPointerDown={(event) => {
               if (!control.active || ![0, 1, 2].includes(event.button)) return
+              if (event.pointerType === 'touch') {
+                if (!touchContent(event.currentTarget) || !touchPointerRef.current.begin(event.pointerId, event.clientX, event.clientY)) return
+                event.preventDefault()
+                event.currentTarget.focus()
+                try { event.currentTarget.setPointerCapture(event.pointerId) } catch { /* pointer may already have ended */ }
+                showTouchCursor(event.currentTarget, touchPointerRef.current.position)
+                return
+              }
               const position = point(event.currentTarget, event.clientX, event.clientY)
               if (!position) return
               event.preventDefault()
               event.currentTarget.focus()
               control.send({ action: 'click', ...position, button: event.button === 2 ? 'right' : event.button === 1 ? 'middle' : 'left' })
             }}
+            onPointerUp={(event) => {
+              if (!control.active || event.pointerType !== 'touch') return
+              const image = touchContent(event.currentTarget)
+              if (!image) { touchPointerRef.current.cancel(event.pointerId); return }
+              const position = touchPointerRef.current.move(event.pointerId, event.clientX, event.clientY, image.width, image.height)
+              if (position) {
+                showTouchCursor(event.currentTarget, position)
+                control.send({ action: 'move', ...position }, true)
+              }
+              const click = touchPointerRef.current.end(event.pointerId)
+              if (click) control.send({ action: 'click', ...click, button: 'left' })
+            }}
+            onPointerCancel={(event) => { if (event.pointerType === 'touch') touchPointerRef.current.cancel(event.pointerId) }}
             onContextMenu={(event) => { if (control.active) event.preventDefault() }}
             onWheel={(event) => {
               if (!control.active || !point(event.currentTarget, event.clientX, event.clientY)) return
@@ -196,6 +247,9 @@ function ChatScreenSharePanel({
               }
             }}
           />
+          {control.active && touchCursor && (
+            <span aria-hidden="true" data-screen-share-touch-cursor className="pointer-events-none absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/60 shadow" style={touchCursor} />
+          )}
           {pendingApproval && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 p-4 text-center text-sm text-white">
               <p className="font-medium">Waiting for the node&apos;s user to approve</p>

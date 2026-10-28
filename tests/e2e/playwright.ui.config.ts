@@ -18,6 +18,8 @@ export default defineConfig({
     'browser-control-transition.spec.ts',
     'chat-browser.spec.ts',
     'browser-mobile-input.spec.ts',
+    'screen-share-touch.spec.ts',
+    'screen-share-media.spec.ts',
     'browser-handoff.spec.ts',
     'composer-prompts.spec.ts',
     'messenger-tools.spec.ts',

@@ -345,3 +345,126 @@ fn unmatched_glob_brackets_remain_literal() {
             .is_match("filec")
     );
 }
+
+#[test]
+fn ignore_files_override_gitignore_and_respect_nested_rules() {
+    let fixture = Fixture::new();
+    fixture.put(".gitignore", "*.txt\n");
+    fixture.put(".ignore", "!keep.txt\nprivate.log\n");
+    fixture.put("src/.gitignore", "keep.txt\n");
+    fixture.put("src/.ignore", "nested.log\n");
+    fixture.put("src/keep.txt", "needle");
+    fixture.put("src/private.log", "needle");
+    fixture.put("src/nested.log", "needle");
+    fixture.put("src/other.txt", "needle");
+    let root = fixture.root();
+    let result = search_project(
+        &root,
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap();
+    let SearchResult::Content { matches, .. } = result else {
+        panic!()
+    };
+    assert_eq!(
+        matches
+            .iter()
+            .map(|m| m.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["src/keep.txt"]
+    );
+    let result = search_project(
+        &root,
+        &SearchOptions {
+            include_ignored_files: true,
+            ..options("needle", SearchMode::Content)
+        },
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap();
+    let SearchResult::Content { matches, .. } = result else {
+        panic!()
+    };
+    assert_eq!(matches.len(), 4);
+}
+
+#[test]
+fn hidden_entries_are_excluded_by_default_in_fresh_and_reused_searches() {
+    let fixture = Fixture::new();
+    fixture.put("visible/needle.txt", "needle");
+    fixture.put("visible/.needle.txt", "needle");
+    fixture.put(".hidden/needle.txt", "needle");
+    fixture.put(".git/needle.txt", "needle");
+    fixture.put(".ignore", "ignored.txt\n");
+    fixture.put("ignored.txt", "needle");
+    let root = fixture.root();
+    let budgets = Budgets::default();
+    let cancel = Cancellation::default();
+    let index = build_index(&root, &IndexOptions::default(), &cancel).unwrap();
+    assert!(index.entries.contains_key(".hidden/needle.txt"));
+    for mode in [SearchMode::Files, SearchMode::Content] {
+        let opts = options("needle", mode);
+        for result in [
+            search_project(&root, &opts, &budgets, &cancel).unwrap(),
+            search_index(&index, &opts, &budgets, &cancel).unwrap(),
+        ] {
+            let paths: Vec<String> = match result {
+                SearchResult::Files { files, .. } => {
+                    files.into_iter().map(|m| m.relative_path).collect()
+                }
+                SearchResult::Content { matches, .. } => {
+                    matches.into_iter().map(|m| m.relative_path).collect()
+                }
+            };
+            assert_eq!(paths, vec!["visible/needle.txt"]);
+        }
+        let opts = SearchOptions {
+            include_ignored_files: true,
+            ..opts
+        };
+        let result = search_project(&root, &opts, &budgets, &cancel).unwrap();
+        let paths: Vec<String> = match result {
+            SearchResult::Files { files, .. } => {
+                files.into_iter().map(|m| m.relative_path).collect()
+            }
+            SearchResult::Content { matches, .. } => {
+                matches.into_iter().map(|m| m.relative_path).collect()
+            }
+        };
+        assert!(paths.contains(&"visible/.needle.txt".to_string()));
+        assert!(paths.contains(&".hidden/needle.txt".to_string()));
+        assert!(!paths.contains(&".git/needle.txt".to_string()));
+        if mode == SearchMode::Content {
+            assert!(paths.contains(&"ignored.txt".to_string()));
+        }
+    }
+}
+
+#[test]
+fn file_include_uses_reference_post_filter() {
+    let fixture = Fixture::new();
+    fixture.put("src/needle.rs", "needle");
+    let root = fixture.root();
+    let search_with = |include: &str| {
+        let options = SearchOptions {
+            include: Some(include.into()),
+            ..options("needle", SearchMode::Files)
+        };
+        let SearchResult::Files { files, .. } = search_project(
+            &root,
+            &options,
+            &Budgets::default(),
+            &Cancellation::default(),
+        )
+        .unwrap() else {
+            panic!()
+        };
+        files
+    };
+    assert_eq!(search_with("*.rs").len(), 1);
+    // The reference's post-filter removes '*' before substring matching.
+    assert!(search_with("src/*.rs").is_empty());
+}

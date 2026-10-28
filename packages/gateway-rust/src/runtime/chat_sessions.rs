@@ -2,11 +2,15 @@
 //! manager per runtime and share clones; no HTTP route or production activation.
 use super::{
     chat_store::SqliteTurnStore,
-    chat_turn::{TurnConfig, TurnCoordinator, TurnError, TurnOutcome, TurnProvider, TurnTools},
+    chat_turn::{
+        TurnConfig, TurnCoordinator, TurnError, TurnEvent, TurnOutcome, TurnPersistence,
+        TurnProvider, TurnTools,
+    },
 };
 use crate::{
     providers::openai_stream::EventSink, security::consent_executor::ToolExecutionContext,
 };
+use futures_util::future::BoxFuture;
 use std::{
     collections::HashSet,
     num::NonZeroU16,
@@ -48,19 +52,24 @@ impl SessionTurnManager {
         }))
     }
     /// The lease covers storage load, generation, tools and every durable write.
-    /// Dropping this future releases admission; it never retries model tool ids.
+    /// Dropping the caller retains admission until any dispatched store operation finishes.
+    /// It never retries model tool ids.
     pub async fn run(&self, mut request: SessionTurn<'_>) -> Result<TurnOutcome, SessionTurnError> {
         let (owner, session) = request.store.identity();
         if owner != request.context.user_id || session != request.context.session_id {
             return Err(SessionTurnError::ContextMismatch);
         }
         request.config.validate().map_err(SessionTurnError::Turn)?;
-        let _lease = self.acquire(session)?;
+        let lease = Arc::new(self.acquire(session)?);
+        let store = LeasedStore {
+            store: request.store.clone(),
+            lease,
+        };
         let deadline = Instant::now() + request.config.timeout;
         let events = tokio::select! { biased;
             _ = request.context.cancellation.wait_cancelled() => return Err(SessionTurnError::Turn(TurnError::Cancelled)),
             _ = tokio::time::sleep_until(deadline) => return Err(SessionTurnError::Turn(TurnError::TimedOut)),
-            events = request.store.load() => events.map_err(SessionTurnError::Storage)?,
+            events = store.load() => events.map_err(SessionTurnError::Storage)?,
         };
         request.config.timeout = deadline
             .checked_duration_since(Instant::now())
@@ -70,7 +79,7 @@ impl SessionTurnManager {
             config: request.config,
             provider: request.provider,
             tools: request.tools,
-            persistence: request.store,
+            persistence: &store,
         }
         .run(
             events.iter().map(|event| event.to_message()).collect(),
@@ -97,6 +106,55 @@ impl SessionTurnManager {
             admission: self.0.clone(),
             session: session.to_owned(),
             _permit: permit,
+        })
+    }
+}
+// Detached store tasks keep admission until the worker replies, even if the turn
+// times out or its caller is dropped. A stuck database consumes bounded capacity.
+struct LeasedStore {
+    store: SqliteTurnStore,
+    lease: Arc<SessionLease>,
+}
+impl LeasedStore {
+    async fn load(&self) -> Result<Vec<TurnEvent>, String> {
+        let store = self.store.clone();
+        let lease = self.lease.clone();
+        tokio::spawn(async move {
+            let _lease = lease;
+            store.load().await
+        })
+        .await
+        .map_err(|_| "Turn storage task failed".to_string())?
+    }
+}
+impl TurnPersistence for LeasedStore {
+    fn check_capacity(
+        &self,
+        events: usize,
+        bytes: usize,
+        max_event_bytes: usize,
+    ) -> BoxFuture<'_, Result<(), String>> {
+        let store = self.store.clone();
+        let lease = self.lease.clone();
+        Box::pin(async move {
+            tokio::spawn(async move {
+                let _lease = lease;
+                store.check_capacity(events, bytes, max_event_bytes).await
+            })
+            .await
+            .map_err(|_| "Turn storage task failed".to_string())?
+        })
+    }
+    fn append(&self, event: TurnEvent) -> BoxFuture<'_, Result<(), String>> {
+        let store = self.store.clone();
+        let lease = self.lease.clone();
+        Box::pin(async move {
+            tokio::spawn(async move {
+                let _lease = lease;
+                store.append(event).await
+            })
+            .await
+            .map_err(|_| "Turn storage task failed".to_string())?
         })
     }
 }
@@ -284,6 +342,63 @@ mod tests {
                 .await
                 .is_ok()
         );
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn timed_out_started_append_retains_session_and_capacity() {
+        let (auth, store, _) = fixture();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        auth.with_database(move |db| {
+            let mut started = Some(started_tx);
+            db.progress_handler(
+                1,
+                Some(move || {
+                    if let Some(started) = started.take() {
+                        let _ = started.send(());
+                        let _ = release_rx.recv();
+                    }
+                    false
+                }),
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let leased = LeasedStore {
+            store: store.clone(),
+            lease: Arc::new(manager.acquire("session").unwrap()),
+        };
+        let task = tokio::spawn(async move {
+            tokio::time::timeout(
+                Duration::from_millis(100),
+                leased.append(TurnEvent::User {
+                    content: "late".into(),
+                }),
+            )
+            .await
+        });
+        started_rx.await.unwrap();
+        assert!(task.await.unwrap().is_err());
+        assert!(matches!(
+            manager.acquire("session"),
+            Err(SessionTurnError::SessionBusy)
+        ));
+        assert!(matches!(
+            manager.acquire("other"),
+            Err(SessionTurnError::Capacity)
+        ));
+        release_tx.send(()).unwrap();
+        // A subsequent worker request establishes that the started write completed.
+        auth.with_database(|db| {
+            db.progress_handler(0, None::<fn() -> bool>)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(store.load().await.unwrap().len(), 1);
+        assert!(manager.acquire("session").is_ok());
         auth.shutdown().await.unwrap();
     }
     #[test]

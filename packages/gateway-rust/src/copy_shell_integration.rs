@@ -2,6 +2,10 @@
 //!
 //! The caller explicitly supplies the gateway package root and is responsible
 //! for authorizing writes there. Relative paths resolve against the current directory.
+//! Path checks and subsequent filesystem operations are not atomic. The caller
+//! must also prevent concurrent replacement or mutation of relevant ancestors,
+//! source entries, and destination entries for the entire operation. This module
+//! does not enforce that isolation and is not safe for an untrusted mutable tree.
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -110,6 +114,10 @@ fn copy_entry(from: &Path, to: &Path) -> Result<(), CopyError> {
         }
         match fs::symlink_metadata(to) {
             Ok(meta) if meta.file_type().is_symlink() => remove_destination_link(to, &meta)?,
+            // Node cp removes an existing file before copying, preserving any
+            // other hard links to its previous contents. This is not race-safe
+            // against concurrent replacement of path components.
+            Ok(meta) if meta.is_file() => fs::remove_file(to).map_err(|e| failure("remove destination", to, e))?,
             Ok(_) => {},
             Err(e) if e.kind() == io::ErrorKind::NotFound => {},
             Err(e) => return Err(failure("stat", to, e)),
@@ -314,6 +322,17 @@ mod tests {
     impl Drop for Fixture {
         fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
     }
+    #[test]
+    fn replacement_preserves_other_destination_hard_links() {
+        let f = Fixture::new();
+        f.write("source", b"new");
+        f.write("destination", b"old");
+        fs::hard_link(f.0.join("destination"), f.0.join("alias")).unwrap();
+        copy_entry(&f.0.join("source"), &f.0.join("destination")).unwrap();
+        assert_eq!(fs::read(f.0.join("destination")).unwrap(), b"new");
+        assert_eq!(fs::read(f.0.join("alias")).unwrap(), b"old");
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_hard_link_identity_prevents_overwrite() {

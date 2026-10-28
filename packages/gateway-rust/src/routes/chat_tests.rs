@@ -303,6 +303,91 @@ async fn sse_frames_persist_and_messages_endpoint_projects_completed_turn() {
     fixture.finish().await;
 }
 #[tokio::test]
+async fn web_chat_payload_and_legacy_aliases_preserve_content() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    for (payload, expected) in [
+        (
+            json!({"sessionId":"session","content":"web message"}),
+            "web message",
+        ),
+        (
+            json!({"session_id":"session","message":"legacy message"}),
+            "legacy message",
+        ),
+    ] {
+        let response = fixture
+            .post("/api/chat")
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            frames(&response.text().await.unwrap()).last().unwrap()["type"],
+            "done"
+        );
+        assert!(
+            fixture.events().await.iter().any(
+                |event| matches!(event, TurnEvent::User { content, .. } if content == expected)
+            )
+        );
+    }
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn web_options_are_explicitly_rejected_before_preparation() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    for (option, value) in [
+        ("personaAgentId", json!("agent")),
+        ("queuedMessageId", json!("queue")),
+        ("mode", json!("ask")),
+        ("provider", json!("codex")),
+        ("runtimeMode", json!("supervised")),
+        ("responseStyle", json!("concise")),
+        ("model", json!("model")),
+        ("reasoningEffort", Value::Null),
+        ("displaySegments", json!([{"type":"text","text":"hi"}])),
+        ("attachments", json!([])),
+        ("_queuedDrain", json!(true)),
+        ("_queuedMessageId", json!("queue")),
+        ("_systemNotification", json!("notice")),
+        ("_systemNotice", json!("notice")),
+        ("_recoveryAttempts", json!(1)),
+        ("_loopRevision", json!(1)),
+    ] {
+        let mut payload = json!({"sessionId":"session","content":"hi"});
+        payload[option] = value;
+        let response = fixture
+            .post("/api/chat")
+            .json(&payload)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 400, "{option}");
+        let body: Value = response.json().await.unwrap();
+        assert_eq!(
+            body,
+            json!({"error":"UNSUPPORTED_CHAT_OPTION","option":option})
+        );
+    }
+    let response = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"hi","unexpected":true}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 400);
+    assert_eq!(
+        response.json::<Value>().await.unwrap()["error"],
+        "INVALID_CHAT_REQUEST"
+    );
+    assert_eq!(fixture.factory.calls.load(Ordering::SeqCst), 0);
+    assert!(fixture.events().await.is_empty());
+    fixture.finish().await;
+}
+
+#[tokio::test]
 async fn request_limits_and_execution_configuration_fields_are_rejected() {
     let limits = ChatLimits {
         body_bytes: 1024,
@@ -446,7 +531,52 @@ async fn same_session_is_rejected_and_owner_cancel_persists_partial_then_release
     fixture.finish().await;
 }
 #[tokio::test]
-async fn disconnected_http_consumer_cancels_and_drains_durable_partial_turn() {
+async fn terminal_write_failure_is_visible_without_a_durable_id() {
+    let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
+    let mut post = fixture
+        .post("/api/chat")
+        .json(&json!({"sessionId":"session","content":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    post.chunk().await.unwrap().unwrap();
+    fixture.auth.with_database(|db| {
+        db.execute_batch("CREATE TRIGGER fail_terminal BEFORE INSERT ON session_events WHEN NEW.type = 'rust.chat.stream' AND (json_extract(NEW.payload, '$.type') = 'done' OR json_extract(NEW.payload, '$.type') = 'error') BEGIN SELECT RAISE(FAIL, 'injected failure'); END;")?;
+        Ok(())
+    }).await.unwrap();
+    let cancelled = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status(), 200);
+    let body = post.text().await.unwrap();
+    assert!(body.contains("Chat stream could not be persisted"));
+    let mut subscription = fixture
+        .get("/api/sessions/session/events")
+        .send()
+        .await
+        .unwrap();
+    let frame = tokio::time::timeout(Duration::from_secs(3), subscription.chunk())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let frame = String::from_utf8(frame.to_vec()).unwrap();
+    assert!(
+        frame.contains("Chat stream could not be persisted"),
+        "{frame}"
+    );
+    assert!(!frame.contains("id:"), "{frame}");
+    drop(subscription);
+    let terminal_count: i64 = fixture.auth.with_database(|db| Ok(db.query_row("SELECT count(*) FROM session_events WHERE type='rust.chat.stream' AND json_extract(payload, '$.type') IN ('done','error')", [], |row| row.get(0))?)).await.unwrap();
+    assert_eq!(terminal_count, 0);
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn disconnected_http_consumer_keeps_turn_until_explicit_cancel() {
     let fixture = Fixture::new(true, 1, ChatLimits::default()).await;
     let mut response = fixture
         .post("/api/chat")
@@ -466,6 +596,24 @@ async fn disconnected_http_consumer_cancels_and_drains_durable_partial_turn() {
         .done
         .subscribe();
     drop(response);
+    assert!(!*done.borrow());
+    assert!(
+        fixture
+            .routes
+            .active
+            .turns
+            .lock()
+            .unwrap()
+            .contains_key("session")
+    );
+    let cancelled = fixture
+        .post("/api/sessions/session/cancel")
+        .json(&json!({}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status(), 200);
+    assert_eq!(cancelled.json::<Value>().await.unwrap()["cancelled"], true);
     tokio::time::timeout(Duration::from_secs(3), async {
         while !*done.borrow_and_update() {
             done.changed().await.unwrap();
@@ -502,13 +650,28 @@ async fn http_stream_total_bytes_are_bounded_and_terminal_event_fits_reserve() {
     fixture.finish().await;
 }
 #[tokio::test(start_paused = true)]
-async fn full_consumer_channel_has_a_bounded_wait_and_cancels() {
+async fn full_consumer_channel_detaches_without_cancelling_turn() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
     let (sender, _receiver) = mpsc::channel(1);
     let cancellation = ProcessCancellation::default();
-    let sink = event_sink(sender, cancellation.clone(), ChatLimits::default());
+    let delivery_failed = Arc::new(AtomicBool::new(false));
+    let store =
+        SqliteTurnStore::new(fixture.auth.clone(), "owner".into(), "session".into()).unwrap();
+    let sink = event_sink(
+        sender,
+        cancellation.clone(),
+        ChatLimits::default(),
+        store,
+        Arc::new(tokio::sync::Mutex::new(())),
+        Arc::new(AtomicBool::new(false)),
+        delivery_failed.clone(),
+        Arc::new(AtomicBool::new(false)),
+    );
     sink(json!({"type":"token","content":"one"})).await.unwrap();
-    assert!(sink(json!({"type":"token","content":"two"})).await.is_err());
-    assert!(cancellation.is_cancelled());
+    sink(json!({"type":"token","content":"two"})).await.unwrap();
+    assert!(delivery_failed.load(Ordering::Acquire));
+    assert!(!cancellation.is_cancelled());
+    fixture.finish().await;
 }
 #[tokio::test]
 async fn shutdown_closes_new_turn_admission() {
@@ -604,11 +767,12 @@ async fn stream_replays_durable_events_with_ascending_ids() {
         .unwrap();
     assert_eq!(turn.status(), 200);
     turn.bytes().await.unwrap();
-    let durable = fixture.events().await;
-    assert!(
-        durable.len() >= 2,
-        "a completed turn persists user and assistant events"
-    );
+    let durable: Vec<i64> = fixture.auth.with_database(|db| {
+        let mut stmt = db.prepare("SELECT log_id FROM session_events WHERE session_id='session' AND type='rust.chat.stream' ORDER BY log_id")?;
+        let rows = stmt.query_map([], |row| row.get(0))?.collect::<Result<Vec<i64>, _>>()?;
+        Ok(rows)
+    }).await.unwrap();
+    assert!(!durable.is_empty(), "a completed turn persists UI frames");
 
     let stream = fixture
         .get("/api/sessions/session/stream")
@@ -624,17 +788,18 @@ async fn stream_replays_durable_events_with_ascending_ids() {
     let body = read_frames(stream, durable.len()).await;
     assert_eq!(
         frame_ids(&body),
-        (1..=durable.len() as i64).collect::<Vec<_>>(),
+        durable,
         "replay must reproduce the durable sequence from the start"
     );
     let payloads = frame_payloads(&body);
-    assert_eq!(payloads.len(), durable.len());
+    assert_eq!(payloads.len(), frame_ids(&body).len());
     assert!(payloads.iter().all(|payload| payload.get("type").is_some()));
+    assert!(payloads.iter().all(|payload| payload["replay"] == true));
     fixture.finish().await;
 }
 
 #[tokio::test]
-async fn stream_resumes_after_last_event_id() {
+async fn ui_events_route_resumes_after_last_event_id() {
     let fixture = Fixture::new(false, 2, ChatLimits::default()).await;
     let turn = fixture
         .post("/api/chat")
@@ -648,7 +813,7 @@ async fn stream_resumes_after_last_event_id() {
     assert!(durable.len() >= 2);
 
     let stream = fixture
-        .get("/api/sessions/session/stream")
+        .get("/api/sessions/session/events")
         .header("Last-Event-ID", "1")
         .send()
         .await
@@ -684,6 +849,25 @@ async fn stream_gates_authentication_and_session_ownership() {
             "{session} must not expose a stream"
         );
     }
+    assert_eq!(
+        fixture
+            .client
+            .get(format!("{}/api/sessions/session/events", fixture.url))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+    assert_eq!(
+        fixture
+            .get("/api/sessions/foreign/events")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        404
+    );
     fixture.finish().await;
 }
 
@@ -699,8 +883,6 @@ async fn stream_delivers_live_events_published_after_subscribe() {
         .unwrap();
     assert_eq!(stream.status(), 200);
     // Keep the POST response alive while observing the independent subscription.
-    // Dropping it after headers cancels this development turn, potentially before
-    // the first append; that tests cancellation rather than live delivery.
     let turn = fixture
         .post("/api/chat")
         .json(&json!({"session_id":"session","message":"hi"}))
@@ -714,7 +896,7 @@ async fn stream_delivers_live_events_published_after_subscribe() {
         !payloads.is_empty(),
         "a subscriber attached before the turn must receive live frames"
     );
-    assert_eq!(payloads[0]["type"], "user");
+    assert_eq!(payloads[0]["type"], "thinking");
     assert!(
         !frame_ids(&body).is_empty(),
         "live frames carry their log id"

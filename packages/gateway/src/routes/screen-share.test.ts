@@ -3,6 +3,9 @@ import Fastify from "fastify";
 import { ScreenShareService } from "@jait/screen-share";
 import { registerScreenShareRoutes } from "./screen-share.js";
 import type { WsControlPlane } from "../ws.js";
+import type { AppConfig } from "../config.js";
+import type { ControlAccess } from "../security/control-access.js";
+import { signAuthToken } from "../security/http-auth.js";
 
 function stubWs() {
   const calls = { state: 0, startRequest: 0, handoff: 0, relay: 0 };
@@ -52,6 +55,50 @@ async function setup() {
 
   return { app, screenShare, calls, states, sessionId: started.id };
 }
+
+describe("chat-owned share access", () => {
+  it("requires host consent even when a chat caller claims to be the user", async () => {
+    const { app, screenShare } = await setup();
+    const response = await app.inject({ method: "POST", url: "/api/screen-share/start", payload: {
+      hostDeviceId: "node-1", viewerDeviceIds: ["web-1"], chatId: "chat-1",
+      initiatedBy: "user", requireConsent: false,
+    } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().session.pendingApproval).toBe(true);
+    expect(screenShare.getSessionForChat("chat-1")?.pendingApproval).toBe(true);
+    await app.close();
+  });
+  it("rejects a different user before returning or mutating the share", async () => {
+    const screenShare = new ScreenShareService();
+    for (const id of ["host", "viewer"]) {
+      screenShare.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+    }
+    const share = screenShare.startShare({ hostDeviceId: "host", viewerDeviceIds: ["viewer"],
+      chatId: "private", initiatedBy: "agent", requireConsent: true });
+    const { ws, calls } = stubWs();
+    const config = { jwtSecret: "screen-share-test-secret" } as AppConfig;
+    const access = { session: (id: string, user: string) => id === "private" && user === "alice" } as ControlAccess;
+    const app = Fastify();
+    registerScreenShareRoutes(app, { screenShare, ws, config, access });
+    await app.ready();
+    const headers = { authorization: `Bearer ${await signAuthToken({ id: "bob", username: "bob" }, config.jwtSecret)}` };
+    const attempts = [
+      { method: "GET" as const, url: "/api/screen-share/chat/private" },
+      { method: "POST" as const, url: "/api/screen-share/join", payload: { sessionId: share.id, viewerDeviceId: "viewer" } },
+      { method: "POST" as const, url: "/api/screen-share/leave", payload: { sessionId: share.id, viewerDeviceId: "viewer" } },
+      { method: "POST" as const, url: "/api/screen-share/approve", payload: { sessionId: share.id, approved: true } },
+      { method: "POST" as const, url: "/api/screen-share/handoff", payload: { sessionId: share.id, chatId: "private", controlOwner: "user" } },
+      { method: "POST" as const, url: "/api/screen-share/transfer-control", payload: { sessionId: share.id, controllerDeviceId: "viewer" } },
+      { method: "POST" as const, url: "/api/screen-share/stop", payload: { sessionId: share.id } },
+    ];
+    for (const attempt of attempts) expect((await app.inject({ ...attempt, headers })).statusCode).toBe(404);
+    expect(screenShare.getSession(share.id)).toMatchObject({ status: "sharing", pendingApproval: true, viewers: [{ deviceId: "viewer" }] });
+    expect(calls.state).toBe(0);
+    const alice = { authorization: `Bearer ${await signAuthToken({ id: "alice", username: "alice" }, config.jwtSecret)}` };
+    expect((await app.inject({ method: "GET", url: "/api/screen-share/chat/private", headers: alice })).statusCode).toBe(200);
+    await app.close();
+  });
+});
 
 describe("POST /api/screen-share/join", () => {
   it("attaches a chat panel to the live share instead of starting a new one", async () => {
@@ -103,6 +150,21 @@ describe("POST /api/screen-share/join", () => {
 
     expect(res.statusCode).toBe(400);
     await app.close();
+  });
+});
+
+describe("POST /api/screen-share/leave", () => {
+  it("detaches one viewer while keeping the other viewer and capture active", async () => {
+    const { app, screenShare, sessionId } = await setup();
+    try {
+      screenShare.addViewer(sessionId, "web-2");
+      const response = await app.inject({ method: "POST", url: "/api/screen-share/leave", payload: { sessionId, viewerDeviceId: "web-1" } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().session.status).toBe("sharing");
+      expect(response.json().session.viewers.map((viewer: { deviceId: string }) => viewer.deviceId)).toEqual(["web-2"]);
+      expect(screenShare.getSessionForChat("chat-1")?.id).toBe(sessionId);
+      expect((await app.inject({ method: "POST", url: "/api/screen-share/leave", payload: { sessionId, viewerDeviceId: "node-1" } })).statusCode).toBe(400);
+    } finally { await app.close(); }
   });
 });
 

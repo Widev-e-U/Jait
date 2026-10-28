@@ -55,7 +55,7 @@ export class ScreenShareControlCoordinator {
   }
 
   private async proxy(entry: Entry, tool: string, args: Record<string, unknown>, timeoutMs = 5_000): Promise<RemoteResult> {
-    const result = await this.ws.proxyToolOp<RemoteResult>(entry.nodeId, tool, args, { sessionId: entry.chatId, timeoutMs });
+    const result = await this.ws.proxyToolOp<RemoteResult>(entry.nodeId, tool, { ...args, shareSessionId: entry.shareId }, { sessionId: entry.chatId, timeoutMs });
     if (!result || result.ok !== true) throw new Error(result?.message ?? "The desktop rejected the control request.");
     return result;
   }
@@ -200,9 +200,24 @@ export class ScreenShareControlCoordinator {
     if (entry && entry.chatId === chatId && entry.viewerId === viewerId && entry.requestId === requestId) await this.stopEntry(entry);
   }
 
+  async stopForViewer(shareId: string, viewerId: string): Promise<void> {
+    const entry = this.entries.get(shareId);
+    if (entry?.viewerId === viewerId) await this.stopEntry(entry);
+  }
+
   async stopForShare(shareId: string): Promise<void> {
     const entry = this.entries.get(shareId);
     if (entry) await this.stopEntry(entry);
+  }
+
+  /** The host revokes locally when its node socket drops; discard the gateway seat too. */
+  nodeDisconnected(nodeId: string): void {
+    const active = this.sessions.findByNode(nodeId);
+    if (!active) return;
+    for (const [shareId, entry] of this.entries) {
+      if (entry.controlId === active.id) this.entries.delete(shareId);
+    }
+    this.sessions.stop(active.id);
   }
 
   async stopForNode(nodeId: string, chatId: string, strict = true): Promise<void> {

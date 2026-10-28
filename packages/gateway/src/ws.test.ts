@@ -572,6 +572,142 @@ describe("WsControlPlane", () => {
       }
     });
 
+    it("binds legacy start and stop requests to the real share and host consent", async () => {
+      const token = await createToken("user-screen-share-lifecycle");
+      const shares = new ScreenShareService();
+      for (const id of ["host", "viewer", "outsider"]) {
+        shares.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = shares.startShare({
+        hostDeviceId: "host", viewerDeviceIds: ["viewer"], chatId: "owned-chat",
+        initiatedBy: "agent", requireConsent: true, reason: "Please share",
+      });
+      plane.screenShareSessionLookup = id => shares.getSession(id);
+      plane.canAccessSession = (id, user) => id === "owned-chat" && user === "user-screen-share-lifecycle";
+      // This case tests lifecycle scoping with an already-granted node.
+      const permission = vi.spyOn(plane as unknown as { permissionDeniedError: () => Error | null }, "permissionDeniedError").mockReturnValue(null);
+      const stopped = vi.fn();
+      plane.onScreenShareStop = stopped;
+      const connect = async (deviceId: string) => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("host");
+      const viewer = await connect("viewer");
+      const outsider = await connect("outsider");
+      try {
+        const request = { type: "screen-share:start-request", payload: {
+          sessionId: session.id, hostDeviceId: "host", initiatedBy: "user", requireConsent: false, chatId: "forged",
+        } };
+        outsider.ws.send(JSON.stringify(request));
+        expect(await host.collector.maybeNext(100)).toBeNull();
+        viewer.ws.send(JSON.stringify({ ...request, payload: { ...request.payload, sessionId: "unknown" } }));
+        expect(await host.collector.maybeNext(100)).toBeNull();
+        viewer.ws.send(JSON.stringify(request));
+        const delivered = await host.collector.next();
+        expect(delivered.payload).toMatchObject({
+          sessionId: session.id, hostDeviceId: "host", viewerDeviceIds: ["viewer"],
+          initiatedBy: "agent", requireConsent: true, chatId: "owned-chat",
+        });
+        outsider.ws.send(JSON.stringify({ type: "screen-share:stop-request", payload: { sessionId: session.id } }));
+        viewer.ws.send(JSON.stringify({ type: "screen-share:stop-request", payload: { sessionId: session.id } }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        expect(stopped).not.toHaveBeenCalled();
+        host.ws.send(JSON.stringify({ type: "screen-share:stop-request", payload: { sessionId: session.id } }));
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledWith(session.id));
+      } finally {
+        permission.mockRestore();
+        host.ws.close(); viewer.ws.close(); outsider.ws.close();
+      }
+    });
+
+    it("does not deliver chat-owned signaling to another user's matching device id", async () => {
+      const shares = new ScreenShareService();
+      for (const id of ["host", "viewer"]) {
+        shares.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = shares.startShare({ hostDeviceId: "host", viewerDeviceIds: ["viewer"], chatId: "private" });
+      plane.screenShareSessionLookup = id => shares.getSession(id);
+      plane.canAccessSession = (id, user) => id === "private" && user === "alice";
+      const connect = async (user: string, deviceId: string) => {
+        const client = openWs(port, { token: await createToken(user) });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("alice", "host");
+      const viewer = await connect("alice", "viewer");
+      const attacker = await connect("bob", "viewer");
+      try {
+        host.ws.send(JSON.stringify({ type: "screen-share:offer", payload: {
+          sessionId: session.id, hostDeviceId: "host", sdp: "offer",
+        } }));
+        expect((await viewer.collector.next()).payload.sdp).toBe("offer");
+        expect(await attacker.collector.maybeNext(100)).toBeNull();
+        attacker.ws.send(JSON.stringify({ type: "screen-share:answer", payload: {
+          sessionId: session.id, viewerDeviceId: "viewer", sdp: "forged",
+        } }));
+        expect(await host.collector.maybeNext(100)).toBeNull();
+        plane.broadcastScreenShareState(session);
+        expect((await viewer.collector.next()).type).toBe("screen-share:state-update");
+        expect((await host.collector.next()).type).toBe("screen-share:state-update");
+        expect(await attacker.collector.maybeNext(100)).toBeNull();
+        plane.sendScreenShareStartRequest(session.id, "host", ["viewer"], { chatId: "private" });
+        expect((await viewer.collector.next()).type).toBe("screen-share:start-request");
+        expect((await host.collector.next()).type).toBe("screen-share:start-request");
+        expect(await attacker.collector.maybeNext(100)).toBeNull();
+      } finally {
+        host.ws.close(); viewer.ws.close(); attacker.ws.close();
+      }
+    });
+
+    it("routes each viewer's offer and ICE only to its peer", async () => {
+      const token = await createToken("user-screen-share-peers");
+      const shares = new ScreenShareService();
+      for (const id of ["host", "viewer-a", "viewer-b", "outsider"]) {
+        shares.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = shares.startShare({ hostDeviceId: "host", viewerDeviceIds: ["viewer-a", "viewer-b"] });
+      plane.screenShareSessionLookup = id => shares.getSession(id);
+      const connect = async (deviceId: string) => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("host");
+      const a = await connect("viewer-a");
+      const b = await connect("viewer-b");
+      const outsider = await connect("outsider");
+      try {
+        const send = (client: typeof host, type: string, payload: Record<string, unknown>) =>
+          client.ws.send(JSON.stringify({ type, payload: { sessionId: session.id, ...payload } }));
+        send(host, "screen-share:offer", { hostDeviceId: "host", toDeviceId: "viewer-a", sdp: "offer-a" });
+        expect((await a.collector.next()).payload.sdp).toBe("offer-a");
+        expect(await b.collector.maybeNext(100)).toBeNull();
+        send(host, "screen-share:offer", { hostDeviceId: "host", sdp: "ambiguous" });
+        send(host, "screen-share:offer", { hostDeviceId: "host", toDeviceId: "outsider", sdp: "invalid" });
+        expect(await a.collector.maybeNext(100)).toBeNull();
+        expect(await outsider.collector.maybeNext(100)).toBeNull();
+        send(a, "screen-share:ice-candidate", { fromDeviceId: "viewer-a", candidate: "a-ice" });
+        expect((await host.collector.next()).payload.candidate).toBe("a-ice");
+        expect(await b.collector.maybeNext(100)).toBeNull();
+        send(host, "screen-share:ice-candidate", { fromDeviceId: "host", toDeviceId: "viewer-b", candidate: "b-ice" });
+        expect((await b.collector.next()).payload.candidate).toBe("b-ice");
+        expect(await a.collector.maybeNext(100)).toBeNull();
+      } finally {
+        host.ws.close(); a.ws.close(); b.ws.close(); outsider.ws.close();
+      }
+    });
+
     it("reports UI state updates with fallback to subscribed session and sender client id", async () => {
       const token = await createToken("user-ui-state");
       const updatePromise = new Promise<{ sessionId: string; key: string; value: unknown | null; clientId: string }>((resolve) => {

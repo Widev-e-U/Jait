@@ -15,15 +15,38 @@ and checks the advertised input capability against the host's capabilities.
 These tests use signaling and media stubs; they do not establish real capture,
 control, clipboard, or runtime composition.
 
-Compatibility decisions: shares now report `remoteInput` only when the host
-advertises `remote-input`; desktop registration probes the native bridge before
-advertising the computer tools. Existing chat panels remain view-only. The
-native agent share tool now requires an authenticated chat context and always
-requests host approval; the context-free `execute`/`share` entrypoints fail
-closed for connect requests. Its caller must use `execute_for_chat` and supply
-an authorized chat. Focused capability, route, and tool tests exercise these
-changes; no claim is made that a real desktop client or Rust production runtime
-has completed the end-to-end flow.
+Compatibility decisions: shares report `remoteInput` only when the host
+advertises it; desktop registration probes the native bridge before advertising
+computer tools. The chat panel exposes input only when the host reports the
+capability and a separate control lease is approved. The Windows desktop control
+adapter remains behind its experimental build feature. The native agent share
+tool requires an authenticated chat context and host approval; its caller must
+use `execute_for_chat` and supply an authorized chat.
+
+With multiple viewers, a host offer or ICE candidate must name its destination;
+untargeted messages remain accepted for a single viewer. Viewer signaling goes
+only to the host. Legacy WebSocket start requests now refer to an existing share
+and viewer, and their chat/consent fields are replaced by the server's state;
+only the host may send a WebSocket stop request. Chat-owned starts require
+host consent even if a caller claims to be a user, and chat-owned state and
+signaling are delivered only to users with access to that chat. Existing REST
+join and leave remain the current client path. Migration must include client,
+authentication and WebSocket coverage for these intentional changes rather than
+silently restoring broadcast or client-provided consent.
+
+The browser media fixture exercises actual WebRTC between a canvas capture and
+two viewers, including one viewer leaving. It uses a test signaling server. The
+touch-panel fixture exercises relative movement and tap-to-click with mocked
+control requests. Neither establishes desktop capture, native input effects,
+linked-gateway transport, or Rust runtime composition. The native leave route
+currently removes the viewer and broadcasts state, but there is no native
+control coordinator to revoke an active viewer lease; that authority and its
+failure/cancellation behavior remain mandatory before enabling native control.
+The native HTTP routes now check chat and persistent-thread ownership before
+reading or mutating chat-owned shares. Differential cases cover another user,
+a missing chat, and a thread-owned chat using the native database. Cross-user
+WebSocket authorization, native control leases, and actual runtime composition
+still need executable parity before chat-owned native sharing is exposed.
 
 Before migration is considered complete, add and pass executable tests for:
 

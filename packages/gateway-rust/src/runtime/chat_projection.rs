@@ -186,6 +186,51 @@ pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
     Ok(())
 }
 
+// Reconstruct displayable frames after the last durable model record. The
+// transaction pins both this tail and the returned cursor to the same snapshot.
+fn stream_tail(db: &Connection, session: &str) -> Result<(bool, String, String, Vec<Value>), Error> {
+    let last_model: i64 = db.query_row("SELECT COALESCE(MAX(log_id),0) FROM session_events WHERE session_id=? AND type=?", params![session, EVENT_TYPE], |r| r.get(0))?;
+    let mut statement = db.prepare("SELECT payload,length(CAST(payload AS BLOB)) FROM session_events WHERE session_id=? AND type='rust.chat.stream' ORDER BY log_id LIMIT 8193")?;
+    let mut rows = statement.query([session])?;
+    let mut count = 0usize;
+    let mut bytes = 0usize;
+    let mut streaming = false;
+    while let Some(row) = rows.next()? {
+        count += 1;
+        let size: i64 = row.get(1)?;
+        if !(0..=65536).contains(&size) { return Err("Stream frame exceeds limits".into()); }
+        bytes += size as usize;
+        if count > 8192 || bytes > 16 * 1024 * 1024 { return Err("Stream history exceeds limits".into()); }
+        let value: Value = serde_json::from_str(&row.get::<_, String>(0)?)?;
+        match value["type"].as_str() {
+            Some("request") => streaming = true,
+            Some("done" | "error") => streaming = false,
+            Some(_) => {},
+            None => return Err("Invalid stream frame".into()),
+        }
+    }
+    drop(rows);
+    drop(statement);
+    let mut statement = db.prepare("SELECT payload FROM session_events WHERE session_id=? AND type='rust.chat.stream' AND log_id>? ORDER BY log_id")?;
+    let mut rows = statement.query(params![session,last_model])?;
+    let (mut content, mut thinking, mut segments) = (String::new(), String::new(), Vec::new());
+    while let Some(row) = rows.next()? {
+        let value: Value = serde_json::from_str(&row.get::<_, String>(0)?)?;
+        match value["type"].as_str() {
+            Some(kind @ ("token" | "thinking")) => {
+                let text = value["content"].as_str().ok_or("Invalid display frame")?;
+                if content.len() + thinking.len() + text.len() > 128 * 1024 { return Err("Partial response exceeds limits".into()); }
+                if kind == "token" { content.push_str(text); } else { thinking.push_str(text); }
+                segments.push(json!({"type":if kind == "token" {"text"} else {"thinking"},"content":text}));
+            }
+            Some("request" | "done" | "error") => {},
+            // Never advance past a frame whose UI effects we cannot reconstruct.
+            _ => return Err("Unprojected stream frame".into()),
+        }
+    }
+    Ok((streaming, content, thinking, segments))
+}
+
 pub async fn project_messages(
     auth: AuthState,
     owner: String,
@@ -214,20 +259,26 @@ pub async fn project_messages(
         let has_log:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM session_events WHERE session_id=? AND type=?)",params![session,EVENT_TYPE],|row|row.get(0))?;
         // Repair logs written before materialization existed; all writes are atomic.
         if has_log {project_log(&tx,&session)?;}
+        let (streaming, partial_content, partial_thinking, partial_segments)=stream_tail(&tx,&session)?;
+        let has_partial=!partial_segments.is_empty();
+        let last_role:Option<String>=tx.query_row("SELECT role FROM messages WHERE session_id=? AND role<>'tool' ORDER BY created_at DESC,id DESC LIMIT 1",[&session],|row|row.get(0)).optional()?;
+        let synthetic=has_partial && last_role.as_deref()!=Some("assistant");
         let total:i64=tx.query_row("SELECT count(*) FROM messages WHERE session_id=? AND role<>'tool'",[&session],|row|row.get(0))?;
-        let total=usize::try_from(total).map_err(|_| "Invalid message count")?;
+        let total=usize::try_from(total).map_err(|_| "Invalid message count")? + usize::from(synthetic);
         let end=before.filter(|before|*before<total).unwrap_or(total);
         let start=end.saturating_sub(limit);
+        let db_end=end.min(total-usize::from(synthetic));
+        let db_start=start.min(db_end);
         let mut sizes=tx.prepare("SELECT length(CAST(content AS BLOB))+COALESCE(length(CAST(tool_calls AS BLOB)),0)+COALESCE(length(CAST(segments AS BLOB)),0)+COALESCE(length(CAST(thinking AS BLOB)),0) FROM messages WHERE session_id=? AND role<>'tool' ORDER BY created_at,id LIMIT ? OFFSET ?")?;
         let mut page_bytes=0usize;
-        for size in sizes.query_map(params![session,(end-start) as i64,start as i64],|row|row.get::<_,i64>(0))? {
+        for size in sizes.query_map(params![session,(db_end-db_start) as i64,db_start as i64],|row|row.get::<_,i64>(0))? {
             let size=usize::try_from(size?).map_err(|_|"Invalid stored message length")?;
             page_bytes=page_bytes.checked_add(size).ok_or("Message size overflow")?;
             if page_bytes>MAX_BYTES{return Err("Message page exceeds output limits".into());}
         }
         drop(sizes);
         let mut statement=tx.prepare("SELECT role,content,tool_calls,segments,thinking FROM messages WHERE session_id=? AND role<>'tool' ORDER BY created_at,id LIMIT ? OFFSET ?")?;
-        let messages=statement.query_map(params![session,(end-start) as i64,start as i64],|row|{
+        let messages=statement.query_map(params![session,(db_end-db_start) as i64,db_start as i64],|row|{
             let role:String=row.get(0)?;
             let mut value=json!({"role":role,"content":row.get::<_,String>(1)?});
             if role=="system"{value["systemNotice"]=json!(true);}
@@ -238,10 +289,21 @@ pub async fn project_messages(
             Ok(value)
         })?.collect::<rusqlite::Result<Vec<_>>>()?;
         drop(statement);
-        let messages:Vec<Value>=messages.into_iter().enumerate().map(|(offset,mut value)|{value["id"]=json!(format!("{session}-{}",start+offset));value}).collect();
+        let mut messages:Vec<Value>=messages.into_iter().enumerate().map(|(offset,mut value)|{value["id"]=json!(format!("{session}-{}",db_start+offset));value}).collect();
+        if has_partial && end == total {
+            if synthetic { messages.push(json!({"id":format!("{session}-{}",total-1),"role":"assistant","content":""})); }
+            if let Some(last)=messages.last_mut() {
+                let existing=last["content"].as_str().unwrap_or("").to_owned();
+                last["content"]=json!(existing+&partial_content);
+                let existing=last["thinking"].as_str().unwrap_or("").to_owned();
+                if !existing.is_empty() || !partial_thinking.is_empty() { last["thinking"]=json!(existing+&partial_thinking); }
+                if !last["segments"].is_array() { last["segments"]=json!([]); }
+                last["segments"].as_array_mut().unwrap().extend(partial_segments);
+            }
+        }
         let seq:i64=tx.query_row("SELECT COALESCE(MAX(log_id),0) FROM session_events WHERE session_id=?",[&session],|row|row.get(0))?;
         tx.commit()?;
-        let result=json!({"sessionId":session,"streaming":false,"seq":seq,"lastActiveAt":active,"total":total,"hasMore":start>0,"limit":limit,"messages":messages});
+        let result=json!({"sessionId":session,"streaming":streaming,"seq":seq,"lastActiveAt":active,"total":total,"hasMore":start>0,"limit":limit,"messages":messages});
         if serde_json::to_writer(JsonBudget(0),&result).is_err(){return Err("Serialized message page exceeds output limits".into());}
         Ok(result)
     }).await.map_err(|_|"Messages could not be loaded".into())
@@ -421,6 +483,26 @@ mod tests {
         assert_eq!(activity, "2026-10-21T00:00:00Z");
         auth.shutdown().await.unwrap();
     }
+    #[tokio::test]
+    async fn snapshot_includes_partial_frames_at_its_cursor_and_terminal_state() {
+        let (auth, store) = setup();
+        store.append(TurnEvent::User { content: "hello".into() }).await.unwrap();
+        store.append_stream_event(json!({"type":"thinking","content":"reason"})).await.unwrap();
+        store.append_stream_event(json!({"type":"token","content":"partial"})).await.unwrap();
+        let snapshot = page(&auth, 10, None).await;
+        assert_eq!(snapshot["streaming"], true);
+        assert_eq!(snapshot["messages"][1]["content"], "partial");
+        assert_eq!(snapshot["messages"][1]["thinking"], "reason");
+        assert_eq!(snapshot["seq"], 4);
+        store.append(TurnEvent::Assistant { content: "partial".into(), thinking: "reason".into(), tool_calls: vec![] }).await.unwrap();
+        store.append_stream_terminal(json!({"type":"done"})).await.unwrap();
+        let snapshot = page(&auth, 10, None).await;
+        assert_eq!(snapshot["streaming"], false);
+        assert_eq!(snapshot["messages"][1]["content"], "partial");
+        assert_eq!(snapshot["seq"], 6);
+        auth.shutdown().await.unwrap();
+    }
+
     #[tokio::test]
     async fn owner_and_cursor_checks_precede_projection_effects() {
         let (auth, store) = setup();

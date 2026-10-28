@@ -1,6 +1,16 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('useChat stream resume lifecycle', () => {
+  test('does not duplicate a user message when turn start arrives before POST headers', async ({ page }) => {
+    await page.goto('/use-chat-resume-repro.html?early-start=1')
+    await expect(page.getByTestId('stream-fetch-count')).toHaveText('1')
+    await page.getByRole('button', { name: 'Send race prompt' }).click()
+    await expect(page.getByTestId('race-send-state')).toHaveText('sending')
+    await expect(page.getByTestId('race-user-count')).toHaveText('1')
+    await expect(page.getByTestId('race-send-state')).toHaveText('sent')
+    await expect(page.getByTestId('race-user-count')).toHaveText('1')
+  })
+
   test('does not open duplicate resume streams on focus/pageshow/online while one is active', async ({ page }) => {
     await page.goto('/use-chat-resume-repro.html')
 

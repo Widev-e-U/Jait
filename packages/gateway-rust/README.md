@@ -7,11 +7,15 @@ including six later additions. The live ledger records **236 originals as verifi
 **87 originals as implemented but unverified**, and **47 originals without a
 ledger entry** (323/370 originals have a ledger entry). Five additions are recorded as verified
 and one has no entry. An absent entry does not mean no native code exists. These are
-ledger statuses, not a fresh source-bound validation. Six historically verified
+ledger statuses, not a fresh source-bound validation. Seven historically verified
 reference hashes no longer match live source: `providers/model-fetchers.ts`,
-`routes/screen-share.ts`, `tools/core/todo.ts`, `tools/prompts/shared-sections.ts`,
-`tools/repo-proposal-tools.ts`, and `tools/surface-tools.ts`. Their historical
-verification must be reconciled and revalidated against the final snapshot.
+`routes/screen-share.ts`, `services/computer-control.ts`, `tools/core/todo.ts`,
+`tools/prompts/shared-sections.ts`, `tools/repo-proposal-tools.ts`, and
+`tools/surface-tools.ts`. Six implemented-but-unverified references also differ:
+`routes/voice.ts`, `services/messenger-service.ts`, `tools/browser-tools.ts`,
+`tools/computer-tools.ts`, `tools/screen-share-tools.ts`, and `tools/index.ts`.
+These differences must be reconciled against the final snapshot; historical
+verification is not a fresh validation of the changed sources.
 
 Focused-only evidence never earns `verified`: the new `tools/agent-tools.ts`
 (16/16 `tools::agent_tools` tests) and `tools/index.ts` (8/8 `tools::index` tests,

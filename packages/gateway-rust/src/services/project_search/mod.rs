@@ -199,6 +199,7 @@ pub fn search_project(
             ..Default::default()
         },
         &operation,
+        !options.include_ignored_files && options.include.as_deref().is_none_or(str::is_empty),
     )?;
     search(&index, options, budgets, &operation)
 }
@@ -223,6 +224,16 @@ pub fn search_index(
         budgets,
         &Operation::new(budgets.duration, cancel),
     )
+}
+// The TypeScript filename path applies this filter after ripgrep enumeration.
+fn matches_file_include(relative: &str, include: &str) -> bool {
+    if let Some(suffix) = include.strip_prefix("*.") {
+        return relative.ends_with(&format!(".{suffix}"));
+    }
+    if let Some(prefix) = include.strip_suffix("/**") {
+        return relative.starts_with(prefix);
+    }
+    relative.contains(&include.replace('*', ""))
 }
 fn search(
     index: &ProjectIndex,
@@ -262,10 +273,23 @@ fn search(
     let mut candidate_bytes = 0usize;
     for (relative, entry) in &index.entries {
         operation.check()?;
-        if entry.directory || include.as_ref().is_some_and(|re| !re.is_match(relative)) {
+        if entry.directory
+            || (!options.include_ignored_files
+                && include.is_none()
+                && relative.split('/').any(|part| part.starts_with('.')))
+            || include.as_ref().is_some_and(|re| !re.is_match(relative))
+        {
             continue;
         }
         if options.mode == SearchMode::Files {
+            if options
+                .include
+                .as_deref()
+                .filter(|p| !p.is_empty())
+                .is_some_and(|p| !matches_file_include(relative, p))
+            {
+                continue;
+            }
             if file_needle.is_empty() {
                 break;
             }

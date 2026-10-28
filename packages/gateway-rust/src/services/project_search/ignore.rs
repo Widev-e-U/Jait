@@ -12,6 +12,7 @@ pub(crate) struct Rule {
 #[derive(Clone, Debug)]
 pub(crate) struct IgnoreScope {
     pub base: String,
+    pub higher_priority: bool,
     pub rules: Vec<Rule>,
 }
 
@@ -117,7 +118,11 @@ pub(crate) fn parse(content: &str) -> (Vec<Rule>, bool) {
 }
 pub(crate) fn ignored(scopes: &[IgnoreScope], path: &str, directory: bool) -> bool {
     let mut ignored = false;
-    for scope in scopes {
+    for scope in scopes
+        .iter()
+        .filter(|s| !s.higher_priority)
+        .chain(scopes.iter().filter(|s| s.higher_priority))
+    {
         let local = if scope.base.is_empty() {
             path
         } else {
