@@ -1,8 +1,6 @@
 diff --git a/dist/index.js b/dist/index.js
-index 16daa15df86bfa40062889c8bec02c8881354a18..f19c382cf818fdbb50d3a02014f8cc7c0e29fd09 100755
---- a/dist/index.js
-+++ b/dist/index.js
-@@ -30191,8 +30191,9 @@ var CodexEventHandler = class {
+index 16daa15df86bfa40062889c8bec02c8881354a18..535c184473c30fa856b3e81d22566bdda5284121 100755
+@@ -30191,8 +30191,9 @@
      }
      return this.createSessionFailureMeta(failure3);
    }
@@ -14,7 +12,55 @@ index 16daa15df86bfa40062889c8bec02c8881354a18..f19c382cf818fdbb50d3a02014f8cc7c
    }
    /**
     * Handles notifications after the prompt-local handler has been disposed. The app-server subscription
-@@ -39912,7 +39913,14 @@ Check ${configPath} and project .codex directories, especially their config.toml
+@@ -35004,6 +35005,7 @@
+   }
+   async runCompact(params, onTurnStarted) {
+     let compactTurnId = null;
++    let completionTimer = null;
+     let resolveCompleted = () => {
+     };
+     let rejectCompleted = () => {
+@@ -35014,16 +35016,35 @@
+     });
+     void completed.catch(() => {
+     });
+-    const closed = this.connection.onClose?.(() => rejectCompleted(new Error("Codex connection closed during compaction.")));
++    const clearCompletionTimer = () => {
++      if (completionTimer === null) return;
++      clearTimeout(completionTimer);
++      completionTimer = null;
++    };
++    const settleCompleted = (value) => {
++      clearCompletionTimer();
++      resolveCompleted(value);
++    };
++    const failCompleted = (error) => {
++      clearCompletionTimer();
++      rejectCompleted(error);
++    };
++    const closed = this.connection.onClose?.(() => failCompleted(new Error("Codex connection closed during compaction.")));
+     const completeCompaction = (event) => {
+-      if (compactTurnId !== null && event.params.turnId !== compactTurnId) return;
+-      resolveCompleted(event);
++      if (compactTurnId !== null && event.params.turnId != null && event.params.turnId !== compactTurnId) return;
++      if (compactTurnId === null && event.params.turnId != null) {
++        compactTurnId = event.params.turnId;
++      }
++      if (completionTimer !== null) return;
++      completionTimer = setTimeout(() => {
++        failCompleted(new Error("Codex compaction turn did not finish after compaction completed"));
++      }, 120000);
+     };
+     const releaseCompactionCapture = this.captureCompactionCompletions(params.threadId, completeCompaction);
+     const releaseTurnCapture = this.captureTurnCompletions(params.threadId, (event) => {
+       if (compactTurnId === null || event.turn.id !== compactTurnId) return;
+       if (event.turn.status !== "inProgress") {
+-        resolveCompleted({ method: "turn/completed", params: event });
++        settleCompleted({ method: "turn/completed", params: event });
+       }
+     });
+     const releaseRoutingCapture = this.captureTurnRoutings(params.threadId, (turnId, notification) => {
+@@ -39912,7 +39933,14 @@
        if (eventHandler !== null && clientSupportsTypedSessionFailures(this.clientCapabilities) && (isProcessExit || isUnexpectedFailure)) {
          eventHandler.recordSyntheticTerminalFailure(
            isProcessExit ? "transport_lost" : "internal_error",
