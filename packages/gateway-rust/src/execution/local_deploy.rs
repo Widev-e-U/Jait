@@ -4,7 +4,6 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs::{self, OpenOptions},
-    io::Read,
     os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     process::Stdio,
@@ -209,91 +208,317 @@ fn err(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
+/// One fingerprint unit. Metadata is captured during the walk so a stat signature
+/// can prove the tree unchanged without re-reading every byte.
+#[derive(Clone)]
+struct Entry {
+    path: PathBuf,
+    mode: u32,
+    size: u64,
+    device: u64,
+    inode: u64,
+    modified: (i64, i64),
+    changed: (i64, i64),
+    symlink: bool,
+    file: bool,
+}
+
+impl Entry {
+    fn new(root: &Path, path: &Path, stat: &fs::Metadata) -> Result<Self> {
+        Ok(Self {
+            path: path.strip_prefix(root).map_err(err)?.to_owned(),
+            mode: stat.mode() & 0o777,
+            size: stat.len(),
+            device: stat.dev(),
+            inode: stat.ino(),
+            modified: (stat.mtime(), stat.mtime_nsec()),
+            changed: (stat.ctime(), stat.ctime_nsec()),
+            symlink: stat.is_symlink(),
+            file: stat.is_file(),
+        })
+    }
+}
+
+/// A fingerprint pass. `digest` is empty when only the signature was refreshed.
+#[derive(Clone, Default)]
+struct Scan {
+    digest: String,
+    signature: String,
+    files: usize,
+}
+
+/// Fingerprints over the staged workspace are I/O bound, so a small fixed ceiling
+/// beats matching cores exactly and keeps memory bounded on wide hosts.
+const FINGERPRINT_THREADS: usize = 16;
+/// Files queued per reader thread. Bounds resident memory to the window size.
+const FINGERPRINT_WINDOW: usize = 32;
+
+fn fingerprint_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1)
+        .clamp(1, FINGERPRINT_THREADS)
+}
+
+fn hashed(name: &str, dependencies: bool) -> bool {
+    ![".git", ".jait"].contains(&name)
+        && (dependencies || name != "node_modules")
+        && !name.ends_with(".tsbuildinfo")
+}
+
+fn walk_dir(
+    root: &Path,
+    directory: &Path,
+    dependencies: bool,
+    entries: &mut Vec<Entry>,
+) -> Result<()> {
+    for next in fs::read_dir(directory).map_err(err)? {
+        let next = next.map_err(err)?;
+        let name = next.file_name();
+        let name = name.to_str().ok_or("Non-UTF8 deployment filename")?;
+        if !hashed(name, dependencies) {
+            continue;
+        }
+        if next.file_type().map_err(err)?.is_dir() {
+            walk_dir(root, &next.path(), dependencies, entries)?;
+        } else {
+            let stat = next.metadata().map_err(err)?;
+            entries.push(Entry::new(root, &next.path(), &stat)?);
+        }
+    }
+    Ok(())
+}
+
+/// Walks the tree, spreading top-level directories over worker threads.
+fn walk_tree(root: &Path, dependencies: bool) -> Result<Vec<Entry>> {
+    let mut entries = Vec::new();
+    let mut directories = Vec::new();
+    for next in fs::read_dir(root).map_err(err)? {
+        let next = next.map_err(err)?;
+        let name = next.file_name();
+        let name = name.to_str().ok_or("Non-UTF8 deployment filename")?;
+        if !hashed(name, dependencies) {
+            continue;
+        }
+        if next.file_type().map_err(err)?.is_dir() {
+            directories.push(next.path());
+        } else {
+            let stat = next.metadata().map_err(err)?;
+            entries.push(Entry::new(root, &next.path(), &stat)?);
+        }
+    }
+    let workers = fingerprint_threads().min(directories.len()).max(1);
+    if workers > 1 {
+        let next = std::sync::atomic::AtomicUsize::new(0);
+        let shards = std::sync::Mutex::new(Vec::with_capacity(workers));
+        let failure = std::sync::Mutex::new(None::<String>);
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                scope.spawn(|| loop {
+                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(directory) = directories.get(index) else {
+                        break;
+                    };
+                    let mut found = Vec::new();
+                    match walk_dir(root, directory, dependencies, &mut found) {
+                        Ok(()) => shards.lock().unwrap().push((index, found)),
+                        Err(error) => {
+                            failure.lock().unwrap().get_or_insert(error);
+                            break;
+                        }
+                    }
+                });
+            }
+        });
+        if let Some(error) = failure.into_inner().unwrap() {
+            return Err(error);
+        }
+        let mut shards = shards.into_inner().unwrap();
+        shards.sort_by_key(|(index, _)| *index);
+        entries.extend(shards.into_iter().flat_map(|(_, found)| found));
+    } else {
+        for directory in &directories {
+            walk_dir(root, directory, dependencies, &mut entries)?;
+        }
+    }
+    entries.sort_by(|a, b| {
+        // JavaScript sorts UTF-16 code units.
+        a.path
+            .to_str()
+            .unwrap()
+            .encode_utf16()
+            .cmp(b.path.to_str().unwrap().encode_utf16())
+    });
+    Ok(entries)
+}
+
+/// Path, permissions and identity. A change proves the tree moved; ctime cannot be
+/// rewritten by unprivileged writers, so an unchanged signature means no writes.
+fn signature_of(entries: &[Entry]) -> Result<String> {
+    let mut hash = Sha256::new();
+    for entry in entries {
+        hash.update(
+            serde_json::to_vec(&(
+                entry.path.to_str().ok_or("Non-UTF8 deployment path")?,
+                entry.mode,
+                entry.size,
+                entry.device,
+                entry.inode,
+                entry.modified.0,
+                entry.modified.1,
+                entry.changed.0,
+                entry.changed.1,
+            ))
+            .map_err(err)?,
+        );
+    }
+    Ok(hex::encode(hash.finalize()))
+}
+
+fn feed_entry(
+    hash: &mut Sha256,
+    root: &Path,
+    entry: &Entry,
+    dependencies: bool,
+    payload: Option<Vec<u8>>,
+) -> Result<()> {
+    hash.update(
+        serde_json::to_vec(&(
+            entry.path.to_str().ok_or("Non-UTF8 deployment path")?,
+            entry.mode,
+        ))
+        .map_err(err)?,
+    );
+    let full = root.join(&entry.path);
+    if entry.symlink {
+        if dependencies {
+            let target = fs::canonicalize(&full).map_err(err)?;
+            let relative = target
+                .strip_prefix(root)
+                .map_err(|_| "External symlink prevents verification reuse")?;
+            if relative.components().any(|part| {
+                let name = part.as_os_str().to_string_lossy();
+                name == ".git" || name == ".jait" || name.ends_with(".tsbuildinfo")
+            }) {
+                return Err("Symlink to unhashed inputs prevents verification reuse".into());
+            }
+        }
+        hash.update(
+            fs::read_link(full)
+                .map_err(err)?
+                .to_str()
+                .ok_or("Non-UTF8 deployment symlink")?
+                .as_bytes(),
+        );
+        Ok(())
+    } else if entry.file {
+        let bytes = match payload {
+            Some(bytes) => bytes,
+            None => fs::read(full).map_err(err)?,
+        };
+        hash.update(&bytes);
+        Ok(())
+    } else {
+        Err("Unsupported deployment entry".into())
+    }
+}
+
+/// Feeds the ordered byte stream while readers stay a window ahead of the hash.
+fn digest_of(root: &Path, entries: &[Entry], dependencies: bool) -> Result<String> {
+    let mut hash = Sha256::new();
+    let readers = if entries.len() > 64 {
+        fingerprint_threads()
+    } else {
+        1
+    };
+    if readers <= 1 {
+        for entry in entries {
+            feed_entry(&mut hash, root, entry, dependencies, None)?;
+        }
+        return Ok(hex::encode(hash.finalize()));
+    }
+    // Declared outside the scope so the borrowed cursor outlives the spawned readers.
+    let cursor = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| -> Result<()> {
+        let (sender, receiver) =
+            std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>>)>(readers * FINGERPRINT_WINDOW);
+        let counter = &cursor;
+        let source = root;
+        let items = entries.as_ref();
+        for _ in 0..readers {
+            let sender = sender.clone();
+            scope.spawn(move || loop {
+                let index = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let Some(entry) = items.get(index) else {
+                    break;
+                };
+                let payload = if entry.file && !entry.symlink {
+                    fs::read(source.join(&entry.path)).map_err(err)
+                } else {
+                    Ok(Vec::new())
+                };
+                let failed = payload.is_err();
+                if sender.send((index, payload)).is_err() || failed {
+                    break;
+                }
+            });
+        }
+        drop(sender);
+        // Out-of-order completions are buffered until their turn, so the stream stays
+        // byte-for-byte identical to a single-threaded pass.
+        let mut ready = BTreeMap::new();
+        for index in 0..entries.len() {
+            let payload = loop {
+                if let Some(payload) = ready.remove(&index) {
+                    break payload;
+                }
+                match receiver.recv() {
+                    Ok((at, payload)) => {
+                        ready.insert(at, payload);
+                    }
+                    Err(_) => return Err("Deployment digest workers stopped".into()),
+                }
+            };
+            feed_entry(&mut hash, root, &entries[index], dependencies, Some(payload?))?;
+        }
+        Ok(())
+    })?;
+    Ok(hex::encode(hash.finalize()))
+}
+
+/// One traversal, plus a byte pass only when the stat signature cannot vouch for the
+/// previous digest. The signature covers every field the digest reads, so a signature
+/// match means the rebuilt bytes would be identical.
+fn scan_tree(root: &Path, dependencies: bool, previous: Option<&Scan>) -> Result<Scan> {
+    let entries = walk_tree(root, dependencies)?;
+    let signature = signature_of(&entries)?;
+    let digest = match previous {
+        Some(previous) if previous.signature == signature => previous.digest.clone(),
+        _ => digest_of(root, &entries, dependencies)?,
+    };
+    Ok(Scan {
+        digest,
+        signature,
+        files: entries.len(),
+    })
+}
+
 /// Hash path, permissions and bytes, matching the launcher, without following symlinks.
 pub fn tree_digest(root: &Path) -> Result<String> {
     digest_tree(root, false)
 }
 
 fn digest_tree(root: &Path, dependencies: bool) -> Result<String> {
-    fn collect(
-        root: &Path,
-        dir: &Path,
-        files: &mut Vec<PathBuf>,
-        dependencies: bool,
-    ) -> Result<()> {
-        for entry in fs::read_dir(dir).map_err(err)? {
-            let entry = entry.map_err(err)?;
-            let name = entry.file_name();
-            let name = name.to_str().ok_or("Non-UTF8 deployment filename")?;
-            if [".git", ".jait"].contains(&name)
-                || (!dependencies && name == "node_modules")
-                || name.ends_with(".tsbuildinfo")
-            {
-                continue;
-            }
-            if entry.file_type().map_err(err)?.is_dir() {
-                collect(root, &entry.path(), files, dependencies)?;
-            } else {
-                files.push(entry.path().strip_prefix(root).map_err(err)?.to_owned());
-            }
-        }
-        Ok(())
-    }
-    let mut files = Vec::new();
-    collect(root, root, &mut files, dependencies)?;
-    files.sort_by(|a, b| {
-        // JavaScript sorts UTF-16 code units.
-        a.to_str()
-            .unwrap()
-            .encode_utf16()
-            .cmp(b.to_str().unwrap().encode_utf16())
-    });
+    scan_tree(root, dependencies, None).map(|scan| scan.digest)
+}
+
+/// The verification reuse key for a content digest.
+fn key_of(context: &str, digest: &str) -> String {
     let mut hash = Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
-    for path in files {
-        let full = root.join(&path);
-        let stat = fs::symlink_metadata(&full).map_err(err)?;
-        hash.update(
-            serde_json::to_vec(&(
-                path.to_str().ok_or("Non-UTF8 deployment path")?,
-                stat.mode() & 0o777,
-            ))
-            .map_err(err)?,
-        );
-        if stat.is_symlink() {
-            if dependencies {
-                let target = fs::canonicalize(&full).map_err(err)?;
-                let relative = target
-                    .strip_prefix(root)
-                    .map_err(|_| "External symlink prevents verification reuse")?;
-                if relative.components().any(|part| {
-                    let name = part.as_os_str().to_string_lossy();
-                    name == ".git" || name == ".jait" || name.ends_with(".tsbuildinfo")
-                }) {
-                    return Err("Symlink to unhashed inputs prevents verification reuse".into());
-                }
-            }
-            hash.update(
-                fs::read_link(full)
-                    .map_err(err)?
-                    .to_str()
-                    .ok_or("Non-UTF8 deployment symlink")?
-                    .as_bytes(),
-            );
-        } else if stat.is_file() {
-            let mut file = fs::File::open(full).map_err(err)?;
-            loop {
-                let read = file.read(&mut buffer).map_err(err)?;
-                if read == 0 {
-                    break;
-                }
-                hash.update(&buffer[..read]);
-            }
-        } else {
-            return Err("Unsupported deployment entry".into());
-        }
-    }
-    Ok(hex::encode(hash.finalize()))
+    hash.update(b"jait-verification-resume-v1\0");
+    hash.update(context);
+    hash.update(digest);
+    hex::encode(hash.finalize())
 }
 
 pub fn systemd_quote(value: &str) -> Result<String> {
@@ -581,13 +806,6 @@ fn now_seconds() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
-fn resume_key(root: &Path, context: &str) -> Result<String> {
-    let mut hash = Sha256::new();
-    hash.update(b"jait-verification-resume-v1\0");
-    hash.update(context);
-    hash.update(digest_tree(root, true)?);
-    Ok(hex::encode(hash.finalize()))
-}
 impl Resume {
     fn reused(&self, step: &Step) -> Option<&SavedPasses> {
         self.saved.as_ref().filter(|saved| {
@@ -605,6 +823,14 @@ impl Resume {
     }
 }
 
+/// Verified fingerprint state. Both digests are expensive, so they are held for the
+/// lifetime of a run and revalidated against the stat signature instead of re-read.
+#[derive(Default)]
+struct Observations {
+    sources: Option<Scan>,
+    inputs: Option<Scan>,
+}
+
 pub struct FilesystemVerificationHost {
     pub root: PathBuf,
     pub logs: PathBuf,
@@ -612,8 +838,42 @@ pub struct FilesystemVerificationHost {
     pending: Vec<Step>,
     running: BTreeMap<String, JoinHandle<Result<()>>>,
     resume: Option<Resume>,
+    observations: std::sync::Mutex<Observations>,
 }
 impl FilesystemVerificationHost {
+    /// Reuses the content digest when the stat signature still matches, otherwise
+    /// re-reads. Either way the returned digest always describes the tree on disk now.
+    fn scan_observed(&self, dependencies: bool) -> Result<Scan> {
+        let previous = {
+            let observations = self.observations.lock().unwrap();
+            if dependencies {
+                observations.inputs.clone()
+            } else {
+                observations.sources.clone()
+            }
+        };
+        let started = std::time::Instant::now();
+        let scan = scan_tree(&self.root, dependencies, previous.as_ref())?;
+        {
+            let mut observations = self.observations.lock().unwrap();
+            if dependencies {
+                observations.inputs = Some(scan.clone());
+            } else {
+                observations.sources = Some(scan.clone());
+            }
+        }
+        eprintln!(
+            "[local-deploy] Fingerprint {} verified in {}ms ({} files)",
+            if dependencies { "inputs" } else { "sources" },
+            started.elapsed().as_millis(),
+            scan.files
+        );
+        Ok(scan)
+    }
+    /// The reuse key for the current inputs, reusing a verified digest when possible.
+    fn verified_resume_key(&self, context: &str) -> Result<String> {
+        Ok(key_of(context, &self.scan_observed(true)?.digest))
+    }
     /// Prefetched stages start only after the preflight pair has finished, so the
     /// cheap workspace guards still observe an idle tree.
     pub fn new(root: PathBuf, logs: PathBuf, steps: &[Step]) -> Self {
@@ -629,6 +889,7 @@ impl FilesystemVerificationHost {
             pending,
             running: BTreeMap::new(),
             resume: None,
+            observations: std::sync::Mutex::new(Observations::default()),
         }
     }
     /// The launcher supplies tool/environment identity after frozen installation.
@@ -644,7 +905,7 @@ impl FilesystemVerificationHost {
                 .filter(|key| valid_hash(key))
                 .ok_or("Missing verification context")?
                 .to_owned();
-            let key = resume_key(&self.root, &context)?;
+            let key = self.verified_resume_key(&context)?;
             let saved: Option<SavedPasses> = if value["fresh"] == true {
                 None
             } else {
@@ -676,7 +937,7 @@ impl FilesystemVerificationHost {
         let Some(resume) = &self.resume else {
             return Ok(());
         };
-        if resume_key(&self.root, &resume.context)? != resume.key {
+        if self.verified_resume_key(&resume.context)? != resume.key {
             eprintln!("[local-deploy] Inputs changed; successful stages will not be reused");
             return Ok(());
         }
@@ -812,14 +1073,14 @@ impl Drop for FilesystemVerificationHost {
 impl VerificationHost for FilesystemVerificationHost {
     async fn validate_inputs(&mut self) -> Result<()> {
         if let Some(resume) = &self.resume
-            && resume_key(&self.root, &resume.context)? != resume.key
+            && self.verified_resume_key(&resume.context)? != resume.key
         {
             return Err("Verification inputs changed during checks; refusing deployment".into());
         }
         Ok(())
     }
     async fn fingerprint(&mut self) -> Result<String> {
-        tree_digest(&self.root)
+        self.scan_observed(false).map(|scan| scan.digest)
     }
     async fn run(&mut self, step: &Step) -> Result<()> {
         self.start_prefetch(&step.id);
@@ -1161,5 +1422,165 @@ mod parallel_tests {
         assert!(error.contains("rust-migration.log"), "{error}");
         assert!(!fixture.0.join(".jait/e2e-started").exists());
         assert!(!fixture.0.join(".jait/ui-started").exists());
+    }
+}
+
+/// Locks the fingerprint to the launcher: both implementations materialise the shared
+/// fixture in `tests/fixtures/local-deploy-digest.json` and must reproduce the same bytes.
+#[cfg(test)]
+mod digest_parity {
+    use super::*;
+    use std::os::unix::fs::symlink;
+
+    const MANIFEST: &str = "../../tests/fixtures/local-deploy-digest.json";
+
+    struct Fixture(PathBuf);
+
+    impl Fixture {
+        fn new(tag: &str) -> Self {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("src/execution/.jait/artifacts/digest-parity")
+                .join(format!("{}-{tag}", std::process::id()));
+            let _ = fs::remove_dir_all(&root);
+            fs::create_dir_all(&root).unwrap();
+            let manifest = manifest();
+            for key in ["entries", "excluded"] {
+                for entry in manifest[key].as_array().unwrap() {
+                    let path = root.join(entry["path"].as_str().unwrap());
+                    fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    match entry["symlink"].as_str() {
+                        Some(target) => symlink(target, &path).unwrap(),
+                        None => {
+                            fs::write(&path, entry["file"].as_str().unwrap()).unwrap();
+                            if let Some(mode) = entry["mode"].as_u64() {
+                                fs::set_permissions(
+                                    &path,
+                                    std::os::unix::fs::PermissionsExt::from_mode(mode as u32),
+                                )
+                                .unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+            Self(root)
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn manifest() -> serde_json::Value {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(MANIFEST);
+        serde_json::from_slice(&fs::read(&path).expect("parity fixture manifest")).unwrap()
+    }
+
+    fn reference() -> String {
+        manifest()["digests"]["sources"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn rust_digest_reproduces_the_launcher_reference() {
+        let fixture = Fixture::new("reference");
+        assert_eq!(tree_digest(&fixture.0).unwrap(), reference());
+    }
+
+    #[test]
+    fn excluded_trees_and_build_metadata_never_reach_the_digest() {
+        let fixture = Fixture::new("excluded");
+        let before = tree_digest(&fixture.0).unwrap();
+        for (path, body) in [
+            ("node_modules/pkg/extra.js", "module.exports = 1;"),
+            (".jait/artifacts/notes.md", "scratch"),
+            (".git/index", "binary"),
+            ("packages/web/other.tsbuildinfo", "{}"),
+        ] {
+            let target = fixture.0.join(path);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(&target, body).unwrap();
+        }
+        assert_eq!(tree_digest(&fixture.0).unwrap(), before);
+        assert_eq!(before, reference());
+    }
+
+    #[test]
+    fn dependencies_flag_is_the_only_way_node_modules_is_hashed() {
+        let fixture = Fixture::new("dependencies");
+        let sources = digest_tree(&fixture.0, false).unwrap();
+        let dependencies = digest_tree(&fixture.0, true).unwrap();
+        assert_eq!(sources, reference());
+        assert_ne!(dependencies, sources);
+    }
+
+    #[test]
+    fn signature_reuse_returns_the_cached_digest_and_tracks_mutation() {
+        let fixture = Fixture::new("reuse");
+        let first = scan_tree(&fixture.0, false, None).unwrap();
+        assert_eq!(first.digest, reference());
+
+        let reused = scan_tree(&fixture.0, false, Some(&first)).unwrap();
+        assert_eq!(reused.digest, first.digest);
+        assert_eq!(reused.signature, first.signature);
+
+        let edited = fixture.0.join("a.txt");
+        fs::write(&edited, "alpha changed").unwrap();
+        let changed = scan_tree(&fixture.0, false, Some(&first)).unwrap();
+        assert_ne!(changed.signature, first.signature);
+        assert_ne!(changed.digest, first.digest);
+        assert_eq!(changed.digest, tree_digest(&fixture.0).unwrap());
+    }
+
+    #[test]
+    fn parallel_readers_match_a_serial_pass() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/execution/.jait/artifacts/digest-parity")
+            .join(format!("{}-parallel", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        for index in 0..256 {
+            let body = format!("file {index} {}", "x".repeat(index % 37));
+            fs::write(root.join(format!("f{index:03}.txt")), body).unwrap();
+        }
+        let entries = walk_tree(&root, false).unwrap();
+        assert!(entries.len() > 64, "parallel path requires >64 entries");
+
+        let mut hash = Sha256::new();
+        for entry in &entries {
+            feed_entry(&mut hash, &root, entry, false, None).unwrap();
+        }
+        let serial = hex::encode(hash.finalize());
+        assert_eq!(digest_of(&root, &entries, false).unwrap(), serial);
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// Opt-in timing harness over a live tree:
+    /// `JAIT_DIGEST_BENCH=<path> cargo test --release --lib digest_parity -- --ignored --nocapture`
+    #[test]
+    #[ignore = "timing harness; opt in with JAIT_DIGEST_BENCH=<path>"]
+    fn fingerprint_bench() {
+        let Some(root) = std::env::var_os("JAIT_DIGEST_BENCH").map(PathBuf::from) else {
+            return;
+        };
+        for dependencies in [false, true] {
+            let started = std::time::Instant::now();
+            let first = scan_tree(&root, dependencies, None).unwrap();
+            let cold = started.elapsed();
+            let started = std::time::Instant::now();
+            let second = scan_tree(&root, dependencies, Some(&first)).unwrap();
+            let warm = started.elapsed();
+            assert_eq!(first.digest, second.digest);
+            println!(
+                "dependencies={dependencies} files={} threads={} cold={cold:?} reused={warm:?}",
+                first.files,
+                fingerprint_threads()
+            );
+        }
     }
 }

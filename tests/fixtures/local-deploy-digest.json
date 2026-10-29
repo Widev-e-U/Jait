@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "comment": "Cross-language fingerprint parity fixture. scripts/local-deploy.test.mjs and packages/gateway-rust/src/execution/local_deploy.rs both materialise this tree with the pinned modes, hash it, and must reproduce `digests.sources` byte-for-byte. `excluded` entries must never influence the digest.",
+  "entries": [
+    { "path": "a.txt", "file": "alpha", "mode": 420 },
+    { "path": "z.txt", "file": "omega", "mode": 420 },
+    { "path": "dir/b.txt", "file": "beta", "mode": 420 },
+    { "path": "dir/nested/c.txt", "file": "gamma", "mode": 493 },
+    { "path": "dir/empty.txt", "file": "", "mode": 420 },
+    { "path": "unicode/\u00e4\u00f6\u00fc.txt", "file": "umlaut", "mode": 420 },
+    { "path": "unicode/\u4e2d\u6587.txt", "file": "han", "mode": 420 },
+    { "path": "dir/link", "symlink": "b.txt", "mode": 511 }
+  ],
+  "excluded": [
+    { "path": "node_modules/pkg/index.js", "file": "dependency" },
+    { "path": ".jait/state.json", "file": "{\"state\":true}" },
+    { "path": ".git/HEAD", "file": "ref: refs/heads/main" },
+    { "path": "packages/web/build.tsbuildinfo", "file": "{}" }
+  ],
+  "digests": {
+    "sources": "1d68f0928eefa79fa5cd1a03280f77b365982f49e22dd14aba78981385ee5e92"
+  }
+}

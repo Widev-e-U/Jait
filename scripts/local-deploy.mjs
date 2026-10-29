@@ -368,11 +368,16 @@ export async function main(argv = process.argv.slice(2)) {
     await runStep('browser-runtime', 'node', ['tests/e2e/node_modules/playwright/cli.js', 'install', 'chromium']);
     }
     if (!skipTests) await runStep('browser-tools-runtime', 'node', ['packages/gateway/node_modules/playwright/cli.js', 'install', 'chromium']);
-    await runStep('build', 'bun', ['run', 'build']);
     // Build once, then test and deploy the exact native controller with the staged runtime.
     const cargo = process.env.CARGO || join(homedir(), '.cargo/bin/cargo');
     const nativeTarget = join(workspace, '.jait/native-local-deploy');
-    await runStep('native-controller-build', cargo, ['build', '--locked', '--manifest-path', 'packages/gateway-rust/Cargo.toml', '--bin', 'jait-local-deploy', '--target-dir', nativeTarget]);
+    // The staged build (node/tsc only) and the native controller build (cargo, own target
+    // directory) share no inputs or outputs, so run them together. Each keeps its own log
+    // and both must succeed before the fingerprinting and gate steps that depend on them.
+    await Promise.all([
+      runStep('build', 'bun', ['run', 'build']),
+      runStep('native-controller-build', cargo, ['build', '--locked', '--manifest-path', 'packages/gateway-rust/Cargo.toml', '--bin', 'jait-local-deploy', '--target-dir', nativeTarget]),
+    ]);
     const controller = join(workspace, 'packages/gateway-rust/bin/jait-local-deploy');
     await fs.mkdir(dirname(controller), {recursive:true});
     await fs.copyFile(join(nativeTarget, 'debug/jait-local-deploy'), controller);

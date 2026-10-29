@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { promises as fs, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verificationContext, verificationContextKey, main, verificationSteps, VERIFY_STEPS, verifyAndActivate, activateLocal, snapshotSource, sourceFiles, digestFiles, overrideUnit } from './local-deploy.mjs';
+import { verificationContext, verificationContextKey, main, verificationSteps, VERIFY_STEPS, verifyAndActivate, activateLocal, snapshotSource, sourceFiles, digestFiles, treeDigest, overrideUnit } from './local-deploy.mjs';
 const artifacts=fileURLToPath(new URL('../.jait/artifacts/local-deploy-tests/',import.meta.url));
 async function fixture(t){await fs.mkdir(artifacts,{recursive:true});const root=await fs.mkdtemp(join(artifacts,'case-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));return root;}
 function git(root,args){return execFileSync('git',['-C',root,...args],{encoding:'utf8'});}
@@ -398,4 +398,40 @@ test('release prerequisites include skipped tests and stop on failure', async ()
   }
   const source=await fs.readFile(new URL('./release.mjs',import.meta.url),'utf8');
   assert(source.indexOf('  runReleaseTests()') < source.indexOf('    for (const change of release.changes)'));
+});
+
+test('fingerprint reproduces the shared cross-language reference digest', async (t) => {
+  const manifest = JSON.parse(await fs.readFile(new URL('../tests/fixtures/local-deploy-digest.json', import.meta.url), 'utf8'));
+  const root = await fixture(t);
+  const materialise = async (entries) => {
+    for (const entry of entries) {
+      const full = join(root, entry.path);
+      await fs.mkdir(dirname(full), { recursive: true });
+      if (entry.symlink) await fs.symlink(entry.symlink, full);
+      else {
+        await fs.writeFile(full, entry.file);
+        if (entry.mode) await fs.chmod(full, entry.mode);
+      }
+    }
+  };
+  await materialise([...manifest.entries, ...manifest.excluded]);
+  assert.equal(await treeDigest(root), manifest.digests.sources);
+
+  await materialise([
+    { path: 'node_modules/pkg/extra.js', file: 'module.exports = 1;' },
+    { path: '.jait/artifacts/notes.md', file: 'scratch' },
+    { path: '.git/index', file: 'binary' },
+    { path: 'packages/web/other.tsbuildinfo', file: '{}' }
+  ]);
+  assert.equal(await treeDigest(root), manifest.digests.sources, 'excluded trees must never shift the digest');
+
+  await fs.writeFile(join(root, 'a.txt'), 'alpha changed');
+  assert.notEqual(await treeDigest(root), manifest.digests.sources, 'content edits must shift the digest');
+});
+
+test('launcher and native fingerprint share the same fixture expectation', async () => {
+  const manifest = JSON.parse(await fs.readFile(new URL('../tests/fixtures/local-deploy-digest.json', import.meta.url), 'utf8'));
+  const source = await fs.readFile(new URL('../packages/gateway-rust/src/execution/local_deploy.rs', import.meta.url), 'utf8');
+  assert.match(source, /"\.\.\/\.\.\/tests\/fixtures\/local-deploy-digest\.json"/, 'native parity test must read the shared manifest');
+  assert.ok(manifest.digests.sources.length === 64, 'reference digest must be a sha256 hex string');
 });
