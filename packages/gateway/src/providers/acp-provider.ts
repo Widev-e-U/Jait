@@ -7,10 +7,11 @@ import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { hasOpenCodeGoCredential, setOpenCodeGoCredential } from "./opencode-credentials.js";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { Readable, Writable } from "node:stream";
+import { fileURLToPath } from "node:url";
 import {
   ClientSideConnection,
   PROTOCOL_VERSION,
@@ -357,6 +358,56 @@ class JaitAcpClient implements Client {
 
 const requireAcpAdapter = createRequire(import.meta.url);
 
+/**
+ * Absolute path to the Codex runtime that `codex-acp` drives.
+ *
+ * The adapter spawns `CODEX_PATH` when it is set and otherwise resolves
+ * `@openai/codex/bin/codex.js` relative to its own install location. A patched
+ * adapter copy has no nested `node_modules`, so that lookup fails, the adapter
+ * exits before the ACP handshake, and the SDK reports only the opaque
+ * "ACP connection closed". Resolving from the gateway keeps the runtime
+ * reachable no matter how the adapter was installed.
+ */
+function resolveCodexRuntime(): string | undefined {
+  try {
+    return requireAcpAdapter.resolve("@openai/codex/bin/codex.js");
+  } catch {
+    // Fall through to the package store scan below.
+  }
+  // Bun extracts every installed package into `node_modules/.bun` even when it
+  // does not link it at the top level, and deploy snapshots only carry the
+  // extracted copies. Walk up to the nearest store and take the newest match.
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 8; depth += 1) {
+    const store = join(dir, "node_modules", ".bun");
+    const found = findCodexInStore(store);
+    if (found) return found;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+function findCodexInStore(store: string): string | undefined {
+  if (!existsSync(store)) return undefined;
+  let entries: string[];
+  try {
+    entries = readdirSync(store);
+  } catch {
+    return undefined;
+  }
+  const candidates = entries
+    .filter((entry) => entry.startsWith("@openai+codex@"))
+    .sort()
+    .reverse();
+  for (const entry of candidates) {
+    const bin = join(store, entry, "node_modules", "@openai", "codex", "bin", "codex.js");
+    if (existsSync(bin)) return bin;
+  }
+  return undefined;
+}
+
 /** Built-in adapters are installed with the gateway, so a session never runs npm. */
 function resolveBundledAdapter(config: AcpProviderConfig, providerType: string): Pick<AcpProviderConfig, "command" | "args"> | null {
   const packageName = providerType === "codex"
@@ -449,7 +500,13 @@ export class AcpProvider implements CliProviderAdapter {
    * provider-configured value always wins.
    */
   private childEnv(...overrides: Array<NodeJS.ProcessEnv | undefined>): NodeJS.ProcessEnv {
-    return buildAcpChildEnv(this.config, process.env, ...overrides);
+    const env = buildAcpChildEnv(this.config, process.env, ...overrides);
+    // An explicit CODEX_PATH from the provider config always wins.
+    if (this.providerType === "codex" && !env["CODEX_PATH"]) {
+      const runtime = resolveCodexRuntime();
+      if (runtime) env["CODEX_PATH"] = runtime;
+    }
+    return env;
   }
 
   async checkAvailability(): Promise<boolean> {
@@ -934,9 +991,14 @@ export class AcpProvider implements CliProviderAdapter {
 
     child.on("error", () => {}); // prevent unhandled ENOENT on Windows
 
+    // Keep the tail of stderr so a startup crash can be reported with the real
+    // cause. Without this the ACP SDK only sees stdout EOF and reports the
+    // opaque "ACP connection closed", hiding errors like a missing module.
+    let stderrTail = "";
     child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8").trim();
       if (text) {
+        stderrTail = (stderrTail + "\n" + text).slice(-800).trim();
         this.emitEvent({ type: "activity", sessionId, kind: "stderr", summary: text });
       }
     });
@@ -1055,6 +1117,10 @@ export class AcpProvider implements CliProviderAdapter {
     } catch (error) {
       this.contextControls.delete(sessionId);
       stopSessionProcess(child);
+      const detail = extractErrorMessage(error, "unknown error");
+      if (stderrTail && /connection closed|unavailable/i.test(detail)) {
+        throw new Error(`${this.info.name} failed to start: ${detail} — ${stderrTail}`);
+      }
       throw error;
     }
 
@@ -2028,5 +2094,9 @@ function readAcpSessionFailure(meta: unknown): string | undefined {
   const frames = diagnostic.frames.slice(0, 8).filter((frame): frame is string =>
     typeof frame === "string" && /^[A-Za-z0-9_.$<>]+ \([A-Za-z0-9_.-]+:\d+:\d+\)$/.test(frame)
   );
-  return `${title} Diagnostic: ${diagnostic.name}${frames.length ? `; ${frames.join("; ")}` : ""}`;
+  const code = typeof diagnostic.code === "number" && Number.isInteger(diagnostic.code)
+    && diagnostic.code >= -2147483648 && diagnostic.code <= 2147483647 ? diagnostic.code : undefined;
+  const methods = ["turn/start", "turn/steer", "thread/resume", "thread/start", "thread/read", "skills/list", "skills/extraRoots/set"];
+  const method = typeof diagnostic.method === "string" && methods.includes(diagnostic.method) ? diagnostic.method : undefined;
+  return `${title} Diagnostic: ${diagnostic.name}${code !== undefined ? `; RPC code ${code}` : ""}${method ? `; RPC method ${method}` : ""}${frames.length ? `; ${frames.join("; ")}` : ""}`;
 }
