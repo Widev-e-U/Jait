@@ -4,8 +4,8 @@ import type { ChatLoop } from '@jait/shared'
 import { Button } from '@/components/ui/button'
 import { getApiUrl } from '@/lib/gateway-url'
 
-// Match the browser panel's grow/shrink timing and reduced-motion behavior.
-const GOAL_TRANSITION = 'transition-[width,height,border-radius,box-shadow] [transition-duration:180ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none'
+// Keep expansion subtle and respect reduced-motion preferences.
+const GOAL_TRANSITION = 'transition-[height] [transition-duration:180ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none'
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {

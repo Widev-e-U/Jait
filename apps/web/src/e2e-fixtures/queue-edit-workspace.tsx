@@ -156,6 +156,7 @@ function Harness() {
       <button onClick={() => finishRetry(true)}>Complete retry</button>
       <button onClick={() => finishRetry(false)}>Fail retry</button>
     </div>}
+    {goalMode && <header data-testid="fixture-mobile-header" className="fixed top-2 left-2 right-2 z-40 h-10 md:hidden" />}
     <DeveloperChatWorkspace {...props} />
   </ConfirmDialogProvider></TooltipProvider>
 }

@@ -188,13 +188,12 @@ pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
 
 // Reconstruct displayable frames after the last durable model record. The
 // transaction pins both this tail and the returned cursor to the same snapshot.
-fn stream_tail(db: &Connection, session: &str) -> Result<(bool, String, String, Vec<Value>), Error> {
+fn stream_tail(db: &Connection, session: &str) -> Result<(String, String, Vec<Value>), Error> {
     let last_model: i64 = db.query_row("SELECT COALESCE(MAX(log_id),0) FROM session_events WHERE session_id=? AND type=?", params![session, EVENT_TYPE], |r| r.get(0))?;
     let mut statement = db.prepare("SELECT payload,length(CAST(payload AS BLOB)) FROM session_events WHERE session_id=? AND type='rust.chat.stream' ORDER BY log_id LIMIT 8193")?;
     let mut rows = statement.query([session])?;
     let mut count = 0usize;
     let mut bytes = 0usize;
-    let mut streaming = false;
     while let Some(row) = rows.next()? {
         count += 1;
         let size: i64 = row.get(1)?;
@@ -203,8 +202,6 @@ fn stream_tail(db: &Connection, session: &str) -> Result<(bool, String, String, 
         if count > 8192 || bytes > 16 * 1024 * 1024 { return Err("Stream history exceeds limits".into()); }
         let value: Value = serde_json::from_str(&row.get::<_, String>(0)?)?;
         match value["type"].as_str() {
-            Some("request") => streaming = true,
-            Some("done" | "error") => streaming = false,
             Some(_) => {},
             None => return Err("Invalid stream frame".into()),
         }
@@ -228,7 +225,7 @@ fn stream_tail(db: &Connection, session: &str) -> Result<(bool, String, String, 
             _ => return Err("Unprojected stream frame".into()),
         }
     }
-    Ok((streaming, content, thinking, segments))
+    Ok((content, thinking, segments))
 }
 
 pub async fn project_messages(
@@ -259,7 +256,7 @@ pub async fn project_messages(
         let has_log:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM session_events WHERE session_id=? AND type=?)",params![session,EVENT_TYPE],|row|row.get(0))?;
         // Repair logs written before materialization existed; all writes are atomic.
         if has_log {project_log(&tx,&session)?;}
-        let (streaming, partial_content, partial_thinking, partial_segments)=stream_tail(&tx,&session)?;
+        let (partial_content, partial_thinking, partial_segments)=stream_tail(&tx,&session)?;
         let has_partial=!partial_segments.is_empty();
         let last_role:Option<String>=tx.query_row("SELECT role FROM messages WHERE session_id=? AND role<>'tool' ORDER BY created_at DESC,id DESC LIMIT 1",[&session],|row|row.get(0)).optional()?;
         let synthetic=has_partial && last_role.as_deref()!=Some("assistant");
@@ -303,7 +300,8 @@ pub async fn project_messages(
         }
         let seq:i64=tx.query_row("SELECT COALESCE(MAX(log_id),0) FROM session_events WHERE session_id=?",[&session],|row|row.get(0))?;
         tx.commit()?;
-        let result=json!({"sessionId":session,"streaming":streaming,"seq":seq,"lastActiveAt":active,"total":total,"hasMore":start>0,"limit":limit,"messages":messages});
+        // Only the runtime route can establish live ownership; persisted frames cannot.
+        let result=json!({"sessionId":session,"streaming":false,"seq":seq,"lastActiveAt":active,"total":total,"hasMore":start>0,"limit":limit,"messages":messages});
         if serde_json::to_writer(JsonBudget(0),&result).is_err(){return Err("Serialized message page exceeds output limits".into());}
         Ok(result)
     }).await.map_err(|_|"Messages could not be loaded".into())
@@ -490,7 +488,8 @@ mod tests {
         store.append_stream_event(json!({"type":"thinking","content":"reason"})).await.unwrap();
         store.append_stream_event(json!({"type":"token","content":"partial"})).await.unwrap();
         let snapshot = page(&auth, 10, None).await;
-        assert_eq!(snapshot["streaming"], true);
+        // An unfinished durable request alone cannot establish live authority.
+        assert_eq!(snapshot["streaming"], false);
         assert_eq!(snapshot["messages"][1]["content"], "partial");
         assert_eq!(snapshot["messages"][1]["thinking"], "reason");
         assert_eq!(snapshot["seq"], 4);

@@ -752,7 +752,7 @@ export function DeveloperChatWorkspace({
           )}
           {!showDebugPanel && loop && activeSessionId && (
             // Align wide-screen goals with the chat column so long cards can cover the composer.
-            <div data-testid="chat-goal-overlay" className={`pointer-events-none absolute z-40 flex flex-col items-start bg-transparent ${useNarrowGoalLayout ? 'top-12 left-[max(0.5rem,calc((100%_-_56rem)/2))] w-52 max-h-[calc(100%-64px)]' : 'top-2 left-4 right-4 max-h-[calc(100%-16px)]'}`}>
+            <div data-testid="chat-goal-overlay" className={`pointer-events-none absolute z-40 flex flex-col items-start bg-transparent ${isMobile ? 'top-14 left-4 right-4 max-h-[calc(100%-64px)]' : useNarrowGoalLayout ? 'top-12 left-[max(0.5rem,calc((100%_-_56rem)/2))] w-52 max-h-[calc(100%-64px)]' : 'top-2 left-4 right-4 max-h-[calc(100%-16px)]'}`}>
               <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
           )}

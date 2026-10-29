@@ -269,6 +269,33 @@ mod tests {
         SqliteTurnStore::new(auth.clone(), "owner".into(), "session".into()).unwrap()
     }
     #[tokio::test]
+    async fn failed_terminal_write_and_restart_do_not_imply_live_stream() {
+        let path = artifact_database();
+        let auth = open(&path);
+        let adapter = store(&auth);
+        adapter.append(TurnEvent::User { content: "hello".into() }).await.unwrap();
+        adapter.append_stream_event(json!({"type":"token","content":"partial"})).await.unwrap();
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_terminal BEFORE INSERT ON session_events WHEN NEW.type='rust.chat.stream' BEGIN SELECT RAISE(ABORT, 'injected failure'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(adapter.append_stream_terminal(json!({"type":"done"})).await.is_err());
+        auth.shutdown().await.unwrap();
+
+        let restarted = open(&path);
+        let snapshot = super::super::chat_projection::project_messages(
+            restarted.clone(), "owner".into(), "session".into(), None, None,
+        ).await.unwrap();
+        assert_eq!(snapshot["streaming"], false);
+        assert_eq!(snapshot["messages"][1]["content"], "partial");
+        assert_eq!(snapshot["seq"], 3);
+        assert!(super::super::chat_projection::project_messages(
+            restarted.clone(), "other".into(), "session".into(), None, None,
+        ).await.is_err());
+        assert_eq!(store(&restarted).load().await.unwrap().len(), 1);
+        restarted.shutdown().await.unwrap();
+    }
+    #[tokio::test]
     async fn stream_events_are_owner_checked_durable_and_separate_from_history() {
         let path = artifact_database();
         let auth = open(&path);

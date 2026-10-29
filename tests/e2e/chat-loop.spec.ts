@@ -146,7 +146,10 @@ for (const width of [390, 1280]) {
       const frame = page.getByTestId('loop-goal-card')
       await expect(frame.getByRole('button', { name: /goal card/ })).toHaveAttribute('aria-expanded', width < 768 ? 'false' : 'true')
       if (reducedMotion) await expect(frame).toHaveCSS('transition-property', 'none')
-      else await expect(frame).toHaveCSS('transition-duration', '0.18s')
+      else {
+        await expect(frame).toHaveCSS('transition-duration', '0.18s')
+        await expect(frame).toHaveCSS('transition-property', 'height')
+      }
       for (let toggle = 0; toggle < 2; toggle++) {
         const sizes = await frame.evaluate(async element => {
           const before = element.getBoundingClientRect()
@@ -165,11 +168,6 @@ for (const width of [390, 1280]) {
         // Measure actual intermediate sizes, not just the transition class.
         const intermediateHeight = sizes.samples.some(sample => sample.height > Math.min(after.height, sizes.before.height) + 1 && sample.height < Math.max(after.height, sizes.before.height) - 1)
         expect(intermediateHeight).toBe(!reducedMotion)
-        if (!reducedMotion) {
-          if (width < 768) {
-            expect(sizes.samples.some(sample => sample.width > Math.min(after.width, sizes.before.width) + 1 && sample.width < Math.max(after.width, sizes.before.width) - 1)).toBe(true)
-          }
-        }
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     })
@@ -197,6 +195,8 @@ for (const width of [390, 900, 1440]) {
     const previousTop = (await previous.boundingBox())!.y
     expect(previousTop - transcriptTop).toBeLessThanOrEqual(width < 768 ? 57 : 41)
     if (width < 768) {
+      const header = page.getByTestId('fixture-mobile-header')
+      expect((await frame.boundingBox())!.y).toBeGreaterThanOrEqual((await header.boundingBox())!.y + (await header.boundingBox())!.height)
       const compactWidth = (await frame.boundingBox())!.width
       expect(compactWidth).toBeLessThan(110)
       // Space beside the pill passes pointer input through to the transcript.

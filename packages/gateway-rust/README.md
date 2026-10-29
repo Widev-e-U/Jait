@@ -1,5 +1,19 @@
 # Native Rust gateway
 
+## Integration checkpoint — 2026-10-29
+
+The previously blocked `services::project_search` library test run now compiles
+against the owner-aware chat event bus and passes 12 focused tests. This is
+implementation evidence only; project-search parity and component verification
+remain open. A live ledger audit still reports 236 verified and 87 implemented
+originals, with 47 original paths absent; five of six later additions have verified
+entries. Seven verified and six implemented reference hashes differ from live
+source, as detailed below. These counts are historical ledger statuses, not a
+source-bound validation or a production-readiness measure. Restart lifecycle
+authority and gateway entrypoint integration remain under active review; broad
+validation remains deferred until implementation is integrated. Evidence is recorded in
+`.jait/artifacts/gateway-rust/chat-loops/integration-20261029.md`.
+
 ## Live ledger audit — 2026-10-28
 
 The original manifest contains 370 paths; the current inventory records 376,
