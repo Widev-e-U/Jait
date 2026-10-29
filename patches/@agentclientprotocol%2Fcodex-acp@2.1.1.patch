@@ -1,0 +1,32 @@
+diff --git a/dist/index.js b/dist/index.js
+index 16daa15df86bfa40062889c8bec02c8881354a18..f19c382cf818fdbb50d3a02014f8cc7c0e29fd09 100755
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -30191,8 +30191,9 @@ var CodexEventHandler = class {
+     }
+     return this.createSessionFailureMeta(failure3);
+   }
+-  recordSyntheticTerminalFailure(kind, turnId) {
+-    this.recordSessionFailure(kind, turnId ?? void 0, "error", SYNTHETIC_FAILURE_TITLE[kind]);
++  recordSyntheticTerminalFailure(kind, turnId, diagnostic) {
++    const failure3 = this.recordSessionFailure(kind, turnId ?? void 0, "error", SYNTHETIC_FAILURE_TITLE[kind]);
++    if (diagnostic) failure3.jaitDiagnostic = diagnostic;
+   }
+   /**
+    * Handles notifications after the prompt-local handler has been disposed. The app-server subscription
+@@ -39912,7 +39913,14 @@ Check ${configPath} and project .codex directories, especially their config.toml
+       if (eventHandler !== null && clientSupportsTypedSessionFailures(this.clientCapabilities) && (isProcessExit || isUnexpectedFailure)) {
+         eventHandler.recordSyntheticTerminalFailure(
+           isProcessExit ? "transport_lost" : "internal_error",
+-          sessionState.currentTurnId
++          sessionState.currentTurnId,
++          err instanceof Error ? {
++            name: /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(err.name) ? err.name : "Error",
++            frames: String(err.stack ?? "").split("\n").slice(1, 9).flatMap((line) => {
++              const match = line.match(/^\s*at (?:([A-Za-z0-9_.$<>]+) )?\(?.*?([^/\\(): ]+):(\d+):(\d+)\)?$/);
++              return match ? [`${match[1] ?? "anonymous"} (${match[2]}:${match[3]}:${match[4]})`] : [];
++            })
++          } : { name: "NonErrorException", frames: [] }
+         );
+         const failureResponse = this.terminalFailurePromptResponse(
+           sessionState,

@@ -34,7 +34,10 @@ function agentScript(scenario: string): string {
         } else if (scenario === "quote") {
           update({ sessionUpdate: "agent_message_chunk", messageId: "reply", content: { type: "text", text: errorText } });
         }
-        result = { stopReason: "end_turn", ...(scenario === "result" ? { _meta: meta } : {}) };
+        if (scenario === "diagnostic") {
+          meta.jetbrains.air.sessionFailure.jaitDiagnostic = { name: "TypeError", frames: ["resume (index.js:123:4)", "secret /private/path:1:2"] };
+        }
+        result = { stopReason: "end_turn", ...(["result", "diagnostic"].includes(scenario) ? { _meta: meta } : {}) };
       }
       send({ jsonrpc: "2.0", id: request.id, result });
     });
@@ -53,6 +56,20 @@ describe("ACP provider error display", () => {
       expect(events.filter((event) => event.type === "session.error")).toEqual([{ type: "session.error", sessionId: session.id, error: capacityError }]);
       expect(events.some((event) => event.type === "turn.completed")).toBe(false);
       expect(session.status).toBe("error");
+    } finally { unsubscribe(); await provider.dispose(); }
+  });
+
+  it("retains bounded exception diagnostics without arbitrary paths", async () => {
+    const provider = new AcpProvider({ id: "codex", name: "Codex", description: "Test", command: process.execPath, args: ["-e", agentScript("diagnostic")] });
+    const events: ProviderEvent[] = [];
+    const unsubscribe = provider.onEvent((event) => events.push(event));
+    try {
+      const session = await provider.startSession({ threadId: "diagnostic", workingDirectory: process.cwd() });
+      await expect(provider.sendTurn(session.id, "test")).rejects.toThrow("Diagnostic: TypeError; resume (index.js:123:4)");
+      expect(events.filter((event) => event.type === "session.error")).toEqual([{
+        type: "session.error", sessionId: session.id,
+        error: `${capacityError} Diagnostic: TypeError; resume (index.js:123:4)`,
+      }]);
     } finally { unsubscribe(); await provider.dispose(); }
   });
 

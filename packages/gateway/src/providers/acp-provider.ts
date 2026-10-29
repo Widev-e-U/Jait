@@ -2017,5 +2017,16 @@ function readAcpSessionFailure(meta: unknown): string | undefined {
   if (!isRecord(meta) || !isRecord(meta.jetbrains) || !isRecord(meta.jetbrains.air)) return;
   const failure = meta.jetbrains.air.sessionFailure;
   if (!isRecord(failure) || failure.severity !== "error" || typeof failure.title !== "string") return;
-  return failure.title.trim() || undefined;
+  const title = failure.title.trim();
+  if (!title) return;
+  // Only accept the adapter's bounded, path-free diagnostic shape. Never
+  // persist arbitrary exception messages, which can contain prompts or secrets.
+  const diagnostic = failure.jaitDiagnostic;
+  if (!isRecord(diagnostic) || typeof diagnostic.name !== "string"
+    || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(diagnostic.name)
+    || !Array.isArray(diagnostic.frames)) return title;
+  const frames = diagnostic.frames.slice(0, 8).filter((frame): frame is string =>
+    typeof frame === "string" && /^[A-Za-z0-9_.$<>]+ \([A-Za-z0-9_.-]+:\d+:\d+\)$/.test(frame)
+  );
+  return `${title} Diagnostic: ${diagnostic.name}${frames.length ? `; ${frames.join("; ")}` : ""}`;
 }
