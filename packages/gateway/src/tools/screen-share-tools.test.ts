@@ -122,34 +122,3 @@ describe.each(["os.tool", "os_tool"] as const)("%s", (name) => {
     expect(f.service.updateViewerTransport).not.toHaveBeenCalled();
   });
 });
-
-describe("screen tool edge cases", () => {
-  it("reports when no devices are registered and requires a chat to disconnect", async () => {
-    const f = fixture();
-    f.state.devices = [];
-    const tool = createScreenShareTool(f.screenShare);
-    expect((await tool.execute({ action: "list-devices" }, context)).message).toContain("No devices registered");
-    expect((await tool.execute({ action: "connect" }, context)).message).toContain("No devices registered");
-    expect((await tool.execute({ action: "disconnect" }, { ...context, sessionId: "" })).ok).toBe(false);
-  });
-
-  it("honors explicit viewers and reports a pending approval", async () => {
-    const f = fixture();
-    f.service.startShare.mockReturnValue({ id: "share-1", nodeId: "host", pendingApproval: true } as never);
-    const result = await createScreenShareTool(f.screenShare, f.control).execute({ action: "start", hostDeviceId: "host", viewerDeviceIds: ["viewer"] }, context);
-    expect(result.message).toContain("Waiting for the device to approve");
-    expect(f.service.startShare).toHaveBeenCalledWith(expect.objectContaining({ viewerDeviceIds: ["viewer"], requireConsent: true }));
-  });
-
-  it("validates OS action inputs and handles service errors", async () => {
-    const f = fixture();
-    const tool = createOsTool(f.screenShare, "os.tool");
-    expect((await tool.execute({ action: "state" }, context)).data).toEqual(f.state);
-    expect((await tool.execute({ action: "register-device" }, context)).ok).toBe(false);
-    expect((await tool.execute({ action: "transfer-control" }, context)).ok).toBe(false);
-    expect((await tool.execute({ action: "transport-update", transport: { deviceId: "viewer", latencyMs: 10 } }, context)).ok).toBe(true);
-    expect(f.service.updateViewerTransport).toHaveBeenCalledWith({ deviceId: "viewer", latencyMs: 10, preferP2P: true });
-    f.service.transferControl.mockImplementation(() => { throw new Error("denied"); });
-    expect(await tool.execute({ action: "transfer-control", controllerDeviceId: "viewer" }, context)).toMatchObject({ ok: false, message: "denied" });
-  });
-});

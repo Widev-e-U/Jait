@@ -10,11 +10,11 @@
     "This inventory does not enumerate route/tool/schema/event contracts or prove gateway behavior."
   ],
   "summary": {
-    "test_files": 364,
-    "test_declarations": 3073,
+    "test_files": 369,
+    "test_declarations": 3081,
     "runtime_source_files": 383,
     "source_files_without_direct_test_import": 101,
-    "rust_verified_declarations": 2240,
+    "rust_verified_declarations": 2463,
     "retained_test_files": 1,
     "retained_test_declarations": 1
   },
@@ -8768,6 +8768,31 @@
       ]
     },
     {
+      "path": "packages/gateway/src/providers/acp-provider-boundary.test.ts",
+      "fingerprint": "ea99ad37979963f9",
+      "lane": "providers-streams-coordination",
+      "direct_source_imports": [
+        "packages/gateway/src/providers/acp-provider.ts"
+      ],
+      "declaration_count": 1,
+      "cases": [
+        {
+          "id": "packages/gateway/src/providers/acp-provider-boundary.test.ts:45:3",
+          "line": 45,
+          "column": 3,
+          "name": "rejects native terminals and resolves approvals only once",
+          "suite": [
+            "ACP terminal and approval boundaries"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        }
+      ]
+    },
+    {
       "path": "packages/gateway/src/providers/acp-provider-errors.test.ts",
       "fingerprint": "2af97d1071944876",
       "lane": "providers-streams-coordination",
@@ -10307,6 +10332,45 @@
           ],
           "boundary": "public-behavior-or-isolated-protocol-fixture",
           "parity_review": "Reviewed declaration: adds the core namespace without replacing existing Codex settings.\nThe full execution body matches tests/contract/drivers/tailstatic/fixture45.ts case tailstatic_packages_gateway_src_providers_jait_mcp_test_ts_5_3 after replacing each original assertion with a capture of its actual operand only; no expected operand is captured. Normalized body SHA-256: 6bd177f3e86a22d2bf16ddeb73fd74bbf0780a675e3c40de1998362f642d32fe. All non-test imports resolve to the same production modules and import bindings.\n1 original mandatory assertion site(s), 1 Rust comparisons, one nonparameterized variant. Each slot executed exactly once and completed in the isolated focused run; there are no dynamic, optional, synthetic, conditional or rejection rules. Original assertion order and exact expressions:\n[0] expect(merged).toEqual({\n      model: \"gpt-5.6-sol\",\n      features: {\n        apps: true,\n        code_mode: {\n          enabled: true,\n          direct_only_tool_namespaces: [\"mcp__history\", \"mcp__jait_core\"],\n        },\n      },\n    })\nSetup and boundary review: No enclosing executable setup declarations. No mock operations participate in this declaration or its lexical setup. Body-local setup, cleanup, try/finally and awaited operations are unchanged. Relative runtime imports and location-dependent setup were excluded by the audit.\nMatcher and transport review: these sites compare primitive strings, finite numbers, booleans, plain data objects or ordered arrays, lengths, definedness, and mock call counts. toBe has primitive literal expectations; toContain has primitive elements/substrings; toEqual has plain literal expectations, including explicit undefined markers. Actual object identity, class/date equality, custom toJSON, getters and symbols are not asserted here. Raw objects used solely for definedness or length retain the information that those matchers require. Vitest and Rust agree on every emitted slot and reject a matcher-specific counterexample for each slot (wire-summary.json). Shared-package source and compiled distribution canonical bindings match.\nExecution boundary: one isolated Bun peer runs original production TypeScript; Rust owns all verdicts. The existing tailruntime shim supplies Node-compatible writableEnded semantics only for injected Fastify responses. This credits reference-test assertion parity, not a Rust gateway runtime port. Supplemental focused evidence and a fresh complete source-bound translated report both pass for this exact Rust case."
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/providers/jait-provider-discovery.test.ts",
+      "fingerprint": "2f2bde8c0707b067",
+      "lane": "providers-streams-coordination",
+      "direct_source_imports": [
+        "packages/gateway/src/providers/jait-provider.ts"
+      ],
+      "declaration_count": 2,
+      "cases": [
+        {
+          "id": "packages/gateway/src/providers/jait-provider-discovery.test.ts:6:3",
+          "line": 6,
+          "column": 3,
+          "name": "leaves malformed command inputs unchanged for downstream validation",
+          "suite": [
+            "sandbox input validation"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/providers/jait-provider-discovery.test.ts:14:3",
+          "line": 14,
+          "column": 3,
+          "name": "retains only the most recent valid discovered tool names",
+          "suite": [
+            "JaitProvider tool discovery"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
       ]
     },
@@ -28476,6 +28540,31 @@
           ],
           "boundary": "public-behavior-or-isolated-protocol-fixture",
           "parity_review": "Reviewed declaration: finds shortest paths by human-readable labels.\nThe original execution body and referenced lexical helper/hook bodies match the fixture after replacing comparisons with semantic assertion signatures. Each original comparison is bound to the same matcher, negation, actual expression and literal/original expected expression. Normalized body SHA-256: 1e64e81d563c7f835e556cdbf78fe4823f296f58eaf951823076a4f224c785c2.\n2 source assertion site(s); observed repetition counts by Rust slot: [1, 1]. Every site executed at least once, every repeated comparison passed, and peer completion was observed. Repetitions follow unchanged original loops/callbacks; no new fixed repetition requirement replaces an original predicate.\nOriginal comparisons:\n[0] expect(result?.nodes.map((node) => node.label)).toEqual([\n      \"AuthService\",\n      \"SessionStore\",\n      \"DatabasePool\",\n    ])\n[1] expect(result?.edges).toHaveLength(2)\nSetup consists of 4 preserved lexical declaration/effect(s), in matched initialization order. 1 hook(s) retain their original callbacks, awaited setup order and finally cleanup. beforeAll/afterAll run once for this isolated declaration. Original setup text and hashes are in the structural review. Module imports and bindings match; bare package imports resolve from the original test workspace. Type-only imports are distinguished from runtime imports. Every expected operand is a source literal preserved in Rust; the peer captures actual operands only.\nTransport/domain review: structural comparisons are exercised on guarded plain data, ordered dense arrays and primitives; unsupported prototypes, getters, custom JSON, marker collisions and symbol keys are excluded. Dynamic object identity cases remain pending. Type-only declarations have no runtime execution. Temporary-root substitutions are allowed only for unshadowed node:os tmpdir() calls in unshadowed node:path join/resolve positions; the peer fixture root is verified to be the project artifact fixture directory. This review preserves filesystem behavior relative to the disposable root; it does not establish equivalence of distinct filesystems or host-wide temporary-directory permissions. Static object/array/string-containing and primitive-constructor predicates preserve their source asymmetric matcher expressions; constructors cannot be locally shadowed. Promise resolution/rejection mode and original module location are retained. Simple regex literals are separately checked against their finite ASCII text-pattern language, with flags preserved; broader regex operators remain pending. Exception comparisons in this batch are limited to observed throwing/message semantics; unsupported exception representations remain pending. Type/definedness-only captures retain only the information their source predicate needs.\nReal Vitest and the Rust comparator agree on every observation and reject an opposing counterexample per observation (wire-summary.json). Fixture mocks reuse @vitest/spy, clocks use the shared Sinon adapter, and no module mocks/hoisted factories receive blanket credit. The existing injected-response shim supplies Node-compatible Fastify writableEnded semantics.\nEvidence: .jait/artifacts/parity-temp-root/focused-runs/tailstatic_packages_gateway_src_services_code_graph_code_graphs_test_ts_196_3/result.json and fresh full source-bound translated report. This is reference-test predicate equivalence for reviewed fixture domains, not independent application correctness or a Rust gateway runtime port."
+        }
+      ]
+    },
+    {
+      "path": "packages/gateway/src/services/code-graph/graphify-runner-cancel.test.ts",
+      "fingerprint": "052fe5793a16e557",
+      "lane": "http-tools-config",
+      "direct_source_imports": [
+        "packages/gateway/src/services/code-graph/graphify-runner.ts"
+      ],
+      "declaration_count": 1,
+      "cases": [
+        {
+          "id": "packages/gateway/src/services/code-graph/graphify-runner-cancel.test.ts:4:3",
+          "line": 4,
+          "column": 3,
+          "name": "does not prepare or invoke a build when already cancelled",
+          "suite": [
+            "Graphify cancellation"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
         }
       ]
     },
@@ -59913,6 +60002,60 @@
       ]
     },
     {
+      "path": "packages/gateway/src/tools/screen-share-tools-coverage.test.ts",
+      "fingerprint": "4d6f06329771e63e",
+      "lane": "native-integrations",
+      "direct_source_imports": [
+        "packages/gateway/src/tools/screen-share-tools.ts",
+        "packages/gateway/src/ws.ts"
+      ],
+      "declaration_count": 3,
+      "cases": [
+        {
+          "id": "packages/gateway/src/tools/screen-share-tools-coverage.test.ts:28:3",
+          "line": 28,
+          "column": 3,
+          "name": "reports when no devices are registered and requires a chat to disconnect",
+          "suite": [
+            "screen tool edge cases"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/tools/screen-share-tools-coverage.test.ts:37:3",
+          "line": 37,
+          "column": 3,
+          "name": "honors explicit viewers and reports a pending approval",
+          "suite": [
+            "screen tool edge cases"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        },
+        {
+          "id": "packages/gateway/src/tools/screen-share-tools-coverage.test.ts:45:3",
+          "line": 45,
+          "column": 3,
+          "name": "validates OS action inputs and handles service errors",
+          "suite": [
+            "screen tool edge cases"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        }
+      ]
+    },
+    {
       "path": "packages/gateway/src/tools/screen-share-tools.test.ts",
       "fingerprint": "4b67609ce8abd56d",
       "lane": "native-integrations",
@@ -64702,6 +64845,32 @@
       ]
     },
     {
+      "path": "packages/gateway/src/voice-assistant/tools-location.test.ts",
+      "fingerprint": "6ce21e8367cdc65c",
+      "lane": "native-integrations",
+      "direct_source_imports": [
+        "packages/gateway/src/config.ts",
+        "packages/gateway/src/voice-assistant/tools.ts"
+      ],
+      "declaration_count": 1,
+      "cases": [
+        {
+          "id": "packages/gateway/src/voice-assistant/tools-location.test.ts:7:3",
+          "line": 7,
+          "column": 3,
+          "name": "resolves an approximate location from the lookup response",
+          "suite": [
+            "voice location lookup"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "public-behavior-or-isolated-protocol-fixture"
+        }
+      ]
+    },
+    {
       "path": "packages/gateway/src/voice-assistant/tools.registry.test.ts",
       "fingerprint": "d73417231a569240",
       "lane": "native-integrations",
@@ -67623,6 +67792,7 @@
         "packages/gateway/src/voice-assistant/handoff.test.ts",
         "packages/gateway/src/voice-assistant/service.test.ts",
         "packages/gateway/src/voice-assistant/tier-catalog.test.ts",
+        "packages/gateway/src/voice-assistant/tools-location.test.ts",
         "packages/gateway/src/voice-assistant/tools.test.ts",
         "packages/gateway/src/ws-chat-notifications.test.ts",
         "packages/gateway/src/ws.test.ts"
@@ -69032,6 +69202,7 @@
       "direct_test_references": [
         "packages/gateway/src/providers/acp-opencode-models.test.ts",
         "packages/gateway/src/providers/acp-provider-attachments.test.ts",
+        "packages/gateway/src/providers/acp-provider-boundary.test.ts",
         "packages/gateway/src/providers/acp-provider-errors.test.ts",
         "packages/gateway/src/providers/acp-provider-startup.test.ts",
         "packages/gateway/src/providers/acp-provider-steering.test.ts",
@@ -69288,6 +69459,7 @@
       "fingerprint": "b60a90f8428923da",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
+        "packages/gateway/src/providers/jait-provider-discovery.test.ts",
         "packages/gateway/src/providers/jait-provider.test.ts",
         "packages/gateway/src/routes/team-execution.e2e.test.ts",
         "packages/gateway/src/security/agent-sandbox-lifecycle.test.ts"
@@ -73477,32 +73649,16 @@
     },
     {
       "path": "packages/gateway/src/services/code-graph/graphify-runner.ts",
-      "fingerprint": "4dcc919345566e54",
+      "fingerprint": "d128346c622e545b",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/services/code-graph/code-graphs.test.ts",
+        "packages/gateway/src/services/code-graph/graphify-runner-cancel.test.ts",
         "packages/gateway/src/services/code-graph/graphify-runner.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.graphify-build-layout-and-arguments",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.graphify-version-normalization",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.graphify-build-failure-order",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Production GraphifyRunner with explicit execute/runtime boundaries: setup before output creation, exact argv/cwd/environment/signal, version stdout/stderr/null/error policy and unavailable error, nested/legacy/both/missing graph path selection, setup/extraction failure order. Actual filesystem checks use local fixtures. Default runtime installation and default child-process adapter remain separate checks. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/services/code-graph/graphify-runtime.ts",
@@ -81687,6 +81843,7 @@
       "fingerprint": "eb770c5af4a502c7",
       "lane": "native-integrations",
       "direct_test_references": [
+        "packages/gateway/src/tools/screen-share-tools-coverage.test.ts",
         "packages/gateway/src/tools/screen-share-tools.test.ts"
       ],
       "status": "pending",
@@ -82334,6 +82491,7 @@
       "lane": "native-integrations",
       "direct_test_references": [
         "packages/gateway/src/voice-assistant/background.test.ts",
+        "packages/gateway/src/voice-assistant/tools-location.test.ts",
         "packages/gateway/src/voice-assistant/tools.registry.test.ts",
         "packages/gateway/src/voice-assistant/tools.test.ts"
       ],
@@ -82432,6 +82590,7 @@
         "packages/gateway/src/tools/project-message-tool.test.ts",
         "packages/gateway/src/tools/project-tools.test.ts",
         "packages/gateway/src/tools/remote-executor.test.ts",
+        "packages/gateway/src/tools/screen-share-tools-coverage.test.ts",
         "packages/gateway/src/tools/screen-share-tools.test.ts",
         "packages/gateway/src/tools/terminal-tools.test.ts",
         "packages/gateway/src/ws-chat-notifications.test.ts",

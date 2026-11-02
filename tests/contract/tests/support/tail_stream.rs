@@ -356,7 +356,7 @@ fn run_inner(
     // Preserve that runtime boundary instead of rewriting the source fixture.
     let ollama_peer =
         name.starts_with("tailstatic_packages_gateway_src_routes_chat_ollama_e2e_test_ts_");
-    let node_peer = review.is_some() || name.contains("routes_browser_devtools_test")
+    let node_peer = name.contains("routes_browser_devtools_test")
         // Bun's built-in ws fails noServer.handleUpgrade before the preview echo.
         // Exercise the original socket scenario with the installed ws on Node.
         || name == "tailstatic_packages_gateway_src_security_pairing_preview_access_test_ts_127_1"
@@ -375,9 +375,13 @@ fn run_inner(
     } else {
         let mut command =
             Command::new(std::env::var("JAIT_CONTRACT_BUN").unwrap_or_else(|_| "bun".into()));
+        command.arg("--no-env-file").arg("test");
+        if review.is_some() {
+            command
+                .arg("--preload")
+                .arg(root.join("tests/contract/drivers/tail-bun-review.ts"));
+        }
         command
-            .arg("--no-env-file")
-            .arg("test")
             .arg(if ollama_peer {
                 "--timeout=330000"
             } else {

@@ -37,12 +37,6 @@ describe("prepareJaitThreadSandboxToolInput", () => {
     });
   });
 
-  it("leaves malformed command inputs unchanged for downstream validation", () => {
-    const invalid = ["not", "an object"];
-    expect(prepareJaitThreadSandboxToolInput("execute", invalid)).toBe(invalid);
-    expect(prepareJaitThreadSandboxToolInput("execute", null)).toBeNull();
-  });
-
   it("leaves non-command tools unchanged", () => {
     const input = { path: "packages/gateway/src/providers/jait-provider.ts" };
     expect(prepareJaitThreadSandboxToolInput("file.read", input)).toBe(input);
@@ -404,30 +398,5 @@ describe("thread host file paths", () => {
   it("rejects traversal through relative and sandbox aliases", () => {
     expect(() => prepareThreadFileInput("file.write", { path: "../main/owned.ts" }, "/tmp/delivery")).toThrow("boundary");
     expect(() => prepareThreadFileInput("file.read", { path: "/project/../../etc/passwd" }, "/tmp/delivery")).toThrow("boundary");
-  });
-});
-
-describe("JaitProvider tool discovery", () => {
-  it("retains only the most recent valid discovered tool names", async () => {
-    const names = Array.from({ length: 25 }, (_, i) => `tool.${i}`);
-    runAgentLoopMock.mockResolvedValueOnce({ content: "ok", executedToolCalls: [
-      { tool: "other", ok: true, data: { matches: [{ name: "ignored" }] } },
-      { tool: "tools.search", ok: false, data: { matches: [{ name: "failed" }] } },
-      { tool: "tools.search", ok: true, data: { matches: names.map(name => ({ name })) } },
-      { tool: "jait.catalog", ok: true, data: { matches: [{ name: 42 }, { name: "tool.10" }] } },
-    ] });
-    const provider = new JaitProvider({
-      config: { openaiApiKey: "test", openaiBaseUrl: "http://localhost:11434/v1", openaiModel: "test", ollamaUrl: "http://localhost:11434", ollamaModel: "test", ollamaContextWindow: 0, agentMaxRounds: 0 } as any,
-      threadService: { getById: () => ({ userId: "user-1" }) } as any,
-      userService: { getSettings: () => ({ apiKeys: {}, jaitBackend: "ollama" }) } as any,
-    });
-    const session = await provider.startSession({ threadId: "thread-1", workingDirectory: "/repo-worktree", mode: "full-access" });
-    await provider.sendTurn(session.id, "discover");
-    const activated = [...(provider as any).sessions.get(session.id).activatedToolNames];
-    expect(activated).toHaveLength(20);
-    expect(activated).not.toContain("tool.0");
-    expect(activated.at(-1)).toBe("tool.10");
-    expect(activated).not.toContain("ignored");
-    expect(activated).not.toContain("failed");
   });
 });

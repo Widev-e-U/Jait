@@ -2605,19 +2605,17 @@
       "module": "reusedRepoTodos",
       "path": "packages/gateway/src/tools/repo-proposal-tools.ts",
       "case_ids": [
-        "internal.sourcereview.reuse-reusedRepoTodos-49-3",
-        "internal.sourcereview.reuse-reusedRepoTodos-61-3",
-        "internal.sourcereview.reuse-reusedRepoTodos-104-3"
+        "internal.sourcereview.reuse-reusedRepoTodos-49-3"
       ],
-      "review": "Reuses all three reviewed Rust-owned todo scenarios: tool registration, metadata creation/list projection, update and removal. Dependencies are local service fixtures; no persisted user todo or thread executes. Every existing assertion remains controlled by Rust. Repository inference boundaries, foreign-owner refusal and malformed optional metadata remain separate gaps.",
+      "review": "Checks the verified Rust-owned todo registration scenario against the production source. Metadata creation/list projection and update/removal declarations remain pending parity review; repository inference, foreign-owner refusal and malformed optional metadata remain separate gaps.",
       "evidence_files": [
         "packages/gateway/src/tools/repo-proposal-tools.test.ts",
         "tests/contract/drivers/tailstatic/fixture-gateway-src-tools-repo-proposal-tools-test-e17a49aa.ts"
       ],
       "mutation": {
-        "find": ".slice(0, 12)",
-        "replace": ".slice(0, 1)",
-        "case_id": "internal.sourcereview.reuse-reusedRepoTodos-61-3"
+        "find": "name: \"jait.todos\"",
+        "replace": "name: \"jait.changed\"",
+        "case_id": "internal.sourcereview.reuse-reusedRepoTodos-49-3"
       }
     },
     {
@@ -2943,23 +2941,13 @@
       "path": "packages/gateway/src/tools/screen-share-tools.ts",
       "case_ids": [
         "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_23_3",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_29_3",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_36_3",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_41_3",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each0",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each1",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each0",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each1",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each0",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each1",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each0",
-        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each1"
+        "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_36_3"
       ],
-      "review": "Reuses eight original Rust-owned screen-tool declarations and all parameterized variants: local/remote device projection, selected-host request/viewer fanout, missing-target refusal, disconnect, capture/record forwarding, both OS aliases and required action schemas, registration/control dispatch and missing-transport nonmutation. Services and control-plane transports are synthetic; no real capture, recording or device control occurs. Zero/multiple local viewers, explicit viewer overrides, successful transport updates and service exceptions remain coverage gaps.",
+      "review": "Checks verified, registered device projection and missing-target refusal scenarios against the production source. Selected-host fanout, disconnect, capture/record and OS-tool cases need renewed parity review and registration; dependencies are synthetic.",
       "mutation": {
-        "find": "ws.getConnectedDeviceIds().filter((id) => id !== hostDeviceId)",
-        "replace": "ws.getConnectedDeviceIds().filter((id) => id === hostDeviceId)",
-        "case_id": "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_29_3"
+        "find": "isCurrent: localDevice ? d.id === localDevice.id : false",
+        "replace": "isCurrent: false",
+        "case_id": "internal.sourcereview.reusedScreenShareTools-packages_gateway_src_tools_screen_share_tools_test_ts_23_3"
       },
       "evidence_files": [
         "packages/gateway/src/tools/screen-share-tools.test.ts",
@@ -4462,13 +4450,11 @@
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_18_3",
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_89_3",
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_145_3",
-        "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_177_3",
-        "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_239_3",
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_306_3",
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_345_3",
         "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_377_3"
       ],
-      "review": "Reviewed current-session validation, project/target normalization, open/start alias, stable target persistence and UI state broadcasts, failed-start hiding, stop/restart/status handling, sharing-gated events/log projections and inspect screenshot omission/control checks. Original Rust-owned fake-service fixtures assert schema alias visibility, exact start/broadcast/state payloads and MCP session routing, failure-panel state, screenshot opt-in/error count and restart success. Mutation persists transient preview URL instead of stable user target and must fail the exact UI/state payload assertion; restoration passes. No real preview, browser, screenshot, external website or UI command is sent. Stop/status/log filters/caps, absent services/sessions, browser-control refusal and failures, every sharing/metrics branch, real process lifecycle and UI/platform integration remain gaps. The schema case now checks canonical browser tool naming, hidden legacy execution aliases, resumed activation and per-name execution authority with nine Rust assertions.",
+      "review": "Reviewed current-session validation, project/target normalization, open/start alias, stable target persistence and UI state broadcasts, failed-start hiding, stop/restart/status handling, sharing-gated events/log projections and inspect screenshot omission/control checks. Original Rust-owned fake-service fixtures assert schema alias visibility, exact start/broadcast/state payloads and MCP session routing, failure-panel state, screenshot opt-in/error count and restart success. Mutation persists transient preview URL instead of stable user target and must fail the exact UI/state payload assertion; restoration passes. No real preview, browser, screenshot, external website or UI command is sent. Stop/status/log filters/caps, absent services/sessions, browser-control refusal and failures, every sharing/metrics branch, real process lifecycle and UI/platform integration remain gaps. The schema case now checks canonical browser tool naming, hidden legacy execution aliases, resumed activation and per-name execution authority with nine Rust assertions. Two prior preview scenarios need renewed parity review and registration.",
       "mutation": {
         "find": "const stableTarget = preview.target ?? target ?? null;",
         "replace": "const stableTarget = preview.url ?? null;",

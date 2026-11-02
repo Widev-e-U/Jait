@@ -1976,27 +1976,3 @@ describe("ACP child environment", () => {
     expect(acpInheritedEnvToStrip({ providerType: "acp", id: "claude" })).toEqual([]);
   });
 });
-
-describe("ACP terminal and approval boundaries", () => {
-  it("rejects native terminals and resolves approvals only once", async () => {
-    const provider = new AcpProvider({ id: "codex", name: "Codex", description: "Codex via ACP", command: process.execPath, args: ["-e", fakeAcpBackgroundTerminalScript] });
-    try {
-      const session = await provider.startSession({ threadId: "thread-1", workingDirectory: process.cwd(), mode: "full-access" });
-      const state = (provider as any).sessions.get(session.id);
-      const client = state.client;
-      await expect(client.createTerminal({})).rejects.toThrow("Provider-native terminals are disabled");
-      await expect(client.terminalOutput({ terminalId: "missing" })).rejects.toThrow("Unknown terminal");
-      await expect(client.waitForTerminalExit({ terminalId: "missing" })).rejects.toThrow("Unknown terminal");
-      await expect(client.killTerminal({ terminalId: "missing" })).rejects.toThrow("Unknown terminal");
-      await expect(client.releaseTerminal({ terminalId: "missing" })).resolves.toEqual({});
-      let outcome: unknown;
-      state.approvals.set("request", { allowOptionId: "yes", rejectOptionId: "no", resolve: (value: unknown) => { outcome = value; } });
-      await provider.respondToApproval(session.id, "request", false);
-      expect(outcome).toEqual({ outcome: { outcome: "selected", optionId: "no" } });
-      expect(state.approvals.has("request")).toBe(false);
-      await expect(provider.respondToApproval(session.id, "request", true)).resolves.toBeUndefined();
-    } finally {
-      await provider.dispose();
-    }
-  });
-});
