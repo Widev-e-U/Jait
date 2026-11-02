@@ -116,6 +116,7 @@ pub mod computer_tools;
 pub mod browser_tools;
 
 pub mod agent_acp_runner;
+pub mod agent_loop;
 pub mod agent_tools;
 pub mod contracts;
 pub mod elevated_tools;
