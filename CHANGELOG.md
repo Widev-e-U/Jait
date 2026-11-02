@@ -4,6 +4,51 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.963](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.963) — 2026-11-02
+
+- fix(web): improve goal and browser overlays — 6fdd4b47
+- feat: add browser workflows and streamline release checks — d78f4a36
+- fix(contracts): reconcile reviewed source fingerprints — 9af1a730
+- fix(contracts): isolate reviewed source mutation probes — 87cbfdd6
+- fix(contracts): apply source review overrides in node peer — 957e6b41
+- fix(contracts): provide steering fixture UUID import — 492ddcd5
+- fix(graph): stop cancelled builds before setup — 2d2d4109
+- test(gateway): cover provider and location boundaries — 2ad0809d
+- fix(ci): account for new migration inventory and test gaps — 147db3de
+- fix(tests): release mutex guards before async calls — 8ca2bb07
+- feat(gateway-rust): advance native migration and contract coverage — 90c66ec3
+- test(rust): reconcile native coverage ledger with 370-path inventory — f7bf554a
+- test(rust): add prompt parity contracts and refresh native coverage inventory — 91278701
+- feat(web): single-line browser header with three-way size switch — 501de9eb
+- fix(rust): reconcile prompt and computer control drift — b5efae91
+- fix: format Rust contract tests — 6d8b2d12
+- fix: align pipeline tests with browser and chat behavior — bd3026d1
+- feat: advance gateway migration and improve browser controls — f74cae5b
+- fix(codex-acp): restore compaction turn-completion wait in adapter patch — c5463c8c
+- Fix Codex ACP startup: give the adapter a resolvable Codex runtime — 0ec156ed
+- fix(gateway): retain codex exception diagnostics — 5eaa5c57
+- deploy: cut pipeline from 9m21s to 4m23s without weakening gates — 2fa05ce6
+- chat: steady goal-card expansion; rust: no live stream after failed terminal write — f2ba37a3
+- feat: improve screen sharing and native gateway — d6c5dfd8
+- chore: capture local workspace changes — bedc3ed9
+- fix(gateway): preserve chat-scoped Codex MCP bindings — faa29639
+- fix(gateway-rust): mirror Bun's URL parse errors for the Jait MCP server ref — 9d473705
+- fix(contracts): separate provider fixture checks from migration cases — 66642765
+- fix(web): coalesce repeated question waits into one card — 6a7769fc
+- fix(contracts): refresh parser dependency interface snapshot — 37670f40
+- fix(contracts): reconcile reviewed native source fingerprints — 81b5bf54
+- fix(gateway): avoid Bun shared HTML parser import race — 4a46bbf2
+- test(contracts): allow provider fixture shutdown during reads — 3f602850
+- fix(ci): align Rust contracts with reviewed Bun runtime — 26f34fa1
+- test(contracts): preserve reviewed remote-terminal mappings — 41661264
+- fix(rust): match pinned Bun assessment error responses — f53b7d21
+- test(browser): refresh reviewed MCP contract inventory — 386c1379
+- fix(ci): restore Rust lint and component coverage gates — 987b38cc
+- fix(browser): bind handoffs to the originating chat — 53403b40
+- feat: improve browser handoffs, chat workflows and native gateway contracts — 0fec4d81
+- revert: drop parallel-workstream test files committed without contract recapture — 88dd31cf
+- test(gateway): cover background execution, ACP context updates and graph truncation — 2657b6ec
+
 ## [v0.1.962](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.962) — 2026-11-02
 
 - feat: add browser workflows and streamline release checks — d78f4a36
