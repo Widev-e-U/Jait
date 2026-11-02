@@ -318,6 +318,13 @@ impl PromptRegistry {
                 );
             }
         }
+        append(
+            &mut prompt,
+            &format!(
+                "\n\n<liveBrowserUpdates>\n{}\n</liveBrowserUpdates>",
+                shared("LIVE_BROWSER_UPDATE_INSTRUCTIONS").unwrap()
+            ),
+        );
         if truthy(&ctx.project_root).is_some() {
             append(
                 &mut prompt,

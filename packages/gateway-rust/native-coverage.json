@@ -5543,7 +5543,19 @@
       "evidence": [
         "packages/gateway-rust/.evidence/tools-agent-acp-runner.log"
       ]
+    },
+    {
+      "reference": "packages/gateway/src/clawhub/client.ts",
+      "reference_sha256": "83cfdc81bacd698397297d880f13689dc598350416c1949596612a498973053e",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/integrations/clawhub.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Reconciled by coverage audit: packages/gateway-rust/src/integrations/clawhub.rs (98 KB) is declared at integrations/mod.rs:11 and its ClawHubClient is consumed in production code at runtime/application.rs:239 (that file contains no #[cfg(test)] gate). Module documentation plus call-site wiring were confirmed directly against the live source; no line-by-line TS-vs-Rust diff has been recorded.",
+      "remaining": "Wired but unverified: no focused contract target or differential comparison is recorded for clawhub/client.ts, so it stays implemented-but-unverified. The supervised store constructor in runtime/server.rs remains test-only, so store integration is not production-proven either."
     }
   ],
-  "updated_at": "2026-10-27T20:30:00.000000+00:00"
+  "updated_at": "2026-11-02T08:20:26.953064+00:00"
 }

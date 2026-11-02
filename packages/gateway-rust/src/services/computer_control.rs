@@ -39,7 +39,7 @@ impl ComputerControlSessionService {
     }
     pub fn start(&mut self, owner: &str, node: &str) -> Result<ComputerControlSession, String> {
         self.remove_expired();
-        if let Some((session, _)) = self.sessions.values().find(|(s, _)| s.node_id == node) {
+        if let Some(session) = self.find_by_node(node) {
             return Err(if session.owner_session_id == owner {
                 format!(
                     "Computer session {} is already active on {node}",
@@ -68,6 +68,16 @@ impl ComputerControlSessionService {
         self.remove_expired();
         self.sessions.get(id).map(|(s, _)| s.clone())
     }
+    // Mirrors the TS Map-insertion-order lookup: expire first, then take the
+    // earliest-created session bound to the node.
+    pub fn find_by_node(&mut self, node: &str) -> Option<ComputerControlSession> {
+        self.remove_expired();
+        self.order
+            .iter()
+            .filter_map(|id| self.sessions.get(id))
+            .find(|(s, _)| s.node_id == node)
+            .map(|(s, _)| s.clone())
+    }
     pub fn require_owned(
         &mut self,
         id: &str,
@@ -94,5 +104,73 @@ impl ComputerControlSessionService {
     pub fn stop(&mut self, id: &str) -> Option<ComputerControlSession> {
         self.order.retain(|key| key != id);
         self.sessions.remove(id).map(|(s, _)| s)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicI64, Ordering};
+
+    fn manual_clock(start: i64) -> (Clock, Arc<AtomicI64>) {
+        let now = Arc::new(AtomicI64::new(start));
+        let handle = now.clone();
+        (
+            Arc::new(move || handle.load(Ordering::SeqCst)) as Clock,
+            now,
+        )
+    }
+
+    #[test]
+    fn find_by_node_returns_session_bound_to_node() {
+        let (clock, _now) = manual_clock(1_700_000_000_000);
+        let mut service = ComputerControlSessionService::new(clock, 60_000);
+        let alpha = service.start("chat-a", "node-1").unwrap();
+        let beta = service.start("chat-a", "node-2").unwrap();
+
+        assert_eq!(service.find_by_node("node-1").unwrap().id, alpha.id);
+        assert_eq!(service.find_by_node("node-2").unwrap().id, beta.id);
+        assert!(service.find_by_node("node-3").is_none());
+    }
+
+    #[test]
+    fn find_by_node_prefers_earliest_created_session() {
+        let (clock, _now) = manual_clock(1_700_000_000_000);
+        let mut service = ComputerControlSessionService::new(clock, 60_000);
+        let first = service.start("chat-a", "node-1").unwrap();
+        // A second lease on a different node keeps the map insertion order distinct
+        // from the node binding, so the lookup must scan in insertion order.
+        let second = service.start("chat-b", "node-2").unwrap();
+        assert_ne!(first.id, second.id);
+        assert_eq!(service.find_by_node("node-1").unwrap().id, first.id);
+        assert_eq!(service.find_by_node("node-2").unwrap().id, second.id);
+    }
+
+    #[test]
+    fn find_by_node_hides_expired_session() {
+        let (clock, now) = manual_clock(1_700_000_000_000);
+        let mut service = ComputerControlSessionService::new(clock, 1_000);
+        let session = service.start("chat-a", "node-1").unwrap();
+        assert_eq!(service.find_by_node("node-1").unwrap().id, session.id);
+
+        now.fetch_add(2_000, Ordering::SeqCst);
+        // Expiry must run before the lookup: an expired lease cannot block a new one.
+        assert!(service.find_by_node("node-1").is_none());
+        assert!(service.start("chat-b", "node-1").is_ok());
+    }
+
+    #[test]
+    fn start_rejects_node_already_leased() {
+        let (clock, _now) = manual_clock(1_700_000_000_000);
+        let mut service = ComputerControlSessionService::new(clock, 60_000);
+        let session = service.start("chat-a", "node-1").unwrap();
+
+        let same_owner = service.start("chat-a", "node-1").unwrap_err();
+        assert!(same_owner.contains(&format!(
+            "Computer session {} is already active on node-1",
+            session.id
+        )));
+        let other_owner = service.start("chat-b", "node-1").unwrap_err();
+        assert_eq!(other_owner, "Computer node-1 is already controlled by another chat");
     }
 }
