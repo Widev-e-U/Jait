@@ -115,6 +115,31 @@ describe('createMessageStream', () => {
     expect(snap.segments).toEqual([{ type: 'toolGroup', callIds: ['c1'] }])
   })
 
+  it('rekeys the correct parallel provisional call after snapshot resume', () => {
+    const initial = createMessageStream()
+    initial.pushToolCallDelta('pending-0', 'file_', '{', undefined, 0)
+    initial.pushToolCallDelta('pending-1', 'other', '', undefined, 1)
+    const resumed = createMessageStream(initial.snapshot())
+    resumed.pushToolCallDelta('real-a', 'read', '}', undefined, 0)
+    expect(resumed.snapshot().toolCalls.map(call => [call.callId, call.tool])).toEqual([
+      ['real-a', 'file_read'], ['pending-1', 'other'],
+    ])
+    expect(resumed.snapshot().segments).toEqual([{ type: 'toolGroup', callIds: ['real-a', 'pending-1'] }])
+  })
+
+  it('hydrates out-of-order provider slots and preserves fragments', () => {
+    const initial = createMessageStream()
+    initial.pushToolCallDelta('pending-0', 'file_', '{', undefined, 4)
+    initial.pushToolCallDelta('pending-1', 'other', '', undefined, 1)
+    const resumed = createMessageStream()
+    resumed.hydrate(initial.snapshot())
+    resumed.pushToolCallDelta('real-a', 'read', '}', undefined, 4)
+    expect(resumed.snapshot().toolCalls.map(call => [call.callId, call.tool, call.streamingArgs])).toEqual([
+      ['real-a', 'file_read', '{}'], ['pending-1', 'other', ''],
+    ])
+    expect(resumed.snapshot().segments).toEqual([{ type: 'toolGroup', callIds: ['real-a', 'pending-1'] }])
+  })
+
   it('supports approval_required', () => {
     const stream = createMessageStream()
     stream.pushApprovalRequired('r1', 'c1', 'dangerous', { x: 1 })
@@ -471,4 +496,23 @@ describe('provisional pending-N tool call ids', () => {
       { type: 'text', content: 'Done.' },
     ])
   })
+})
+
+it('tracks explicit provisional identity across live same-ID adoption', () => {
+  const stream = createMessageStream()
+  stream.pushToolCallDelta('pending-0', 'file_', '{', undefined, 4, true)
+  stream.pushToolCallDelta('pending-0', 'read', '}', undefined, 4, false)
+  stream.pushToolStart('other', 'file_read', {})
+  expect(stream.snapshot().toolCalls.map(call => [call.callId, call.provisional])).toEqual([
+    ['pending-0', false], ['other', undefined],
+  ])
+})
+
+it('does not adopt a provisional call from a different indexed slot', () => {
+  const stream = createMessageStream()
+  stream.pushToolCallDelta('pending-0', 'first', '', undefined, 4, true)
+  stream.pushToolCallDelta('real-1', 'second', '', undefined, 1, false)
+  expect(stream.snapshot().toolCalls.map(call => [call.callId, call.tool])).toEqual([
+    ['pending-0', 'first'], ['real-1', 'second'],
+  ])
 })

@@ -19,7 +19,13 @@ pub struct CopyError {
 }
 impl std::fmt::Display for CopyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}: {}", self.operation, self.path.display(), self.source)
+        write!(
+            f,
+            "{} {}: {}",
+            self.operation,
+            self.path.display(),
+            self.source
+        )
     }
 }
 impl std::error::Error for CopyError {
@@ -28,7 +34,11 @@ impl std::error::Error for CopyError {
     }
 }
 fn failure(operation: &'static str, path: &Path, source: io::Error) -> CopyError {
-    CopyError { operation, path: path.to_owned(), source }
+    CopyError {
+        operation,
+        path: path.to_owned(),
+        source,
+    }
 }
 
 /// Copy the shell tree and the three browser assets in the original order.
@@ -47,8 +57,11 @@ pub fn copy_assets_with_progress(
     let source = package_root.join("src/surfaces/shell-integration");
     let target = package_root.join("dist/surfaces/shell-integration");
     if !source.exists() {
-        return Err(failure("shell integration source directory not found", &source,
-            io::Error::new(io::ErrorKind::NotFound, "source does not exist")));
+        return Err(failure(
+            "shell integration source directory not found",
+            &source,
+            io::Error::new(io::ErrorKind::NotFound, "source does not exist"),
+        ));
     }
     ensure_directory(&target)?;
     copy_tree(&source, &target)?;
@@ -67,10 +80,18 @@ pub fn copy_assets_with_progress(
 
 fn ensure_directory(path: &Path) -> Result<(), CopyError> {
     match fs::symlink_metadata(path) {
-        Ok(meta) if !meta.is_dir() => return Err(failure("mkdir", path,
-            io::Error::new(io::ErrorKind::AlreadyExists, "destination is not a directory"))),
+        Ok(meta) if !meta.is_dir() => {
+            return Err(failure(
+                "mkdir",
+                path,
+                io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "destination is not a directory",
+                ),
+            ));
+        }
         Ok(_) => return Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => {},
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(failure("stat", path, e)),
     }
     fs::create_dir_all(path).map_err(|e| failure("mkdir", path, e))
@@ -79,8 +100,14 @@ fn ensure_directory(path: &Path) -> Result<(), CopyError> {
 fn copy_tree(source: &Path, destination: &Path) -> Result<(), CopyError> {
     // cpSync rejects a directory copied onto itself, including through an alias.
     if same_file_checked(source, destination)? {
-        return Err(failure("copy", source,
-            io::Error::new(io::ErrorKind::InvalidInput, "source and destination are the same directory")));
+        return Err(failure(
+            "copy",
+            source,
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "source and destination are the same directory",
+            ),
+        ));
     }
     // Resolve existing directories so aliases through parent symlinks cannot
     // make the copier descend into the destination it is creating.
@@ -88,8 +115,14 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), CopyError> {
     let destination_real = fs::canonicalize(destination)
         .map_err(|e| failure("resolve destination", destination, e))?;
     if destination_real.starts_with(&source_real) {
-        return Err(failure("copy", source,
-            io::Error::new(io::ErrorKind::InvalidInput, "destination is inside source directory")));
+        return Err(failure(
+            "copy",
+            source,
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "destination is inside source directory",
+            ),
+        ));
     }
     let entries = fs::read_dir(source).map_err(|e| failure("read directory", source, e))?;
     for entry in entries {
@@ -100,7 +133,9 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), CopyError> {
 }
 
 fn copy_entry(from: &Path, to: &Path) -> Result<(), CopyError> {
-    let kind = fs::symlink_metadata(from).map_err(|e| failure("stat", from, e))?.file_type();
+    let kind = fs::symlink_metadata(from)
+        .map_err(|e| failure("stat", from, e))?
+        .file_type();
     if kind.is_dir() {
         ensure_directory(to)?;
         copy_tree(from, to)
@@ -109,24 +144,35 @@ fn copy_entry(from: &Path, to: &Path) -> Result<(), CopyError> {
     } else if kind.is_file() {
         // cpSync checks identity before replacing an existing destination link.
         if same_file_checked(from, to)? {
-            return Err(failure("copy", from,
-                io::Error::new(io::ErrorKind::InvalidInput, "source and destination are the same file")));
+            return Err(failure(
+                "copy",
+                from,
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "source and destination are the same file",
+                ),
+            ));
         }
         match fs::symlink_metadata(to) {
             Ok(meta) if meta.file_type().is_symlink() => remove_destination_link(to, &meta)?,
             // Node cp removes an existing file before copying, preserving any
             // other hard links to its previous contents. This is not race-safe
             // against concurrent replacement of path components.
-            Ok(meta) if meta.is_file() => fs::remove_file(to).map_err(|e| failure("remove destination", to, e))?,
-            Ok(_) => {},
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {},
+            Ok(meta) if meta.is_file() => {
+                fs::remove_file(to).map_err(|e| failure("remove destination", to, e))?
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(failure("stat", to, e)),
         }
         fs::copy(from, to).map_err(|e| failure("copy", from, e))?;
         Ok(())
     } else {
-        Err(failure("copy", from,
-            io::Error::new(io::ErrorKind::Unsupported, "unsupported source file type")))
+        Err(failure(
+            "copy",
+            from,
+            io::Error::new(io::ErrorKind::Unsupported, "unsupported source file type"),
+        ))
     }
 }
 
@@ -156,25 +202,41 @@ fn same_file_checked(a: &Path, b: &Path) -> Result<bool, CopyError> {
     use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
     #[repr(C)]
     struct FileInformation {
-        attributes: u32, creation: [u32; 2], access: [u32; 2], write: [u32; 2],
-        volume: u32, size_high: u32, size_low: u32, links: u32,
-        index_high: u32, index_low: u32,
+        attributes: u32,
+        creation: [u32; 2],
+        access: [u32; 2],
+        write: [u32; 2],
+        volume: u32,
+        size_high: u32,
+        size_low: u32,
+        links: u32,
+        index_high: u32,
+        index_low: u32,
     }
     #[link(name = "kernel32")]
     unsafe extern "system" {
-        fn GetFileInformationByHandle(handle: *mut std::ffi::c_void, info: *mut FileInformation) -> i32;
+        fn GetFileInformationByHandle(
+            handle: *mut std::ffi::c_void,
+            info: *mut FileInformation,
+        ) -> i32;
     }
     fn identity(path: &Path) -> io::Result<(u32, u32, u32)> {
         // Zero desired access allows identity checks without requesting file data;
         // BACKUP_SEMANTICS permits opening directories and follows links.
-        let file = fs::OpenOptions::new().access_mode(0).custom_flags(0x02000000).open(path)?;
+        let file = fs::OpenOptions::new()
+            .access_mode(0)
+            .custom_flags(0x02000000)
+            .open(path)?;
         let mut info = std::mem::MaybeUninit::<FileInformation>::uninit();
         if unsafe { GetFileInformationByHandle(file.as_raw_handle(), info.as_mut_ptr()) } == 0 {
             return Err(io::Error::last_os_error());
         }
         let info = unsafe { info.assume_init() };
         if info.index_high == 0 && info.index_low == 0 {
-            return Err(io::Error::new(io::ErrorKind::Unsupported, "filesystem did not provide a file ID"));
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "filesystem did not provide a file ID",
+            ));
         }
         Ok((info.volume, info.index_high, info.index_low))
     }
@@ -217,19 +279,45 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), CopyError> {
         link
     } else {
         let path = source.parent().unwrap_or(Path::new("")).join(link);
-        std::path::absolute(&path).map_err(|e| failure("resolve link", &path, e))?
+        let absolute = std::path::absolute(&path).map_err(|e| failure("resolve link", &path, e))?;
+        // Node's path.resolve removes dot segments lexically, without resolving
+        // filesystem symlinks. Preserve that observable link text.
+        let mut normalized = PathBuf::new();
+        for component in absolute.components() {
+            match component {
+                std::path::Component::RootDir => normalized.push(component.as_os_str()),
+                std::path::Component::Normal(part) => normalized.push(part),
+                std::path::Component::ParentDir => {
+                    normalized.pop();
+                }
+                std::path::Component::CurDir => {}
+                std::path::Component::Prefix(_) => unreachable!("Unix absolute path"),
+            }
+        }
+        normalized
     };
     match fs::symlink_metadata(destination) {
         Ok(meta) if meta.file_type().is_symlink() && fs::metadata(destination).is_ok() => {
             if same_file(source, destination) {
-                return Err(failure("copy link", destination,
-                    io::Error::new(io::ErrorKind::InvalidInput, "source and destination refer to the same file")));
+                return Err(failure(
+                    "copy link",
+                    destination,
+                    io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "source and destination refer to the same file",
+                    ),
+                ));
             }
             fs::remove_file(destination)
                 .map_err(|e| failure("remove destination", destination, e))?
         }
-        Ok(_) => return Err(failure("copy link", destination,
-            io::Error::new(io::ErrorKind::AlreadyExists, "destination already exists"))),
+        Ok(_) => {
+            return Err(failure(
+                "copy link",
+                destination,
+                io::Error::new(io::ErrorKind::AlreadyExists, "destination already exists"),
+            ));
+        }
         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(failure("stat", destination, e)),
     }
@@ -245,9 +333,16 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), CopyError> {
     } else {
         // Drive-relative and root-relative paths need Windows path.resolve
         // semantics that are not established here.
-        if link.has_root() || link.components().any(|c| matches!(c, std::path::Component::Prefix(_))) {
-            return Err(failure("resolve link", source,
-                io::Error::new(io::ErrorKind::Unsupported, "ambiguous Windows link target")));
+        if link.has_root()
+            || link
+                .components()
+                .any(|c| matches!(c, std::path::Component::Prefix(_)))
+        {
+            return Err(failure(
+                "resolve link",
+                source,
+                io::Error::new(io::ErrorKind::Unsupported, "ambiguous Windows link target"),
+            ));
         }
         let path = source.parent().unwrap_or(Path::new("")).join(link);
         std::path::absolute(&path).map_err(|e| failure("resolve link", &path, e))?
@@ -255,9 +350,14 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), CopyError> {
     // Existing link replacement has additional Node subdirectory checks. Do
     // not unlink anything until those Windows cases have been verified.
     match fs::symlink_metadata(destination) {
-        Ok(_) => return Err(failure("copy link", destination,
-            io::Error::new(io::ErrorKind::AlreadyExists, "destination already exists"))),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => {},
+        Ok(_) => {
+            return Err(failure(
+                "copy link",
+                destination,
+                io::Error::new(io::ErrorKind::AlreadyExists, "destination already exists"),
+            ));
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {}
         Err(e) => return Err(failure("stat", destination, e)),
     }
     // Node auto-detects directory targets; missing targets use a file link.
@@ -266,14 +366,24 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), CopyError> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => false,
         Err(e) => return Err(failure("stat link target", &resolved, e)),
     };
-    let result = if is_dir { symlink_dir(&resolved, destination) } else { symlink_file(&resolved, destination) };
+    let result = if is_dir {
+        symlink_dir(&resolved, destination)
+    } else {
+        symlink_file(&resolved, destination)
+    };
     result.map_err(|e| failure("copy link", destination, e))
 }
 
 #[cfg(not(any(unix, windows)))]
 fn copy_symlink(source: &Path, _destination: &Path) -> Result<(), CopyError> {
-    Err(failure("copy link", source,
-        io::Error::new(io::ErrorKind::Unsupported, "copying symlinks is unavailable on this platform")))
+    Err(failure(
+        "copy link",
+        source,
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            "copying symlinks is unavailable on this platform",
+        ),
+    ))
 }
 
 #[cfg(test)]
@@ -308,8 +418,13 @@ mod tests {
     struct Fixture(PathBuf);
     impl Fixture {
         fn new() -> Self {
-            let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.jait/artifacts/gateway-rust")
-                .join(format!("copy-shell-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.jait/artifacts/gateway-rust")
+                .join(format!(
+                    "copy-shell-{}-{}",
+                    std::process::id(),
+                    NEXT.fetch_add(1, Ordering::Relaxed)
+                ));
             fs::create_dir_all(&root).unwrap();
             Self(root)
         }
@@ -320,7 +435,9 @@ mod tests {
         }
     }
     impl Drop for Fixture {
-        fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
     }
     #[test]
     fn replacement_preserves_other_destination_hard_links() {
@@ -356,9 +473,18 @@ mod tests {
         copy_symlink(&f.0.join("file-link"), &f.0.join("new-file-link")).unwrap();
         copy_symlink(&f.0.join("directory-link"), &f.0.join("new-directory-link")).unwrap();
         assert_eq!(fs::read(f.0.join("new-file-link")).unwrap(), b"content");
-        assert!(fs::metadata(f.0.join("new-directory-link")).unwrap().is_dir());
-        assert_eq!(copy_symlink(&f.0.join("file-link"), &f.0.join("new-file-link"))
-            .unwrap_err().source.kind(), io::ErrorKind::AlreadyExists);
+        assert!(
+            fs::metadata(f.0.join("new-directory-link"))
+                .unwrap()
+                .is_dir()
+        );
+        assert_eq!(
+            copy_symlink(&f.0.join("file-link"), &f.0.join("new-file-link"))
+                .unwrap_err()
+                .source
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
     }
 
     #[cfg(unix)]
@@ -370,7 +496,12 @@ mod tests {
         f.write("target", b"old");
         symlink("target", f.0.join("destination")).unwrap();
         copy_entry(&f.0.join("source"), &f.0.join("destination")).unwrap();
-        assert!(!fs::symlink_metadata(f.0.join("destination")).unwrap().file_type().is_symlink());
+        assert!(
+            !fs::symlink_metadata(f.0.join("destination"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(fs::read(f.0.join("destination")).unwrap(), b"new");
         assert_eq!(fs::read(f.0.join("target")).unwrap(), b"old");
     }
@@ -407,7 +538,10 @@ mod tests {
         let f = Fixture::new();
         fs::create_dir(f.0.join("source")).unwrap();
         let source = f.0.join("source");
-        assert_eq!(copy_tree(&source, &source).unwrap_err().source.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(
+            copy_tree(&source, &source).unwrap_err().source.kind(),
+            io::ErrorKind::InvalidInput
+        );
     }
 
     #[cfg(unix)]
@@ -417,8 +551,13 @@ mod tests {
         let f = Fixture::new();
         fs::create_dir_all(f.0.join("real/source")).unwrap();
         symlink("real", f.0.join("alias")).unwrap();
-        assert_eq!(copy_tree(&f.0.join("real/source"), &f.0.join("alias/source"))
-            .unwrap_err().source.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(
+            copy_tree(&f.0.join("real/source"), &f.0.join("alias/source"))
+                .unwrap_err()
+                .source
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
     }
 
     #[test]
@@ -426,13 +565,23 @@ mod tests {
         let f = Fixture::new();
         f.write("src/surfaces/shell-integration/nested/script.sh", b"new");
         f.write("dist/surfaces/shell-integration/nested/script.sh", b"old");
-        for name in ["playwright-node-bridge.cjs", "browser-cursor.cjs", "browser-cursor.d.cts"] {
+        for name in [
+            "playwright-node-bridge.cjs",
+            "browser-cursor.cjs",
+            "browser-cursor.d.cts",
+        ] {
             f.write(&format!("src/surfaces/{name}"), name.as_bytes());
         }
         let target = copy_assets(&f.0).unwrap();
         assert_eq!(fs::read(target.join("nested/script.sh")).unwrap(), b"new");
-        assert_eq!(fs::read(f.0.join("dist/surfaces/browser-cursor.d.cts")).unwrap(), b"browser-cursor.d.cts");
-        assert_eq!(fs::read(f.0.join("dist/surfaces/playwright-node-bridge.cjs")).unwrap(), b"playwright-node-bridge.cjs");
+        assert_eq!(
+            fs::read(f.0.join("dist/surfaces/browser-cursor.d.cts")).unwrap(),
+            b"browser-cursor.d.cts"
+        );
+        assert_eq!(
+            fs::read(f.0.join("dist/surfaces/playwright-node-bridge.cjs")).unwrap(),
+            b"playwright-node-bridge.cjs"
+        );
     }
     #[test]
     fn progress_is_reported_before_cursor_copy_failure() {
@@ -443,17 +592,29 @@ mod tests {
         let result = copy_assets_with_progress(&f.0, |target| reported = Some(target.to_owned()));
         assert_eq!(result.unwrap_err().source.kind(), io::ErrorKind::NotFound);
         assert_eq!(reported, Some(f.0.join("dist/surfaces/shell-integration")));
-        assert_eq!(fs::read(f.0.join("dist/surfaces/playwright-node-bridge.cjs")).unwrap(), b"bridge");
+        assert_eq!(
+            fs::read(f.0.join("dist/surfaces/playwright-node-bridge.cjs")).unwrap(),
+            b"bridge"
+        );
     }
 
     #[test]
     fn missing_source_and_bridge_fail_without_hiding_partial_work() {
         let f = Fixture::new();
-        assert_eq!(copy_assets(&f.0).unwrap_err().source.kind(), io::ErrorKind::NotFound);
+        assert_eq!(
+            copy_assets(&f.0).unwrap_err().source.kind(),
+            io::ErrorKind::NotFound
+        );
         assert!(!f.0.join("dist").exists());
         f.write("src/surfaces/shell-integration/a.sh", b"copied");
-        assert_eq!(copy_assets(&f.0).unwrap_err().source.kind(), io::ErrorKind::NotFound);
-        assert_eq!(fs::read(f.0.join("dist/surfaces/shell-integration/a.sh")).unwrap(), b"copied");
+        assert_eq!(
+            copy_assets(&f.0).unwrap_err().source.kind(),
+            io::ErrorKind::NotFound
+        );
+        assert_eq!(
+            fs::read(f.0.join("dist/surfaces/shell-integration/a.sh")).unwrap(),
+            b"copied"
+        );
     }
     #[cfg(unix)]
     #[test]
@@ -462,11 +623,18 @@ mod tests {
         let f = Fixture::new();
         f.write("src/surfaces/shell-integration/a.sh", b"source");
         symlink("a.sh", f.0.join("src/surfaces/shell-integration/link.sh")).unwrap();
-        for name in ["playwright-node-bridge.cjs", "browser-cursor.cjs", "browser-cursor.d.cts"] {
+        for name in [
+            "playwright-node-bridge.cjs",
+            "browser-cursor.cjs",
+            "browser-cursor.d.cts",
+        ] {
             f.write(&format!("src/surfaces/{name}"), b"");
         }
         let cwd = std::env::current_dir().unwrap();
-        let common = cwd.ancestors().find(|ancestor| f.0.starts_with(ancestor)).unwrap();
+        let common = cwd
+            .ancestors()
+            .find(|ancestor| f.0.starts_with(ancestor))
+            .unwrap();
         let mut relative = PathBuf::new();
         for _ in cwd.strip_prefix(common).unwrap().components() {
             relative.push("..");
@@ -487,12 +655,40 @@ mod tests {
         let destination = f.0.join("destination");
         symlink("target", &source).unwrap();
         fs::write(&destination, b"keep").unwrap();
-        assert_eq!(copy_symlink(&source, &destination).unwrap_err().source.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            copy_symlink(&source, &destination)
+                .unwrap_err()
+                .source
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
         assert_eq!(fs::read(&destination).unwrap(), b"keep");
         fs::remove_file(&destination).unwrap();
         symlink("missing", &destination).unwrap();
-        assert_eq!(copy_symlink(&source, &destination).unwrap_err().source.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            copy_symlink(&source, &destination)
+                .unwrap_err()
+                .source
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
         assert_eq!(fs::read_link(&destination).unwrap(), Path::new("missing"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn relative_link_dot_segments_are_normalized_lexically() {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new();
+        f.write("target", b"data");
+        fs::create_dir(f.0.join("child")).unwrap();
+        symlink("child/../target", f.0.join("source-link")).unwrap();
+        copy_symlink(&f.0.join("source-link"), &f.0.join("destination-link")).unwrap();
+        assert_eq!(
+            fs::read_link(f.0.join("destination-link")).unwrap(),
+            f.0.join("target")
+        );
+        assert_eq!(fs::read(f.0.join("destination-link")).unwrap(), b"data");
     }
 
     #[cfg(unix)]
@@ -503,10 +699,17 @@ mod tests {
         f.write("src/surfaces/shell-integration/a.sh", b"a");
         let src = f.0.join("src/surfaces/shell-integration");
         symlink("a.sh", src.join("link.sh")).unwrap();
-        for name in ["playwright-node-bridge.cjs", "browser-cursor.cjs", "browser-cursor.d.cts"] {
+        for name in [
+            "playwright-node-bridge.cjs",
+            "browser-cursor.cjs",
+            "browser-cursor.d.cts",
+        ] {
             f.write(&format!("src/surfaces/{name}"), b"");
         }
         let target = copy_assets(&f.0).unwrap();
-        assert_eq!(fs::read_link(target.join("link.sh")).unwrap(), src.join("a.sh"));
+        assert_eq!(
+            fs::read_link(target.join("link.sh")).unwrap(),
+            src.join("a.sh")
+        );
     }
 }

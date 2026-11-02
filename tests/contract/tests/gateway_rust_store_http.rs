@@ -67,7 +67,10 @@ async fn compare(steps: Value) {
     let events = Arc::new(Mutex::new(vec![]));
     let state = active.clone();
     let log = events.clone();
-    let manager: StorePort = Arc::new(move |op| {
+    let manager: StorePort = Arc::new(move |context, op| {
+        assert_eq!(context.user.id, "owner");
+        assert_eq!(context.user.username, "alice");
+        assert!(!context.cancellation.is_cancelled());
         let (name, args) = operation(op);
         log.lock()
             .unwrap()

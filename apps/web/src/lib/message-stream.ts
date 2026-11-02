@@ -33,6 +33,7 @@ export type { MessageSegment }
  * tool-call fragments without an id yet: `pending-<slot index>`.
  */
 const PENDING_CALL_ID_RE = /^pending-\d+$/
+const isProvisional = (call: ToolCallInfo) => call.provisional ?? PENDING_CALL_ID_RE.test(call.callId)
 
 /** Snapshot of the streamed message at a point in time. */
 export interface MessageStreamSnapshot {
@@ -60,6 +61,7 @@ export type ToolStreamEvent =
        * placeholder entry deterministically instead of orphaning it.
        */
       index?: number
+      provisional?: boolean
     }
   | {
       type: 'tool_start'
@@ -122,7 +124,7 @@ export interface MessageStreamWriter {
   /** Convenience: insert a steered-message marker anchored at the current point in the stream. */
   pushSteering(content: string, displayContent?: string, queuedMessageId?: string, deferred?: boolean): void
   /** Convenience: push a tool_call_delta. */
-  pushToolCallDelta(callId: string, nameDelta: string, argsDelta: string, parentCallId?: string, index?: number): void
+  pushToolCallDelta(callId: string, nameDelta: string, argsDelta: string, parentCallId?: string, index?: number, provisional?: boolean): void
   /** Convenience: push a tool_start. */
   pushToolStart(callId: string, tool: string, args: Record<string, unknown>, parentCallId?: string): void
   /** Convenience: push an approval_required event. */
@@ -209,13 +211,20 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
   // De-dupe tool groups in the segment list.
   const seenToolCallIds = seedSeenToolCallIds(segments)
 
-  // Some OpenAI-compatible providers stream the first fragment(s) of a tool
-  // call without an id; the gateway then emits a provisional `pending-N` id
-  // (N = cumulative slot index, see agent-loop.ts) and only reveals the real
-  // id on a later fragment. Map each provider slot to the id we are currently
-  // keying its fragments under, so the real id can deterministically re-key
-  // the placeholder instead of creating a duplicate, orphaned tool entry.
+  // Preserve the provider slot across snapshot hydration. Legacy snapshots may
+  // only have a pending-N identifier, whose suffix was historically the slot.
   const slotCallIds = new Map<number, string>()
+  const seedSlots = () => {
+    slotCallIds.clear()
+    for (const call of toolCalls) {
+      if (call.status !== 'pending') continue
+      if (!isProvisional(call)) continue
+      const suffix = Number(call.callId.slice('pending-'.length))
+      const slot = Number.isSafeInteger(call.streamIndex) && call.streamIndex! >= 0 ? call.streamIndex! : suffix
+      if (Number.isSafeInteger(slot)) slotCallIds.set(slot, call.callId)
+    }
+  }
+  seedSlots()
 
   /**
    * Re-key a tool entry (and its derived state) from `oldId` to `newId` in
@@ -268,11 +277,15 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
       if (mapped) {
         const idx = findToolCallIndex(mapped)
         const tc = idx === -1 ? undefined : toolCalls[idx]
-        if (tc && PENDING_CALL_ID_RE.test(tc.callId) && tc.status === 'pending') return tc
+        if (tc && isProvisional(tc) && tc.status === 'pending') return tc
         return undefined
       }
+      // Older live events can omit the slot on the placeholder; their
+      // numeric suffix is the only available slot hint.
+      return toolCalls.find(tc => tc.streamIndex === undefined && isProvisional(tc)
+        && tc.status === 'pending' && tc.callId === `pending-${index}`)
     }
-    const candidates = toolCalls.filter(tc => PENDING_CALL_ID_RE.test(tc.callId) && tc.status === 'pending')
+    const candidates = toolCalls.filter(tc => isProvisional(tc) && tc.status === 'pending')
     return candidates.length === 1 ? candidates[0] : undefined
   }
 
@@ -363,7 +376,7 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
         // A fresh provisional `pending-N` id always starts a new entry — never
         // adopt an earlier placeholder, or a second parallel call would merge
         // into the first. Adoption is only for real (non-provisional) ids.
-        if (idx === -1 && !PENDING_CALL_ID_RE.test(event.callId)) {
+        if (idx === -1 && !(event.provisional ?? PENDING_CALL_ID_RE.test(event.callId))) {
           // The gateway emits a provisional `pending-N` id while a provider
           // streams tool-call fragments without one; when the real id shows up
           // on a later fragment, re-key the placeholder entry (keeping its
@@ -379,7 +392,7 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
         if (idx !== -1) {
           toolCalls = toolCalls.map((tc, i) =>
             i === idx
-              ? { ...tc, tool: tc.tool + event.nameDelta, streamingArgs: (tc.streamingArgs ?? '') + event.argsDelta }
+              ? { ...tc, tool: tc.tool + event.nameDelta, streamingArgs: (tc.streamingArgs ?? '') + event.argsDelta, provisional: event.provisional ?? tc.provisional }
               : tc
           )
         } else {
@@ -392,6 +405,8 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
               args: {},
               status: 'pending',
               streamingArgs: event.argsDelta,
+              streamIndex: event.index,
+              provisional: event.provisional,
               startedAt: Date.now(),
             },
           ]
@@ -408,7 +423,7 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
           // Adopt the placeholder when it is unambiguous (prefer an exact
           // accumulated-name match, then a name prefix, then a sole candidate)
           // so the entry this call already opened keeps its segment position.
-          const pending = toolCalls.filter(tc => PENDING_CALL_ID_RE.test(tc.callId) && tc.status === 'pending')
+          const pending = toolCalls.filter(tc => isProvisional(tc) && tc.status === 'pending')
           const byName = pending.filter(tc => tc.tool === event.tool)
           const byPrefix = pending.filter(tc => event.tool.startsWith(tc.tool))
           const candidate = byName[0] ?? byPrefix[0] ?? (pending.length === 1 ? pending[0] : undefined)
@@ -521,8 +536,8 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
     pushThinking: (text: string) => pushEvent({ type: 'thinking', content: text }),
     pushSteering: (content: string, displayContent?: string, queuedMessageId?: string, deferred?: boolean) =>
       pushEvent({ type: 'steering', content, displayContent, queuedMessageId, deferred }),
-    pushToolCallDelta: (callId, nameDelta, argsDelta, parentCallId, index) =>
-      pushEvent({ type: 'tool_call_delta', callId, nameDelta, argsDelta, parentCallId, index }),
+    pushToolCallDelta: (callId, nameDelta, argsDelta, parentCallId, index, provisional) =>
+      pushEvent({ type: 'tool_call_delta', callId, nameDelta, argsDelta, parentCallId, index, provisional }),
     pushToolStart: (callId, tool, args, parentCallId) =>
       pushEvent({ type: 'tool_start', callId, tool, args, parentCallId }),
     pushApprovalRequired: (requestId, callId, tool, args) =>
@@ -585,9 +600,7 @@ export function createMessageStream(initial?: Partial<MessageStreamSnapshot>): M
       if (snapshot.thinkingDuration !== undefined) thinkingDuration = snapshot.thinkingDuration
       if (snapshot.toolCalls !== undefined) {
         toolCalls = [...snapshot.toolCalls]
-        // Resume snapshots carry persisted (real) ids; any provisional
-        // pending-N slot mapping from before the reconnect is stale.
-        slotCallIds.clear()
+        seedSlots()
       }
       if (snapshot.segments !== undefined) {
         const incoming = normalizeMessageSegments(snapshot.segments)

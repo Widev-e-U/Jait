@@ -36,6 +36,8 @@ for (const width of [390, 1100]) {
         constructor(screen) {
           super(); window.testRfb = this; window.sentKeys = [];
           screen.innerHTML = '<canvas tabindex="0" aria-label="Remote screen"></canvas><input aria-label="Persistent page field">';
+          window.remoteClicks = 0;
+          screen.querySelector('canvas').addEventListener('click', () => { if (!this.viewOnly) window.remoteClicks++; });
           queueMicrotask(() => this.dispatchEvent(new Event('connect')));
         }
         sendKey(keysym) { if (!this.viewOnly) window.sentKeys.push(keysym); }
@@ -48,9 +50,12 @@ for (const width of [390, 1100]) {
     const remoteMode = () => frame.locator('body').evaluate(() => Reflect.get(window, 'testRfb').viewOnly)
     const take = panel.getByRole('button', { name: 'Take control', exact: true })
     await expect(take).toBeEnabled()
-    await expect.poll(remoteMode).toBe(true)
+    await expect.poll(remoteMode).toBe(false)
     await expect(panel).toHaveClass(/border-blue-500/)
     await expect(take).toHaveClass(/border-blue-500/)
+    await frame.getByLabel('Remote screen').click()
+    await expect.poll(() => frame.locator('body').evaluate(() => Reflect.get(window, 'remoteClicks'))).toBe(1)
+    expect(shared).toBe(true)
     const originalSource = await iframe.getAttribute('src')
     await frame.getByLabel('Persistent page field').fill('Keep this page state')
 
@@ -93,11 +98,11 @@ for (const width of [390, 1100]) {
     await expect.poll(() => !!finishShare).toBe(true)
     finishShare!()
     await expect(take).toBeEnabled()
-    await expect.poll(remoteMode).toBe(true)
+    await expect.poll(remoteMode).toBe(false)
     await expect(panel).toHaveClass(/border-blue-500/)
     await expect(take).toHaveClass(/border-blue-500/)
-    await expect(frame.getByRole('button', { name: 'Toggle keyboard' })).toBeHidden()
-    await expect(frame.getByRole('button', { name: 'Toggle mouse mode' })).toBeHidden()
+    await expect(frame.getByRole('button', { name: 'Toggle keyboard' })).toBeVisible()
+    await expect(frame.getByRole('button', { name: 'Toggle mouse mode' })).toBeVisible()
     await expect(iframe).toHaveAttribute('src', originalSource!)
     await expect(frame.getByLabel('Persistent page field')).toHaveValue('Keep this page state')
     expect(grants).toBe(1)

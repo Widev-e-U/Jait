@@ -186,7 +186,7 @@ impl CodeGraphTools<Option<ProcessCancellation>> {
                                 .await
                         }
                         "prepareGraphRag" => service.prepare_graph_rag(root, user).await,
-                        _ => service.get_index(root, user),
+                        _ => service.get_index(root, user).await,
                     };
                     result.map_err(|e| HostError::Error(e.message))
                 })

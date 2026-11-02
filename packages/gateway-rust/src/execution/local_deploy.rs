@@ -314,17 +314,19 @@ fn walk_tree(root: &Path, dependencies: bool) -> Result<Vec<Entry>> {
         let failure = std::sync::Mutex::new(None::<String>);
         std::thread::scope(|scope| {
             for _ in 0..workers {
-                scope.spawn(|| loop {
-                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let Some(directory) = directories.get(index) else {
-                        break;
-                    };
-                    let mut found = Vec::new();
-                    match walk_dir(root, directory, dependencies, &mut found) {
-                        Ok(()) => shards.lock().unwrap().push((index, found)),
-                        Err(error) => {
-                            failure.lock().unwrap().get_or_insert(error);
+                scope.spawn(|| {
+                    loop {
+                        let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(directory) = directories.get(index) else {
                             break;
+                        };
+                        let mut found = Vec::new();
+                        match walk_dir(root, directory, dependencies, &mut found) {
+                            Ok(()) => shards.lock().unwrap().push((index, found)),
+                            Err(error) => {
+                                failure.lock().unwrap().get_or_insert(error);
+                                break;
+                            }
                         }
                     }
                 });
@@ -447,19 +449,21 @@ fn digest_of(root: &Path, entries: &[Entry], dependencies: bool) -> Result<Strin
         let items = entries.as_ref();
         for _ in 0..readers {
             let sender = sender.clone();
-            scope.spawn(move || loop {
-                let index = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let Some(entry) = items.get(index) else {
-                    break;
-                };
-                let payload = if entry.file && !entry.symlink {
-                    fs::read(source.join(&entry.path)).map_err(err)
-                } else {
-                    Ok(Vec::new())
-                };
-                let failed = payload.is_err();
-                if sender.send((index, payload)).is_err() || failed {
-                    break;
+            scope.spawn(move || {
+                loop {
+                    let index = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(entry) = items.get(index) else {
+                        break;
+                    };
+                    let payload = if entry.file && !entry.symlink {
+                        fs::read(source.join(&entry.path)).map_err(err)
+                    } else {
+                        Ok(Vec::new())
+                    };
+                    let failed = payload.is_err();
+                    if sender.send((index, payload)).is_err() || failed {
+                        break;
+                    }
                 }
             });
         }
@@ -479,7 +483,13 @@ fn digest_of(root: &Path, entries: &[Entry], dependencies: bool) -> Result<Strin
                     Err(_) => return Err("Deployment digest workers stopped".into()),
                 }
             };
-            feed_entry(&mut hash, root, &entries[index], dependencies, Some(payload?))?;
+            feed_entry(
+                &mut hash,
+                root,
+                &entries[index],
+                dependencies,
+                Some(payload?),
+            )?;
         }
         Ok(())
     })?;

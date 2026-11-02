@@ -38,8 +38,8 @@ use std::{
     path::PathBuf,
     pin::Pin,
     sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Mutex, Weak,
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
     },
     task::{Context, Poll},
     time::Duration,
@@ -102,8 +102,63 @@ struct ActiveTurn {
 #[derive(Default)]
 struct ActiveState {
     closed: AtomicBool,
+    // Entries exist only while at least one snapshot for that session is in flight.
+    database_owner: Option<Arc<std::fs::File>>,
+    snapshots: Mutex<HashMap<String, Weak<AtomicU64>>>,
     turns: Mutex<HashMap<String, ActiveTurn>>,
 }
+// Lease transitions and snapshot registration are serialized by `turns`.
+// The snapshots mutex is always acquired after `turns` when both are needed.
+impl ActiveState {
+    fn changed(&self, session: &str) {
+        if let Some(revision) = self
+            .snapshots
+            .lock()
+            .unwrap()
+            .get(session)
+            .and_then(Weak::upgrade)
+        {
+            revision.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn snapshot(self: &Arc<Self>, session: &str) -> SnapshotRevision {
+        let _turns = self.turns.lock().unwrap();
+        let mut snapshots = self.snapshots.lock().unwrap();
+        let revision = snapshots
+            .get(session)
+            .and_then(Weak::upgrade)
+            .unwrap_or_else(|| {
+                let revision = Arc::new(AtomicU64::new(0));
+                snapshots.insert(session.to_owned(), Arc::downgrade(&revision));
+                revision
+            });
+        SnapshotRevision {
+            state: self.clone(),
+            session: session.to_owned(),
+            revision: Some(revision),
+        }
+    }
+}
+
+struct SnapshotRevision {
+    state: Arc<ActiveState>,
+    session: String,
+    revision: Option<Arc<AtomicU64>>,
+}
+impl Drop for SnapshotRevision {
+    fn drop(&mut self) {
+        let mut snapshots = self.state.snapshots.lock().unwrap();
+        drop(self.revision.take());
+        if snapshots
+            .get(&self.session)
+            .is_some_and(|revision| revision.strong_count() == 0)
+        {
+            snapshots.remove(&self.session);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ChatRoutes {
     pub(crate) auth: AuthState,
@@ -134,6 +189,14 @@ impl ChatRoutes {
             events: EventBus::new(),
         })
     }
+    pub(crate) fn with_database_owner(mut self, owner: Arc<std::fs::File>) -> Self {
+        // This is called before the routes are cloned or accept requests. TurnLease
+        // retains ActiveState even if shutdown times out or the router is dropped.
+        Arc::get_mut(&mut self.active)
+            .expect("new chat state")
+            .database_owner = Some(owner);
+        self
+    }
     pub fn with_limits(mut self, limits: ChatLimits) -> Result<Self, String> {
         if !limits.valid() {
             return Err("Invalid chat HTTP limits".into());
@@ -151,10 +214,28 @@ impl ChatRoutes {
             .route("/api/sessions/{id}/events", get(super::chat_events::stream))
             .with_state(self.clone())
     }
-    /// Cancel and drain before shutting down the shared auth/database worker.
-    pub async fn shutdown(&self) -> Result<(), String> {
+    /// Stop admission and signal active turns even when no async cleanup is polled.
+    pub(crate) fn close(&self) {
         self.active.closed.store(true, Ordering::Release);
         self.events.close_all();
+        let active = self.active.turns.lock().unwrap();
+        for turn in active.values() {
+            turn.cancellation.cancel();
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn is_closed(&self) -> bool {
+        self.active.closed.load(Ordering::Acquire)
+    }
+    #[cfg(test)]
+    pub(crate) fn test_admit(&self) -> (impl Drop + use<>, ProcessCancellation) {
+        let lease = self.admit("test-owner", "test-session").unwrap();
+        let cancellation = lease.cancellation.clone();
+        (lease, cancellation)
+    }
+    /// Cancel and drain before shutting down the shared auth/database worker.
+    pub async fn shutdown(&self) -> Result<(), String> {
+        self.close();
         let waiting = {
             let active = self.active.turns.lock().unwrap();
             active
@@ -200,6 +281,7 @@ impl ChatRoutes {
                 done: done.clone(),
             },
         );
+        self.active.changed(session);
         Ok(TurnLease {
             state: self.active.clone(),
             session: session.into(),
@@ -217,7 +299,11 @@ struct TurnLease {
 impl Drop for TurnLease {
     fn drop(&mut self) {
         self.cancellation.cancel();
-        self.state.turns.lock().unwrap().remove(&self.session);
+        {
+            let mut turns = self.state.turns.lock().unwrap();
+            turns.remove(&self.session);
+            self.state.changed(&self.session);
+        }
         let _ = self.done.send(true);
     }
 }
@@ -353,8 +439,12 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
         user.id.clone(),
         input.session_id.clone(),
     )
-    .map(|store| store.with_events(state.events.clone()))
-    {
+    .map(|store| {
+        store
+            .with_events(state.events.clone())
+            .with_database_owner(state.active.database_owner.clone())
+            .with_turn()
+    }) {
         Ok(store) => store,
         Err(_) => return auth::internal_error(),
     };
@@ -463,6 +553,16 @@ fn public_error(error: &SessionTurnError) -> &'static str {
         _ => "Chat turn could not complete",
     }
 }
+// A panic in a detached stream operation must not be mistaken for a
+// successfully persisted stream when the provider has stopped awaiting it.
+struct StreamTaskFailure(Arc<AtomicBool>);
+impl Drop for StreamTaskFailure {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.store(true, Ordering::Release);
+        }
+    }
+}
 fn event_sink(
     sender: mpsc::Sender<String>,
     cancellation: ProcessCancellation,
@@ -485,41 +585,50 @@ fn event_sink(
         let delivery_failed = delivery_failed.clone();
         let stream_failed = stream_failed.clone();
         Box::pin(async move {
-            let _serial = serial.lock().await;
-            if closed.load(Ordering::Acquire) || cancellation.is_cancelled() {
-                return Err("Chat stream cancelled".into());
-            }
-            let data = format!("data: {event}\n\n");
-            if data.len() > limits.event_bytes
-                || bytes
-                    .fetch_update(Ordering::AcqRel, Ordering::Acquire, |bytes| {
-                        bytes
-                            .checked_add(data.len())
-                            .filter(|total| *total <= limits.stream_bytes - 1024)
-                    })
-                    .is_err()
-            {
-                stream_failed.store(true, Ordering::Release);
-                cancellation.cancel();
-                return Err("Chat stream limit reached".into());
-            }
-            if store.append_stream_event(event).await.is_err() {
-                stream_failed.store(true, Ordering::Release);
-                cancellation.cancel();
-                return Err("Chat stream could not be persisted".into());
-            }
-            if !delivery_failed.load(Ordering::Acquire) {
-                let delivered = tokio::select! {
-                    biased;
-                    _ = cancellation.wait_cancelled() => return Err("Chat stream cancelled".into()),
-                    result = tokio::time::timeout(limits.send_timeout, sender.send(data)) =>
-                        matches!(result, Ok(Ok(()))),
-                };
-                if !delivered {
-                    delivery_failed.store(true, Ordering::Release);
+            // Acquire before spawning, so abandoned waiters cannot queue detached
+            // tasks. Once acquired, the task keeps the guard until SQLite replies
+            // even if the provider drops its sink future on timeout.
+            let serial_guard = serial.lock_owned().await;
+            tokio::spawn(async move {
+                let _serial = serial_guard;
+                let _panic_failure = StreamTaskFailure(stream_failed.clone());
+                if closed.load(Ordering::Acquire) || cancellation.is_cancelled() {
+                    return Err("Chat stream cancelled".into());
                 }
-            }
-            Ok(())
+                let data = format!("data: {event}\n\n");
+                if data.len() > limits.event_bytes
+                    || bytes
+                        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |bytes| {
+                            bytes
+                                .checked_add(data.len())
+                                .filter(|total| *total <= limits.stream_bytes - 1024)
+                        })
+                        .is_err()
+                {
+                    stream_failed.store(true, Ordering::Release);
+                    cancellation.cancel();
+                    return Err("Chat stream limit reached".into());
+                }
+                if store.append_stream_event(event).await.is_err() {
+                    stream_failed.store(true, Ordering::Release);
+                    cancellation.cancel();
+                    return Err("Chat stream could not be persisted".into());
+                }
+                if !delivery_failed.load(Ordering::Acquire) {
+                    let delivered = tokio::select! {
+                        biased;
+                        _ = cancellation.wait_cancelled() => return Err("Chat stream cancelled".into()),
+                        result = tokio::time::timeout(limits.send_timeout, sender.send(data)) =>
+                            matches!(result, Ok(Ok(()))),
+                    };
+                    if !delivered {
+                        delivery_failed.store(true, Ordering::Release);
+                    }
+                }
+                Ok(())
+            })
+            .await
+            .map_err(|_| "Chat stream storage task failed".to_string())?
         })
     })
 }
@@ -640,29 +749,47 @@ async fn messages(
             _ => return response(400, json!({"error":"INVALID_QUERY"})),
         }
     }
-    match crate::runtime::chat_projection::project_messages(
-        state.auth.clone(),
-        user.id.clone(),
-        session.clone(),
-        limit,
-        before,
-    )
+    match consistent_snapshot(&state.active, &user.id, &session, || {
+        crate::runtime::chat_projection::project_messages(
+            state.auth.clone(),
+            user.id.clone(),
+            session.clone(),
+            limit,
+            before.clone(),
+        )
+    })
     .await
     {
-        Ok(mut value) => {
-            value["streaming"] = json!(
-                state
-                    .active
-                    .turns
-                    .lock()
-                    .unwrap()
-                    .get(&session)
-                    .is_some_and(|turn| turn.owner == user.id)
-            );
-            response(200, value)
-        }
+        Ok(Some(value)) => response(200, value),
+        Ok(None) => response(503, json!({"error":"CHAT_SNAPSHOT_BUSY"})),
         Err(_) => auth::internal_error(),
     }
+}
+
+// A successful projection and its lease state must cover the same interval.
+// Three attempts bound work when this session itself is changing continuously.
+async fn consistent_snapshot<F, Fut, E>(
+    active: &Arc<ActiveState>,
+    owner: &str,
+    session: &str,
+    mut project: F,
+) -> Result<Option<Value>, E>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<Value, E>>,
+{
+    let snapshot = active.snapshot(session);
+    for _ in 0..3 {
+        let revision = snapshot.revision.as_ref().unwrap().load(Ordering::Relaxed);
+        let mut value = project().await?;
+        let turns = active.turns.lock().unwrap();
+        if snapshot.revision.as_ref().unwrap().load(Ordering::Relaxed) != revision {
+            continue;
+        }
+        value["streaming"] = json!(turns.get(session).is_some_and(|turn| turn.owner == owner));
+        return Ok(Some(value));
+    }
+    Ok(None)
 }
 #[cfg(test)]
 #[path = "chat_tests.rs"]

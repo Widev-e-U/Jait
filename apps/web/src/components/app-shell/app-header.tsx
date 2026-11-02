@@ -257,7 +257,7 @@ export function AppHeader(props: AppHeaderProps) {
                switch would be centered only in the space left over by the
                unequal left/right clusters, which sits off the true center. */
             <div ref={selectorRef} className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2" style={isDesktop ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-              <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} className={isMobile ? "[&_[role=tab]]:w-8" : undefined} />
+              <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} className={isMobile ? "h-8 [&_[role=tab]]:w-8" : undefined} />
             </div>
           ) : null}
 

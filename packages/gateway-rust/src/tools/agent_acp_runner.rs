@@ -22,10 +22,10 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use serde::Serialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::text::js_trim;
-use crate::time::{default_clock, Clock};
+use crate::time::{Clock, default_clock};
 use crate::tools::agent_communication::{
     is_successful_performative, parse_performative, strip_performative_tag,
 };
@@ -319,7 +319,8 @@ impl Collector {
             PendingKind::Thinking => trimmed,
         };
         if !text.is_empty() {
-            self.segments.push(json!({ "type": kind.as_str(), "content": text }));
+            self.segments
+                .push(json!({ "type": kind.as_str(), "content": text }));
         }
     }
 
@@ -440,7 +441,9 @@ impl Collector {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 fn js_round_seconds(timeout_ms: i64) -> i64 {
@@ -484,7 +487,7 @@ pub async fn run_acp_specialist_turn(
             return AcpSpecialistResult::failed(format!(
                 "Could not check availability of provider \"{}\": {}",
                 opts.provider_id, err
-            ))
+            ));
         }
     }
 
@@ -529,7 +532,7 @@ pub async fn run_acp_specialist_turn(
             return AcpSpecialistResult::failed(format!(
                 "Failed to start {} session for specialist: {}",
                 opts.provider_id, err
-            ))
+            ));
         }
     };
 

@@ -17,22 +17,18 @@
 //! - `POST   /api/terminals/{id}/execute`    run a command and capture output
 //! - `DELETE /api/terminals/{id}`            stop the terminal
 use super::auth::{self, AuthState};
-use crate::security::http_auth::AuthUser;
 use crate::db::identifiers::uuidv7;
 use crate::execution::command_timeout::resolve_command_timeout_ms;
+use crate::security::http_auth::AuthUser;
 use crate::services::audit::{AuditEntry, AuditWriter};
 use crate::surfaces::registry::{SurfaceRef, SurfaceRegistry};
 use axum::{
+    Router,
     extract::{Path, Request, State},
     routing::{get, post},
-    Router,
 };
-use serde_json::{json, Value};
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::Arc,
-};
+use serde_json::{Value, json};
+use std::{future::Future, pin::Pin, sync::Arc};
 
 /// Surface kind used by every route in this module.
 pub const TERMINAL_KIND: &str = "terminal";
@@ -58,6 +54,8 @@ pub type ControlFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// Everything the control plane needs to attach a PTY for a new terminal.
 pub struct TerminalSpawn<'a> {
     pub id: &'a str,
+    /// The adapter must register its surface with this token before returning success.
+    pub reservation: &'a Arc<()>,
     pub session_id: &'a str,
     pub project_root: &'a str,
     pub cols: u16,
@@ -86,7 +84,10 @@ pub struct TerminalRunOutcome {
 pub trait TerminalHandle: Send + Sync {
     fn write(&self, data: &str) -> Result<(), String>;
     fn resize(&self, cols: u16, rows: u16);
-    fn run(&self, request: TerminalRun<'_>) -> ControlFuture<'_, Result<TerminalRunOutcome, String>>;
+    fn run(
+        &self,
+        request: TerminalRun<'_>,
+    ) -> ControlFuture<'_, Result<TerminalRunOutcome, String>>;
 }
 
 /// Process-control plane. Implementations are expected to register a
@@ -98,7 +99,8 @@ pub trait TerminalControl: Send + Sync {
         registry: &SurfaceRegistry,
         request: &TerminalSpawn<'_>,
     ) -> Result<Arc<dyn TerminalHandle>, String>;
-    fn handle(&self, id: &str) -> Option<Arc<dyn TerminalHandle>>;
+    /// Return a handle only when it belongs to this exact surface instance.
+    fn handle_for_surface(&self, surface: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>>;
     fn shell_list(&self) -> Vec<String> {
         Vec::new()
     }
@@ -123,7 +125,7 @@ impl TerminalControl for NoTerminalControl {
         Err("Terminal runtime is not available".to_string())
     }
 
-    fn handle(&self, _id: &str) -> Option<Arc<dyn TerminalHandle>> {
+    fn handle_for_surface(&self, _surface: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
         None
     }
 }
@@ -197,29 +199,24 @@ impl TerminalRoutes {
         &self.registry
     }
 
-    
-pub fn router(self) -> Router {
+    pub fn router(self) -> Router {
         Router::new()
             .route("/api/terminals", get(list_terminals).post(create_terminal))
-                        .route("/api/terminals/shells", get(terminal_shells))
-            .route("/api/terminals/{id}", get(get_terminal).delete(delete_terminal))
+            .route("/api/terminals/shells", get(terminal_shells))
+            .route(
+                "/api/terminals/{id}",
+                get(get_terminal).delete(delete_terminal),
+            )
             .route("/api/terminals/{id}/write", post(write_terminal))
             .route("/api/terminals/{id}/resize", post(resize_terminal))
             .route("/api/terminals/{id}/execute", post(execute_in_terminal))
             .with_state(self)
     }
 
-    /// Ownership check: a surface with no recorded owner is not accessible.
-    fn owned_by(&self, user: &AuthUser, id: &str) -> bool {
-        self.registry
-            .owner(id)
-            .is_some_and(|owner| owner == user.id)
-    }
-
     fn lookup(&self, user: &AuthUser, id: &str) -> Lookup {
-        match self.registry.surface(id) {
-            Some(surface) if surface.kind() == TERMINAL_KIND => {
-                if self.owned_by(user, id) {
+        match self.registry.surface_with_owner(id) {
+            Some((surface, owner)) if surface.kind() == TERMINAL_KIND => {
+                if owner.as_deref() == Some(user.id.as_str()) {
                     Lookup::Found(surface)
                 } else {
                     Lookup::Forbidden
@@ -251,7 +248,9 @@ pub fn router(self) -> Router {
                         consent_method: Some("user".to_string()),
                     })
                     .map(|_| ())
-                    .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(error) })
+                    .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> {
+                        Box::new(error)
+                    })
             })
             .await;
     }
@@ -282,12 +281,18 @@ fn runtime_detached() -> axum::response::Response {
 }
 
 fn terminal_error(details: String) -> axum::response::Response {
-    auth::response(400, json!({ "error": "TERMINAL_ERROR", "details": details }))
+    auth::response(
+        400,
+        json!({ "error": "TERMINAL_ERROR", "details": details }),
+    )
 }
 
 /// Failed execute round-trip: the TS returns 500 here (unlike write/resize).
 fn terminal_error_internal(details: String) -> axum::response::Response {
-    auth::response(500, json!({ "error": "TERMINAL_ERROR", "details": details }))
+    auth::response(
+        500,
+        json!({ "error": "TERMINAL_ERROR", "details": details }),
+    )
 }
 
 fn lookup_response(lookup: Lookup) -> Result<SurfaceRef, axum::response::Response> {
@@ -335,14 +340,17 @@ async fn authorize_with_body(
     Ok((user, body))
 }
 
-async fn list_terminals(State(state): State<TerminalRoutes>, request: Request) -> axum::response::Response {
+async fn list_terminals(
+    State(state): State<TerminalRoutes>,
+    request: Request,
+) -> axum::response::Response {
     let user = match authorize(&state, request.headers()).await {
         Ok(user) => user,
         Err(response) => return response,
     };
     let mut terminals = Vec::new();
-    for surface in state.registry.list() {
-        if surface.kind() != TERMINAL_KIND || !state.owned_by(&user, surface.id()) {
+    for (surface, owner) in state.registry.list_with_owners() {
+        if surface.kind() != TERMINAL_KIND || owner.as_deref() != Some(user.id.as_str()) {
             continue;
         }
         if let Ok(snapshot) = surface.snapshot() {
@@ -352,20 +360,27 @@ async fn list_terminals(State(state): State<TerminalRoutes>, request: Request) -
     auth::response(200, json!({ "terminals": terminals }))
 }
 
-async fn terminal_shells(State(state): State<TerminalRoutes>, request: Request) -> axum::response::Response {
+async fn terminal_shells(
+    State(state): State<TerminalRoutes>,
+    request: Request,
+) -> axum::response::Response {
     if let Err(response) = authorize(&state, request.headers()).await {
         return response;
     }
     auth::response(200, json!({ "shells": state.control.shell_list() }))
 }
 
-async fn create_terminal(State(state): State<TerminalRoutes>, request: Request) -> axum::response::Response {
+async fn create_terminal(
+    State(state): State<TerminalRoutes>,
+    request: Request,
+) -> axum::response::Response {
     let (user, body) = match authorize_with_body(&state, request).await {
         Ok(parsed) => parsed,
         Err(response) => return response,
     };
 
-    let session_id = string_field(&body, "sessionId").unwrap_or_else(|| DEFAULT_SESSION_ID.to_string());
+    let session_id =
+        string_field(&body, "sessionId").unwrap_or_else(|| DEFAULT_SESSION_ID.to_string());
     let project_root = string_field(&body, "projectRoot")
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| state.project_root.to_string());
@@ -377,15 +392,23 @@ async fn create_terminal(State(state): State<TerminalRoutes>, request: Request) 
     if !state.sessions.can_access_session(&user.id, &session_id) {
         return auth::response(404, json!({ "error": "Session not found" }));
     }
-    if !node_id.is_empty() && state.control.node_owner(&node_id).as_deref() != Some(user.id.as_str()) {
+    if !node_id.is_empty()
+        && state.control.node_owner(&node_id).as_deref() != Some(user.id.as_str())
+    {
         return auth::response(404, json!({ "error": "Node not found" }));
     }
 
     let term_id = format!("term-{}", uuidv7());
-    state.registry.set_owner(&term_id, &user.id);
+    let Some(reservation) = state.registry.reserve_owner(&term_id, &user.id) else {
+        return auth::response(
+            500,
+            json!({ "error": "TERMINAL_ERROR", "details": "Terminal ID already in use" }),
+        );
+    };
 
     let spawn = TerminalSpawn {
         id: &term_id,
+        reservation: &reservation,
         session_id: &session_id,
         project_root: &project_root,
         cols,
@@ -394,26 +417,36 @@ async fn create_terminal(State(state): State<TerminalRoutes>, request: Request) 
         node_id: &node_id,
     };
     if let Err(details) = state.control.spawn(&state.registry, &spawn) {
-        state.registry.unregister(&term_id);
+        state
+            .registry
+            .finish_reservation(&term_id, &reservation, true);
         let details = if details.trim().is_empty() {
             "Failed to create terminal".to_string()
         } else {
             details
         };
-        return auth::response(500, json!({ "error": "TERMINAL_ERROR", "details": details }));
+        return auth::response(
+            500,
+            json!({ "error": "TERMINAL_ERROR", "details": details }),
+        );
     }
 
-    let snapshot = match state.registry.surface(&term_id).map(|surface| surface.snapshot()) {
+    let surface = state.registry.surface(&term_id);
+    let snapshot = match surface.as_ref().map(|surface| surface.snapshot()) {
         Some(Ok(snapshot)) => snapshot,
         Some(Err(error)) => {
-            state.registry.unregister(&term_id);
+            state
+                .registry
+                .finish_reservation(&term_id, &reservation, true);
             return auth::response(
                 500,
                 json!({ "error": "TERMINAL_ERROR", "details": error.to_string() }),
             );
         }
         None => {
-            state.registry.unregister(&term_id);
+            state
+                .registry
+                .finish_reservation(&term_id, &reservation, true);
             return auth::response(
                 500,
                 json!({ "error": "TERMINAL_ERROR", "details": "Failed to create terminal" }),
@@ -421,6 +454,15 @@ async fn create_terminal(State(state): State<TerminalRoutes>, request: Request) 
         }
     };
 
+    if !state
+        .registry
+        .finish_reservation(&term_id, &reservation, false)
+    {
+        return auth::response(
+            500,
+            json!({ "error": "TERMINAL_ERROR", "details": "Terminal registration was replaced" }),
+        );
+    }
     state
         .audit(
             &session_id,
@@ -464,11 +506,16 @@ async fn write_terminal(
         Ok(parsed) => parsed,
         Err(response) => return response,
     };
-    let data = body.get("data").and_then(Value::as_str).unwrap_or("").to_string();
-    if let Err(response) = lookup_response(state.lookup(&user, &id)) {
-        return response;
-    }
-    let Some(handle) = state.control.handle(&id) else {
+    let data = body
+        .get("data")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let surface = match lookup_response(state.lookup(&user, &id)) {
+        Ok(surface) => surface,
+        Err(response) => return response,
+    };
+    let Some(handle) = state.control.handle_for_surface(&surface) else {
         return runtime_detached();
     };
     match handle.write(&data) {
@@ -495,10 +542,11 @@ async fn resize_terminal(
     };
     let cols = dimension(body.get("cols"), DEFAULT_COLS);
     let rows = dimension(body.get("rows"), DEFAULT_ROWS);
-    if let Err(response) = lookup_response(state.lookup(&user, &id)) {
-        return response;
-    }
-    let Some(handle) = state.control.handle(&id) else {
+    let surface = match lookup_response(state.lookup(&user, &id)) {
+        Ok(surface) => surface,
+        Err(response) => return response,
+    };
+    let Some(handle) = state.control.handle_for_surface(&surface) else {
         return runtime_detached();
     };
     handle.resize(cols, rows);
@@ -514,18 +562,26 @@ async fn delete_terminal(
         Ok(user) => user,
         Err(response) => return response,
     };
-    if let Err(response) = lookup_response(state.lookup(&user, &id)) {
-        return response;
-    }
-    match state.registry.stop_surface(&id, Some("user request".to_string())).await {
+    let surface = match lookup_response(state.lookup(&user, &id)) {
+        Ok(surface) => surface,
+        Err(response) => return response,
+    };
+    let session_id = surface
+        .session_id()
+        .unwrap_or_else(|| DEFAULT_SESSION_ID.to_string());
+    match state
+        .registry
+        .stop_surface_instance(&id, surface, Some("user request".to_string()))
+        .await
+    {
         Ok(true) => {
-            let session_id = state
-                .registry
-                .surface(&id)
-                .and_then(|surface| surface.session_id())
-                .unwrap_or_else(|| DEFAULT_SESSION_ID.to_string());
             state
-                .audit(&session_id, "terminal.stop", json!({ "terminalId": id }), json!({ "ok": true }))
+                .audit(
+                    &session_id,
+                    "terminal.stop",
+                    json!({ "terminalId": id }),
+                    json!({ "ok": true }),
+                )
                 .await;
             auth::response(200, json!({ "ok": true }))
         }
@@ -542,7 +598,11 @@ async fn execute_in_terminal(
         Ok(parsed) => parsed,
         Err(response) => return response,
     };
-    let command = body.get("command").and_then(Value::as_str).unwrap_or("").to_string();
+    let command = body
+        .get("command")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     if command.trim().is_empty() {
         return auth::response(
             400,
@@ -550,10 +610,11 @@ async fn execute_in_terminal(
         );
     }
     let timeout_ms = resolve_command_timeout_ms(Some(&body));
-    if let Err(response) = lookup_response(state.lookup(&user, &id)) {
-        return response;
-    }
-    let Some(handle) = state.control.handle(&id) else {
+    let surface = match lookup_response(state.lookup(&user, &id)) {
+        Ok(surface) => surface,
+        Err(response) => return response,
+    };
+    let Some(handle) = state.control.handle_for_surface(&surface) else {
         return runtime_detached();
     };
 
@@ -578,7 +639,11 @@ async fn execute_in_terminal(
     };
 
     let output = cap_output(&finish_output(&outcome.raw_output, &command, &marker));
-    let output = if output.is_empty() { NO_OUTPUT.to_string() } else { output };
+    let output = if output.is_empty() {
+        NO_OUTPUT.to_string()
+    } else {
+        output
+    };
     auth::response(
         200,
         json!({
@@ -725,10 +790,11 @@ fn looks_like_prompt(line: &str) -> bool {
     if trimmed.is_empty() || trimmed.chars().count() > 200 {
         return false;
     }
-    matches!(trimmed.chars().last(), Some('$') | Some('#') | Some('%') | Some('>'))
-        && !trimmed.contains(char::is_control)
+    matches!(
+        trimmed.chars().last(),
+        Some('$') | Some('#') | Some('%') | Some('>')
+    ) && !trimmed.contains(char::is_control)
 }
-
 
 /// Port of the TS `finish()` pipeline: strip OSC 633 + ANSI, drop `\r`, remove
 /// the exit marker, drop echoed command lines, trim trailing blank lines and
@@ -778,12 +844,12 @@ fn cap_output(output: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::security::http_auth::{sign_auth_token, AuthUser};
+    use crate::security::http_auth::{AuthUser, sign_auth_token};
     use crate::surfaces::registry::{
         Surface, SurfaceFuture, SurfaceRef, SurfaceResult, SurfaceSnapshot, SurfaceStartInput,
         SurfaceState,
     };
-    use axum::body::{to_bytes, Body};
+    use axum::body::{Body, to_bytes};
     use axum::http::Request as HttpRequest;
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -837,7 +903,10 @@ mod tests {
         let bytes = to_bytes(response.into_body(), usize::MAX)
             .await
             .expect("body");
-        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
     }
 
     struct FakeSurface {
@@ -879,7 +948,7 @@ mod tests {
                 state: self.state,
                 session_id: self.session_id.clone(),
                 started_at: None,
-                metadata: Default::default()
+                metadata: Default::default(),
             })
         }
     }
@@ -893,7 +962,8 @@ mod tests {
         })
     }
 
-    type RunFn = Box<dyn for<'a> Fn(&TerminalRun<'a>) -> Result<TerminalRunOutcome, String> + Send + Sync>;
+    type RunFn =
+        Box<dyn for<'a> Fn(&TerminalRun<'a>) -> Result<TerminalRunOutcome, String> + Send + Sync>;
 
     struct FakeHandle {
         writes: Mutex<Vec<String>>,
@@ -959,7 +1029,7 @@ mod tests {
     }
 
     struct FakeControl {
-        handles: Mutex<HashMap<String, Arc<FakeHandle>>>,
+        handles: Mutex<HashMap<String, (SurfaceRef, Arc<FakeHandle>)>>,
         spawn_error: Option<String>,
         shells: Vec<String>,
     }
@@ -974,7 +1044,11 @@ mod tests {
         }
 
         fn handle_ref(&self, id: &str) -> Option<Arc<FakeHandle>> {
-            self.handles.lock().expect("handles").get(id).cloned()
+            self.handles
+                .lock()
+                .expect("handles")
+                .get(id)
+                .map(|(_, handle)| handle.clone())
         }
     }
 
@@ -987,21 +1061,29 @@ mod tests {
             if let Some(message) = &self.spawn_error {
                 return Err(message.clone());
             }
-            registry.register_instance(
+            let surface = fake_surface(request.id, TERMINAL_KIND, request.session_id);
+            if !registry.register_reserved_instance(
                 request.id,
-                fake_surface(request.id, TERMINAL_KIND, request.session_id),
-            );
+                request.reservation,
+                surface.clone(),
+            ) {
+                return Err("Terminal registration was replaced".into());
+            }
             let handle = Arc::new(FakeHandle::new());
             self.handles
                 .lock()
                 .expect("handles")
-                .insert(request.id.to_string(), handle.clone());
+                .insert(request.id.to_string(), (surface, handle.clone()));
             Ok(handle)
         }
 
-        fn handle(&self, id: &str) -> Option<Arc<dyn TerminalHandle>> {
-            self.handle_ref(id)
-                .map(|handle| handle as Arc<dyn TerminalHandle>)
+        fn handle_for_surface(&self, surface: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+            self.handles
+                .lock()
+                .expect("handles")
+                .get(surface.id())
+                .filter(|(registered, _)| Arc::ptr_eq(registered, surface))
+                .map(|(_, handle)| handle.clone() as Arc<dyn TerminalHandle>)
         }
 
         fn shell_list(&self) -> Vec<String> {
@@ -1032,6 +1114,219 @@ mod tests {
         );
         let output = finish_output(&raw, "echo hi", marker);
         assert_eq!(output, "hello\ndone");
+    }
+
+    #[tokio::test]
+    async fn pending_terminal_remains_hidden_when_owner_mutation_is_attempted() {
+        struct InspectPending;
+        impl TerminalControl for InspectPending {
+            fn spawn(
+                &self,
+                registry: &SurfaceRegistry,
+                request: &TerminalSpawn<'_>,
+            ) -> Result<Arc<dyn TerminalHandle>, String> {
+                let surface = fake_surface(request.id, TERMINAL_KIND, request.session_id);
+                assert!(registry.register_reserved_instance(
+                    request.id,
+                    request.reservation,
+                    surface
+                ));
+                registry.set_owner(request.id, "bob");
+                assert!(registry.surface_with_owner(request.id).is_none());
+                assert!(
+                    registry
+                        .list_with_owners()
+                        .iter()
+                        .all(|(surface, _)| surface.id() != request.id)
+                );
+                assert!(
+                    crate::security::control_access::SurfaceAccess::surface(registry, request.id)
+                        .unwrap()
+                        .is_none()
+                );
+                Ok(Arc::new(FakeHandle::new()))
+            }
+            fn handle_for_surface(&self, _: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+                None
+            }
+        }
+        let routes = routes_with(FakeControl::new()).with_control(Arc::new(InspectPending));
+        let (status, body) = create(&routes, "alice", json!({})).await;
+        assert_eq!(status, 201);
+        let id = body["id"].as_str().unwrap();
+        assert_eq!(
+            routes
+                .registry()
+                .surface_with_owner(id)
+                .unwrap()
+                .1
+                .as_deref(),
+            Some("alice")
+        );
+    }
+
+    #[tokio::test]
+    async fn unrelated_first_registration_cannot_complete_terminal_creation() {
+        struct UnrelatedFirst {
+            surface: Mutex<Option<SurfaceRef>>,
+        }
+        impl TerminalControl for UnrelatedFirst {
+            fn spawn(
+                &self,
+                registry: &SurfaceRegistry,
+                request: &TerminalSpawn<'_>,
+            ) -> Result<Arc<dyn TerminalHandle>, String> {
+                let unrelated = fake_surface(request.id, TERMINAL_KIND, request.session_id);
+                registry.register_instance(request.id, unrelated.clone());
+                assert!(!registry.register_reserved_instance(
+                    request.id,
+                    request.reservation,
+                    fake_surface(request.id, TERMINAL_KIND, request.session_id),
+                ));
+                *self.surface.lock().unwrap() = Some(unrelated);
+                Ok(Arc::new(FakeHandle::new()))
+            }
+            fn handle_for_surface(&self, _: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+                None
+            }
+        }
+        let control = Arc::new(UnrelatedFirst {
+            surface: Mutex::new(None),
+        });
+        let routes = routes_with(FakeControl::new()).with_control(control.clone());
+        let (status, body) = create(&routes, "alice", json!({})).await;
+        assert_eq!(status, 500);
+        assert_eq!(body["details"], "Terminal registration was replaced");
+        let unrelated = control.surface.lock().unwrap().clone().unwrap();
+        let (current, owner) = routes
+            .registry()
+            .surface_with_owner(unrelated.id())
+            .unwrap();
+        assert!(Arc::ptr_eq(&current, &unrelated));
+        assert_eq!(owner, None);
+    }
+
+    #[tokio::test]
+    async fn failed_spawn_does_not_remove_replacement() {
+        struct ReplacingFailure {
+            id: Mutex<Option<String>>,
+        }
+        impl TerminalControl for ReplacingFailure {
+            fn spawn(
+                &self,
+                registry: &SurfaceRegistry,
+                request: &TerminalSpawn<'_>,
+            ) -> Result<Arc<dyn TerminalHandle>, String> {
+                assert!(registry.register_reserved_instance(
+                    request.id,
+                    request.reservation,
+                    fake_surface(request.id, TERMINAL_KIND, request.session_id),
+                ));
+                registry.register_instance(
+                    request.id,
+                    fake_surface(request.id, TERMINAL_KIND, request.session_id),
+                );
+                registry.set_owner(request.id, "bob");
+                *self.id.lock().unwrap() = Some(request.id.to_string());
+                Err("spawn failed".into())
+            }
+            fn handle_for_surface(&self, _: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+                None
+            }
+        }
+        let control = Arc::new(ReplacingFailure {
+            id: Mutex::new(None),
+        });
+        let routes = routes_with(FakeControl::new()).with_control(control.clone());
+        let (status, _) = create(&routes, "alice", json!({})).await;
+        assert_eq!(status, 500);
+        let id = control.id.lock().unwrap().clone().unwrap();
+        assert_eq!(
+            routes
+                .registry()
+                .surface_with_owner(&id)
+                .unwrap()
+                .1
+                .as_deref(),
+            Some("bob")
+        );
+    }
+
+    #[tokio::test]
+    async fn successful_spawn_rejects_displaced_registration() {
+        struct ReplacingSuccess {
+            id: Mutex<Option<String>>,
+        }
+        impl TerminalControl for ReplacingSuccess {
+            fn spawn(
+                &self,
+                registry: &SurfaceRegistry,
+                request: &TerminalSpawn<'_>,
+            ) -> Result<Arc<dyn TerminalHandle>, String> {
+                assert!(registry.register_reserved_instance(
+                    request.id,
+                    request.reservation,
+                    fake_surface(request.id, TERMINAL_KIND, request.session_id),
+                ));
+                registry.register_instance(
+                    request.id,
+                    fake_surface(request.id, TERMINAL_KIND, request.session_id),
+                );
+                registry.set_owner(request.id, "bob");
+                *self.id.lock().unwrap() = Some(request.id.to_string());
+                Ok(Arc::new(FakeHandle::new()))
+            }
+            fn handle_for_surface(&self, _: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+                None
+            }
+        }
+        let control = Arc::new(ReplacingSuccess {
+            id: Mutex::new(None),
+        });
+        let routes = routes_with(FakeControl::new()).with_control(control.clone());
+        let (status, body) = create(&routes, "alice", json!({})).await;
+        assert_eq!(status, 500);
+        assert_eq!(body["details"], "Terminal registration was replaced");
+        let id = control.id.lock().unwrap().clone().unwrap();
+        assert_eq!(
+            routes
+                .registry()
+                .surface_with_owner(&id)
+                .unwrap()
+                .1
+                .as_deref(),
+            Some("bob")
+        );
+    }
+
+    #[tokio::test]
+    async fn successful_spawn_without_surface_cleans_reservation() {
+        struct MissingSurface {
+            id: Mutex<Option<String>>,
+        }
+        impl TerminalControl for MissingSurface {
+            fn spawn(
+                &self,
+                _: &SurfaceRegistry,
+                request: &TerminalSpawn<'_>,
+            ) -> Result<Arc<dyn TerminalHandle>, String> {
+                *self.id.lock().unwrap() = Some(request.id.to_string());
+                Ok(Arc::new(FakeHandle::new()))
+            }
+            fn handle_for_surface(&self, _: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+                None
+            }
+        }
+        let control = Arc::new(MissingSurface {
+            id: Mutex::new(None),
+        });
+        let routes = routes_with(FakeControl::new()).with_control(control.clone());
+        let (status, _) = create(&routes, "alice", json!({})).await;
+        assert_eq!(status, 500);
+        let id = control.id.lock().unwrap().clone().unwrap();
+        assert!(routes.registry().surface(&id).is_none());
+        assert!(routes.registry().owner(&id).is_none());
+        assert!(routes.registry().reserve_owner(&id, "bob").is_some());
     }
 
     #[tokio::test]
@@ -1106,18 +1401,91 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn handle_lookup_rejects_replaced_surface() {
+        let control = FakeControl::new();
+        let routes = routes_with(control.clone());
+        let (_, body) = create(&routes, "alice", json!({})).await;
+        let id = body["id"].as_str().unwrap();
+        let original = routes.registry().surface(id).unwrap();
+        let replacement = fake_surface(id, TERMINAL_KIND, "default");
+        routes.registry().register_instance(id, replacement.clone());
+        assert!(control.handle_for_surface(&original).is_some());
+        assert!(control.handle_for_surface(&replacement).is_none());
+    }
+
+    #[tokio::test]
+    async fn write_rejects_handle_replaced_after_authorization() {
+        struct ReplaceOnLookup {
+            registry: SurfaceRegistry,
+            control: Arc<FakeControl>,
+            replacement_handle: Arc<FakeHandle>,
+        }
+        impl TerminalControl for ReplaceOnLookup {
+            fn spawn(
+                &self,
+                registry: &SurfaceRegistry,
+                request: &TerminalSpawn<'_>,
+            ) -> Result<Arc<dyn TerminalHandle>, String> {
+                self.control.spawn(registry, request)
+            }
+            fn handle_for_surface(&self, surface: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>> {
+                let replacement = fake_surface(surface.id(), TERMINAL_KIND, "default");
+                self.registry
+                    .register_instance(surface.id(), replacement.clone());
+                self.registry.set_owner(surface.id(), "bob");
+                self.control.handles.lock().expect("handles").insert(
+                    surface.id().to_string(),
+                    (replacement, self.replacement_handle.clone()),
+                );
+                self.control.handle_for_surface(surface)
+            }
+        }
+        let control = FakeControl::new();
+        let routes = routes_with(control.clone());
+        let (_, body) = create(&routes, "alice", json!({})).await;
+        let id = body["id"].as_str().unwrap().to_string();
+        let original_handle = control.handle_ref(&id).unwrap();
+        let replacement_handle = Arc::new(FakeHandle::new());
+        let routes = routes.clone().with_control(Arc::new(ReplaceOnLookup {
+            registry: routes.registry().clone(),
+            control,
+            replacement_handle: replacement_handle.clone(),
+        }));
+        let (status, _) = decode(
+            write_terminal(
+                State(routes),
+                Path(id.clone()),
+                request(
+                    "POST",
+                    &format!("/api/terminals/{id}/write"),
+                    Some("alice"),
+                    Some(json!({"data": "secret"})),
+                ),
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(status, 400);
+        assert!(original_handle.writes().is_empty());
+        assert!(replacement_handle.writes().is_empty());
+    }
+
+    #[tokio::test]
     async fn write_denies_foreign_owner() {
         let control = FakeControl::new();
         let routes = routes_with(control.clone());
-        routes
-            .registry()
-            .register_instance("term-owned", fake_surface("term-owned", TERMINAL_KIND, "default"));
+        routes.registry().register_instance(
+            "term-owned",
+            fake_surface("term-owned", TERMINAL_KIND, "default"),
+        );
         routes.registry().set_owner("term-owned", "bob");
-        control
-            .handles
-            .lock()
-            .expect("handles")
-            .insert("term-owned".to_string(), Arc::new(FakeHandle::new()));
+        control.handles.lock().expect("handles").insert(
+            "term-owned".to_string(),
+            (
+                routes.registry().surface("term-owned").unwrap(),
+                Arc::new(FakeHandle::new()),
+            ),
+        );
 
         let (status, body) = decode(
             write_terminal(
@@ -1239,11 +1607,10 @@ mod tests {
                 timed_out: false,
             })
         })));
-        control
-            .handles
-            .lock()
-            .expect("handles")
-            .insert(id.clone(), handle.clone());
+        control.handles.lock().expect("handles").insert(
+            id.clone(),
+            (routes.registry().surface(&id).unwrap(), handle.clone()),
+        );
 
         let (status, body) = decode(
             execute_in_terminal(
@@ -1283,11 +1650,10 @@ mod tests {
                 timed_out: true,
             })
         })));
-        control
-            .handles
-            .lock()
-            .expect("handles")
-            .insert(id.clone(), handle);
+        control.handles.lock().expect("handles").insert(
+            id.clone(),
+            (routes.registry().surface(&id).unwrap(), handle),
+        );
 
         let (status, body) = decode(
             execute_in_terminal(
@@ -1304,10 +1670,12 @@ mod tests {
         )
         .await;
         assert_eq!(status, 200);
-        assert!(body["output"]
-            .as_str()
-            .expect("output")
-            .starts_with(TRUNCATION_NOTICE));
+        assert!(
+            body["output"]
+                .as_str()
+                .expect("output")
+                .starts_with(TRUNCATION_NOTICE)
+        );
         assert_eq!(body["timedOut"], true);
         assert!(body["exitCode"].is_null());
     }

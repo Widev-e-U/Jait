@@ -78,6 +78,22 @@ test.describe('provider selector actions', () => {
       await page.goto('/')
       await sessionRestored
       await expect(page.getByRole('button', { name: 'Copy chat id' })).toBeVisible()
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+          writeText: async (text: string) => { (window as unknown as { copiedChat: string }).copiedChat = text },
+        } })
+      })
+      await page.getByRole('button', { name: 'Copy chat id' }).click()
+      const copied = await page.evaluate(() => (window as unknown as { copiedChat: string }).copiedChat)
+      expect(copied).toBe(`[chat:${session.id}]`)
+      const composer = page.locator('[data-testid="chat-composer"] [contenteditable="true"]')
+      await composer.focus()
+      await composer.evaluate((element, text) => {
+        const data = new DataTransfer()
+        data.setData('text/plain', text)
+        element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+      }, copied)
+      await expect(composer.locator('[contenteditable="false"]')).toContainText(session.id)
       const providerSelector = page.getByRole('button', { name: /^Provider .*model / }).first()
       await expect(providerSelector).not.toContainText('Gateway')
       await expect(providerSelector).not.toHaveAttribute('aria-label', /reasoning/)

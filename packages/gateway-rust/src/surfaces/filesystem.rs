@@ -234,10 +234,12 @@ impl FileSystemSurface {
         self
     }
     pub fn on_output(&self, callback: Option<OutputCallback>) {
-        self.callbacks.lock().unwrap().output = callback;
+        let old = std::mem::replace(&mut self.callbacks.lock().unwrap().output, callback);
+        drop(old);
     }
     pub fn on_state_change(&self, callback: Option<StateCallback>) {
-        self.callbacks.lock().unwrap().state = callback;
+        let old = std::mem::replace(&mut self.callbacks.lock().unwrap().state, callback);
+        drop(old);
     }
     fn transition(&self, phase: SurfaceState) -> FileSystemResult<()> {
         self.state.lock().unwrap().phase = phase;
@@ -819,5 +821,68 @@ impl SurfaceFactory for FileSystemSurfaceFactory {
     }
     fn create(&self, id: &str) -> Result<SurfaceRef, String> {
         Ok(Arc::new(self.create_filesystem(id)))
+    }
+}
+
+#[cfg(test)]
+mod callback_drop_tests {
+    use super::*;
+    use crate::surfaces::remote_filesystem::{RemoteFileSystemSurface, RemoteFsTransport};
+    use futures_util::future::BoxFuture;
+    use std::{num::NonZeroU16, sync::mpsc, time::Duration};
+
+    struct Reenter(Box<dyn Fn() + Send + Sync>);
+    impl Drop for Reenter {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
+    struct UnusedTransport;
+    impl RemoteFsTransport for UnusedTransport {
+        fn request<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+            _: Value,
+        ) -> BoxFuture<'a, FileSystemResult<Value>> {
+            Box::pin(async { unreachable!() })
+        }
+    }
+
+    #[test]
+    fn filesystem_callback_destructors_can_reenter() {
+        let (done, received) = mpsc::channel();
+        std::thread::spawn(move || {
+            let local = FileSystemSurface::new(
+                "local",
+                GuardOptions::default(),
+                BlockingLane::new(NonZeroU16::new(1).unwrap()),
+            );
+            let remote = RemoteFileSystemSurface::new("remote", Arc::new(UnusedTransport));
+            macro_rules! exercise {
+                ($surface:ident) => {{
+                    let other = $surface.clone();
+                    let capture = Reenter(Box::new(move || other.on_state_change(None)));
+                    $surface.on_output(Some(Arc::new(move |_| {
+                        let _ = &capture;
+                        Ok(())
+                    })));
+                    $surface.on_output(None);
+                    let other = $surface.clone();
+                    let capture = Reenter(Box::new(move || other.on_output(None)));
+                    $surface.on_state_change(Some(Arc::new(move |_| {
+                        let _ = &capture;
+                        Ok(())
+                    })));
+                    $surface.on_state_change(None);
+                }};
+            }
+            exercise!(local);
+            exercise!(remote);
+            done.send(()).unwrap();
+        });
+        received
+            .recv_timeout(Duration::from_secs(5))
+            .expect("callback destructor deadlocked");
     }
 }

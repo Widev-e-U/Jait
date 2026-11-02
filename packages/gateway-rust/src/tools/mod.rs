@@ -115,11 +115,11 @@ pub mod computer_tools;
 
 pub mod browser_tools;
 
-pub mod os_control_tools;
-pub mod elevated_tools;
-pub mod project_tools;
-pub mod contracts;
-pub mod mcp_bridge;
-pub mod agent_tools;
 pub mod agent_acp_runner;
+pub mod agent_tools;
+pub mod contracts;
+pub mod elevated_tools;
 pub mod index;
+pub mod mcp_bridge;
+pub mod os_control_tools;
+pub mod project_tools;

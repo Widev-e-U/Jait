@@ -550,7 +550,7 @@ async fn search_response(
         .filesystem
         .run(move || {
             let root = ProjectRoot::open(&root)?;
-            project_search::search_project(&root, &options, &Budgets::default(), &cancel)
+            project_search::search_project_auto(&root, &options, &Budgets::default(), &cancel)
         })
         .await;
     match work {
@@ -698,10 +698,11 @@ mod search_tests {
         );
     }
     #[tokio::test]
-    async fn authenticated_search_uses_relative_wire_paths_and_bounded_native_content() {
+    async fn authenticated_search_uses_relative_wire_paths() {
         let fixture = Fixture::new();
         std::fs::create_dir(fixture.0.join("src")).unwrap();
         std::fs::write(fixture.0.join("src/needle.rs"), "pub fn needle() {}\n").unwrap();
+        std::fs::write(fixture.0.join("src/needle.unknown"), "needle\n").unwrap();
         #[cfg(unix)]
         std::os::unix::fs::symlink("/etc", fixture.0.join("escape")).unwrap();
         let (state, own, _, _) = setup(&fixture.0);
@@ -712,8 +713,13 @@ mod search_tests {
         assert!(files["files"][0].get("score").is_none());
         let (status, content) = request(&state, &own, "query=needle&mode=content").await;
         assert_eq!(status, StatusCode::OK, "{content}");
-        assert_eq!(content["matches"][0]["file"], "src/needle.rs");
-        assert_eq!(content["matches"][0]["line"], 1);
+        assert!(
+            content["matches"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["file"] == "src/needle.rs" && m["line"] == 1)
+        );
         assert!(!content.to_string().contains(fixture.0.to_str().unwrap()));
         state.auth.shutdown().await.unwrap();
     }

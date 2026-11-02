@@ -302,21 +302,24 @@ impl ScreenShareTools {
         let mut service = self.service.lock().expect("screen share service lock");
         let previous = service.chat_session(chat_id);
         let state = match service.start_with_options(
-                &host,
-                Some(&viewers),
-                StartOptions {
-                    chat_id: Some(chat_id.to_owned()),
-                    node_id: Some(host.clone()),
-                    initiated_by_agent: true,
-                    require_consent: true,
-                    reason: Some("The agent wants to view this screen in the chat.".into()),
-                },
-            ) {
+            &host,
+            Some(&viewers),
+            StartOptions {
+                chat_id: Some(chat_id.to_owned()),
+                node_id: Some(host.clone()),
+                initiated_by_agent: true,
+                require_consent: true,
+                reason: Some("The agent wants to view this screen in the chat.".into()),
+            },
+        ) {
             Ok(session) => session,
             Err(error) => return fail(error),
         };
-        let stopped = previous.as_ref().and_then(|old| old["id"].as_str())
-            .and_then(|id| service.session(id)).filter(|old| old["status"] == "idle");
+        let stopped = previous
+            .as_ref()
+            .and_then(|old| old["id"].as_str())
+            .and_then(|id| service.session(id))
+            .filter(|old| old["status"] == "idle");
         drop(service);
 
         if let Some(port) = &self.port {
@@ -353,8 +356,11 @@ impl ScreenShareTools {
         };
         let mut service = self.service.lock().expect("screen share service lock");
         let owned = service.chat_session(chat_id);
-        let state = owned.as_ref().and_then(|s| s["id"].as_str())
-            .map(|id| service.stop_session(Some(id))).unwrap_or(Value::Null);
+        let state = owned
+            .as_ref()
+            .and_then(|s| s["id"].as_str())
+            .map(|id| service.stop_session(Some(id)))
+            .unwrap_or(Value::Null);
         drop(service);
         if !state.is_null() {
             if let Some(port) = &self.port {
@@ -418,13 +424,25 @@ mod chat_consent_tests {
             Ok(Value::Null)
         }));
         let input = json!({"action":"connect","targetDeviceId":"host"});
-        let old = tool.execute_for_chat("screen.share", &input, Some("chat-a"))["data"]["id"].as_str().unwrap().to_owned();
-        let other = tool.execute_for_chat("screen.share", &input, Some("chat-b"))["data"]["id"].as_str().unwrap().to_owned();
+        let old = tool.execute_for_chat("screen.share", &input, Some("chat-a"))["data"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let other = tool.execute_for_chat("screen.share", &input, Some("chat-b"))["data"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
         events.lock().unwrap().clear();
         let replacement = tool.execute_for_chat("screen.share", &input, Some("chat-a"));
         assert_eq!(replacement["ok"], true);
-        assert!(matches!(&events.lock().unwrap()[0], ScreenShareEffect::Broadcast(state) if state["id"] == old && state["status"] == "idle"));
-        let result = tool.execute_for_chat("screen.share", &json!({"action":"disconnect"}), Some("chat-a"));
+        assert!(
+            matches!(&events.lock().unwrap()[0], ScreenShareEffect::Broadcast(state) if state["id"] == old && state["status"] == "idle")
+        );
+        let result = tool.execute_for_chat(
+            "screen.share",
+            &json!({"action":"disconnect"}),
+            Some("chat-a"),
+        );
         assert_eq!(result["data"]["status"], "idle");
         let state = service.lock().unwrap();
         assert!(state.chat_session("chat-a").is_none());

@@ -260,3 +260,363 @@ async fn actual_model_tool_and_sqlite_flow_resumes_after_storage_restart() {
     let _ = stop.send(());
     server.await.unwrap().unwrap();
 }
+
+#[tokio::test]
+async fn cancelling_waiting_consent_removes_request_without_executing_tool() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let requested = Arc::new(tokio::sync::Notify::new());
+    let observer = requested.clone();
+    let consent = ConsentManager::new(ConsentManagerOptions {
+        on_request: Some(Arc::new(move |_| {
+            observer.notify_one();
+            Ok(())
+        })),
+        ..ConsentManagerOptions::default()
+    });
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed_calls = calls.clone();
+    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+        observed_calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(ToolResult::message(true, "executed")) })
+    });
+    let executor = ConsentAwareExecutor::new(
+        ConsentExecutorOptions {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            permissions: HashMap::new(),
+            session_approvals: Default::default(),
+            profile_name: None,
+            max_concurrent: NonZeroU16::new(1).unwrap(),
+        },
+        consent.clone(),
+        Arc::new(LowTrust),
+        delegate,
+    );
+    let cancellation = ProcessCancellation::default();
+    let context = ToolExecutionContext {
+        user_id: "owner".into(),
+        session_id: "session".into(),
+        action_id: "action".into(),
+        project_root: PathBuf::from("."),
+        origin: ExecutionOrigin::Agent,
+        runtime_mode: RuntimeMode::Guarded,
+        cancellation: cancellation.clone(),
+        on_output: None,
+    };
+    let task = tokio::spawn(async move {
+        executor
+            .execute(
+                "terminal.run",
+                &json!({}),
+                &context,
+                ExecuteOptions::default(),
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), requested.notified())
+        .await
+        .unwrap();
+    assert_eq!(consent.list_pending(Some("session")).len(), 1);
+    cancellation.cancel();
+    let result = tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(!result.ok);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !consent.list_pending(Some("session")).is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn cancellation_wins_when_consent_is_approved_before_waiter_resumes() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let requested = Arc::new(tokio::sync::Notify::new());
+    let observer = requested.clone();
+    let consent = ConsentManager::new(ConsentManagerOptions {
+        on_request: Some(Arc::new(move |_| {
+            observer.notify_one();
+            Ok(())
+        })),
+        ..ConsentManagerOptions::default()
+    });
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed_calls = calls.clone();
+    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+        observed_calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(ToolResult::message(true, "executed")) })
+    });
+    let executor = ConsentAwareExecutor::new(
+        ConsentExecutorOptions {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            permissions: HashMap::new(),
+            session_approvals: Default::default(),
+            profile_name: None,
+            max_concurrent: NonZeroU16::new(1).unwrap(),
+        },
+        consent.clone(),
+        Arc::new(LowTrust),
+        delegate,
+    );
+    let cancellation = ProcessCancellation::default();
+    let context = ToolExecutionContext {
+        user_id: "owner".into(),
+        session_id: "session".into(),
+        action_id: "action".into(),
+        project_root: PathBuf::from("."),
+        origin: ExecutionOrigin::Agent,
+        runtime_mode: RuntimeMode::Guarded,
+        cancellation: cancellation.clone(),
+        on_output: None,
+    };
+    let task = tokio::spawn(async move {
+        executor
+            .execute(
+                "terminal.run",
+                &json!({}),
+                &context,
+                ExecuteOptions::default(),
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), requested.notified())
+        .await
+        .unwrap();
+    assert_eq!(consent.list_pending(Some("session")).len(), 1);
+    let request_id = consent.list_pending(Some("session"))[0].snapshot().id;
+    cancellation.cancel();
+    assert!(consent.approve(&request_id, None, None).unwrap());
+    let result = tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(!result.ok);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !consent.list_pending(Some("session")).is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn cancellation_with_invalid_clock_removes_pending_consent() {
+    use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
+    let clock = Arc::new(AtomicI64::new(0));
+    let current = clock.clone();
+    let requested = Arc::new(tokio::sync::Notify::new());
+    let observer = requested.clone();
+    let consent = ConsentManager::new(ConsentManagerOptions {
+        clock: Arc::new(move || current.load(Ordering::SeqCst)),
+        on_request: Some(Arc::new(move |_| {
+            observer.notify_one();
+            Ok(())
+        })),
+        ..ConsentManagerOptions::default()
+    });
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed_calls = calls.clone();
+    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+        observed_calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(ToolResult::message(true, "executed")) })
+    });
+    let executor = ConsentAwareExecutor::new(
+        ConsentExecutorOptions {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            permissions: HashMap::new(),
+            session_approvals: Default::default(),
+            profile_name: None,
+            max_concurrent: NonZeroU16::new(1).unwrap(),
+        },
+        consent.clone(),
+        Arc::new(LowTrust),
+        delegate,
+    );
+    let cancellation = ProcessCancellation::default();
+    let context = ToolExecutionContext {
+        user_id: "owner".into(),
+        session_id: "session".into(),
+        action_id: "action".into(),
+        project_root: PathBuf::from("."),
+        origin: ExecutionOrigin::Agent,
+        runtime_mode: RuntimeMode::Guarded,
+        cancellation: cancellation.clone(),
+        on_output: None,
+    };
+    let task = tokio::spawn(async move {
+        executor
+            .execute(
+                "terminal.run",
+                &json!({}),
+                &context,
+                ExecuteOptions::default(),
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), requested.notified())
+        .await
+        .unwrap();
+    assert_eq!(consent.list_pending(Some("session")).len(), 1);
+    let request = consent.list_pending(Some("session"))[0].clone();
+    clock.store(i64::MAX, Ordering::SeqCst);
+    cancellation.cancel();
+    let result = tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(!result.ok);
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !consent.list_pending(Some("session")).is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        request.snapshot().status,
+        crate::security::consent_manager::ConsentStatus::Rejected
+    );
+    assert!(!consent.approve(&request.snapshot().id, None, None).unwrap());
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn cancellation_claim_blocks_approval_and_retains_permit_until_finalized() {
+    use std::sync::{
+        Condvar,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let requested = Arc::new(tokio::sync::Notify::new());
+    let request_notice = requested.clone();
+    let entered = Arc::new(tokio::sync::Notify::new());
+    let entered_notice = entered.clone();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let observer_release = release.clone();
+    let consent = ConsentManager::new(ConsentManagerOptions {
+        on_request: Some(Arc::new(move |_| {
+            request_notice.notify_one();
+            Ok(())
+        })),
+        on_decision: Some(Arc::new(move |_| {
+            entered_notice.notify_one();
+            let (lock, wake) = &*observer_release;
+            let mut released = lock.lock().unwrap();
+            while !*released {
+                released = wake.wait(released).unwrap();
+            }
+            Ok(())
+        })),
+        ..ConsentManagerOptions::default()
+    });
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+        observed.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(ToolResult::message(true, "executed")) })
+    });
+    let executor = Arc::new(ConsentAwareExecutor::new(
+        ConsentExecutorOptions {
+            user_id: "owner".into(),
+            session_id: "session".into(),
+            permissions: HashMap::new(),
+            session_approvals: Default::default(),
+            profile_name: None,
+            max_concurrent: NonZeroU16::new(1).unwrap(),
+        },
+        consent.clone(),
+        Arc::new(LowTrust),
+        delegate,
+    ));
+    let cancellation = ProcessCancellation::default();
+    let context = ToolExecutionContext {
+        user_id: "owner".into(),
+        session_id: "session".into(),
+        action_id: "action".into(),
+        project_root: PathBuf::from("."),
+        origin: ExecutionOrigin::Agent,
+        runtime_mode: RuntimeMode::Guarded,
+        cancellation: cancellation.clone(),
+        on_output: None,
+    };
+    let task_executor = executor.clone();
+    let task_context = context.clone();
+    let task = tokio::spawn(async move {
+        task_executor
+            .execute(
+                "terminal.run",
+                &json!({}),
+                &task_context,
+                ExecuteOptions::default(),
+            )
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), requested.notified())
+        .await
+        .unwrap();
+    let request_id = consent.list_pending(Some("session"))[0].snapshot().id;
+    cancellation.cancel();
+    let result = tokio::time::timeout(Duration::from_secs(2), task)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let entered_result = tokio::time::timeout(Duration::from_secs(2), entered.notified()).await;
+    let approval = consent.approve(&request_id, None, None);
+    let mut next_context = context;
+    next_context.cancellation = ProcessCancellation::default();
+    let capacity = executor
+        .execute(
+            "terminal.run",
+            &json!({}),
+            &next_context,
+            ExecuteOptions {
+                dry_run: true,
+                ..ExecuteOptions::default()
+            },
+        )
+        .await;
+    {
+        let (lock, wake) = &*release;
+        *lock.lock().unwrap() = true;
+        wake.notify_all();
+    }
+    assert!(entered_result.is_ok());
+    assert!(!result.ok);
+    assert_eq!(approval.unwrap(), false);
+    assert_eq!(capacity.unwrap_err(), "tool execution capacity unavailable");
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if executor
+                .execute(
+                    "terminal.run",
+                    &json!({}),
+                    &next_context,
+                    ExecuteOptions {
+                        dry_run: true,
+                        ..ExecuteOptions::default()
+                    },
+                )
+                .await
+                .is_ok()
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}

@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use futures_util::stream::{self, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Ports probed for any responsive address during the discovery pass.
 pub const QUICK_DISCOVERY_PORTS: [u16; 9] = [53, 80, 139, 443, 445, 554, 8000, 8080, 22];
@@ -154,7 +154,11 @@ pub trait NetworkScanHost: Send + Sync {
     /// All IPv4 interfaces; `internal` entries are dropped by the scan.
     fn local_ipv4_interfaces(&self) -> Vec<LocalIpv4Interface>;
     /// Run a shell command, returning stdout on success.
-    fn exec<'a>(&'a self, command: &'a str, timeout_ms: u64) -> HostFuture<'a, Result<String, String>>;
+    fn exec<'a>(
+        &'a self,
+        command: &'a str,
+        timeout_ms: u64,
+    ) -> HostFuture<'a, Result<String, String>>;
     fn probe_port<'a>(&'a self, ip: &'a str, port: u16, timeout_ms: u64) -> HostFuture<'a, bool>;
     /// GET a JSON document; `None` on any transport or parse failure.
     fn http_get_json<'a>(&'a self, url: &'a str, timeout_ms: u64) -> HostFuture<'a, Option<Value>>;
@@ -310,7 +314,10 @@ pub fn merge_entries(rows: &[HostEntry]) -> Vec<HostEntry> {
 /// `buildSubnetCandidates`: every host address in the subnets except network
 /// and broadcast, plus the local host addresses (which are reachable but not
 /// always in the ARP table).
-pub fn build_subnet_candidates(subnets: &[String], interfaces: &[LocalIpv4Interface]) -> Vec<String> {
+pub fn build_subnet_candidates(
+    subnets: &[String],
+    interfaces: &[LocalIpv4Interface],
+) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut candidates = Vec::new();
     for subnet in subnets {
@@ -353,7 +360,11 @@ fn is_usable_mac(mac: &str) -> bool {
     if mac == "ff:ff:ff:ff:ff:ff" || mac == "00:00:00:00:00:00" {
         return false;
     }
-    match mac.split(':').next().and_then(|o| u8::from_str_radix(o, 16).ok()) {
+    match mac
+        .split(':')
+        .next()
+        .and_then(|o| u8::from_str_radix(o, 16).ok())
+    {
         Some(first) => first & 1 == 0,
         None => false,
     }
@@ -551,25 +562,39 @@ pub fn parse_default_gateway_output(platform: Platform, stdout: &str) -> Option<
 pub fn parse_reverse_lookup_output(stdout: &str) -> Option<String> {
     for line in stdout.lines() {
         let lower = line.to_ascii_lowercase();
-        let Some(idx) = lower.find("name") else { continue };
+        let Some(idx) = lower.find("name") else {
+            continue;
+        };
         let rest = &line[idx + "name".len()..];
-        let Some(rest) = rest.strip_prefix(':') else { continue };
+        let Some(rest) = rest.strip_prefix(':') else {
+            continue;
+        };
         if !rest.starts_with([' ', '\t']) {
             continue;
         }
-        let token: String = rest.chars().skip_while(|c| c.is_whitespace()).take_while(|c| !c.is_whitespace()).collect();
+        let token: String = rest
+            .chars()
+            .skip_while(|c| c.is_whitespace())
+            .take_while(|c| !c.is_whitespace())
+            .collect();
         if !token.is_empty() {
             return Some(token);
         }
     }
     for line in stdout.lines() {
         let lower = line.to_ascii_lowercase();
-        let Some(idx) = lower.find("pointer") else { continue };
+        let Some(idx) = lower.find("pointer") else {
+            continue;
+        };
         let rest = &line[idx + "pointer".len()..];
         if !rest.starts_with([' ', '\t']) {
             continue;
         }
-        let token: String = rest.chars().skip_while(|c| c.is_whitespace()).take_while(|c| !c.is_whitespace()).collect();
+        let token: String = rest
+            .chars()
+            .skip_while(|c| c.is_whitespace())
+            .take_while(|c| !c.is_whitespace())
+            .collect();
         let token = token.trim_end_matches('.');
         if !token.is_empty() {
             return Some(token.to_string());
@@ -654,9 +679,10 @@ pub fn topology_providers(topology: &Value) -> Option<Vec<String>> {
 
 /// `ipSortKey`: numeric comparison of the four octets.
 pub fn ip_sort_key(ip: &str) -> u64 {
-    ip.split('.')
-        .take(4)
-        .fold(0u64, |acc, part| acc.wrapping_mul(256).wrapping_add(part.parse::<u64>().unwrap_or(0)))
+    ip.split('.').take(4).fold(0u64, |acc, part| {
+        acc.wrapping_mul(256)
+            .wrapping_add(part.parse::<u64>().unwrap_or(0))
+    })
 }
 
 async fn map_concurrent<T, R, F, Fut>(items: Vec<T>, concurrency: usize, f: F) -> Vec<R>
@@ -672,7 +698,10 @@ where
 
 fn gateway_command(platform: Platform) -> (&'static str, u64) {
     match platform {
-        Platform::Windows => ("powershell -NoProfile -Command \"(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Select-Object -First 1).NextHop\"", 4000),
+        Platform::Windows => (
+            "powershell -NoProfile -Command \"(Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Select-Object -First 1).NextHop\"",
+            4000,
+        ),
         Platform::MacOs => ("route -n get default", 4000),
         _ => ("ip route show default", 4000),
     }
@@ -734,7 +763,12 @@ async fn ping_host(host: &dyn NetworkScanHost, ip: &str) -> bool {
     host.exec(&command, PING_TIMEOUT_MS).await.is_ok()
 }
 
-async fn probe_any_port(host: &dyn NetworkScanHost, ip: &str, ports: &[u16], timeout_ms: u64) -> Vec<u16> {
+async fn probe_any_port(
+    host: &dyn NetworkScanHost,
+    ip: &str,
+    ports: &[u16],
+    timeout_ms: u64,
+) -> Vec<u16> {
     let candidates: Vec<u16> = ports.to_vec();
     let concurrency = candidates.len().max(1);
     let target = ip.to_string();
@@ -743,7 +777,10 @@ async fn probe_any_port(host: &dyn NetworkScanHost, ip: &str, ports: &[u16], tim
         async move { (port, host.probe_port(&target, port, timeout_ms).await) }
     })
     .await;
-    results.into_iter().filter_map(|(port, open)| open.then_some(port)).collect()
+    results
+        .into_iter()
+        .filter_map(|(port, open)| open.then_some(port))
+        .collect()
 }
 
 async fn reverse_resolve(host: &dyn NetworkScanHost, ip: &str) -> Option<String> {
@@ -757,7 +794,10 @@ async fn reverse_resolve(host: &dyn NetworkScanHost, ip: &str) -> Option<String>
 
 async fn detect_os_version(host: &dyn NetworkScanHost, ip: &str) -> Option<String> {
     if let Some(health) = host
-        .http_get_json(&format!("http://{ip}:{AGENT_HEALTH_PORT}/api/health"), HTTP_TIMEOUT_MS)
+        .http_get_json(
+            &format!("http://{ip}:{AGENT_HEALTH_PORT}/api/health"),
+            HTTP_TIMEOUT_MS,
+        )
         .await
     {
         if let Some(os) = detect_os_from_health(&health) {
@@ -784,7 +824,10 @@ async fn scan_host_detail(
     let mut health_os = None;
     if open_ports.contains(&AGENT_HEALTH_PORT) {
         if let Some(health) = host
-            .http_get_json(&format!("http://{ip}:{AGENT_HEALTH_PORT}/api/health"), HTTP_TIMEOUT_MS)
+            .http_get_json(
+                &format!("http://{ip}:{AGENT_HEALTH_PORT}/api/health"),
+                HTTP_TIMEOUT_MS,
+            )
             .await
         {
             if classify_agent_health(&health) {
@@ -844,10 +887,7 @@ pub async fn scan_network(
     let started = host.now_ms();
     let interfaces = host.local_ipv4_interfaces();
 
-    let requested = options
-        .subnet
-        .as_deref()
-        .and_then(normalize_subnet_prefix);
+    let requested = options.subnet.as_deref().and_then(normalize_subnet_prefix);
     let subnets = match requested {
         Some(subnet) => vec![subnet],
         None => get_local_subnets(&interfaces),
@@ -882,7 +922,8 @@ pub async fn scan_network(
             if ping_host(host, &ip).await {
                 return Some((ip, true));
             }
-            let open = probe_any_port(host, &ip, &QUICK_DISCOVERY_PORTS, QUICK_PROBE_TIMEOUT_MS).await;
+            let open =
+                probe_any_port(host, &ip, &QUICK_DISCOVERY_PORTS, QUICK_PROBE_TIMEOUT_MS).await;
             (!open.is_empty()).then_some((ip, false))
         })
         .await;
@@ -960,8 +1001,8 @@ pub fn scan_request_body(result: &NetworkScanResult) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicI64, AtomicUsize, Ordering};
 
     fn iface(address: &str, internal: bool) -> LocalIpv4Interface {
         LocalIpv4Interface {
@@ -984,8 +1025,14 @@ mod tests {
 
     #[test]
     fn subnet_prefix_normalisation() {
-        assert_eq!(normalize_subnet_prefix("192.168.1.0/24").as_deref(), Some("192.168.1"));
-        assert_eq!(normalize_subnet_prefix("  10.0.0.7 ").as_deref(), Some("10.0.0"));
+        assert_eq!(
+            normalize_subnet_prefix("192.168.1.0/24").as_deref(),
+            Some("192.168.1")
+        );
+        assert_eq!(
+            normalize_subnet_prefix("  10.0.0.7 ").as_deref(),
+            Some("10.0.0")
+        );
         assert_eq!(normalize_subnet_prefix("10.0.5").as_deref(), Some("10.0.5"));
         assert_eq!(normalize_subnet_prefix("10.0.300"), None);
         assert_eq!(normalize_subnet_prefix("10.0.0.300/24"), None);
@@ -1030,9 +1077,21 @@ garbage line without addresses
         assert_eq!(
             entries,
             vec![
-                HostEntry { ip: "192.168.1.1".into(), mac: Some("3c:37:86:aa:bb:cc".into()), responsive: true },
-                HostEntry { ip: "192.168.1.20".into(), mac: Some("00:1b:44:11:3a:b7".into()), responsive: true },
-                HostEntry { ip: "192.168.1.40".into(), mac: Some("a4:83:e7:11:22:33".into()), responsive: true },
+                HostEntry {
+                    ip: "192.168.1.1".into(),
+                    mac: Some("3c:37:86:aa:bb:cc".into()),
+                    responsive: true
+                },
+                HostEntry {
+                    ip: "192.168.1.20".into(),
+                    mac: Some("00:1b:44:11:3a:b7".into()),
+                    responsive: true
+                },
+                HostEntry {
+                    ip: "192.168.1.40".into(),
+                    mac: Some("a4:83:e7:11:22:33".into()),
+                    responsive: true
+                },
             ]
         );
     }
@@ -1055,9 +1114,21 @@ garbage line without addresses
     #[test]
     fn entries_merge_prefers_new_mac_and_keeps_order() {
         let merged = merge_entries(&[
-            HostEntry { ip: "10.0.0.2".into(), mac: None, responsive: false },
-            HostEntry { ip: "10.0.0.1".into(), mac: Some("aa:bb:cc:dd:ee:ff".into()), responsive: true },
-            HostEntry { ip: "10.0.0.2".into(), mac: Some("11:22:33:44:55:66".into()), responsive: false },
+            HostEntry {
+                ip: "10.0.0.2".into(),
+                mac: None,
+                responsive: false,
+            },
+            HostEntry {
+                ip: "10.0.0.1".into(),
+                mac: Some("aa:bb:cc:dd:ee:ff".into()),
+                responsive: true,
+            },
+            HostEntry {
+                ip: "10.0.0.2".into(),
+                mac: Some("11:22:33:44:55:66".into()),
+                responsive: false,
+            },
         ]);
         assert_eq!(merged.len(), 2);
         assert_eq!(merged[0].ip, "10.0.0.2");
@@ -1067,7 +1138,8 @@ garbage line without addresses
 
     #[test]
     fn subnet_candidates_cover_range_and_local_addresses() {
-        let candidates = build_subnet_candidates(&["10.0.0".to_string()], &[iface("10.0.0.5", false)]);
+        let candidates =
+            build_subnet_candidates(&["10.0.0".to_string()], &[iface("10.0.0.5", false)]);
         assert_eq!(candidates.len(), 254);
         assert_eq!(candidates[0], "10.0.0.1");
         assert_eq!(candidates[253], "10.0.0.254");
@@ -1077,18 +1149,29 @@ garbage line without addresses
     #[test]
     fn default_gateway_parsing_per_platform() {
         assert_eq!(
-            parse_default_gateway_output(Platform::Linux, "default via 192.168.1.1 dev eth0 proto dhcp\n").as_deref(),
+            parse_default_gateway_output(
+                Platform::Linux,
+                "default via 192.168.1.1 dev eth0 proto dhcp\n"
+            )
+            .as_deref(),
             Some("192.168.1.1")
         );
         assert_eq!(
-            parse_default_gateway_output(Platform::MacOs, "   route to: default\ngateway: 10.0.0.1\ninterface: en0\n").as_deref(),
+            parse_default_gateway_output(
+                Platform::MacOs,
+                "   route to: default\ngateway: 10.0.0.1\ninterface: en0\n"
+            )
+            .as_deref(),
             Some("10.0.0.1")
         );
         assert_eq!(
             parse_default_gateway_output(Platform::Windows, " 172.16.0.1 \r\n").as_deref(),
             Some("172.16.0.1")
         );
-        assert_eq!(parse_default_gateway_output(Platform::Linux, "default via fdfd::1 dev eth0"), None);
+        assert_eq!(
+            parse_default_gateway_output(Platform::Linux, "default via fdfd::1 dev eth0"),
+            None
+        );
     }
 
     #[test]
@@ -1101,10 +1184,8 @@ garbage line without addresses
             Some("printer.lan")
         );
         assert_eq!(
-            parse_reverse_lookup_output(
-                "20.1.168.192.in-addr.arpa domain name pointer nas.lan.\n"
-            )
-            .as_deref(),
+            parse_reverse_lookup_output("20.1.168.192.in-addr.arpa domain name pointer nas.lan.\n")
+                .as_deref(),
             Some("nas.lan")
         );
         // `Name:` must be followed by whitespace and a single non-space token.
@@ -1122,7 +1203,8 @@ garbage line without addresses
     #[test]
     fn os_detection_prefers_health_then_banner() {
         assert_eq!(
-            detect_os_from_health(&json!({"osVersion": "Windows 11 Pro 23H2", "os": "windows"})).as_deref(),
+            detect_os_from_health(&json!({"osVersion": "Windows 11 Pro 23H2", "os": "windows"}))
+                .as_deref(),
             Some("Windows 11 Pro 23H2")
         );
         assert_eq!(
@@ -1135,17 +1217,31 @@ garbage line without addresses
             detect_os_from_banner("SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.1").as_deref(),
             Some("Ubuntu 3ubuntu0.1")
         );
-        assert_eq!(detect_os_from_banner("SSH-2.0-OpenSSH_9.6 Debian-1").as_deref(), Some("Debian"));
-        assert_eq!(detect_os_from_banner("SSH-2.0-OpenSSH_for_Windows_8.6").as_deref(), Some("Windows"));
-        assert_eq!(detect_os_from_banner("SSH-2.0-OpenSSH_7.4 Raspbian").as_deref(), Some("Raspbian"));
-        assert_eq!(detect_os_from_banner("SSH-2.0-OpenSSH_7.4").as_deref(), Some("SSH-2.0-OpenSSH_7.4"));
+        assert_eq!(
+            detect_os_from_banner("SSH-2.0-OpenSSH_9.6 Debian-1").as_deref(),
+            Some("Debian")
+        );
+        assert_eq!(
+            detect_os_from_banner("SSH-2.0-OpenSSH_for_Windows_8.6").as_deref(),
+            Some("Windows")
+        );
+        assert_eq!(
+            detect_os_from_banner("SSH-2.0-OpenSSH_7.4 Raspbian").as_deref(),
+            Some("Raspbian")
+        );
+        assert_eq!(
+            detect_os_from_banner("SSH-2.0-OpenSSH_7.4").as_deref(),
+            Some("SSH-2.0-OpenSSH_7.4")
+        );
         assert_eq!(detect_os_from_banner("   "), None);
     }
 
     #[test]
     fn agent_health_classification_and_topology_providers() {
         assert!(classify_agent_health(&json!({"name": "jait-gateway"})));
-        assert!(classify_agent_health(&json!({"healthy": true, "version": "1.2.3"})));
+        assert!(classify_agent_health(
+            &json!({"healthy": true, "version": "1.2.3"})
+        ));
         assert!(!classify_agent_health(&json!({"healthy": true})));
         assert!(!classify_agent_health(&json!({"name": "other"})));
 
@@ -1156,7 +1252,11 @@ garbage line without addresses
             ]}))
             .as_deref()
             .map(|p| p.to_vec()),
-            Some(vec!["anthropic".to_string(), "openai".to_string(), "ollama".to_string()])
+            Some(vec![
+                "anthropic".to_string(),
+                "openai".to_string(),
+                "ollama".to_string()
+            ])
         );
         assert_eq!(topology_providers(&json!({"devices": []})), None);
     }
@@ -1199,65 +1299,90 @@ garbage line without addresses
             self.interfaces.clone()
         }
 
-        fn exec<'a>(&'a self, command: &'a str, _timeout_ms: u64) -> HostFuture<'a, Result<String, String>> {
+        fn exec<'a>(
+            &'a self,
+            command: &'a str,
+            _timeout_ms: u64,
+        ) -> HostFuture<'a, Result<String, String>> {
             Box::pin(async move {
-            if command.contains("ip route show default") {
-                return Ok("default via 192.168.1.1 dev eth0\n".to_string());
-            }
-            if command.contains("arp -a") {
-                let call = self.arp_calls.fetch_add(1, Ordering::SeqCst);
-                return Ok(if call == 0 {
-                    "? (192.168.1.1) at 3c:37:86:aa:bb:cc on eth0\n".to_string()
-                } else {
-                    "? (192.168.1.1) at 3c:37:86:aa:bb:cc on eth0\n? (192.168.1.20) at a4:83:e7:11:22:33 on eth0\n".to_string()
-                });
-            }
-            if command.starts_with("ping ") {
-                self.sweeps.fetch_add(1, Ordering::SeqCst);
-                let ip = command.rsplit(' ').next().unwrap_or("").to_string();
-                self.pinged.lock().unwrap().push(ip.clone());
-                return if ip == "192.168.1.20" {
-                    Ok("64 bytes from 192.168.1.20".to_string())
-                } else {
-                    Err("unreachable".to_string())
-                };
-            }
-            if command.starts_with("host ") {
-                return Ok(if command.contains("192.168.1.20") {
-                    "20.1.168.192.in-addr.arpa domain name pointer nas.localdomain.\n".to_string()
-                } else {
-                    "Host 192.168.1.1.in-addr.arpa. not found: 3(NXDOMAIN)\n".to_string()
-                });
-            }
-            Err("unsupported".to_string())
+                if command.contains("ip route show default") {
+                    return Ok("default via 192.168.1.1 dev eth0\n".to_string());
+                }
+                if command.contains("arp -a") {
+                    let call = self.arp_calls.fetch_add(1, Ordering::SeqCst);
+                    return Ok(if call == 0 {
+                        "? (192.168.1.1) at 3c:37:86:aa:bb:cc on eth0\n".to_string()
+                    } else {
+                        "? (192.168.1.1) at 3c:37:86:aa:bb:cc on eth0\n? (192.168.1.20) at a4:83:e7:11:22:33 on eth0\n".to_string()
+                    });
+                }
+                if command.starts_with("ping ") {
+                    self.sweeps.fetch_add(1, Ordering::SeqCst);
+                    let ip = command.rsplit(' ').next().unwrap_or("").to_string();
+                    self.pinged.lock().unwrap().push(ip.clone());
+                    return if ip == "192.168.1.20" {
+                        Ok("64 bytes from 192.168.1.20".to_string())
+                    } else {
+                        Err("unreachable".to_string())
+                    };
+                }
+                if command.starts_with("host ") {
+                    return Ok(if command.contains("192.168.1.20") {
+                        "20.1.168.192.in-addr.arpa domain name pointer nas.localdomain.\n"
+                            .to_string()
+                    } else {
+                        "Host 192.168.1.1.in-addr.arpa. not found: 3(NXDOMAIN)\n".to_string()
+                    });
+                }
+                Err("unsupported".to_string())
             })
         }
 
-        fn probe_port<'a>(&'a self, ip: &'a str, port: u16, _timeout_ms: u64) -> HostFuture<'a, bool> {
+        fn probe_port<'a>(
+            &'a self,
+            ip: &'a str,
+            port: u16,
+            _timeout_ms: u64,
+        ) -> HostFuture<'a, bool> {
             Box::pin(async move { ip == "192.168.1.20" && matches!(port, 22 | 8000) })
         }
 
-        fn http_get_json<'a>(&'a self, url: &'a str, _timeout_ms: u64) -> HostFuture<'a, Option<Value>> {
+        fn http_get_json<'a>(
+            &'a self,
+            url: &'a str,
+            _timeout_ms: u64,
+        ) -> HostFuture<'a, Option<Value>> {
             Box::pin(async move {
-            if !url.starts_with("http://192.168.1.20:8000/") {
-                return None;
-            }
-            if url.ends_with("/api/health") {
-                return Some(json!({"name": "jait-gateway", "healthy": true, "version": "1.4.0"}));
-            }
-            if url.ends_with("/api/network/topology") {
-                return Some(json!({"devices": [{"providers": ["anthropic", "openai"]}]}));
-            }
-            None
+                if !url.starts_with("http://192.168.1.20:8000/") {
+                    return None;
+                }
+                if url.ends_with("/api/health") {
+                    return Some(
+                        json!({"name": "jait-gateway", "healthy": true, "version": "1.4.0"}),
+                    );
+                }
+                if url.ends_with("/api/network/topology") {
+                    return Some(json!({"devices": [{"providers": ["anthropic", "openai"]}]}));
+                }
+                None
             })
         }
 
-        fn ssh_banner<'a>(&'a self, ip: &'a str, _timeout_ms: u64) -> HostFuture<'a, Option<String>> {
-            Box::pin(async move { (ip == "192.168.1.20").then(|| "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.1".to_string()) })
+        fn ssh_banner<'a>(
+            &'a self,
+            ip: &'a str,
+            _timeout_ms: u64,
+        ) -> HostFuture<'a, Option<String>> {
+            Box::pin(async move {
+                (ip == "192.168.1.20")
+                    .then(|| "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.1".to_string())
+            })
         }
 
         fn sleep_ms(&self, ms: u64) -> HostFuture<'_, ()> {
-            Box::pin(async move { self.sleeps.lock().unwrap().push(ms); })
+            Box::pin(async move {
+                self.sleeps.lock().unwrap().push(ms);
+            })
         }
 
         fn now_ms(&self) -> i64 {
@@ -1300,7 +1425,10 @@ garbage line without addresses
         assert_eq!(nas.open_ports, vec![22, 8000]);
         assert!(nas.ssh_reachable);
         assert_eq!(nas.agent_status, AgentStatus::Running);
-        assert_eq!(nas.providers.as_deref(), Some(&["anthropic".to_string(), "openai".to_string()][..]));
+        assert_eq!(
+            nas.providers.as_deref(),
+            Some(&["anthropic".to_string(), "openai".to_string()][..])
+        );
         assert_eq!(nas.os_version.as_deref(), Some("Ubuntu 3ubuntu0.1"));
 
         let included = &result.hosts[2];
@@ -1310,7 +1438,10 @@ garbage line without addresses
         // Sweep ran once, sleeps are the two settle windows, and the ARP cache
         // was re-read after the sweep.
         assert!(host.sweeps.load(Ordering::SeqCst) > 0);
-        assert_eq!(host.sleeps.lock().unwrap().as_slice(), &[SWEEP_SETTLE_MS, ARP_SETTLE_MS]);
+        assert_eq!(
+            host.sleeps.lock().unwrap().as_slice(),
+            &[SWEEP_SETTLE_MS, ARP_SETTLE_MS]
+        );
         assert_eq!(host.arp_calls.load(Ordering::SeqCst), 2);
         assert!(result.duration_ms >= 0);
         assert!(!result.scanned_at.is_empty());

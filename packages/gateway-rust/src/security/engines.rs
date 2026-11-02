@@ -27,7 +27,7 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 use super::protocols::{
-    evidence, rule, AdapterResult, Cancellation, Confidence, RuleStatus, Severity,
+    AdapterResult, Cancellation, Confidence, RuleStatus, Severity, evidence, rule,
 };
 
 /// Maximum accepted parser input, matching the TypeScript `512 * 1024` guard.
@@ -43,13 +43,18 @@ pub const MAX_STDERR_CAPTURE: usize = 64 * 1024;
 #[derive(Debug)]
 pub enum EngineError {
     /// The engine binary is missing or did not produce a recognisable banner.
-    Unavailable { engine: String, detail: String },
+    Unavailable {
+        engine: String,
+        detail: String,
+    },
     /// The engine ran but failed, timed out, or was killed.
     Failed(String),
     /// The engine produced output that violates the reviewed contract.
     Output(String),
     /// Captured output exceeded the configured bound.
-    TooLarge { limit: usize },
+    TooLarge {
+        limit: usize,
+    },
     /// The caller's [`Cancellation`] fired while the engine was running.
     Cancelled,
     Io(std::io::Error),
@@ -236,7 +241,7 @@ impl CommandRunner for SystemCommandRunner {
                     return Err(EngineError::Unavailable {
                         engine: program.to_owned(),
                         detail: "binary was not found on PATH".to_owned(),
-                    })
+                    });
                 }
                 Err(error) => return Err(EngineError::Io(error)),
             };
@@ -284,9 +289,7 @@ impl CommandRunner for SystemCommandRunner {
                 let _ = child.wait().await;
             }
 
-            let (stdout, truncated) = stdout_reader
-                .await
-                .unwrap_or_else(|_| (Vec::new(), false));
+            let (stdout, truncated) = stdout_reader.await.unwrap_or_else(|_| (Vec::new(), false));
             let stderr = stderr_reader.await.unwrap_or_default();
 
             match outcome {
@@ -294,13 +297,13 @@ impl CommandRunner for SystemCommandRunner {
                     return Err(EngineError::Failed(format!(
                         "{program} exceeded its {:?} budget",
                         self.timeout
-                    )))
+                    )));
                 }
                 RunOutcome::Cancelled => return Err(EngineError::Cancelled),
                 RunOutcome::TooLarge => {
                     return Err(EngineError::TooLarge {
                         limit: self.max_capture,
-                    })
+                    });
                 }
                 RunOutcome::Exited => {}
             }
@@ -441,7 +444,13 @@ fn text(value: &str) -> Value {
     Value::String(value.to_owned())
 }
 
-fn base_result(engine: &str, version: &str, gap: &str, raw: &str, content_type: &str) -> AdapterResult {
+fn base_result(
+    engine: &str,
+    version: &str,
+    gap: &str,
+    raw: &str,
+    content_type: &str,
+) -> AdapterResult {
     AdapterResult {
         engine: engine.to_owned(),
         engine_version: version.to_owned(),
@@ -716,8 +725,7 @@ pub fn clean_label(value: Option<&str>) -> String {
     value
         .chars()
         .filter(|character| {
-            character.is_ascii_alphanumeric()
-                || matches!(character, '.' | '_' | '+' | ' ' | '-')
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '+' | ' ' | '-')
         })
         .take(80)
         .collect()
@@ -753,12 +761,7 @@ pub fn parse_nmap(
     for host in root.children_named("host") {
         let addresses: Vec<&XmlNode> = host
             .children_named("address")
-            .filter(|address| {
-                matches!(
-                    address.attribute("addrtype"),
-                    Some("ipv4") | Some("ipv6")
-                )
-            })
+            .filter(|address| matches!(address.attribute("addrtype"), Some("ipv4") | Some("ipv6")))
             .collect();
         let target = match addresses.as_slice() {
             [address] => address.attribute("addr").unwrap_or_default().to_owned(),
@@ -842,9 +845,11 @@ pub fn parse_nmap(
         }
     }
 
-    let uncovered = targets
-        .iter()
-        .any(|target| ports.iter().any(|port| !measured.contains(&format!("{target}:{port}"))));
+    let uncovered = targets.iter().any(|target| {
+        ports
+            .iter()
+            .any(|port| !measured.contains(&format!("{target}:{port}")))
+    });
     if uncovered {
         output.conclusive = false;
         output.push_gap("Some authorized target/port pairs lack a deterministic observation");
@@ -967,13 +972,9 @@ pub fn parse_nuclei(raw: &str, url: &str, version: &str) -> Result<AdapterResult
         .host_str()
         .ok_or_else(|| EngineError::output("Nuclei target has no host"))?
         .to_owned();
-    let port = parsed.port_or_known_default().unwrap_or_else(|| {
-        if parsed.scheme() == "https" {
-            443
-        } else {
-            80
-        }
-    });
+    let port = parsed
+        .port_or_known_default()
+        .unwrap_or_else(|| if parsed.scheme() == "https" { 443 } else { 80 });
     let revision = nuclei_revision();
 
     let mut output = base_result(
@@ -988,7 +989,10 @@ pub fn parse_nuclei(raw: &str, url: &str, version: &str) -> Result<AdapterResult
     for line in raw.split('\n').filter(|line| !line.is_empty()) {
         let item: Value = serde_json::from_str(line)
             .map_err(|_| EngineError::output("Nuclei emitted a malformed result line"))?;
-        let template_id = item.get("template-id").and_then(Value::as_str).unwrap_or("");
+        let template_id = item
+            .get("template-id")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let matched_at = item.get("matched-at").and_then(Value::as_str).unwrap_or("");
         if template_id != "jait-nosniff-v1" || (matched_at != url && matched_at != with_slash) {
             return Err(EngineError::output(
@@ -1088,25 +1092,19 @@ pub async fn scan_nuclei(
     write_private(&template, NUCLEI_TEMPLATE)?;
     write_private(&config, "{}\n")?;
 
-    let args: Vec<String> = [
-        "-u",
-        url,
-        "-t",
-    ]
-    .iter()
-    .map(|arg| (*arg).to_owned())
-    .chain(std::iter::once(
-        template.to_string_lossy().into_owned(),
-    ))
-    .chain(
-        [
-            "-config",
-            // config path injected below
-        ]
+    let args: Vec<String> = ["-u", url, "-t"]
         .iter()
-        .map(|arg| (*arg).to_owned()),
-    )
-    .collect();
+        .map(|arg| (*arg).to_owned())
+        .chain(std::iter::once(template.to_string_lossy().into_owned()))
+        .chain(
+            [
+                "-config",
+                // config path injected below
+            ]
+            .iter()
+            .map(|arg| (*arg).to_owned()),
+        )
+        .collect();
     let mut args = args;
     args.push(config.to_string_lossy().into_owned());
     args.extend(
@@ -1191,8 +1189,8 @@ pub fn parse_trivy(raw: &str, target: &str, version: &str) -> Result<AdapterResu
     if byte_len(raw) > MAX_ENGINE_DOCUMENT {
         return Err(EngineError::output("Oversized Trivy output"));
     }
-    let parsed: Value = serde_json::from_str(raw)
-        .map_err(|_| EngineError::output("Unsupported Trivy JSON"))?;
+    let parsed: Value =
+        serde_json::from_str(raw).map_err(|_| EngineError::output("Unsupported Trivy JSON"))?;
     let schema_ok = parsed.get("SchemaVersion").and_then(Value::as_i64) == Some(2);
     let results = match parsed.get("Results") {
         Some(Value::Array(results)) if schema_ok && results.len() <= MAX_TRIVY_RESULTS => {
@@ -1244,7 +1242,10 @@ pub fn parse_trivy(raw: &str, target: &str, version: &str) -> Result<AdapterResu
         }
 
         let class = str_field(result, "Class").unwrap_or_default();
-        if class == "lang-pkgs" || class == "os-pkgs" || !array_field(result, "Vulnerabilities").is_empty() {
+        if class == "lang-pkgs"
+            || class == "os-pkgs"
+            || !array_field(result, "Vulnerabilities").is_empty()
+        {
             evaluated = true;
         }
 
@@ -1314,8 +1315,14 @@ pub fn parse_trivy(raw: &str, target: &str, version: &str) -> Result<AdapterResu
                 facts([
                     ("vulnerabilityId", text(&id)),
                     ("package", text(&package)),
-                    ("installedVersion", text(&clean_label(str_field(item, "InstalledVersion")))),
-                    ("fixedVersion", text(&clean_label(str_field(item, "FixedVersion")))),
+                    (
+                        "installedVersion",
+                        text(&clean_label(str_field(item, "InstalledVersion"))),
+                    ),
+                    (
+                        "fixedVersion",
+                        text(&clean_label(str_field(item, "FixedVersion"))),
+                    ),
                 ]),
             ));
             let mut observation = rule(
@@ -1333,8 +1340,9 @@ pub fn parse_trivy(raw: &str, target: &str, version: &str) -> Result<AdapterResu
 
     if !evaluated || passing_rules.len() > MAX_TRIVY_FINDINGS {
         output.conclusive = false;
-        output
-            .push_gap("No bounded recognized check coverage was established; absence is inconclusive");
+        output.push_gap(
+            "No bounded recognized check coverage was established; absence is inconclusive",
+        );
     }
 
     let reported: Vec<String> = passing_rules
@@ -1421,20 +1429,24 @@ mod tests {
         let out = parse_nmap(&doc, &["10.0.0.5"], &[22, 443], "7.94").expect("valid");
         assert!(!out.conclusive);
         assert_eq!(out.evidence.len(), 1);
-        assert!(out
-            .coverage_gaps
-            .iter()
-            .any(|gap| gap.contains("deterministic observation")));
-        assert!(out
-            .coverage_gaps
-            .iter()
-            .any(|gap| gap.contains("successful completion")));
+        assert!(
+            out.coverage_gaps
+                .iter()
+                .any(|gap| gap.contains("deterministic observation"))
+        );
+        assert!(
+            out.coverage_gaps
+                .iter()
+                .any(|gap| gap.contains("successful completion"))
+        );
     }
 
     #[test]
     fn nmap_rejects_addresses_and_ports_outside_the_allowlist() {
-        let foreign_host = "<nmaprun><host><address addr=\"192.0.2.9\" addrtype=\"ipv4\"/><ports/></host>\
-<runstats><finished exit=\"success\"/></runstats></nmaprun>".to_string();
+        let foreign_host =
+            "<nmaprun><host><address addr=\"192.0.2.9\" addrtype=\"ipv4\"/><ports/></host>\
+<runstats><finished exit=\"success\"/></runstats></nmaprun>"
+                .to_string();
         let err = parse_nmap(&foreign_host, &["10.0.0.5"], &[22], "7.94").unwrap_err();
         assert!(err.to_string().contains("out-of-scope address"));
 
@@ -1449,7 +1461,8 @@ mod tests {
     #[test]
     fn nmap_rejects_doctype_declarations() {
         let doc = "<!DOCTYPE nmaprun [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>\
-<nmaprun><host><address addr=\"10.0.0.5\" addrtype=\"ipv4\"/></host></nmaprun>".to_string();
+<nmaprun><host><address addr=\"10.0.0.5\" addrtype=\"ipv4\"/></host></nmaprun>"
+            .to_string();
         assert!(parse_nmap(&doc, &["10.0.0.5"], &[22], "7.94").is_err());
     }
 
@@ -1488,7 +1501,8 @@ mod tests {
         let err = parse_nuclei(foreign, "https://example.test", "3.1.0").unwrap_err();
         assert!(err.to_string().contains("allowlist"));
 
-        let off_target = r#"{"template-id":"jait-nosniff-v1","matched-at":"https://elsewhere.test/"}"#;
+        let off_target =
+            r#"{"template-id":"jait-nosniff-v1","matched-at":"https://elsewhere.test/"}"#;
         assert!(parse_nuclei(off_target, "https://example.test", "3.1.0").is_err());
 
         let garbage = "not json at all";
@@ -1497,28 +1511,43 @@ mod tests {
 
     #[test]
     fn nuclei_accepts_pinned_template_with_trailing_slash() {
-        let raw = "{\"template-id\":\"jait-nosniff-v1\",\"matched-at\":\"https://example.test/\"}\n";
+        let raw =
+            "{\"template-id\":\"jait-nosniff-v1\",\"matched-at\":\"https://example.test/\"}\n";
         let out = parse_nuclei(raw, "https://example.test", "3.1.0").expect("valid");
         assert_eq!(out.rules.len(), 1);
         assert_eq!(out.rules[0].rule_id, "http.nosniff");
         assert_eq!(out.rules[0].severity, Severity::Low);
         assert_eq!(out.rules[0].evidence_index, 1);
         assert_eq!(out.evidence.len(), 2);
-        assert_eq!(out.evidence[0].facts.get("matchCount"), Some(&Value::from(1)));
+        assert_eq!(
+            out.evidence[0].facts.get("matchCount"),
+            Some(&Value::from(1))
+        );
         assert!(out.engine_version.contains("template-"));
     }
 
     #[test]
     fn trivy_rejects_garbage_and_unexpected_schema() {
         assert!(parse_trivy("not json", "example.test", "0.50.1").is_err());
-        assert!(parse_trivy("{\"SchemaVersion\":1,\"Results\":[]}", "example.test", "0.50.1").is_err());
+        assert!(
+            parse_trivy(
+                "{\"SchemaVersion\":1,\"Results\":[]}",
+                "example.test",
+                "0.50.1"
+            )
+            .is_err()
+        );
         assert!(parse_trivy("{\"SchemaVersion\":2}", "example.test", "0.50.1").is_err());
     }
 
     #[test]
     fn trivy_empty_result_set_is_inconclusive() {
-        let out = parse_trivy("{\"SchemaVersion\":2,\"Results\":[]}", "example.test", "0.50.1")
-            .expect("valid");
+        let out = parse_trivy(
+            "{\"SchemaVersion\":2,\"Results\":[]}",
+            "example.test",
+            "0.50.1",
+        )
+        .expect("valid");
         assert!(!out.conclusive);
         assert_eq!(out.evidence.len(), 1);
         assert!(out.coverage_gaps.len() >= 2);
@@ -1533,23 +1562,32 @@ mod tests {
         let out = parse_trivy(raw, "example.test", "0.50.1").expect("valid");
         assert_eq!(out.rules.len(), 2);
         assert!(out.conclusive);
-        assert!(out
-            .rules
-            .iter()
-            .any(|rule| rule.rule_id == "trivy.package.CVE-2021-12345.lodash"
-                && rule.severity == Severity::Medium));
-        assert!(out
-            .rules
-            .iter()
-            .any(|rule| rule.rule_id == "trivy.config.AVD-AWS-0001"
-                && rule.severity == Severity::High));
+        assert!(
+            out.rules
+                .iter()
+                .any(|rule| rule.rule_id == "trivy.package.CVE-2021-12345.lodash"
+                    && rule.severity == Severity::Medium)
+        );
+        assert!(
+            out.rules
+                .iter()
+                .any(|rule| rule.rule_id == "trivy.config.AVD-AWS-0001"
+                    && rule.severity == Severity::High)
+        );
         assert_eq!(out.evidence.len(), 3);
         assert_eq!(
             out.evidence[0].facts.get("passingConfigurationRules"),
             Some(&text("AVD-AWS-0002"))
         );
-        assert_eq!(out.evidence[0].facts.get("resultCount"), Some(&Value::from(1)));
-        assert!(out.rules.iter().all(|rule| rule.evidence_index < out.evidence.len()));
+        assert_eq!(
+            out.evidence[0].facts.get("resultCount"),
+            Some(&Value::from(1))
+        );
+        assert!(
+            out.rules
+                .iter()
+                .all(|rule| rule.evidence_index < out.evidence.len())
+        );
     }
 
     #[test]
@@ -1568,7 +1606,10 @@ mod tests {
 
     #[test]
     fn normalize_severity_is_case_insensitive_and_defaults_to_unknown() {
-        assert_eq!(normalize_severity(Some(&text("critical"))), Severity::Critical);
+        assert_eq!(
+            normalize_severity(Some(&text("critical"))),
+            Severity::Critical
+        );
         assert_eq!(normalize_severity(Some(&text("HiGh"))), Severity::High);
         assert_eq!(normalize_severity(Some(&text("medium"))), Severity::Medium);
         assert_eq!(normalize_severity(Some(&text("weird"))), Severity::Info);
@@ -1583,7 +1624,11 @@ mod tests {
 
     impl StubRunner {
         fn new(stdout: &'static str, stderr: &'static str) -> Self {
-            Self { stdout, stderr, calls: AtomicUsize::new(0) }
+            Self {
+                stdout,
+                stderr,
+                calls: AtomicUsize::new(0),
+            }
         }
     }
 
@@ -1610,11 +1655,15 @@ mod tests {
     async fn engine_version_reads_banner_and_rejects_unknown_output() {
         let cancel = Cancellation::new();
         let runner = StubRunner::new("Trivy\nVersion: 0.50.1\nVulnerability DB:\n", "");
-        let version = engine_version(EngineName::Trivy, &cancel, &runner).await.expect("banner");
+        let version = engine_version(EngineName::Trivy, &cancel, &runner)
+            .await
+            .expect("banner");
         assert_eq!(version, "0.50.1");
 
         let silent = StubRunner::new("segmentation fault", "");
-        let err = engine_version(EngineName::Nmap, &cancel, &silent).await.unwrap_err();
+        let err = engine_version(EngineName::Nmap, &cancel, &silent)
+            .await
+            .unwrap_err();
         assert!(err.is_unavailable(), "expected unavailable, got {err}");
     }
 
@@ -1623,7 +1672,9 @@ mod tests {
         let cancel = Cancellation::new();
         cancel.cancel();
         let runner = StubRunner::new("Nmap version 7.94\n", "");
-        let err = engine_version(EngineName::Nmap, &cancel, &runner).await.unwrap_err();
+        let err = engine_version(EngineName::Nmap, &cancel, &runner)
+            .await
+            .unwrap_err();
         assert!(matches!(err, EngineError::Cancelled));
         assert_eq!(runner.calls.load(Ordering::SeqCst), 0);
     }

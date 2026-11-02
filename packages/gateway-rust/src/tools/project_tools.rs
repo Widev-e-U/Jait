@@ -118,10 +118,7 @@ impl<'a> ProjectTools<'a> {
         // Re-creating a project for an existing folder returns the existing
         // project so tool retries stay idempotent.
         let outcome: Result<(ProjectRecord, bool), String> = match project_root {
-            Some(root) => match self
-                .repo
-                .find_by_root(&root, &node_id, Some(user_id))
-            {
+            Some(root) => match self.repo.find_by_root(&root, &node_id, Some(user_id)) {
                 Ok(Some(existing)) => Ok((existing, false)),
                 Ok(None) => self
                     .repo
@@ -197,11 +194,17 @@ impl<'a> ProjectTools<'a> {
                 "Repository {repository} could not be resolved for this project"
             ));
         };
-        if let Err(error) = self.repo.assign_repository(&project_id, &attached, Some(user_id)) {
+        if let Err(error) = self
+            .repo
+            .assign_repository(&project_id, &attached, Some(user_id))
+        {
             return fail(error.to_string());
         }
-        self.host
-            .broadcast(user_id, "project.updated", json!({ "projectId": project_id }));
+        self.host.broadcast(
+            user_id,
+            "project.updated",
+            json!({ "projectId": project_id }),
+        );
         match self.repo.get(&project_id, Some(user_id)) {
             Ok(Some(project)) => json!({ "ok": true, "project": summary(&project) }),
             Ok(None) => fail("Project not found"),
@@ -237,8 +240,11 @@ impl<'a> ProjectTools<'a> {
                 return fail(error.to_string());
             }
         }
-        self.host
-            .broadcast(user_id, "project.updated", json!({ "projectId": project_id }));
+        self.host.broadcast(
+            user_id,
+            "project.updated",
+            json!({ "projectId": project_id }),
+        );
         let project = match self.repo.get(&project_id, Some(user_id)) {
             Ok(Some(updated)) => updated,
             Ok(None) => project,
@@ -282,8 +288,11 @@ impl<'a> ProjectTools<'a> {
         if let Err(error) = self.repo.update(&project_id, &patch, Some(user_id)) {
             return fail(error.to_string());
         }
-        self.host
-            .broadcast(user_id, "project.updated", json!({ "projectId": project_id }));
+        self.host.broadcast(
+            user_id,
+            "project.updated",
+            json!({ "projectId": project_id }),
+        );
         let updated = match self.repo.get(&project_id, Some(user_id)) {
             Ok(Some(updated)) => updated,
             Ok(None) => project,
@@ -463,9 +472,10 @@ mod tests {
     #[test]
     fn create_requires_title() {
         let fixture = Fixture::new(FakeHost::with_node("gateway"));
-        let result = fixture
-            .tools()
-            .execute("project.create", &json!({ "projectRoot": "/work/x" }), USER);
+        let result =
+            fixture
+                .tools()
+                .execute("project.create", &json!({ "projectRoot": "/work/x" }), USER);
         assert_eq!(result["ok"], json!(false));
         assert!(
             result["message"]
@@ -608,17 +618,17 @@ mod tests {
         );
         let broadcasts = fixture.host.broadcasts.borrow();
         assert_eq!(broadcasts.len(), 2, "attach + transfer broadcast");
-        assert!(broadcasts.iter().all(|(user, event, _)| {
-            user == USER && event == "project.updated"
-        }));
+        assert!(
+            broadcasts
+                .iter()
+                .all(|(user, event, _)| { user == USER && event == "project.updated" })
+        );
     }
 
     #[test]
     fn unknown_tool_is_rejected() {
         let fixture = Fixture::new(FakeHost::with_node("gateway"));
-        let result = fixture
-            .tools()
-            .execute("project.destroy", &json!({}), USER);
+        let result = fixture.tools().execute("project.destroy", &json!({}), USER);
         assert_eq!(result["ok"], json!(false));
         assert!(
             result["message"]

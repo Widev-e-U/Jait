@@ -48,9 +48,9 @@ pub fn score_path(path: &str, query: &str) -> i32 {
     if segments
         .iter()
         .any(|s| matches!(*s, "__tests__" | "test" | "tests" | "spec"))
-        || name
-            .rsplit_once('.')
-            .is_some_and(|(stem, _)| stem.ends_with(".test") || stem.ends_with(".spec"))
+        || name.rsplit_once('.').is_some_and(|(stem, extension)| {
+            !extension.is_empty() && (stem.ends_with(".test") || stem.ends_with(".spec"))
+        })
     {
         score -= 100;
     }
@@ -103,15 +103,15 @@ pub fn rank_file_paths(
 }
 pub fn rank_content_matches(matches: &mut Vec<ContentMatch>, query: &str, limit: usize) {
     static DEFINITION: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var|def|fn|struct|trait)\b").unwrap()
+        Regex::new(r"(?i)^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var|def|fn|struct|trait)(?-u:\b)").unwrap()
     });
-    let needle = query.trim().to_lowercase();
+    let needle = query.to_lowercase();
     let path_query = cleaned_file_query(query);
     let escaped = regex::escape(&needle);
     let named = if needle.is_empty() || needle.len() > 4096 {
         None
     } else {
-        Regex::new(&format!(r"(?i)\b(?:function|class|interface|type|enum|const|let|var|def|fn|struct|trait)\s+{escaped}\b")).ok()
+        Regex::new(&format!(r"(?i)(?-u:\b)(?:function|class|interface|type|enum|const|let|var|def|fn|struct|trait)\s+{escaped}(?-u:\b)")).ok()
     };
     for matched in matches.iter_mut() {
         matched.relative_path = normalized(&matched.relative_path);
@@ -164,5 +164,46 @@ pub(crate) fn truncate_content(value: &str) -> String {
             cleaned.chars().take(500).collect::<String>(),
             count - 500
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ranking_preserves_content_query_whitespace_and_requires_test_extension() {
+        assert_eq!(score_path("src/foo.test.", "foo"), 919);
+        assert_eq!(score_path("src/foo.test.ts", "foo"), 819);
+        let mut matches = vec![ContentMatch {
+            file: String::new(),
+            relative_path: "src/other.rs".into(),
+            line: 1,
+            content: "foo".into(),
+            score: 0,
+        }];
+        rank_content_matches(&mut matches, " foo ", 1);
+        assert_eq!(matches[0].score, 119);
+    }
+}
+
+#[cfg(test)]
+mod word_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn named_definition_uses_javascript_ascii_word_boundaries() {
+        let mut matches = vec![ContentMatch {
+            file: String::new(),
+            relative_path: "src/other.rs".into(),
+            line: 1,
+            content: "function café() {}".into(),
+            score: 0,
+        }];
+        rank_content_matches(&mut matches, "café", 1);
+        assert_eq!(matches[0].score, 719);
+        matches[0].content = "function cafe() {}".into();
+        rank_content_matches(&mut matches, "cafe", 1);
+        assert_eq!(matches[0].score, 1419);
     }
 }

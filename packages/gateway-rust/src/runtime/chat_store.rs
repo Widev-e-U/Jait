@@ -25,6 +25,8 @@ pub struct SqliteTurnStore {
     owner: String,
     session: String,
     events: Arc<EventBus>,
+    turn_id: Option<String>,
+    database_owner: Option<Arc<std::fs::File>>,
 }
 impl SqliteTurnStore {
     pub fn new(auth: AuthState, owner: String, session: String) -> Result<Self, String> {
@@ -36,6 +38,8 @@ impl SqliteTurnStore {
             owner,
             session,
             events: EventBus::new(),
+            turn_id: None,
+            database_owner: None,
         })
     }
 
@@ -43,6 +47,33 @@ impl SqliteTurnStore {
     /// Defaults to a private bus so store construction in tests stays unchanged.
     pub(crate) fn with_events(mut self, events: Arc<EventBus>) -> Self {
         self.events = events;
+        self
+    }
+
+    pub(crate) fn with_database_owner(mut self, owner: Option<Arc<std::fs::File>>) -> Self {
+        self.database_owner = owner;
+        self
+    }
+
+    // A cancelled caller may leave a started SQLite job running. Keep ownership
+    // inside that job until its transaction has completed or rolled back.
+    async fn with_database<T: Send + 'static>(
+        &self,
+        operation: impl FnOnce(&rusqlite::Connection) -> Result<T, crate::routes::auth::Error>
+        + Send
+        + 'static,
+    ) -> Result<T, crate::routes::auth::Error> {
+        let owner = self.database_owner.clone();
+        self.auth
+            .with_database(move |db| {
+                let _owner = owner;
+                operation(db)
+            })
+            .await
+    }
+
+    pub(crate) fn with_turn(mut self) -> Self {
+        self.turn_id = Some(uuid::Uuid::new_v4().to_string());
         self
     }
 
@@ -54,7 +85,7 @@ impl SqliteTurnStore {
     pub async fn load(&self) -> Result<Vec<TurnEvent>, String> {
         let owner = self.owner.clone();
         let session = self.session.clone();
-        self.auth.with_database(move |db| {
+        self.with_database(move |db| {
             let tx = db.unchecked_transaction()?;
             require_owner(&tx, &owner, &session)?;
             super::chat_projection::require_native_history(&tx,&session)?;
@@ -91,9 +122,12 @@ impl SqliteTurnStore {
     pub(crate) async fn check_stream_capacity(&self) -> Result<(), String> {
         let owner = self.owner.clone();
         let session = self.session.clone();
-        self.auth.with_database(move |db| {
+        self.with_database(move |db| {
             let tx = db.unchecked_transaction()?;
             require_owner(&tx, &owner, &session)?;
+            ensure_lifecycle_schema(&tx)?;
+            let unresolved: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM rust_chat_turns WHERE session_id=? AND state='started')", [&session], |row| row.get(0))?;
+            if unresolved { return Err("A previous turn requires recovery".into()); }
             let (count, bytes): (i64, i64) = tx.query_row(
                 "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
                 params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
@@ -118,19 +152,42 @@ impl SqliteTurnStore {
 
     async fn append_stream_frame(&self, event: Value, terminal: bool) -> Result<(), String> {
         let kind = event.get("type").and_then(Value::as_str);
-        if !event.is_object() || kind.is_none() || matches!(kind, Some("done" | "error")) != terminal {
+        if !event.is_object()
+            || kind.is_none()
+            || matches!(kind, Some("done" | "error")) != terminal
+        {
             return Err("Invalid stream event".into());
         }
-        let data = serde_json::to_string(&event).map_err(|_| "Stream event could not be encoded")?;
+        let data =
+            serde_json::to_string(&event).map_err(|_| "Stream event could not be encoded")?;
         if data.len() > MAX_STREAM_EVENT_BYTES {
             return Err("Stream event exceeds persistence limit".into());
         }
         let owner = self.owner.clone();
         let session = self.session.clone();
         let events = self.events.clone();
-        self.auth.with_database(move |db| {
+        let turn_id = self.turn_id.clone();
+        self.with_database(move |db| {
             let tx = db.unchecked_transaction()?;
             require_owner(&tx, &owner, &session)?;
+            if let Some(ref turn_id) = turn_id {
+                ensure_lifecycle_schema(&tx)?;
+                let recorded: Option<(String, String, String)> = tx.query_row(
+                    "SELECT session_id,owner_id,state FROM rust_chat_turns WHERE turn_id=?",
+                    [turn_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                ).optional()?;
+                // An early failure may occur before a turn record is created.
+                // Once recorded, closed or mismatched turns must never emit frames.
+                match recorded {
+                    Some((recorded_session, recorded_owner, state))
+                        if recorded_session != session || recorded_owner != owner || state != "started" =>
+                    {
+                        return Err("Chat turn is no longer active".into());
+                    }
+                    None if !terminal => return Err("Chat turn has not started".into()),
+                    _ => {}
+                }
+            }
             let (count, bytes): (i64, i64) = tx.query_row(
                 "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
                 params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
@@ -142,6 +199,11 @@ impl SqliteTurnStore {
             }
             let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [&session], |row| row.get(0))?;
             tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session, next, STREAM_EVENT_TYPE, data, chrono::Utc::now().timestamp_millis()])?;
+            if terminal && let Some(turn_id) = turn_id {
+                // A terminal before request persistence still closes this turn. The
+                // terminal's log ID is used as its lifecycle anchor; no request exists.
+                tx.execute("INSERT INTO rust_chat_turns(turn_id,session_id,owner_id,state,request_log_id,terminal_log_id) VALUES(?,?,?,'finished',?,?) ON CONFLICT(turn_id) DO UPDATE SET state='finished', terminal_log_id=excluded.terminal_log_id WHERE session_id=excluded.session_id AND owner_id=excluded.owner_id AND state='started'", params![turn_id, session, owner, next, next])?;
+            }
             tx.commit()?;
             let _ = events.publish_serialized(&session, next, data);
             Ok(())
@@ -150,11 +212,16 @@ impl SqliteTurnStore {
 
     async fn append_event(&self, event: TurnEvent) -> Result<(), String> {
         let start = match &event {
-            TurnEvent::User { content } => Some(serde_json::to_string(&json!({"type":"request","content":content}))
-                .map_err(|_| "Stream event could not be encoded")?),
+            TurnEvent::User { content } => Some(
+                serde_json::to_string(&json!({"type":"request","content":content}))
+                    .map_err(|_| "Stream event could not be encoded")?,
+            ),
             _ => None,
         };
-        if start.as_ref().is_some_and(|data| data.len() > MAX_STREAM_EVENT_BYTES) {
+        if start
+            .as_ref()
+            .is_some_and(|data| data.len() > MAX_STREAM_EVENT_BYTES)
+        {
             return Err("Stream event exceeds persistence limit".into());
         }
         let payload = serde_json::to_string(&json!({"version":1,"event":event}))
@@ -165,10 +232,19 @@ impl SqliteTurnStore {
         let owner = self.owner.clone();
         let session = self.session.clone();
         let events = self.events.clone();
-        self.auth.with_database(move |db| {
+        let turn_id = self.turn_id.clone();
+        self.with_database(move |db| {
             let tx = db.unchecked_transaction()?;
             require_owner(&tx, &owner, &session)?;
             super::chat_projection::require_native_history(&tx,&session)?;
+            if start.is_none() && let Some(ref turn_id) = turn_id {
+                ensure_lifecycle_schema(&tx)?;
+                let active: bool = tx.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM rust_chat_turns WHERE turn_id=? AND session_id=? AND owner_id=? AND state='started')",
+                    params![turn_id, session, owner], |row| row.get(0),
+                )?;
+                if !active { return Err("Chat turn is no longer active".into()); }
+            }
             let (count, bytes): (i64, i64) = tx.query_row("SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?", params![session,EVENT_TYPE], |row| Ok((row.get(0)?,row.get(1)?)))?;
             if count >= MAX_HISTORY_EVENTS as i64 || bytes + payload.len() as i64 > MAX_HISTORY_BYTES as i64 {
                 return Err("Stored turn history exceeds migration runtime limits".into());
@@ -178,6 +254,10 @@ impl SqliteTurnStore {
             let now = chrono::Utc::now();
             tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next,EVENT_TYPE,payload,now.timestamp_millis()])?;
             if let Some(data) = &start {
+                if let Some(turn_id) = &turn_id {
+                    ensure_lifecycle_schema(&tx)?;
+                    tx.execute("INSERT INTO rust_chat_turns(turn_id,session_id,owner_id,state,request_log_id) VALUES(?,?,?,'started',?)", params![turn_id,session,owner,next+1])?;
+                }
                 let (count, bytes): (i64, i64) = tx.query_row(
                     "SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",
                     params![session, STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?)),
@@ -213,7 +293,7 @@ impl TurnPersistence for SqliteTurnStore {
             }
             let owner = self.owner.clone();
             let session = self.session.clone();
-            self.auth.with_database(move |db| {
+            self.with_database(move |db| {
                 require_owner(db,&owner,&session)?;
                 let (count,stored_bytes):(i64,i64)=db.query_row("SELECT count(*),COALESCE(sum(length(CAST(payload AS BLOB))),0) FROM session_events WHERE session_id=? AND type=?",params![session,EVENT_TYPE],|row|Ok((row.get(0)?,row.get(1)?)))?;
                 if count as usize + events > MAX_HISTORY_EVENTS || stored_bytes as usize + bytes > MAX_HISTORY_BYTES {
@@ -227,6 +307,78 @@ impl TurnPersistence for SqliteTurnStore {
         Box::pin(self.append_event(event))
     }
 }
+// Runtime-private metadata: no production schema version is claimed by this opt-in runtime.
+fn ensure_lifecycle_schema(db: &rusqlite::Connection) -> Result<(), crate::routes::auth::Error> {
+    db.execute_batch("CREATE TABLE IF NOT EXISTS rust_chat_turns (turn_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, owner_id TEXT NOT NULL, state TEXT NOT NULL, request_log_id INTEGER NOT NULL, terminal_log_id INTEGER); CREATE UNIQUE INDEX IF NOT EXISTS rust_chat_turns_active ON rust_chat_turns(session_id) WHERE state='started';")?;
+    Ok(())
+}
+
+/// Resolve abandoned turns before accepting requests. Each bounded transaction commits
+/// an interruption frame and state together; no provider or tool is invoked.
+#[cfg(test)]
+async fn reconcile_startup(auth: &AuthState) -> Result<(), crate::routes::auth::Error> {
+    reconcile_startup_inner(auth, None).await
+}
+pub(crate) async fn reconcile_startup_owned(
+    auth: &AuthState,
+    owner: Arc<std::fs::File>,
+) -> Result<(), crate::routes::auth::Error> {
+    reconcile_startup_inner(auth, Some(owner)).await
+}
+async fn reconcile_startup_inner(
+    auth: &AuthState,
+    owner: Option<Arc<std::fs::File>>,
+) -> Result<(), crate::routes::auth::Error> {
+    const BATCH: usize = 128;
+    const MAX_BATCHES: usize = 32;
+    for _ in 0..MAX_BATCHES {
+        let job_owner = owner.clone();
+        let count = auth.with_database(move |db| {
+            let _owner = job_owner;
+            let tx = db.unchecked_transaction()?;
+            ensure_lifecycle_schema(&tx)?;
+            let turns = {
+                let mut statement = tx.prepare("SELECT turn_id,session_id,owner_id FROM rust_chat_turns WHERE state='started' ORDER BY rowid LIMIT ?")?;
+                let rows = statement.query_map([BATCH as i64], |row| Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?;
+                rows.collect::<rusqlite::Result<Vec<_>>>()?
+            };
+            for (turn, session, owner) in &turns {
+                // A transferred, archived or deleted session must not receive the old owner's frame.
+                let owned: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=? AND status='active')", params![session,owner], |row| row.get(0))?;
+                let terminal = if owned {
+                    let next: i64 = tx.query_row("SELECT COALESCE(MAX(log_id),0)+1 FROM session_events WHERE session_id=?", [session], |row| row.get(0))?;
+                    let data = json!({"type":"error","message":"Chat turn interrupted by gateway restart"}).to_string();
+                    tx.execute("INSERT INTO session_events(session_id,log_id,type,payload,created_at) VALUES(?,?,?,?,?)", params![session,next,STREAM_EVENT_TYPE,data,chrono::Utc::now().timestamp_millis()])?;
+                    Some(next)
+                } else { None };
+                tx.execute("UPDATE rust_chat_turns SET state='interrupted',terminal_log_id=? WHERE turn_id=? AND state='started'", params![terminal,turn])?;
+            }
+            tx.commit()?;
+            Ok(turns.len())
+        }).await?;
+        if count < BATCH {
+            return Ok(());
+        }
+    }
+    // Fail closed if the bounded startup budget was exhausted. Already committed
+    // batches remain idempotent and the next startup can continue reconciliation.
+    let remaining: bool = auth
+        .with_database(move |db| {
+            let _owner = owner;
+            Ok(db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM rust_chat_turns WHERE state='started')",
+                [],
+                |row| row.get(0),
+            )?)
+        })
+        .await?;
+    if remaining {
+        Err("Chat recovery exceeds startup budget; restart to continue".into())
+    } else {
+        Ok(())
+    }
+}
+
 fn require_owner(
     db: &rusqlite::Connection,
     owner: &str,
@@ -268,30 +420,421 @@ mod tests {
     fn store(auth: &AuthState) -> SqliteTurnStore {
         SqliteTurnStore::new(auth.clone(), "owner".into(), "session".into()).unwrap()
     }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn cancelled_caller_keeps_database_lock_until_started_job_finishes() {
+        let path = artifact_database();
+        let owner = Arc::new(
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(&path)
+                .unwrap(),
+        );
+        owner.try_lock().unwrap();
+        let auth = open(&path);
+        let adapter = store(&auth).with_database_owner(Some(owner.clone()));
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            adapter
+                .with_database(move |_| {
+                    started_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+                .await
+        });
+        tokio::task::spawn_blocking(move || {
+            started_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap()
+        })
+        .await
+        .unwrap();
+        drop(owner);
+        task.abort();
+        let _ = task.await;
+        let contender = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        assert!(contender.try_lock().is_err());
+        release_tx.send(()).unwrap();
+        // Drain the worker after the in-flight job before checking release.
+        auth.with_database(|_| Ok(())).await.unwrap();
+        contender.try_lock().unwrap();
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn failed_request_transaction_leaves_no_lifecycle_or_history() {
+        let auth = open(Path::new(":memory:"));
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_request BEFORE INSERT ON session_events WHEN NEW.type='rust.chat.stream' BEGIN SELECT RAISE(ABORT, 'injected'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(
+            store(&auth)
+                .with_turn()
+                .append(TurnEvent::User {
+                    content: "one".into()
+                })
+                .await
+                .is_err()
+        );
+        let history: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row("SELECT count(*) FROM session_events", [], |r| r.get(0))?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(history, 0);
+        reconcile_startup(&auth).await.unwrap();
+        let turns: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row("SELECT count(*) FROM rust_chat_turns", [], |r| r.get(0))?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(turns, 0);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn lifecycle_recovery_is_atomic_idempotent_and_does_not_repeat_work() {
+        let path = artifact_database();
+        let auth = open(&path);
+        let first = store(&auth).with_turn();
+        first
+            .append(TurnEvent::User {
+                content: "hello".into(),
+            })
+            .await
+            .unwrap();
+        first
+            .append_stream_event(json!({"type":"token","content":"partial"}))
+            .await
+            .unwrap();
+        // A second admission cannot overwrite an unresolved turn.
+        assert!(
+            store(&auth)
+                .with_turn()
+                .append(TurnEvent::User {
+                    content: "duplicate".into()
+                })
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+        let restarted = open(&path);
+        reconcile_startup(&restarted).await.unwrap();
+        reconcile_startup(&restarted).await.unwrap();
+        let (states, frames): (Vec<(String, Option<i64>)>, Vec<String>) = restarted.with_database(|db| {
+            let mut state = db.prepare("SELECT state,terminal_log_id FROM rust_chat_turns")?;
+            let states = state.query_map([], |r| Ok((r.get(0)?,r.get(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            let mut stream = db.prepare("SELECT payload FROM session_events WHERE type='rust.chat.stream' ORDER BY log_id")?;
+            let frames = stream.query_map([], |r| r.get(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok((states,frames))
+        }).await.unwrap();
+        assert_eq!(states, vec![("interrupted".into(), Some(4))]);
+        assert_eq!(frames.len(), 3);
+        assert_eq!(
+            serde_json::from_str::<Value>(&frames[2]).unwrap()["type"],
+            "error"
+        );
+        assert_eq!(store(&restarted).load().await.unwrap().len(), 1);
+        restarted.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn closed_turn_rejects_late_and_duplicate_frames() {
+        let auth = open(Path::new(":memory:"));
+        let turn = store(&auth).with_turn();
+        turn.append(TurnEvent::User {
+            content: "hello".into(),
+        })
+        .await
+        .unwrap();
+        turn.append(TurnEvent::Assistant {
+            content: "on time".into(),
+            thinking: String::new(),
+            tool_calls: vec![],
+        })
+        .await
+        .unwrap();
+        turn.append_stream_terminal(json!({"type":"done"}))
+            .await
+            .unwrap();
+        assert!(
+            turn.append_stream_event(json!({"type":"token","content":"late"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            turn.append_stream_terminal(json!({"type":"error"}))
+                .await
+                .is_err()
+        );
+        let late = TurnEvent::Assistant {
+            content: "late".into(),
+            thinking: String::new(),
+            tool_calls: vec![],
+        };
+        assert!(turn.append(late.clone()).await.is_err());
+        let (count, state): (i64, String) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!((count, state.as_str()), (2, "finished"));
+        // Startup interruption also closes the recorded turn to stale writers.
+        let interrupted = store(&auth).with_turn();
+        interrupted
+            .append(TurnEvent::User {
+                content: "restart".into(),
+            })
+            .await
+            .unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        assert!(
+            interrupted
+                .append_stream_event(json!({"type":"token","content":"late"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            interrupted
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        assert!(interrupted.append(late.clone()).await.is_err());
+        // A failure before request persistence still has a deliverable terminal.
+        let early = store(&auth).with_turn();
+        assert!(
+            early
+                .append_stream_event(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        assert!(early.append(late).await.is_err());
+        early
+            .append_stream_terminal(json!({"type":"error"}))
+            .await
+            .unwrap();
+        assert!(
+            early
+                .append_stream_terminal(json!({"type":"error"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            early
+                .append(TurnEvent::User {
+                    content: "delayed".into()
+                })
+                .await
+                .is_err()
+        );
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn terminal_and_state_commit_together_and_transfer_is_not_exposed() {
+        let auth = open(Path::new(":memory:"));
+        let first = store(&auth).with_turn();
+        first
+            .append(TurnEvent::User {
+                content: "one".into(),
+            })
+            .await
+            .unwrap();
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_finish BEFORE UPDATE ON rust_chat_turns WHEN NEW.state='finished' BEGIN SELECT RAISE(ABORT, 'injected'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(
+            first
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        let count: i64 = auth
+            .with_database(|db| {
+                Ok(db.query_row(
+                    "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                    [],
+                    |r| r.get(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(count, 1);
+        auth.with_database(|db| { db.execute_batch("DROP TRIGGER reject_finish; UPDATE sessions SET user_id='other' WHERE id='session';")?; Ok(()) }).await.unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        let (state, terminal): (String, Option<i64>) = auth
+            .with_database(|db| {
+                Ok(db.query_row(
+                    "SELECT state,terminal_log_id FROM rust_chat_turns",
+                    [],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "interrupted");
+        assert_eq!(terminal, None);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn recovery_failure_rolls_back_terminal_and_state() {
+        let auth = open(Path::new(":memory:"));
+        store(&auth)
+            .with_turn()
+            .append(TurnEvent::User {
+                content: "one".into(),
+            })
+            .await
+            .unwrap();
+        auth.with_database(|db| {
+            db.execute_batch("CREATE TRIGGER reject_recovery BEFORE UPDATE ON rust_chat_turns WHEN NEW.state='interrupted' BEGIN SELECT RAISE(ABORT, 'injected'); END;")?;
+            Ok(())
+        }).await.unwrap();
+        assert!(reconcile_startup(&auth).await.is_err());
+        let (state, count): (String, i64) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "started");
+        assert_eq!(count, 1);
+        auth.with_database(|db| {
+            db.execute_batch("DROP TRIGGER reject_recovery")?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        let (state, count): (String, i64) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "interrupted");
+        assert_eq!(count, 2);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn completed_turn_is_not_reconciled() {
+        let auth = open(Path::new(":memory:"));
+        let turn = store(&auth).with_turn();
+        turn.append(TurnEvent::User {
+            content: "one".into(),
+        })
+        .await
+        .unwrap();
+        turn.append_stream_terminal(json!({"type":"done"}))
+            .await
+            .unwrap();
+        reconcile_startup(&auth).await.unwrap();
+        let (state, count): (String, i64) = auth
+            .with_database(|db| {
+                Ok((
+                    db.query_row("SELECT state FROM rust_chat_turns", [], |r| r.get(0))?,
+                    db.query_row(
+                        "SELECT count(*) FROM session_events WHERE type='rust.chat.stream'",
+                        [],
+                        |r| r.get(0),
+                    )?,
+                ))
+            })
+            .await
+            .unwrap();
+        assert_eq!(state, "finished");
+        assert_eq!(count, 2);
+        auth.shutdown().await.unwrap();
+    }
     #[tokio::test]
     async fn failed_terminal_write_and_restart_do_not_imply_live_stream() {
         let path = artifact_database();
         let auth = open(&path);
         let adapter = store(&auth);
-        adapter.append(TurnEvent::User { content: "hello".into() }).await.unwrap();
-        adapter.append_stream_event(json!({"type":"token","content":"partial"})).await.unwrap();
+        adapter
+            .append(TurnEvent::User {
+                content: "hello".into(),
+            })
+            .await
+            .unwrap();
+        adapter
+            .append_stream_event(json!({"type":"token","content":"partial"}))
+            .await
+            .unwrap();
         auth.with_database(|db| {
             db.execute_batch("CREATE TRIGGER reject_terminal BEFORE INSERT ON session_events WHEN NEW.type='rust.chat.stream' BEGIN SELECT RAISE(ABORT, 'injected failure'); END;")?;
             Ok(())
         }).await.unwrap();
-        assert!(adapter.append_stream_terminal(json!({"type":"done"})).await.is_err());
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
         auth.shutdown().await.unwrap();
 
         let restarted = open(&path);
         let snapshot = super::super::chat_projection::project_messages(
-            restarted.clone(), "owner".into(), "session".into(), None, None,
-        ).await.unwrap();
+            restarted.clone(),
+            "owner".into(),
+            "session".into(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
         assert_eq!(snapshot["streaming"], false);
         assert_eq!(snapshot["messages"][1]["content"], "partial");
         assert_eq!(snapshot["seq"], 3);
-        assert!(super::super::chat_projection::project_messages(
-            restarted.clone(), "other".into(), "session".into(), None, None,
-        ).await.is_err());
+        assert!(
+            super::super::chat_projection::project_messages(
+                restarted.clone(),
+                "other".into(),
+                "session".into(),
+                None,
+                None,
+            )
+            .await
+            .is_err()
+        );
         assert_eq!(store(&restarted).load().await.unwrap().len(), 1);
         restarted.shutdown().await.unwrap();
     }
@@ -329,7 +872,9 @@ mod tests {
             .append_stream_event(json!({"type":"token","content":"yes"}))
             .await
             .unwrap();
-        let Message::Durable(frame) = receiver.try_recv().unwrap() else { panic!("expected durable frame") };
+        let Message::Durable(frame) = receiver.try_recv().unwrap() else {
+            panic!("expected durable frame")
+        };
         assert_eq!(frame.log_id, 1);
         assert_eq!(
             serde_json::from_str::<Value>(&frame.data).unwrap()["content"],
@@ -361,14 +906,32 @@ mod tests {
         let bus = EventBus::new();
         let (mut receiver, _) = bus.subscribe("session", "owner").unwrap();
         let adapter = store(&auth).with_events(bus);
-        adapter.append(TurnEvent::User { content: "history".into() }).await.unwrap();
-        let Message::Durable(start) = receiver.try_recv().unwrap() else { panic!("expected request") };
+        adapter
+            .append(TurnEvent::User {
+                content: "history".into(),
+            })
+            .await
+            .unwrap();
+        let Message::Durable(start) = receiver.try_recv().unwrap() else {
+            panic!("expected request")
+        };
         assert_eq!(start.log_id, 2);
-        assert_eq!(serde_json::from_str::<Value>(&start.data).unwrap()["content"], "history");
-        adapter.append_stream_event(json!({"type":"token","content":"visible"})).await.unwrap();
-        let Message::Durable(frame) = receiver.try_recv().unwrap() else { panic!("expected durable frame") };
+        assert_eq!(
+            serde_json::from_str::<Value>(&start.data).unwrap()["content"],
+            "history"
+        );
+        adapter
+            .append_stream_event(json!({"type":"token","content":"visible"}))
+            .await
+            .unwrap();
+        let Message::Durable(frame) = receiver.try_recv().unwrap() else {
+            panic!("expected durable frame")
+        };
         assert_eq!(frame.log_id, 3);
-        assert_eq!(serde_json::from_str::<Value>(&frame.data).unwrap()["content"], "visible");
+        assert_eq!(
+            serde_json::from_str::<Value>(&frame.data).unwrap()["content"],
+            "visible"
+        );
         auth.shutdown().await.unwrap();
     }
 
@@ -389,12 +952,23 @@ mod tests {
             tx.commit()?;
             Ok(())
         }).await.unwrap();
-        assert!(adapter.append_stream_terminal(json!({"type":"done"})).await.is_err());
-        assert!(matches!(receiver.try_recv(), Err(tokio::sync::broadcast::error::TryRecvError::Empty)));
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
         let (count, first, last): (i64, i64, i64) = auth.with_database(|db| {
             Ok(db.query_row("SELECT count(*),min(log_id),max(log_id) FROM session_events WHERE session_id='session' AND type=?", [STREAM_EVENT_TYPE], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?)
         }).await.unwrap();
-        assert_eq!((count, first, last), (MAX_STREAM_EVENTS, 1, MAX_STREAM_EVENTS));
+        assert_eq!(
+            (count, first, last),
+            (MAX_STREAM_EVENTS, 1, MAX_STREAM_EVENTS)
+        );
         auth.shutdown().await.unwrap();
     }
 
@@ -407,8 +981,18 @@ mod tests {
         assert!(adapter.check_stream_capacity().await.is_ok());
         let other = SqliteTurnStore::new(auth.clone(), "other".into(), "session".into()).unwrap();
         assert!(other.check_stream_capacity().await.is_err());
-        assert!(adapter.append_stream_event(json!({"type":"done"})).await.is_err());
-        assert!(adapter.append_stream_terminal(json!({"type":"token"})).await.is_err());
+        assert!(
+            adapter
+                .append_stream_event(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
         auth.with_database(|db| {
             let tx = db.unchecked_transaction()?;
             {
@@ -421,12 +1005,30 @@ mod tests {
             Ok(())
         }).await.unwrap();
         assert!(adapter.check_stream_capacity().await.is_err());
-        assert!(adapter.append_stream_event(json!({"type":"token"})).await.is_err());
-        assert!(matches!(receiver.try_recv(), Err(tokio::sync::broadcast::error::TryRecvError::Empty)));
-        adapter.append_stream_terminal(json!({"type":"error"})).await.unwrap();
-        let Message::Durable(Frame { log_id, .. }) = receiver.try_recv().unwrap() else { panic!("expected durable frame") };
+        assert!(
+            adapter
+                .append_stream_event(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+        ));
+        adapter
+            .append_stream_terminal(json!({"type":"error"}))
+            .await
+            .unwrap();
+        let Message::Durable(Frame { log_id, .. }) = receiver.try_recv().unwrap() else {
+            panic!("expected durable frame")
+        };
         assert_eq!(log_id, MAX_STREAM_EVENTS);
-        assert!(adapter.append_stream_terminal(json!({"type":"done"})).await.is_err());
+        assert!(
+            adapter
+                .append_stream_terminal(json!({"type":"done"}))
+                .await
+                .is_err()
+        );
         auth.shutdown().await.unwrap();
     }
 
@@ -449,8 +1051,16 @@ mod tests {
             Ok(())
         }).await.unwrap();
         assert!(adapter.check_stream_capacity().await.is_err());
-        assert!(adapter.append_stream_event(json!({"type":"token"})).await.is_err());
-        adapter.append_stream_terminal(json!({"type":"error"})).await.unwrap();
+        assert!(
+            adapter
+                .append_stream_event(json!({"type":"token"}))
+                .await
+                .is_err()
+        );
+        adapter
+            .append_stream_terminal(json!({"type":"error"}))
+            .await
+            .unwrap();
         let bytes: i64 = auth.with_database(|db| {
             Ok(db.query_row("SELECT sum(length(CAST(payload AS BLOB))) FROM session_events WHERE session_id='session' AND type=?", [STREAM_EVENT_TYPE], |row| row.get(0))?)
         }).await.unwrap();

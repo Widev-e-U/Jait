@@ -32,6 +32,31 @@ pub trait CodeGraphBackend: Send + Sync {
 }
 pub type OwnedProjects =
     Arc<dyn Fn(String) -> BoxFuture<'static, Result<Vec<Value>, GraphError>> + Send + Sync>;
+/// Resolve active projects through the application's bounded database worker.
+/// An empty identity must never become the project service's unscoped query.
+pub fn owned_projects_from_auth(auth: AuthState) -> OwnedProjects {
+    Arc::new(move |user| {
+        let auth = auth.clone();
+        Box::pin(async move {
+            if user.is_empty() {
+                return Err(GraphError::error("Project owner is required"));
+            }
+            auth.with_database(move |db| {
+                let projects = crate::services::projects::ProjectService::new(db).list(
+                    Some("active"),
+                    Some(&user),
+                    None,
+                )?;
+                Ok(serde_json::to_value(projects)?)
+            })
+            .await
+            .map_err(|error| GraphError::error(error.to_string()))?
+            .as_array()
+            .cloned()
+            .ok_or_else(|| GraphError::error("Invalid project list"))
+        })
+    })
+}
 pub struct NativeCodeGraphBackend {
     pub service: Arc<CodeGraphService>,
     pub projects: OwnedProjects,
@@ -51,7 +76,7 @@ impl CodeGraphBackend for NativeCodeGraphBackend {
             let root = params["projectRoot"].as_str().expect("owned root");
             let user = params["userId"].as_str();
             match method.as_str() {
-                "getIndex" => self.service.get_index(root, user),
+                "getIndex" => self.service.get_index(root, user).await,
                 "index" => {
                     self.service
                         .index(
@@ -351,5 +376,27 @@ async fn dispatch(state: CodeGraphRoutes, request: Request) -> Response {
         ),
         Err(error) if method == "getIndex" => generic(error),
         Err(error) => graph_error(error),
+    }
+}
+
+#[cfg(test)]
+mod owned_project_adapter_tests {
+    use super::*;
+    use rusqlite::Connection;
+
+    #[tokio::test]
+    async fn worker_project_adapter_limits_results_to_active_owner() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE projects(id TEXT, user_id TEXT, title TEXT, root_path TEXT, node_id TEXT, created_at TEXT, last_active_at TEXT, status TEXT, metadata TEXT, parent_id TEXT, instructions TEXT, description TEXT, color TEXT, kind TEXT);
+          INSERT INTO projects VALUES ('a','alice',NULL,'/alice','gateway','now','now','active',NULL,NULL,NULL,NULL,NULL,'folder');
+          INSERT INTO projects VALUES ('b','bob',NULL,'/bob','gateway','now','now','active',NULL,NULL,NULL,NULL,NULL,'folder');
+          INSERT INTO projects VALUES ('c','alice',NULL,'/archived','gateway','now','now','archived',NULL,NULL,NULL,NULL,NULL,'folder');").unwrap();
+        let auth = AuthState::new(db, "test-secret".into()).unwrap();
+        let projects = owned_projects_from_auth(auth.clone());
+        let result = projects("alice".into()).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["rootPath"], "/alice");
+        assert!(projects(String::new()).await.is_err());
+        auth.shutdown().await.unwrap();
     }
 }

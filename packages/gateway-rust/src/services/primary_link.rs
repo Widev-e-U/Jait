@@ -209,8 +209,9 @@ pub fn detect_platform(os: &str) -> FsPlatform {
 }
 
 fn strip_prefix_ci<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
-    if value.len() >= prefix.len() && value[..prefix.len()].eq_ignore_ascii_case(prefix) {
-        Some(&value[prefix.len()..])
+    let head = value.get(..prefix.len())?;
+    if head.eq_ignore_ascii_case(prefix) {
+        value.get(prefix.len()..)
     } else {
         None
     }
@@ -381,6 +382,23 @@ pub fn resolve_node_id(existing: Option<&str>, generate: Option<String>, hostnam
     }
 }
 
+/// Avoid creating or overwriting the persisted ID when it is already usable.
+fn resolve_node_id_lazy(
+    existing: Result<Option<&str>, ()>,
+    generate: impl FnOnce() -> Option<String>,
+    hostname: &str,
+) -> NodeId {
+    let Ok(existing) = existing else {
+        return resolve_node_id(None, None, hostname);
+    };
+    let generated = if existing.is_some_and(|value| !js_trim(value).is_empty()) {
+        None
+    } else {
+        generate()
+    };
+    resolve_node_id(existing, generated, hostname)
+}
+
 /// `nodeName = opts.nodeName?.trim() || hostname()`.
 pub fn node_name(configured: Option<&str>, hostname: &str) -> String {
     let trimmed = js_trim(configured.unwrap_or_default());
@@ -484,6 +502,8 @@ pub enum Inbound {
         request_id: Option<Value>,
         tool: String,
         args: Map<String, Value>,
+        project_root: Option<String>,
+        background_id: Option<String>,
     },
     TerminalOpRequest {
         request_id: Option<Value>,
@@ -542,12 +562,24 @@ pub fn parse_inbound(message: &Value) -> Inbound {
         "fs.op-request" => Inbound::FsOpRequest {
             request_id: request_id(payload),
             op: js_string(payload.get("op")),
-            args: args_object(payload),
+            args: payload
+                .iter()
+                .filter(|(key, _)| key.as_str() != "requestId" && key.as_str() != "op")
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
         },
         "tool.op-request" => Inbound::ToolOpRequest {
             request_id: request_id(payload),
             tool: js_string(payload.get("tool")),
             args: args_object(payload),
+            project_root: payload
+                .get("projectRoot")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            background_id: payload
+                .get("backgroundId")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
         },
         "terminal.op-request" => Inbound::TerminalOpRequest {
             request_id: request_id(payload),
@@ -938,7 +970,13 @@ pub trait PrimaryLinkHost: Send + Sync {
     fn browse(&self, path: &str) -> Result<Map<String, Value>, String>;
     fn fs_roots(&self) -> Vec<Value>;
     fn run_fs_op(&self, op: &str, args: &Map<String, Value>) -> Result<Value, String>;
-    fn run_tool(&self, tool: &str, args: &Map<String, Value>) -> Result<Value, String>;
+    fn run_tool(
+        &self,
+        tool: &str,
+        args: &Map<String, Value>,
+        project_root: Option<&str>,
+        background_id: Option<&str>,
+    ) -> Result<Value, String>;
 
     fn spawn_terminal(&self, spawn: &TerminalSpawn) -> Result<TerminalSnapshot, String>;
     fn terminal_input(&self, terminal_id: &str, data: &str) -> Result<(), String>;
@@ -987,14 +1025,21 @@ impl PrimaryLink {
     ) -> Self {
         let state_directory = host.state_directory();
         let id_path = node_id_path(&state_directory);
-        let existing = host.read_state_file(&id_path).ok().flatten();
+        let existing = host.read_state_file(&id_path);
         let generate = || {
             let id = generate_node_id(&uuid_like());
             host.ensure_parent_dir(&id_path).ok()?;
             host.write_state_file(&id_path, &id).ok()?;
             Some(id)
         };
-        let node_id = resolve_node_id(existing.as_deref(), generate(), &host.hostname());
+        let node_id = resolve_node_id_lazy(
+            existing
+                .as_ref()
+                .map(|value| value.as_deref())
+                .map_err(|_| ()),
+            generate,
+            &host.hostname(),
+        );
         Self {
             opts,
             host,
@@ -1149,9 +1194,19 @@ impl PrimaryLink {
                 request_id,
                 tool,
                 args,
+                project_root,
+                background_id,
             } => {
-                let outcome = check_tool(&tool)
-                    .and_then(|()| self.host.run_tool(&tool, &args).map_err(Error::Host));
+                let outcome = check_tool(&tool).and_then(|()| {
+                    self.host
+                        .run_tool(
+                            &tool,
+                            &args,
+                            project_root.as_deref(),
+                            background_id.as_deref(),
+                        )
+                        .map_err(Error::Host)
+                });
                 vec![match outcome {
                     Ok(result) => result_response(ResponseKind::ToolOp, request_id, result),
                     Err(error) => {
@@ -1273,15 +1328,9 @@ fn uuid_like() -> String {
 // Project search bridge (`runPrimaryProjectSearch` / `runPrimarySearchTool`)
 // ---------------------------------------------------------------------------
 //
-// The TS file imports `searchProject`, `normalizeProjectSearchLimit`,
-// `PROJECT_SEARCH_DEFAULT_RESULTS` and `ProjectSearchUnavailableError` from
-// `services/project-search.ts` — a host capability with no reachable native
-// counterpart (the Rust `services/project_search` tree is present on disk but is
-// not declared as a module yet).  The functions below therefore take a
-// [`ProjectSearchBridge`] seam; a wiring layer adapts it onto
-// `services::project_search::search_project` once that module is registered.
-// Everything else (limit normalisation, message strings, retry ordering) is
-// transcribed verbatim.
+// The search service is available through a pinned-root bridge. Runtime callers
+// must authorize the root, run blocking work on the shared filesystem lane, and
+// propagate cancellation; this seam does not provide those authorities itself.
 
 /// `PROJECT_SEARCH_DEFAULT_RESULTS`.
 pub const PROJECT_SEARCH_DEFAULT_RESULTS: usize = 20;
@@ -1790,6 +1839,12 @@ mod tests {
     }
 
     #[test]
+    fn to_ws_url_handles_unicode_at_scheme_boundaries() {
+        assert_eq!(to_ws_url("abcdefé.example", None), "ws://abcdefé.example");
+        assert_eq!(to_ws_url("https://例.example/", None), "wss://例.example");
+    }
+
+    #[test]
     fn redact_token_hides_only_the_credential() {
         assert_eq!(
             redact_token("ws://h?token=secret&x=1"),
@@ -1851,6 +1906,31 @@ mod tests {
         let fallback = resolve_node_id(None, None, "host");
         assert_eq!(fallback.id, "node-host");
         assert_eq!(fallback.source, NodeIdSource::Fallback);
+    }
+
+    #[test]
+    fn persisted_node_id_does_not_run_persistence_callback() {
+        let persisted = resolve_node_id_lazy(
+            Ok(Some(" node-existing\n")),
+            || panic!("existing node identity must not be overwritten"),
+            "host",
+        );
+        assert_eq!(persisted.id, "node-existing");
+        assert_eq!(persisted.source, NodeIdSource::Persisted);
+
+        let generated = resolve_node_id_lazy(Ok(Some("  ")), || Some("node-new".into()), "host");
+        assert_eq!(generated.id, "node-new");
+        assert_eq!(generated.source, NodeIdSource::Generated);
+        let fallback = resolve_node_id_lazy(Ok(None), || None, "host");
+        assert_eq!(fallback.id, "node-host");
+        assert_eq!(fallback.source, NodeIdSource::Fallback);
+        let unreadable = resolve_node_id_lazy(
+            Err(()),
+            || panic!("an unreadable node identity must not be overwritten"),
+            "host",
+        );
+        assert_eq!(unreadable.id, "node-host");
+        assert_eq!(unreadable.source, NodeIdSource::Fallback);
     }
 
     #[test]
@@ -2005,7 +2085,7 @@ mod tests {
     fn parse_inbound_and_responses_echo_request_ids() {
         let frame = json!({
             "type": "fs.op-request",
-            "payload": { "requestId": "r1", "op": "readdir", "args": { "path": "/tmp" } }
+            "payload": { "requestId": "r1", "op": "readdir", "path": "/tmp", "args": { "preserved": true } }
         });
         match parse_inbound(&frame) {
             Inbound::FsOpRequest {
@@ -2016,6 +2096,41 @@ mod tests {
                 assert_eq!(request_id, Some(json!("r1")));
                 assert_eq!(op, "readdir");
                 assert_eq!(args["path"], json!("/tmp"));
+                assert_eq!(args["args"]["preserved"], json!(true));
+                assert!(!args.contains_key("requestId"));
+                assert!(!args.contains_key("op"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        match parse_inbound(&json!({"type": "tool.op-request", "payload": {
+            "requestId": "r2", "tool": "search", "args": {"pattern": "needle"},
+            "projectRoot": "/authorized", "backgroundId": "job-1"
+        }})) {
+            Inbound::ToolOpRequest {
+                request_id,
+                tool,
+                args,
+                project_root,
+                background_id,
+            } => {
+                assert_eq!(request_id, Some(json!("r2")));
+                assert_eq!(tool, "search");
+                assert_eq!(args["pattern"], json!("needle"));
+                assert_eq!(project_root.as_deref(), Some("/authorized"));
+                assert_eq!(background_id.as_deref(), Some("job-1"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+        match parse_inbound(&json!({"type": "tool.op-request", "payload": {
+            "projectRoot": 7, "backgroundId": null
+        }})) {
+            Inbound::ToolOpRequest {
+                project_root,
+                background_id,
+                ..
+            } => {
+                assert!(project_root.is_none());
+                assert!(background_id.is_none());
             }
             other => panic!("unexpected {other:?}"),
         }

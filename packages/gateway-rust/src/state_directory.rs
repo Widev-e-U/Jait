@@ -55,9 +55,7 @@ pub fn default_db_path(home: &Path, configured: Option<&str>) -> Result<PathBuf,
 mod tests {
     use super::*;
 
-    fn lookup_of<'a>(
-        entries: &'a [(&'a str, &'a str)],
-    ) -> impl Fn(&str) -> Option<String> + 'a {
+    fn lookup_of<'a>(entries: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
         move |key| {
             entries
                 .iter()
@@ -74,13 +72,15 @@ mod tests {
 
     #[test]
     fn default_db_path_uses_a_configured_absolute_state_directory() {
-        let path = default_db_path(Path::new("/home/me"), Some("  /srv/jait  ")).expect("configured");
+        let path =
+            default_db_path(Path::new("/home/me"), Some("  /srv/jait  ")).expect("configured");
         assert_eq!(path, PathBuf::from("/srv/jait/data/jait.db"));
     }
 
     #[test]
     fn default_db_path_rejects_a_relative_state_directory() {
-        let error = default_db_path(Path::new("/home/me"), Some("relative/dir")).expect_err("relative");
+        let error =
+            default_db_path(Path::new("/home/me"), Some("relative/dir")).expect_err("relative");
         assert_eq!(error.0, "JAIT_STATE_DIR must be an absolute path");
     }
 
@@ -95,14 +95,16 @@ mod tests {
     #[test]
     fn resolve_trims_the_configured_database_path() {
         let lookup = lookup_of(&[("JAIT_DB_PATH", "  /from/env.db  "), ("NODE_ENV", "test")]);
-        let resolved = resolve_database_path(None, lookup, Path::new("/home/me")).expect("env path");
+        let resolved =
+            resolve_database_path(None, lookup, Path::new("/home/me")).expect("env path");
         assert_eq!(resolved, PathBuf::from("/from/env.db"));
     }
 
     #[test]
     fn resolve_refuses_the_default_database_in_test_mode_with_the_exact_message() {
         let lookup = lookup_of(&[("JAIT_DB_PATH", "   "), ("NODE_ENV", "test")]);
-        let error = resolve_database_path(None, lookup, Path::new("/home/me")).expect_err("test mode");
+        let error =
+            resolve_database_path(None, lookup, Path::new("/home/me")).expect_err("test mode");
         assert_eq!(
             error.0,
             "Refusing to open the default Jait database in test mode. Pass ':memory:' or set JAIT_DB_PATH."
@@ -112,7 +114,8 @@ mod tests {
     #[test]
     fn resolve_falls_back_to_the_same_path_as_default_db_path() {
         let lookup = lookup_of(&[("JAIT_STATE_DIR", "/srv/jait"), ("NODE_ENV", "production")]);
-        let resolved = resolve_database_path(None, lookup, Path::new("/home/me")).expect("fallback");
+        let resolved =
+            resolve_database_path(None, lookup, Path::new("/home/me")).expect("fallback");
         assert_eq!(
             resolved,
             default_db_path(Path::new("/home/me"), Some("/srv/jait")).expect("default")

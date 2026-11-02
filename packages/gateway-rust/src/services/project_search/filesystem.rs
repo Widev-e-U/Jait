@@ -125,7 +125,7 @@ impl ProjectRoot {
         relative: &str,
         max: usize,
         operation: &Operation,
-    ) -> Result<(Vec<String>, bool)> {
+    ) -> Result<(Vec<String>, usize, bool)> {
         operation.check()?;
         directory_names(self.open_directory(relative)?, max, operation)
     }
@@ -245,12 +245,54 @@ fn open_relative(_: &File, _: &str, _: bool) -> io::Result<File> {
         "descriptor-relative project access unsupported",
     ))
 }
-#[cfg(unix)]
+// errno is thread-local and its accessor differs between Unix families.
+#[cfg(any(target_os = "linux", target_os = "dragonfly"))]
+fn directory_errno() -> *mut libc::c_int {
+    unsafe { libc::__errno_location() }
+}
+#[cfg(any(target_vendor = "apple", target_os = "freebsd"))]
+fn directory_errno() -> *mut libc::c_int {
+    unsafe { libc::__error() }
+}
+#[cfg(any(target_os = "android", target_os = "netbsd", target_os = "openbsd"))]
+fn directory_errno() -> *mut libc::c_int {
+    unsafe { libc::__errno() }
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_vendor = "apple",
+    target_os = "freebsd",
+    target_os = "android",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
 fn directory_names(
     directory: File,
     max: usize,
     operation: &Operation,
-) -> Result<(Vec<String>, bool)> {
+) -> Result<(Vec<String>, usize, bool)> {
+    directory_names_with(directory, max, operation, |stream| unsafe {
+        libc::readdir(stream)
+    })
+}
+
+#[cfg(any(
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_vendor = "apple",
+    target_os = "freebsd",
+    target_os = "android",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+fn directory_names_with(
+    directory: File,
+    max: usize,
+    operation: &Operation,
+    mut read_entry: impl FnMut(*mut libc::DIR) -> *mut libc::dirent,
+) -> Result<(Vec<String>, usize, bool)> {
     use std::{ffi::CStr, os::fd::IntoRawFd};
     struct Stream(*mut libc::DIR);
     impl Drop for Stream {
@@ -264,10 +306,12 @@ fn directory_names(
     // SAFETY: fd is owned; fdopendir consumes it on success only.
     let stream = unsafe { libc::fdopendir(fd) };
     if stream.is_null() {
+        // Preserve fdopendir's error before closing the still-owned descriptor.
+        let error = io::Error::last_os_error();
         unsafe {
             libc::close(fd);
         }
-        return Err(Error::Io(io::Error::last_os_error()));
+        return Err(Error::Io(error));
     }
     let stream = Stream(stream);
     let mut names = Vec::new();
@@ -277,15 +321,18 @@ fn directory_names(
         operation.check()?;
         // SAFETY: stream remains live, copy each name before the next readdir call.
         // errno distinguishes end-of-stream from partial I/O failures.
-        #[cfg(target_os = "linux")]
         unsafe {
-            *libc::__errno_location() = 0;
+            *directory_errno() = 0;
         }
-        let entry = unsafe { libc::readdir(stream.0) };
+        let entry = read_entry(stream.0);
         if entry.is_null() {
-            #[cfg(target_os = "linux")]
-            if unsafe { *libc::__errno_location() } != 0 {
-                return Err(Error::Io(io::Error::last_os_error()));
+            if unsafe { *directory_errno() } != 0 {
+                let error = io::Error::last_os_error();
+                if error.kind() == io::ErrorKind::Interrupted {
+                    // Retry through the loop so cancellation and deadline remain responsive.
+                    continue;
+                }
+                return Err(Error::Io(error));
             }
             break;
         }
@@ -295,7 +342,8 @@ fn directory_names(
         }
         seen += 1;
         if seen > max {
-            return Ok((names, true));
+            names.sort();
+            return Ok((names, max, true));
         }
         if let Ok(name) = std::str::from_utf8(name) {
             names.push(name.to_owned());
@@ -304,9 +352,98 @@ fn directory_names(
         }
     }
     names.sort();
-    Ok((names, skipped))
+    Ok((names, seen, skipped))
 }
-#[cfg(not(unix))]
-fn directory_names(_: File, _: usize, _: &Operation) -> Result<(Vec<String>, bool)> {
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_vendor = "apple",
+    target_os = "freebsd",
+    target_os = "android",
+    target_os = "netbsd",
+    target_os = "openbsd"
+)))]
+fn directory_names(_: File, _: usize, _: &Operation) -> Result<(Vec<String>, usize, bool)> {
     Err(Error::Unsupported)
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod directory_read_tests {
+    use super::*;
+    use crate::services::project_search::Cancellation;
+    use std::{ptr, time::Duration};
+
+    #[test]
+    fn readdir_retries_interruption_and_returns_entries() {
+        let cancel = Cancellation::default();
+        let operation = Operation::new(Duration::from_secs(10), &cancel);
+        let mut calls = 0;
+        let result = directory_names_with(
+            File::open(env!("CARGO_MANIFEST_DIR")).unwrap(),
+            usize::MAX,
+            &operation,
+            |stream| {
+                calls += 1;
+                if calls == 1 {
+                    unsafe {
+                        *directory_errno() = libc::EINTR;
+                    }
+                    ptr::null_mut()
+                } else {
+                    unsafe { libc::readdir(stream) }
+                }
+            },
+        )
+        .unwrap();
+        assert!(calls > 1);
+        assert!(result.1 > 0);
+    }
+
+    #[test]
+    fn readdir_error_rejects_partial_results() {
+        let cancel = Cancellation::default();
+        let operation = Operation::new(Duration::from_secs(10), &cancel);
+        let mut returned_entry = false;
+        let result = directory_names_with(
+            File::open(env!("CARGO_MANIFEST_DIR")).unwrap(),
+            usize::MAX,
+            &operation,
+            |stream| {
+                if returned_entry {
+                    unsafe {
+                        *directory_errno() = libc::EIO;
+                    }
+                    return ptr::null_mut();
+                }
+                let entry = unsafe { libc::readdir(stream) };
+                assert!(!entry.is_null(), "fixture must contain a non-dot entry");
+                let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+                returned_entry = name != b"." && name != b"..";
+                entry
+            },
+        );
+        assert!(matches!(result, Err(Error::Io(error)) if error.raw_os_error() == Some(libc::EIO)));
+    }
+
+    #[test]
+    fn readdir_interruption_rechecks_cancellation() {
+        let cancel = Cancellation::default();
+        let operation = Operation::new(Duration::from_secs(10), &cancel);
+        let mut calls = 0;
+        let result = directory_names_with(
+            File::open(env!("CARGO_MANIFEST_DIR")).unwrap(),
+            usize::MAX,
+            &operation,
+            |_| {
+                calls += 1;
+                cancel.cancel();
+                unsafe {
+                    *directory_errno() = libc::EINTR;
+                }
+                ptr::null_mut()
+            },
+        );
+        assert!(matches!(result, Err(Error::Cancelled)));
+        assert_eq!(calls, 1);
+    }
 }

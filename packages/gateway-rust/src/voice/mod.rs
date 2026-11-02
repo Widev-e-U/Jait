@@ -299,7 +299,7 @@ pub fn transcription_request(
         wyoming: false,
     };
     let prompt_field = |p: Option<&str>| {
-        p.map(str::trim)
+        p.map(js_trim)
             .filter(|p| !p.is_empty())
             .map(|p| ("prompt".into(), p.into()))
     };
@@ -421,6 +421,43 @@ mod tests {
         assert!(voice.state("b").is_err());
         assert_eq!(decode_node_base64("aGk").unwrap(), b"hi");
     }
+    #[test]
+    fn transcription_prompt_uses_javascript_whitespace_rules() {
+        let whisper = |prompt| {
+            transcription_request(
+                SttProvider::Whisper {
+                    base: "https://example.com",
+                    prompt: Some(prompt),
+                },
+                "",
+            )
+            .unwrap()
+        };
+        let bom_only = whisper("\u{feff}");
+        assert!(!bom_only.multipart);
+        assert!(bom_only.fields.is_empty());
+        let nel = whisper("\u{85}");
+        assert!(nel.multipart);
+        assert_eq!(nel.fields, vec![("prompt".into(), "\u{85}".into())]);
+        let gpt = transcription_request(
+            SttProvider::Gpt {
+                base: "https://example.com",
+                key: "key",
+                model: "model",
+                prompt: Some("\u{feff}hello\u{feff}"),
+            },
+            "",
+        )
+        .unwrap();
+        assert_eq!(
+            gpt.fields,
+            vec![
+                ("model".into(), "model".into()),
+                ("prompt".into(), "hello".into())
+            ]
+        );
+    }
+
     #[test]
     fn remote_request_shapes() {
         let r = transcription_request(

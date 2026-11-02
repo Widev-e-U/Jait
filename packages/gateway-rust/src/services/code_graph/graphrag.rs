@@ -191,6 +191,103 @@ fn clean_join(directory: &Path, name: &str) -> PathBuf {
 fn io_error(message: impl std::fmt::Display) -> io::Error {
     io::Error::other(message.to_string())
 }
+// Publish through a newly created sibling so a pre-existing leaf symlink or
+// hard link is replaced rather than followed or truncated. The parent remains
+// path-based and is not an authorized root capability (see SECURITY.md).
+fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    let parent = path
+        .parent()
+        .ok_or_else(|| io_error("missing export parent"))?;
+    let temporary = parent.join(format!(".jait-export-{}", uuid::Uuid::new_v4()));
+    let mut created = false;
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        created = true;
+        file.write_all(contents)?;
+        drop(file);
+        std::fs::rename(&temporary, path)
+    })();
+    if result.is_err() && created {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// Derive an export directory below a caller-authorized, pinned root.
+/// The caller must prevent untrusted writes to every traversed directory, including
+/// the root, throughout derivation and export. Descriptor-relative traversal does
+/// not prevent an authorized directory from being moved by an external actor.
+#[cfg(unix)]
+pub fn open_export_namespace(root: &std::fs::File, components: &[&std::ffi::OsStr]) -> io::Result<std::fs::File> {
+    use std::{ffi::CString, os::{fd::{AsRawFd, FromRawFd}, unix::ffi::OsStrExt}};
+    if !root.metadata()?.is_dir() {
+        return Err(io_error("export root capability is not a directory"));
+    }
+    let names = components.iter().map(|component| {
+        let bytes = component.as_bytes();
+        if bytes.is_empty() || bytes == b"." || bytes == b".." || bytes.contains(&b'/') {
+            return Err(io_error("invalid export namespace component"));
+        }
+        CString::new(bytes).map_err(io_error)
+    }).collect::<io::Result<Vec<_>>>()?;
+    let mut current = root.try_clone()?;
+    for name in names {
+        let made = unsafe { libc::mkdirat(current.as_raw_fd(), name.as_ptr(), 0o700) };
+        if made != 0 {
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::AlreadyExists { return Err(error); }
+        }
+        let fd = unsafe { libc::openat(current.as_raw_fd(), name.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC) };
+        if fd < 0 { return Err(io::Error::last_os_error()); }
+        current = unsafe { std::fs::File::from_raw_fd(fd) };
+    }
+    Ok(current)
+}
+
+/// Publish to an already-open directory authorized by the embedding caller.
+/// The caller must pin the directory through its own trusted root capability and
+/// ensure untrusted actors cannot modify entries in that directory during export.
+/// Otherwise they can replace temporary names before rename or cleanup. The
+/// display_directory is only used in the returned manifest and is not authority.
+#[cfg(unix)]
+pub fn write_graph_rag_export_in_directory(
+    snapshot: &GraphSnapshot,
+    directory: &std::fs::File,
+    display_directory: &Path,
+    clock: &Clock,
+) -> io::Result<GraphRagExportManifest> {
+    if !directory.metadata()?.is_dir() {
+        return Err(io_error("export capability is not a directory"));
+    }
+    write_graph_rag_export_impl(snapshot, display_directory, clock, Some(directory))
+}
+
+#[cfg(unix)]
+fn atomic_write_at(directory: &std::fs::File, name: &std::ffi::OsStr, contents: &[u8]) -> io::Result<()> {
+    use std::{ffi::CString, io::Write, os::{fd::{AsRawFd, FromRawFd}, unix::ffi::OsStrExt}};
+    let target = CString::new(name.as_bytes()).map_err(io_error)?;
+    if name.as_bytes().contains(&b'/') || name.as_bytes() == b"." || name.as_bytes() == b".." || name.is_empty() {
+        return Err(io_error("invalid export filename"));
+    }
+    let temporary = CString::new(format!(".jait-export-{}", uuid::Uuid::new_v4())).unwrap();
+    let fd = unsafe { libc::openat(directory.as_raw_fd(), temporary.as_ptr(), libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC, 0o600) };
+    if fd < 0 { return Err(io::Error::last_os_error()); }
+    let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+    let result = file.write_all(contents).and_then(|()| {
+        if unsafe { libc::renameat(directory.as_raw_fd(), temporary.as_ptr(), directory.as_raw_fd(), target.as_ptr()) } == 0 {
+            Ok(())
+        } else { Err(io::Error::last_os_error()) }
+    });
+    if result.is_err() {
+        unsafe { libc::unlinkat(directory.as_raw_fd(), temporary.as_ptr(), 0); }
+    }
+    result
+}
+
 pub fn write_graph_rag_export(
     snapshot: &GraphSnapshot,
     output_directory: &Path,
@@ -201,6 +298,15 @@ pub fn write_graph_rag_export_with_clock(
     snapshot: &GraphSnapshot,
     output_directory: &Path,
     clock: &Clock,
+) -> io::Result<GraphRagExportManifest> {
+    write_graph_rag_export_impl(snapshot, output_directory, clock, None)
+}
+
+fn write_graph_rag_export_impl(
+    snapshot: &GraphSnapshot,
+    output_directory: &Path,
+    clock: &Clock,
+    directory: Option<&std::fs::File>,
 ) -> io::Result<GraphRagExportManifest> {
     let version = snapshot
         .index
@@ -213,7 +319,9 @@ pub fn write_graph_rag_export_with_clock(
     if output_directory.as_os_str().is_empty() {
         return Err(io::Error::from(io::ErrorKind::NotFound));
     }
-    std::fs::create_dir_all(output_directory)?;
+    if directory.is_none() {
+        std::fs::create_dir_all(output_directory)?;
+    }
     let paths = [
         "entities.jsonl",
         "relationships.jsonl",
@@ -253,7 +361,13 @@ pub fn write_graph_rag_export_with_clock(
         let workers: Vec<_> = paths
             .iter()
             .zip(&contents)
-            .map(|(path, contents)| scope.spawn(move || std::fs::write(path, contents)))
+            .map(|(path, contents)| scope.spawn(move || {
+                #[cfg(unix)]
+                if let Some(directory) = directory {
+                    return atomic_write_at(directory, path.file_name().ok_or_else(|| io_error("missing export filename"))?, contents.as_bytes());
+                }
+                atomic_write(path, contents.as_bytes())
+            }))
             .collect();
         let mut first_error = None;
         for worker in workers {
@@ -268,4 +382,124 @@ pub fn write_graph_rag_export_with_clock(
         first_error.map_or(Ok(()), Err)
     })?;
     Ok(manifest)
+}
+
+#[cfg(all(test, unix))]
+mod atomic_write_tests {
+    use super::atomic_write;
+    use std::{fs, os::unix::fs::symlink, path::Path};
+
+    #[test]
+    fn namespace_rejects_links_and_invalid_components() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/code-graph/export-boundary")
+            .join(uuid::Uuid::new_v4().to_string());
+        let root = base.join("root");
+        let outside = base.join("outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let capability = fs::File::open(&root).unwrap();
+        symlink(&outside, root.join("linked")).unwrap();
+        assert!(super::open_export_namespace(&capability, &["linked".as_ref(), "child".as_ref()]).is_err());
+        assert!(!outside.join("child").exists());
+        assert!(super::open_export_namespace(&capability, &["new".as_ref(), "..".as_ref()]).is_err());
+        assert!(!root.join("new").exists());
+        let namespace = super::open_export_namespace(&capability, &["owner".as_ref(), "export".as_ref()]).unwrap();
+        super::atomic_write_at(&namespace, "entities.jsonl".as_ref(), b"safe").unwrap();
+        assert_eq!(fs::read(root.join("owner/export/entities.jsonl")).unwrap(), b"safe");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn pinned_directory_survives_path_replacement() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/code-graph/export-boundary")
+            .join(uuid::Uuid::new_v4().to_string());
+        let original = base.join("original");
+        let moved = base.join("moved");
+        let outside = base.join("outside");
+        fs::create_dir_all(&original).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let directory = fs::File::open(&original).unwrap();
+        fs::rename(&original, &moved).unwrap();
+        symlink(&outside, &original).unwrap();
+        super::atomic_write_at(&directory, "entities.jsonl".as_ref(), b"safe").unwrap();
+        assert_eq!(fs::read(moved.join("entities.jsonl")).unwrap(), b"safe");
+        assert!(!outside.join("entities.jsonl").exists());
+        assert!(super::atomic_write_at(&directory, "../escape".as_ref(), b"no").is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn pinned_export_api_uses_directory_after_path_replacement() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/code-graph/export-boundary")
+            .join(uuid::Uuid::new_v4().to_string());
+        let original = base.join("original");
+        let moved = base.join("moved");
+        let outside = base.join("outside");
+        fs::create_dir_all(&original).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        let directory = fs::File::open(&original).unwrap();
+        fs::rename(&original, &moved).unwrap();
+        symlink(&outside, &original).unwrap();
+        let snapshot = super::GraphSnapshot {
+            nodes: vec![],
+            edges: vec![],
+            index: super::GraphIndex { graph_version: Some("v1".into()) },
+        };
+        let manifest = super::write_graph_rag_export_in_directory(
+            &snapshot, &directory, &original, &super::default_clock(),
+        ).unwrap();
+        assert_eq!(manifest.graph_version, "v1");
+        for name in ["entities.jsonl", "relationships.jsonl", "text_units.jsonl", "manifest.json"] {
+            assert!(moved.join(name).is_file(), "missing {name}");
+            assert!(!outside.join(name).exists(), "escaped {name}");
+        }
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn pinned_export_replaces_links_without_touching_target() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/code-graph/export-boundary")
+            .join(uuid::Uuid::new_v4().to_string());
+        let export = base.join("export");
+        fs::create_dir_all(&export).unwrap();
+        let target = base.join("target");
+        let output = export.join("entities.jsonl");
+        fs::write(&target, b"original").unwrap();
+        let directory = fs::File::open(&export).unwrap();
+        symlink(&target, &output).unwrap();
+        super::atomic_write_at(&directory, "entities.jsonl".as_ref(), b"first").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"original");
+        assert_eq!(fs::read(&output).unwrap(), b"first");
+        fs::remove_file(&output).unwrap();
+        fs::hard_link(&target, &output).unwrap();
+        super::atomic_write_at(&directory, "entities.jsonl".as_ref(), b"second").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"original");
+        assert_eq!(fs::read(&output).unwrap(), b"second");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn replaces_links_without_modifying_their_target() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/code-graph/export-boundary")
+            .join(uuid::Uuid::new_v4().to_string());
+        fs::create_dir_all(&base).unwrap();
+        let target = base.join("target");
+        let output = base.join("output");
+        fs::write(&target, b"original").unwrap();
+        symlink(&target, &output).unwrap();
+        atomic_write(&output, b"first").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"original");
+        assert_eq!(fs::read(&output).unwrap(), b"first");
+        fs::remove_file(&output).unwrap();
+        fs::hard_link(&target, &output).unwrap();
+        atomic_write(&output, b"second").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"original");
+        assert_eq!(fs::read(&output).unwrap(), b"second");
+        fs::remove_dir_all(base).unwrap();
+    }
 }

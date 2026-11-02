@@ -483,7 +483,6 @@ export class PreviewService {
   async navigate(sessionId: string, target: string): Promise<PreviewSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== "ready" || session.terminating || !session.browserId) return null;
-    if (session.sharedWithAgent) throw new Error("Take control before navigating.");
     const url = new URL(target);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) {
       throw new Error("Enter an HTTP or HTTPS URL without credentials.");
@@ -530,7 +529,6 @@ export class PreviewService {
   async reload(sessionId: string): Promise<PreviewSession | null> {
     const session = this.sessions.get(sessionId);
     if (!session || session.status !== "ready" || session.terminating || !session.browserId) return null;
-    if (session.sharedWithAgent) throw new Error("Take control before refreshing.");
     const surface = this.surfaceRegistry.getSurface(session.browserId);
     if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
     const snapshot = await (surface as BrowserSurface).reload();

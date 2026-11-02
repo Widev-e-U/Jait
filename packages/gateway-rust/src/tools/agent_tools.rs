@@ -12,7 +12,7 @@
 //! Result shaping reuses [`crate::tools::agent_communication`] so performative tags
 //! (`[inform] …`) and render-segment whitespace behave exactly like the TS helpers.
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::text::js_trim;
 use crate::tools::agent_communication::{
@@ -79,7 +79,10 @@ concrete summary of what you did and found. Do not ask follow-up questions.",
 /// Mirrors the TS `allowedTools` normalization: comma split, trim, drop empties.
 pub fn parse_allowed_tools(raw: Option<&str>) -> Vec<String> {
     match raw {
-        None => DEFAULT_SUBAGENT_TOOLS.iter().map(|s| (*s).to_string()).collect(),
+        None => DEFAULT_SUBAGENT_TOOLS
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect(),
         Some(raw) => raw
             .split(',')
             .map(js_trim)
@@ -110,7 +113,11 @@ pub fn render_segments(segments: &[Value]) -> Vec<Value> {
                 return segment.clone();
             };
             let mut out = obj.clone();
-            let key = if obj.contains_key("content") { "content" } else { "text" };
+            let key = if obj.contains_key("content") {
+                "content"
+            } else {
+                "text"
+            };
             out.insert(
                 key.into(),
                 Value::String(strip_performative_tag(text).to_string()),
@@ -134,14 +141,16 @@ pub fn render_tool_calls(calls: &[Value]) -> Vec<Value> {
             let Some(obj) = call.as_object() else {
                 return Value::Object(out);
             };
-            let pick = |keys: &[&str]| -> Option<Value> {
-                keys.iter().find_map(|k| obj.get(*k).cloned())
-            };
+            let pick =
+                |keys: &[&str]| -> Option<Value> { keys.iter().find_map(|k| obj.get(*k).cloned()) };
             out.insert(
                 "callId".into(),
                 pick(&["callId", "id"]).unwrap_or(Value::Null),
             );
-            out.insert("tool".into(), pick(&["tool", "name"]).unwrap_or(Value::Null));
+            out.insert(
+                "tool".into(),
+                pick(&["tool", "name"]).unwrap_or(Value::Null),
+            );
             out.insert(
                 "args".into(),
                 pick(&["args", "input"]).unwrap_or(Value::Null),
@@ -621,7 +630,12 @@ mod tests {
         assert_eq!(out["data"]["toolCalls"][0]["args"]["path"], "a");
         assert_eq!(out["data"]["toolCalls"][0]["ok"], true);
         assert_eq!(out["data"]["toolCalls"][0]["message"], "read a");
-        assert!(out["data"]["toolCalls"][0].as_object().unwrap().contains_key("data"));
+        assert!(
+            out["data"]["toolCalls"][0]
+                .as_object()
+                .unwrap()
+                .contains_key("data")
+        );
         assert_eq!(out["data"]["toolCalls"][0]["startedAt"], 1);
         assert_eq!(out["data"]["toolCalls"][0]["completedAt"], 2);
     }

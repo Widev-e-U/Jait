@@ -74,9 +74,9 @@ pub mod preview;
 
 pub mod network;
 
+pub mod browser_devtools;
 pub mod mcp_server;
 pub mod mobile;
 pub mod providers;
 pub mod terminals;
-pub mod browser_devtools;
 pub mod voice;

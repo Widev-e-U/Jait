@@ -1,5 +1,174 @@
 # Native Rust gateway
 
+## Application shutdown continuation — 2026-11-02
+
+The opt-in application closes store admission before draining chat. A focused
+regression holds an admitted chat turn open, triggers shutdown, then aborts the
+application while chat cleanup is pending; it confirms the turn is cancelled,
+chat remains closed, and a later drain completes once the turn releases its
+lease. The chat cleanup deadline is eight seconds; the server's separate
+five-second HTTP drain begins afterward. This does not establish request-bound
+host authority, full runtime integration, or component verification.
+
+A read-only ledger audit found 236 historically verified and 87 implemented but
+unverified original components, with 47 originals absent; five newer paths have
+historical verified entries and one is absent. Seven verified and nine implemented
+reference hashes differ from the live sources. These historical statuses require
+reconciliation and are not final validation of the current snapshot. The production
+gateway remains TypeScript; platform, replacement, and activation gates remain open.
+
+## Store authority cancellation continuation — 2026-11-01
+
+The standalone ClawHub store port now stops waiting for request authority when
+its cancellation token fires. The focused `cancelling_port_interrupts_pending_authority`
+regression passed. This covers cancellation while authority is pending; it does
+not establish request-bound authority or production runtime integration, and
+adds no component verification credit.
+
+## Store server lifecycle continuation — 2026-11-01
+
+An opt-in server method retains a store supervisor through serving, closes
+admission on shutdown or cancellation, and awaits its drain. A focused test
+passed for cancellation of the server future and the specific closed-admission
+error, followed by an explicit shutdown call. Retry of a cancelled drain is
+covered separately at the supervisor level; this server test does not exercise
+an in-flight blocking operation. The host must retain the supervisor to retry a
+cancelled drain. Request-bound authority and production runtime composition remain
+unwired; this adds no component verification credit.
+
+## ClawHub store composition continuation — 2026-11-01
+
+An opt-in store port now connects the shared registry and bounded blocking lane to
+the existing prepare/commit adapter. The host must provide request- and
+operation-bound authority; the request cancellation token is passed through both
+stages. A focused local test passed for allowed reads, denied identity, pre-cancel,
+and closed-lane admission. It does not establish live network, installation,
+revocation, or concurrent mutation behavior. No production runtime mounts this
+port yet, and no component verification credit is claimed.
+
+## Preview admission continuation — 2026-11-01
+
+The local preview runner now prioritizes cancellation while waiting for launch
+authority and rechecks it when approval returns. A focused regression passed for
+cancellation during the same poll as an approved grant. Cancellation after that
+check still uses the existing supervised process cleanup path; the test does not
+establish atomic cancellation against spawning. The preview service and runtime
+integration remain incomplete, and this change adds no component verification.
+
+## Packaging adapter continuation — 2026-11-01
+
+The optional `scripts/copy-shell-integration.sh` invokes the native asset copier
+from a source checkout, with an explicit gateway root override. It requires Cargo
+and a trusted tree that remains stable during copying; the copier does not make
+its filesystem checks atomic. The production build remains on the Node script.
+A focused fixture comparison against the Node script passed for the checkout
+assets; no additional component verification is claimed. The current ledger retains 236/370 historically verified
+originals and 87 implemented but unverified, with 47 originals unlisted; seven
+verified and nine implemented references have drifted from their recorded hashes.
+Five of six newer additions have historical verified entries. These counts do not
+establish current-source validation or production readiness.
+
+## Integration continuation — 2026-10-30
+
+The most recent ledger audit records 236 historically verified originals, 87
+implemented but unverified, and 47 without entries, plus five historically verified
+and one absent newer path. These are not validation of the current source: reference
+drift and final evidence remain to be reconciled. Git batch reads are wired through
+the existing scoped command authority; focused parser and scoped-worker tests passed.
+The 512 KiB output cap leaves large-file compatibility and HTTP route evidence open,
+so this work does not earn component credit.
+The batch parser also rejects mismatched missing records and malformed object
+headers before falling back to individually authorized reads. Four parser tests
+and the scoped real-Git batch/fallback test passed on 2026-10-30; this focused
+evidence does not resolve the large-file or route compatibility gaps.
+Authorized worktree files above 10 MiB now return the reference-sized
+placeholder from handle metadata without reading the body; focused oversized-file,
+parser and path-boundary tests passed. The authenticated real-Git HTTP fixture
+also passed with an oversized untracked file; it uses individually authorized
+fallback reads because its command grant denies batch. Revision content trims one
+terminal newline, while worktree content preserves it, matching the reference
+reader. Reads between 512 KiB and 10 MiB and large revision blobs remain limited
+by the existing capture budgets; no large-file differential suite has passed.
+Truncated process captures are charged before the individual-limit error; the
+focused capture-accounting and scoped batch/fallback tests passed. An over-budget
+charge now saturates the aggregate counter and prevents subsequent admissions;
+the aggregate-budget regression passed. Focused real-process tests confirm captured
+bytes are charged on timeout and cancellation while preserving their error kinds;
+a worktree read exceeding 512 KiB is also charged. Partial I/O errors remain
+untested. A per-request capture permit now serializes process captures and
+worktree reads, including cancellation-aware and deadline-bounded waiting. A
+focused concurrent real-process test passed for cancellation while waiting; normal
+completion and deadline behavior still need focused evidence. Current handlers already submit
+one blocking task per request. Process captures and worktree reads are now capped
+by the remaining aggregate allowance under the capture permit; the focused
+remaining-budget test passed. Exact-boundary worktree reads fail closed when EOF
+has not been established. The TypeScript revision reader emits an
+oversized placeholder only when the entire batch fits its 64 MiB capture; if the
+batch fails it instead falls back to individual `git show` reads. Metadata alone
+therefore cannot select the reference result without accounting for the whole
+batch and the existing command authority and resource limits.
+
+The opt-in `scripts/embed-shell-integration.sh` adapter matched the Node generator
+in a focused fixture, including current/stale checks; a source-tree check passed
+from another working directory.
+It is POSIX-only, recompiles on invocation, and is not the gateway production build.
+The evaluation handoff transfers capabilities but does not establish exclusive
+descendant containment, restart ownership, or authority to clean up. Full frozen
+validation, runtime replacement and activation remain open. Production remains
+TypeScript.
+
+## Evaluation ownership checkpoint — 2026-10-29
+
+The ledger records **236/370 verified originals**, 87 implemented-but-unverified
+originals and 47 absent originals; **5/6 newer paths** are verified (241/376 current).
+These are existing ledger states, not newly validated coverage. Evaluation recovery
+and descriptor primitives are not wired to a durable parent-child resource handoff;
+the child can adopt transferred directory handles, but the parent operation does not yet wire that handoff into its durable ownership lifecycle. Focused recovery and private
+directory checks passed, without component credit. Full frozen-source validation,
+runtime integration, platform, recovery, rollback and activation remain open;
+production remains TypeScript. Evidence and limits: `.jait/artifacts/gateway-rust/chat-loops/evaluation-ownership-20261029.md`.
+
+## Implementation continuation — 2026-10-29
+
+The native Git status flag now includes staged-only changes. The scoped HTTP
+fixture stages three files and verifies the flag with an empty working-tree list.
+Status now propagates porcelain and required diff failures; the scoped HTTP fixture
+checks denied commands and avoids diffs for clean and untracked-only status.
+The fixture also checks mixed staged and tracked worktree changes and a failing
+worktree diff process. A local diverged upstream fixture checks two ahead and
+one behind, and a fixture-authorized failing upstream count process returns HTTP
+500. The fixture also confirms the gh availability probe requires a selected
+branch. Earlier injected failures were rejected before execution; the corrected
+fixture verifies process exits. Full Git service parity remains open.
+
+The native Git status path uses a requested branch only for pull-request lookup;
+its checked-out branch and upstream remain independent. The authenticated route
+fixture passed for an unborn HEAD with a requested branch.
+
+The native Git status path now preserves whitespace in numstat filenames,
+associates rename statistics with the destination, and enumerates untracked
+files individually. Focused parser and authenticated route tests passed;
+these do not establish Git service parity or award coverage credit. See
+`.jait/artifacts/gateway-rust/chat-loops/git-status-20261029.md`.
+
+The project-search directory reader now counts non-UTF-8 names against the global
+entry budget and sorts the already-read names when a directory hits its limit.
+The focused `non_utf8_names_consume_global_entry_budget` and
+`limited_directory_batch_is_sorted` tests passed individually. Selection at the
+limit still depends on filesystem enumeration; these tests do not establish
+search parity or award component verification. See
+`.jait/artifacts/gateway-rust/chat-loops/project-search-budget-20261029.md`.
+
+Focused project-search ignore-rule regressions passed for unmatched brackets and
+backslashes, empty and negated empty character classes, and rule-budget handling.
+These checks cover the fallback compiler only; the Rust walker and per-file
+ripgrep integration still have the gaps in
+`src/services/project_search/COMPATIBILITY.md`. They do not verify the original
+component or establish runtime replacement readiness. The current search backend
+uses bounded per-file subprocesses, not ripgrep traversal. Worker provider failures
+reported exhausted credits; parallel implementation is therefore not currently
+progressing through those workers. No broad gate or final source freeze has run.
+
 ## Integration checkpoint — 2026-10-29
 
 The previously blocked `services::project_search` library test run now compiles
@@ -7,14 +176,15 @@ against the owner-aware chat event bus and passes 12 focused tests. This is
 implementation evidence only; project-search parity and component verification
 remain open. A live ledger audit still reports 236 verified and 87 implemented
 originals, with 47 original paths absent; five of six later additions have verified
-entries. Seven verified and six implemented reference hashes differ from live
-source, as detailed below. These counts are historical ledger statuses, not a
+entries. A subsequent reference audit found seven verified and nine implemented reference
+hashes differ from live source; see
+`.jait/artifacts/gateway-rust/chat-loops/reference-drift-20261029.json`. These counts are historical ledger statuses, not a
 source-bound validation or a production-readiness measure. Restart lifecycle
 authority and gateway entrypoint integration remain under active review; broad
 validation remains deferred until implementation is integrated. Evidence is recorded in
 `.jait/artifacts/gateway-rust/chat-loops/integration-20261029.md`.
 
-## Live ledger audit — 2026-10-28
+## Historical ledger audit — 2026-10-28
 
 The original manifest contains 370 paths; the current inventory records 376,
 including six later additions. The live ledger records **236 originals as verified**,
@@ -1454,3 +1624,79 @@ listens through a separate subscription. That browser lifecycle, live trajectory
 subscription/replay, rich request selectors, attachments, platform/resource gates
 and production cutover remain separate work. Review:
 `tests/contract/reviews/native-chat-http.md`.
+
+Git status integration: branch-configured remote selection and origin fallback passed the scoped authenticated HTTP fixture. PR lookup and worktree remote fallback remain incomplete; this is focused evidence, not Git component verification. See `.jait/artifacts/gateway-rust/chat-loops/git-status-20261029.md`.
+
+Git PR status: scoped fixture CLI regression passed for explicit head and GitHub owner/repository arguments, non-GitHub lookup without repository selector, and merged/default-open projections. The fixture checks arguments and cannot access the network. Token fallback, broader remote parsing and real CLI behavior remain unverified; no component credit.
+
+Git status provider classification has focused local parser evidence for Azure DevOps and selected other host/path forms in `.jait/artifacts/gateway-rust/chat-loops/git-status-20261029.md`. This does not verify the Git component or token fallback.
+
+Code-graph runner checkpoint: a cancelled build now stops before runtime setup,
+and cancellation observed after setup or version probing stops later extraction.
+The focused `cancelled_graph_build_does_not_start_runtime_or_extraction` Rust
+unit test passed (1 test, offline locked Cargo). Setup or version probing already
+in progress is not interrupted by these checks; the supervised extraction executor
+still receives the original cancellation signal. This is an intentional earlier
+cancellation admission than the TypeScript reference and is not component parity
+or verification credit; client compatibility and end-to-end integration remain
+open. The live ledger still records 236 historically verified and 87 implemented
+original paths, with 47 absent; reference drift affects seven verified and nine
+implemented entries. Production activation and frozen-source validation remain open.
+
+Code-graph ownership integration checkpoint: the HTTP backend can now receive an
+active-project lookup backed by the application's bounded SQLite worker. It
+rejects an empty owner before the project service's unscoped query fallback. The
+focused `worker_project_adapter_limits_results_to_active_owner` Rust unit test
+passed (1 test, offline locked Cargo), covering another owner, archived state and
+empty identity. The adapter is not yet mounted in the development application: the
+graph index store now offers a bounded-worker-backed constructor, while its legacy
+constructor still uses a synchronous connection. The focused
+`worker_backed_index_storage_is_owner_scoped` test passed (1 test, offline locked
+Cargo), covering owner isolation and worker shutdown. Runtime composition and an
+authorized effect executor remain necessary; no native component verification
+credit is claimed for this partial integration.
+
+Code-graph active builds now use structured owner/root keys, preventing distinct
+pairs containing delimiters from sharing a build. The focused
+`distinct_owner_and_root_pairs_do_not_share_builds` test passed (1 test, offline
+locked Cargo). This does not authorize runtime mounting: the output-directory
+scheme previously mapped an absent owner and the literal owner `system` to the same
+directory; the v2 change and remaining authority limits are described below.
+Resolve these boundaries with a compatibility plan before exposing graph effects.
+No component verification credit is claimed.
+
+Code-graph path migration review: TypeScript uses the same `system` fallback,
+while owner-scoped database rows retain `graphPath` independently. A new hash
+alone therefore cannot establish which owner created an existing shared file.
+Before mounting, use a versioned, unambiguous encoding for every new owner/root
+pair, and require reindexing for ambiguous legacy paths rather than copying or
+attributing their contents. Review how unambiguous legacy paths are accepted and
+obtain client compatibility evidence before enabling a migration. Validate both
+build-returned and stored paths under explicitly authorized roots, including
+symlink and replacement races; GraphRAG currently derives a write directory from
+the stored path, so a lexical prefix check alone is insufficient. These are pending
+requirements, not implemented safeguards or a production migration.
+
+New native code-graph builds now use a `v2` output namespace with tagged,
+length-delimited owner and root inputs; empty owners follow the database's absent
+owner semantics. This separates new absent-owner builds from the literal `system`
+owner. Graph reads, GraphRAG preparation and build results now reject paths other
+than the two expected graph filenames in the current owner/root v2 namespace;
+legacy rows require reindexing and are not silently migrated. This lexical check
+is not symlink-safe and does not establish filesystem authority against replacement
+races. This intentionally differs from TypeScript output paths; client compatibility
+evidence and reviewed filesystem authority are required before mounting. No native
+component verification credit is claimed.
+
+The opt-in ClawHub store port now signals request cancellation when an admitted
+port future is abandoned; normal completion leaves the shared request token
+unchanged. The focused `abandoned_port_cancels_request_during_authority` test
+passed. This covers abandonment during authority acquisition, not atomic
+cancellation of a running blocking mutation. Runtime wiring and effect-boundary
+and concurrent mutation evidence remain outstanding; no coverage credit added.
+
+ClawHub uninstall cancellation continuation (2026-11-01): the native store rechecks cancellation after final uninstall authorization and before rename. The focused `uninstall_denial_and_abandonment_preserve_installed_files` test passed with a local installed-skill fixture, denied effect authority, and a request abandoned during final authorization. Cancellation and rename remain non-atomic; this does not establish mutation parity, shared runtime registry ownership, request-authority composition, or production mounting. No component verification credit is awarded.
+
+The opt-in ClawHub shared store now exposes a bounded-lane, point-in-time registry snapshot for discovery. The host must authorize discovery, and a snapshot is not authority for later file access. Runtime ownership, request-scoped discovery authorization, safe file reads, and supervised shutdown remain to be composed; this does not establish runtime integration or component verification.
+
+A focused `committed_uninstall_updates_later_discovery_snapshot` test confirms that a successful shared-store uninstall is visible in a subsequent discovery snapshot and that an earlier snapshot remains unchanged. This is point-in-time registry evidence only: the runtime still needs request-authorized discovery, safe file reads, and lifecycle ownership. `BlockingLane::close` rejects new work but does not wait for running closures, so shutdown must also supervise their completion before releasing dependent resources.

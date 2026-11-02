@@ -227,7 +227,7 @@ pub(crate) fn scan(
             }
         }
         let scopes = Arc::new(scopes);
-        let (names, limited) = match root.names(
+        let (names, examined, limited) = match root.names(
             &directory,
             options
                 .budgets
@@ -245,9 +245,11 @@ pub(crate) fn scan(
             Err(error) => return Err(error),
         };
         coverage.limited |= limited;
+        // Count all directory entries read, including names that cannot be
+        // represented as UTF-8, against the scan-wide traversal budget.
+        coverage.entries_examined += examined;
         for name in names {
             operation.check()?;
-            coverage.entries_examined += 1;
             if skip_hidden && name.starts_with('.') {
                 continue;
             }
@@ -277,6 +279,13 @@ pub(crate) fn scan(
                         coverage.unreadable += 1;
                         coverage.limited = true;
                     }
+                    continue;
+                }
+                Err(Error::Input(_)) => {
+                    // Names rejected by the pinned-root path validator cannot be
+                    // searched, so do not report the traversal as complete.
+                    coverage.skipped += 1;
+                    coverage.limited = true;
                     continue;
                 }
                 _ => {

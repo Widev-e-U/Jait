@@ -116,7 +116,9 @@ impl ProcessPool {
         request: ProcessRequest,
         cancellation: ProcessCancellation,
     ) -> io::Result<CapturedProcessResult> {
-        let result = self.run_inner(request, cancellation, true).await?;
+        let result = self
+            .run_inner(request, cancellation, true, &|_| Ok(()))
+            .await?;
         Ok(CapturedProcessResult {
             stdout: result.stdout,
             stderr: result.stderr,
@@ -131,13 +133,31 @@ impl ProcessPool {
         request: ProcessRequest,
         cancellation: ProcessCancellation,
     ) -> io::Result<ProcessResult> {
-        Ok(self.run_inner(request, cancellation, false).await?.display)
+        Ok(self
+            .run_inner(request, cancellation, false, &|_| Ok(()))
+            .await?
+            .display)
+    }
+    /// Revalidate the exact request after admission and immediately before every spawn attempt.
+    /// The callback must be fast and nonblocking; it should check current request-bound authority.
+    /// This is not a grant, nor does it revoke a child that has already started.
+    pub async fn run_revalidated(
+        &self,
+        request: ProcessRequest,
+        cancellation: ProcessCancellation,
+        revalidate: &(dyn Fn(&ProcessRequest) -> io::Result<()> + Send + Sync),
+    ) -> io::Result<ProcessResult> {
+        Ok(self
+            .run_inner(request, cancellation, false, revalidate)
+            .await?
+            .display)
     }
     async fn run_inner(
         &self,
         request: ProcessRequest,
         cancellation: ProcessCancellation,
         raw: bool,
+        revalidate: &(dyn Fn(&ProcessRequest) -> io::Result<()> + Send + Sync),
     ) -> io::Result<Completion> {
         if request.argv.is_empty()
             || request.argv[0].is_empty()
@@ -202,6 +222,21 @@ impl ProcessPool {
         // cancellation is honoured between attempts, so the bounded contract is unchanged.
         let mut attempt = 0u32;
         let mut child = loop {
+            if cancellation.is_cancelled() {
+                return Ok(Completion {
+                    display: empty_result(false, true),
+                    stdout: vec![],
+                    stderr: vec![],
+                });
+            }
+            revalidate(&request)?;
+            if cancellation.is_cancelled() {
+                return Ok(Completion {
+                    display: empty_result(false, true),
+                    stdout: vec![],
+                    stderr: vec![],
+                });
+            }
             match command.spawn() {
                 Ok(child) => break child,
                 Err(error) if is_transient_spawn_error(&error) && attempt + 1 < SPAWN_ATTEMPTS => {
@@ -414,6 +449,39 @@ mod captured_tests {
             .await
             .unwrap();
         assert_eq!(legacy.output, "value");
+    }
+    #[tokio::test]
+    async fn revalidation_occurs_after_admission_and_denial_prevents_spawn() {
+        let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
+        let held = pool.permits.clone().acquire_owned().await.unwrap();
+        let allowed = Arc::new(AtomicBool::new(true));
+        let checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let task_pool = pool.clone();
+        let task_allowed = allowed.clone();
+        let task_checks = checks.clone();
+        let task = tokio::spawn(async move {
+            let check = |req: &ProcessRequest| {
+                assert_eq!(req.argv[0], "/definitely-not-an-executable");
+                task_checks.fetch_add(1, Ordering::SeqCst);
+                if task_allowed.load(Ordering::SeqCst) {
+                    Ok(())
+                } else {
+                    Err(io::Error::new(io::ErrorKind::PermissionDenied, "revoked"))
+                }
+            };
+            let mut req = request("exit 0", 128);
+            req.argv = vec!["/definitely-not-an-executable".into()];
+            task_pool
+                .run_revalidated(req, ProcessCancellation::default(), &check)
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert_eq!(checks.load(Ordering::SeqCst), 0);
+        allowed.store(false, Ordering::SeqCst);
+        drop(held);
+        let err = task.await.unwrap().unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(checks.load(Ordering::SeqCst), 1);
     }
     #[tokio::test]
     async fn raw_streams_share_one_budget_and_honor_cancellation() {

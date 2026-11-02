@@ -25,6 +25,7 @@ impl SessionAccess for SessionService<'_> {
 }
 pub struct AccessSurface {
     pub session_id: Option<String>,
+    pub owner: Option<String>,
 }
 pub struct AccessConsent {
     pub status: String,
@@ -32,7 +33,6 @@ pub struct AccessConsent {
 }
 pub trait SurfaceAccess {
     fn surface(&self, id: &str) -> AccessResult<Option<AccessSurface>>;
-    fn owner(&self, id: &str) -> AccessResult<Option<String>>;
 }
 pub trait ConsentAccess {
     fn request(&self, id: &str) -> AccessResult<Option<AccessConsent>>;
@@ -80,7 +80,7 @@ impl ControlAccess<'_> {
         let Some(surface) = surfaces.surface(id)? else {
             return Ok(false);
         };
-        match surfaces.owner(id)?.filter(|owner| !owner.is_empty()) {
+        match surface.owner.filter(|owner| !owner.is_empty()) {
             Some(owner) => Ok(owner == user),
             None => self.session(surface.session_id.as_deref().unwrap_or(""), Some(user)),
         }

@@ -33,14 +33,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock};
 
 use futures_util::future::BoxFuture;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use super::core_io::HostError;
 use super::core_jait::JaitPort;
-use super::validate::{validate_tool_input, ToolInput};
+use super::validate::{ToolInput, validate_tool_input};
 use crate::security::ssrf_guard::SsrfGuard;
 use crate::security::tool_permissions::{
-    requires_consent, resolve_tool_permission, ToolPermission,
+    ToolPermission, requires_consent, resolve_tool_permission,
 };
 
 /// Default browser surface id when the session has no chat-scoped browser.
@@ -90,13 +90,19 @@ pub const TOOL_NAMES: [&str; 7] = [
 const NAVIGATE_DESCRIPTION: &str = "Open a URL in the live browser displayed in this chat and return a page summary. When a preview is active, automatically targets the preview browser.";
 const SNAPSHOT_DESCRIPTION: &str = "Capture the visible text and interactive elements of the live browser displayed in this chat. When a preview is active, automatically targets the preview browser.";
 const INSPECT_DESCRIPTION: &str = "Inspect the live browser in this chat, optionally focusing on a single CSS selector, and return a page summary.";
-const SCREENSHOT_DESCRIPTION: &str = "Capture a screenshot of the live browser displayed in this chat and save it to a file.";
+const SCREENSHOT_DESCRIPTION: &str =
+    "Capture a screenshot of the live browser displayed in this chat and save it to a file.";
 const FETCH_DESCRIPTION: &str = "Fetch a URL over HTTP(S) and return its body. Private and non-allowlisted hosts are blocked, response size and time are bounded.";
 const SEARCH_DESCRIPTION: &str = "Search the public web and return ranked results. Provider credentials come from the user's settings, never from tool arguments.";
-const SANDBOX_START_DESCRIPTION: &str = "Start a sandboxed browser container for this project with noVNC/VNC access.";
+const SANDBOX_START_DESCRIPTION: &str =
+    "Start a sandboxed browser container for this project with noVNC/VNC access.";
 
 fn tool_entry(name: &str, description: &str, parameters: Value) -> Value {
-    let category = if name.starts_with("web.") { "web" } else { "browser" };
+    let category = if name.starts_with("web.") {
+        "web"
+    } else {
+        "browser"
+    };
     json!({
         "name": name,
         "description": description,
@@ -261,7 +267,10 @@ pub fn definition(name: &str) -> Option<&'static Value> {
 
 /// All tool metadata, in declaration order.
 pub fn all_metadata() -> Vec<&'static Value> {
-    TOOL_NAMES.iter().filter_map(|name| metadata(name)).collect()
+    TOOL_NAMES
+        .iter()
+        .filter_map(|name| metadata(name))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +299,10 @@ fn error_text(error: &HostError) -> String {
 
 /// True when the caller aborted before or during the call.
 fn cancelled(context: &Value) -> bool {
-    context.get("aborted").and_then(Value::as_bool).unwrap_or(false)
+    context
+        .get("aborted")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
         || context
             .get("signal")
             .and_then(|signal| signal.get("aborted"))
@@ -353,9 +365,12 @@ fn permission_denied(name: &str, context: &Value) -> Option<String> {
     let permissions = context.get("permissions")?;
 
     if let Some(denied) = permissions.get("denied").and_then(Value::as_array)
-        && denied.iter().any(|entry| entry.as_str() == Some(name)) {
-            return Some(format!("Permission denied for {name}: tool is explicitly denied by policy"));
-        }
+        && denied.iter().any(|entry| entry.as_str() == Some(name))
+    {
+        return Some(format!(
+            "Permission denied for {name}: tool is explicitly denied by policy"
+        ));
+    }
 
     let policy = permissions.get("tools")?;
     let parsed: HashMap<String, ToolPermission> = serde_json::from_value(policy.clone()).ok()?;
@@ -439,9 +454,7 @@ pub type HttpPort =
 /// Real HTTP transport, bounded and non-redirect-following so the SSRF guard can
 /// vet every hop itself.
 pub fn reqwest_http() -> HttpPort {
-    Arc::new(|request: HttpRequest| {
-        Box::pin(async move { execute_reqwest(request).await })
-    })
+    Arc::new(|request: HttpRequest| Box::pin(async move { execute_reqwest(request).await }))
 }
 
 async fn execute_reqwest(request: HttpRequest) -> Result<HttpResponse, String> {
@@ -594,7 +607,10 @@ fn build_snapshot_payload(
         object.insert("obstruction".into(), Value::Null);
         object.insert("target".into(), Value::Null);
         object.insert("captureSuppressed".into(), Value::Bool(true));
-        object.insert("suppressionReason".into(), Value::String(SECRET_SAFE_REASON.into()));
+        object.insert(
+            "suppressionReason".into(),
+            Value::String(SECRET_SAFE_REASON.into()),
+        );
     }
 
     payload
@@ -602,11 +618,9 @@ fn build_snapshot_payload(
 
 /// The chat-scoped browser id (`ensureBrowserSurface` in the TS source).
 fn resolve_browser_id(input: &Value, context: &Value) -> String {
-    string_field(input, "browserId").unwrap_or_else(|| {
-        match string_field(context, "sessionId") {
-            Some(session) => format!("browser-{session}"),
-            None => DEFAULT_BROWSER_ID.to_string(),
-        }
+    string_field(input, "browserId").unwrap_or_else(|| match string_field(context, "sessionId") {
+        Some(session) => format!("browser-{session}"),
+        None => DEFAULT_BROWSER_ID.to_string(),
     })
 }
 
@@ -666,7 +680,11 @@ impl<C> BrowserTools<C> {
     }
 
     /// Configure the SSRF policy.
-    pub fn with_ssrf_policy(mut self, allow_private_hosts: bool, allowed_hosts: Vec<String>) -> Self {
+    pub fn with_ssrf_policy(
+        mut self,
+        allow_private_hosts: bool,
+        allowed_hosts: Vec<String>,
+    ) -> Self {
         self.allow_private_hosts = allow_private_hosts;
         self.allowed_hosts = allowed_hosts;
         self
@@ -730,15 +748,11 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             return Ok(fail(denial));
         }
 
-        let raw_url = string_field(input, "url").ok_or_else(|| {
-            HostError::Error("browser.navigate requires a url".to_string())
-        })?;
+        let raw_url = string_field(input, "url")
+            .ok_or_else(|| HostError::Error("browser.navigate requires a url".to_string()))?;
         // The browser driver performs navigation, but the URL still has to be a
         // well-formed absolute http(s) URL before we hand it to the surface.
-        let parsed = self
-            .guard()
-            .validate(&raw_url)
-            .map_err(HostError::Error)?;
+        let parsed = self.guard().validate(&raw_url).map_err(HostError::Error)?;
 
         let browser_id = resolve_browser_id(input, ctx);
         let args = json!({ "browserId": browser_id, "url": parsed.as_str() });
@@ -1069,10 +1083,7 @@ fn parse_brave(payload: &Value, limit: usize) -> SearchOutcome {
                 .iter()
                 .filter_map(|item| {
                     let url = item.get("url").and_then(Value::as_str)?;
-                    let title = item
-                        .get("title")
-                        .and_then(Value::as_str)
-                        .unwrap_or(url);
+                    let title = item.get("title").and_then(Value::as_str).unwrap_or(url);
                     let description = item
                         .get("description")
                         .and_then(Value::as_str)
@@ -1105,10 +1116,7 @@ fn parse_chat_citations(payload: &Value, limit: usize) -> SearchOutcome {
             }
         }
     }
-    if let Some(sources) = payload
-        .get("search_results")
-        .and_then(Value::as_array)
-    {
+    if let Some(sources) = payload.get("search_results").and_then(Value::as_array) {
         for source in sources {
             if let Some(url) = source.get("url").and_then(Value::as_str) {
                 let title = source.get("title").and_then(Value::as_str).unwrap_or(url);
@@ -1179,15 +1187,12 @@ fn parse_openai(payload: &Value, limit: usize) -> SearchOutcome {
                     continue;
                 };
                 for annotation in annotations {
-                    let url = annotation
-                        .get("url")
-                        .and_then(Value::as_str)
-                        .or_else(|| {
-                            annotation
-                                .get("url_citation")
-                                .and_then(|citation| citation.get("url"))
-                                .and_then(Value::as_str)
-                        });
+                    let url = annotation.get("url").and_then(Value::as_str).or_else(|| {
+                        annotation
+                            .get("url_citation")
+                            .and_then(|citation| citation.get("url"))
+                            .and_then(Value::as_str)
+                    });
                     if let Some(url) = url {
                         let title = annotation
                             .get("title")
@@ -1232,15 +1237,13 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
     }
 
     async fn web_fetch_inner(&self, input: &Value, context: &C) -> Result<Value, HostError> {
-    
         let ctx = context.json();
         if cancelled(ctx) {
             return Ok(fail("Cancelled"));
         }
         let mut typed = ToolInput::new(input);
-        let validation = match
-            validate_tool_input(definition("web.fetch").expect("fetch schema"), &mut typed)
-            {
+        let validation =
+            match validate_tool_input(definition("web.fetch").expect("fetch schema"), &mut typed) {
                 Ok(result) => result,
                 Err(err) => return Ok(fail(format!("Invalid input: {}", err.name))),
             };
@@ -1268,7 +1271,9 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             .map(|map| {
                 map.iter()
                     .filter_map(|(name, value)| {
-                        value.as_str().map(|value| (name.clone(), value.to_string()))
+                        value
+                            .as_str()
+                            .map(|value| (name.clone(), value.to_string()))
                     })
                     .collect::<Vec<_>>()
             })
@@ -1378,9 +1383,7 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             ));
         }
 
-        Ok(fail(format!(
-            "Too many redirects while fetching {raw_url}"
-        )))
+        Ok(fail(format!("Too many redirects while fetching {raw_url}")))
     }
 
     // -- web.search ---------------------------------------------------------
@@ -1399,8 +1402,8 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             return Ok(fail("Cancelled"));
         }
         let mut typed = ToolInput::new(input);
-        let validation = match
-            validate_tool_input(definition("web.search").expect("search schema"), &mut typed)
+        let validation =
+            match validate_tool_input(definition("web.search").expect("search schema"), &mut typed)
             {
                 Ok(result) => result,
                 Err(err) => return Ok(fail(format!("Invalid input: {}", err.name))),
@@ -1427,7 +1430,7 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
                 None => {
                     return Ok(fail(
                         "No web search provider is configured. Add an API key for Brave, OpenAI, Perplexity, Grok, Gemini or Kimi.",
-                    ))
+                    ));
                 }
             }
         } else {
@@ -1439,7 +1442,7 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             None => {
                 return Ok(fail(format!(
                     "Missing API key for web search provider '{provider}'"
-                )))
+                )));
             }
         };
 
@@ -1468,11 +1471,8 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             }
             "openai" => {
                 let base = context_string(ctx, "openaiBaseUrl", DEFAULT_OPENAI_BASE_URL);
-                let model = context_string(
-                    ctx,
-                    "openaiWebSearchModel",
-                    DEFAULT_OPENAI_WEB_SEARCH_MODEL,
-                );
+                let model =
+                    context_string(ctx, "openaiWebSearchModel", DEFAULT_OPENAI_WEB_SEARCH_MODEL);
                 (
                     chat_request(
                         &format!("{base}/responses"),
@@ -1570,7 +1570,7 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             Err(error) => {
                 return Ok(fail(format!(
                     "{provider} search returned invalid JSON: {error}"
-                )))
+                )));
             }
         };
 
@@ -1589,14 +1589,12 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             "results": outcome.results,
         });
         if let Some(answer) = outcome.answer
-            && let Some(object) = data.as_object_mut() {
-                object.insert("answer".into(), Value::String(bound_text(&answer, 4000)));
-            }
+            && let Some(object) = data.as_object_mut()
+        {
+            object.insert("answer".into(), Value::String(bound_text(&answer, 4000)));
+        }
 
-        Ok(success(
-            format!("Found {count} results for {query}"),
-            data,
-        ))
+        Ok(success(format!("Found {count} results for {query}"), data))
     }
 
     // -- browser.sandbox.start ---------------------------------------------
@@ -1623,15 +1621,21 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
             Err(err) => return Ok(fail(format!("Invalid input: {}", err.name))),
         };
         if !validation.valid {
-            return Ok(validation_failure("browser.sandbox.start", &validation.errors));
+            return Ok(validation_failure(
+                "browser.sandbox.start",
+                &validation.errors,
+            ));
         }
         if let Some(denial) = permission_denied("browser.sandbox.start", ctx) {
             return Ok(fail(denial));
         }
 
-        let mount_mode = string_field(input, "mountMode").unwrap_or_else(|| "read-only".to_string());
+        let mount_mode =
+            string_field(input, "mountMode").unwrap_or_else(|| "read-only".to_string());
         if !["none", "read-only", "read-write"].contains(&mount_mode.as_str()) {
-            return Ok(fail(format!("Unsupported sandbox mount mode: {mount_mode}")));
+            return Ok(fail(format!(
+                "Unsupported sandbox mount mode: {mount_mode}"
+            )));
         }
 
         let mut ports: Map<String, Value> = Map::new();
@@ -1647,9 +1651,7 @@ impl<C: CallContext + Send + Sync> BrowserTools<C> {
         }
 
         let project_root = string_field(ctx, "projectRoot").ok_or_else(|| {
-            HostError::Error(
-                "A project root is required to start the sandbox browser.".to_string(),
-            )
+            HostError::Error("A project root is required to start the sandbox browser.".to_string())
         })?;
 
         let mut args = Map::new();
@@ -1759,8 +1761,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     type Calls = Arc<AtomicUsize>;
 
@@ -1776,7 +1778,10 @@ mod tests {
     }
 
     /// Transport fake that captures the requests it saw and replays a response.
-    fn http_port(replies: Vec<HttpResponse>, seen: Arc<std::sync::Mutex<Vec<HttpRequest>>>) -> HttpPort {
+    fn http_port(
+        replies: Vec<HttpResponse>,
+        seen: Arc<std::sync::Mutex<Vec<HttpRequest>>>,
+    ) -> HttpPort {
         let port: HttpPort = Arc::new(move |request| {
             let replies = replies.clone();
             let seen = seen.clone();
@@ -1827,14 +1832,21 @@ mod tests {
         for name in TOOL_NAMES {
             let entry = metadata(name).unwrap_or_else(|| panic!("missing metadata for {name}"));
             assert_eq!(entry.get("name").and_then(Value::as_str), Some(name));
-            assert!(!entry
-                .get("description")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .is_empty());
+            assert!(
+                !entry
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .is_empty()
+            );
             let schema = definition(name).expect("definition");
             assert_eq!(schema.get("type").and_then(Value::as_str), Some("object"));
-            assert!(schema.get("properties").and_then(Value::as_object).is_some());
+            assert!(
+                schema
+                    .get("properties")
+                    .and_then(Value::as_object)
+                    .is_some()
+            );
         }
         // `definition` must be the schema embedded in the metadata table.
         let stored = metadata("web.fetch").and_then(|entry| entry.get("parameters").cloned());
@@ -1849,9 +1861,15 @@ mod tests {
             ("web.search", "query"),
         ] {
             let schema = definition(name).expect("schema");
-            let required = schema.get("required").and_then(Value::as_array).cloned().unwrap_or_default();
+            let required = schema
+                .get("required")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
             assert!(
-                required.iter().any(|field| field.as_str() == Some(required_field(name))),
+                required
+                    .iter()
+                    .any(|field| field.as_str() == Some(required_field(name))),
                 "{} must require {} ({:?})",
                 name,
                 required_field(name),
@@ -1873,11 +1891,13 @@ mod tests {
         let (tools, _) = tools(snapshot_reply());
         let result = tools.call("browser.teleport", &json!({}), &json!({})).await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
-        assert!(result
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .contains("Unknown browser tool"));
+        assert!(
+            result
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("Unknown browser tool")
+        );
     }
 
     #[tokio::test]
@@ -1887,7 +1907,11 @@ mod tests {
             .navigate(&json!({ "url": "javascript:alert(1)" }), &json!({}))
             .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
-        assert_eq!(calls.load(Ordering::SeqCst), 0, "driver must not be reached");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "driver must not be reached"
+        );
     }
 
     #[tokio::test]
@@ -1915,7 +1939,10 @@ mod tests {
     async fn navigate_shapes_and_bounds_the_snapshot() {
         let (tools, _) = tools(snapshot_reply());
         let result = tools
-            .navigate(&json!({ "url": "https://example.com" }), &json!({ "sessionId": "abc" }))
+            .navigate(
+                &json!({ "url": "https://example.com" }),
+                &json!({ "sessionId": "abc" }),
+            )
             .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(true));
         assert_eq!(
@@ -1923,8 +1950,14 @@ mod tests {
             Some("Navigated to https://example.com/final")
         );
         let data = result.get("data").expect("data");
-        assert_eq!(data.get("browserId").and_then(Value::as_str), Some("browser-abc"));
-        let text = data.get("textPreview").and_then(Value::as_str).unwrap_or_default();
+        assert_eq!(
+            data.get("browserId").and_then(Value::as_str),
+            Some("browser-abc")
+        );
+        let text = data
+            .get("textPreview")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         assert_eq!(text.chars().count(), TEXT_PREVIEW_LIMIT, "text is bounded");
         let elements = data
             .get("interactiveElements")
@@ -1939,10 +1972,17 @@ mod tests {
         let result = tools
             .snapshot(&json!({}), &json!({ "secretSafe": true }))
             .await;
-        let message = result.get("message").and_then(Value::as_str).unwrap_or_default();
+        let message = result
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
         assert!(message.contains("secret-safe"), "got: {message}");
         let data = result.get("data").expect("data");
-        assert!(data.get("suppressionReason").and_then(Value::as_str).is_some());
+        assert!(
+            data.get("suppressionReason")
+                .and_then(Value::as_str)
+                .is_some()
+        );
         assert_eq!(data.get("textPreview").and_then(Value::as_str), Some(""));
     }
 
@@ -1952,46 +1992,56 @@ mod tests {
         let ctx = json!({ "permissions": { "denied": ["browser.snapshot", "web.fetch"] } });
         let snapshot = tools.snapshot(&json!({}), &ctx).await;
         assert_eq!(snapshot.get("ok").and_then(Value::as_bool), Some(false));
-        assert!(snapshot
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .contains("Permission denied"));
+        assert!(
+            snapshot
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("Permission denied")
+        );
 
         let fetch_tools = tools.with_http(http_port(
             vec![HttpResponse::new(200, None, "hi".to_string())],
             Arc::new(std::sync::Mutex::new(Vec::new())),
         ));
-        let fetch = fetch_tools.web_fetch(&json!({ "url": "https://example.com" }), &ctx).await;
+        let fetch = fetch_tools
+            .web_fetch(&json!({ "url": "https://example.com" }), &ctx)
+            .await;
         assert_eq!(fetch.get("ok").and_then(Value::as_bool), Some(false));
-        assert_eq!(calls.load(Ordering::SeqCst), 0, "driver must not run when denied");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "driver must not run when denied"
+        );
     }
 
     #[tokio::test]
     async fn driver_failures_pass_through_unchanged() {
         let failure = json!({ "ok": false, "message": "surface not a browser" });
         let (tools, _) = tools(failure.clone());
-        let result = tools.inspect(&json!({ "selector": "#main" }), &json!({})).await;
+        let result = tools
+            .inspect(&json!({ "selector": "#main" }), &json!({}))
+            .await;
         assert_eq!(result, failure);
     }
 
     #[tokio::test]
     async fn missing_driver_result_is_reported_not_swallowed() {
         let calls: Calls = Arc::new(AtomicUsize::new(0));
-        let browser: JaitPort<Value> = Arc::new(|_m: &str, _a: Vec<Value>, _c: &Value| {
-            Box::pin(async move { Ok(None) })
-        });
-        let sandbox: JaitPort<Value> = Arc::new(|_m: &str, _a: Vec<Value>, _c: &Value| {
-            Box::pin(async move { Ok(None) })
-        });
+        let browser: JaitPort<Value> =
+            Arc::new(|_m: &str, _a: Vec<Value>, _c: &Value| Box::pin(async move { Ok(None) }));
+        let sandbox: JaitPort<Value> =
+            Arc::new(|_m: &str, _a: Vec<Value>, _c: &Value| Box::pin(async move { Ok(None) }));
         let tools = BrowserTools::new(browser, sandbox);
         let result = tools.snapshot(&json!({}), &json!({})).await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
-        assert!(result
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .contains("did not return a result"));
+        assert!(
+            result
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("did not return a result")
+        );
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 
@@ -1999,9 +2049,15 @@ mod tests {
     async fn navigate_stops_when_the_context_is_aborted() {
         let (tools, calls) = tools(snapshot_reply());
         let result = tools
-            .navigate(&json!({ "url": "https://example.com" }), &json!({ "aborted": true }))
+            .navigate(
+                &json!({ "url": "https://example.com" }),
+                &json!({ "aborted": true }),
+            )
             .await;
-        assert_eq!(result.get("message").and_then(Value::as_str), Some("Cancelled"));
+        assert_eq!(
+            result.get("message").and_then(Value::as_str),
+            Some("Cancelled")
+        );
         assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 
@@ -2014,7 +2070,10 @@ mod tests {
             seen.clone(),
         ));
         let result = tools
-            .web_fetch(&json!({ "url": "https://example.com", "method": "TRACE" }), &json!({}))
+            .web_fetch(
+                &json!({ "url": "https://example.com", "method": "TRACE" }),
+                &json!({}),
+            )
             .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
         assert!(seen.lock().unwrap().is_empty());
@@ -2022,19 +2081,27 @@ mod tests {
 
     #[tokio::test]
     async fn web_fetch_reports_truncated_bodies() {
-        let mut response = HttpResponse::new(200, Some("text/plain".to_string()), "abc".to_string());
+        let mut response =
+            HttpResponse::new(200, Some("text/plain".to_string()), "abc".to_string());
         response.truncated = true;
         let (tools, _) = tools(snapshot_reply());
-        let tools = tools.with_http(http_port(vec![response], Arc::new(std::sync::Mutex::new(Vec::new()))));
-        let result = tools.web_fetch(&json!({ "url": "https://example.com" }), &json!({})).await;
+        let tools = tools.with_http(http_port(
+            vec![response],
+            Arc::new(std::sync::Mutex::new(Vec::new())),
+        ));
+        let result = tools
+            .web_fetch(&json!({ "url": "https://example.com" }), &json!({}))
+            .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(true));
         let data = result.get("data").expect("data");
         assert_eq!(data.get("truncated").and_then(Value::as_bool), Some(true));
-        assert!(result
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .contains("[truncated]"));
+        assert!(
+            result
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("[truncated]")
+        );
     }
 
     #[tokio::test]
@@ -2048,14 +2115,20 @@ mod tests {
             seen.clone(),
         ));
         let result = tools
-            .web_fetch(&json!({ "url": "https://example.com/start", "method": "POST", "body": "a=1" }), &json!({}))
+            .web_fetch(
+                &json!({ "url": "https://example.com/start", "method": "POST", "body": "a=1" }),
+                &json!({}),
+            )
             .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(true));
         let requests = seen.lock().unwrap();
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].method, "POST");
         assert_eq!(requests[1].method, "GET", "302 on POST downgrades to GET");
-        assert!(requests[1].body.is_none(), "body must be dropped after downgrade");
+        assert!(
+            requests[1].body.is_none(),
+            "body must be dropped after downgrade"
+        );
         assert_eq!(requests[1].url, "https://example.com/moved");
         let redirects = result
             .get("data")
@@ -2076,24 +2149,34 @@ mod tests {
             .web_fetch(&json!({ "url": "https://example.com" }), &json!({}))
             .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
-        assert!(result
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .contains("Redirect blocked"));
-        assert_eq!(seen.lock().unwrap().len(), 1, "second hop must never be requested");
+        assert!(
+            result
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("Redirect blocked")
+        );
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            1,
+            "second hop must never be requested"
+        );
     }
 
     #[tokio::test]
     async fn web_search_without_provider_credentials_fails_loudly() {
         let (tools, _) = tools(snapshot_reply());
-        let result = tools.web_search(&json!({ "query": "rust" }), &json!({})).await;
+        let result = tools
+            .web_search(&json!({ "query": "rust" }), &json!({}))
+            .await;
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
-        assert!(result
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .contains("No web search provider"));
+        assert!(
+            result
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .contains("No web search provider")
+        );
     }
 
     #[test]
@@ -2101,20 +2184,29 @@ mod tests {
         assert_eq!(resolve_requested_provider("altavista"), "openai");
         assert_eq!(resolve_requested_provider("openai"), "openai");
         assert_eq!(resolve_requested_provider("brave"), "brave");
-        assert_eq!(resolve_requested_provider("KIMI".to_lowercase().as_str()), "kimi");
+        assert_eq!(
+            resolve_requested_provider("KIMI".to_lowercase().as_str()),
+            "kimi"
+        );
     }
 
     #[tokio::test]
     async fn web_search_unknown_provider_uses_openai_path() {
         let (tools, _) = tools(snapshot_reply());
         let result = tools
-            .web_search(&json!({ "query": "rust", "provider": "altavista" }), &json!({}))
+            .web_search(
+                &json!({ "query": "rust", "provider": "altavista" }),
+                &json!({}),
+            )
             .await;
         let message = result
             .get("message")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        assert!(!message.contains("Unsupported web search provider"), "{message}");
+        assert!(
+            !message.contains("Unsupported web search provider"),
+            "{message}"
+        );
         // With no keys configured the fallback surfaces the OpenAI provider.
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(false));
         assert!(message.to_lowercase().contains("openai"), "{message}");
@@ -2129,7 +2221,11 @@ mod tests {
         let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
         let (tools, _) = tools(snapshot_reply());
         let tools = tools.with_http(http_port(
-            vec![HttpResponse::new(200, Some("application/json".to_string()), body)],
+            vec![HttpResponse::new(
+                200,
+                Some("application/json".to_string()),
+                body,
+            )],
             seen.clone(),
         ));
         let ctx = json!({ "apiKeys": { "brave": { "apiKey": "secret-token" } } });
@@ -2139,7 +2235,10 @@ mod tests {
         assert_eq!(result.get("ok").and_then(Value::as_bool), Some(true));
         let data = result.get("data").expect("data");
         assert_eq!(data.get("provider").and_then(Value::as_str), Some("brave"));
-        assert_eq!(data.get("limit").and_then(Value::as_u64), Some(MAX_SEARCH_LIMIT));
+        assert_eq!(
+            data.get("limit").and_then(Value::as_u64),
+            Some(MAX_SEARCH_LIMIT)
+        );
         assert_eq!(
             data.get("results").and_then(Value::as_array).map(Vec::len),
             Some(MAX_SEARCH_LIMIT as usize)
@@ -2155,9 +2254,8 @@ mod tests {
         let calls: Calls = Arc::new(AtomicUsize::new(0));
         let seen: Arc<std::sync::Mutex<Vec<Value>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
         let recorder = seen.clone();
-        let browser: JaitPort<Value> = Arc::new(|_m: &str, _a: Vec<Value>, _c: &Value| {
-            Box::pin(async move { Ok(None) })
-        });
+        let browser: JaitPort<Value> =
+            Arc::new(|_m: &str, _a: Vec<Value>, _c: &Value| Box::pin(async move { Ok(None) }));
         let sandbox: JaitPort<Value> = {
             let calls = calls.clone();
             Arc::new(move |method: &str, args: Vec<Value>, _c: &Value| {
@@ -2166,20 +2264,32 @@ mod tests {
                 recorder.lock().unwrap().push(captured);
                 let method = method.to_string();
                 Box::pin(async move {
-                    Ok(Some(json!({ "ok": true, "data": { "novncUrl": "http://localhost:6080", "method": method } })))
+                    Ok(Some(
+                        json!({ "ok": true, "data": { "novncUrl": "http://localhost:6080", "method": method } }),
+                    ))
                 })
             })
         };
         let tools = BrowserTools::new(browser, sandbox);
 
         let bad = tools
-            .sandbox_start(&json!({ "mountMode": "rw" }), &json!({ "projectRoot": "/tmp/p" }))
+            .sandbox_start(
+                &json!({ "mountMode": "rw" }),
+                &json!({ "projectRoot": "/tmp/p" }),
+            )
             .await;
         assert_eq!(bad.get("ok").and_then(Value::as_bool), Some(false));
-        assert_eq!(calls.load(Ordering::SeqCst), 0, "invalid input must not reach the sandbox");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            0,
+            "invalid input must not reach the sandbox"
+        );
 
         let bad_port = tools
-            .sandbox_start(&json!({ "vncPort": 70000 }), &json!({ "projectRoot": "/tmp/p" }))
+            .sandbox_start(
+                &json!({ "vncPort": 70000 }),
+                &json!({ "projectRoot": "/tmp/p" }),
+            )
             .await;
         assert_eq!(bad_port.get("ok").and_then(Value::as_bool), Some(false));
 
@@ -2198,13 +2308,28 @@ mod tests {
             Some("Sandbox browser started")
         );
         let data = ok.get("data").expect("data");
-        assert_eq!(data.get("novncUrl").and_then(Value::as_str), Some("http://localhost:6080"));
-        assert_eq!(data.get("mountMode").and_then(Value::as_str), Some("read-write"));
-        assert_eq!(data.get("projectRoot").and_then(Value::as_str), Some("/tmp/p"));
+        assert_eq!(
+            data.get("novncUrl").and_then(Value::as_str),
+            Some("http://localhost:6080")
+        );
+        assert_eq!(
+            data.get("mountMode").and_then(Value::as_str),
+            Some("read-write")
+        );
+        assert_eq!(
+            data.get("projectRoot").and_then(Value::as_str),
+            Some("/tmp/p")
+        );
 
         let forwarded = seen.lock().unwrap();
         assert_eq!(forwarded.len(), 1);
-        assert_eq!(forwarded[0].get("novncPort").and_then(Value::as_u64), Some(6080));
-        assert_eq!(forwarded[0].get("mountMode").and_then(Value::as_str), Some("read-write"));
+        assert_eq!(
+            forwarded[0].get("novncPort").and_then(Value::as_u64),
+            Some(6080)
+        );
+        assert_eq!(
+            forwarded[0].get("mountMode").and_then(Value::as_str),
+            Some("read-write")
+        );
     }
 }

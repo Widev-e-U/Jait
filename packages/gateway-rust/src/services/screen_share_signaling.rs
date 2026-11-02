@@ -71,21 +71,34 @@ pub fn authorize_share_signal(
     }
     let target = target.and_then(Value::as_str);
     let destination_matches = if sender_is_host {
-        is_viewer(recipient) && match target {
-            Some(target) => target == recipient,
-            None => viewers.iter().filter_map(|v| v.get("deviceId").and_then(Value::as_str))
-                .collect::<std::collections::HashSet<_>>().len() == 1,
-        }
+        is_viewer(recipient)
+            && match target {
+                Some(target) => target == recipient,
+                None => {
+                    viewers
+                        .iter()
+                        .filter_map(|v| v.get("deviceId").and_then(Value::as_str))
+                        .collect::<std::collections::HashSet<_>>()
+                        .len()
+                        == 1
+                }
+            }
     } else {
         recipient == host && target.is_none_or(|target| target == host)
     };
-    if !destination_matches { return false; }
+    if !destination_matches {
+        return false;
+    }
     match kind {
-        ShareSignalKind::Offer => sender_is_host
-            && payload.get("hostDeviceId").and_then(Value::as_str) == Some(sender),
-        ShareSignalKind::Answer => !sender_is_host
-            && payload.get("viewerDeviceId").and_then(Value::as_str) == Some(sender),
-        ShareSignalKind::IceCandidate => payload.get("fromDeviceId").and_then(Value::as_str) == Some(sender),
+        ShareSignalKind::Offer => {
+            sender_is_host && payload.get("hostDeviceId").and_then(Value::as_str) == Some(sender)
+        }
+        ShareSignalKind::Answer => {
+            !sender_is_host && payload.get("viewerDeviceId").and_then(Value::as_str) == Some(sender)
+        }
+        ShareSignalKind::IceCandidate => {
+            payload.get("fromDeviceId").and_then(Value::as_str) == Some(sender)
+        }
     }
 }
 
@@ -110,9 +123,20 @@ mod tests {
     fn approved_signals_only_reach_correct_participants() {
         let s = session();
         let offer = json!({"sessionId":"s", "hostDeviceId":"host", "toDeviceId":"a"});
-        assert!(!allowed(Some(&s), "host", "a", ShareSignalKind::Offer,
-            json!({"sessionId":"s", "hostDeviceId":"host"})));
-        assert!(!allowed(Some(&s), "host", "b", ShareSignalKind::Offer, offer.clone()));
+        assert!(!allowed(
+            Some(&s),
+            "host",
+            "a",
+            ShareSignalKind::Offer,
+            json!({"sessionId":"s", "hostDeviceId":"host"})
+        ));
+        assert!(!allowed(
+            Some(&s),
+            "host",
+            "b",
+            ShareSignalKind::Offer,
+            offer.clone()
+        ));
         assert!(allowed(
             Some(&s),
             "host",
@@ -166,8 +190,20 @@ mod tests {
             ice.clone()
         ));
         let host_ice = json!({"sessionId":"s", "fromDeviceId":"host", "toDeviceId":"b"});
-        assert!(allowed(Some(&s), "host", "b", ShareSignalKind::IceCandidate, host_ice.clone()));
-        assert!(!allowed(Some(&s), "host", "a", ShareSignalKind::IceCandidate, host_ice));
+        assert!(allowed(
+            Some(&s),
+            "host",
+            "b",
+            ShareSignalKind::IceCandidate,
+            host_ice.clone()
+        ));
+        assert!(!allowed(
+            Some(&s),
+            "host",
+            "a",
+            ShareSignalKind::IceCandidate,
+            host_ice
+        ));
         assert!(!allowed(
             Some(&s),
             "a",

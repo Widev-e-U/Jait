@@ -131,6 +131,8 @@ impl Default for IsolatedOptions {
 /// Everything the host needs to launch the child gateway.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChildSpec {
+    /// Identity used to associate the child with its prepared state.
+    pub operation: String,
     pub program: String,
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
@@ -150,11 +152,25 @@ pub struct SpawnedChild {
     pub stdout: mpsc::UnboundedReceiver<String>,
     /// Raw stderr chunks.
     pub stderr: mpsc::UnboundedReceiver<String>,
-    /// Fires once the process is gone (close or error).
+    /// Signals only after the host proves the child and every effect that can
+    /// access its state have stopped. Direct-child exit, an error notification,
+    /// or a closed control channel alone is not sufficient. Dropping the sender
+    /// conveys an inconclusive outcome and must not authorize state removal.
     pub closed: oneshot::Receiver<()>,
     /// Carries the child `error` message, if the process could not run.
     pub error: mpsc::UnboundedReceiver<String>,
     pub control: Box<dyn ChildControl>,
+}
+
+/// A spawn error must describe whether a child may still exist. If a child
+/// exists, its control and exit notification remain owned by the caller.
+pub enum SpawnFailure {
+    NoChild(EvalError),
+    Child {
+        error: EvalError,
+        child: SpawnedChild,
+    },
+    Unknown(EvalError),
 }
 
 /// Host boundary for the isolated-gateway lifecycle.
@@ -167,10 +183,52 @@ pub trait IsolatedGatewayHost: Send + Sync {
     ) -> HostFuture<'a, Result<Value, EvalError>>;
     /// Create a private (`0700`) temporary state directory.
     fn make_state_dir(&self) -> HostFuture<'_, Result<PathBuf, EvalError>>;
+    /// Create state for an operation identity chosen before any side effect.
+    /// Hosts implementing reconciliation must persist the association before
+    /// creating state. The legacy default cannot reconcile uncertain outcomes.
+    fn make_state_dir_for<'a>(
+        &'a self,
+        _operation: &'a str,
+    ) -> HostFuture<'a, Result<PathBuf, EvalError>> {
+        self.make_state_dir()
+    }
+    /// Confirm the operation has no remaining state, removing it if needed.
+    /// An error or cancellation is inconclusive. Implementations must be safe
+    /// to retry and must not remove state belonging to any other operation.
+    fn reconcile_state_creation<'a>(
+        &'a self,
+        _operation: &'a str,
+    ) -> HostFuture<'a, Result<(), EvalError>> {
+        Box::pin(async {
+            Err(EvalError::Child(
+                "state creation reconciliation unavailable".into(),
+            ))
+        })
+    }
+    /// Reconcile an uncertain spawn and remove its state only after proving that
+    /// the operation and every effect it could start have stopped. Success means
+    /// both shutdown and removal are complete. Errors, panics and cancellation
+    /// are inconclusive; implementations must be idempotent and must never act
+    /// on state belonging to another operation. The default remains fail-closed.
+    fn reconcile_unknown_spawn<'a>(
+        &'a self,
+        _operation: &'a str,
+        _state: &'a Path,
+    ) -> HostFuture<'a, Result<(), EvalError>> {
+        Box::pin(async {
+            Err(EvalError::Child(
+                "unknown spawn reconciliation unavailable".into(),
+            ))
+        })
+    }
     /// Recursively delete the state directory, ignoring absence.
     fn remove_state_dir(&self, dir: PathBuf) -> HostFuture<'_, Result<(), EvalError>>;
-    /// Spawn the child gateway process.
-    fn spawn_child<'a>(&'a self, spec: &'a ChildSpec) -> HostFuture<'a, Result<SpawnedChild, EvalError>>;
+    /// Spawn the child gateway process, returning ownership on partial failure.
+    /// Use `Unknown` if the host cannot prove that no child exists.
+    fn spawn_child<'a>(
+        &'a self,
+        spec: &'a ChildSpec,
+    ) -> HostFuture<'a, Result<SpawnedChild, SpawnFailure>>;
     /// Inherited environment of the calling process.
     fn base_env(&self) -> Vec<(String, String)>;
     /// Fresh random token secret (UUID v4 in the TS source).
@@ -189,56 +247,112 @@ pub struct IsolatedGateway {
     closed: Option<oneshot::Receiver<()>>,
     kill_grace_ms: u64,
     stopped: bool,
+    exit_confirmed: bool,
+    term_deadline: Option<tokio::time::Instant>,
+    kill_sent: bool,
 }
 
-/// Wait up to `grace` for the child-exit signal.
-///
-/// Returns `true` when the child is already gone. A oneshot receiver panics if
-/// it is polled after completion, so a resolved receiver is dropped here.
-async fn wait_closed(closed: &mut Option<oneshot::Receiver<()>>, grace: Duration) -> bool {
+/// A dropped notification sender is not evidence that the process exited.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExitObservation {
+    Confirmed,
+    TimedOut,
+    Lost,
+}
+
+async fn wait_closed(
+    closed: &mut Option<oneshot::Receiver<()>>,
+    grace: Duration,
+) -> ExitObservation {
     let Some(rx) = closed.as_mut() else {
-        return true;
+        return ExitObservation::Lost;
     };
-    let exited = tokio::time::timeout(grace, &mut *rx).await.is_ok();
-    if exited {
-        *closed = None;
+    match tokio::time::timeout(grace, &mut *rx).await {
+        Ok(result) => {
+            *closed = None;
+            if result.is_ok() {
+                ExitObservation::Confirmed
+            } else {
+                ExitObservation::Lost
+            }
+        }
+        Err(_) => ExitObservation::TimedOut,
     }
-    exited
 }
 
-/// Resolve once the child is gone, staying pending when no receiver remains.
-async fn closed_signal(closed: &mut Option<oneshot::Receiver<()>>) {
+// A lost notification is not an exit. Preserve the TERM grace before
+// escalating, even if the receiver disappeared or an earlier attempt was cancelled.
+async fn wait_until_term_deadline(
+    closed: &mut Option<oneshot::Receiver<()>>,
+    deadline: tokio::time::Instant,
+) -> ExitObservation {
+    let result = wait_closed(
+        closed,
+        deadline.saturating_duration_since(tokio::time::Instant::now()),
+    )
+    .await;
+    if result == ExitObservation::Lost {
+        tokio::time::sleep_until(deadline).await;
+        ExitObservation::TimedOut
+    } else {
+        result
+    }
+}
+
+async fn closed_signal(closed: &mut Option<oneshot::Receiver<()>>) -> bool {
     match closed.as_mut() {
-        Some(rx) => {
-            let _ = rx.await;
-        }
-        None => std::future::pending::<()>().await,
+        Some(rx) => rx.await.is_ok(),
+        None => std::future::pending::<bool>().await,
     }
 }
 
 impl IsolatedGateway {
-    /// Terminate the child and delete its state directory. Idempotent.
-    pub async fn stop(&mut self) {
+    /// Returns false when exit or state removal cannot be confirmed. The state
+    /// directory is retained unless a child exit has been explicitly observed.
+    pub async fn stop(&mut self) -> bool {
         if self.stopped {
-            return;
+            return true;
+        }
+        if !self.exit_confirmed {
+            let grace = Duration::from_millis(self.kill_grace_ms);
+            let deadline = *self.term_deadline.get_or_insert_with(|| {
+                self.control.kill(ChildSignal::Term);
+                tokio::time::Instant::now() + grace
+            });
+            let mut observation = if self.kill_sent {
+                ExitObservation::TimedOut
+            } else {
+                wait_until_term_deadline(&mut self.closed, deadline).await
+            };
+            if observation == ExitObservation::TimedOut {
+                if !self.kill_sent {
+                    self.control.kill(ChildSignal::Kill);
+                    self.kill_sent = true;
+                }
+                observation = wait_closed(&mut self.closed, grace).await;
+            }
+            if observation != ExitObservation::Confirmed {
+                return false;
+            }
+            self.exit_confirmed = true;
+        }
+        if self
+            .host
+            .remove_state_dir(self.state.clone())
+            .await
+            .is_err()
+        {
+            return false;
         }
         self.stopped = true;
-        self.control.kill(ChildSignal::Term);
-        let grace = Duration::from_millis(self.kill_grace_ms);
-        if !wait_closed(&mut self.closed, grace).await {
-            self.control.kill(ChildSignal::Kill);
-            // Even `SIGKILL` needs a moment to be reaped; never block teardown forever.
-            let _ = wait_closed(&mut self.closed, grace).await;
-        }
-        let state = self.state.clone();
-        let _ = self.host.remove_state_dir(state).await;
+        true
     }
 }
 
 impl Drop for IsolatedGateway {
     fn drop(&mut self) {
         // Best-effort, matching the TS `stop` being wired into teardown paths.
-        if !self.stopped {
+        if !self.stopped && !self.exit_confirmed {
             self.control.kill(ChildSignal::Term);
         }
     }
@@ -278,10 +392,7 @@ pub fn build_child_env(
         ("HOST".to_string(), "127.0.0.1".to_string()),
         ("JWT_SECRET".to_string(), jwt_secret.to_string()),
         ("LOG_LEVEL".to_string(), "warn".to_string()),
-        (
-            "LLM_PROVIDER".to_string(),
-            backend_from_settings(settings),
-        ),
+        ("LLM_PROVIDER".to_string(), backend_from_settings(settings)),
         ("JAIT_PRIMARY_GATEWAY".to_string(), String::new()),
         ("JAIT_PRIMARY_TOKEN".to_string(), String::new()),
         ("JAIT_NODE_ONLY".to_string(), "false".to_string()),
@@ -369,24 +480,211 @@ async fn wait_aborted(signal: &Option<watch::Receiver<bool>>) {
     }
 }
 
-async fn stop_child(
-    host: &Arc<dyn IsolatedGatewayHost>,
-    control: &mut Box<dyn ChildControl>,
-    closed: &mut Option<oneshot::Receiver<()>>,
-    already_closed: bool,
-    state: &Path,
+// Movable ownership of a failed startup. A supervisor must retain this value
+// until cleanup succeeds; dropping it does not prove the child has exited.
+struct StartupCleanup {
+    host: Arc<dyn IsolatedGatewayHost>,
+    control: Box<dyn ChildControl>,
+    closed: Option<oneshot::Receiver<()>>,
+    exit_confirmed: bool,
+    state: PathBuf,
     kill_grace_ms: u64,
-) {
-    control.kill(ChildSignal::Term);
-    if already_closed {
-        *closed = None;
-    } else if !wait_closed(closed, Duration::from_millis(kill_grace_ms)).await {
-        control.kill(ChildSignal::Kill);
-        if let Some(rx) = closed.as_mut() {
-            let _ = rx.await;
+    term_deadline: Option<tokio::time::Instant>,
+    kill_sent: bool,
+}
+
+impl StartupCleanup {
+    async fn attempt(&mut self) -> bool {
+        if !self.exit_confirmed {
+            let grace = Duration::from_millis(self.kill_grace_ms);
+            let deadline = *self.term_deadline.get_or_insert_with(|| {
+                self.control.kill(ChildSignal::Term);
+                tokio::time::Instant::now() + grace
+            });
+            let mut observation = if self.kill_sent {
+                ExitObservation::TimedOut
+            } else {
+                wait_until_term_deadline(&mut self.closed, deadline).await
+            };
+            if observation == ExitObservation::TimedOut {
+                if !self.kill_sent {
+                    self.control.kill(ChildSignal::Kill);
+                    self.kill_sent = true;
+                }
+                observation = wait_closed(&mut self.closed, grace).await;
+            }
+            self.exit_confirmed = observation == ExitObservation::Confirmed;
+        }
+        self.exit_confirmed && self.host.remove_state_dir(self.state.clone()).await.is_ok()
+    }
+}
+
+/// Bounded storage for startup resources that still need reconciliation.
+/// Slots are reserved before host side effects; an unknown child is never
+/// treated as proof of exit. This registry is in-memory and must be owned by
+/// the runtime, which is also responsible for recovery after runtime failure.
+pub struct StartupRecoveryRegistry {
+    slots: Vec<Arc<tokio::sync::Mutex<StartupRecoveryEntry>>>,
+    next_retry: std::sync::atomic::AtomicUsize,
+}
+
+enum StartupRecoveryEntry {
+    Free,
+    Reserved,
+    UnknownState {
+        host: Arc<dyn IsolatedGatewayHost>,
+        operation: String,
+    },
+    StateOnly {
+        host: Arc<dyn IsolatedGatewayHost>,
+        state: PathBuf,
+    },
+    Child(StartupCleanup),
+    Unknown {
+        state: PathBuf,
+        host: Arc<dyn IsolatedGatewayHost>,
+        operation: String,
+    },
+    Running {
+        identity: Arc<()>,
+        gateway: IsolatedGateway,
+    },
+    Recovering {
+        identity: Arc<()>,
+        gateway: IsolatedGateway,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StartupRecoveryStatus {
+    /// A cleanup or transition currently holds this slot.
+    Busy,
+    Reserved,
+    /// State creation may have had effects, but no path was returned.
+    UnknownState,
+    StateOnly(PathBuf),
+    Child(PathBuf),
+    Unknown(PathBuf),
+    Running(PathBuf),
+    Recovering(PathBuf),
+}
+
+impl StartupRecoveryRegistry {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            slots: (0..capacity)
+                .map(|_| Arc::new(tokio::sync::Mutex::new(StartupRecoveryEntry::Free)))
+                .collect(),
+            next_retry: std::sync::atomic::AtomicUsize::new(0),
         }
     }
-    let _ = host.remove_state_dir(state.to_path_buf()).await;
+
+    // Never waits for a busy slot: exhaustion is reported before effects begin.
+    fn reserve(&self) -> Option<Arc<tokio::sync::Mutex<StartupRecoveryEntry>>> {
+        for slot in &self.slots {
+            if let Ok(mut entry) = slot.try_lock() {
+                if matches!(*entry, StartupRecoveryEntry::Free) {
+                    *entry = StartupRecoveryEntry::Reserved;
+                    return Some(slot.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Snapshot retained resources without waiting for an in-flight operation.
+    /// Busy slots are reported without their paths, which are private topology.
+    pub async fn status(&self) -> Vec<StartupRecoveryStatus> {
+        let mut result = Vec::new();
+        for slot in &self.slots {
+            let Ok(entry) = slot.try_lock() else {
+                result.push(StartupRecoveryStatus::Busy);
+                continue;
+            };
+            match &*entry {
+                StartupRecoveryEntry::Free => {}
+                StartupRecoveryEntry::Reserved => result.push(StartupRecoveryStatus::Reserved),
+                StartupRecoveryEntry::UnknownState { .. } => {
+                    result.push(StartupRecoveryStatus::UnknownState)
+                }
+                StartupRecoveryEntry::StateOnly { state, .. } => {
+                    result.push(StartupRecoveryStatus::StateOnly(state.clone()))
+                }
+                StartupRecoveryEntry::Child(cleanup) => {
+                    result.push(StartupRecoveryStatus::Child(cleanup.state.clone()))
+                }
+                StartupRecoveryEntry::Unknown { state, .. } => {
+                    result.push(StartupRecoveryStatus::Unknown(state.clone()))
+                }
+                StartupRecoveryEntry::Running { gateway, .. } => {
+                    result.push(StartupRecoveryStatus::Running(gateway.state.clone()))
+                }
+                StartupRecoveryEntry::Recovering { gateway, .. } => {
+                    result.push(StartupRecoveryStatus::Recovering(gateway.state.clone()))
+                }
+            }
+        }
+        result
+    }
+
+    /// Retry known cleanup within both a per-slot limit and a total sweep budget.
+    /// Timed-out entries are retained. Removal and reconciliation must be
+    /// idempotent and safe to retry after cancellation of their futures.
+    pub async fn retry_with_budget(&self, per_slot: Duration, total: Duration) {
+        let count = self.slots.len();
+        if count == 0 || total.is_zero() {
+            return;
+        }
+        let start = self
+            .next_retry
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % count;
+        let deadline = tokio::time::Instant::now() + total;
+        for offset in 0..count {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            let slot = &self.slots[(start + offset) % count];
+            let Ok(mut entry) = slot.try_lock() else {
+                continue;
+            };
+            let attempt = async {
+                match &mut *entry {
+                    StartupRecoveryEntry::UnknownState { host, operation } => {
+                        host.reconcile_state_creation(operation).await.is_ok()
+                    }
+                    StartupRecoveryEntry::Unknown {
+                        host,
+                        operation,
+                        state,
+                    } => host.reconcile_unknown_spawn(operation, state).await.is_ok(),
+                    StartupRecoveryEntry::StateOnly { host, state } => {
+                        host.remove_state_dir(state.clone()).await.is_ok()
+                    }
+                    StartupRecoveryEntry::Child(cleanup) => cleanup.attempt().await,
+                    StartupRecoveryEntry::Recovering { gateway, .. } => gateway.stop().await,
+                    _ => false,
+                }
+            };
+            if matches!(
+                tokio::time::timeout(per_slot.min(remaining), attempt).await,
+                Ok(true)
+            ) {
+                *entry = StartupRecoveryEntry::Free;
+            }
+        }
+    }
+
+    /// Retain the per-slot API while bounding the whole sweep as well.
+    pub async fn retry_with_timeout(&self, per_slot: Duration) {
+        self.retry_with_budget(per_slot, per_slot).await;
+    }
+
+    /// Retry for at most 30 seconds in total. Busy and unknown entries remain.
+    pub async fn retry(&self) {
+        self.retry_with_timeout(Duration::from_secs(30)).await;
+    }
 }
 
 /// Start an isolated evaluation gateway and wait for its readiness handshake.
@@ -395,42 +693,159 @@ pub async fn start_isolated_gateway(
     source: Source,
     options: IsolatedOptions,
 ) -> Result<IsolatedGateway, EvalError> {
+    let mut entry = StartupRecoveryEntry::Reserved;
+    start_isolated_gateway_owned(host, source, options, &mut entry).await
+}
+
+// The caller owns and retains the entry across all awaits. A future backed by a
+// registry slot must keep that slot reserved until the returned lease is stored.
+async fn start_isolated_gateway_owned(
+    host: Arc<dyn IsolatedGatewayHost>,
+    source: Source,
+    options: IsolatedOptions,
+    entry: &mut StartupRecoveryEntry,
+) -> Result<IsolatedGateway, EvalError> {
     if is_aborted(&source.signal) {
+        *entry = StartupRecoveryEntry::Free;
         return Err(EvalError::Cancelled);
     }
-    let settings = host.fetch_settings(&source.gateway, &source.token).await?;
-    let state = host.make_state_dir().await?;
+    // Settings retrieval precedes creation of locally owned resources. Catch
+    // a host panic here so it cannot strand the reserved capacity indefinitely.
+    let settings =
+        match futures_util::FutureExt::catch_unwind(std::panic::AssertUnwindSafe(async {
+            host.fetch_settings(&source.gateway, &source.token).await
+        }))
+        .await
+        {
+            Ok(Ok(settings)) => settings,
+            Ok(Err(error)) => {
+                *entry = StartupRecoveryEntry::Free;
+                return Err(error);
+            }
+            Err(_) => {
+                *entry = StartupRecoveryEntry::Free;
+                return Err(EvalError::Child("settings retrieval panicked".into()));
+            }
+        };
+    // A failed or interrupted host operation may have created a directory.
+    // Retain the reservation until the host can reconcile that unknown effect.
+    // Recovery identities must not consume the host's token-secret sequence.
+    let operation = uuid::Uuid::new_v4().to_string();
+    *entry = StartupRecoveryEntry::UnknownState {
+        host: host.clone(),
+        operation: operation.clone(),
+    };
+    let state = match host.make_state_dir_for(&operation).await {
+        Ok(state) => state,
+        Err(error) => {
+            return Err(EvalError::Child(format!(
+                "{}; state creation outcome unknown",
+                error.message()
+            )));
+        }
+    };
+    // Before spawn begins, only the state directory needs cleanup, including
+    // when preparing the child panics.
+    *entry = StartupRecoveryEntry::StateOnly {
+        host: host.clone(),
+        state: state.clone(),
+    };
     let jwt_secret = host.new_uuid();
     let env = build_child_env(&host.base_env(), &settings, &state, &jwt_secret);
     let spec = ChildSpec {
+        operation,
         program: std::env::current_exe()
             .map(|path| path.to_string_lossy().into_owned())
             .unwrap_or_else(|_| "jait-gateway".to_string()),
         args: vec![CHILD_BOOTSTRAP_ARG.to_string()],
         env,
     };
+    // A dropped or panicking spawn future cannot prove that no child exists.
+    *entry = StartupRecoveryEntry::Unknown {
+        state: state.clone(),
+        host: host.clone(),
+        operation: spec.operation.clone(),
+    };
     let mut child = match host.spawn_child(&spec).await {
         Ok(child) => child,
-        Err(error) => {
-            let _ = host.remove_state_dir(state).await;
-            return Err(error);
+        Err(SpawnFailure::NoChild(error)) => {
+            *entry = StartupRecoveryEntry::StateOnly {
+                host: host.clone(),
+                state: state.clone(),
+            };
+            return match host.remove_state_dir(state.clone()).await {
+                Ok(()) => {
+                    *entry = StartupRecoveryEntry::Free;
+                    Err(error)
+                }
+                Err(_) => Err(EvalError::Child(format!(
+                    "{}; state cleanup failed; retained {}",
+                    error.message(),
+                    state.display()
+                ))),
+            };
+        }
+        Err(SpawnFailure::Unknown(error)) => {
+            return Err(EvalError::Child(format!(
+                "{}; child ownership unconfirmed; retained {}",
+                error.message(),
+                state.display()
+            )));
+        }
+        Err(SpawnFailure::Child { error, child }) => {
+            *entry = StartupRecoveryEntry::Child(StartupCleanup {
+                host,
+                control: child.control,
+                closed: Some(child.closed),
+                exit_confirmed: false,
+                state: state.clone(),
+                kill_grace_ms: options.kill_grace_ms,
+                term_deadline: None,
+                kill_sent: false,
+            });
+            let StartupRecoveryEntry::Child(cleanup) = entry else {
+                unreachable!()
+            };
+            let cleaned = cleanup.attempt().await;
+            if cleaned {
+                *entry = StartupRecoveryEntry::Free;
+            }
+            return if cleaned {
+                Err(error)
+            } else {
+                Err(EvalError::Child(format!(
+                    "{}; child exit or state cleanup unconfirmed; retained {}",
+                    error.message(),
+                    state.display()
+                )))
+            };
         }
     };
     let payload = serde_json::to_string(&settings).unwrap_or_else(|_| "null".to_string());
-    child.control.end_stdin(&payload);
+    *entry = StartupRecoveryEntry::Child(StartupCleanup {
+        host: host.clone(),
+        control: child.control,
+        closed: Some(child.closed),
+        exit_confirmed: false,
+        state: state.clone(),
+        kill_grace_ms: options.kill_grace_ms,
+        term_deadline: None,
+        kill_sent: false,
+    });
 
     let deadline = Duration::from_millis(options.ready_timeout_ms);
     let mut stderr_tail = String::new();
     let mut buffer = String::new();
-    let mut closed = Some(child.closed);
-    let mut child_closed = false;
+    let StartupRecoveryEntry::Child(cleanup) = entry else {
+        unreachable!()
+    };
+    cleanup.control.end_stdin(&payload);
     let mut error = child.error;
     let mut error_open = true;
     let mut stdout = child.stdout;
     let mut stdout_open = true;
     let mut stderr = child.stderr;
     let mut stderr_open = true;
-    let mut control = child.control;
 
     let readiness = {
         let signal = source.signal.clone();
@@ -481,8 +896,9 @@ pub async fn start_isolated_gateway(
                             stderr_open = false;
                         }
                     }
-                    _ = closed_signal(&mut closed) => {
-                        child_closed = true;
+                    confirmed = closed_signal(&mut cleanup.closed) => {
+                        cleanup.exit_confirmed = confirmed;
+                        cleanup.closed = None;
                         // A process flushes stderr before it closes; collect whatever is already
                         // buffered so the reported tail matches what the child actually wrote.
                         while let Ok(chunk) = stderr.try_recv() {
@@ -514,29 +930,246 @@ pub async fn start_isolated_gateway(
     };
 
     match readiness {
-        Ok(info) => Ok(IsolatedGateway {
-            gateway: format!("http://127.0.0.1:{}", info.port),
-            token: info.token,
-            state,
-            host,
-            control,
-            closed,
-            kill_grace_ms: options.kill_grace_ms,
-            stopped: false,
-        }),
+        Ok(info) => {
+            let StartupRecoveryEntry::Child(cleanup) =
+                std::mem::replace(entry, StartupRecoveryEntry::Reserved)
+            else {
+                unreachable!()
+            };
+            Ok(IsolatedGateway {
+                gateway: format!("http://127.0.0.1:{}", info.port),
+                token: info.token,
+                state,
+                host: cleanup.host,
+                control: cleanup.control,
+                closed: cleanup.closed,
+                kill_grace_ms: options.kill_grace_ms,
+                stopped: false,
+                exit_confirmed: cleanup.exit_confirmed,
+                term_deadline: cleanup.term_deadline,
+                kill_sent: cleanup.kill_sent,
+            })
+        }
         Err(error) => {
-            stop_child(
-                &host,
-                &mut control,
-                &mut closed,
-                child_closed,
-                &state,
-                options.kill_grace_ms,
-            )
-            .await;
-            Err(error)
+            let StartupRecoveryEntry::Child(cleanup) = entry else {
+                unreachable!()
+            };
+            let cleaned = cleanup.attempt().await;
+            if cleaned {
+                *entry = StartupRecoveryEntry::Free;
+            }
+            if cleaned {
+                Err(error)
+            } else {
+                Err(EvalError::Child(format!(
+                    "{}; child exit or state cleanup unconfirmed; retained {}",
+                    error.message(),
+                    state.display()
+                )))
+            }
         }
     }
+}
+
+/// A registry-backed lease. The registry must outlive the lease and runtime.
+pub struct RegistryGateway {
+    slot: Arc<tokio::sync::Mutex<StartupRecoveryEntry>>,
+    identity: Arc<()>,
+    pub gateway: String,
+    pub token: String,
+    runtime: tokio::runtime::Handle,
+}
+
+async fn registry_shutdown(
+    slot: Arc<tokio::sync::Mutex<StartupRecoveryEntry>>,
+    identity: Arc<()>,
+) -> bool {
+    let mut entry = slot.lock().await;
+    let owned = match &*entry {
+        StartupRecoveryEntry::Running {
+            identity: current, ..
+        }
+        | StartupRecoveryEntry::Recovering {
+            identity: current, ..
+        } => Arc::ptr_eq(current, &identity),
+        _ => false,
+    };
+    if !owned {
+        return true;
+    }
+    if matches!(*entry, StartupRecoveryEntry::Running { .. }) {
+        let StartupRecoveryEntry::Running { identity, gateway } =
+            std::mem::replace(&mut *entry, StartupRecoveryEntry::Reserved)
+        else {
+            unreachable!()
+        };
+        *entry = StartupRecoveryEntry::Recovering { identity, gateway };
+    }
+    let StartupRecoveryEntry::Recovering { gateway, .. } = &mut *entry else {
+        unreachable!()
+    };
+    if gateway.stop().await {
+        *entry = StartupRecoveryEntry::Free;
+        true
+    } else {
+        false
+    }
+}
+
+impl RegistryGateway {
+    /// Spawn cleanup independently so cancellation of this waiter retains ownership.
+    pub async fn stop(&mut self) -> bool {
+        let slot = self.slot.clone();
+        let identity = self.identity.clone();
+        let task = self
+            .runtime
+            .spawn(async move { registry_shutdown(slot, identity).await });
+        task.await.unwrap_or(false)
+    }
+}
+impl Drop for RegistryGateway {
+    fn drop(&mut self) {
+        let slot = self.slot.clone();
+        let identity = self.identity.clone();
+        self.runtime.spawn(async move {
+            registry_shutdown(slot, identity).await;
+        });
+    }
+}
+
+/// Reserve capacity before host effects; startup continues if the requester drops.
+/// The owner must keep `registry` alive for the lifetime of any returned lease.
+pub async fn start_registry_gateway(
+    registry: Arc<StartupRecoveryRegistry>,
+    host: Arc<dyn IsolatedGatewayHost>,
+    source: Source,
+    options: IsolatedOptions,
+) -> Result<RegistryGateway, EvalError> {
+    let slot = registry
+        .reserve()
+        .ok_or_else(|| EvalError::Child("isolated gateway recovery capacity exhausted".into()))?;
+    let runtime = tokio::runtime::Handle::current();
+    let (sender, receiver) = oneshot::channel();
+    tokio::spawn(async move {
+        let mut entry = slot.lock().await;
+        let result = start_isolated_gateway_owned(host, source, options, &mut entry).await;
+        let result = result.map(|gateway| {
+            let identity = Arc::new(());
+            let lease = RegistryGateway {
+                slot: slot.clone(),
+                identity: identity.clone(),
+                gateway: gateway.gateway.clone(),
+                token: gateway.token.clone(),
+                runtime,
+            };
+            *entry = StartupRecoveryEntry::Running { identity, gateway };
+            lease
+        });
+        drop(entry);
+        let _ = sender.send(result);
+        // Keep the registry alive until startup has handed off or retained failure.
+        drop(registry);
+    });
+    receiver.await.unwrap_or_else(|_| {
+        Err(EvalError::Child(
+            "isolated gateway owner task failed".into(),
+        ))
+    })
+}
+
+/// A lifecycle lease whose cleanup task outlives a cancelled stop future.
+/// The owner task requires a running Tokio runtime; runtime shutdown can still
+/// interrupt cleanup, so retained state must be reconciled by the host.
+pub struct SupervisedGateway {
+    inner: Arc<tokio::sync::Mutex<IsolatedGateway>>,
+    gateway: String,
+    token: String,
+    completion: Option<watch::Receiver<Option<bool>>>,
+    runtime: tokio::runtime::Handle,
+}
+
+impl SupervisedGateway {
+    pub fn gateway(&self) -> Option<&str> {
+        self.completion.is_none().then_some(self.gateway.as_str())
+    }
+
+    pub fn token(&self) -> Option<&str> {
+        self.completion.is_none().then_some(self.token.as_str())
+    }
+
+    fn begin_shutdown(&mut self) {
+        if self.completion.is_none() {
+            let inner = self.inner.clone();
+            let (sender, receiver) = watch::channel(None);
+            self.completion = Some(receiver);
+            self.runtime.spawn(async move {
+                let result = inner.lock().await.stop().await;
+                let _ = sender.send(Some(result));
+            });
+        }
+    }
+
+    /// Request cleanup and await its result; cancelling the wait does not
+    /// cancel cleanup. A later call retries an unsuccessful attempt.
+    pub async fn stop(&mut self) -> bool {
+        if self.completion.as_ref().is_some_and(|receiver| {
+            *receiver.borrow() == Some(false)
+                || receiver.has_changed().is_err() && receiver.borrow().is_none()
+        }) {
+            self.completion = None;
+        }
+        self.begin_shutdown();
+        let receiver = self.completion.as_mut().expect("shutdown started");
+        loop {
+            if let Some(result) = *receiver.borrow_and_update() {
+                return result;
+            }
+            if receiver.changed().await.is_err() {
+                return false;
+            }
+        }
+    }
+}
+
+impl Drop for SupervisedGateway {
+    fn drop(&mut self) {
+        // Queue a cleanup attempt even if another is in flight. The mutex
+        // serializes it after that attempt, closing the result-send/drop race;
+        // a successful previous stop is idempotent.
+        let inner = self.inner.clone();
+        self.runtime.spawn(async move {
+            let _ = inner.lock().await.stop().await;
+        });
+    }
+}
+
+/// Starts the lifecycle in an owner task so dropping the requesting future does
+/// not drop in-flight host side effects. A rejected or subsequently abandoned
+/// result drops its lease and starts cleanup on the same runtime.
+pub async fn start_supervised_gateway(
+    host: Arc<dyn IsolatedGatewayHost>,
+    source: Source,
+    options: IsolatedOptions,
+) -> Result<SupervisedGateway, EvalError> {
+    let runtime = tokio::runtime::Handle::current();
+    let (sender, receiver) = oneshot::channel();
+    tokio::spawn(async move {
+        let result = start_isolated_gateway(host, source, options)
+            .await
+            .map(|inner| SupervisedGateway {
+                gateway: inner.gateway.clone(),
+                token: inner.token.clone(),
+                inner: Arc::new(tokio::sync::Mutex::new(inner)),
+                completion: None,
+                runtime,
+            });
+        let _ = sender.send(result);
+    });
+    receiver.await.unwrap_or_else(|_| {
+        Err(EvalError::Child(
+            "isolated gateway owner task failed".to_string(),
+        ))
+    })
 }
 
 /// Shape of the child-side configuration payload, for the bootstrap half.
@@ -565,7 +1198,12 @@ impl EvaluationSettings {
 
 /// Child-side isolation guard: `JAIT_DB_PATH` must live inside `JAIT_STATE_DIR`.
 pub fn validate_isolation(state_dir: &str, db_path: &str) -> Result<PathBuf, String> {
-    if state_dir.is_empty() || db_path != Path::new(state_dir).join(DB_RELATIVE_PATH).to_string_lossy() {
+    if state_dir.is_empty()
+        || db_path
+            != Path::new(state_dir)
+                .join(DB_RELATIVE_PATH)
+                .to_string_lossy()
+    {
         return Err("Evaluation database isolation required".to_string());
     }
     Ok(PathBuf::from(db_path))
@@ -584,7 +1222,7 @@ mod tests {
     use std::sync::Mutex;
     use tokio::sync::Notify;
 
-    type Script = Arc<dyn Fn() -> Result<SpawnedChild, EvalError> + Send + Sync>;
+    type Script = Arc<dyn Fn() -> Result<SpawnedChild, SpawnFailure> + Send + Sync>;
 
     struct FakeControl {
         stdin: Arc<Mutex<Vec<String>>>,
@@ -612,6 +1250,14 @@ mod tests {
         script: Script,
         dirs: Arc<Mutex<Vec<PathBuf>>>,
         removed: Arc<Mutex<Vec<PathBuf>>>,
+        remove_failures: Arc<Mutex<usize>>,
+        state_creation_fails: Arc<Mutex<bool>>,
+        panic_uuid: Arc<Mutex<bool>>,
+        panic_fetch: Arc<Mutex<bool>>,
+        reconcile_enabled: Arc<Mutex<bool>>,
+        state_operation: Arc<Mutex<Option<String>>>,
+        remove_delay_ms: Arc<Mutex<u64>>,
+        remove_attempts: Arc<Mutex<usize>>,
         specs: Arc<Mutex<Vec<ChildSpec>>>,
         fetches: Arc<Mutex<u32>>,
     }
@@ -624,25 +1270,85 @@ mod tests {
         ) -> HostFuture<'a, Result<Value, EvalError>> {
             let result = self.settings.clone();
             let fetches = self.fetches.clone();
+            let panic_fetch = *self.panic_fetch.lock().unwrap();
             let _ = (gateway, token);
             Box::pin(async move {
                 *fetches.lock().unwrap() += 1;
+                assert!(!panic_fetch, "settings retrieval failed");
                 result
             })
         }
 
         fn make_state_dir(&self) -> HostFuture<'_, Result<PathBuf, EvalError>> {
             let dirs = self.dirs.clone();
+            let fails = *self.state_creation_fails.lock().unwrap();
             Box::pin(async move {
                 let dir = PathBuf::from("/tmp/jait-eval-state-test");
                 dirs.lock().unwrap().push(dir.clone());
+                if fails {
+                    return Err(EvalError::Child(
+                        "state creation failed after effect".into(),
+                    ));
+                }
                 Ok(dir)
+            })
+        }
+
+        fn make_state_dir_for<'a>(
+            &'a self,
+            operation: &'a str,
+        ) -> HostFuture<'a, Result<PathBuf, EvalError>> {
+            *self.state_operation.lock().unwrap() = Some(operation.to_owned());
+            self.make_state_dir()
+        }
+
+        fn reconcile_state_creation<'a>(
+            &'a self,
+            operation: &'a str,
+        ) -> HostFuture<'a, Result<(), EvalError>> {
+            Box::pin(async move {
+                if !*self.reconcile_enabled.lock().unwrap()
+                    || self.state_operation.lock().unwrap().as_deref() != Some(operation)
+                {
+                    return Err(EvalError::Child("reconciliation unavailable".into()));
+                }
+                self.remove_state_dir(PathBuf::from("/tmp/jait-eval-state-test"))
+                    .await
+            })
+        }
+
+        fn reconcile_unknown_spawn<'a>(
+            &'a self,
+            operation: &'a str,
+            state: &'a Path,
+        ) -> HostFuture<'a, Result<(), EvalError>> {
+            Box::pin(async move {
+                // The test flag represents a supervisor's affirmative shutdown proof.
+                if !*self.reconcile_enabled.lock().unwrap()
+                    || self.state_operation.lock().unwrap().as_deref() != Some(operation)
+                    || state != Path::new("/tmp/jait-eval-state-test")
+                {
+                    return Err(EvalError::Child("spawn reconciliation unavailable".into()));
+                }
+                self.remove_state_dir(state.to_owned()).await
             })
         }
 
         fn remove_state_dir(&self, dir: PathBuf) -> HostFuture<'_, Result<(), EvalError>> {
             let removed = self.removed.clone();
+            let failures = self.remove_failures.clone();
+            let delay = *self.remove_delay_ms.lock().unwrap();
+            let attempts = self.remove_attempts.clone();
             Box::pin(async move {
+                *attempts.lock().unwrap() += 1;
+                if delay > 0 {
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
+                }
+                let mut remaining = failures.lock().unwrap();
+                if *remaining > 0 {
+                    *remaining -= 1;
+                    return Err(EvalError::Child("removal failed".into()));
+                }
                 removed.lock().unwrap().push(dir);
                 Ok(())
             })
@@ -651,7 +1357,7 @@ mod tests {
         fn spawn_child<'a>(
             &'a self,
             spec: &'a ChildSpec,
-        ) -> HostFuture<'a, Result<SpawnedChild, EvalError>> {
+        ) -> HostFuture<'a, Result<SpawnedChild, SpawnFailure>> {
             self.specs.lock().unwrap().push(spec.clone());
             let script = self.script.clone();
             Box::pin(async move { script() })
@@ -666,6 +1372,7 @@ mod tests {
         }
 
         fn new_uuid(&self) -> String {
+            assert!(!*self.panic_uuid.lock().unwrap(), "token generation failed");
             "test-uuid".to_string()
         }
     }
@@ -772,6 +1479,14 @@ mod tests {
                 script: factory,
                 dirs: dirs.clone(),
                 removed: removed.clone(),
+                remove_failures: Arc::new(Mutex::new(0)),
+                state_creation_fails: Arc::new(Mutex::new(false)),
+                panic_uuid: Arc::new(Mutex::new(false)),
+                panic_fetch: Arc::new(Mutex::new(false)),
+                reconcile_enabled: Arc::new(Mutex::new(false)),
+                state_operation: Arc::new(Mutex::new(None)),
+                remove_delay_ms: Arc::new(Mutex::new(0)),
+                remove_attempts: Arc::new(Mutex::new(0)),
                 specs: specs.clone(),
                 fetches: fetches.clone(),
             }),
@@ -969,6 +1684,891 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn supervised_drop_during_failed_removal_retries() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.remove_failures.lock().unwrap() = 1;
+        *h.host.remove_delay_ms.lock().unwrap() = 30;
+        let mut gateway = start_supervised_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        gateway.begin_shutdown();
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while *h.host.remove_attempts.lock().unwrap() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        drop(gateway);
+        tokio::time::timeout(Duration::from_millis(300), async {
+            while h.removed.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(*h.host.remove_attempts.lock().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn supervised_stop_restarts_after_owner_channel_closes() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let mut gateway = start_supervised_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        let (sender, receiver) = watch::channel(None);
+        drop(sender);
+        gateway.completion = Some(receiver);
+        assert!(gateway.stop().await);
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn supervised_stop_retries_failed_state_removal() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.remove_failures.lock().unwrap() = 1;
+        let mut gateway = start_supervised_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        assert!(!gateway.stop().await);
+        assert!(h.removed.lock().unwrap().is_empty());
+        assert!(gateway.stop().await);
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+    }
+
+    #[tokio::test]
+    async fn supervised_successful_handoff_drop_cleans_up() {
+        let h = harness(
+            Ok(json!({})),
+            ChildScript {
+                stderr: Vec::new(),
+                lines: vec![ready_line(8123, "token")],
+                close_early: false,
+                close_after_ms: Some(30),
+            },
+        );
+        let options = IsolatedOptions {
+            ready_timeout_ms: 100,
+            kill_grace_ms: 100,
+        };
+        let gateway = start_supervised_gateway(h.host.clone(), source(), options)
+            .await
+            .unwrap();
+        drop(gateway);
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while h.removed.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+    }
+
+    #[tokio::test]
+    async fn supervised_stop_retains_state_when_exit_unconfirmed() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let mut gateway = start_supervised_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        let (sender, receiver) = oneshot::channel();
+        {
+            let mut inner = gateway.inner.lock().await;
+            inner.closed = Some(receiver);
+            inner.kill_grace_ms = 2;
+        }
+        assert!(!gateway.stop().await);
+        assert!(h.removed.lock().unwrap().is_empty());
+        assert!(h.signals.lock().unwrap().contains(&ChildSignal::Kill));
+        drop(sender);
+    }
+
+    #[tokio::test]
+    async fn supervised_stop_outlives_cancelled_waiter() {
+        let h = harness(
+            Ok(json!({})),
+            ChildScript {
+                stderr: Vec::new(),
+                lines: vec![ready_line(8123, "token")],
+                close_early: false,
+                close_after_ms: Some(40),
+            },
+        );
+        let options = IsolatedOptions {
+            ready_timeout_ms: 100,
+            kill_grace_ms: 100,
+        };
+        let mut gateway = start_supervised_gateway(h.host.clone(), source(), options)
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), gateway.stop())
+                .await
+                .is_err()
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), gateway.stop())
+                .await
+                .unwrap()
+        );
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+    }
+
+    #[tokio::test]
+    async fn supervised_start_cleans_up_after_request_is_dropped() {
+        let h = harness(
+            Ok(json!({})),
+            ChildScript {
+                stderr: Vec::new(),
+                lines: Vec::new(),
+                close_early: false,
+                close_after_ms: Some(50),
+            },
+        );
+        let options = IsolatedOptions {
+            ready_timeout_ms: 20,
+            kill_grace_ms: 100,
+        };
+        let host = h.host.clone();
+        let request =
+            tokio::spawn(async move { start_supervised_gateway(host, source(), options).await });
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while h.specs.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        request.abort();
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while h.removed.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(h.signals.lock().unwrap().contains(&ChildSignal::Term));
+    }
+
+    #[tokio::test]
+    async fn cleanup_retains_state_without_confirmed_exit() {
+        for sender_lost in [true, false] {
+            let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+            let mut gateway = start_isolated_gateway(h.host.clone(), source(), fast())
+                .await
+                .unwrap();
+            let (sender, receiver) = oneshot::channel();
+            gateway.closed = Some(receiver);
+            gateway.kill_grace_ms = 2;
+            let sender = if sender_lost {
+                drop(sender);
+                None
+            } else {
+                Some(sender)
+            };
+            assert!(!gateway.stop().await);
+            assert!(h.removed.lock().unwrap().is_empty());
+            if !sender_lost {
+                assert!(h.signals.lock().unwrap().contains(&ChildSignal::Kill));
+            }
+            drop(sender);
+        }
+    }
+
+    #[tokio::test]
+    async fn interrupted_running_stop_preserves_termination_deadline() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let mut gateway = start_isolated_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        let (sender, receiver) = oneshot::channel();
+        gateway.closed = Some(receiver);
+        gateway.kill_grace_ms = 20;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(2), gateway.stop())
+                .await
+                .is_err()
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(2), gateway.stop())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        sender.send(()).unwrap();
+        assert!(gateway.stop().await);
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+    }
+
+    #[tokio::test]
+    async fn lost_running_exit_notification_still_escalates() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let mut gateway = start_isolated_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        let (sender, receiver) = oneshot::channel();
+        drop(sender);
+        gateway.closed = Some(receiver);
+        gateway.kill_grace_ms = 20;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(2), gateway.stop())
+                .await
+                .is_err()
+        );
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        assert!(!gateway.stop().await);
+        assert!(!gateway.stop().await);
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancelled_stop_keeps_drop_termination_armed() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let mut gateway = start_isolated_gateway(h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        let (_sender, receiver) = oneshot::channel();
+        gateway.closed = Some(receiver);
+        gateway.kill_grace_ms = 1000;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), gateway.stop())
+                .await
+                .is_err()
+        );
+        drop(gateway);
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Term]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn startup_cleanup_retry_preserves_confirmed_exit() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.remove_failures.lock().unwrap() = 1;
+        let (sender, receiver) = oneshot::channel();
+        sender.send(()).unwrap();
+        let mut cleanup = StartupCleanup {
+            host: h.host.clone(),
+            control: Box::new(FakeControl {
+                stdin: h.stdin.clone(),
+                signals: h.signals.clone(),
+                killed: Arc::new(Notify::new()),
+            }),
+            closed: Some(receiver),
+            exit_confirmed: false,
+            state: PathBuf::from("/fake/state"),
+            kill_grace_ms: 5,
+            term_deadline: None,
+            kill_sent: false,
+        };
+        assert!(!cleanup.attempt().await);
+        assert!(cleanup.exit_confirmed);
+        assert!(cleanup.attempt().await);
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+        assert_eq!(*h.host.remove_attempts.lock().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_releases_capacity_after_fetch_panic() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.panic_fetch.lock().unwrap() = true;
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        assert!(registry.status().await.is_empty());
+        assert!(h.dirs.lock().unwrap().is_empty());
+        *h.host.panic_fetch.lock().unwrap() = false;
+        let mut lease = start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        assert!(lease.stop().await);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_recovers_pre_spawn_panic() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.panic_uuid.lock().unwrap() = true;
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::StateOnly(PathBuf::from(
+                "/tmp/jait-eval-state-test"
+            ))]
+        );
+        assert!(h.specs.lock().unwrap().is_empty());
+        registry.retry().await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_retains_unknown_state_creation_failure() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.state_creation_fails.lock().unwrap() = true;
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::UnknownState]
+        );
+        registry.retry().await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::UnknownState]
+        );
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        assert_eq!(h.dirs.lock().unwrap().len(), 1);
+        assert!(h.specs.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_reconciles_unknown_state_before_reuse() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.state_creation_fails.lock().unwrap() = true;
+        *h.host.reconcile_enabled.lock().unwrap() = true;
+        *h.host.remove_failures.lock().unwrap() = 1;
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        let first_operation = h.host.state_operation.lock().unwrap().clone().unwrap();
+        assert_ne!(first_operation, h.host.new_uuid());
+        registry.retry().await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::UnknownState]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        registry.retry().await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+        *h.host.state_creation_fails.lock().unwrap() = false;
+        let mut lease = start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        assert_ne!(
+            h.host.state_operation.lock().unwrap().as_ref(),
+            Some(&first_operation)
+        );
+        assert!(lease.stop().await);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_stop_outlives_cancelled_waiter() {
+        let h = harness(
+            Ok(json!({})),
+            ChildScript {
+                stderr: Vec::new(),
+                lines: vec![ready_line(8123, "token")],
+                close_early: false,
+                close_after_ms: Some(40),
+            },
+        );
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        let options = IsolatedOptions {
+            ready_timeout_ms: 100,
+            kill_grace_ms: 100,
+        };
+        let mut lease = start_registry_gateway(registry.clone(), h.host.clone(), source(), options)
+            .await
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(5), lease.stop())
+                .await
+                .is_err()
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), lease.stop())
+                .await
+                .unwrap()
+        );
+        assert!(registry.status().await.is_empty());
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_cancelled_request_retains_failed_cleanup() {
+        let h = harness(
+            Ok(json!({})),
+            ChildScript {
+                stderr: Vec::new(),
+                lines: Vec::new(),
+                close_early: false,
+                close_after_ms: Some(50),
+            },
+        );
+        *h.host.remove_failures.lock().unwrap() = 1;
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        let host = h.host.clone();
+        let owner = registry.clone();
+        let options = IsolatedOptions {
+            ready_timeout_ms: 20,
+            kill_grace_ms: 100,
+        };
+        let request =
+            tokio::spawn(
+                async move { start_registry_gateway(owner, host, source(), options).await },
+            );
+        tokio::time::timeout(Duration::from_millis(200), async {
+            while h.specs.lock().unwrap().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        request.abort();
+        tokio::time::timeout(Duration::from_millis(300), async {
+            loop {
+                if matches!(
+                    registry.status().await.as_slice(),
+                    [StartupRecoveryStatus::Child(_)]
+                ) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(h.removed.lock().unwrap().is_empty());
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        registry.retry().await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_capacity_and_stale_lease_do_not_stop_replacement() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        let mut first = start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        assert_eq!(h.dirs.lock().unwrap().len(), 1);
+        assert!(first.stop().await);
+        let mut second = start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        drop(first);
+        tokio::task::yield_now().await;
+        assert!(matches!(
+            registry.status().await.as_slice(),
+            [StartupRecoveryStatus::Running(_)]
+        ));
+        assert!(second.stop().await);
+    }
+
+    #[tokio::test]
+    async fn registry_gateway_retains_failed_stop_for_retry() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        *h.host.remove_failures.lock().unwrap() = 1;
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        let mut lease = start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+            .await
+            .unwrap();
+        assert!(!lease.stop().await);
+        assert!(matches!(
+            registry.status().await.as_slice(),
+            [StartupRecoveryStatus::Recovering(_)]
+        ));
+        registry.retry().await;
+        assert!(registry.status().await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn recovery_registry_bounds_and_retries_known_state() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = StartupRecoveryRegistry::new(1);
+        let slot = registry.reserve().expect("first reservation");
+        assert!(registry.reserve().is_none());
+        *h.host.remove_failures.lock().unwrap() = 1;
+        *slot.lock().await = StartupRecoveryEntry::StateOnly {
+            host: h.host.clone(),
+            state: PathBuf::from("/fake/state"),
+        };
+        registry.retry().await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::StateOnly(PathBuf::from(
+                "/fake/state"
+            ))]
+        );
+        assert!(registry.reserve().is_none());
+        registry.retry().await;
+        assert!(registry.status().await.is_empty());
+        assert!(registry.reserve().is_some());
+    }
+
+    #[tokio::test]
+    async fn recovery_registry_reports_busy_and_retries_other_slots() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = StartupRecoveryRegistry::new(2);
+        let busy = registry.reserve().unwrap();
+        let other = registry.reserve().unwrap();
+        *other.lock().await = StartupRecoveryEntry::StateOnly {
+            host: h.host.clone(),
+            state: PathBuf::from("/fake/state"),
+        };
+        let guard = busy.lock().await;
+        assert_eq!(registry.status().await[0], StartupRecoveryStatus::Busy);
+        registry.retry().await;
+        assert_eq!(*h.host.remove_attempts.lock().unwrap(), 1);
+        assert_eq!(registry.status().await, vec![StartupRecoveryStatus::Busy]);
+        drop(guard);
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::Reserved]
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_registry_retains_timed_out_removal_for_retry() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = StartupRecoveryRegistry::new(1);
+        let slot = registry.reserve().unwrap();
+        *slot.lock().await = StartupRecoveryEntry::StateOnly {
+            host: h.host.clone(),
+            state: PathBuf::from("/fake/state"),
+        };
+        *h.host.remove_delay_ms.lock().unwrap() = 100;
+        registry.retry_with_timeout(Duration::from_millis(1)).await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::StateOnly(PathBuf::from(
+                "/fake/state"
+            ))]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        *h.host.remove_delay_ms.lock().unwrap() = 0;
+        registry
+            .retry_with_timeout(Duration::from_millis(100))
+            .await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(*h.host.remove_attempts.lock().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn recovery_sweep_budget_rotates_past_slow_slot() {
+        let slow = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let fast = harness(Ok(json!({})), ChildScript::ready(8124, "token"));
+        let registry = StartupRecoveryRegistry::new(2);
+        let first = registry.reserve().unwrap();
+        let second = registry.reserve().unwrap();
+        *first.lock().await = StartupRecoveryEntry::StateOnly {
+            host: slow.host.clone(),
+            state: PathBuf::from("/fake/slow"),
+        };
+        *second.lock().await = StartupRecoveryEntry::StateOnly {
+            host: fast.host.clone(),
+            state: PathBuf::from("/fake/fast"),
+        };
+        *slow.host.remove_delay_ms.lock().unwrap() = 200;
+        registry
+            .retry_with_budget(Duration::from_secs(1), Duration::from_millis(10))
+            .await;
+        assert_eq!(registry.status().await.len(), 2);
+        registry
+            .retry_with_budget(Duration::from_secs(1), Duration::from_millis(10))
+            .await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::StateOnly(PathBuf::from(
+                "/fake/slow"
+            ))]
+        );
+        assert_eq!(*fast.host.remove_attempts.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn interrupted_recovery_preserves_termination_deadline() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = StartupRecoveryRegistry::new(1);
+        let slot = registry.reserve().unwrap();
+        let (sender, receiver) = oneshot::channel();
+        *slot.lock().await = StartupRecoveryEntry::Child(StartupCleanup {
+            host: h.host.clone(),
+            control: Box::new(FakeControl {
+                stdin: h.stdin.clone(),
+                signals: h.signals.clone(),
+                killed: Arc::new(Notify::new()),
+            }),
+            closed: Some(receiver),
+            exit_confirmed: false,
+            state: PathBuf::from("/fake/state"),
+            kill_grace_ms: 20,
+            term_deadline: None,
+            kill_sent: false,
+        });
+        registry.retry_with_timeout(Duration::from_millis(2)).await;
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        registry.retry_with_timeout(Duration::from_millis(2)).await;
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        sender.send(()).unwrap();
+        registry.retry_with_timeout(Duration::from_millis(20)).await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+    }
+
+    #[tokio::test]
+    async fn lost_recovery_exit_notification_still_escalates() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = StartupRecoveryRegistry::new(1);
+        let slot = registry.reserve().unwrap();
+        let (sender, receiver) = oneshot::channel();
+        drop(sender);
+        *slot.lock().await = StartupRecoveryEntry::Child(StartupCleanup {
+            host: h.host.clone(),
+            control: Box::new(FakeControl {
+                stdin: h.stdin.clone(),
+                signals: h.signals.clone(),
+                killed: Arc::new(Notify::new()),
+            }),
+            closed: Some(receiver),
+            exit_confirmed: false,
+            state: PathBuf::from("/fake/state"),
+            kill_grace_ms: 20,
+            term_deadline: None,
+            kill_sent: false,
+        });
+        registry.retry_with_timeout(Duration::from_millis(2)).await;
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+        tokio::time::sleep(Duration::from_millis(25)).await;
+        registry.retry_with_timeout(Duration::from_millis(20)).await;
+        registry.retry_with_timeout(Duration::from_millis(20)).await;
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::Child(PathBuf::from("/fake/state"))]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn recovery_registry_timeout_preserves_confirmed_child_exit() {
+        let h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let registry = StartupRecoveryRegistry::new(1);
+        let slot = registry.reserve().unwrap();
+        let (sender, receiver) = oneshot::channel();
+        sender.send(()).unwrap();
+        *slot.lock().await = StartupRecoveryEntry::Child(StartupCleanup {
+            host: h.host.clone(),
+            control: Box::new(FakeControl {
+                stdin: h.stdin.clone(),
+                signals: h.signals.clone(),
+                killed: Arc::new(Notify::new()),
+            }),
+            closed: Some(receiver),
+            exit_confirmed: false,
+            state: PathBuf::from("/fake/state"),
+            kill_grace_ms: 5,
+            term_deadline: None,
+            kill_sent: false,
+        });
+        *h.host.remove_delay_ms.lock().unwrap() = 100;
+        registry.retry_with_timeout(Duration::from_millis(1)).await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::Child(PathBuf::from("/fake/state"))]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        *h.host.remove_delay_ms.lock().unwrap() = 0;
+        registry
+            .retry_with_timeout(Duration::from_millis(100))
+            .await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+    }
+
+    #[tokio::test]
+    async fn recovery_registry_never_removes_unknown_state() {
+        let mut h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        Arc::get_mut(&mut h.host).unwrap().script = Arc::new(|| {
+            Err(SpawnFailure::Unknown(EvalError::Child(
+                "unknown spawn".into(),
+            )))
+        });
+        let registry = Arc::new(StartupRecoveryRegistry::new(1));
+        assert!(
+            start_registry_gateway(registry.clone(), h.host.clone(), source(), fast())
+                .await
+                .is_err()
+        );
+        let operation = h.host.state_operation.lock().unwrap().clone().unwrap();
+        {
+            let entry = registry.slots[0].lock().await;
+            let StartupRecoveryEntry::Unknown {
+                host,
+                operation: retained_operation,
+                ..
+            } = &*entry
+            else {
+                panic!("unknown spawn must be retained")
+            };
+            assert_eq!(retained_operation, &operation);
+            let expected: Arc<dyn IsolatedGatewayHost> = h.host.clone();
+            assert!(Arc::ptr_eq(host, &expected));
+        }
+        registry.retry().await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::Unknown(PathBuf::from(
+                "/tmp/jait-eval-state-test"
+            ))]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        assert!(registry.reserve().is_none());
+        *h.host.reconcile_enabled.lock().unwrap() = true;
+        *h.host.remove_delay_ms.lock().unwrap() = 100;
+        registry.retry_with_timeout(Duration::from_millis(1)).await;
+        assert_eq!(
+            registry.status().await,
+            vec![StartupRecoveryStatus::Unknown(PathBuf::from(
+                "/tmp/jait-eval-state-test"
+            ))]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        assert!(registry.reserve().is_none());
+        *h.host.remove_delay_ms.lock().unwrap() = 0;
+        registry.retry().await;
+        assert!(registry.status().await.is_empty());
+        assert_eq!(
+            h.removed.lock().unwrap().as_slice(),
+            [PathBuf::from("/tmp/jait-eval-state-test")]
+        );
+        assert!(registry.reserve().is_some());
+    }
+
+    #[tokio::test]
+    async fn spawn_partial_failure_owns_child_until_exit_before_removal() {
+        let mut h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let original = h.host.script.clone();
+        Arc::get_mut(&mut h.host).unwrap().script = Arc::new(move || {
+            let child = original().ok().unwrap();
+            Err(SpawnFailure::Child {
+                error: EvalError::Child("partial spawn".into()),
+                child,
+            })
+        });
+        let result = start_isolated_gateway(h.host.clone(), source(), fast()).await;
+        assert!(matches!(result, Err(EvalError::Child(ref message)) if message == "partial spawn"));
+        assert_eq!(h.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+        assert_eq!(h.removed.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn spawn_partial_failure_retains_state_when_exit_unconfirmed() {
+        let mut h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        let close_sender = Arc::new(Mutex::new(None));
+        let held_sender = close_sender.clone();
+        let signals = h.signals.clone();
+        let stdin = h.stdin.clone();
+        Arc::get_mut(&mut h.host).unwrap().script = Arc::new(move || {
+            let (_, stdout) = mpsc::unbounded_channel();
+            let (_, stderr) = mpsc::unbounded_channel();
+            let (_, error_rx) = mpsc::unbounded_channel();
+            let (tx, closed) = oneshot::channel();
+            *held_sender.lock().unwrap() = Some(tx);
+            let control = FakeControl {
+                stdin: stdin.clone(),
+                signals: signals.clone(),
+                killed: Arc::new(Notify::new()),
+            };
+            Err(SpawnFailure::Child {
+                error: EvalError::Child("partial spawn".into()),
+                child: SpawnedChild {
+                    stdout,
+                    stderr,
+                    closed,
+                    error: error_rx,
+                    control: Box::new(control),
+                },
+            })
+        });
+        let result = start_isolated_gateway(h.host.clone(), source(), fast()).await;
+        assert!(
+            matches!(result, Err(EvalError::Child(ref message)) if message.contains("child exit or state cleanup unconfirmed"))
+        );
+        assert_eq!(
+            h.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term, ChildSignal::Kill]
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+        drop(close_sender);
+    }
+
+    #[tokio::test]
+    async fn spawn_unknown_failure_retains_state() {
+        let mut h = harness(Ok(json!({})), ChildScript::ready(8123, "token"));
+        Arc::get_mut(&mut h.host).unwrap().script = Arc::new(|| {
+            Err(SpawnFailure::Unknown(EvalError::Child(
+                "unknown spawn".into(),
+            )))
+        });
+        let result = start_isolated_gateway(h.host.clone(), source(), fast()).await;
+        assert!(
+            matches!(result, Err(EvalError::Child(ref message)) if message.contains("child ownership unconfirmed"))
+        );
+        assert!(h.removed.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
     async fn start_writes_settings_and_returns_ready_gateway() {
         let harness = harness(
             Ok(json!({ "jait_backend": "openai", "selected_model": "gpt" })),
@@ -986,19 +2586,24 @@ mod tests {
             ["{\"jait_backend\":\"openai\",\"selected_model\":\"gpt\"}".to_string()]
         );
         let spec = harness.specs.lock().unwrap()[0].clone();
+        assert_eq!(
+            Some(spec.operation.as_str()),
+            harness.host.state_operation.lock().unwrap().as_deref()
+        );
         assert_eq!(spec.args, vec![CHILD_BOOTSTRAP_ARG.to_string()]);
-        assert!(spec
-            .env
-            .iter()
-            .any(|(key, value)| key == "JWT_SECRET" && value == "test-uuid"));
-        assert!(spec
-            .env
-            .iter()
-            .any(|(key, value)| key == "JAIT_DB_PATH"
-                && value == "/tmp/jait-eval-state-test/data/jait.db"));
+        assert!(
+            spec.env
+                .iter()
+                .any(|(key, value)| key == "JWT_SECRET" && value == "test-uuid")
+        );
+        assert!(spec.env.iter().any(|(key, value)| key == "JAIT_DB_PATH"
+            && value == "/tmp/jait-eval-state-test/data/jait.db"));
 
         gateway.stop().await;
-        assert_eq!(harness.signals.lock().unwrap().as_slice(), [ChildSignal::Term]);
+        assert_eq!(
+            harness.signals.lock().unwrap().as_slice(),
+            [ChildSignal::Term]
+        );
         assert_eq!(
             harness.removed.lock().unwrap().as_slice(),
             [PathBuf::from("/tmp/jait-eval-state-test")]
@@ -1141,12 +2746,20 @@ mod tests {
                 token: "t".to_string(),
                 signal: Some(rx),
             },
-            IsolatedOptions { ready_timeout_ms: 30, kill_grace_ms: 20 },
+            IsolatedOptions {
+                ready_timeout_ms: 30,
+                kill_grace_ms: 20,
+            },
         )
         .await
         .err()
         .expect("must time out");
-        assert_eq!(error, EvalError::NotStarted { stderr: String::new() });
+        assert_eq!(
+            error,
+            EvalError::NotStarted {
+                stderr: String::new()
+            }
+        );
     }
 
     #[tokio::test]

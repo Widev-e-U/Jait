@@ -21,10 +21,10 @@ use std::fmt;
 use std::sync::{Arc, LazyLock};
 
 use futures_util::future::BoxFuture;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::tools::core_io::HostError;
-use crate::tools::validate::{validate_tool_input, ToolInput};
+use crate::tools::validate::{ToolInput, validate_tool_input};
 
 pub const ELEVATED_RUN: &str = "elevated.run";
 
@@ -250,7 +250,10 @@ fn base64_utf8(text: &str) -> String {
 }
 
 fn base64_utf16le(text: &str) -> String {
-    let bytes: Vec<u8> = text.encode_utf16().flat_map(|unit| unit.to_le_bytes()).collect();
+    let bytes: Vec<u8> = text
+        .encode_utf16()
+        .flat_map(|unit| unit.to_le_bytes())
+        .collect();
     use base64::Engine as _;
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
@@ -479,9 +482,9 @@ impl ElevatedTools {
             let username = windows_username.clone().unwrap_or_default();
             let prompt = if platform.is_windows() {
                 match &reason {
-                    Some(reason) => format!(
-                        "Password for {username} to run an elevated command: {reason}"
-                    ),
+                    Some(reason) => {
+                        format!("Password for {username} to run an elevated command: {reason}")
+                    }
                     None => format!("Password for {username} to run an elevated command"),
                 }
             } else {
@@ -567,18 +570,20 @@ impl ElevatedTools {
         let mut stdout = truncate_output(&outcome.stdout).trim().to_owned();
         let mut stderr = truncate_output(&outcome.stderr).trim().to_owned();
         let mut exit_code = outcome.exit_code;
-        if platform.is_windows() && !stdout.is_empty()
-            && let Ok(parsed) = serde_json::from_str::<Value>(&stdout) {
-                if let Some(value) = parsed.get("stdout").and_then(Value::as_str) {
-                    stdout = value.trim().to_owned();
-                }
-                if let Some(value) = parsed.get("stderr").and_then(Value::as_str) {
-                    stderr = value.trim().to_owned();
-                }
-                if let Some(value) = parsed.get("exitCode").and_then(Value::as_i64) {
-                    exit_code = Some(value);
-                }
+        if platform.is_windows()
+            && !stdout.is_empty()
+            && let Ok(parsed) = serde_json::from_str::<Value>(&stdout)
+        {
+            if let Some(value) = parsed.get("stdout").and_then(Value::as_str) {
+                stdout = value.trim().to_owned();
             }
+            if let Some(value) = parsed.get("stderr").and_then(Value::as_str) {
+                stderr = value.trim().to_owned();
+            }
+            if let Some(value) = parsed.get("exitCode").and_then(Value::as_i64) {
+                exit_code = Some(value);
+            }
+        }
         let combined = [stdout.as_str(), stderr.as_str()]
             .into_iter()
             .filter(|part| !part.is_empty())
@@ -685,7 +690,12 @@ mod tests {
         }
 
         fn last(&self) -> ElevatedSpawnRequest {
-            self.requests.lock().unwrap().last().cloned().expect("spawned")
+            self.requests
+                .lock()
+                .unwrap()
+                .last()
+                .cloned()
+                .expect("spawned")
         }
     }
 
@@ -750,7 +760,9 @@ mod tests {
     #[tokio::test]
     async fn unknown_tool_is_reported() {
         let spawn = FakeSpawn::returning(SpawnOutcome::default());
-        let result = unix_tools(None, spawn).call("elevated.other", &json!({}), &context()).await;
+        let result = unix_tools(None, spawn)
+            .call("elevated.other", &json!({}), &context())
+            .await;
         assert_eq!(result["ok"], json!(false));
         assert_eq!(result["message"], json!("Unknown tool: elevated.other"));
     }
@@ -762,7 +774,12 @@ mod tests {
             .call(ELEVATED_RUN, &json!({}), &context())
             .await;
         assert_eq!(result["ok"], json!(false));
-        assert!(result["message"].as_str().unwrap_or_default().contains("command"));
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("command")
+        );
         assert_eq!(spawn.calls(), 0);
     }
 
@@ -786,7 +803,10 @@ mod tests {
             .call(ELEVATED_RUN, &json!({ "command": "id" }), &context())
             .await;
         assert_eq!(result["ok"], json!(false));
-        assert_eq!(result["message"], json!("Secret input service is unavailable"));
+        assert_eq!(
+            result["message"],
+            json!("Secret input service is unavailable")
+        );
         assert_eq!(spawn.calls(), 0);
     }
 
@@ -798,11 +818,17 @@ mod tests {
             .call(ELEVATED_RUN, &json!({ "command": "id" }), &context())
             .await;
         assert_eq!(result["ok"], json!(false));
-        assert_eq!(result["message"], json!("Administrator password was not provided"));
+        assert_eq!(
+            result["message"],
+            json!("Administrator password was not provided")
+        );
         let requests = secret.requests.lock().unwrap();
         assert_eq!(requests.len(), 1);
         assert_eq!(requests[0].requested_by, ELEVATED_RUN);
-        assert_eq!(requests[0].prompt, "Password to run an elevated command with sudo");
+        assert_eq!(
+            requests[0].prompt,
+            "Password to run an elevated command with sudo"
+        );
         assert_eq!(requests[0].timeout_ms, SECRET_PROMPT_TIMEOUT_MS);
         assert_eq!(spawn.calls(), 0);
     }
@@ -825,7 +851,10 @@ mod tests {
             )
             .await;
         assert_eq!(result["ok"], json!(true));
-        assert_eq!(result["message"], json!("Elevated command exited with code 0"));
+        assert_eq!(
+            result["message"],
+            json!("Elevated command exited with code 0")
+        );
         assert_eq!(result["data"]["output"], json!("uid=0(root)"));
         assert_eq!(result["data"]["elevated"], json!(true));
         assert_eq!(result["data"]["cwd"], json!("/tmp/project"));
@@ -851,7 +880,11 @@ mod tests {
             uid: Some(0),
         });
         let result = tools
-            .call(ELEVATED_RUN, &json!({ "command": "id", "cwd": "/srv" }), &context())
+            .call(
+                ELEVATED_RUN,
+                &json!({ "command": "id", "cwd": "/srv" }),
+                &context(),
+            )
             .await;
         assert_eq!(result["ok"], json!(true));
         assert_eq!(result["data"]["elevated"], json!(false));
@@ -922,7 +955,10 @@ mod tests {
             .call(ELEVATED_RUN, &json!({ "command": "whoami" }), &context())
             .await;
         assert_eq!(result["ok"], json!(false));
-        assert_eq!(result["message"], json!("Elevated command exited with code 3"));
+        assert_eq!(
+            result["message"],
+            json!("Elevated command exited with code 3")
+        );
         assert_eq!(result["data"]["exitCode"], json!(3));
         assert_eq!(result["data"]["stdout"], json!("partial"));
         assert_eq!(result["data"]["stderr"], json!("boom"));
@@ -941,10 +977,17 @@ mod tests {
             uid: Some(0),
         });
         let result = tools
-            .call(ELEVATED_RUN, &json!({ "command": "sleep 10", "timeoutMs": 1500.0 }), &context())
+            .call(
+                ELEVATED_RUN,
+                &json!({ "command": "sleep 10", "timeoutMs": 1500.0 }),
+                &context(),
+            )
             .await;
         assert_eq!(result["ok"], json!(false));
-        assert_eq!(result["message"], json!("Elevated command timed out after 1500ms"));
+        assert_eq!(
+            result["message"],
+            json!("Elevated command timed out after 1500ms")
+        );
         assert_eq!(result["data"]["timedOut"], json!(true));
         assert_eq!(result["data"]["output"], json!("(no output)"));
     }
@@ -976,5 +1019,4 @@ mod tests {
         assert!(secret.requests.lock().unwrap().is_empty());
         assert_eq!(spawn.calls(), 0);
     }
-
 }

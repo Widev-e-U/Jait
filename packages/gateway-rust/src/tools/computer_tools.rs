@@ -22,11 +22,11 @@
 
 use std::sync::LazyLock;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::tools::core_io::HostError;
 use crate::tools::core_jait::JaitPort;
-use crate::tools::validate::{validate_tool_input, ToolInput};
+use crate::tools::validate::{ToolInput, validate_tool_input};
 
 pub const COMPUTER_TARGETS: &str = "computer.targets";
 pub const COMPUTER_SESSION: &str = "computer.session";
@@ -229,7 +229,13 @@ fn validated(name: &str, input: &Value) -> Result<Value, Value> {
     if validation.valid {
         Ok(tool_input.value())
     } else {
-        Err(fail(validation.errors.first().map(|e| String::from_utf16_lossy(&e.0)).unwrap_or_else(|| format!("Invalid input for {name}."))))
+        Err(fail(
+            validation
+                .errors
+                .first()
+                .map(|e| String::from_utf16_lossy(&e.0))
+                .unwrap_or_else(|| format!("Invalid input for {name}.")),
+        ))
     }
 }
 
@@ -266,7 +272,9 @@ impl Target {
 
 /// `targetFromNode` — desktop + ready nodes only, Windows-only control.
 pub fn target_from_node(node: &Value) -> Option<Target> {
-    if opt_str(node.get("role")) != Some("desktop") || opt_str(node.get("lifecycle")) != Some("ready") {
+    if opt_str(node.get("role")) != Some("desktop")
+        || opt_str(node.get("lifecycle")) != Some("ready")
+    {
         return None;
     }
     let node_id = node
@@ -307,7 +315,9 @@ pub fn target_from_node(node: &Value) -> Option<Target> {
             node_id,
             name,
             available: false,
-            reason: Some(format!("Desktop update required ({missing} is unavailable)")),
+            reason: Some(format!(
+                "Desktop update required ({missing} is unavailable)"
+            )),
         }),
         None => Some(Target {
             node_id,
@@ -356,18 +366,18 @@ pub fn select_target(targets: &[Target], node_id: Option<&str>) -> Result<Target
 pub fn validate_act_input(input: &Value) -> Result<(), String> {
     let action = input["action"].as_str().unwrap_or_default();
 
-    if matches!(action, "move" | "click") && (finite(input.get("x")).is_none() || finite(input.get("y")).is_none())
+    if matches!(action, "move" | "click")
+        && (finite(input.get("x")).is_none() || finite(input.get("y")).is_none())
     {
-        return Err(format!(
-            "{action} requires finite x and y coordinates"
-        ));
+        return Err(format!("{action} requires finite x and y coordinates"));
     }
 
     if action == "click"
         && let Some(clicks) = finite(input.get("clicks"))
-            && (clicks.fract() != 0.0 || !(1.0..=3.0).contains(&clicks)) {
-                return Err("clicks must be an integer from 1 to 3".to_owned());
-            }
+        && (clicks.fract() != 0.0 || !(1.0..=3.0).contains(&clicks))
+    {
+        return Err("clicks must be an integer from 1 to 3".to_owned());
+    }
 
     if action == "type" {
         match opt_str(input.get("text")) {
@@ -388,17 +398,19 @@ pub fn validate_act_input(input: &Value) -> Result<(), String> {
     }
 
     if let Some(amount) = finite(input.get("amount"))
-        && amount <= 0.0 {
-            return Err("amount must be a positive number".to_owned());
-        }
+        && amount <= 0.0
+    {
+        return Err("amount must be a positive number".to_owned());
+    }
 
     if let Some(wait) = finite(input.get("waitAfterMs"))
-        && !(0.0..=MAX_WAIT_AFTER_MS).contains(&wait) {
-            return Err(format!(
-                "waitAfterMs must be between 0 and {}",
-                MAX_WAIT_AFTER_MS as u64
-            ));
-        }
+        && !(0.0..=MAX_WAIT_AFTER_MS).contains(&wait)
+    {
+        return Err(format!(
+            "waitAfterMs must be between 0 and {}",
+            MAX_WAIT_AFTER_MS as u64
+        ));
+    }
 
     Ok(())
 }
@@ -407,17 +419,17 @@ pub fn validate_act_input(input: &Value) -> Result<(), String> {
 pub fn as_remote_tool_result(value: &Value, fallback: &str) -> Value {
     if let Value::Object(map) = value
         && map.get("ok").and_then(Value::as_bool).is_some()
-            && map.get("message").and_then(Value::as_str).is_some()
-        {
-            let mut result = json!({
-                "ok": map["ok"].clone(),
-                "message": map["message"].clone(),
-            });
-            if let Some(data) = map.get("data") {
-                result["data"] = data.clone();
-            }
-            return result;
+        && map.get("message").and_then(Value::as_str).is_some()
+    {
+        let mut result = json!({
+            "ok": map["ok"].clone(),
+            "message": map["message"].clone(),
+        });
+        if let Some(data) = map.get("data") {
+            result["data"] = data.clone();
         }
+        return result;
+    }
     success(fallback, value.clone())
 }
 
@@ -610,13 +622,22 @@ impl<C: Send + Sync> ComputerTools<C> {
                     )
                     .await
                     .map(|value| as_remote_tool_result(&value, "Computer control stopped."))
-                    .unwrap_or_else(|error| json!({ "ok": false, "message": host_error_message(error) }));
+                    .unwrap_or_else(
+                        |error| json!({ "ok": false, "message": host_error_message(error) }),
+                    );
                 let _ = self
-                    .invoke(&self.sessions, "stop", vec![json!(session["id"].clone())], host)
+                    .invoke(
+                        &self.sessions,
+                        "stop",
+                        vec![json!(session["id"].clone())],
+                        host,
+                    )
                     .await;
                 Ok(remote)
             }
-            other => Ok(fail(format!("Unsupported computer session action: {other}"))),
+            other => Ok(fail(format!(
+                "Unsupported computer session action: {other}"
+            ))),
         }
     }
 
@@ -697,11 +718,7 @@ impl<C: Send + Sync> ComputerTools<C> {
             .invoke(
                 &self.proxy,
                 "invoke",
-                vec![
-                    json!(COMPUTER_ACT),
-                    input.clone(),
-                    json!(ACT_TIMEOUT_MS),
-                ],
+                vec![json!(COMPUTER_ACT), input.clone(), json!(ACT_TIMEOUT_MS)],
                 host,
             )
             .await?;
@@ -806,7 +823,9 @@ mod tests {
                     }))),
                     "stop" => Ok(Some(Value::Null)),
                     "requireOwned" => {
-                        if args[0] == json!("sess-1") && !args[1].as_str().unwrap_or_default().is_empty() {
+                        if args[0] == json!("sess-1")
+                            && !args[1].as_str().unwrap_or_default().is_empty()
+                        {
                             Ok(Some(json!({
                                 "id": "sess-1",
                                 "nodeId": "node-a",
@@ -875,7 +894,9 @@ mod tests {
                 "computer.act"
             ]))])),
             sessions: session_port(),
-            proxy: proxy_port(json!({ "ok": true, "message": "remote ok", "data": { "frames": 1 } })),
+            proxy: proxy_port(
+                json!({ "ok": true, "message": "remote ok", "data": { "frames": 1 } }),
+            ),
         }
     }
 
@@ -901,9 +922,15 @@ mod tests {
     #[test]
     fn definition_matches_metadata_and_risk_levels() {
         assert_eq!(definition(COMPUTER_SESSION)["risk"], json!("high"));
-        assert_eq!(definition(COMPUTER_SESSION)["defaultConsentLevel"], json!("once"));
+        assert_eq!(
+            definition(COMPUTER_SESSION)["defaultConsentLevel"],
+            json!("once")
+        );
         assert_eq!(definition(COMPUTER_ACT)["risk"], json!("high"));
-        assert_eq!(definition(COMPUTER_TARGETS)["defaultConsentLevel"], json!("none"));
+        assert_eq!(
+            definition(COMPUTER_TARGETS)["defaultConsentLevel"],
+            json!("none")
+        );
     }
 
     #[test]
@@ -945,8 +972,18 @@ mod tests {
     #[test]
     fn select_target_requires_disambiguation_and_known_nodes() {
         let targets = vec![
-            Target { node_id: "a".into(), name: "A".into(), available: true, reason: None },
-            Target { node_id: "b".into(), name: "B".into(), available: true, reason: None },
+            Target {
+                node_id: "a".into(),
+                name: "A".into(),
+                available: true,
+                reason: None,
+            },
+            Target {
+                node_id: "b".into(),
+                name: "B".into(),
+                available: true,
+                reason: None,
+            },
         ];
         assert_eq!(
             select_target(&targets, None).unwrap_err(),
@@ -977,11 +1014,13 @@ mod tests {
             "click requires finite x and y coordinates"
         );
         assert_eq!(
-            validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 4 })).unwrap_err(),
+            validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 4 }))
+                .unwrap_err(),
             "clicks must be an integer from 1 to 3"
         );
         assert_eq!(
-            validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 1.5 })).unwrap_err(),
+            validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 1.5 }))
+                .unwrap_err(),
             "clicks must be an integer from 1 to 3"
         );
         assert_eq!(
@@ -997,29 +1036,45 @@ mod tests {
             "scroll requires a direction"
         );
         assert_eq!(
-            validate_act_input(&json!({ "action": "scroll", "direction": "down", "amount": 0 })).unwrap_err(),
+            validate_act_input(&json!({ "action": "scroll", "direction": "down", "amount": 0 }))
+                .unwrap_err(),
             "amount must be a positive number"
         );
         assert_eq!(
-            validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 10001 })).unwrap_err(),
+            validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 10001 }))
+                .unwrap_err(),
             "waitAfterMs must be between 0 and 10000"
         );
-        assert!(validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 0 })).is_ok());
+        assert!(
+            validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 0 }))
+                .is_ok()
+        );
     }
 
     #[tokio::test]
     async fn targets_reports_availability_lines() {
         let tools = ComputerTools {
             nodes: nodes_port(json!([
-                windows_node(json!(["computer.session", "computer.observe", "computer.act"])),
+                windows_node(json!([
+                    "computer.session",
+                    "computer.observe",
+                    "computer.act"
+                ])),
                 mac_node()
             ])),
             sessions: session_port(),
             proxy: proxy_port(Value::Null),
         };
-        let result = tools.computer_targets(&json!({}), &json!({}), &json!({})).await;
+        let result = tools
+            .computer_targets(&json!({}), &json!({}), &json!({}))
+            .await;
         assert_eq!(result["ok"], json!(true));
-        assert!(result["message"].as_str().unwrap().contains("Study PC (node-a): available"));
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("Study PC (node-a): available")
+        );
         assert_eq!(result["data"]["targets"].as_array().unwrap().len(), 2);
         assert_eq!(result["data"]["targets"][1]["available"], json!(false));
     }
@@ -1028,14 +1083,27 @@ mod tests {
     async fn session_start_requires_a_resolvable_target() {
         let mut tools = tools();
         tools.nodes = nodes_port(json!([
-            windows_node(json!(["computer.session", "computer.observe", "computer.act"])),
+            windows_node(json!([
+                "computer.session",
+                "computer.observe",
+                "computer.act"
+            ])),
             windows_node_with_id("node-b")
         ]));
         let denied = tools
-            .computer_session(&json!({ "action": "start" }), &json!({ "sessionId": "chat-1" }), &json!({}))
+            .computer_session(
+                &json!({ "action": "start" }),
+                &json!({ "sessionId": "chat-1" }),
+                &json!({}),
+            )
             .await;
         assert_eq!(denied["ok"], json!(false));
-        assert!(denied["message"].as_str().unwrap().contains("choose nodeId"));
+        assert!(
+            denied["message"]
+                .as_str()
+                .unwrap()
+                .contains("choose nodeId")
+        );
 
         let started = tools
             .computer_session(
@@ -1047,7 +1115,12 @@ mod tests {
         assert_eq!(started["ok"], json!(true));
         assert_eq!(started["data"]["session"]["id"], json!("sess-1"));
         assert_eq!(started["data"]["remote"]["frames"], json!(1));
-        assert!(started["message"].as_str().unwrap().contains("Ctrl+Alt+Escape"));
+        assert!(
+            started["message"]
+                .as_str()
+                .unwrap()
+                .contains("Ctrl+Alt+Escape")
+        );
     }
 
     #[tokio::test]
@@ -1060,7 +1133,12 @@ mod tests {
             )
             .await;
         assert_eq!(result["ok"], json!(false));
-        assert!(result["message"].as_str().unwrap().contains("another conversation"));
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("another conversation")
+        );
     }
 
     #[tokio::test]
@@ -1111,7 +1189,12 @@ mod tests {
         let context = json!({ "sessionId": "chat-1", "signal": { "aborted": true } });
         for name in [COMPUTER_SESSION, COMPUTER_OBSERVE, COMPUTER_ACT] {
             let result = tools()
-                .call(name, &json!({ "action": "status", "sessionId": "sess-1" }), &context, &json!({}))
+                .call(
+                    name,
+                    &json!({ "action": "status", "sessionId": "sess-1" }),
+                    &context,
+                    &json!({}),
+                )
                 .await;
             assert_eq!(result["ok"], json!(false), "{name} should be cancelled");
             assert_eq!(result["message"], json!("Computer control was cancelled."));
@@ -1120,8 +1203,15 @@ mod tests {
 
     #[tokio::test]
     async fn unknown_tool_name_is_a_structured_failure() {
-        let result = tools().call("computer.nope", &json!({}), &json!({}), &json!({})).await;
+        let result = tools()
+            .call("computer.nope", &json!({}), &json!({}), &json!({}))
+            .await;
         assert_eq!(result["ok"], json!(false));
-        assert!(result["message"].as_str().unwrap().contains("Unknown computer tool"));
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("Unknown computer tool")
+        );
     }
 }

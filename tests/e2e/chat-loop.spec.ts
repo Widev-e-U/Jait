@@ -105,6 +105,32 @@ test('mobile goal stays a compact icon and label until tapped', async ({ page })
   await expect(card).toHaveCount(0)
 })
 
+test('mobile goal fades its details while closing and respects reduced motion', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 850 })
+  await page.goto('/src/e2e-fixtures/chat-loop.html')
+  const frame = page.getByTestId('loop-goal-card')
+  const goal = page.getByText('Fix the failing network inventory check and verify the result', { exact: true })
+  await page.getByRole('button', { name: 'Expand goal card' }).click()
+  await expect(goal).toBeVisible()
+  await expect.poll(async () => (await frame.boundingBox())!.height).toBeGreaterThan(100)
+  const closing = await frame.evaluate(async el => {
+    const width = el.getBoundingClientRect().width
+    const radius = getComputedStyle(el).borderRadius
+    const button = el.querySelector('button')!
+    button.click()
+    await new Promise(requestAnimationFrame)
+    const details = el.querySelector('[id]') as HTMLElement
+    return { hidden: details.hidden, inert: details.inert, expanded: button.getAttribute('aria-expanded'), widthHeld: Math.abs(el.getBoundingClientRect().width - width) < 1, radiusHeld: getComputedStyle(el).borderRadius === radius }
+  })
+  expect(closing).toEqual({ hidden: false, inert: true, expanded: 'false', widthHeld: true, radiusHeld: true })
+  await expect(goal).toBeHidden()
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.getByRole('button', { name: 'Expand goal card' }).click()
+  await page.getByRole('button', { name: 'Collapse goal card' }).click()
+  await expect(goal).toBeHidden()
+})
+
 test('goal card remembers its collapsed state per chat across navigation and reloads', async ({ page }) => {
   await page.goto('/src/e2e-fixtures/chat-loop.html')
   const card = page.getByRole('region', { name: 'Chat loop goal' })
@@ -194,6 +220,11 @@ for (const width of [390, 900, 1440]) {
     await expect(previous).toBeVisible()
     const previousTop = (await previous.boundingBox())!.y
     expect(previousTop - transcriptTop).toBeLessThanOrEqual(width < 768 ? 57 : 41)
+    if (width === 1440) {
+      const cardBounds = (await frame.boundingBox())!
+      const composerBounds = (await page.getByTestId('chat-composer').boundingBox())!
+      expect(cardBounds.x + cardBounds.width).toBeLessThanOrEqual(composerBounds.x)
+    }
     if (width < 768) {
       const header = page.getByTestId('fixture-mobile-header')
       expect((await frame.boundingBox())!.y).toBeGreaterThanOrEqual((await header.boundingBox())!.y + (await header.boundingBox())!.height)
@@ -243,21 +274,25 @@ for (const width of [390, 1440]) {
     await expect(pause).toBeInViewport()
     const bounds = (await card.boundingBox())!
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(660)
-    // The card must cover the input itself and receive pointer input there.
     const composerBounds = (await page.getByTestId('chat-composer').boundingBox())!
-    const overlap = {
-      left: Math.max(bounds.x, composerBounds.x),
-      top: Math.max(bounds.y, composerBounds.y),
-      right: Math.min(bounds.x + bounds.width, composerBounds.x + composerBounds.width),
-      bottom: Math.min(bounds.y + bounds.height, composerBounds.y + composerBounds.height),
+    if (width < 768) {
+      // The expanded mobile card covers the input and must receive pointer input.
+      const overlap = {
+        left: Math.max(bounds.x, composerBounds.x),
+        top: Math.max(bounds.y, composerBounds.y),
+        right: Math.min(bounds.x + bounds.width, composerBounds.x + composerBounds.width),
+        bottom: Math.min(bounds.y + bounds.height, composerBounds.y + composerBounds.height),
+      }
+      expect(overlap.right - overlap.left).toBeGreaterThan(0)
+      expect(overlap.bottom - overlap.top).toBeGreaterThan(0)
+      const cardReceivesOverlap = await page.evaluate(
+        ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-testid="loop-goal-card"]')),
+        { x: (overlap.left + overlap.right) / 2, y: (overlap.top + overlap.bottom) / 2 },
+      )
+      expect(cardReceivesOverlap).toBe(true)
+    } else {
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(composerBounds.x)
     }
-    expect(overlap.right - overlap.left, 'card should overlap the input horizontally').toBeGreaterThan(0)
-    expect(overlap.bottom - overlap.top, 'card should overlap the input vertically').toBeGreaterThan(0)
-    const cardReceivesOverlap = await page.evaluate(
-      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('[data-testid="loop-goal-card"]')),
-      { x: (overlap.left + overlap.right) / 2, y: (overlap.top + overlap.bottom) / 2 },
-    )
-    expect(cardReceivesOverlap).toBe(true)
     await pause.click({ timeout: 3000 })
     await expect.poll(() => pauseRequests).toBe(1)
     await card.getByRole('button', { name: 'Collapse goal card' }).click()

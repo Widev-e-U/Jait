@@ -199,7 +199,7 @@ pub struct ConditionalRequirement {
     pub if_clause: ConditionalSchemaBranch,
     #[serde(rename = "then")]
     pub then_clause: ConditionalSchemaBranch,
-    }
+}
 
 /// TS literal `type: "object"` used by [`ToolParametersSchema`].
 pub const TOOL_PARAMETERS_SCHEMA_TYPE: &str = "object";
@@ -280,9 +280,8 @@ impl Serialize for ToolSource {
 impl<'de> Deserialize<'de> for ToolSource {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(d)?;
-        ToolSource::from_source_str(&raw).ok_or_else(|| {
-            serde::de::Error::custom(format!("invalid tool source: {raw}"))
-        })
+        ToolSource::from_source_str(&raw)
+            .ok_or_else(|| serde::de::Error::custom(format!("invalid tool source: {raw}")))
     }
 }
 
@@ -381,274 +380,1342 @@ pub mod barrel {
         pub native: Option<&'static str>,
     }
 
-/// Every symbol `packages/gateway/src/tools/index.ts` re-exports, in TS source order.
-///
-/// `native` is a conservative lower bound: `Some(module)` is only set where the
-/// family was verified against a native `crate::tools::<module>` port, so `None`
-/// means "no verified native port yet", not "definitely missing". The gap report
-/// below is therefore a lower bound on the real coverage gap.
-pub const REEXPORTS: &[Reexport] = &[
-    Reexport { symbol: "ToolRegistry", ts_module: "registry.ts", native: Some("registry") },
-    Reexport { symbol: "createTerminalRunTool", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Reexport { symbol: "createJaitTerminalTool", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Reexport { symbol: "createTerminalStreamTool", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Reexport { symbol: "type AgentEnvResolver", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Reexport { symbol: "createFileReadTool", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Reexport { symbol: "createFileWriteTool", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Reexport { symbol: "createFilePatchTool", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Reexport { symbol: "createFileListTool", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Reexport { symbol: "createFileStatTool", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Reexport { symbol: "createImageViewTool", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Reexport { symbol: "createOsQueryTool", ts_module: "os-tools.ts", native: Some("os_tools") },
-    Reexport { symbol: "createOsInstallTool", ts_module: "os-tools.ts", native: Some("os_tools") },
-    Reexport { symbol: "createOsControlToolset", ts_module: "os-control-tools.ts", native: Some("os_control_tools") },
-    Reexport { symbol: "createComputerTools", ts_module: "computer-tools.ts", native: Some("computer_tools") },
-    Reexport { symbol: "createSurfacesListTool", ts_module: "surface-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createSurfacesStartTool", ts_module: "surface-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createSurfacesStopTool", ts_module: "surface-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createCronAddTool", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createCronListTool", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createCronRemoveTool", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createCronUpdateTool", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createGatewayStatusTool", ts_module: "gateway-tools.ts", native: Some("redeploy_tools") },
-    Reexport { symbol: "createProjectAssignRepositoryTool", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Reexport { symbol: "createProjectCreateTool", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Reexport { symbol: "createProjectMoveTool", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Reexport { symbol: "createProjectTransferTool", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Reexport { symbol: "createProjectMessageTool", ts_module: "project-message-tool.ts", native: Some("project_message") },
-    Reexport { symbol: "createProjectEditorOpenTool", ts_module: "project-editor-tools.ts", native: Some("runtime_tools") },
-    Reexport { symbol: "createJaitTodosTool", ts_module: "repo-proposal-tools.ts", native: None },
-    Reexport { symbol: "createUserAskTool", ts_module: "user-question-tools.ts", native: None },
-    Reexport { symbol: "createScreenShareTool", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Reexport { symbol: "createScreenCaptureTool", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Reexport { symbol: "createScreenRecordTool", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Reexport { symbol: "createOsTool", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Reexport { symbol: "createBrowserNavigateTool", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createBrowserSnapshotTool", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createBrowserInspectTool", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createBrowserInteractionTools", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createWebFetchTool", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createWebSearchTool", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createBrowserSandboxStartTool", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Reexport { symbol: "createScreenshotCaptureTool", ts_module: "screenshot-tools.ts", native: Some("screenshot_tools") },
-    Reexport { symbol: "createWindowsSandboxStartTool", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Reexport { symbol: "createWindowsSandboxStopTool", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Reexport { symbol: "createLinuxDesktopSandboxStartTool", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Reexport { symbol: "createLinuxDesktopSandboxStopTool", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Reexport { symbol: "createMemorySaveTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createMemorySearchTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createMemoryForgetTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createMemoryHygieneTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createMemoryListTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createMemoryReviewChatsTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createMemoryUpdateTool", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Reexport { symbol: "createSessionSearchTool", ts_module: "session-search-tools.ts", native: None },
-    Reexport { symbol: "createSessionSqlTool", ts_module: "session-sql-tools.ts", native: Some("session_sql") },
-    Reexport { symbol: "createChatTracesTool", ts_module: "chat-traces-tools.ts", native: None },
-    Reexport { symbol: "createVoiceSpeakTool", ts_module: "voice-tools.ts", native: None },
-    Reexport { symbol: "createAgentSpawnTool", ts_module: "agent-tools.ts", native: Some("agent_communication") },
-    Reexport { symbol: "createAgentMessageTool", ts_module: "agent-message-tool.ts", native: Some("agent_communication") },
-    Reexport { symbol: "createThreadControlTool", ts_module: "thread-tools.ts", native: Some("thread_tools") },
-    Reexport { symbol: "createNetworkScanTool", ts_module: "network-tools.ts", native: Some("network_scan") },
-    Reexport { symbol: "getLatestNetworkScan", ts_module: "network-tools.ts", native: Some("network_scan") },
-    Reexport { symbol: "setLatestNetworkScan", ts_module: "network-tools.ts", native: Some("network_scan") },
-    Reexport { symbol: "createEmailTools", ts_module: "email-tools.ts", native: Some("email_tools") },
-    Reexport { symbol: "createCalendarTools", ts_module: "calendar-tools.ts", native: Some("calendar") },
-    Reexport { symbol: "createHomeAssistantCallServiceTool", ts_module: "homeassistant-tools.ts", native: Some("homeassistant_tools") },
-    Reexport { symbol: "createHomeAssistantServicesTool", ts_module: "homeassistant-tools.ts", native: Some("homeassistant_tools") },
-    Reexport { symbol: "createHomeAssistantStatesTool", ts_module: "homeassistant-tools.ts", native: Some("homeassistant_tools") },
-    Reexport { symbol: "createSshRunTool", ts_module: "ssh-tools.ts", native: Some("ssh_tools") },
-    Reexport { symbol: "createSshSessionStartTool", ts_module: "ssh-tools.ts", native: Some("ssh_tools") },
-    Reexport { symbol: "createSshSessionRunTool", ts_module: "ssh-tools.ts", native: Some("ssh_tools") },
-    Reexport { symbol: "createSshSessionCloseTool", ts_module: "ssh-tools.ts", native: Some("ssh_tools") },
-    Reexport { symbol: "createElevatedRunTool", ts_module: "elevated-tools.ts", native: Some("elevated_tools") },
-    Reexport { symbol: "createRedeployTool", ts_module: "redeploy-tools.ts", native: Some("redeploy_tools") },
-    Reexport { symbol: "createMaintenanceRunTool", ts_module: "maintenance-tools.ts", native: Some("maintenance") },
-    Reexport { symbol: "createArchitectureTool", ts_module: "architecture-tools.ts", native: Some("diagrams") },
-    Reexport { symbol: "createCodeGraphTools", ts_module: "code-graph-tools.ts", native: Some("code_graph") },
-    Reexport { symbol: "createPreviewOpenTool", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Reexport { symbol: "createPreviewStopTool", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Reexport { symbol: "createPreviewRestartTool", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Reexport { symbol: "createPreviewStatusTool", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Reexport { symbol: "createPreviewLogsTool", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Reexport { symbol: "createPreviewInspectTool", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Reexport { symbol: "createToolsListTool", ts_module: "meta-tools.ts", native: Some("meta_tools") },
-    Reexport { symbol: "createToolsSearchTool", ts_module: "meta-tools.ts", native: Some("meta_tools") },
-    Reexport { symbol: "createSkillsManageTool", ts_module: "skill-tools.ts", native: Some("skill_tools") },
-    Reexport { symbol: "createExtensionsManageTool", ts_module: "skill-tools.ts", native: Some("skill_tools") },
-    Reexport { symbol: "McpManager", ts_module: "mcp-bridge.ts", native: Some("mcp_bridge") },
-    Reexport { symbol: "wrapMcpTool", ts_module: "mcp-bridge.ts", native: Some("mcp_bridge") },
-    Reexport { symbol: "registerMcpTools", ts_module: "mcp-bridge.ts", native: Some("mcp_bridge") },
-    Reexport { symbol: "unregisterMcpTools", ts_module: "mcp-bridge.ts", native: Some("mcp_bridge") },
-    Reexport { symbol: "type McpServerConfig", ts_module: "mcp-bridge.ts", native: Some("mcp_bridge") },
-    Reexport { symbol: "type McpConnection", ts_module: "mcp-bridge.ts", native: Some("mcp_bridge") },
-    Reexport { symbol: "ToolName", ts_module: "tool-names.ts", native: Some("tool_names") },
-    Reexport { symbol: "type ToolNameValue", ts_module: "tool-names.ts", native: Some("tool_names") },
-    Reexport { symbol: "validateToolInput", ts_module: "validate.ts", native: Some("validate") },
-    Reexport { symbol: "type ValidationResult", ts_module: "validate.ts", native: Some("validate") },
-    Reexport { symbol: "type ChatMode", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "CHAT_MODES", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "isValidChatMode", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "ASK_MODE_TOOLS", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "MUTATING_TOOLS", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "getSystemPromptForMode", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "type PlannedAction", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "type Plan", ts_module: "chat-modes.ts", native: Some("chat_modes") },
-    Reexport { symbol: "buildSystemPrompt", ts_module: "index.ts", native: None },
-    Reexport { symbol: "getReminderInstructions", ts_module: "index.ts", native: None },
-    Reexport { symbol: "promptRegistry", ts_module: "index.ts", native: None },
-    Reexport { symbol: "type ModelEndpoint", ts_module: "index.ts", native: None },
-    Reexport { symbol: "type IAgentPrompt", ts_module: "index.ts", native: None },
-    Reexport { symbol: "type PromptContext", ts_module: "index.ts", native: None },
-    Reexport { symbol: "runAgentLoop", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "retryToolCall", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "pruneHistory", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "repairToolCallHistory", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "generateLLMConversationSummary", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "CONTEXT_COMPACT_TRIGGER_RATIO", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "buildToolSchemas", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "buildTieredToolSchemas", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "buildSystemOneToolSchemas", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "toolDefsToSchemas", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "parseOpenAIStream", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "serializeMessages", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "toOpenAIName", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "fromOpenAIName", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "SteeringController", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "ToolCallQueue", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "ToolCallPriority", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type AgentLoopOptions", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type AgentLoopResult", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type AgentLoopEvent", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type AgentMessage", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type OpenAIToolCall", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type OpenAIToolSchema", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type LLMConfig", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type LlmContextFlowRound", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type ExecutedToolCall", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "type ToolExecutor", ts_module: "agent-loop.ts", native: Some("loop_tools") },
-    Reexport { symbol: "computeContextUsage", ts_module: "token-estimator.ts", native: Some("token_estimator") },
-    Reexport { symbol: "type ContextUsage", ts_module: "token-estimator.ts", native: Some("token_estimator") },
-    Reexport { symbol: "ToolRegistryDeps", ts_module: "index.ts", native: None },
-    Reexport { symbol: "createToolRegistry", ts_module: "index.ts", native: None },
-];
+    /// Every symbol `packages/gateway/src/tools/index.ts` re-exports, in TS source order.
+    ///
+    /// `native` is a conservative lower bound: `Some(module)` is only set where the
+    /// family was verified against a native `crate::tools::<module>` port, so `None`
+    /// means "no verified native port yet", not "definitely missing". The gap report
+    /// below is therefore a lower bound on the real coverage gap.
+    pub const REEXPORTS: &[Reexport] = &[
+        Reexport {
+            symbol: "ToolRegistry",
+            ts_module: "registry.ts",
+            native: Some("registry"),
+        },
+        Reexport {
+            symbol: "createTerminalRunTool",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Reexport {
+            symbol: "createJaitTerminalTool",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Reexport {
+            symbol: "createTerminalStreamTool",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Reexport {
+            symbol: "type AgentEnvResolver",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Reexport {
+            symbol: "createFileReadTool",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Reexport {
+            symbol: "createFileWriteTool",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Reexport {
+            symbol: "createFilePatchTool",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Reexport {
+            symbol: "createFileListTool",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Reexport {
+            symbol: "createFileStatTool",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Reexport {
+            symbol: "createImageViewTool",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Reexport {
+            symbol: "createOsQueryTool",
+            ts_module: "os-tools.ts",
+            native: Some("os_tools"),
+        },
+        Reexport {
+            symbol: "createOsInstallTool",
+            ts_module: "os-tools.ts",
+            native: Some("os_tools"),
+        },
+        Reexport {
+            symbol: "createOsControlToolset",
+            ts_module: "os-control-tools.ts",
+            native: Some("os_control_tools"),
+        },
+        Reexport {
+            symbol: "createComputerTools",
+            ts_module: "computer-tools.ts",
+            native: Some("computer_tools"),
+        },
+        Reexport {
+            symbol: "createSurfacesListTool",
+            ts_module: "surface-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createSurfacesStartTool",
+            ts_module: "surface-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createSurfacesStopTool",
+            ts_module: "surface-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createCronAddTool",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createCronListTool",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createCronRemoveTool",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createCronUpdateTool",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createGatewayStatusTool",
+            ts_module: "gateway-tools.ts",
+            native: Some("redeploy_tools"),
+        },
+        Reexport {
+            symbol: "createProjectAssignRepositoryTool",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Reexport {
+            symbol: "createProjectCreateTool",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Reexport {
+            symbol: "createProjectMoveTool",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Reexport {
+            symbol: "createProjectTransferTool",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Reexport {
+            symbol: "createProjectMessageTool",
+            ts_module: "project-message-tool.ts",
+            native: Some("project_message"),
+        },
+        Reexport {
+            symbol: "createProjectEditorOpenTool",
+            ts_module: "project-editor-tools.ts",
+            native: Some("runtime_tools"),
+        },
+        Reexport {
+            symbol: "createJaitTodosTool",
+            ts_module: "repo-proposal-tools.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "createUserAskTool",
+            ts_module: "user-question-tools.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "createScreenShareTool",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Reexport {
+            symbol: "createScreenCaptureTool",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Reexport {
+            symbol: "createScreenRecordTool",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Reexport {
+            symbol: "createOsTool",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Reexport {
+            symbol: "createBrowserNavigateTool",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createBrowserSnapshotTool",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createBrowserInspectTool",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createBrowserInteractionTools",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createWebFetchTool",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createWebSearchTool",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createBrowserSandboxStartTool",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Reexport {
+            symbol: "createScreenshotCaptureTool",
+            ts_module: "screenshot-tools.ts",
+            native: Some("screenshot_tools"),
+        },
+        Reexport {
+            symbol: "createWindowsSandboxStartTool",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Reexport {
+            symbol: "createWindowsSandboxStopTool",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Reexport {
+            symbol: "createLinuxDesktopSandboxStartTool",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Reexport {
+            symbol: "createLinuxDesktopSandboxStopTool",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Reexport {
+            symbol: "createMemorySaveTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createMemorySearchTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createMemoryForgetTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createMemoryHygieneTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createMemoryListTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createMemoryReviewChatsTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createMemoryUpdateTool",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Reexport {
+            symbol: "createSessionSearchTool",
+            ts_module: "session-search-tools.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "createSessionSqlTool",
+            ts_module: "session-sql-tools.ts",
+            native: Some("session_sql"),
+        },
+        Reexport {
+            symbol: "createChatTracesTool",
+            ts_module: "chat-traces-tools.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "createVoiceSpeakTool",
+            ts_module: "voice-tools.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "createAgentSpawnTool",
+            ts_module: "agent-tools.ts",
+            native: Some("agent_communication"),
+        },
+        Reexport {
+            symbol: "createAgentMessageTool",
+            ts_module: "agent-message-tool.ts",
+            native: Some("agent_communication"),
+        },
+        Reexport {
+            symbol: "createThreadControlTool",
+            ts_module: "thread-tools.ts",
+            native: Some("thread_tools"),
+        },
+        Reexport {
+            symbol: "createNetworkScanTool",
+            ts_module: "network-tools.ts",
+            native: Some("network_scan"),
+        },
+        Reexport {
+            symbol: "getLatestNetworkScan",
+            ts_module: "network-tools.ts",
+            native: Some("network_scan"),
+        },
+        Reexport {
+            symbol: "setLatestNetworkScan",
+            ts_module: "network-tools.ts",
+            native: Some("network_scan"),
+        },
+        Reexport {
+            symbol: "createEmailTools",
+            ts_module: "email-tools.ts",
+            native: Some("email_tools"),
+        },
+        Reexport {
+            symbol: "createCalendarTools",
+            ts_module: "calendar-tools.ts",
+            native: Some("calendar"),
+        },
+        Reexport {
+            symbol: "createHomeAssistantCallServiceTool",
+            ts_module: "homeassistant-tools.ts",
+            native: Some("homeassistant_tools"),
+        },
+        Reexport {
+            symbol: "createHomeAssistantServicesTool",
+            ts_module: "homeassistant-tools.ts",
+            native: Some("homeassistant_tools"),
+        },
+        Reexport {
+            symbol: "createHomeAssistantStatesTool",
+            ts_module: "homeassistant-tools.ts",
+            native: Some("homeassistant_tools"),
+        },
+        Reexport {
+            symbol: "createSshRunTool",
+            ts_module: "ssh-tools.ts",
+            native: Some("ssh_tools"),
+        },
+        Reexport {
+            symbol: "createSshSessionStartTool",
+            ts_module: "ssh-tools.ts",
+            native: Some("ssh_tools"),
+        },
+        Reexport {
+            symbol: "createSshSessionRunTool",
+            ts_module: "ssh-tools.ts",
+            native: Some("ssh_tools"),
+        },
+        Reexport {
+            symbol: "createSshSessionCloseTool",
+            ts_module: "ssh-tools.ts",
+            native: Some("ssh_tools"),
+        },
+        Reexport {
+            symbol: "createElevatedRunTool",
+            ts_module: "elevated-tools.ts",
+            native: Some("elevated_tools"),
+        },
+        Reexport {
+            symbol: "createRedeployTool",
+            ts_module: "redeploy-tools.ts",
+            native: Some("redeploy_tools"),
+        },
+        Reexport {
+            symbol: "createMaintenanceRunTool",
+            ts_module: "maintenance-tools.ts",
+            native: Some("maintenance"),
+        },
+        Reexport {
+            symbol: "createArchitectureTool",
+            ts_module: "architecture-tools.ts",
+            native: Some("diagrams"),
+        },
+        Reexport {
+            symbol: "createCodeGraphTools",
+            ts_module: "code-graph-tools.ts",
+            native: Some("code_graph"),
+        },
+        Reexport {
+            symbol: "createPreviewOpenTool",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Reexport {
+            symbol: "createPreviewStopTool",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Reexport {
+            symbol: "createPreviewRestartTool",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Reexport {
+            symbol: "createPreviewStatusTool",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Reexport {
+            symbol: "createPreviewLogsTool",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Reexport {
+            symbol: "createPreviewInspectTool",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Reexport {
+            symbol: "createToolsListTool",
+            ts_module: "meta-tools.ts",
+            native: Some("meta_tools"),
+        },
+        Reexport {
+            symbol: "createToolsSearchTool",
+            ts_module: "meta-tools.ts",
+            native: Some("meta_tools"),
+        },
+        Reexport {
+            symbol: "createSkillsManageTool",
+            ts_module: "skill-tools.ts",
+            native: Some("skill_tools"),
+        },
+        Reexport {
+            symbol: "createExtensionsManageTool",
+            ts_module: "skill-tools.ts",
+            native: Some("skill_tools"),
+        },
+        Reexport {
+            symbol: "McpManager",
+            ts_module: "mcp-bridge.ts",
+            native: Some("mcp_bridge"),
+        },
+        Reexport {
+            symbol: "wrapMcpTool",
+            ts_module: "mcp-bridge.ts",
+            native: Some("mcp_bridge"),
+        },
+        Reexport {
+            symbol: "registerMcpTools",
+            ts_module: "mcp-bridge.ts",
+            native: Some("mcp_bridge"),
+        },
+        Reexport {
+            symbol: "unregisterMcpTools",
+            ts_module: "mcp-bridge.ts",
+            native: Some("mcp_bridge"),
+        },
+        Reexport {
+            symbol: "type McpServerConfig",
+            ts_module: "mcp-bridge.ts",
+            native: Some("mcp_bridge"),
+        },
+        Reexport {
+            symbol: "type McpConnection",
+            ts_module: "mcp-bridge.ts",
+            native: Some("mcp_bridge"),
+        },
+        Reexport {
+            symbol: "ToolName",
+            ts_module: "tool-names.ts",
+            native: Some("tool_names"),
+        },
+        Reexport {
+            symbol: "type ToolNameValue",
+            ts_module: "tool-names.ts",
+            native: Some("tool_names"),
+        },
+        Reexport {
+            symbol: "validateToolInput",
+            ts_module: "validate.ts",
+            native: Some("validate"),
+        },
+        Reexport {
+            symbol: "type ValidationResult",
+            ts_module: "validate.ts",
+            native: Some("validate"),
+        },
+        Reexport {
+            symbol: "type ChatMode",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "CHAT_MODES",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "isValidChatMode",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "ASK_MODE_TOOLS",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "MUTATING_TOOLS",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "getSystemPromptForMode",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "type PlannedAction",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "type Plan",
+            ts_module: "chat-modes.ts",
+            native: Some("chat_modes"),
+        },
+        Reexport {
+            symbol: "buildSystemPrompt",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "getReminderInstructions",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "promptRegistry",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "type ModelEndpoint",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "type IAgentPrompt",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "type PromptContext",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "runAgentLoop",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "retryToolCall",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "pruneHistory",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "repairToolCallHistory",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "generateLLMConversationSummary",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "CONTEXT_COMPACT_TRIGGER_RATIO",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "buildToolSchemas",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "buildTieredToolSchemas",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "buildSystemOneToolSchemas",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "toolDefsToSchemas",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "parseOpenAIStream",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "serializeMessages",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "toOpenAIName",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "fromOpenAIName",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "SteeringController",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "ToolCallQueue",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "ToolCallPriority",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type AgentLoopOptions",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type AgentLoopResult",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type AgentLoopEvent",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type AgentMessage",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type OpenAIToolCall",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type OpenAIToolSchema",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type LLMConfig",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type LlmContextFlowRound",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type ExecutedToolCall",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "type ToolExecutor",
+            ts_module: "agent-loop.ts",
+            native: Some("loop_tools"),
+        },
+        Reexport {
+            symbol: "computeContextUsage",
+            ts_module: "token-estimator.ts",
+            native: Some("token_estimator"),
+        },
+        Reexport {
+            symbol: "type ContextUsage",
+            ts_module: "token-estimator.ts",
+            native: Some("token_estimator"),
+        },
+        Reexport {
+            symbol: "ToolRegistryDeps",
+            ts_module: "index.ts",
+            native: None,
+        },
+        Reexport {
+            symbol: "createToolRegistry",
+            ts_module: "index.ts",
+            native: None,
+        },
+    ];
 
-/// `createToolRegistry()` registration order (TS call order), with each call's enclosing gate.
-pub const REGISTRATIONS: &[Registration] = &[
-    Registration { factory: "createContextReadTool", gate: "", ts_module: "context-evidence.ts", native: Some("context_evidence") },
-    Registration { factory: "createReadTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createEditTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createExecuteTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createSearchTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createWebTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createTodoTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createLoopTools", gate: "", ts_module: "loop-tools.ts", native: Some("loop_tools") },
-    Registration { factory: "createJaitTool", gate: "", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createTerminalExecutionTool", gate: "", ts_module: "terminal-execution.ts", native: Some("terminal_execution") },
-    Registration { factory: "createTerminalRunTool", gate: "", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Registration { factory: "createJaitTerminalTool", gate: "", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Registration { factory: "createTerminalStreamTool", gate: "", ts_module: "terminal-tools.ts", native: Some("terminal_tools") },
-    Registration { factory: "createFileReadTool", gate: "", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Registration { factory: "createFileWriteTool", gate: "", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Registration { factory: "createFilePatchTool", gate: "", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Registration { factory: "createFileListTool", gate: "", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Registration { factory: "createFileStatTool", gate: "", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Registration { factory: "createImageViewTool", gate: "", ts_module: "file-tools.ts", native: Some("file_tools") },
-    Registration { factory: "createOsQueryTool", gate: "", ts_module: "os-tools.ts", native: Some("os_tools") },
-    Registration { factory: "createOsInstallTool", gate: "", ts_module: "os-tools.ts", native: Some("os_tools") },
-    Registration { factory: "createComputerTools", gate: "deps.ws", ts_module: "computer-tools.ts", native: Some("computer_tools") },
-    Registration { factory: "createSurfacesListTool", gate: "", ts_module: "surface-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createSurfacesStartTool", gate: "", ts_module: "surface-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createSurfacesStopTool", gate: "", ts_module: "surface-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createCronAddTool", gate: "deps.scheduler", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createCronListTool", gate: "deps.scheduler", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createCronRemoveTool", gate: "deps.scheduler", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createCronUpdateTool", gate: "deps.scheduler", ts_module: "cron-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createGatewayStatusTool", gate: "deps.sessionService && deps.ws", ts_module: "gateway-tools.ts", native: Some("redeploy_tools") },
-    Registration { factory: "createProjectCreateTool", gate: "deps.projectService && deps.repoService", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Registration { factory: "createProjectAssignRepositoryTool", gate: "deps.projectService && deps.repoService", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Registration { factory: "createProjectMoveTool", gate: "deps.projectService && deps.repoService", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Registration { factory: "createProjectTransferTool", gate: "deps.projectService && deps.repoService", ts_module: "project-tools.ts", native: Some("project_tools") },
-    Registration { factory: "createProjectEditorOpenTool", gate: "", ts_module: "project-editor-tools.ts", native: Some("runtime_tools") },
-    Registration { factory: "createJaitTodosTool", gate: "deps.repoService && deps.repoProposalService", ts_module: "repo-proposal-tools.ts", native: None },
-    Registration { factory: "createUserAskTool", gate: "deps.userQuestionService", ts_module: "user-question-tools.ts", native: None },
-    Registration { factory: "createBrowserHandoffTool", gate: "deps.userQuestionService", ts_module: "browser-handoff.ts", native: Some("browser_tools") },
-    Registration { factory: "createRedeployTool", gate: "deps.config && deps.shutdown", ts_module: "redeploy-tools.ts", native: Some("redeploy_tools") },
-    Registration { factory: "createMemorySaveTool", gate: "deps.memoryService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createMemorySearchTool", gate: "deps.memoryService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createMemoryForgetTool", gate: "deps.memoryService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createMemoryListTool", gate: "deps.reminderService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createMemoryUpdateTool", gate: "deps.reminderService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createMemoryHygieneTool", gate: "deps.reminderService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createMemoryReviewChatsTool", gate: "deps.reminderService", ts_module: "memory-tools.ts", native: Some("core_jait") },
-    Registration { factory: "createSessionSearchTool", gate: "deps.sessionSearchService", ts_module: "session-search-tools.ts", native: None },
-    Registration { factory: "createChatTracesTool", gate: "deps.chatTracesService", ts_module: "chat-traces-tools.ts", native: None },
-    Registration { factory: "createSessionSqlTool", gate: "deps.sessionSqlService", ts_module: "session-sql-tools.ts", native: Some("session_sql") },
-    Registration { factory: "createVoiceSpeakTool", gate: "deps.voiceService", ts_module: "voice-tools.ts", native: None },
-    Registration { factory: "createPersonaAgentInspectTool", gate: "deps.threadService && deps.providerRegistry", ts_module: "persona-agent-tools.ts", native: None },
-    Registration { factory: "createPersonaAgentTool", gate: "deps.threadService && deps.providerRegistry", ts_module: "persona-agent-tools.ts", native: None },
-    Registration { factory: "createThreadControlTool", gate: "deps.threadService && deps.providerRegistry", ts_module: "thread-tools.ts", native: Some("thread_tools") },
-    Registration { factory: "createAgentGithubTools", gate: "deps.agentGithubAppService", ts_module: "agent-github-tools.ts", native: Some("agent_github") },
-    Registration { factory: "createProjectMessageTool", gate: "deps.threadService && deps.providerRegistry && deps.projectService && deps.sessionService", ts_module: "project-message-tool.ts", native: Some("project_message") },
-    Registration { factory: "createScreenShareTool", gate: "deps.screenShare", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Registration { factory: "createScreenCaptureTool", gate: "deps.screenShare", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Registration { factory: "createScreenRecordTool", gate: "deps.screenShare", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Registration { factory: "createOsTool", gate: "deps.screenShare", ts_module: "screen-share-tools.ts", native: Some("screen_share_tools") },
-    Registration { factory: "createJaitCatalogTool", gate: "", ts_module: "catalog-tools.ts", native: Some("catalog") },
-    Registration { factory: "createToolsListTool", gate: "", ts_module: "meta-tools.ts", native: Some("meta_tools") },
-    Registration { factory: "createToolsSearchTool", gate: "", ts_module: "meta-tools.ts", native: Some("meta_tools") },
-    Registration { factory: "createDecisionEvaluateTool", gate: "", ts_module: "decision.ts", native: Some("decision") },
-    Registration { factory: "createBrowserNavigateTool", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createBrowserSnapshotTool", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createBrowserInspectTool", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createBrowserInteractionTools", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createPreviewOpenTool", gate: "", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Registration { factory: "createPreviewStopTool", gate: "", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Registration { factory: "createPreviewRestartTool", gate: "", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Registration { factory: "createPreviewStatusTool", gate: "", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Registration { factory: "createPreviewLogsTool", gate: "", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Registration { factory: "createPreviewInspectTool", gate: "", ts_module: "preview-tools.ts", native: Some("preview_tools") },
-    Registration { factory: "createWebFetchTool", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createWebSearchTool", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createBrowserSandboxStartTool", gate: "", ts_module: "browser-tools.ts", native: Some("browser_tools") },
-    Registration { factory: "createWindowsSandboxStartTool", gate: "", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Registration { factory: "createWindowsSandboxStopTool", gate: "", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Registration { factory: "createLinuxDesktopSandboxStartTool", gate: "", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Registration { factory: "createLinuxDesktopSandboxStopTool", gate: "", ts_module: "sandbox-tools.ts", native: Some("sandbox_tools") },
-    Registration { factory: "createScreenshotCaptureTool", gate: "", ts_module: "screenshot-tools.ts", native: Some("screenshot_tools") },
-    Registration { factory: "createEmailTools", gate: "deps.emailService", ts_module: "email-tools.ts", native: Some("email_tools") },
-    Registration { factory: "createCalendarTools", gate: "deps.calendarService", ts_module: "calendar-tools.ts", native: Some("calendar") },
-    Registration { factory: "createHomeAssistantStatesTool", gate: "", ts_module: "homeassistant-tools.ts", native: Some("homeassistant_tools") },
-    Registration { factory: "createHomeAssistantServicesTool", gate: "", ts_module: "homeassistant-tools.ts", native: Some("homeassistant_tools") },
-    Registration { factory: "createHomeAssistantCallServiceTool", gate: "", ts_module: "homeassistant-tools.ts", native: Some("homeassistant_tools") },
-    Registration { factory: "createNetworkScanTool", gate: "", ts_module: "network-tools.ts", native: Some("network_scan") },
-    Registration { factory: "createSecurityTools", gate: "", ts_module: "security-tools.ts", native: Some("security_tools") },
-    Registration { factory: "createSecurityWorkbenchTools", gate: "", ts_module: "security-workbench-tools.ts", native: Some("security_workbench_tools") },
-    Registration { factory: "createElevatedRunTool", gate: "", ts_module: "elevated-tools.ts", native: Some("elevated_tools") },
-    Registration { factory: "createSshRunTool", gate: "", ts_module: "ssh-tools.ts", native: Some("ssh_tools") },
-    Registration { factory: "createDiagramTool", gate: "", ts_module: "diagram-tools.ts", native: Some("diagrams") },
-    Registration { factory: "createArchitectureTool", gate: "", ts_module: "architecture-tools.ts", native: Some("diagrams") },
-    Registration { factory: "createCodeGraphTools", gate: "deps.codeGraphService", ts_module: "code-graph-tools.ts", native: Some("code_graph") },
-    Registration { factory: "createMaintenanceRunTool", gate: "deps.maintenanceService", ts_module: "maintenance-tools.ts", native: Some("maintenance") },
-    Registration { factory: "createMobileAlarmScheduleTool", gate: "deps.mobilePush", ts_module: "mobile-tools.ts", native: None },
-    Registration { factory: "createAgentTool", gate: "deps.config", ts_module: "core/index.ts", native: None },
-    Registration { factory: "createAgentSpawnTool", gate: "deps.config", ts_module: "agent-tools.ts", native: Some("agent_communication") },
-    Registration { factory: "createAgentMessageTool", gate: "deps.config", ts_module: "agent-message-tool.ts", native: Some("agent_communication") },
-];
+    /// `createToolRegistry()` registration order (TS call order), with each call's enclosing gate.
+    pub const REGISTRATIONS: &[Registration] = &[
+        Registration {
+            factory: "createContextReadTool",
+            gate: "",
+            ts_module: "context-evidence.ts",
+            native: Some("context_evidence"),
+        },
+        Registration {
+            factory: "createReadTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createEditTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createExecuteTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createSearchTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createWebTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createTodoTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createLoopTools",
+            gate: "",
+            ts_module: "loop-tools.ts",
+            native: Some("loop_tools"),
+        },
+        Registration {
+            factory: "createJaitTool",
+            gate: "",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createTerminalExecutionTool",
+            gate: "",
+            ts_module: "terminal-execution.ts",
+            native: Some("terminal_execution"),
+        },
+        Registration {
+            factory: "createTerminalRunTool",
+            gate: "",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Registration {
+            factory: "createJaitTerminalTool",
+            gate: "",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Registration {
+            factory: "createTerminalStreamTool",
+            gate: "",
+            ts_module: "terminal-tools.ts",
+            native: Some("terminal_tools"),
+        },
+        Registration {
+            factory: "createFileReadTool",
+            gate: "",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Registration {
+            factory: "createFileWriteTool",
+            gate: "",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Registration {
+            factory: "createFilePatchTool",
+            gate: "",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Registration {
+            factory: "createFileListTool",
+            gate: "",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Registration {
+            factory: "createFileStatTool",
+            gate: "",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Registration {
+            factory: "createImageViewTool",
+            gate: "",
+            ts_module: "file-tools.ts",
+            native: Some("file_tools"),
+        },
+        Registration {
+            factory: "createOsQueryTool",
+            gate: "",
+            ts_module: "os-tools.ts",
+            native: Some("os_tools"),
+        },
+        Registration {
+            factory: "createOsInstallTool",
+            gate: "",
+            ts_module: "os-tools.ts",
+            native: Some("os_tools"),
+        },
+        Registration {
+            factory: "createComputerTools",
+            gate: "deps.ws",
+            ts_module: "computer-tools.ts",
+            native: Some("computer_tools"),
+        },
+        Registration {
+            factory: "createSurfacesListTool",
+            gate: "",
+            ts_module: "surface-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createSurfacesStartTool",
+            gate: "",
+            ts_module: "surface-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createSurfacesStopTool",
+            gate: "",
+            ts_module: "surface-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createCronAddTool",
+            gate: "deps.scheduler",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createCronListTool",
+            gate: "deps.scheduler",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createCronRemoveTool",
+            gate: "deps.scheduler",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createCronUpdateTool",
+            gate: "deps.scheduler",
+            ts_module: "cron-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createGatewayStatusTool",
+            gate: "deps.sessionService && deps.ws",
+            ts_module: "gateway-tools.ts",
+            native: Some("redeploy_tools"),
+        },
+        Registration {
+            factory: "createProjectCreateTool",
+            gate: "deps.projectService && deps.repoService",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Registration {
+            factory: "createProjectAssignRepositoryTool",
+            gate: "deps.projectService && deps.repoService",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Registration {
+            factory: "createProjectMoveTool",
+            gate: "deps.projectService && deps.repoService",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Registration {
+            factory: "createProjectTransferTool",
+            gate: "deps.projectService && deps.repoService",
+            ts_module: "project-tools.ts",
+            native: Some("project_tools"),
+        },
+        Registration {
+            factory: "createProjectEditorOpenTool",
+            gate: "",
+            ts_module: "project-editor-tools.ts",
+            native: Some("runtime_tools"),
+        },
+        Registration {
+            factory: "createJaitTodosTool",
+            gate: "deps.repoService && deps.repoProposalService",
+            ts_module: "repo-proposal-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createUserAskTool",
+            gate: "deps.userQuestionService",
+            ts_module: "user-question-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createBrowserHandoffTool",
+            gate: "deps.userQuestionService",
+            ts_module: "browser-handoff.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createRedeployTool",
+            gate: "deps.config && deps.shutdown",
+            ts_module: "redeploy-tools.ts",
+            native: Some("redeploy_tools"),
+        },
+        Registration {
+            factory: "createMemorySaveTool",
+            gate: "deps.memoryService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createMemorySearchTool",
+            gate: "deps.memoryService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createMemoryForgetTool",
+            gate: "deps.memoryService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createMemoryListTool",
+            gate: "deps.reminderService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createMemoryUpdateTool",
+            gate: "deps.reminderService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createMemoryHygieneTool",
+            gate: "deps.reminderService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createMemoryReviewChatsTool",
+            gate: "deps.reminderService",
+            ts_module: "memory-tools.ts",
+            native: Some("core_jait"),
+        },
+        Registration {
+            factory: "createSessionSearchTool",
+            gate: "deps.sessionSearchService",
+            ts_module: "session-search-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createChatTracesTool",
+            gate: "deps.chatTracesService",
+            ts_module: "chat-traces-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createSessionSqlTool",
+            gate: "deps.sessionSqlService",
+            ts_module: "session-sql-tools.ts",
+            native: Some("session_sql"),
+        },
+        Registration {
+            factory: "createVoiceSpeakTool",
+            gate: "deps.voiceService",
+            ts_module: "voice-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createPersonaAgentInspectTool",
+            gate: "deps.threadService && deps.providerRegistry",
+            ts_module: "persona-agent-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createPersonaAgentTool",
+            gate: "deps.threadService && deps.providerRegistry",
+            ts_module: "persona-agent-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createThreadControlTool",
+            gate: "deps.threadService && deps.providerRegistry",
+            ts_module: "thread-tools.ts",
+            native: Some("thread_tools"),
+        },
+        Registration {
+            factory: "createAgentGithubTools",
+            gate: "deps.agentGithubAppService",
+            ts_module: "agent-github-tools.ts",
+            native: Some("agent_github"),
+        },
+        Registration {
+            factory: "createProjectMessageTool",
+            gate: "deps.threadService && deps.providerRegistry && deps.projectService && deps.sessionService",
+            ts_module: "project-message-tool.ts",
+            native: Some("project_message"),
+        },
+        Registration {
+            factory: "createScreenShareTool",
+            gate: "deps.screenShare",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Registration {
+            factory: "createScreenCaptureTool",
+            gate: "deps.screenShare",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Registration {
+            factory: "createScreenRecordTool",
+            gate: "deps.screenShare",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Registration {
+            factory: "createOsTool",
+            gate: "deps.screenShare",
+            ts_module: "screen-share-tools.ts",
+            native: Some("screen_share_tools"),
+        },
+        Registration {
+            factory: "createJaitCatalogTool",
+            gate: "",
+            ts_module: "catalog-tools.ts",
+            native: Some("catalog"),
+        },
+        Registration {
+            factory: "createToolsListTool",
+            gate: "",
+            ts_module: "meta-tools.ts",
+            native: Some("meta_tools"),
+        },
+        Registration {
+            factory: "createToolsSearchTool",
+            gate: "",
+            ts_module: "meta-tools.ts",
+            native: Some("meta_tools"),
+        },
+        Registration {
+            factory: "createDecisionEvaluateTool",
+            gate: "",
+            ts_module: "decision.ts",
+            native: Some("decision"),
+        },
+        Registration {
+            factory: "createBrowserNavigateTool",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createBrowserSnapshotTool",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createBrowserInspectTool",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createBrowserInteractionTools",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createPreviewOpenTool",
+            gate: "",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Registration {
+            factory: "createPreviewStopTool",
+            gate: "",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Registration {
+            factory: "createPreviewRestartTool",
+            gate: "",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Registration {
+            factory: "createPreviewStatusTool",
+            gate: "",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Registration {
+            factory: "createPreviewLogsTool",
+            gate: "",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Registration {
+            factory: "createPreviewInspectTool",
+            gate: "",
+            ts_module: "preview-tools.ts",
+            native: Some("preview_tools"),
+        },
+        Registration {
+            factory: "createWebFetchTool",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createWebSearchTool",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createBrowserSandboxStartTool",
+            gate: "",
+            ts_module: "browser-tools.ts",
+            native: Some("browser_tools"),
+        },
+        Registration {
+            factory: "createWindowsSandboxStartTool",
+            gate: "",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Registration {
+            factory: "createWindowsSandboxStopTool",
+            gate: "",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Registration {
+            factory: "createLinuxDesktopSandboxStartTool",
+            gate: "",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Registration {
+            factory: "createLinuxDesktopSandboxStopTool",
+            gate: "",
+            ts_module: "sandbox-tools.ts",
+            native: Some("sandbox_tools"),
+        },
+        Registration {
+            factory: "createScreenshotCaptureTool",
+            gate: "",
+            ts_module: "screenshot-tools.ts",
+            native: Some("screenshot_tools"),
+        },
+        Registration {
+            factory: "createEmailTools",
+            gate: "deps.emailService",
+            ts_module: "email-tools.ts",
+            native: Some("email_tools"),
+        },
+        Registration {
+            factory: "createCalendarTools",
+            gate: "deps.calendarService",
+            ts_module: "calendar-tools.ts",
+            native: Some("calendar"),
+        },
+        Registration {
+            factory: "createHomeAssistantStatesTool",
+            gate: "",
+            ts_module: "homeassistant-tools.ts",
+            native: Some("homeassistant_tools"),
+        },
+        Registration {
+            factory: "createHomeAssistantServicesTool",
+            gate: "",
+            ts_module: "homeassistant-tools.ts",
+            native: Some("homeassistant_tools"),
+        },
+        Registration {
+            factory: "createHomeAssistantCallServiceTool",
+            gate: "",
+            ts_module: "homeassistant-tools.ts",
+            native: Some("homeassistant_tools"),
+        },
+        Registration {
+            factory: "createNetworkScanTool",
+            gate: "",
+            ts_module: "network-tools.ts",
+            native: Some("network_scan"),
+        },
+        Registration {
+            factory: "createSecurityTools",
+            gate: "",
+            ts_module: "security-tools.ts",
+            native: Some("security_tools"),
+        },
+        Registration {
+            factory: "createSecurityWorkbenchTools",
+            gate: "",
+            ts_module: "security-workbench-tools.ts",
+            native: Some("security_workbench_tools"),
+        },
+        Registration {
+            factory: "createElevatedRunTool",
+            gate: "",
+            ts_module: "elevated-tools.ts",
+            native: Some("elevated_tools"),
+        },
+        Registration {
+            factory: "createSshRunTool",
+            gate: "",
+            ts_module: "ssh-tools.ts",
+            native: Some("ssh_tools"),
+        },
+        Registration {
+            factory: "createDiagramTool",
+            gate: "",
+            ts_module: "diagram-tools.ts",
+            native: Some("diagrams"),
+        },
+        Registration {
+            factory: "createArchitectureTool",
+            gate: "",
+            ts_module: "architecture-tools.ts",
+            native: Some("diagrams"),
+        },
+        Registration {
+            factory: "createCodeGraphTools",
+            gate: "deps.codeGraphService",
+            ts_module: "code-graph-tools.ts",
+            native: Some("code_graph"),
+        },
+        Registration {
+            factory: "createMaintenanceRunTool",
+            gate: "deps.maintenanceService",
+            ts_module: "maintenance-tools.ts",
+            native: Some("maintenance"),
+        },
+        Registration {
+            factory: "createMobileAlarmScheduleTool",
+            gate: "deps.mobilePush",
+            ts_module: "mobile-tools.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createAgentTool",
+            gate: "deps.config",
+            ts_module: "core/index.ts",
+            native: None,
+        },
+        Registration {
+            factory: "createAgentSpawnTool",
+            gate: "deps.config",
+            ts_module: "agent-tools.ts",
+            native: Some("agent_communication"),
+        },
+        Registration {
+            factory: "createAgentMessageTool",
+            gate: "deps.config",
+            ts_module: "agent-message-tool.ts",
+            native: Some("agent_communication"),
+        },
+    ];
 
     /// Split a TS gate expression into its individual dependency names.
     pub fn gate_terms(gate: &str) -> Vec<&str> {
         if gate.is_empty() {
             return Vec::new();
         }
-        gate.split(" && ").map(str::trim).filter(|s| !s.is_empty()).collect()
+        gate.split(" && ")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect()
     }
 
     /// `true` when every dependency named in `gate` is in `provided`.
     pub fn gate_satisfied(gate: &str, provided: &[&str]) -> bool {
-        gate_terms(gate)
-            .iter()
-            .all(|term| provided.contains(term))
+        gate_terms(gate).iter().all(|term| provided.contains(term))
     }
 
     /// The registrations `createToolRegistry()` would perform for `provided`
@@ -746,13 +1813,22 @@ pub const REGISTRATIONS: &[Registration] = &[
                 .expect("table has at least one gated registration");
             let terms = gate_terms(gated.gate);
             assert!(!terms.is_empty());
-            assert!(!gate_satisfied(gated.gate, &[]), "gate {} ignored deps", gated.gate);
+            assert!(
+                !gate_satisfied(gated.gate, &[]),
+                "gate {} ignored deps",
+                gated.gate
+            );
             let plan = registration_plan(&terms);
             assert!(plan.iter().any(|r| r.factory == gated.factory));
             // Plan is always a subsequence of the table order.
             let order: Vec<usize> = plan
                 .iter()
-                .map(|r| REGISTRATIONS.iter().position(|x| x.factory == r.factory).unwrap())
+                .map(|r| {
+                    REGISTRATIONS
+                        .iter()
+                        .position(|x| x.factory == r.factory)
+                        .unwrap()
+                })
                 .collect();
             assert!(order.windows(2).all(|w| w[0] < w[1]), "order drifted");
         }
@@ -920,7 +1996,10 @@ mod tests {
         });
         let p: ToolParametersSchema = serde_json::from_value(v).unwrap();
         assert_eq!(p.schema_type, "object");
-        assert_eq!(p.properties["mode"].schema_type.as_slice(), vec!["string", "null"]);
+        assert_eq!(
+            p.properties["mode"].schema_type.as_slice(),
+            vec!["string", "null"]
+        );
         assert_eq!(p.properties["files"].max_items, Some(5));
         assert_eq!(p.required, Some(vec!["path".to_string()]));
         let back = serde_json::to_value(&p).unwrap();

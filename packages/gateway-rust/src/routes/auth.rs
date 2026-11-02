@@ -81,22 +81,38 @@ pub struct AuthState {
 impl AuthState {
     /// Takes explicit storage and secret. No default paths or credential discovery.
     pub fn new(db: Connection, secret: String) -> Result<Self, Error> {
+        Self::validate_secret(&secret)?;
+        let worker = DatabaseWorker::new(db, NonZeroU16::new(64).expect("fixed queue capacity"))?;
+        Ok(Self::from_validated_worker(worker, secret))
+    }
+
+    /// Share an explicitly owned worker with its lifecycle supervisor.
+    pub(crate) fn from_worker(worker: DatabaseWorker, secret: String) -> Result<Self, Error> {
+        Self::validate_secret(&secret)?;
+        Ok(Self::from_validated_worker(worker, secret))
+    }
+
+    fn validate_secret(secret: &str) -> Result<(), Error> {
         http_auth::sign_auth_token(
             &AuthUser {
                 id: "configuration-check".into(),
                 username: "configuration-check".into(),
             },
-            &secret,
+            secret,
         )
         .map_err(|_| http_auth::SecretError)?;
-        Ok(Self {
-            db: DatabaseWorker::new(db, NonZeroU16::new(64).expect("fixed queue capacity"))?,
+        Ok(())
+    }
+
+    fn from_validated_worker(db: DatabaseWorker, secret: String) -> Self {
+        Self {
+            db,
             passwords: BlockingLane::new(NonZeroU16::new(2).expect("fixed CPU capacity")),
             secret: Arc::new(secret),
             cors_origin: String::new(),
             env_set: BTreeMap::new(),
             tools: None,
-        })
+        }
     }
     pub(crate) fn resolve_user(&self, headers: &HeaderMap) -> Option<AuthUser> {
         auth_user(headers, &self.secret)
@@ -714,5 +730,36 @@ fn forbidden_json_property(value: &Value) -> bool {
         }
         Value::Array(array) => array.iter().any(forbidden_json_property),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod worker_ownership_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn supervised_worker_is_shared_with_auth_and_closed_by_supervisor() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE sample (value INTEGER)")
+            .unwrap();
+        let worker = DatabaseWorker::new(db, NonZeroU16::new(2).unwrap()).unwrap();
+        let auth = AuthState::from_worker(worker.clone(), "test-secret".into()).unwrap();
+        auth.with_database(|db| {
+            db.execute("INSERT INTO sample VALUES (42)", [])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            worker
+                .run(|db| Ok(
+                    db.query_row("SELECT value FROM sample", [], |row| row.get::<_, i64>(0))?
+                ))
+                .await
+                .unwrap(),
+            42
+        );
+        worker.shutdown().await.unwrap();
+        assert!(auth.with_database(|_| Ok(())).await.is_err());
     }
 }

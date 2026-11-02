@@ -13,6 +13,19 @@ mod native {
         path::Component,
     };
     pub struct Directory(File);
+    // errno is thread-local and its accessor differs across Unix families.
+    #[cfg(any(target_os = "linux", target_os = "dragonfly"))]
+    fn directory_errno() -> *mut libc::c_int {
+        unsafe { libc::__errno_location() }
+    }
+    #[cfg(any(target_vendor = "apple", target_os = "freebsd"))]
+    fn directory_errno() -> *mut libc::c_int {
+        unsafe { libc::__error() }
+    }
+    #[cfg(any(target_os = "android", target_os = "netbsd", target_os = "openbsd"))]
+    fn directory_errno() -> *mut libc::c_int {
+        unsafe { libc::__errno() }
+    }
     fn name(value: &str) -> io::Result<CString> {
         if value.is_empty()
             || value == "."
@@ -116,7 +129,47 @@ mod native {
             }
             self.child(child, false)
         }
+        #[cfg(not(any(
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_vendor = "apple",
+            target_os = "freebsd",
+            target_os = "android",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        )))]
+        pub fn names(&self, _: usize) -> io::Result<Vec<String>> {
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Secure skill directory enumeration is unavailable on this platform",
+            ))
+        }
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_vendor = "apple",
+            target_os = "freebsd",
+            target_os = "android",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ))]
         pub fn names(&self, limit: usize) -> io::Result<Vec<String>> {
+            self.names_with(limit, |stream| unsafe { libc::readdir(stream) })
+        }
+        #[cfg(any(
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_vendor = "apple",
+            target_os = "freebsd",
+            target_os = "android",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        ))]
+        fn names_with(
+            &self,
+            limit: usize,
+            mut read_entry: impl FnMut(*mut libc::DIR) -> *mut libc::dirent,
+        ) -> io::Result<Vec<String>> {
             // Open a fresh file description: dup would share the readdir offset.
             // SAFETY: retained descriptor and static string are valid.
             let fd = unsafe {
@@ -132,10 +185,11 @@ mod native {
             // SAFETY: successful fdopendir takes ownership of this fresh fd.
             let ptr = unsafe { libc::fdopendir(fd) };
             if ptr.is_null() {
+                let error = io::Error::last_os_error();
                 unsafe {
                     libc::close(fd);
                 }
-                return Err(io::Error::last_os_error());
+                return Err(error);
             }
             struct Entries(*mut libc::DIR);
             impl Drop for Entries {
@@ -149,27 +203,14 @@ mod native {
             let mut names = Vec::new();
             loop {
                 // SAFETY: stream owns DIR; each entry is consumed before next read.
-                #[cfg(target_os = "linux")]
                 unsafe {
-                    *libc::__errno_location() = 0;
+                    *directory_errno() = 0;
                 }
-                #[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
-                unsafe {
-                    *libc::__error() = 0;
-                }
-                let entry = unsafe { libc::readdir(stream.0) };
+                let entry = read_entry(stream.0);
                 if entry.is_null() {
-                    #[cfg(any(
-                        target_os = "linux",
-                        target_os = "macos",
-                        target_os = "ios",
-                        target_os = "freebsd"
-                    ))]
-                    {
-                        let error = io::Error::last_os_error();
-                        if error.raw_os_error() != Some(0) {
-                            return Err(error);
-                        }
+                    let errno = unsafe { *directory_errno() };
+                    if errno != 0 {
+                        return Err(io::Error::from_raw_os_error(errno));
                     }
                     break;
                 }
@@ -325,6 +366,40 @@ mod native {
                 Ok(())
             } else {
                 Err(io::Error::last_os_error())
+            }
+        }
+    }
+
+    #[cfg(all(test, target_os = "linux"))]
+    mod directory_read_tests {
+        use super::*;
+        use std::ptr;
+
+        #[test]
+        fn read_failures_reject_partial_names() {
+            let directory = Directory(File::open(env!("CARGO_MANIFEST_DIR")).unwrap());
+            for errno in [libc::EIO, libc::EINTR] {
+                let mut saw_name = false;
+                let mut calls_after_name = 0;
+                let result = directory.names_with(usize::MAX, |stream| {
+                    if saw_name {
+                        calls_after_name += 1;
+                        unsafe {
+                            *directory_errno() = errno;
+                        }
+                        return ptr::null_mut();
+                    }
+                    let entry = unsafe { libc::readdir(stream) };
+                    assert!(!entry.is_null(), "fixture must contain a non-dot entry");
+                    let name = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) };
+                    if name.to_bytes() != b"." && name.to_bytes() != b".." {
+                        saw_name = true;
+                    }
+                    entry
+                });
+                assert!(saw_name);
+                assert_eq!(calls_after_name, 1);
+                assert_eq!(result.unwrap_err().raw_os_error(), Some(errno));
             }
         }
     }

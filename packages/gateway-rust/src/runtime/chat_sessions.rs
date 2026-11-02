@@ -14,7 +14,10 @@ use futures_util::future::BoxFuture;
 use std::{
     collections::HashSet,
     num::NonZeroU16,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
@@ -64,32 +67,46 @@ impl SessionTurnManager {
         let store = LeasedStore {
             store: request.store.clone(),
             lease,
+            serial: Arc::new(tokio::sync::Mutex::new(())),
+            failed: Arc::new(AtomicBool::new(false)),
         };
         let deadline = Instant::now() + request.config.timeout;
-        let events = tokio::select! { biased;
-            _ = request.context.cancellation.wait_cancelled() => return Err(SessionTurnError::Turn(TurnError::Cancelled)),
-            _ = tokio::time::sleep_until(deadline) => return Err(SessionTurnError::Turn(TurnError::TimedOut)),
-            events = store.load() => events.map_err(SessionTurnError::Storage)?,
-        };
-        request.config.timeout = deadline
-            .checked_duration_since(Instant::now())
-            .filter(|remaining| !remaining.is_zero())
-            .ok_or(SessionTurnError::Turn(TurnError::TimedOut))?;
-        TurnCoordinator {
-            config: request.config,
-            provider: request.provider,
-            tools: request.tools,
-            persistence: &store,
+        let result = async {
+            let events = tokio::select! { biased;
+                _ = request.context.cancellation.wait_cancelled() => return Err(SessionTurnError::Turn(TurnError::Cancelled)),
+                _ = tokio::time::sleep_until(deadline) => return Err(SessionTurnError::Turn(TurnError::TimedOut)),
+                events = store.load() => events.map_err(SessionTurnError::Storage)?,
+            };
+            request.config.timeout = deadline
+                .checked_duration_since(Instant::now())
+                .filter(|remaining| !remaining.is_zero())
+                .ok_or(SessionTurnError::Turn(TurnError::TimedOut))?;
+            TurnCoordinator {
+                config: request.config,
+                provider: request.provider,
+                tools: request.tools,
+                persistence: &store,
+            }
+            .run(
+                events.iter().map(|event| event.to_message()).collect(),
+                request.user_content,
+                request.context,
+                request.sink,
+            )
+            .await
+            .map_err(SessionTurnError::Turn)
+        }.await;
+        // A cancelled coordinator can drop a storage future after its SQL was
+        // dispatched. Wait for that task's definitive result before finalizing.
+        let _drained = store.serial.lock().await;
+        if store.failed.load(Ordering::Acquire) {
+            return Err(SessionTurnError::Storage(
+                "Turn storage operation failed".into(),
+            ));
         }
-        .run(
-            events.iter().map(|event| event.to_message()).collect(),
-            request.user_content,
-            request.context,
-            request.sink,
-        )
-        .await
-        .map_err(SessionTurnError::Turn)
+        result
     }
+
     fn acquire(&self, session: &str) -> Result<SessionLease, SessionTurnError> {
         let mut sessions = self.0.sessions.lock().unwrap();
         if sessions.contains(session) {
@@ -114,17 +131,43 @@ impl SessionTurnManager {
 struct LeasedStore {
     store: SqliteTurnStore,
     lease: Arc<SessionLease>,
+    serial: Arc<tokio::sync::Mutex<()>>,
+    failed: Arc<AtomicBool>,
+}
+// Set on unwind as well as an ordinary storage failure. The guard is held
+// until the detached task finishes, so the owner observes the flag after drain.
+struct StorageTaskFailure(Arc<AtomicBool>);
+impl Drop for StorageTaskFailure {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.store(true, Ordering::Release);
+        }
+    }
 }
 impl LeasedStore {
-    async fn load(&self) -> Result<Vec<TurnEvent>, String> {
-        let store = self.store.clone();
+    async fn supervised<T: Send + 'static>(
+        &self,
+        operation: impl std::future::Future<Output = Result<T, String>> + Send + 'static,
+    ) -> Result<T, String> {
+        let guard = self.serial.clone().lock_owned().await;
         let lease = self.lease.clone();
+        let failed = self.failed.clone();
         tokio::spawn(async move {
+            let _guard = guard;
             let _lease = lease;
-            store.load().await
+            let _panic = StorageTaskFailure(failed.clone());
+            let result = operation.await;
+            if result.is_err() {
+                failed.store(true, Ordering::Release);
+            }
+            result
         })
         .await
         .map_err(|_| "Turn storage task failed".to_string())?
+    }
+    async fn load(&self) -> Result<Vec<TurnEvent>, String> {
+        let store = self.store.clone();
+        self.supervised(async move { store.load().await }).await
     }
 }
 impl TurnPersistence for LeasedStore {
@@ -135,27 +178,15 @@ impl TurnPersistence for LeasedStore {
         max_event_bytes: usize,
     ) -> BoxFuture<'_, Result<(), String>> {
         let store = self.store.clone();
-        let lease = self.lease.clone();
-        Box::pin(async move {
-            tokio::spawn(async move {
-                let _lease = lease;
-                store.check_capacity(events, bytes, max_event_bytes).await
-            })
-            .await
-            .map_err(|_| "Turn storage task failed".to_string())?
-        })
+        Box::pin(
+            self.supervised(
+                async move { store.check_capacity(events, bytes, max_event_bytes).await },
+            ),
+        )
     }
     fn append(&self, event: TurnEvent) -> BoxFuture<'_, Result<(), String>> {
         let store = self.store.clone();
-        let lease = self.lease.clone();
-        Box::pin(async move {
-            tokio::spawn(async move {
-                let _lease = lease;
-                store.append(event).await
-            })
-            .await
-            .map_err(|_| "Turn storage task failed".to_string())?
-        })
+        Box::pin(self.supervised(async move { store.append(event).await }))
     }
 }
 struct SessionLease {
@@ -344,6 +375,45 @@ mod tests {
         );
         auth.shutdown().await.unwrap();
     }
+    #[tokio::test]
+    async fn abandoned_storage_result_is_observed_before_drain() {
+        let (auth, store, _) = fixture();
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let leased = LeasedStore {
+            store,
+            lease: Arc::new(manager.acquire("session").unwrap()),
+            serial: Arc::new(tokio::sync::Mutex::new(())),
+            failed: Arc::new(AtomicBool::new(false)),
+        };
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let mut operation = Box::pin(leased.supervised(async move {
+            let _ = started_tx.send(());
+            let _ = release_rx.await;
+            Err::<(), _>("late failure".to_owned())
+        }));
+        tokio::select! {
+            _ = started_rx => {},
+            _ = &mut operation => panic!("operation finished before release"),
+        }
+        drop(operation);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), leased.serial.lock())
+                .await
+                .is_err()
+        );
+        assert!(matches!(
+            manager.acquire("session"),
+            Err(SessionTurnError::SessionBusy)
+        ));
+        release_tx.send(()).unwrap();
+        let _drained = leased.serial.lock().await;
+        assert!(leased.failed.load(Ordering::Acquire));
+        drop(_drained);
+        drop(leased);
+        assert!(manager.acquire("session").is_ok());
+        auth.shutdown().await.unwrap();
+    }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn timed_out_started_append_retains_session_and_capacity() {
         let (auth, store, _) = fixture();
@@ -369,6 +439,8 @@ mod tests {
         let leased = LeasedStore {
             store: store.clone(),
             lease: Arc::new(manager.acquire("session").unwrap()),
+            serial: Arc::new(tokio::sync::Mutex::new(())),
+            failed: Arc::new(AtomicBool::new(false)),
         };
         let task = tokio::spawn(async move {
             tokio::time::timeout(

@@ -121,9 +121,10 @@ fn parameter(value: &str, key: &str) -> Result<Option<String>, String> {
     parts.push(&value[start..]);
     for part in parts.into_iter().skip(1) {
         if let Some((k, v)) = part.split_once('=')
-            && k.trim().eq_ignore_ascii_case(key) {
-                return unquote(v.trim()).map(Some);
-            }
+            && k.trim().eq_ignore_ascii_case(key)
+        {
+            return unquote(v.trim()).map(Some);
+        }
     }
     Ok(None)
 }

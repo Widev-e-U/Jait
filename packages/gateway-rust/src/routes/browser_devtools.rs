@@ -37,14 +37,14 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::{Path, State};
-use axum::http::{header, HeaderMap, StatusCode};
+use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post};
-use axum::Router;
 use futures_util::StreamExt;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::auth::{self, AuthState};
 use crate::security::http_auth::AuthUser;
@@ -439,7 +439,12 @@ impl BrowserDevToolsState {
             "url": format!("{prefix}/devtools_app.html"),
             "socketUrl": format!("{prefix}/socket"),
         });
-        (StatusCode::OK, [(header::CACHE_CONTROL, "no-store")], axum::Json(body)).into_response()
+        (
+            StatusCode::OK,
+            [(header::CACHE_CONTROL, "no-store")],
+            axum::Json(body),
+        )
+            .into_response()
     }
 
     /// `DELETE /api/preview/devtools/:grantId`
@@ -554,11 +559,18 @@ impl BrowserDevToolsState {
                 let headers = response.headers_mut();
                 headers.insert(
                     header::CONTENT_TYPE,
-                    header::HeaderValue::from_str(&content_type)
-                        .unwrap_or_else(|_| header::HeaderValue::from_static("application/octet-stream")),
+                    header::HeaderValue::from_str(&content_type).unwrap_or_else(|_| {
+                        header::HeaderValue::from_static("application/octet-stream")
+                    }),
                 );
-                headers.insert(header::CACHE_CONTROL, header::HeaderValue::from_static("no-store"));
-                headers.insert(header::REFERRER_POLICY, header::HeaderValue::from_static("no-referrer"));
+                headers.insert(
+                    header::CACHE_CONTROL,
+                    header::HeaderValue::from_static("no-store"),
+                );
+                headers.insert(
+                    header::REFERRER_POLICY,
+                    header::HeaderValue::from_static("no-referrer"),
+                );
                 headers.insert(
                     header::X_CONTENT_TYPE_OPTIONS,
                     header::HeaderValue::from_static("nosniff"),
@@ -596,11 +608,18 @@ fn session_not_found() -> Response {
 }
 
 fn devtools_unavailable() -> Response {
-    auth::response(404, json!({"error":"Chrome DevTools is unavailable for this browser."}))
+    auth::response(
+        404,
+        json!({"error":"Chrome DevTools is unavailable for this browser."}),
+    )
 }
 
 fn asset_not_found(status: u16) -> Response {
-    let status = if (400..600).contains(&status) { status } else { 404 };
+    let status = if (400..600).contains(&status) {
+        status
+    } else {
+        404
+    };
     auth::response(status, json!({"error":"DevTools asset not found"}))
 }
 
@@ -667,7 +686,10 @@ mod tests {
     impl DevToolsAssetSource for FakeAssets {
         fn fetch(&self, _endpoint: &str, _asset: &str) -> AssetFetch<'_> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            let reply = self.reply.clone().unwrap_or(Err(UpstreamFailure::Unavailable));
+            let reply = self
+                .reply
+                .clone()
+                .unwrap_or(Err(UpstreamFailure::Unavailable));
             Box::pin(async move { reply })
         }
     }
@@ -682,7 +704,8 @@ mod tests {
     }
 
     fn state(assets: Arc<dyn DevToolsAssetSource>) -> BrowserDevToolsState {
-        let auth = AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
+        let auth =
+            AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
         BrowserDevToolsState::new(auth, SECRET)
             .with_sessions(Arc::new(FakeSessions {
                 owner: Some("user-1".into()),
@@ -756,7 +779,11 @@ mod tests {
         let state = state(Arc::new(FakeAssets::default()));
         let missing = state.create_for(&user(), &json!({}));
         assert_eq!(missing.status(), StatusCode::BAD_REQUEST);
-        assert!(body_bytes(missing).await.contains("required property 'sessionId'"));
+        assert!(
+            body_bytes(missing)
+                .await
+                .contains("required property 'sessionId'")
+        );
         let empty = state.create_for(&user(), &json!({"sessionId": ""}));
         assert_eq!(empty.status(), StatusCode::BAD_REQUEST);
     }
@@ -764,7 +791,8 @@ mod tests {
     // 4
     #[tokio::test]
     async fn create_rejects_unknown_session() {
-        let auth = AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
+        let auth =
+            AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
         let state = BrowserDevToolsState::new(auth, SECRET)
             .with_sessions(Arc::new(FakeSessions { owner: None }))
             .with_host(Arc::new(FakeHost {
@@ -779,19 +807,25 @@ mod tests {
     // 5
     #[tokio::test]
     async fn create_returns_not_found_when_cdp_host_is_missing() {
-        let auth = AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
+        let auth =
+            AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
         let state = BrowserDevToolsState::new(auth, SECRET).with_sessions(Arc::new(FakeSessions {
             owner: Some("user-1".into()),
         }));
         let response = state.create_for(&user(), &json!({"sessionId": "session-1"}));
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert!(body_bytes(response).await.contains("Chrome DevTools is unavailable"));
+        assert!(
+            body_bytes(response)
+                .await
+                .contains("Chrome DevTools is unavailable")
+        );
     }
 
     // 6
     #[tokio::test]
     async fn create_rejects_unsafe_target_id_and_endpoint() {
-        let auth = AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
+        let auth =
+            AuthState::new(Connection::open_in_memory().unwrap(), SECRET.to_string()).unwrap();
         for connection in [
             DevToolsConnection {
                 target_id: "../etc/passwd".into(),
@@ -854,7 +888,11 @@ mod tests {
         }
         let capped = state.create_for(&user(), &json!({"sessionId": "session-1"}));
         assert_eq!(capped.status(), StatusCode::TOO_MANY_REQUESTS);
-        assert!(body_bytes(capped).await.contains("Close an existing DevTools panel"));
+        assert!(
+            body_bytes(capped)
+                .await
+                .contains("Close an existing DevTools panel")
+        );
     }
 
     // 8
@@ -881,14 +919,21 @@ mod tests {
         let grant_id = insert_grant(&state);
         let no_token = state.serve("", &grant_id, "devtools_app.html").await;
         assert_eq!(no_token.status(), StatusCode::FORBIDDEN);
-        assert!(body_bytes(no_token).await.contains("DevTools access expired"));
+        assert!(
+            body_bytes(no_token)
+                .await
+                .contains("DevTools access expired")
+        );
 
         let other = sign_preview_token(&user().id, "devtools:other-grant", SECRET).unwrap();
         let foreign = state.serve(&other, &grant_id, "devtools_app.html").await;
         assert_eq!(foreign.status(), StatusCode::FORBIDDEN);
 
-        let other_user = sign_preview_token("user-2", &format!("devtools:{grant_id}"), SECRET).unwrap();
-        let stolen = state.serve(&other_user, &grant_id, "devtools_app.html").await;
+        let other_user =
+            sign_preview_token("user-2", &format!("devtools:{grant_id}"), SECRET).unwrap();
+        let stolen = state
+            .serve(&other_user, &grant_id, "devtools_app.html")
+            .await;
         assert_eq!(stolen.status(), StatusCode::FORBIDDEN);
     }
 
@@ -973,7 +1018,10 @@ mod tests {
             "no-referrer"
         );
         assert_eq!(
-            response.headers().get(header::X_CONTENT_TYPE_OPTIONS).unwrap(),
+            response
+                .headers()
+                .get(header::X_CONTENT_TYPE_OPTIONS)
+                .unwrap(),
             "nosniff"
         );
         assert_eq!(body_bytes(response).await, "<!doctype html>");
@@ -992,11 +1040,18 @@ mod tests {
         let token = token_for(&grant_id);
         let response = svc.serve(&token, &grant_id, "inspector.html").await;
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert!(body_bytes(response).await.contains("DevTools asset not found"));
+        assert!(
+            body_bytes(response)
+                .await
+                .contains("DevTools asset not found")
+        );
 
         for (failure, message) in [
             (UpstreamFailure::TooLarge, "DevTools asset too large"),
-            (UpstreamFailure::Unavailable, "DevTools frontend unavailable."),
+            (
+                UpstreamFailure::Unavailable,
+                "DevTools frontend unavailable.",
+            ),
         ] {
             let svc = state(FakeAssets::with(Err(failure)));
             let grant_id = insert_grant(&svc);
@@ -1017,7 +1072,11 @@ mod tests {
         let token = token_for(&grant_id);
         let guarded = state.serve(&token, &grant_id, "socket").await;
         assert_eq!(guarded.status(), StatusCode::NOT_IMPLEMENTED);
-        assert!(body_bytes(guarded).await.contains("socket proxy is not available"));
+        assert!(
+            body_bytes(guarded)
+                .await
+                .contains("socket proxy is not available")
+        );
     }
 
     // 15

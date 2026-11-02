@@ -130,6 +130,10 @@ export interface ToolCallInfo {
   childSegments?: MessageSegment[]
   /** Accumulated raw JSON argument string while LLM is still streaming the tool call */
   streamingArgs?: string
+  /** Provider slot used to resume provisional tool call fragments. */
+  streamIndex?: number
+  /** Whether the provider has yet to assign the definitive call ID. */
+  provisional?: boolean
   startedAt: number
   completedAt?: number
 }

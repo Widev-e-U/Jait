@@ -215,6 +215,58 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn node_generator_matches_fixture_and_check_results() {
+        use std::process::Command;
+        let project = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let root = project
+            .join(".jait/artifacts/gateway-rust")
+            .join(format!("embed-differential-{}", std::process::id()));
+        let scripts = root.join("scripts");
+        let source = root.join("src/surfaces/shell-integration");
+        fs::create_dir_all(&scripts).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        fs::copy(
+            project.join("packages/gateway/scripts/embed-shell-integration.mjs"),
+            scripts.join("embed-shell-integration.mjs"),
+        )
+        .unwrap();
+        fs::write(
+            source.join("bash.sh"),
+            b"quote \" slash \\ tab\t\ninvalid \xff\n",
+        )
+        .unwrap();
+        fs::write(source.join("zsh.sh"), "astral 😀\r\nend").unwrap();
+        fs::write(source.join("pwsh.ps1"), "").unwrap();
+        let node = |check: bool| {
+            let mut command = Command::new("node");
+            command.arg(scripts.join("embed-shell-integration.mjs"));
+            if check {
+                command.arg("--check");
+            }
+            command
+                .output()
+                .expect("node is required for this differential test")
+        };
+        assert!(!node(true).status.success());
+        assert_eq!(run(&root, true).unwrap(), Outcome::Missing);
+        assert!(node(false).status.success());
+        let output = root.join("src/surfaces/shell-integration-assets.ts");
+        let reference = fs::read(&output).unwrap();
+        assert_eq!(run(&root, false).unwrap(), Outcome::Written);
+        assert_eq!(fs::read(&output).unwrap(), reference);
+        assert!(node(true).status.success());
+        assert_eq!(run(&root, true).unwrap(), Outcome::UpToDate);
+        fs::write(&output, b"stale").unwrap();
+        assert!(!node(true).status.success());
+        assert_eq!(run(&root, true).unwrap(), Outcome::OutOfDate);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn repository_generated_asset_matches() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()

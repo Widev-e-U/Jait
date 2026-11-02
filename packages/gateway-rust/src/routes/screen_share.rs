@@ -8,12 +8,20 @@ mod approval_error_tests {
     #[tokio::test]
     async fn host_errors_preserve_message_and_non_error_uses_fallback() {
         for (error, expected) in [
-            (ScreenShareError::Message("signal failed".into()), "signal failed"),
-            (ScreenShareError::Thrown(json!("failure")), "Unknown share session."),
+            (
+                ScreenShareError::Message("signal failed".into()),
+                "signal failed",
+            ),
+            (
+                ScreenShareError::Thrown(json!("failure")),
+                "Unknown share session.",
+            ),
         ] {
             let response = approval_error(error);
             assert_eq!(response.status(), 404);
-            let body = axum::body::to_bytes(response.into_body(), 1024).await.unwrap();
+            let body = axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap();
             let value: Value = serde_json::from_slice(&body).unwrap();
             assert_eq!(value["error"], expected);
         }
@@ -156,11 +164,7 @@ fn uncaught(error: ScreenShareError) -> Response {
 // Read chat ownership through the database worker, never while holding the
 // screen-share domain lock. Both chats and persistent agent threads can own a
 // share, matching the TypeScript ControlAccess policy.
-async fn authorize_chat(
-    auth: &AuthState,
-    chat_id: &str,
-    user_id: &str,
-) -> Result<(), Response> {
+async fn authorize_chat(auth: &AuthState, chat_id: &str, user_id: &str) -> Result<(), Response> {
     let chat = chat_id.to_owned();
     let user = user_id.to_owned();
     let allowed = auth
@@ -192,11 +196,16 @@ fn chat_for_request(service: &ScreenShareService, path: &str, body: &Value) -> O
         }
         // The reference coerces these fields before it checks authorization.
         for key in ["chatId", "nodeId", "reason"] {
-            if let Some(value) = body.get(key).filter(|v| crate::services::calendar::truthy(v)) {
+            if let Some(value) = body
+                .get(key)
+                .filter(|v| crate::services::calendar::truthy(v))
+            {
                 string(value).ok()?;
             }
         }
-        let value = body.get("chatId").filter(|v| crate::services::calendar::truthy(v))?;
+        let value = body
+            .get("chatId")
+            .filter(|v| crate::services::calendar::truthy(v))?;
         let chat = js_trim(&string(value).ok()?).to_owned();
         return (!chat.is_empty()).then_some(chat);
     }
@@ -339,7 +348,8 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
             let node_id = parsed!(optional("nodeId"));
             let initiated_by_agent = body["initiatedBy"] == "agent";
             let require_consent = chat_id.as_ref().is_some_and(|chat| !chat.is_empty())
-                || initiated_by_agent || body["requireConsent"] == true;
+                || initiated_by_agent
+                || body["requireConsent"] == true;
             // The reference currently forwards reason to the host but does not store it for this route.
             let reason = match body
                 .get("reason")
@@ -349,7 +359,9 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
                 None => None,
             };
             let result = (|| {
-                let previous = chat_id.as_deref().and_then(|chat| service.chat_session(chat));
+                let previous = chat_id
+                    .as_deref()
+                    .and_then(|chat| service.chat_session(chat));
                 let session = service
                     .start_with_options(
                         &host,
@@ -363,7 +375,8 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
                         },
                     )
                     .map_err(ScreenShareError::Message)?;
-                if let Some(stopped) = previous.as_ref()
+                if let Some(stopped) = previous
+                    .as_ref()
                     .and_then(|previous| previous["id"].as_str())
                     .and_then(|id| service.session(id))
                     .filter(|old| old["status"] == "idle")
@@ -392,8 +405,13 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
             let Some(existing) = service.session(&id) else {
                 return response(404, json!({"error":"Unknown share session."}));
             };
-            if existing["status"] != "sharing" || (body["approved"] != true && existing["pendingApproval"] != true) {
-                return response(409, json!({"error":"Screen share approval is no longer pending."}));
+            if existing["status"] != "sharing"
+                || (body["approved"] != true && existing["pendingApproval"] != true)
+            {
+                return response(
+                    409,
+                    json!({"error":"Screen share approval is no longer pending."}),
+                );
             }
             match service.approve(&id, body["approved"] == true) {
                 Ok(session) => match invoke(ScreenShareEffect::Broadcast(session.clone())) {
@@ -425,7 +443,10 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
                 );
             }
             if existing["status"] != "sharing" || existing["pendingApproval"] == true {
-                return response(409, json!({"error":"Screen share is not active and approved."}));
+                return response(
+                    409,
+                    json!({"error":"Screen share is not active and approved."}),
+                );
             }
             let owner = if body["controlOwner"] == "agent" {
                 "agent"
@@ -488,12 +509,19 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
             let id = parsed!(field(&body, "sessionId"));
             let viewer = parsed!(field(&body, "viewerDeviceId"));
             if id.is_empty() || viewer.is_empty() {
-                return response(400, json!({"error":"sessionId and viewerDeviceId are required."}));
+                return response(
+                    400,
+                    json!({"error":"sessionId and viewerDeviceId are required."}),
+                );
             }
-            if service.session(&id).is_none_or(|session| session["status"] == "idle") {
+            if service
+                .session(&id)
+                .is_none_or(|session| session["status"] == "idle")
+            {
                 return response(404, json!({"error":"Unknown active share session."}));
             }
-            let result = service.remove_viewer(&id, &viewer)
+            let result = service
+                .remove_viewer(&id, &viewer)
                 .map_err(ScreenShareError::Message)
                 .and_then(|session| {
                     invoke(ScreenShareEffect::Broadcast(session.clone()))?;

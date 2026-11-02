@@ -44,15 +44,13 @@ export function getChatTranscriptBoundaryClassName(): string {
 }
 
 /**
- * Composer boundary. Horizontal padding lives in
- * `CHAT_COMPOSER_COLUMN_PADDING_CLASS`; only vertical padding is kept here so
- * the composer box can span the column edge while message text stays inset.
+ * On mobile, match the header’s 8px side inset. On desktop, the composer
+ * spans the column edge so its text aligns with the transcript.
  */
 export function getChatComposerBoundaryClassName(isMobile: boolean): string {
   return cn(
     'relative z-30 isolate shrink-0 bg-background',
-    CHAT_COMPOSER_COLUMN_PADDING_CLASS,
-    isMobile ? 'py-2' : 'py-3',
+    isMobile ? 'px-2 py-2' : `${CHAT_COMPOSER_COLUMN_PADDING_CLASS} py-3`,
   )
 }
 

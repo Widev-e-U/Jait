@@ -83,7 +83,7 @@ async fn dropped_subscriber_preserves_shared_build_and_original_cancellation_sig
         first.abort();
         let _ = first.await;
         assert_eq!(
-            service.get_index(&project, Some("alice")).unwrap()["status"],
+            service.get_index(&project, Some("alice")).await.unwrap()["status"],
             "building"
         );
         let second = service.index(&project, Some("alice".into()), None, None);
@@ -100,6 +100,73 @@ async fn dropped_subscriber_preserves_shared_build_and_original_cancellation_sig
     .expect("shared build must complete promptly");
 }
 #[tokio::test]
+async fn panicked_build_is_removed_and_can_be_retried() {
+    let work = workspace();
+    let project = work.join("project").to_str().unwrap().to_owned();
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let build: Build = {
+        let attempts = attempts.clone();
+        Arc::new(move |request| {
+            let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move {
+                assert_ne!(attempt, 0, "test build panic");
+                let path = std::path::Path::new(&request.output_dir).join("graph.json");
+                tokio::fs::write(&path, "{\"nodes\":[]}").await.unwrap();
+                Ok(RunResult {
+                    graph_path: path.to_str().unwrap().into(),
+                    version: None,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            })
+        })
+    };
+    let service = service(&work, build);
+    let first = service
+        .index(&project, Some("alice".into()), None, None)
+        .await;
+    assert!(first.is_err(), "the task panic remains an error");
+    let second = service
+        .index(&project, Some("alice".into()), None, None)
+        .await
+        .unwrap();
+    assert_eq!(second["status"], "ready");
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    tokio::fs::remove_dir_all(work).await.unwrap();
+}
+
+#[tokio::test]
+async fn legacy_graph_path_requires_reindex_before_read_or_export() {
+    let work = workspace();
+    let project = work.join("project").to_str().unwrap().to_owned();
+    let build: Build = Arc::new(|_| Box::pin(async { Err(GraphError::error("unused")) }));
+    let service = service(&work, build);
+    let stored_project = service.normalize_project_root(&project).unwrap();
+    service
+        .save(
+            &stored_project,
+            Some("alice"),
+            json!({"status":"ready","graphPath":"/"}),
+        )
+        .await
+        .unwrap();
+    let error = service
+        .snapshot(&project, Some("alice"), None)
+        .await
+        .err()
+        .unwrap();
+    assert!(error.message.contains("reindex required"));
+    let error = service
+        .prepare_graph_rag(&project, Some("alice"))
+        .await
+        .err()
+        .unwrap();
+    assert!(error.message.contains("reindex required"));
+    let index = service.get_index(&project, Some("alice")).await.unwrap();
+    assert_eq!(index["graphRagStatus"], "not-prepared");
+}
+
+#[tokio::test]
 async fn failed_builds_leave_scope_isolated_and_can_be_retried() {
     let work = workspace();
     let project = work.join("project").to_str().unwrap().to_owned();
@@ -115,11 +182,11 @@ async fn failed_builds_leave_scope_isolated_and_can_be_retried() {
                 .message,
             "cancelled extraction"
         );
-        let index = service.get_index(&project, Some("alice")).unwrap();
+        let index = service.get_index(&project, Some("alice")).await.unwrap();
         assert_eq!(index["status"], "error");
         assert_eq!(index["error"], "cancelled extraction");
         assert_eq!(
-            service.get_index(&project, Some("bob")).unwrap()["status"],
+            service.get_index(&project, Some("bob")).await.unwrap()["status"],
             "missing"
         );
     }
@@ -172,8 +239,8 @@ async fn git_revision_port_uses_parallel_argv_reads_and_preserves_failure_semant
         );
     }
 }
-#[test]
-fn owner_paths_and_lexical_root_guards_are_independent_of_process_cwd() {
+#[tokio::test]
+async fn owner_paths_and_lexical_root_guards_are_independent_of_process_cwd() {
     let work = workspace();
     let service = service(&work, Arc::new(|_| Box::pin(async { unreachable!() })));
     assert_ne!(
@@ -199,7 +266,153 @@ fn owner_paths_and_lexical_root_guards_are_independent_of_process_cwd() {
         "projectRoot must be absolute"
     );
     assert_eq!(
-        service.get_index("/repo", Some("alice")).unwrap()["status"],
+        service.get_index("/repo", Some("alice")).await.unwrap()["status"],
         json!("missing")
     );
+}
+
+#[tokio::test]
+async fn worker_backed_index_storage_is_owner_scoped() {
+    use crate::db::worker::DatabaseWorker;
+    use std::num::NonZeroU16;
+    let db = Connection::open_in_memory().unwrap();
+    db.execute_batch(SCHEMA).unwrap();
+    let worker = DatabaseWorker::new(db, NonZeroU16::new(4).unwrap()).unwrap();
+    let service = CodeGraphService::with_worker(
+        worker.clone(),
+        "/data".into(),
+        "/home".into(),
+        Arc::new(|_| Box::pin(async { Err(GraphError::error("unused")) })),
+        Arc::new(|_| Box::pin(async { None })),
+    );
+    service
+        .save("/repo", Some("alice"), json!({"status":"building"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        service.get_index("/repo", Some("alice")).await.unwrap()["status"],
+        "building"
+    );
+    assert_eq!(
+        service.get_index("/repo", Some("bob")).await.unwrap()["status"],
+        "missing"
+    );
+    worker.shutdown().await.unwrap();
+    assert!(service.get_index("/repo", Some("alice")).await.is_err());
+}
+
+#[tokio::test]
+async fn distinct_owner_and_root_pairs_do_not_share_builds() {
+    let work = workspace();
+    let (entered, mut received) = tokio::sync::mpsc::unbounded_channel();
+    let release = Arc::new(tokio::sync::Semaphore::new(0));
+    let build_release = release.clone();
+    let build: Build = Arc::new(move |request| {
+        let entered = entered.clone();
+        let release = build_release.clone();
+        Box::pin(async move {
+            entered.send(request.project_root).unwrap();
+            release.acquire().await.unwrap().forget();
+            Err(GraphError::error("finished"))
+        })
+    });
+    let service = service(&work, build);
+    let first = {
+        let service = service.clone();
+        tokio::spawn(async move {
+            service
+                .index("/c", Some("alice:/b".into()), None, None)
+                .await
+        })
+    };
+    let second = {
+        let service = service.clone();
+        tokio::spawn(async move {
+            service
+                .index("/b:/c", Some("alice".into()), None, None)
+                .await
+        })
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let a = received.recv().await.unwrap();
+        let b = received.recv().await.unwrap();
+        assert_ne!(a, b);
+    })
+    .await
+    .expect("both distinct builds must start");
+    release.add_permits(2);
+    assert!(first.await.unwrap().is_err());
+    assert!(second.await.unwrap().is_err());
+}
+
+#[test]
+fn output_namespace_separates_owner_and_root_boundaries() {
+    let work = workspace();
+    let build: Build = Arc::new(|_| Box::pin(async { Err(GraphError::error("unused")) }));
+    let service = service(&work, build);
+    let directory = |root, owner| service.output_directory(root, owner);
+    assert_ne!(directory("/repo", None), directory("/repo", Some("system")));
+    assert_eq!(directory("/repo", None), directory("/repo", Some("")));
+    assert_ne!(
+        directory("/c", Some("alice:/b")),
+        directory("/b:/c", Some("alice"))
+    );
+    assert_ne!(
+        directory("/repo", Some("alice")),
+        directory("/repo", Some("bob"))
+    );
+    assert!(directory("/repo", None).contains("/v2/"));
+}
+
+#[tokio::test]
+async fn build_returning_foreign_graph_path_is_rejected() {
+    let work = workspace();
+    let project = work.join("project").to_str().unwrap().to_owned();
+    let build: Build = Arc::new(|_| {
+        Box::pin(async {
+            Ok(RunResult {
+                graph_path: "/foreign/graph.json".into(),
+                version: None,
+                stdout: String::new(),
+                stderr: String::new(),
+            })
+        })
+    });
+    let service = service(&work, build);
+    let error = service
+        .index(&project, Some("alice".into()), None, None)
+        .await
+        .err()
+        .unwrap();
+    assert!(error.message.contains("reindex required"));
+    assert_eq!(
+        service.get_index(&project, Some("alice")).await.unwrap()["status"],
+        "error"
+    );
+    tokio::fs::remove_dir_all(work).await.unwrap();
+}
+
+#[tokio::test]
+async fn pre_cancelled_index_has_no_filesystem_or_database_effects() {
+    let work = workspace();
+    let project = work.join("project").to_str().unwrap().to_owned();
+    let build: Build = Arc::new(|_| panic!("cancelled build must not run"));
+    let service = service(&work, build);
+    let output = service.output_directory(&project, Some("alice"));
+    let signal = crate::execution::process_runner::ProcessCancellation::default();
+    signal.cancel();
+    let error = service
+        .index(&project, Some("alice".into()), None, Some(signal))
+        .await
+        .err()
+        .expect("cancelled index must fail");
+    assert_eq!(error.name, "AbortError");
+    assert!(!std::path::Path::new(&output).exists());
+    assert_eq!(
+        service.get_index(&project, Some("alice")).await.unwrap()["status"],
+        "missing"
+    );
+    if work.exists() {
+        tokio::fs::remove_dir_all(work).await.unwrap();
+    }
 }

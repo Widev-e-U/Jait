@@ -54,6 +54,102 @@ async fn with_plan<T: Send + 'static>(
     .await?
     .ok_or_else(|| error(404, "Plan not found"))
 }
+
+// Decide from the current row while holding SQLite's write reservation. The
+// browser still creates the thread; approval alone is not a thread reservation.
+enum TaskAdmission {
+    PlanMissing,
+    TaskMissing,
+    AlreadyStarted,
+    Accepted {
+        task: Value,
+        plan: Option<PlanRecord>,
+    },
+}
+
+fn admit_task(
+    db: &rusqlite::Connection,
+    id: &str,
+    owner: &str,
+    task_id: &str,
+) -> rusqlite::Result<TaskAdmission> {
+    let tx = rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)?;
+    let service = PlanService::new(&tx);
+    let Some(plan) = service
+        .get(id)?
+        .filter(|plan| plan.user_id.as_deref() == Some(owner))
+    else {
+        return Ok(TaskAdmission::PlanMissing);
+    };
+    let Some(task) = plan
+        .tasks
+        .iter()
+        .find(|task| task["id"].as_str() == Some(task_id))
+        .cloned()
+    else {
+        return Ok(TaskAdmission::TaskMissing);
+    };
+    if task["threadId"]
+        .as_str()
+        .is_some_and(|thread| !thread.is_empty())
+    {
+        return Ok(TaskAdmission::AlreadyStarted);
+    }
+    if task["status"] == "proposed" {
+        service.update_task(
+            id,
+            task_id,
+            json!({"status":"approved"}).as_object().unwrap(),
+        )?;
+    }
+    let plan = service.get(id)?;
+    tx.commit()?;
+    Ok(TaskAdmission::Accepted { task, plan })
+}
+
+enum BulkAdmission {
+    PlanMissing,
+    NoTasks,
+    Accepted {
+        tasks: Vec<Value>,
+        plan: Option<PlanRecord>,
+    },
+}
+
+fn admit_tasks(
+    db: &rusqlite::Connection,
+    id: &str,
+    owner: &str,
+) -> rusqlite::Result<BulkAdmission> {
+    let tx = rusqlite::Transaction::new_unchecked(db, rusqlite::TransactionBehavior::Immediate)?;
+    let service = PlanService::new(&tx);
+    let Some(plan) = service
+        .get(id)?
+        .filter(|plan| plan.user_id.as_deref() == Some(owner))
+    else {
+        return Ok(BulkAdmission::PlanMissing);
+    };
+    let tasks: Vec<_> = plan
+        .tasks
+        .into_iter()
+        .filter(|task| {
+            task["status"] == "approved" && task["threadId"].as_str().is_none_or(str::is_empty)
+        })
+        .collect();
+    if tasks.is_empty() {
+        return Ok(BulkAdmission::NoTasks);
+    }
+    let plan = service.update(
+        id,
+        PlanPatch {
+            status: Some("active".into()),
+            ..Default::default()
+        },
+    )?;
+    tx.commit()?;
+    Ok(BulkAdmission::Accepted { tasks, plan })
+}
+
 async fn handle(State(s): State<PlanRoutes>, req: Request) -> Response {
     match dispatch(s, req).await {
         Ok(r) => r,
@@ -161,60 +257,158 @@ async fn dispatch(s: PlanRoutes, req: Request) -> ApiResult<Response> {
         return Ok(bounded(200, json!({"plan":row,"generated":count})));
     }
     if parts[3] == "tasks" {
-        let task = plan
-            .tasks
-            .iter()
-            .find(|t| t["id"].as_str() == Some(&parts[4]))
-            .cloned()
-            .ok_or_else(|| error(404, "Task not found in plan"))?;
-        if task["threadId"].as_str().is_some_and(|s| !s.is_empty()) {
-            return Err(error(409, "Task already has a thread"));
-        }
         let task_id = parts[4].clone();
-        let row = with_plan(&s.auth, id.clone(), owner.clone(), move |db, current| {
-            let service = PlanService::new(db);
-            let current_task = current
-                .tasks
-                .iter()
-                .find(|t| t["id"].as_str() == Some(&task_id));
-            if current_task.is_some_and(|t| {
-                t["status"] == "proposed" && t["threadId"].as_str().is_none_or(str::is_empty)
-            }) {
-                service.update_task(
-                    &id,
-                    &task_id,
-                    json!({"status":"approved"}).as_object().unwrap(),
-                )?;
-            }
-            service.get(&id)
-        })
-        .await?;
+        let plan_id = id.clone();
+        let user = owner.clone();
+        let admission =
+            database(&s.auth, move |db| admit_task(db, &plan_id, &user, &task_id)).await?;
+        let (task, row) = match admission {
+            TaskAdmission::PlanMissing => return Err(error(404, "Plan not found")),
+            TaskAdmission::TaskMissing => return Err(error(404, "Task not found in plan")),
+            TaskAdmission::AlreadyStarted => return Err(error(409, "Task already has a thread")),
+            TaskAdmission::Accepted { task, plan } => (task, plan),
+        };
         publish(&s.events, "plan.updated", json!({"plan":row}));
-        let task = plan
-            .tasks
-            .into_iter()
-            .find(|t| t["id"].as_str() == Some(&parts[4]))
-            .unwrap();
         return Ok(bounded(200, json!({"task":task,"repo":repo_view})));
     }
-    let approved: Vec<_> = plan
-        .tasks
-        .into_iter()
-        .filter(|t| t["status"] == "approved" && t["threadId"].as_str().is_none_or(str::is_empty))
-        .collect();
-    if approved.is_empty() {
-        return Err(error(400, "No approved tasks to start"));
-    }
-    let row = with_plan(&s.auth, id.clone(), owner, move |db, _| {
-        PlanService::new(db).update(
-            &id,
-            PlanPatch {
-                status: Some("active".into()),
-                ..Default::default()
-            },
-        )
-    })
-    .await?;
+    let plan_id = id.clone();
+    let user = owner.clone();
+    let admission = database(&s.auth, move |db| admit_tasks(db, &plan_id, &user)).await?;
+    let (tasks, row) = match admission {
+        BulkAdmission::PlanMissing => return Err(error(404, "Plan not found")),
+        BulkAdmission::NoTasks => return Err(error(400, "No approved tasks to start")),
+        BulkAdmission::Accepted { tasks, plan } => (tasks, plan),
+    };
     publish(&s.events, "plan.updated", json!({"plan":row}));
-    Ok(bounded(200, json!({"tasks":approved,"repo":repo_view})))
+    Ok(bounded(200, json!({"tasks":tasks,"repo":repo_view})))
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+
+    #[test]
+    fn task_admission_observes_concurrent_committed_thread() {
+        use std::{sync::mpsc, time::Duration};
+        let artifact_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.jait/artifacts");
+        std::fs::create_dir_all(&artifact_dir).unwrap();
+        let path = artifact_dir.join(format!("plan-admission-{}.sqlite", uuid::Uuid::new_v4()));
+        let db = rusqlite::Connection::open(&path).unwrap();
+        db.execute_batch(r#"CREATE TABLE automation_plans (id TEXT PRIMARY KEY, repo_id TEXT, user_id TEXT, title TEXT, status TEXT, tasks TEXT, created_at TEXT, updated_at TEXT); INSERT INTO automation_plans VALUES ('p','r','u','plan','draft','[{"id":"t","status":"proposed"}]','now','now');"#).unwrap();
+        let tx =
+            rusqlite::Transaction::new_unchecked(&db, rusqlite::TransactionBehavior::Immediate)
+                .unwrap();
+        PlanService::new(&tx)
+            .update_task("p", "t", json!({"threadId":"thread"}).as_object().unwrap())
+            .unwrap();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let thread_path = path.clone();
+        let worker = std::thread::spawn(move || {
+            let other = rusqlite::Connection::open(thread_path).unwrap();
+            other.busy_timeout(Duration::from_secs(5)).unwrap();
+            started_tx.send(()).unwrap();
+            finished_tx.send(admit_task(&other, "p", "u", "t")).unwrap();
+        });
+        started_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            finished_rx.recv_timeout(Duration::from_millis(100)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ));
+        tx.commit().unwrap();
+        assert!(matches!(
+            finished_rx
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .unwrap(),
+            TaskAdmission::AlreadyStarted
+        ));
+        worker.join().unwrap();
+        drop(db);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn bulk_admission_uses_current_tasks_and_activates_plan() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE automation_plans (id TEXT PRIMARY KEY, repo_id TEXT, user_id TEXT, title TEXT, status TEXT, tasks TEXT, created_at TEXT, updated_at TEXT); INSERT INTO automation_plans VALUES ('p','r','u','plan','draft','[]','now','now');").unwrap();
+        let service = PlanService::new(&db);
+        service
+            .update(
+                "p",
+                PlanPatch {
+                    tasks: Some(vec![
+                        json!({"id":"linked","status":"approved","threadId":"existing"}),
+                        json!({"id":"ready","status":"approved"}),
+                        json!({"id":"proposed","status":"proposed"}),
+                    ]),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let BulkAdmission::Accepted { tasks, plan } = admit_tasks(&db, "p", "u").unwrap() else {
+            panic!("expected admission")
+        };
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0]["id"], "ready");
+        assert_eq!(plan.unwrap().status, "active");
+        service
+            .update_task("p", "ready", json!({"threadId":"new"}).as_object().unwrap())
+            .unwrap();
+        assert!(matches!(
+            admit_tasks(&db, "p", "u").unwrap(),
+            BulkAdmission::NoTasks
+        ));
+        assert!(matches!(
+            admit_tasks(&db, "p", "other").unwrap(),
+            BulkAdmission::PlanMissing
+        ));
+    }
+
+    #[test]
+    fn task_admission_uses_current_database_state() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE automation_plans (id TEXT PRIMARY KEY, repo_id TEXT, user_id TEXT, title TEXT, status TEXT, tasks TEXT, created_at TEXT, updated_at TEXT);
+            INSERT INTO automation_plans VALUES ('p','r','u','plan','draft','[]','now','now');").unwrap();
+        let service = PlanService::new(&db);
+        service
+            .update(
+                "p",
+                PlanPatch {
+                    tasks: Some(vec![json!({"id":"t","status":"proposed"})]),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let TaskAdmission::Accepted { task, plan } = admit_task(&db, "p", "u", "t").unwrap() else {
+            panic!("expected admission")
+        };
+        assert_eq!(task["status"], "proposed");
+        assert_eq!(plan.unwrap().tasks[0]["status"], "approved");
+        service
+            .update_task("p", "t", json!({"threadId":"thread"}).as_object().unwrap())
+            .unwrap();
+        assert!(matches!(
+            admit_task(&db, "p", "u", "t").unwrap(),
+            TaskAdmission::AlreadyStarted
+        ));
+        service
+            .update(
+                "p",
+                PlanPatch {
+                    tasks: Some(vec![]),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(matches!(
+            admit_task(&db, "p", "u", "t").unwrap(),
+            TaskAdmission::TaskMissing
+        ));
+        assert!(matches!(
+            admit_task(&db, "p", "other", "t").unwrap(),
+            TaskAdmission::PlanMissing
+        ));
+    }
 }

@@ -6,6 +6,7 @@
 #![allow(clippy::result_large_err)]
 pub mod app_config;
 pub mod assessments;
+pub mod bundle_web;
 pub mod config;
 pub mod contracts;
 pub mod coordination;

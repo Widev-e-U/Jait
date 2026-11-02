@@ -92,3 +92,50 @@ mod unix {
         assert!(native_executor(work(), Duration::from_secs(1), 0).is_err());
     }
 }
+
+#[tokio::test]
+async fn cancelled_graph_build_does_not_start_runtime_or_extraction() {
+    use super::{engine::*, runner::*, runtime::GraphifyRuntime};
+    use crate::execution::process_runner::ProcessCancellation;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let calls = Arc::new(AtomicUsize::new(0));
+    let execute: Executor = {
+        let calls = calls.clone();
+        Arc::new(move |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Ok(ExecOutput {
+                    stdout: String::new(),
+                    stderr: String::new(),
+                })
+            })
+        })
+    };
+    let runtime = GraphifyRuntime::new("unused".into(), Default::default(), execute);
+    let setup_calls = calls.clone();
+    let ensure = Arc::new(move || {
+        setup_calls.fetch_add(1, Ordering::SeqCst);
+        Box::pin(async { Ok(()) })
+            as futures_util::future::BoxFuture<'static, Result<(), GraphError>>
+    });
+    let runner = GraphifyRunner::new(
+        runtime,
+        RunnerOptions {
+            ensure_runtime: Some(ensure),
+            ..Default::default()
+        },
+    );
+    let signal = ProcessCancellation::default();
+    signal.cancel();
+    let error = runner
+        .build("/unused", "/unused", Some(signal))
+        .await
+        .err()
+        .expect("cancelled build must fail");
+    assert_eq!(error.name, "AbortError");
+    assert_eq!(error.code.as_deref(), Some(&serde_json::json!("ABORT_ERR")));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}

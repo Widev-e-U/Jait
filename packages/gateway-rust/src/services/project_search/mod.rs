@@ -1,8 +1,10 @@
 //! Native bounded project enumeration, indexing and ranked search. No HTTP, shell,
 //! TS/Bun worker, ambient Git config or model interpretation of file contents.
 mod filesystem;
+pub mod primary_bridge;
 pub(crate) mod ignore;
 pub mod ranking;
+mod ripgrep;
 mod walk;
 use crate::{runtime::blocking::BlockingLane, services::projects::ProjectService};
 pub use filesystem::ProjectRoot;
@@ -32,6 +34,8 @@ pub enum Error {
     Excluded,
     FileTooLarge,
     Unsupported,
+    /// The TypeScript fallback cannot execute regular-expression searches.
+    RegexpRequiresRipgrep,
 }
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -44,6 +48,7 @@ impl fmt::Display for Error {
             Self::Excluded => f.write_str("project entry excluded"),
             Self::FileTooLarge => f.write_str("project file exceeds byte budget"),
             Self::Unsupported => f.write_str("project operation unsupported on this platform"),
+            Self::RegexpRequiresRipgrep => f.write_str("regexp_requires_rg"),
         }
     }
 }
@@ -189,8 +194,57 @@ pub fn search_project(
     budgets: &Budgets,
     cancel: &Cancellation,
 ) -> Result<SearchResult> {
+    search_project_with_backend(root, options, budgets, cancel, Backend::Native)
+}
+
+/// Select ripgrep by actually spawning it; only a missing executable selects fallback.
+/// The same deadline covers capability detection, traversal and every child process.
+pub fn search_project_auto(
+    root: &ProjectRoot,
+    options: &SearchOptions,
+    budgets: &Budgets,
+    cancel: &Cancellation,
+) -> Result<SearchResult> {
+    search_project_auto_with_program(root, options, budgets, cancel, std::ffi::OsStr::new("rg"))
+}
+
+fn search_project_auto_with_program(
+    root: &ProjectRoot,
+    options: &SearchOptions,
+    budgets: &Budgets,
+    cancel: &Cancellation,
+    program: &std::ffi::OsStr,
+) -> Result<SearchResult> {
     validate(options, budgets)?;
     let operation = Operation::new(budgets.duration, cancel);
+    if options.mode == SearchMode::Files
+        && ranking::cleaned_file_query(options.query.trim()).is_empty()
+    {
+        operation.check()?;
+        root.check_identity()?;
+        return Ok(SearchResult::Files {
+            query: options.query.clone(),
+            files: Vec::new(),
+            limited: false,
+        });
+    }
+    let backend = if ripgrep::run(
+        program,
+        options.query.trim(),
+        options.is_regexp,
+        b"",
+        budgets.max_output_bytes,
+        &operation,
+    )?
+    .is_some()
+    {
+        Backend::Ripgrep
+    } else {
+        Backend::Fallback
+    };
+    if backend == Backend::Fallback && options.is_regexp {
+        return Err(Error::RegexpRequiresRipgrep);
+    }
     let index = scan(
         root,
         &IndexOptions {
@@ -199,9 +253,78 @@ pub fn search_project(
             ..Default::default()
         },
         &operation,
-        !options.include_ignored_files && options.include.as_deref().is_none_or(str::is_empty),
+        backend == Backend::Ripgrep
+            && !options.include_ignored_files
+            && options.include.as_deref().is_none_or(str::is_empty),
     )?;
-    search(&index, options, budgets, &operation)
+    search(&index, options, budgets, &operation, backend, program)
+}
+
+/// Explicit TypeScript no-ripgrep compatibility path. It never probes or runs a
+/// process; callers must select it based on their own trusted capability decision.
+pub fn search_project_fallback(
+    root: &ProjectRoot,
+    options: &SearchOptions,
+    budgets: &Budgets,
+    cancel: &Cancellation,
+) -> Result<SearchResult> {
+    search_project_with_backend(root, options, budgets, cancel, Backend::Fallback)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Backend {
+    Native,
+    Fallback,
+    Ripgrep,
+}
+
+fn search_project_with_backend(
+    root: &ProjectRoot,
+    options: &SearchOptions,
+    budgets: &Budgets,
+    cancel: &Cancellation,
+    backend: Backend,
+) -> Result<SearchResult> {
+    validate(options, budgets)?;
+    let operation = Operation::new(budgets.duration, cancel);
+    // The reference returns an empty filename result before enumeration or
+    // compiling a regexp when the cleaned query contains no searchable text.
+    if options.mode == SearchMode::Files
+        && ranking::cleaned_file_query(options.query.trim()).is_empty()
+    {
+        operation.check()?;
+        root.check_identity()?;
+        return Ok(SearchResult::Files {
+            query: options.query.clone(),
+            files: Vec::new(),
+            limited: false,
+        });
+    }
+    if backend == Backend::Fallback && options.is_regexp {
+        operation.check()?;
+        root.check_identity()?;
+        return Err(Error::RegexpRequiresRipgrep);
+    }
+    let index = scan(
+        root,
+        &IndexOptions {
+            include_ignored_files: options.include_ignored_files,
+            budgets: budgets.clone(),
+            ..Default::default()
+        },
+        &operation,
+        backend == Backend::Native
+            && !options.include_ignored_files
+            && options.include.as_deref().is_none_or(str::is_empty),
+    )?;
+    search(
+        &index,
+        options,
+        budgets,
+        &operation,
+        backend,
+        std::ffi::OsStr::new("rg"),
+    )
 }
 /// Search a caller-owned immutable metadata index. Contents are read live through
 /// the same pinned root and must retain the indexed identity; this is not a cache
@@ -223,8 +346,51 @@ pub fn search_index(
         options,
         budgets,
         &Operation::new(budgets.duration, cancel),
+        Backend::Native,
+        std::ffi::OsStr::new("rg"),
     )
 }
+// Mirrors Node's extname for the ordinary filenames admitted by the index:
+// a leading dot alone does not form an extension (e.g. `.env`).
+fn fallback_searchable_extension(relative: &str) -> bool {
+    let name = relative.rsplit('/').next().unwrap_or(relative);
+    let Some(dot) = name.rfind('.') else {
+        return false;
+    };
+    if dot == 0 {
+        return false;
+    }
+    matches!(
+        name[dot..].to_ascii_lowercase().as_str(),
+        ".ts"
+            | ".tsx"
+            | ".js"
+            | ".jsx"
+            | ".mjs"
+            | ".cjs"
+            | ".json"
+            | ".css"
+            | ".scss"
+            | ".html"
+            | ".md"
+            | ".yaml"
+            | ".yml"
+            | ".svelte"
+            | ".vue"
+            | ".py"
+            | ".rs"
+            | ".go"
+            | ".java"
+            | ".c"
+            | ".cpp"
+            | ".h"
+            | ".sh"
+            | ".toml"
+            | ".env"
+            | ".txt"
+    )
+}
+
 // The TypeScript filename path applies this filter after ripgrep enumeration.
 fn matches_file_include(relative: &str, include: &str) -> bool {
     if let Some(suffix) = include.strip_prefix("*.") {
@@ -240,12 +406,21 @@ fn search(
     options: &SearchOptions,
     budgets: &Budgets,
     operation: &Operation,
+    backend: Backend,
+    program: &std::ffi::OsStr,
 ) -> Result<SearchResult> {
     let limit = validate(options, budgets)?;
     operation.check()?;
     index.root.check_identity()?;
     let query = options.query.trim();
-    let regex = if options.is_regexp {
+    if options.mode == SearchMode::Files && ranking::cleaned_file_query(query).is_empty() {
+        return Ok(SearchResult::Files {
+            query: options.query.clone(),
+            files: Vec::new(),
+            limited: false,
+        });
+    }
+    let regex = if options.is_regexp && backend == Backend::Native {
         Some(
             RegexBuilder::new(query)
                 .case_insensitive(true)
@@ -260,7 +435,7 @@ fn search(
     let include = options
         .include
         .as_deref()
-        .filter(|p| !p.is_empty())
+        .filter(|p| backend != Backend::Fallback && !p.is_empty())
         .map(|p| ignore::glob(p, !p.contains('/'), false))
         .transpose()?;
     let needle = query.to_lowercase();
@@ -274,10 +449,20 @@ fn search(
     for (relative, entry) in &index.entries {
         operation.check()?;
         if entry.directory
-            || (!options.include_ignored_files
+            || (backend != Backend::Fallback
+                && !options.include_ignored_files
                 && include.is_none()
                 && relative.split('/').any(|part| part.starts_with('.')))
             || include.as_ref().is_some_and(|re| !re.is_match(relative))
+        {
+            continue;
+        }
+        if backend == Backend::Fallback
+            && options
+                .include
+                .as_deref()
+                .filter(|p| !p.is_empty())
+                .is_some_and(|p| !matches_file_include(relative, p))
         {
             continue;
         }
@@ -293,10 +478,29 @@ fn search(
             if file_needle.is_empty() {
                 break;
             }
-            let matched = regex.as_ref().map_or_else(
-                || relative.to_lowercase().contains(&file_needle),
-                |re| re.is_match(relative),
-            );
+            let matched = if backend == Backend::Ripgrep && options.is_regexp {
+                let (output, truncated) = ripgrep::run(
+                    program,
+                    query,
+                    true,
+                    relative.as_bytes(),
+                    budgets.max_output_bytes,
+                    operation,
+                )?
+                .ok_or_else(|| {
+                    Error::Io(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        "ripgrep disappeared",
+                    ))
+                })?;
+                limited |= truncated;
+                !output.is_empty()
+            } else {
+                regex.as_ref().map_or_else(
+                    || relative.to_lowercase().contains(&file_needle),
+                    |re| re.is_match(relative),
+                )
+            };
             if !matched {
                 continue;
             }
@@ -306,6 +510,9 @@ fn search(
             }
             candidate_bytes += relative.len();
             paths.push(relative.clone());
+            continue;
+        }
+        if backend == Backend::Fallback && !fallback_searchable_extension(relative) {
             continue;
         }
         if entry.bytes > budgets.max_file_bytes as u64 {
@@ -333,12 +540,61 @@ fn search(
             }
         };
         operation.check()?;
-        if data.contains(&0) {
+        if backend != Backend::Fallback && data.contains(&0) {
             continue;
         }
-        let Ok(text) = std::str::from_utf8(&data) else {
+        if backend == Backend::Ripgrep {
+            let (output, truncated) = ripgrep::run(
+                program,
+                query,
+                options.is_regexp,
+                &data,
+                budgets.max_output_bytes.saturating_sub(candidate_bytes),
+                operation,
+            )?
+            .ok_or_else(|| {
+                Error::Io(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "ripgrep disappeared",
+                ))
+            })?;
+            limited |= truncated;
+            for line in String::from_utf8_lossy(&output).lines() {
+                operation.check()?;
+                let Some((number, content)) = line.split_once(':') else {
+                    limited = true;
+                    continue;
+                };
+                let Ok(number) = number.parse::<usize>() else {
+                    limited = true;
+                    continue;
+                };
+                let content = ranking::truncate_content(content);
+                if matches.len() >= cap
+                    || candidate_bytes.saturating_add(content.len() + relative.len() + 128)
+                        > budgets.max_output_bytes
+                {
+                    limited = true;
+                    break;
+                }
+                candidate_bytes += content.len() + relative.len() + 128;
+                matches.push(ContentMatch {
+                    file: String::new(),
+                    relative_path: relative.clone(),
+                    line: number,
+                    content,
+                    score: 0,
+                });
+            }
+            if matches.len() >= cap || candidate_bytes >= budgets.max_output_bytes {
+                limited = true;
+                break;
+            }
             continue;
-        };
+        }
+        // Both ripgrep's default text decoding and the TypeScript fallback
+        // replace invalid UTF-8 rather than discarding the entire file.
+        let text = String::from_utf8_lossy(&data);
         let mut per_file = 0;
         for (number, line) in text.split('\n').enumerate() {
             operation.check()?;

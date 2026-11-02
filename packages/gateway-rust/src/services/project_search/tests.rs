@@ -468,3 +468,681 @@ fn file_include_uses_reference_post_filter() {
     // The reference's post-filter removes '*' before substring matching.
     assert!(search_with("src/*.rs").is_empty());
 }
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_names_consume_global_entry_budget() {
+    use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+    let fixture = Fixture::new();
+    fs::create_dir(fixture.0.join("a")).unwrap();
+    fs::create_dir(fixture.0.join("b")).unwrap();
+    fs::write(fixture.0.join("a").join(OsStr::from_bytes(b"\xff")), b"x").unwrap();
+    fixture.put("b/needle.txt", "needle");
+    let mut options = IndexOptions::default();
+    options.budgets.max_entries = 3;
+    let index = build_index(&fixture.root(), &options, &Cancellation::default()).unwrap();
+    assert_eq!(index.coverage.entries_examined, 3);
+    assert!(index.coverage.limited);
+    assert!(!index.entries.contains_key("b/needle.txt"));
+}
+
+#[cfg(unix)]
+#[test]
+fn limited_directory_batch_is_sorted() {
+    let fixture = Fixture::new();
+    for name in ["z.txt", "y.txt", "x.txt", "w.txt"] {
+        fixture.put(name, "");
+    }
+    let cancellation = Cancellation::default();
+    let operation = Operation::new(std::time::Duration::from_secs(2), &cancellation);
+    let (names, examined, limited) = fixture.root().names("", 3, &operation).unwrap();
+    assert_eq!(examined, 3);
+    assert!(limited);
+    assert_eq!(names.len(), 3);
+    assert!(names.windows(2).all(|pair| pair[0] <= pair[1]));
+}
+
+#[cfg(unix)]
+#[test]
+fn rejected_filename_marks_search_incomplete() {
+    let fixture = Fixture::new();
+    fixture.put("folder\\needle.txt", "needle");
+    let SearchResult::Files { files, limited, .. } = search_project_fallback(
+        &fixture.root(),
+        &options("needle", SearchMode::Files),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap() else {
+        panic!()
+    };
+    assert!(files.is_empty());
+    assert!(limited);
+}
+
+#[test]
+fn content_search_decodes_invalid_utf8_without_dropping_the_file() {
+    let fixture = Fixture::new();
+    fs::write(fixture.0.join("encoding.txt"), b"prefix \xff needle\n").unwrap();
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project(
+        &fixture.root(),
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap()
+    else {
+        panic!()
+    };
+    assert!(!limited);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].relative_path, "encoding.txt");
+    assert_eq!(matches[0].content, "prefix \u{fffd} needle");
+}
+
+#[cfg(unix)]
+#[test]
+fn trailing_backslash_ignore_rule_does_not_exclude_unescaped_filename() {
+    let fixture = Fixture::new();
+    fixture.put(".gitignore", "secret\\\n");
+    fixture.put("secret\\", "needle");
+    fixture.put("secret", "needle");
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project(
+        &fixture.root(),
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap()
+    else {
+        panic!()
+    };
+    // The pinned-root validator skips the backslash filename.
+    assert!(limited);
+    assert_eq!(
+        matches
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["secret"]
+    );
+}
+
+#[test]
+fn user_globs_retain_existing_empty_class_and_trailing_escape_behavior() {
+    assert!(
+        ignore::glob("item[]", false, false)
+            .unwrap()
+            .is_match("item[]")
+    );
+    assert!(
+        ignore::glob("item\\", false, false)
+            .unwrap()
+            .is_match("item")
+    );
+}
+
+#[test]
+fn long_unmatched_bracket_ignore_rule_preserves_wildcard() {
+    let pattern = format!("{}*", "[".repeat(400));
+    let (rules, limited) = ignore::parse(&pattern);
+    assert!(!limited);
+    assert_eq!(rules.len(), 1);
+    let scopes = vec![ignore::IgnoreScope {
+        base: String::new(),
+        higher_priority: false,
+        rules,
+    }];
+    assert!(ignore::ignored(
+        &scopes,
+        &format!("{}suffix", "[".repeat(400)),
+        false
+    ));
+    assert!(!ignore::ignored(&scopes, "visible", false));
+    assert!(ignore::parse(&format!("{}*", "[".repeat(4000))).1);
+}
+
+#[test]
+fn empty_ignore_rules_do_not_exhaust_rule_budget() {
+    let content = format!("{}secret\n", "!\n/\n!/\n".repeat(128));
+    let (rules, limited) = ignore::parse(&content);
+    assert!(!limited);
+    assert_eq!(rules.len(), 1);
+    let scopes = vec![ignore::IgnoreScope {
+        base: String::new(),
+        higher_priority: false,
+        rules,
+    }];
+    assert!(ignore::ignored(&scopes, "secret", false));
+    let content = format!("{}!\n/\n!/\n", "valid\n".repeat(128));
+    let (rules, limited) = ignore::parse(&content);
+    assert_eq!(rules.len(), 128);
+    assert!(!limited);
+}
+
+#[test]
+fn unmatched_ignore_bracket_preserves_following_wildcards() {
+    let fixture = Fixture::new();
+    fixture.put(".gitignore", "[secret*\n");
+    fixture.put("[secret-file", "needle");
+    fixture.put("visible", "needle");
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project(
+        &fixture.root(),
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap()
+    else {
+        panic!()
+    };
+    assert!(!limited);
+    assert_eq!(
+        matches
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["visible"]
+    );
+    assert!(
+        ignore::glob("[secret*", false, false)
+            .unwrap()
+            .is_match("[secret*")
+    );
+    assert!(
+        !ignore::glob("[secret*", false, false)
+            .unwrap()
+            .is_match("[secret-file")
+    );
+}
+
+#[test]
+fn negated_empty_ignore_character_classes_match_any_character() {
+    let fixture = Fixture::new();
+    fixture.put(".gitignore", "secret[!]\nprivate[^]\n");
+    fixture.put("secreta", "needle");
+    fixture.put("privateb", "needle");
+    fixture.put("visible", "needle");
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project(
+        &fixture.root(),
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap()
+    else {
+        panic!()
+    };
+    assert!(!limited);
+    assert_eq!(
+        matches
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["visible"]
+    );
+    let (rules, limited) = ignore::parse("secret[!]\n");
+    assert!(!limited);
+    let scopes = vec![ignore::IgnoreScope {
+        base: String::new(),
+        higher_priority: false,
+        rules,
+    }];
+    assert!(ignore::ignored(&scopes, "secret\n", false));
+}
+
+#[test]
+fn empty_ignore_character_class_does_not_match_literal_brackets() {
+    let fixture = Fixture::new();
+    fixture.put(".gitignore", "item[]\n");
+    fixture.put("item[]", "needle");
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project(
+        &fixture.root(),
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap()
+    else {
+        panic!()
+    };
+    assert!(!limited);
+    assert_eq!(
+        matches
+            .iter()
+            .map(|entry| entry.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["item[]"]
+    );
+}
+
+#[test]
+fn escaped_trailing_space_in_ignore_rule_excludes_the_named_file() {
+    let fixture = Fixture::new();
+    fixture.put(".gitignore", "secret\\ \nordinary   \n");
+    fixture.put("secret ", "needle");
+    fixture.put("secret", "needle");
+    fixture.put("ordinary", "needle");
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project(
+        &fixture.root(),
+        &SearchOptions {
+            include_ignored_files: false,
+            ..options("needle", SearchMode::Content)
+        },
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap()
+    else {
+        panic!()
+    };
+    assert!(!limited);
+    assert_eq!(
+        matches
+            .iter()
+            .map(|m| m.relative_path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["secret"]
+    );
+}
+
+#[test]
+fn empty_cleaned_filename_query_returns_before_regexp_or_enumeration() {
+    let fixture = Fixture::new();
+    fixture.put("file.txt", "needle");
+    let result = search_project(
+        &fixture.root(),
+        &SearchOptions {
+            is_regexp: true,
+            ..options("*", SearchMode::Files)
+        },
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap();
+    let SearchResult::Files { files, limited, .. } = result else {
+        panic!()
+    };
+    assert!(files.is_empty());
+    assert!(!limited);
+}
+
+#[test]
+fn fallback_rejects_regex_before_enumeration_and_respects_cancellation() {
+    let fixture = Fixture::new();
+    let root = fixture.root();
+    for mode in [SearchMode::Files, SearchMode::Content] {
+        let opts = SearchOptions {
+            is_regexp: true,
+            ..options("a[", mode)
+        };
+        assert!(matches!(
+            search_project_fallback(&root, &opts, &Budgets::default(), &Cancellation::default()),
+            Err(Error::RegexpRequiresRipgrep)
+        ));
+        let cancel = Cancellation::default();
+        cancel.cancel();
+        assert!(matches!(
+            search_project_fallback(&root, &opts, &Budgets::default(), &cancel),
+            Err(Error::Cancelled)
+        ));
+    }
+    let empty = SearchOptions {
+        is_regexp: true,
+        ..options("*", SearchMode::Files)
+    };
+    assert!(
+        matches!(search_project_fallback(&root, &empty, &Budgets::default(), &Cancellation::default()),
+        Ok(SearchResult::Files { files, limited: false, .. }) if files.is_empty())
+    );
+}
+
+#[test]
+fn fallback_content_filters_extensions_before_consuming_read_budget() {
+    let fixture = Fixture::new();
+    fixture.put("a.bin", &"needle".repeat(100));
+    fixture.put("README", "needle");
+    fixture.put(".env", "needle");
+    fixture.put("config.env", "needle");
+    fixture.put("source.TS", "needle");
+    let budgets = Budgets {
+        max_read_bytes: 32,
+        ..Default::default()
+    };
+    let opts = SearchOptions {
+        include_ignored_files: true,
+        ..options("needle", SearchMode::Content)
+    };
+    let SearchResult::Content {
+        matches, limited, ..
+    } = search_project_fallback(&fixture.root(), &opts, &budgets, &Cancellation::default())
+        .unwrap()
+    else {
+        panic!()
+    };
+    let mut paths = matches
+        .iter()
+        .map(|m| m.relative_path.as_str())
+        .collect::<Vec<_>>();
+    paths.sort();
+    assert_eq!(paths, vec!["config.env", "source.TS"]);
+    assert!(!limited);
+}
+
+#[test]
+fn fallback_include_uses_reference_substring_and_native_still_searches_other_extensions() {
+    let fixture = Fixture::new();
+    fixture.put("src/one.txt", "needle");
+    fixture.put("src/other.bin", "needle");
+    let root = fixture.root();
+    let opts = SearchOptions {
+        include: Some("src/*.txt".into()),
+        ..options("needle", SearchMode::Content)
+    };
+    let SearchResult::Content { matches, .. } =
+        search_project_fallback(&root, &opts, &Budgets::default(), &Cancellation::default())
+            .unwrap()
+    else {
+        panic!()
+    };
+    assert!(matches.is_empty());
+    let SearchResult::Content { matches, .. } = search_project(
+        &root,
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap() else {
+        panic!()
+    };
+    assert!(matches.iter().any(|m| m.relative_path == "src/other.bin"));
+}
+
+#[cfg(unix)]
+#[test]
+fn automatic_search_falls_back_only_for_missing_executable() {
+    use std::ffi::OsStr;
+    let fixture = Fixture::new();
+    fixture.put("known.txt", "needle\n");
+    fixture.put("unknown.xyz", "needle\n");
+    let root = fixture.root();
+    let missing = fixture.0.join("missing-rg");
+    let result = search_project_auto_with_program(
+        &root,
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+        missing.as_os_str(),
+    )
+    .unwrap();
+    let SearchResult::Content { matches, .. } = result else {
+        panic!()
+    };
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].relative_path, "known.txt");
+    let mut regex = options("needle", SearchMode::Content);
+    regex.is_regexp = true;
+    assert!(matches!(
+        search_project_auto_with_program(
+            &root,
+            &regex,
+            &Budgets::default(),
+            &Cancellation::default(),
+            missing.as_os_str()
+        ),
+        Err(Error::RegexpRequiresRipgrep)
+    ));
+    // A present but failing executable is an error, never silently treated as missing.
+    assert!(matches!(
+        search_project_auto_with_program(
+            &root,
+            &regex,
+            &Budgets::default(),
+            &Cancellation::default(),
+            OsStr::new("/bin/sh")
+        ),
+        Err(Error::Input(_))
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn supervised_ripgrep_obeys_deadline_and_output_limit() {
+    use std::{os::unix::fs::PermissionsExt, time::Duration};
+    let fixture = Fixture::new();
+    let script = fixture.0.join("fake-rg");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nwhile :; do printf '1:abcdefghij\\n'; done\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let cancel = Cancellation::default();
+    let operation = Operation::new(Duration::from_secs(2), &cancel);
+    let (_, limited) = ripgrep::run(script.as_os_str(), "x", false, b"", 128, &operation)
+        .unwrap()
+        .unwrap();
+    assert!(limited);
+    std::fs::write(&script, "#!/bin/sh\nwhile :; do :; done\n").unwrap();
+    let operation = Operation::new(Duration::from_millis(30), &cancel);
+    assert!(matches!(
+        ripgrep::run(script.as_os_str(), "x", false, b"", 128, &operation),
+        Err(Error::TimedOut)
+    ));
+    cancel.cancel();
+    let operation = Operation::new(Duration::from_secs(1), &cancel);
+    assert!(matches!(
+        ripgrep::run(script.as_os_str(), "x", false, b"", 128, &operation),
+        Err(Error::Cancelled)
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn supervised_ripgrep_cancels_streaming_child() {
+    use std::{
+        os::unix::fs::PermissionsExt,
+        thread,
+        time::{Duration, Instant},
+    };
+    let fixture = Fixture::new();
+    let script = fixture.0.join("streaming-rg");
+    let ready = fixture.0.join("streaming-rg.ready");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nprintf '1:started\\n'\n: > \"$0.ready\"\nwhile :; do printf '1:abcdefghij\\n'; done\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let cancel = Cancellation::default();
+    let signal = cancel.clone();
+    let waiter = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !ready.exists() && Instant::now() < deadline {
+            thread::yield_now();
+        }
+        let started = ready.exists();
+        signal.cancel();
+        started
+    });
+    let operation = Operation::new(Duration::from_secs(3), &cancel);
+    let result = ripgrep::run(
+        script.as_os_str(),
+        "x",
+        false,
+        b"",
+        64 * 1024 * 1024,
+        &operation,
+    );
+    assert!(waiter.join().unwrap(), "streaming child did not start");
+    assert!(matches!(result, Err(Error::Cancelled)), "{result:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn supervised_ripgrep_exchanges_large_input_and_output() {
+    use std::{os::unix::fs::PermissionsExt, time::Duration};
+    let fixture = Fixture::new();
+    let script = fixture.0.join("duplex-rg");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nwhile IFS= read -r line; do printf '%s\\n' \"$line\"; done\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let input = format!("{}\n", "x".repeat(1023)).repeat(512).into_bytes();
+    let cancel = Cancellation::default();
+    let operation = Operation::new(Duration::from_secs(5), &cancel);
+    let (output, limited) = ripgrep::run(
+        script.as_os_str(),
+        "x",
+        false,
+        &input,
+        input.len() + 1,
+        &operation,
+    )
+    .unwrap()
+    .unwrap();
+    assert!(!limited);
+    assert_eq!(output, input);
+}
+
+#[cfg(unix)]
+#[test]
+fn supervised_ripgrep_keeps_complete_records_in_overflowing_read() {
+    use std::{os::unix::fs::PermissionsExt, time::Duration};
+    let fixture = Fixture::new();
+    let script = fixture.0.join("fake-rg-records");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\nprintf '1:first\\n2:second\\n3:third\\n'\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let cancel = Cancellation::default();
+    for (budget, expected) in [
+        (7, &b""[..]),
+        (8, &b"1:first\n"[..]),
+        (19, &b"1:first\n2:second\n"[..]),
+    ] {
+        let operation = Operation::new(Duration::from_secs(2), &cancel);
+        let (output, limited) =
+            ripgrep::run(script.as_os_str(), "x", false, b"", budget, &operation)
+                .unwrap()
+                .unwrap();
+        assert!(limited);
+        assert_eq!(output, expected);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn installed_ripgrep_searches_only_scoped_file_bytes() {
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new();
+    let outside = Fixture::new();
+    fixture.put("source.xyz", "Alpha needle\n");
+    outside.put("secret.txt", "needle\n");
+    symlink(&outside.0, fixture.0.join("escape")).unwrap();
+    let root = fixture.root();
+    let operation = Operation::new(std::time::Duration::from_secs(2), &Cancellation::default());
+    if ripgrep::run(
+        std::ffi::OsStr::new("rg"),
+        "needle",
+        false,
+        b"",
+        1024,
+        &operation,
+    )
+    .unwrap()
+    .is_none()
+    {
+        return;
+    }
+    let result = search_project_auto(
+        &root,
+        &options("needle", SearchMode::Content),
+        &Budgets::default(),
+        &Cancellation::default(),
+    )
+    .unwrap();
+    let SearchResult::Content { matches, .. } = result else {
+        panic!()
+    };
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].relative_path, "source.xyz");
+    assert_eq!(matches[0].line, 1);
+}
+
+#[test]
+fn primary_bridge_confines_root_and_preserves_results_and_cancellation() {
+    use crate::services::primary_link::{ProjectSearchBridge, ProjectSearchMode, ProjectSearchRequest, RawSearchResult};
+    use super::primary_bridge::PinnedPrimarySearchBridge;
+    let fixture = Fixture::new();
+    fixture.put("src/example.txt", "needle\n");
+    let root = fixture.root();
+    let budgets = Budgets::default();
+    let cancel = Cancellation::default();
+    let bridge = PinnedPrimarySearchBridge { root: &root, budgets: &budgets, cancel: &cancel };
+    let mut request = ProjectSearchRequest { root: root.path().to_path_buf(), query: "needle".into(), mode: ProjectSearchMode::Content, ..Default::default() };
+    let RawSearchResult::Content { matches, .. } = bridge.search_project(&request).unwrap() else { panic!() };
+    assert_eq!(matches[0].relative_path, "src/example.txt");
+    request.root = root.path().join("src");
+    assert!(bridge.search_project(&request).is_err());
+    request.root = root.path().to_path_buf();
+    cancel.cancel();
+    assert!(bridge.search_project(&request).unwrap_err().message.contains("cancelled"));
+}
+
+#[tokio::test]
+async fn primary_search_dispatch_uses_authorized_root_and_lane() {
+    use super::primary_bridge::{PrimarySearchCall, PrimarySearchDispatch};
+    use crate::runtime::blocking::BlockingLane;
+    let fixture = Fixture::new();
+    fixture.put("example.txt", "needle\n");
+    let root = fixture.root();
+    let lane = BlockingLane::new(std::num::NonZeroU16::new(1).unwrap());
+    let dispatch = PrimarySearchDispatch { root: root.clone(), lane: lane.clone() };
+    let args = serde_json::json!({"pattern":"needle"}).as_object().unwrap().clone();
+    let result = dispatch.run(PrimarySearchCall::Tool(args)).await.unwrap();
+    assert_eq!(result["ok"], true);
+    let escaped = serde_json::json!({"pattern":"needle", "path":".."}).as_object().unwrap().clone();
+    let result = dispatch.run(PrimarySearchCall::Tool(escaped)).await.unwrap();
+    assert_eq!(result["ok"], false);
+    let fs_args = serde_json::json!({"path": root.path(), "query": "needle", "mode": "content"}).as_object().unwrap().clone();
+    let result = dispatch.run(PrimarySearchCall::Fs(fs_args)).await.unwrap();
+    assert_eq!(result["mode"], "content");
+    assert_eq!(result["matches"][0]["file"], "example.txt");
+    let foreign_args = serde_json::json!({"path": root.path().parent().unwrap(), "query": "needle"}).as_object().unwrap().clone();
+    assert!(dispatch.run(PrimarySearchCall::Fs(foreign_args)).await.is_err());
+    lane.close();
+    assert!(dispatch.run(PrimarySearchCall::Tool(Default::default())).await.is_err());
+}
+
+#[tokio::test]
+async fn primary_search_dispatch_rejects_replaced_root() {
+    use super::primary_bridge::{PrimarySearchCall, PrimarySearchDispatch};
+    use crate::runtime::blocking::BlockingLane;
+    let fixture = Fixture::new();
+    fixture.put("project/old.txt", "old needle");
+    let path = fixture.0.join("project");
+    let root = ProjectRoot::open(&path).unwrap();
+    let dispatch = PrimarySearchDispatch { root, lane: BlockingLane::new(std::num::NonZeroU16::new(1).unwrap()) };
+    fs::rename(&path, fixture.0.join("original")).unwrap();
+    fixture.put("project/new.txt", "replacement needle");
+    let args = serde_json::json!({"pattern":"needle"}).as_object().unwrap().clone();
+    let result = dispatch.run(PrimarySearchCall::Tool(args)).await.unwrap();
+    assert_eq!(result["ok"], false);
+}

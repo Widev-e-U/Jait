@@ -38,14 +38,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::Router;
 use futures_util::stream::Stream;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use tokio::sync::mpsc;
 
 /// MCP revisions accepted from clients, newest first (TS: `SUPPORTED_PROTOCOL_VERSIONS`).
@@ -171,7 +171,10 @@ pub struct McpToolOutcome {
 
 impl McpToolOutcome {
     pub fn text(text: impl Into<String>) -> Self {
-        Self { ok: true, content: vec![json!({ "type": "text", "text": text.into() })] }
+        Self {
+            ok: true,
+            content: vec![json!({ "type": "text", "text": text.into() })],
+        }
     }
 }
 
@@ -238,7 +241,6 @@ impl std::fmt::Debug for McpToolContext {
             .finish()
     }
 }
-
 
 /// Tool access port (TS: the `toolRegistry` argument of `handleMcpRequest`).
 pub trait McpToolSource: Send + Sync {
@@ -315,7 +317,10 @@ pub fn resolve_requested_protocol_version(
     let from_header = headers.get(PROTOCOL_HEADER).and_then(|v| v.to_str().ok());
     for candidate in [from_body, from_header].into_iter().flatten() {
         let candidate = candidate.trim();
-        if let Some(supported) = SUPPORTED_PROTOCOL_VERSIONS.iter().find(|v| **v == candidate) {
+        if let Some(supported) = SUPPORTED_PROTOCOL_VERSIONS
+            .iter()
+            .find(|v| **v == candidate)
+        {
             return Some(supported);
         }
     }
@@ -347,7 +352,9 @@ pub fn progress_notification(token: Value, progress: u64, message: &str) -> Valu
 /// TS: the `!body || body.jsonrpc !== "2.0" || !body.method` guard that answers
 /// `400 {"error":"Invalid JSON-RPC request"}`.
 pub fn is_valid_jsonrpc_request(body: &Value) -> bool {
-    let Some(object) = body.as_object() else { return false };
+    let Some(object) = body.as_object() else {
+        return false;
+    };
     if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
         return false;
     }
@@ -392,7 +399,10 @@ pub async fn handle_request(
     tool_set: ToolSet,
 ) -> Value {
     let id = request.get("id").cloned().unwrap_or(Value::Null);
-    let method = request.get("method").and_then(Value::as_str).unwrap_or_default();
+    let method = request
+        .get("method")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let params = request.get("params").cloned().unwrap_or(Value::Null);
 
     match method {
@@ -465,11 +475,17 @@ async fn tools_call(
     let Some(source) = source else {
         return tool_error(id, "No tools are available in this gateway runtime.");
     };
-    let mcp_name = params.get("name").and_then(Value::as_str).unwrap_or_default();
+    let mcp_name = params
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     if mcp_name.is_empty() {
         return error(id, -32602, "Invalid params: missing tool name");
     }
-    let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    let args = params
+        .get("arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
     if !args.is_object() {
         return error(id, -32602, "Invalid params: arguments must be an object");
     }
@@ -541,7 +557,10 @@ impl Default for SessionRegistry {
 
 impl SessionRegistry {
     pub fn new() -> Self {
-        Self { inner: Mutex::new(HashMap::new()), counter: AtomicU64::new(0) }
+        Self {
+            inner: Mutex::new(HashMap::new()),
+            counter: AtomicU64::new(0),
+        }
     }
 
     /// Registers a client and returns its id plus the outbound frame receiver.
@@ -580,7 +599,10 @@ impl SessionRegistry {
     }
 
     pub fn contains(&self, id: &str) -> bool {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).contains_key(id)
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(id)
     }
 
     pub fn len(&self) -> usize {
@@ -619,7 +641,11 @@ pub struct McpRoutes {
 
 impl McpRoutes {
     pub fn new() -> Self {
-        Self { tools: None, auth: None, sessions: Arc::new(SessionRegistry::new()) }
+        Self {
+            tools: None,
+            auth: None,
+            sessions: Arc::new(SessionRegistry::new()),
+        }
     }
 
     pub fn with_tools(mut self, tools: Arc<dyn McpToolSource>) -> Self {
@@ -648,7 +674,11 @@ impl McpRoutes {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string);
-        Ok(McpToolContext { session_id: session, session_id_inferred: false, ..Default::default() })
+        Ok(McpToolContext {
+            session_id: session,
+            session_id_inferred: false,
+            ..Default::default()
+        })
     }
 }
 
@@ -703,10 +733,15 @@ fn sse_response(body: Body, version: Option<&str>) -> Response {
     if let Some(version) = version {
         builder = builder.header(PROTOCOL_HEADER, version);
     }
-    builder.body(body).unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+    builder
+        .body(body)
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
-fn frame_stream(rx: mpsc::Receiver<String>, guard: Option<SessionGuard>) -> impl Stream<Item = Result<String, Infallible>> + Send + 'static {
+fn frame_stream(
+    rx: mpsc::Receiver<String>,
+    guard: Option<SessionGuard>,
+) -> impl Stream<Item = Result<String, Infallible>> + Send + 'static {
     futures_util::stream::unfold((rx, guard), |(mut rx, guard)| async move {
         let item = rx.recv().await;
         match item {
@@ -731,7 +766,11 @@ fn session_stream(
         guard: Option<SessionGuard>,
     }
     futures_util::stream::unfold(
-        State { rx, ticker: tokio::time::interval(KEEPALIVE), guard: Some(guard) },
+        State {
+            rx,
+            ticker: tokio::time::interval(KEEPALIVE),
+            guard: Some(guard),
+        },
         |mut state| async move {
             tokio::select! {
                 item = state.rx.recv() => match item {
@@ -816,7 +855,10 @@ pub async fn get_mcp() -> Response {
 
 /// `DELETE /mcp` — session termination is not supported.
 pub async fn delete_mcp() -> Response {
-    json_error(StatusCode::METHOD_NOT_ALLOWED, "Session termination not supported")
+    json_error(
+        StatusCode::METHOD_NOT_ALLOWED,
+        "Session termination not supported",
+    )
 }
 
 /// `POST /mcp` and `POST /mcp/sse` (TS shares `handleStreamableMcpPost`).
@@ -858,7 +900,10 @@ async fn streamable_post(
 
     let requested = resolve_requested_protocol_version(&request, &headers);
     if headers.contains_key(PROTOCOL_HEADER) && requested.is_none() {
-        return json_error(StatusCode::BAD_REQUEST, "Invalid or unsupported MCP-Protocol-Version");
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "Invalid or unsupported MCP-Protocol-Version",
+        );
     }
     let negotiated = requested.unwrap_or(DEFAULT_PROTOCOL_VERSION);
 
@@ -903,8 +948,14 @@ async fn streamable_post(
         return sse_response(Body::from_stream(frame_stream(rx, None)), Some(negotiated));
     }
 
-    let response = handle_request(&request, state.tools.as_deref(), negotiated, &context, tool_set)
-        .await;
+    let response = handle_request(
+        &request,
+        state.tools.as_deref(),
+        negotiated,
+        &context,
+        tool_set,
+    )
+    .await;
 
     if !has_id {
         return StatusCode::ACCEPTED.into_response();
@@ -934,7 +985,10 @@ pub async fn get_mcp_sse(
     let Some((client_id, rx)) = state.sessions.register(owner) else {
         return json_error(StatusCode::SERVICE_UNAVAILABLE, "Too many MCP sessions");
     };
-    let guard = SessionGuard { registry: state.sessions.clone(), id: client_id.clone() };
+    let guard = SessionGuard {
+        registry: state.sessions.clone(),
+        id: client_id.clone(),
+    };
     let endpoint = endpoint_url(&headers, &client_id, &query);
     state
         .sessions
@@ -952,7 +1006,10 @@ pub async fn post_mcp_messages(
     body: Body,
 ) -> Response {
     let query = query_params(&uri);
-    let client_id = query.get("clientId").map(String::as_str).unwrap_or_default();
+    let client_id = query
+        .get("clientId")
+        .map(String::as_str)
+        .unwrap_or_default();
     if client_id.is_empty() || !state.sessions.contains(client_id) {
         return json_error(StatusCode::BAD_REQUEST, "Invalid or missing clientId");
     }
@@ -970,7 +1027,10 @@ pub async fn post_mcp_messages(
 
     let requested = resolve_requested_protocol_version(&request, &headers);
     if headers.contains_key(PROTOCOL_HEADER) && requested.is_none() {
-        return json_error(StatusCode::BAD_REQUEST, "Invalid or unsupported MCP-Protocol-Version");
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "Invalid or unsupported MCP-Protocol-Version",
+        );
     }
     let negotiated = requested.unwrap_or(DEFAULT_PROTOCOL_VERSION);
 
@@ -979,8 +1039,14 @@ pub async fn post_mcp_messages(
         Err(response) => return response,
     };
     let tool_set = parse_tool_set(&query);
-    let response = handle_request(&request, state.tools.as_deref(), negotiated, &context, tool_set)
-        .await;
+    let response = handle_request(
+        &request,
+        state.tools.as_deref(),
+        negotiated,
+        &context,
+        tool_set,
+    )
+    .await;
     if !response.is_null() {
         state.sessions.push(client_id, sse_frame(&response));
     }
@@ -1001,7 +1067,11 @@ mod tests {
 
     impl FakeTools {
         fn with(tools: Vec<McpToolDescriptor>) -> Self {
-            Self { tools, calls: StdMutex::new(Vec::new()), fail: false }
+            Self {
+                tools,
+                calls: StdMutex::new(Vec::new()),
+                fail: false,
+            }
         }
         fn failing() -> Self {
             let mut fake = Self::with(vec![McpToolDescriptor::new("shell.exec")]);
@@ -1041,7 +1111,10 @@ mod tests {
             _query: &'a HashMap<String, String>,
         ) -> BoxFuture<'a, Result<McpToolContext, Response>> {
             Box::pin(async move {
-                Err(json_error(StatusCode::UNAUTHORIZED, "Authentication required"))
+                Err(json_error(
+                    StatusCode::UNAUTHORIZED,
+                    "Authentication required",
+                ))
             })
         }
     }
@@ -1103,7 +1176,10 @@ mod tests {
         let projected = write.to_mcp_tool();
         assert_eq!(projected["name"], json!("files_write"));
         assert_eq!(projected["title"], json!("Write File"));
-        assert_eq!(projected["inputSchema"]["properties"]["path"]["type"], json!("string"));
+        assert_eq!(
+            projected["inputSchema"]["properties"]["path"]["type"],
+            json!("string")
+        );
         assert_eq!(projected["annotations"]["readOnlyHint"], json!(false));
         assert_eq!(projected["annotations"]["destructiveHint"], json!(true));
         assert_eq!(projected["annotations"]["idempotentHint"], json!(false));
@@ -1119,15 +1195,27 @@ mod tests {
         let body = json!({ "params": { "protocolVersion": "2025-06-18" } });
         let mut headers = HeaderMap::new();
         headers.insert(PROTOCOL_HEADER, "2024-11-05".parse().unwrap());
-        assert_eq!(resolve_requested_protocol_version(&body, &headers), Some("2025-06-18"));
+        assert_eq!(
+            resolve_requested_protocol_version(&body, &headers),
+            Some("2025-06-18")
+        );
 
         let bare = json!({});
-        assert_eq!(resolve_requested_protocol_version(&bare, &headers), Some("2024-11-05"));
+        assert_eq!(
+            resolve_requested_protocol_version(&bare, &headers),
+            Some("2024-11-05")
+        );
 
         let mut unsupported = HeaderMap::new();
         unsupported.insert(PROTOCOL_HEADER, "1999-01-01".parse().unwrap());
-        assert_eq!(resolve_requested_protocol_version(&bare, &unsupported), None);
-        assert_eq!(resolve_requested_protocol_version(&json!({}), &HeaderMap::new()), None);
+        assert_eq!(
+            resolve_requested_protocol_version(&bare, &unsupported),
+            None
+        );
+        assert_eq!(
+            resolve_requested_protocol_version(&json!({}), &HeaderMap::new()),
+            None
+        );
     }
 
     #[test]
@@ -1148,26 +1236,53 @@ mod tests {
 
     #[test]
     fn jsonrpc_validation_rejects_malformed_requests() {
-        assert!(is_valid_jsonrpc_request(&json!({ "jsonrpc": "2.0", "method": "ping" })));
+        assert!(is_valid_jsonrpc_request(
+            &json!({ "jsonrpc": "2.0", "method": "ping" })
+        ));
         assert!(!is_valid_jsonrpc_request(&json!({ "method": "ping" })));
-        assert!(!is_valid_jsonrpc_request(&json!({ "jsonrpc": "1.0", "method": "ping" })));
-        assert!(!is_valid_jsonrpc_request(&json!({ "jsonrpc": "2.0", "method": "" })));
-        assert!(!is_valid_jsonrpc_request(&json!([{ "jsonrpc": "2.0", "method": "ping" }])));
+        assert!(!is_valid_jsonrpc_request(
+            &json!({ "jsonrpc": "1.0", "method": "ping" })
+        ));
+        assert!(!is_valid_jsonrpc_request(
+            &json!({ "jsonrpc": "2.0", "method": "" })
+        ));
+        assert!(!is_valid_jsonrpc_request(
+            &json!([{ "jsonrpc": "2.0", "method": "ping" }])
+        ));
         assert!(!is_valid_jsonrpc_request(&json!("ping")));
     }
 
     #[tokio::test]
     async fn initialize_advertises_capabilities_and_instructions() {
         let request = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} });
-        let response =
-            handle_request(&request, None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All)
-                .await;
+        let response = handle_request(
+            &request,
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["jsonrpc"], json!("2.0"));
         assert_eq!(response["id"], json!(1));
-        assert_eq!(response["result"]["protocolVersion"], json!(DEFAULT_PROTOCOL_VERSION));
-        assert_eq!(response["result"]["serverInfo"]["name"], json!("jait-gateway"));
-        assert_eq!(response["result"]["capabilities"]["tools"]["listChanged"], json!(false));
-        assert!(response["result"]["instructions"].as_str().unwrap().starts_with("Jait gateway"));
+        assert_eq!(
+            response["result"]["protocolVersion"],
+            json!(DEFAULT_PROTOCOL_VERSION)
+        );
+        assert_eq!(
+            response["result"]["serverInfo"]["name"],
+            json!("jait-gateway")
+        );
+        assert_eq!(
+            response["result"]["capabilities"]["tools"]["listChanged"],
+            json!(false)
+        );
+        assert!(
+            response["result"]["instructions"]
+                .as_str()
+                .unwrap()
+                .starts_with("Jait gateway")
+        );
         assert!(response.get("error").is_none());
     }
 
@@ -1179,10 +1294,24 @@ mod tests {
         let fake = FakeTools::with(vec![core, extra]);
         let request = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
 
-        let all = handle_request(&request, Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let all = handle_request(
+            &request,
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(all["result"]["tools"].as_array().unwrap().len(), 2);
 
-        let core_only = handle_request(&request, Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::Core).await;
+        let core_only = handle_request(
+            &request,
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::Core,
+        )
+        .await;
         let names: Vec<&str> = core_only["result"]["tools"]
             .as_array()
             .unwrap()
@@ -1191,10 +1320,24 @@ mod tests {
             .collect();
         assert_eq!(names, vec!["fs_read"]);
 
-        let deferred = handle_request(&request, Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::Deferred).await;
+        let deferred = handle_request(
+            &request,
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::Deferred,
+        )
+        .await;
         assert_eq!(deferred["result"]["tools"].as_array().unwrap().len(), 1);
 
-        let none = handle_request(&request, None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let none = handle_request(
+            &request,
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(none["result"]["tools"], json!([]));
     }
 
@@ -1214,7 +1357,10 @@ mod tests {
         assert_eq!(response["result"]["content"][0]["text"], json!("done"));
         let calls = fake.calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "shell.exec", "MCP name maps back to the dotted registry name");
+        assert_eq!(
+            calls[0].0, "shell.exec",
+            "MCP name maps back to the dotted registry name"
+        );
         assert_eq!(calls[0].1["cmd"], json!("ls"));
     }
 
@@ -1224,17 +1370,40 @@ mod tests {
         extra.core = false;
         let fake = FakeTools::with(vec![extra]);
 
-        let unknown = handle_request(&call_request("nope_nothing"), Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let unknown = handle_request(
+            &call_request("nope_nothing"),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(unknown["result"]["isError"], json!(true));
-        assert!(unknown["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .starts_with("Unknown tool:"));
+        assert!(
+            unknown["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("Unknown tool:")
+        );
 
-        let filtered = handle_request(&call_request("browser_click"), Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::Core).await;
+        let filtered = handle_request(
+            &call_request("browser_click"),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::Core,
+        )
+        .await;
         assert_eq!(filtered["result"]["isError"], json!(true));
 
-        let no_source = handle_request(&call_request("browser_click"), None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let no_source = handle_request(
+            &call_request("browser_click"),
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(no_source["result"]["isError"], json!(true));
     }
 
@@ -1242,25 +1411,55 @@ mod tests {
     async fn tools_call_validates_params_and_session() {
         let fake = FakeTools::with(vec![McpToolDescriptor::new("fs.read")]);
 
-        let missing_name = json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {} });
-        let response = handle_request(&missing_name, Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let missing_name =
+            json!({ "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {} });
+        let response = handle_request(
+            &missing_name,
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["error"]["code"], json!(-32602));
 
         let bad_args = json!({
             "jsonrpc": "2.0", "id": 4, "method": "tools/call",
             "params": { "name": "fs.read", "arguments": [1, 2] }
         });
-        let response = handle_request(&bad_args, Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &bad_args,
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["error"]["code"], json!(-32602));
 
-        let no_session = McpToolContext { session_id: None, ..Default::default() };
-        let response = handle_request(&call_request("fs_read"), Some(&fake), DEFAULT_PROTOCOL_VERSION, &no_session, ToolSet::All).await;
+        let no_session = McpToolContext {
+            session_id: None,
+            ..Default::default()
+        };
+        let response = handle_request(
+            &call_request("fs_read"),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &no_session,
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"]["isError"], json!(true));
-        assert!(response["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("requires a sessionId"));
-        assert!(fake.calls.lock().unwrap().is_empty(), "denied calls must not reach the tool");
+        assert!(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("requires a sessionId")
+        );
+        assert!(
+            fake.calls.lock().unwrap().is_empty(),
+            "denied calls must not reach the tool"
+        );
     }
 
     #[tokio::test]
@@ -1276,52 +1475,116 @@ mod tests {
             session_id_inferred: true,
             ..Default::default()
         };
-        let response = handle_request(&call_request("browser_click"), Some(&fake), DEFAULT_PROTOCOL_VERSION, &inferred, ToolSet::All).await;
+        let response = handle_request(
+            &call_request("browser_click"),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &inferred,
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"]["isError"], json!(true));
-        assert!(response["result"]["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("explicit sessionId"));
+        assert!(
+            response["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("explicit sessionId")
+        );
 
         let start_browser = json!({
             "jsonrpc": "2.0", "id": 9, "method": "tools/call",
             "params": { "name": "surfaces_start", "arguments": { "type": "browser" } }
         });
-        let response = handle_request(&start_browser, Some(&fake), DEFAULT_PROTOCOL_VERSION, &inferred, ToolSet::All).await;
+        let response = handle_request(
+            &start_browser,
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &inferred,
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"]["isError"], json!(true));
 
         // Explicit sessions are allowed through.
-        let response = handle_request(&call_request("browser_click"), Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &call_request("browser_click"),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"]["isError"], json!(false));
     }
 
     #[tokio::test]
     async fn tool_execution_failure_is_wrapped_not_leaked_as_stack() {
         let fake = FakeTools::failing();
-        let response = handle_request(&call_request("shell_exec"), Some(&fake), DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &call_request("shell_exec"),
+            Some(&fake),
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"]["isError"], json!(true));
         let text = response["result"]["content"][0]["text"].as_str().unwrap();
         assert_eq!(text, "Tool execution error: boom");
-        assert!(!text.contains("at Object"), "no host stack frames are echoed");
+        assert!(
+            !text.contains("at Object"),
+            "no host stack frames are echoed"
+        );
     }
 
     #[tokio::test]
     async fn ping_unknown_method_and_cancelled_notification() {
         let ping = json!({ "jsonrpc": "2.0", "id": 11, "method": "ping" });
-        let response = handle_request(&ping, None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &ping,
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"], json!({}));
 
         let unknown = json!({ "jsonrpc": "2.0", "id": 12, "method": "resources/subscribe" });
-        let response = handle_request(&unknown, None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &unknown,
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["error"]["code"], json!(-32601));
-        assert_eq!(response["error"]["message"], json!("Method not found: resources/subscribe"));
+        assert_eq!(
+            response["error"]["message"],
+            json!("Method not found: resources/subscribe")
+        );
 
         let cancel = json!({ "jsonrpc": "2.0", "method": "notifications/cancelled", "params": { "requestId": 12 } });
-        let response = handle_request(&cancel, None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &cancel,
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert!(response.is_null(), "notifications are never answered");
 
         let resources = json!({ "jsonrpc": "2.0", "id": 13, "method": "resources/list" });
-        let response = handle_request(&resources, None, DEFAULT_PROTOCOL_VERSION, &session_ctx(), ToolSet::All).await;
+        let response = handle_request(
+            &resources,
+            None,
+            DEFAULT_PROTOCOL_VERSION,
+            &session_ctx(),
+            ToolSet::All,
+        )
+        .await;
         assert_eq!(response["result"]["resources"], json!([]));
     }
 
@@ -1333,16 +1596,25 @@ mod tests {
             registrations.push(registry.register(None).expect("within cap"));
         }
         assert_eq!(registry.len(), MAX_SESSIONS);
-        assert!(registry.register(None).is_none(), "over-cap registration is denied");
+        assert!(
+            registry.register(None).is_none(),
+            "over-cap registration is denied"
+        );
 
         let (id, mut rx) = registrations.remove(0);
         assert!(registry.push(&id, "event: message\ndata: {}\n\n".to_string()));
         let frame = rx.recv().await.expect("frame delivered");
         assert!(frame.starts_with("event: message"));
 
-        let guard = SessionGuard { registry: registry.clone(), id: id.clone() };
+        let guard = SessionGuard {
+            registry: registry.clone(),
+            id: id.clone(),
+        };
         drop(guard);
-        assert!(!registry.contains(&id), "dropping the stream removes the session");
+        assert!(
+            !registry.contains(&id),
+            "dropping the stream removes the session"
+        );
         assert!(!registry.push(&id, "x".to_string()));
     }
 
@@ -1354,10 +1626,15 @@ mod tests {
             .await
             .expect_err("denial must not yield a context");
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-        let bytes = axum::body::to_bytes(response.into_body(), 4096).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
         let body: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(body["error"], json!("Authentication required"));
-        assert!(!body.to_string().contains("token"), "denial bodies carry no credentials");
+        assert!(
+            !body.to_string().contains("token"),
+            "denial bodies carry no credentials"
+        );
     }
 
     #[tokio::test]
@@ -1365,10 +1642,16 @@ mod tests {
         let state = McpRoutes::new();
         let mut headers = HeaderMap::new();
         headers.insert("x-jait-session-id", "sess-42".parse().unwrap());
-        let context = state.authorize(&headers, &HashMap::new()).await.expect("context");
+        let context = state
+            .authorize(&headers, &HashMap::new())
+            .await
+            .expect("context");
         assert_eq!(context.session_id.as_deref(), Some("sess-42"));
         assert!(!context.session_id_inferred);
-        assert!(!context.action_id.is_empty(), "each call gets a correlation id");
+        assert!(
+            !context.action_id.is_empty(),
+            "each call gets a correlation id"
+        );
     }
 
     #[test]

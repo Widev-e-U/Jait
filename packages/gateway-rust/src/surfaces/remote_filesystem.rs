@@ -99,10 +99,12 @@ impl RemoteFileSystemSurface {
         self
     }
     pub fn on_output(&self, callback: Option<OutputCallback>) {
-        self.callbacks.lock().unwrap().output = callback;
+        let old = std::mem::replace(&mut self.callbacks.lock().unwrap().output, callback);
+        drop(old);
     }
     pub fn on_state_change(&self, callback: Option<StateCallback>) {
-        self.callbacks.lock().unwrap().state = callback;
+        let old = std::mem::replace(&mut self.callbacks.lock().unwrap().state, callback);
+        drop(old);
     }
     fn transition(&self, phase: SurfaceState) -> FileSystemResult<()> {
         self.state.lock().unwrap().phase = phase;

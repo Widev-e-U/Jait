@@ -37,6 +37,7 @@ export default defineConfig({
     'queued-attachments.spec.ts',
     'usage-prefetch.spec.ts',
     'chat-column-alignment.spec.ts',
+    'chat-id-paste.spec.ts',
     'conversation-bottom-scroll.spec.ts',
     'conversation-edit-scroll.spec.ts',
   ],

@@ -362,8 +362,18 @@ impl SseDecoder {
                     .get("id")
                     .and_then(Value::as_str)
                     .filter(|s| !s.is_empty());
-                let index = call.get("index").and_then(Value::as_i64);
-                if index.is_some_and(|index| index < 0) || id.is_some_and(|id| id.len() > 512) {
+                // Snapshot and web consumers use JavaScript numbers for slots.
+                // Reject malformed or non-exact indexes before emitting a durable delta.
+                let index = match call.get("index") {
+                    None => None,
+                    Some(value) => Some(
+                        value
+                            .as_i64()
+                            .filter(|index| (0..=9_007_199_254_740_991).contains(index))
+                            .ok_or("Invalid provider tool-call index")?,
+                    ),
+                };
+                if id.is_some_and(|id| id.len() > 512) {
                     return Err("Invalid provider tool-call identifier".into());
                 }
                 let slot = if let Some(existing) = id.and_then(|id| self.slots.get(id).copied()) {
@@ -383,6 +393,19 @@ impl SseDecoder {
                     free
                 };
                 if let Some(id) = id {
+                    // The legacy client and snapshot use this prefix to identify
+                    // placeholders; an ambiguous adoption would corrupt replay.
+                    if self
+                        .provisional
+                        .iter()
+                        .any(|(other, pending)| *other != slot && pending == id)
+                        || self
+                            .provisional
+                            .get(&slot)
+                            .is_some_and(|pending| pending != id && id.starts_with("pending-"))
+                    {
+                        return Err("Ambiguous provider tool-call identifier".into());
+                    }
                     self.slots.insert(id.into(), slot);
                 }
                 self.last_slot = slot;
@@ -404,9 +427,14 @@ impl SseDecoder {
                         },
                     );
                     if id.is_none() {
-                        self.provisional
-                            .insert(slot, format!("pending-{}", self.seq));
-                        self.seq += 1;
+                        loop {
+                            let candidate = format!("pending-{}", self.seq);
+                            self.seq += 1;
+                            if !self.slots.contains_key(&candidate) {
+                                self.provisional.insert(slot, candidate);
+                                break;
+                            }
+                        }
                     } else {
                         self.provisional.remove(&slot);
                     }
@@ -417,6 +445,7 @@ impl SseDecoder {
                         return Err("Provider changed a tool-call identifier".into());
                     }
                     existing.id = id.into();
+                    self.provisional.remove(&slot);
                 }
                 if !new {
                     existing
@@ -441,7 +470,7 @@ impl SseDecoder {
                 } else {
                     existing.id.clone()
                 };
-                let mut event = json!({"type":"tool_call_delta","call_id":call_id,"index":slot});
+                let mut event = json!({"type":"tool_call_delta","call_id":call_id,"index":slot,"provisional":existing.id.is_empty()});
                 if let Some(name) = function["name"].as_str().filter(|s| !s.is_empty()) {
                     event["name_delta"] = json!(name);
                 }
@@ -644,6 +673,110 @@ data: "usage":{"prompt_tokens":4,"completion_tokens":2}}
                 .unwrap();
             assert!(decoder.feed(&frame(json!({"tool_calls":[next]}))).is_err());
         }
+    }
+    #[test]
+    fn provisional_provider_id_collisions_fail_closed() {
+        let mut decoder = SseDecoder::default();
+        decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":4,"function":{"name":"x"}}]}),
+            ))
+            .unwrap();
+        assert!(
+            decoder
+                .feed(&frame(json!({"tool_calls":[{"index":1,"id":"pending-0"}]})))
+                .is_err()
+        );
+        let mut decoder = SseDecoder::default();
+        decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":4,"function":{"name":"x"}}]}),
+            ))
+            .unwrap();
+        assert!(
+            decoder
+                .feed(&frame(json!({"tool_calls":[{"index":4,"id":"pending-3"}]})))
+                .is_err()
+        );
+        let mut decoder = SseDecoder::default();
+        decoder
+            .feed(&frame(json!({"tool_calls":[{"index":1,"id":"pending-0"}]})))
+            .unwrap();
+        let events = decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":4,"function":{"name":"x"}}]}),
+            ))
+            .unwrap();
+        assert_eq!(events[0]["call_id"], "pending-1");
+    }
+    #[test]
+    fn provider_marks_provisional_identity_even_when_real_id_matches() {
+        let mut decoder = SseDecoder::default();
+        let pending = decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":4,"function":{"name":"x"}}]}),
+            ))
+            .unwrap();
+        assert_eq!(pending[0]["call_id"], "pending-0");
+        assert_eq!(pending[0]["provisional"], true);
+        let adopted = decoder
+            .feed(&frame(json!({"tool_calls":[{"index":4,"id":"pending-0"}]})))
+            .unwrap();
+        assert_eq!(adopted[0]["call_id"], "pending-0");
+        assert_eq!(adopted[0]["provisional"], false);
+        let later = decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":4,"function":{"arguments":"{}"}}]}),
+            ))
+            .unwrap();
+        assert_eq!(later[0]["provisional"], false);
+    }
+    #[test]
+    fn adopted_provisional_id_can_be_reused_by_another_slot() {
+        let mut decoder = SseDecoder::default();
+        decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":4,"function":{"name":"x"}}]}),
+            ))
+            .unwrap();
+        let adopted = decoder
+            .feed(&frame(json!({"tool_calls":[{"index":4,"id":"real-4"}]})))
+            .unwrap();
+        assert_eq!(adopted[0]["call_id"], "real-4");
+        let reused = decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":1,"id":"pending-0","function":{"name":"y"}}]}),
+            ))
+            .unwrap();
+        assert_eq!(reused[0]["call_id"], "pending-0");
+        assert_eq!(decoder.result().tool_calls.len(), 2);
+    }
+    #[test]
+    fn provider_rejects_unrepresentable_and_malformed_tool_slots() {
+        for index in [
+            json!(-1),
+            json!(9_007_199_254_740_992_i64),
+            json!(1.5),
+            json!("1"),
+            json!(null),
+        ] {
+            let mut decoder = SseDecoder::default();
+            assert!(
+                decoder
+                    .feed(&frame(
+                        json!({"tool_calls":[{"index":index,"function":{"name":"x"}}]})
+                    ))
+                    .is_err()
+            );
+            assert!(decoder.result().tool_calls.is_empty());
+        }
+        let mut decoder = SseDecoder::default();
+        let events = decoder
+            .feed(&frame(
+                json!({"tool_calls":[{"index":9_007_199_254_740_991_i64,"function":{"name":"x"}}]}),
+            ))
+            .unwrap();
+        assert_eq!(events[0]["index"], json!(9_007_199_254_740_991_i64));
     }
     #[test]
     fn malformed_utf8_and_bounded_frames_are_rejected() {

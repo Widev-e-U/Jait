@@ -143,6 +143,7 @@ describe('chat transcript and composer layout', () => {
     expect(composerBoundary).not.toContain('px-4')
     expect(composerBoundary).not.toContain('px-3')
     expect(CHAT_COMPOSER_COLUMN_PADDING_CLASS).toBe('px-0')
+    expect(getChatComposerBoundaryClassName(true)).toContain('px-2')
   })
 })
 

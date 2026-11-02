@@ -489,8 +489,7 @@ pub mod private_directory {
         let meta = parent.metadata()?;
         if !meta.is_dir()
             || meta.uid() != unsafe { libc::geteuid() }
-            || meta.mode() & 0o077 != 0
-            || meta.mode() & 0o700 != 0o700
+            || meta.mode() & 0o7777 != 0o700
         {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -551,7 +550,7 @@ pub mod private_directory {
         let meta = file.metadata()?;
         if !meta.is_dir()
             || meta.uid() != unsafe { libc::geteuid() }
-            || meta.mode() & 0o777 != 0o700
+            || meta.mode() & 0o7777 != 0o700
         {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -621,6 +620,12 @@ mod private_directory_tests {
             std::io::ErrorKind::PermissionDenied
         );
         assert!(!fixture.0.join("other").exists());
+        fs::set_permissions(&fixture.0, fs::Permissions::from_mode(0o1700)).unwrap();
+        assert_eq!(
+            create_in(&parent, "special").err().unwrap().kind(),
+            std::io::ErrorKind::PermissionDenied
+        );
+        assert!(!fixture.0.join("special").exists());
     }
 }
 
@@ -632,3 +637,7 @@ pub mod database_authority;
 #[cfg(target_os = "linux")]
 #[path = "child_host.rs"]
 pub mod host;
+
+#[cfg(target_os = "linux")]
+#[path = "parent_operation.rs"]
+pub mod parent_operation;

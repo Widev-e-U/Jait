@@ -8,8 +8,26 @@ mod empty_chat_tests {
     fn node_lookup_uses_insertion_order_and_skips_stopped_sessions() {
         let mut service = ScreenShareService::default();
         service.register_device(json!({"id":"host","name":"host","platform":"desktop","authorized":true,"capabilities":[]}));
-        let first = service.start_with_options("host", None, StartOptions { node_id: Some("node".into()), ..Default::default() }).unwrap();
-        let second = service.start_with_options("host", None, StartOptions { node_id: Some("node".into()), ..Default::default() }).unwrap();
+        let first = service
+            .start_with_options(
+                "host",
+                None,
+                StartOptions {
+                    node_id: Some("node".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let second = service
+            .start_with_options(
+                "host",
+                None,
+                StartOptions {
+                    node_id: Some("node".into()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         assert_eq!(service.node_session("node").unwrap()["id"], first["id"]);
         service.stop_session(first["id"].as_str());
         assert_eq!(service.node_session("node").unwrap()["id"], second["id"]);
@@ -19,14 +37,22 @@ mod empty_chat_tests {
     fn pending_join_does_not_approve_or_enable_handoff() {
         let mut service = ScreenShareService::default();
         for id in ["host", "viewer"] {
-            service.register_device(json!({"id":id,"name":id,"platform":"desktop","authorized":true,"capabilities":[]}));
+            service.register_device(
+                json!({"id":id,"name":id,"platform":"desktop","authorized":true,"capabilities":[]}),
+            );
         }
-        let session = service.start_with_options("host", None, StartOptions {
-            chat_id: Some("chat".into()),
-            initiated_by_agent: true,
-            require_consent: true,
-            ..Default::default()
-        }).unwrap();
+        let session = service
+            .start_with_options(
+                "host",
+                None,
+                StartOptions {
+                    chat_id: Some("chat".into()),
+                    initiated_by_agent: true,
+                    require_consent: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         let id = session["id"].as_str().unwrap();
         let joined = service.add_viewer(id, "viewer").unwrap();
         assert_eq!(joined["pendingApproval"], true);
@@ -43,10 +69,16 @@ mod empty_chat_tests {
     fn empty_chat_uses_global_active_session() {
         let mut service = ScreenShareService::default();
         service.register_device(json!({"id":"host","name":"host","platform":"desktop","authorized":true,"capabilities":[]}));
-        let session = service.start_with_options("host", None, StartOptions {
-            chat_id: Some(String::new()),
-            ..Default::default()
-        }).unwrap();
+        let session = service
+            .start_with_options(
+                "host",
+                None,
+                StartOptions {
+                    chat_id: Some(String::new()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         assert_eq!(session["chatId"], "");
         assert_eq!(service.state()["activeSession"]["id"], session["id"]);
         assert!(service.chat_session("").is_none());
@@ -108,7 +140,8 @@ impl ScreenShareService {
     /// Find the earliest still-live share for a node, matching the reference
     /// Map's insertion order when multiple shares belong to the same node.
     pub fn node_session(&self, node: &str) -> Option<Value> {
-        self.session_order.iter()
+        self.session_order
+            .iter()
             .filter_map(|id| self.sessions.get(id))
             .find(|session| session["nodeId"] == node && session["status"] != "idle")
             .cloned()

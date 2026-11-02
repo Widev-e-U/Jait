@@ -907,7 +907,9 @@ fn folder_decode(s: &str) -> Result<String, String> {
                 return Err("Invalid IMAP folder encoding".into());
             }
             let wide: Vec<u16> = bytes
-                .as_chunks::<2>().0.iter()
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|b| u16::from_be_bytes([b[0], b[1]]))
                 .collect();
             out.push_str(&String::from_utf16(&wide).map_err(|_| "Invalid IMAP folder encoding")?);
@@ -946,16 +948,17 @@ impl ImapSession for NativeImap {
                     .strip_prefix('[')
                     .and_then(|v| v.strip_suffix(']'))
                     && let Some((key, value)) = code.split_once(' ')
-                        && key.eq_ignore_ascii_case("UIDVALIDITY") {
-                            validity = Some(
-                                value
-                                    .parse::<u64>()
-                                    .ok()
-                                    .filter(|n| *n > 0 && *n <= 4_294_967_295)
-                                    .ok_or("Invalid UID validity")?
-                                    .to_string(),
-                            );
-                        }
+                    && key.eq_ignore_ascii_case("UIDVALIDITY")
+                {
+                    validity = Some(
+                        value
+                            .parse::<u64>()
+                            .ok()
+                            .filter(|n| *n > 0 && *n <= 4_294_967_295)
+                            .ok_or("Invalid UID validity")?
+                            .to_string(),
+                    );
+                }
             }
             let state = MailboxState {
                 path: folder.into(),

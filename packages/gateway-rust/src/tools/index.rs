@@ -145,7 +145,10 @@ mod tests {
             .with_thread("thread-1", "user-1", Some("persona-1"))
             .with_persona("persona-1", "user-1");
 
-        assert_eq!(persona_agent_id_for_context(Some(&threads), None, Some("thread-1")), None);
+        assert_eq!(
+            persona_agent_id_for_context(Some(&threads), None, Some("thread-1")),
+            None
+        );
         assert_eq!(
             persona_agent_id_for_context(Some(&threads), Some("user-1"), None),
             None

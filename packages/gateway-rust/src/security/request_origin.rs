@@ -54,7 +54,11 @@ mod tests {
             "https://tauri.localhost",
             "capacitor://localhost",
         ] {
-            assert!(is_allowed_request_origin(Some(origin), Some("api.test"), ""));
+            assert!(is_allowed_request_origin(
+                Some(origin),
+                Some("api.test"),
+                ""
+            ));
         }
     }
 

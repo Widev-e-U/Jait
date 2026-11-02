@@ -124,7 +124,10 @@ impl MobileRoutes {
             .route("/api/mobile/devices/{deviceId}/heartbeat", post(heartbeat))
             .route("/api/mobile/devices", get(devices))
             .route("/api/mobile/push-devices", get(push_devices))
-            .route("/api/mobile/push-devices/{deviceId}", delete(push_device_delete))
+            .route(
+                "/api/mobile/push-devices/{deviceId}",
+                delete(push_device_delete),
+            )
             .route("/api/mobile/push-devices/test", post(push_device_test))
             .route("/api/mobile/routines", get(routines))
             .route("/api/mobile/routines/{kind}", put(routine_put))
@@ -341,12 +344,7 @@ fn routine_input(kind: &str, prompt: &str, time_zone: &str, working_directory: &
     })
 }
 
-fn routine_patch(
-    kind: &str,
-    cron: &str,
-    input: Value,
-    enabled: bool,
-) -> Value {
+fn routine_patch(kind: &str, cron: &str, input: Value, enabled: bool) -> Value {
     json!({
         "name": format!("Daily {kind} routine"),
         "cron": cron,
@@ -363,7 +361,10 @@ fn routine_meta_kind(job: &Value) -> Option<String> {
 }
 
 fn is_routine(job: &Value) -> bool {
-    matches!(routine_meta_kind(job).as_deref(), Some("morning") | Some("evening"))
+    matches!(
+        routine_meta_kind(job).as_deref(),
+        Some("morning") | Some("evening")
+    )
 }
 
 fn routine_matches_kind(job: &Value, kind: &str, user_id: &str) -> bool {
@@ -395,7 +396,12 @@ fn hostname(headers: &HeaderMap, request: &Request) -> String {
         .and_then(|value| value.to_str().ok())
         .filter(|value| !value.is_empty())
         .map(str::to_string)
-        .or_else(|| request.uri().authority().map(|authority| authority.to_string()))
+        .or_else(|| {
+            request
+                .uri()
+                .authority()
+                .map(|authority| authority.to_string())
+        })
         .unwrap_or_else(|| "localhost".to_string());
     if let Some(rest) = raw.strip_prefix('[') {
         // IPv6 literal: hostname excludes the port that follows the bracket.
@@ -432,10 +438,7 @@ async fn body_of(request: Request) -> Result<Value, Box<Response>> {
 async fn discovery(State(_state): State<MobileRoutes>, request: Request) -> Response {
     let host = hostname(request.headers(), &request);
     let protocol = protocol(&request);
-    auth::response(
-        200,
-        discovery_payload(&host, protocol, &iso_now()),
-    )
+    auth::response(200, discovery_payload(&host, protocol, &iso_now()))
 }
 
 async fn register(State(state): State<MobileRoutes>, request: Request) -> Response {
@@ -464,10 +467,7 @@ async fn register(State(state): State<MobileRoutes>, request: Request) -> Respon
     auth::response(200, json!({ "ok": true, "device": device }))
 }
 
-async fn heartbeat(
-    State(state): State<MobileRoutes>,
-    Path(device_id): Path<String>,
-) -> Response {
+async fn heartbeat(State(state): State<MobileRoutes>, Path(device_id): Path<String>) -> Response {
     let (status, body) = heartbeat_body(state.devices.heartbeat(&device_id));
     auth::response(status, body)
 }
@@ -592,26 +592,30 @@ async fn routine_put(
     }
     let prompt = routine_prompt(kind, &body);
     let input = routine_input(kind, &prompt, &time_zone, &working_directory());
-    let patch = routine_patch(kind, &routine_cron(&hour, &minute), input, routine_enabled(&body));
+    let patch = routine_patch(
+        kind,
+        &routine_cron(&hour, &minute),
+        input,
+        routine_enabled(&body),
+    );
     let existing = store
         .list(&user.id)
         .into_iter()
         .find(|job| routine_matches_kind(job, kind, &user.id));
-    let routine = match existing
-        .and_then(|job| job.get("id").and_then(Value::as_str).map(str::to_string))
-    {
-        Some(id) => store.update(&id, patch, &user.id),
-        None => {
-            let mut job = match patch {
-                Value::Object(map) => map,
-                _ => serde_json::Map::new(),
-            };
-            job.insert("userId".to_string(), json!(user.id));
-            job.insert("sessionId".to_string(), json!("default"));
-            job.insert("projectRoot".to_string(), json!(working_directory()));
-            store.create(Value::Object(job))
-        }
-    };
+    let routine =
+        match existing.and_then(|job| job.get("id").and_then(Value::as_str).map(str::to_string)) {
+            Some(id) => store.update(&id, patch, &user.id),
+            None => {
+                let mut job = match patch {
+                    Value::Object(map) => map,
+                    _ => serde_json::Map::new(),
+                };
+                job.insert("userId".to_string(), json!(user.id));
+                job.insert("sessionId".to_string(), json!("default"));
+                job.insert("projectRoot".to_string(), json!(working_directory()));
+                store.create(Value::Object(job))
+            }
+        };
     auth::response(200, json!({ "routine": routine }))
 }
 
@@ -734,7 +738,12 @@ mod tests {
         assert_eq!(registration.capabilities, vec!["camera", "7"]);
         assert_eq!(field(&body, "pushToken"), "tok");
         let no_caps = json!({"id": "a", "name": "b", "platform": "desktop", "capabilities": "x"});
-        assert!(device_registration(&no_caps).expect("valid").capabilities.is_empty());
+        assert!(
+            device_registration(&no_caps)
+                .expect("valid")
+                .capabilities
+                .is_empty()
+        );
     }
 
     #[test]
@@ -750,9 +759,12 @@ mod tests {
             Err(error_body(INVALID_PAYLOAD))
         );
         let blank_id = json!({"id": "   ", "name": "n", "platform": "browser"});
-        assert_eq!(device_registration(&blank_id), Err(error_body(INVALID_PAYLOAD)));
         assert_eq!(
-            error_body( INVALID_PAYLOAD)["error"],
+            device_registration(&blank_id),
+            Err(error_body(INVALID_PAYLOAD))
+        );
+        assert_eq!(
+            error_body(INVALID_PAYLOAD)["error"],
             "Invalid device registration payload"
         );
         assert_eq!(error(400, INVALID_PAYLOAD).status(), 400);
@@ -799,14 +811,8 @@ mod tests {
             push_test_message(&json!({"message": "   "})),
             DEFAULT_TEST_MESSAGE
         );
-        assert_eq!(
-            push_test_message(&json!({"message": 42})),
-            "42"
-        );
-        assert_eq!(
-            push_test_message(&json!({"message": " hi "})),
-            "hi"
-        );
+        assert_eq!(push_test_message(&json!({"message": 42})), "42");
+        assert_eq!(push_test_message(&json!({"message": " hi "})), "hi");
         assert_eq!(DEFAULT_TEST_MESSAGE, "This is a test push from Jait.");
     }
 
@@ -828,7 +834,10 @@ mod tests {
             parse_hhmm("07:05"),
             Some(("07".to_string(), "05".to_string()))
         );
-        assert_eq!(parse_hhmm("23:59"), Some(("23".to_string(), "59".to_string())));
+        assert_eq!(
+            parse_hhmm("23:59"),
+            Some(("23".to_string(), "59".to_string()))
+        );
         assert_eq!(parse_hhmm("24:00"), None);
         assert_eq!(parse_hhmm("00:60"), None);
         assert_eq!(parse_hhmm("7:05"), None);
@@ -847,7 +856,10 @@ mod tests {
         assert_eq!(routine_time("morning", &json!({"time": "09:30"})), "09:30");
         assert_eq!(routine_time("evening", &json!({"time": 9})), "21:00");
         assert_eq!(routine_time_zone(&json!({})), "UTC");
-        assert_eq!(routine_time_zone(&json!({"timeZone": "Europe/Berlin"})), "Europe/Berlin");
+        assert_eq!(
+            routine_time_zone(&json!({"timeZone": "Europe/Berlin"})),
+            "Europe/Berlin"
+        );
         assert_eq!(routine_time_zone(&json!({"timeZone": null})), "UTC");
     }
 
@@ -859,7 +871,10 @@ mod tests {
             routine_prompt("morning", &json!({"prompt": "  custom  "})),
             "custom"
         );
-        assert_eq!(routine_prompt("evening", &json!({"prompt": "   "})), EVENING_PROMPT);
+        assert_eq!(
+            routine_prompt("evening", &json!({"prompt": "   "})),
+            EVENING_PROMPT
+        );
     }
 
     #[test]
@@ -957,9 +972,15 @@ mod tests {
             .body(Body::empty())
             .expect("request");
         let mut headers = HeaderMap::new();
-        headers.insert(axum::http::header::HOST, "phone.local:8443".parse().expect("host"));
+        headers.insert(
+            axum::http::header::HOST,
+            "phone.local:8443".parse().expect("host"),
+        );
         assert_eq!(hostname(&headers, &request), "phone.local");
-        headers.insert(axum::http::header::HOST, "[::1]:8443".parse().expect("host"));
+        headers.insert(
+            axum::http::header::HOST,
+            "[::1]:8443".parse().expect("host"),
+        );
         assert_eq!(hostname(&headers, &request), "::1");
         headers.remove(axum::http::header::HOST);
         assert_eq!(hostname(&headers, &request), "localhost");

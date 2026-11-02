@@ -203,7 +203,9 @@ impl FileSystemResolver {
                 Path::new(context.project_root),
                 Path::new(target),
             );
-            let conventional = registry.surface(&fs_id);
+            let conventional = registry
+                .surface_with_owner(&fs_id)
+                .map(|(surface, _)| surface);
             let mut candidates: Vec<_> = conventional
                 .iter()
                 .filter(|s| running(s))
@@ -230,7 +232,7 @@ impl FileSystemResolver {
                     .trim_end_matches('_')
                     .to_lowercase();
                 let id = format!("fs-{}-{safe}", context.session_id);
-                if let Some(existing) = registry.surface(&id)
+                if let Some(existing) = registry.surface_with_owner(&id).map(|(surface, _)| surface)
                     && running(&existing)
                 {
                     return Ok(existing);
@@ -249,7 +251,9 @@ impl FileSystemResolver {
                     .await;
             }
         }
-        if let Some(conventional) = registry.surface(&fs_id)
+        if let Some(conventional) = registry
+            .surface_with_owner(&fs_id)
+            .map(|(surface, _)| surface)
             && running(&conventional)
         {
             return Ok(conventional);

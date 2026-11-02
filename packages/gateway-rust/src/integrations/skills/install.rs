@@ -21,6 +21,49 @@ use url::Url;
 /// resource/arguments every time; markdown and origin files are untrusted.
 pub trait SkillAuthority: Send + Sync {
     fn authorize(&self, effect: SkillEffect<'_>) -> SkillResult<()>;
+
+    /// Legacy authorities cannot approve effects whose complete content was not
+    /// available to them. Implementations must bind these borrowed bytes and all
+    /// fields to the current request and revalidate revocation on every call.
+    fn authorize_resource(&self, _resource: SkillEffectResource<'_>) -> SkillResult<()> {
+        Err("Precise skill effect authorization unavailable".into())
+    }
+}
+
+/// Complete inputs for content-bearing disk mutations. The archive bytes and
+/// rendered document are untrusted and must not be logged or sent to a model.
+/// A registry URL is a claimed origin, not proof of download provenance.
+pub enum SkillEffectResource<'a> {
+    Install {
+        root: &'a Path,
+        slug: &'a str,
+        version: &'a str,
+        registry: &'a str,
+        archive: &'a [u8],
+        installed_at: u64,
+    },
+    Write {
+        root: &'a Path,
+        id: &'a str,
+        overwrite: bool,
+        content: &'a [u8],
+    },
+    InstallTool {
+        skill_id: &'a str,
+        request: &'a ProcessRequest,
+    },
+}
+
+/// Fail-closed fallback when a request-bound policy is unavailable.
+/// Authentication and a consent decision alone must never replace this with an
+/// allow: the host must bind and revalidate the principal, request, complete
+/// resource, policy, expiry, revocation and cancellation at each effect boundary.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DenySkillEffects;
+impl SkillAuthority for DenySkillEffects {
+    fn authorize(&self, _: SkillEffect<'_>) -> SkillResult<()> {
+        Err("Skill effect authorization unavailable".into())
+    }
 }
 #[derive(Debug)]
 pub enum SkillEffect<'a> {
@@ -178,16 +221,28 @@ impl SkillStore {
             zip,
         } = downloaded;
         validate_slug(&slug)?;
+        let authorize_install = || {
+            authority.authorize(SkillEffect::Install {
+                root: &self.root,
+                slug: &slug,
+                version: &version,
+            })?;
+            authority.authorize_resource(SkillEffectResource::Install {
+                root: &self.root,
+                slug: &slug,
+                version: &version,
+                registry: &registry_url,
+                archive: &zip,
+                installed_at,
+            })?;
+            cancelled(cancel)
+        };
         if version.is_empty() || version.len() > 256 || version.chars().any(char::is_control) {
             return Err("Invalid ClawHub version".into());
         }
         ClawHubClient::new(Some(&registry_url))?;
         cancelled(cancel)?;
-        authority.authorize(SkillEffect::Install {
-            root: &self.root,
-            slug: &slug,
-            version: &version,
-        })?;
+        authorize_install()?;
         if self.directory.exists(&slug).map_err(|e| e.to_string())? {
             return Err(format!(
                 "Skill '{slug}' already exists; refusing to overwrite"
@@ -204,19 +259,11 @@ impl SkillStore {
         let mut updated = registry.clone();
         updated.add(skill.clone())?;
         cancelled(cancel)?;
-        authority.authorize(SkillEffect::Install {
-            root: &self.root,
-            slug: &slug,
-            version: &version,
-        })?;
+        authorize_install()?;
         let mut stage = Stage::new(&self.directory)?;
         for file in files {
             cancelled(cancel)?;
-            authority.authorize(SkillEffect::Install {
-                root: &self.root,
-                slug: &slug,
-                version: &version,
-            })?;
+            authorize_install()?;
             let (leaf, parents) = file.path.split_last().ok_or("Empty archive path")?;
             let mut nested: Option<Directory> = None;
             for parent in parents {
@@ -238,14 +285,10 @@ impl SkillStore {
         let origin = Origin {
             slug: slug.clone(),
             version: version.clone(),
-            registry: registry_url,
+            registry: registry_url.clone(),
             installed_at,
         };
-        authority.authorize(SkillEffect::Install {
-            root: &self.root,
-            slug: &slug,
-            version: &version,
-        })?;
+        authorize_install()?;
         let meta = stage
             .directory
             .create_child(".clawhub")
@@ -256,11 +299,7 @@ impl SkillStore {
         )
         .map_err(|e| e.to_string())?;
         cancelled(cancel)?;
-        authority.authorize(SkillEffect::Install {
-            root: &self.root,
-            slug: &slug,
-            version: &version,
-        })?;
+        authorize_install()?;
         self.directory
             .rename(&stage.name, &self.directory, &slug, false)
             .map_err(|e| e.to_string())?;
@@ -332,6 +371,7 @@ impl SkillStore {
             root: &self.root,
             slug,
         })?;
+        cancelled(cancel)?;
         let tombstone = format!(".jait-remove-{}", uuid::Uuid::new_v4());
         self.directory
             .rename(slug, &self.directory, &tombstone, false)
@@ -371,15 +411,25 @@ impl SkillStore {
             return Err(format!("'{}' does not make a usable skill id", params.id));
         }
         let content = render_skill_markdown(params.name, params.description, params.body)?;
+        let authorize_write = || {
+            authority.authorize(SkillEffect::Write {
+                root: &self.root,
+                id: &id,
+                overwrite: params.overwrite,
+            })?;
+            authority.authorize_resource(SkillEffectResource::Write {
+                root: &self.root,
+                id: &id,
+                overwrite: params.overwrite,
+                content: content.as_bytes(),
+            })?;
+            cancelled(cancel)
+        };
         let skill = self.skill_from_content(&id, &content)?;
         let mut updated = registry.clone();
         updated.add(skill)?;
         cancelled(cancel)?;
-        authority.authorize(SkillEffect::Write {
-            root: &self.root,
-            id: &id,
-            overwrite: params.overwrite,
-        })?;
+        authorize_write()?;
         let exists = self.directory.exists(&id).map_err(|e| e.to_string())?;
         let created = if exists {
             let directory = self
@@ -408,11 +458,7 @@ impl SkillStore {
                 .map_err(|e| e.to_string())?;
             let commit = (|| {
                 cancelled(cancel)?;
-                authority.authorize(SkillEffect::Write {
-                    root: &self.root,
-                    id: &id,
-                    overwrite: params.overwrite,
-                })?;
+                authorize_write()?;
                 directory
                     .rename(&temp, &directory, "SKILL.md", params.overwrite)
                     .map_err(|e| e.to_string())
@@ -429,11 +475,7 @@ impl SkillStore {
                 .write_new("SKILL.md", content.as_bytes())
                 .map_err(|e| e.to_string())?;
             cancelled(cancel)?;
-            authority.authorize(SkillEffect::Write {
-                root: &self.root,
-                id: &id,
-                overwrite: params.overwrite,
-            })?;
+            authorize_write()?;
             self.directory
                 .rename(&stage.name, &self.directory, &id, false)
                 .map_err(|e| e.to_string())?;
@@ -571,40 +613,25 @@ pub async fn install_skill_tool(
         skill_id: &skill.id,
         request: &request,
     })?;
+    let revalidate = |request: &ProcessRequest| {
+        authority
+            .authorize_resource(SkillEffectResource::InstallTool {
+                skill_id: &skill.id,
+                request,
+            })
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::PermissionDenied, error))
+    };
     let result = pool
-        .run(request, cancel.clone())
-        .await
-        .map_err(|e| e.to_string())?;
-    // Even a partial npm failure can change bins; never retain stale availability.
+        .run_revalidated(request, cancel.clone(), &revalidate)
+        .await;
+    // Even a process that failed while being collected may have changed binaries.
     cache.invalidate(None);
-    if result.cancelled {
-        return Err("npm install cancelled".into());
-    }
-    if result.timed_out {
-        return Err("npm install timed out after 180s".into());
-    }
-    if result.exit_code != Some(0) {
-        return Err(format!(
-            "npm install exited with code {:?}\n{}",
-            result.exit_code,
-            tail(&result.output, 2000)
-        ));
-    }
+    let result = result.map_err(|error| error.to_string())?;
     Ok(SkillToolInstallResult {
-        ok: true,
+        ok: result.exit_code == Some(0) && !result.timed_out && !result.cancelled,
         package,
-        output: tail(&result.output, 4000),
+        output: result.output,
     })
-}
-fn tail(value: &str, limit: usize) -> String {
-    value
-        .chars()
-        .rev()
-        .take(limit)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect()
 }
 
 #[cfg(test)]
@@ -657,10 +684,121 @@ mod tests {
         }
     }
     #[cfg(unix)]
+    #[tokio::test]
+    async fn tool_install_requires_precise_authority_at_spawn() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Policy(AtomicUsize);
+        impl SkillAuthority for Policy {
+            fn authorize(&self, _: SkillEffect<'_>) -> SkillResult<()> {
+                Ok(())
+            }
+            fn authorize_resource(&self, resource: SkillEffectResource<'_>) -> SkillResult<()> {
+                match resource {
+                    SkillEffectResource::InstallTool { skill_id, request } => {
+                        assert_eq!(skill_id, "s");
+                        assert_eq!(
+                            request.argv,
+                            ["/bin/true", "install", "-g", "--", "example"]
+                        );
+                        self.0.fetch_add(1, Ordering::SeqCst);
+                        Err("revoked".into())
+                    }
+                    _ => panic!("unexpected effect"),
+                }
+            }
+        }
+        let skill = Skill {
+            id: "s".into(),
+            name: "S".into(),
+            description: "D".into(),
+            file_path: "/s/SKILL.md".into(),
+            source: SkillSource::User,
+            enabled: true,
+            requires: None,
+            install: Some(vec![super::super::SkillInstallSpec {
+                kind: Some("node".into()),
+                package: Some("example".into()),
+                ..Default::default()
+            }]),
+        };
+        let host = ProcessRequest {
+            argv: vec!["/bin/true".into()],
+            cwd: "/".into(),
+            environment: Default::default(),
+            input: None,
+            timeout: Duration::from_secs(1),
+            output_limit: 1,
+        };
+        let pool = ProcessPool::new(std::num::NonZeroU16::new(1).unwrap());
+        let mut cache = BinCache::new(std::ffi::OsStr::new("/bin"), None);
+        let policy = Policy(AtomicUsize::new(0));
+        let error = install_skill_tool(
+            &skill,
+            None,
+            host,
+            &pool,
+            &mut cache,
+            &policy,
+            &ProcessCancellation::default(),
+        )
+        .await
+        .unwrap_err();
+        assert!(error.contains("revoked"));
+        assert_eq!(policy.0.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn unavailable_policy_denies_every_skill_effect() {
+        let authority = DenySkillEffects;
+        let url = Url::parse("https://registry.example/skill?q=1").unwrap();
+        let root = Path::new("/skills");
+        let request = ProcessRequest {
+            argv: vec!["/bin/npm".into(), "install".into()],
+            cwd: root.into(),
+            environment: Default::default(),
+            input: None,
+            timeout: Duration::from_secs(1),
+            output_limit: 1,
+        };
+        let effects = [
+            SkillEffect::RegistryRead {
+                url: &url,
+                download: false,
+            },
+            SkillEffect::RegistryRead {
+                url: &url,
+                download: true,
+            },
+            SkillEffect::Install {
+                root,
+                slug: "skill",
+                version: "1",
+            },
+            SkillEffect::Uninstall {
+                root,
+                slug: "skill",
+            },
+            SkillEffect::Write {
+                root,
+                id: "skill",
+                overwrite: true,
+            },
+            SkillEffect::InstallTool {
+                skill_id: "skill",
+                request: &request,
+            },
+        ];
+        for effect in effects {
+            assert!(authority.authorize(effect).is_err());
+        }
+    }
+    #[cfg(unix)]
     struct TestAuthority;
     #[cfg(unix)]
     impl SkillAuthority for TestAuthority {
         fn authorize(&self, _: SkillEffect<'_>) -> SkillResult<()> {
+            Ok(())
+        }
+        fn authorize_resource(&self, _: SkillEffectResource<'_>) -> SkillResult<()> {
             Ok(())
         }
     }
@@ -712,6 +850,103 @@ mod tests {
             writer.write_all(bytes).unwrap();
         }
         writer.finish().unwrap().into_inner()
+    }
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn precise_authority_is_required_and_rechecked_before_publication() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Legacy;
+        impl SkillAuthority for Legacy {
+            fn authorize(&self, _: SkillEffect<'_>) -> SkillResult<()> {
+                Ok(())
+            }
+        }
+        struct RevokeOnSecond {
+            calls: AtomicUsize,
+            expected: Vec<u8>,
+        }
+        impl SkillAuthority for RevokeOnSecond {
+            fn authorize(&self, _: SkillEffect<'_>) -> SkillResult<()> {
+                Ok(())
+            }
+            fn authorize_resource(&self, resource: SkillEffectResource<'_>) -> SkillResult<()> {
+                match resource {
+                    SkillEffectResource::Write { id, content, .. } => {
+                        assert_eq!(id, "new");
+                        assert_eq!(content, self.expected);
+                    }
+                    SkillEffectResource::InstallTool { .. } => {
+                        panic!("unexpected tool installation")
+                    }
+                    SkillEffectResource::Install {
+                        slug,
+                        registry,
+                        archive,
+                        installed_at,
+                        ..
+                    } => {
+                        assert_eq!(slug, "new");
+                        assert_eq!(registry, "https://clawhub.ai");
+                        assert_eq!(archive, self.expected);
+                        assert_eq!(installed_at, 123);
+                    }
+                }
+                if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    Ok(())
+                } else {
+                    Err("revoked".into())
+                }
+            }
+        }
+        let root = TestRoot::new();
+        let store = SkillStore::open(root.0.clone()).unwrap();
+        let mut registry = SkillRegistry::default();
+        let cancel = ProcessCancellation::default();
+        let params = || WriteSkill {
+            id: "new",
+            name: "New",
+            description: "D",
+            body: "Body",
+            overwrite: false,
+        };
+        assert!(
+            store
+                .write_user_skill(&mut registry, params(), &Legacy, &cancel)
+                .is_err()
+        );
+        let write = RevokeOnSecond {
+            calls: AtomicUsize::new(0),
+            expected: render_skill_markdown("New", "D", "Body")
+                .unwrap()
+                .into_bytes(),
+        };
+        assert_eq!(
+            store
+                .write_user_skill(&mut registry, params(), &write, &cancel)
+                .unwrap_err(),
+            "revoked"
+        );
+        assert_eq!(write.calls.load(Ordering::SeqCst), 2);
+        let zip = archive(&[("SKILL.md", b"---\nname: New\ndescription: D\n---\nbody")]);
+        let install = RevokeOnSecond {
+            calls: AtomicUsize::new(0),
+            expected: zip.clone(),
+        };
+        let download = DownloadedSkill {
+            slug: "new".into(),
+            version: "1".into(),
+            registry: "https://clawhub.ai".into(),
+            zip,
+        };
+        assert_eq!(
+            store
+                .install_clawhub_skill(&mut registry, download, 123, &install, &cancel)
+                .unwrap_err(),
+            "revoked"
+        );
+        assert_eq!(install.calls.load(Ordering::SeqCst), 2);
+        assert!(registry.is_empty());
+        assert!(std::fs::read_dir(&root.0).unwrap().next().is_none());
     }
     #[cfg(target_os = "linux")]
     #[test]

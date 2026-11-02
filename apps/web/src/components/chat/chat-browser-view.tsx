@@ -259,7 +259,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const agentInControl = state?.verified === true && state.sharedWithAgent
   const controlLabel = state?.sharedWithAgent ? 'Take control' : 'Share with agent'
   const controls = <>
-    <TooltipHint content={`${state?.sharedWithAgent ? 'Agent is controlling' : 'You are controlling'} · ${controlLabel}`}>
+    <TooltipHint content={`${state?.sharedWithAgent ? 'Shared with agent — you can also interact' : 'You are controlling'} · ${controlLabel}`}>
       <button type="button" aria-label={controlLabel} aria-busy={busyAction === 'control'}
         disabled={busy || !state?.verified} onClick={() => void setShared()}
         className={`relative flex h-8 w-8 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50 ${agentInControl ? 'border-blue-500 ring-1 ring-blue-500' : ''}`}>
@@ -341,7 +341,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
       <div className={expanded ? 'min-h-0 flex-1 rounded-b-xl [&_[data-browser-layout]]:rounded-b-xl' : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
         <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls }}>
           <div className="h-full overflow-hidden rounded-b-xl">{state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
-            hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={state.sharedWithAgent || busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
+            hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
             : <p className="p-3 text-muted-foreground">No live browser is available for this chat.</p>}</div>
         </BrowserViewLayout>
       </div>

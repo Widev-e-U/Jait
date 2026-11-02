@@ -88,18 +88,23 @@ impl SurfaceTools {
                     "Open a browser in the current chat.".into(),
                 ));
             }
-            let browser = self.browser.as_ref().ok_or_else(|| {
-                HostError::Error("Browser navigation is unavailable".into())
-            })?;
+            let browser = self
+                .browser
+                .as_ref()
+                .ok_or_else(|| HostError::Error("Browser navigation is unavailable".into()))?;
             let mut ctx = context.clone();
             if let Some(root) = fallback(input.get("projectRoot"), context.get("projectRoot")) {
                 ctx["projectRoot"] = root.clone();
             }
-            let url = fallback(input.get("url"), None).cloned().unwrap_or_else(|| json!(""));
+            let url = fallback(input.get("url"), None)
+                .cloned()
+                .unwrap_or_else(|| json!(""));
             let mut result = browser("navigate", &json!({"url":url}), &ctx).await?;
-            let surface = result["data"]["browserId"]
-                .as_str()
-                .and_then(|id| self.registry.surface(id));
+            let surface = result["data"]["browserId"].as_str().and_then(|id| {
+                self.registry
+                    .surface_with_owner(id)
+                    .map(|(surface, _)| surface)
+            });
             if !truthy(&result["ok"]) || surface.is_none() {
                 return Ok(result);
             }
@@ -172,14 +177,18 @@ mod drift_tests {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let seen = calls.clone();
         let browser: HostPort<Value> = Arc::new(move |method, input, context| {
-            seen.lock().unwrap().push((method.to_owned(), input.clone(), context.clone()));
+            seen.lock()
+                .unwrap()
+                .push((method.to_owned(), input.clone(), context.clone()));
             Box::pin(async { Ok(json!({"ok":false,"message":"host rejected"})) })
         });
         let tools = SurfaceTools::new(SurfaceRegistry::default(), Some(browser));
-        let result = tools.start(
-            &json!({"type":"browser","url":"https://example.com","projectRoot":"/project"}),
-            &json!({"sessionId":"chat","projectRoot":"/default"}),
-        ).await;
+        let result = tools
+            .start(
+                &json!({"type":"browser","url":"https://example.com","projectRoot":"/project"}),
+                &json!({"sessionId":"chat","projectRoot":"/default"}),
+            )
+            .await;
         assert_eq!(result["message"], "host rejected");
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
@@ -191,7 +200,9 @@ mod drift_tests {
     #[tokio::test]
     async fn browser_without_host_never_starts_a_blank_surface() {
         let tools = SurfaceTools::new(SurfaceRegistry::default(), None);
-        let result = tools.start(&json!({"type":"browser"}), &json!({"sessionId":"chat"})).await;
+        let result = tools
+            .start(&json!({"type":"browser"}), &json!({"sessionId":"chat"}))
+            .await;
         assert_eq!(result["ok"], false);
         assert_eq!(result["message"], "Browser navigation is unavailable");
     }

@@ -21,20 +21,21 @@
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use axum::Router;
 use axum::body::Body;
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::{get, post};
-use axum::Router;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use super::auth::{self, AuthState};
 use crate::security::http_auth::AuthUser;
 use crate::text::js_trim;
 use crate::voice::{
-    resolve_consent, transcribe_remote, transcription_request, ScopedTranscriptionHttp, SttProvider,
-    StatePatch, TranscriptionRequest, VoiceConsent, VoiceFuture, VoiceService, VoiceState,
+    ScopedTranscriptionHttp, StatePatch, SttProvider, TranscriptionRequest, VoiceConsent,
+    VoiceFuture, VoiceService, VoiceState, resolve_consent, transcribe_remote,
+    transcription_request,
 };
 
 /// Adapter that lets an object-safe `dyn ScopedTranscriptionHttp` be handed to
@@ -336,7 +337,9 @@ impl VoiceRoutes {
             resolve_consent(&mut ConsentRef(&mut *host), Some(&session), &text)
         };
         let consent = match consent {
-            Ok(value) => serde_json::to_value(value).unwrap_or_else(|_| json!({ "handled": false })),
+            Ok(value) => {
+                serde_json::to_value(value).unwrap_or_else(|_| json!({ "handled": false }))
+            }
             Err(_) => return auth::internal_error(),
         };
 
@@ -405,7 +408,12 @@ impl VoiceRoutes {
     }
 
     // ── PATCH /api/voice/state/{sessionId} ─────────────────────────
-    pub async fn patch_state(&self, session_id: String, headers: HeaderMap, body: Body) -> Response {
+    pub async fn patch_state(
+        &self,
+        session_id: String,
+        headers: HeaderMap,
+        body: Body,
+    ) -> Response {
         let body = match auth::parse_body(body, &headers).await {
             Ok(value) => value,
             Err(response) => return *response,
@@ -494,8 +502,9 @@ impl VoiceRoutes {
             voice.transcribe(&session, Some(&text), None, &now)
         };
         let mut payload = match outcome {
-            Ok(transcription) => serde_json::to_value(&transcription)
-                .unwrap_or_else(|_| json!({ "text": text })),
+            Ok(transcription) => {
+                serde_json::to_value(&transcription).unwrap_or_else(|_| json!({ "text": text }))
+            }
             Err(_) => json!({ "text": text }),
         };
         if let Value::Object(map) = &mut payload {
@@ -708,11 +717,18 @@ async fn transcribe_handler(
     routes.post_transcribe(headers, body).await
 }
 
-async fn speak_handler(State(routes): State<VoiceRoutes>, headers: HeaderMap, body: Body) -> Response {
+async fn speak_handler(
+    State(routes): State<VoiceRoutes>,
+    headers: HeaderMap,
+    body: Body,
+) -> Response {
     routes.post_speak(headers, body).await
 }
 
-async fn state_handler(State(routes): State<VoiceRoutes>, Path(session_id): Path<String>) -> Response {
+async fn state_handler(
+    State(routes): State<VoiceRoutes>,
+    Path(session_id): Path<String>,
+) -> Response {
     routes.get_state(session_id).await
 }
 
@@ -770,12 +786,12 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use axum::http::HeaderValue;
     use super::*;
     use crate::db;
     use crate::security::http_auth::sign_auth_token;
     use axum::body::to_bytes;
-    use axum::http::{header, StatusCode};
+    use axum::http::HeaderValue;
+    use axum::http::{StatusCode, header};
     use std::path::PathBuf;
     use std::sync::Mutex as StdMutex;
 
@@ -844,7 +860,9 @@ mod tests {
 
     async fn read(response: Response) -> (StatusCode, Value) {
         let status = response.status();
-        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024).await.unwrap();
+        let bytes = to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap();
         let value = if bytes.is_empty() {
             Value::Null
         } else {
@@ -962,10 +980,17 @@ mod tests {
     async fn transcribe_rejects_a_malformed_json_body() {
         let fix = fixture();
         let routes = VoiceRoutes::new(fix.auth, route_config(None));
-        let (status, body) =
-            read(routes.post_transcribe(anon_headers(), Body::from("{not-json")).await).await;
+        let (status, body) = read(
+            routes
+                .post_transcribe(anon_headers(), Body::from("{not-json"))
+                .await,
+        )
+        .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert!(body.get("error").is_some(), "expected an error envelope: {body}");
+        assert!(
+            body.get("error").is_some(),
+            "expected an error envelope: {body}"
+        );
     }
 
     #[tokio::test]
@@ -987,7 +1012,10 @@ mod tests {
             body.get("consent").is_some(),
             "consent envelope missing: {body}"
         );
-        assert!(!body.to_string().contains("hello there\",\"consent"), "leak check");
+        assert!(
+            !body.to_string().contains("hello there\",\"consent"),
+            "leak check"
+        );
     }
 
     // ── 2. POST /api/voice/transcribe-audio ────────────────────────
@@ -1041,7 +1069,10 @@ mod tests {
         );
         let (status, body) = read(
             routes
-                .post_transcribe_audio(authed_headers(&token), json_body(json!({ "sessionId": "s1" })))
+                .post_transcribe_audio(
+                    authed_headers(&token),
+                    json_body(json!({ "sessionId": "s1" })),
+                )
                 .await,
         )
         .await;
@@ -1064,7 +1095,10 @@ mod tests {
         );
         let (status, body) = read(
             routes
-                .post_transcribe_audio(authed_headers(&token), json_body(json!({ "audioBase64": "AAAA" })))
+                .post_transcribe_audio(
+                    authed_headers(&token),
+                    json_body(json!({ "audioBase64": "AAAA" })),
+                )
                 .await,
         )
         .await;
@@ -1091,7 +1125,10 @@ mod tests {
         );
         let (status, body) = read(
             routes
-                .post_transcribe_audio(authed_headers(&token), json_body(json!({ "audioBase64": "AAAA" })))
+                .post_transcribe_audio(
+                    authed_headers(&token),
+                    json_body(json!({ "audioBase64": "AAAA" })),
+                )
                 .await,
         )
         .await;
@@ -1114,7 +1151,10 @@ mod tests {
         );
         let (status, body) = read(
             routes
-                .post_transcribe_audio(authed_headers(&token), json_body(json!({ "audioBase64": "AAAA" })))
+                .post_transcribe_audio(
+                    authed_headers(&token),
+                    json_body(json!({ "audioBase64": "AAAA" })),
+                )
                 .await,
         )
         .await;
@@ -1141,7 +1181,10 @@ mod tests {
         );
         let (status, _body) = read(
             routes
-                .post_transcribe_audio(authed_headers(&token), json_body(json!({ "audioBase64": "AAAA" })))
+                .post_transcribe_audio(
+                    authed_headers(&token),
+                    json_body(json!({ "audioBase64": "AAAA" })),
+                )
                 .await,
         )
         .await;
@@ -1164,7 +1207,8 @@ mod tests {
             },
             &oversized,
         )
-        .err().expect("oversized audio must be rejected");
+        .err()
+        .expect("oversized audio must be rejected");
         assert!(
             err.to_lowercase().contains("too large"),
             "unexpected error: {err}"
@@ -1177,8 +1221,12 @@ mod tests {
     async fn speak_rejects_blank_text() {
         let fix = fixture();
         let routes = VoiceRoutes::new(fix.auth, route_config(None));
-        let (status, body) =
-            read(routes.post_speak(anon_headers(), json_body(json!({ "text": "   " }))).await).await;
+        let (status, body) = read(
+            routes
+                .post_speak(anon_headers(), json_body(json!({ "text": "   " })))
+                .await,
+        )
+        .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(body["error"], "VALIDATION_ERROR");
     }
@@ -1204,7 +1252,10 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
         let encoded = body.to_string();
-        assert!(encoded.contains("wakeWordEnabled"), "missing state: {encoded}");
+        assert!(
+            encoded.contains("wakeWordEnabled"),
+            "missing state: {encoded}"
+        );
         assert!(encoded.contains("listening"), "missing state: {encoded}");
         assert!(!encoded.contains("bogus"), "unknown keys must be ignored");
     }

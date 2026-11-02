@@ -13,9 +13,9 @@
 //!   which this crate does not link, so the adapter reports the gap instead of inventing
 //!   certificate facts (see `CHECK_TLS_UNAVAILABLE_GAP`).
 
+use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -25,7 +25,8 @@ use tokio::sync::watch;
 use tokio::time::{Duration, timeout};
 
 /// `rule()` rollback text in the TypeScript implementation.
-pub const ROLLBACK: &str = "Preserve the previous configuration and restore it if legitimate access is affected.";
+pub const ROLLBACK: &str =
+    "Preserve the previous configuration and restore it if legitimate access is affected.";
 /// Every adapter starts with this coverage gap.
 pub const GAP_GATEWAY_OBSERVATION: &str =
     "Gateway-side observation; WAN exposure and exploitability are not established.";
@@ -48,8 +49,7 @@ pub const GAP_SSH_FAILED: &str = "SSH connection failed";
 pub const GAP_SSH_NO_IDENTIFICATION: &str = "No valid SSH identification received";
 
 /// Documented replacement for the Node-only certificate inspection path.
-pub const CHECK_TLS_UNAVAILABLE_GAP: &str =
-    "TLS certificate inspection is unavailable in this runtime: negotiated protocol, certificate validity and identity require an X.509 parser that the gateway does not link. Certificate policy cannot be determined.";
+pub const CHECK_TLS_UNAVAILABLE_GAP: &str = "TLS certificate inspection is unavailable in this runtime: negotiated protocol, certificate validity and identity require an X.509 parser that the gateway does not link. Certificate policy cannot be determined.";
 
 const SSH_TIMEOUT_MS: u64 = 3_000;
 const HTTP_TIMEOUT_MS: u64 = 3_000;
@@ -160,7 +160,10 @@ impl Default for Cancellation {
 impl Cancellation {
     pub fn new() -> Self {
         let (tx, _rx) = watch::channel(false);
-        Self { flag: Arc::new(AtomicBool::new(false)), tx }
+        Self {
+            flag: Arc::new(AtomicBool::new(false)),
+            tx,
+        }
     }
 
     /// `signal.abort()`.
@@ -341,9 +344,7 @@ pub fn parse_ssh_identification(buffer: &str) -> Option<SshIdentification> {
     let mut complete: Vec<&str> = lines.by_ref().collect();
     // `.slice(0, -1)` drops the trailing (possibly partial) segment.
     complete.pop();
-    complete
-        .into_iter()
-        .find_map(parse_ssh_identification_line)
+    complete.into_iter().find_map(parse_ssh_identification_line)
 }
 
 /// Node decodes chunks with `chunk.toString("ascii")`; every byte maps to one char.
@@ -367,17 +368,32 @@ fn contains_frame_ancestors(csp: Option<&str>) -> bool {
 }
 
 /// Port of the `response` handler inside `checkHttp`.
-pub fn evaluate_http_response(target: &str, port: u16, observation: &HttpObservation<'_>) -> AdapterResult {
-    let mut output = result(if observation.secure { "node-https" } else { "node-http" });
+pub fn evaluate_http_response(
+    target: &str,
+    port: u16,
+    observation: &HttpObservation<'_>,
+) -> AdapterResult {
+    let mut output = result(if observation.secure {
+        "node-https"
+    } else {
+        "node-http"
+    });
     let status = observation.status_code;
     let hsts = hsts_enabled(observation.hsts);
     let no_sniff = observation.content_type_options == Some("nosniff");
-    let framing = observation.frame_options.is_some() || contains_frame_ancestors(observation.content_security_policy);
+    let framing = observation.frame_options.is_some()
+        || contains_frame_ancestors(observation.content_security_policy);
 
     let mut facts = Map::new();
     facts.insert("statusCode".to_owned(), json!(status));
-    facts.insert("transport".to_owned(), json!(if observation.secure { "https" } else { "http" }));
-    facts.insert("redirectObserved".to_owned(), json!((300..400).contains(&status)));
+    facts.insert(
+        "transport".to_owned(),
+        json!(if observation.secure { "https" } else { "http" }),
+    );
+    facts.insert(
+        "redirectObserved".to_owned(),
+        json!((300..400).contains(&status)),
+    );
     facts.insert("hstsEnabled".to_owned(), json!(hsts));
     facts.insert("noSniff".to_owned(), json!(no_sniff));
     facts.insert("framingPolicyPresent".to_owned(), json!(framing));
@@ -437,7 +453,11 @@ pub struct TlsObservation<'a> {
 }
 
 /// Port of the `secureConnect` handler inside `checkTls`.
-pub fn evaluate_tls_certificate(target: &str, port: u16, observation: &TlsObservation<'_>) -> AdapterResult {
+pub fn evaluate_tls_certificate(
+    target: &str,
+    port: u16,
+    observation: &TlsObservation<'_>,
+) -> AdapterResult {
     let mut output = result("node-tls");
     let now = observation.now_ms;
     let expires = observation.valid_to_ms;
@@ -445,15 +465,20 @@ pub fn evaluate_tls_certificate(target: &str, port: u16, observation: &TlsObserv
 
     let expired = expires.is_some_and(|value| value <= now);
     let not_yet_valid = begins.is_some_and(|value| value > now);
-    let expiring_soon =
-        expires.is_some_and(|value| value > now && value - now < THIRTY_DAYS_MS);
+    let expiring_soon = expires.is_some_and(|value| value > now && value - now < THIRTY_DAYS_MS);
 
     output.conclusive = observation.has_certificate && expires.is_some() && begins.is_some();
 
     let mut facts = Map::new();
-    facts.insert("negotiatedProtocol".to_owned(), json!(observation.negotiated_protocol));
+    facts.insert(
+        "negotiatedProtocol".to_owned(),
+        json!(observation.negotiated_protocol),
+    );
     facts.insert("trustedByGateway".to_owned(), json!(observation.authorized));
-    facts.insert("identityMatches".to_owned(), json!(observation.identity_matches));
+    facts.insert(
+        "identityMatches".to_owned(),
+        json!(observation.identity_matches),
+    );
     facts.insert(
         "validFrom".to_owned(),
         json!(begins.and_then(iso_from_millis)),
@@ -462,7 +487,10 @@ pub fn evaluate_tls_certificate(target: &str, port: u16, observation: &TlsObserv
         "validTo".to_owned(),
         json!(expires.and_then(iso_from_millis)),
     );
-    facts.insert("fingerprint256".to_owned(), json!(observation.fingerprint256));
+    facts.insert(
+        "fingerprint256".to_owned(),
+        json!(observation.fingerprint256),
+    );
     facts.insert("expired".to_owned(), json!(expired));
     facts.insert("notYetValid".to_owned(), json!(not_yet_valid));
     facts.insert("expiringSoon".to_owned(), json!(expiring_soon));
@@ -786,7 +814,10 @@ mod tests {
         assert!(output.rules.is_empty());
         assert_eq!(
             output.coverage_gaps,
-            vec!["Gateway-side observation; WAN exposure and exploitability are not established.".to_owned()]
+            vec![
+                "Gateway-side observation; WAN exposure and exploitability are not established."
+                    .to_owned()
+            ]
         );
         assert!(!output.conclusive);
         assert_eq!(output.raw, None);
@@ -815,7 +846,10 @@ mod tests {
 
     #[test]
     fn version_prefers_bun_and_preserves_truthiness() {
-        assert_eq!(version_string(Some("1.1.30"), Some("v22.3.0")), "bun:1.1.30");
+        assert_eq!(
+            version_string(Some("1.1.30"), Some("v22.3.0")),
+            "bun:1.1.30"
+        );
         assert_eq!(version_string(None, Some("v22.3.0")), "v22.3.0");
         assert_eq!(version_string(Some(""), Some("v22.3.0")), "v22.3.0");
         assert_eq!(version_string(None, None), "");
@@ -853,15 +887,27 @@ mod tests {
         assert_eq!(output.evidence.len(), 1);
         let evidence = &output.evidence[0];
         assert_eq!(evidence.port, Some(443));
-        assert_eq!(evidence.summary, "HTTP root response and security-header presence");
+        assert_eq!(
+            evidence.summary,
+            "HTTP root response and security-header presence"
+        );
         assert_eq!(evidence.facts.get("statusCode"), Some(&json!(200)));
         assert_eq!(evidence.facts.get("transport"), Some(&json!("https")));
         assert_eq!(evidence.facts.get("redirectObserved"), Some(&json!(false)));
         assert_eq!(evidence.facts.get("hstsEnabled"), Some(&json!(true)));
         assert_eq!(evidence.facts.get("noSniff"), Some(&json!(true)));
-        assert_eq!(evidence.facts.get("framingPolicyPresent"), Some(&json!(true)));
+        assert_eq!(
+            evidence.facts.get("framingPolicyPresent"),
+            Some(&json!(true))
+        );
         assert_eq!(evidence.facts.get("bodyRetained"), Some(&json!(false)));
-        assert_eq!(output.coverage_gaps, vec![GAP_GATEWAY_OBSERVATION.to_owned(), GAP_HTTP_SCOPE.to_owned()]);
+        assert_eq!(
+            output.coverage_gaps,
+            vec![
+                GAP_GATEWAY_OBSERVATION.to_owned(),
+                GAP_HTTP_SCOPE.to_owned()
+            ]
+        );
     }
 
     #[test]
@@ -881,8 +927,14 @@ mod tests {
         assert_eq!(output.rules[0].severity, Severity::Low);
         assert_eq!(output.rules[1].severity, Severity::Low);
         assert_eq!(output.rules[2].severity, Severity::Info);
-        assert_eq!(output.rules[0].title, "HTTPS response has no active HSTS policy");
-        assert_eq!(output.rules[1].title, "Response omits X-Content-Type-Options: nosniff");
+        assert_eq!(
+            output.rules[0].title,
+            "HTTPS response has no active HSTS policy"
+        );
+        assert_eq!(
+            output.rules[1].title,
+            "Response omits X-Content-Type-Options: nosniff"
+        );
         assert_eq!(output.rules[2].title, "Response has no framing policy");
         assert!(output.rules.iter().all(|rule| rule.evidence_index == 0));
         // value comparison is case sensitive: "Nosniff" is not "nosniff"
@@ -901,8 +953,14 @@ mod tests {
         };
         let output = evaluate_http_response("example.test", 80, &observation);
         assert_eq!(output.engine, "node-http");
-        assert_eq!(output.evidence[0].facts.get("transport"), Some(&json!("http")));
-        assert_eq!(output.evidence[0].facts.get("framingPolicyPresent"), Some(&json!(false)));
+        assert_eq!(
+            output.evidence[0].facts.get("transport"),
+            Some(&json!("http"))
+        );
+        assert_eq!(
+            output.evidence[0].facts.get("framingPolicyPresent"),
+            Some(&json!(false))
+        );
         let ids: Vec<&str> = output.rules.iter().map(|r| r.rule_id.as_str()).collect();
         assert_eq!(ids, vec!["http.framing"]);
         assert_eq!(output.rules[0].severity, Severity::Info);
@@ -921,7 +979,10 @@ mod tests {
         let output = evaluate_http_response("example.test", 443, &observation);
         assert!(!output.conclusive);
         assert!(output.rules.is_empty());
-        assert_eq!(output.evidence[0].facts.get("redirectObserved"), Some(&json!(true)));
+        assert_eq!(
+            output.evidence[0].facts.get("redirectObserved"),
+            Some(&json!(true))
+        );
         assert_eq!(
             output.coverage_gaps,
             vec![
@@ -945,7 +1006,10 @@ mod tests {
         let output = evaluate_http_response("example.test", 443, &observation);
         assert!(!output.conclusive);
         assert!(output.rules.is_empty());
-        assert_eq!(output.evidence[0].facts.get("redirectObserved"), Some(&json!(false)));
+        assert_eq!(
+            output.evidence[0].facts.get("redirectObserved"),
+            Some(&json!(false))
+        );
         assert_eq!(output.coverage_gaps.len(), 2);
     }
 
@@ -984,7 +1048,10 @@ mod tests {
         );
         // software identifier capped at 64 characters
         let long = "A".repeat(65);
-        assert_eq!(parse_ssh_identification_line(&format!("SSH-2.0-{long}")), None);
+        assert_eq!(
+            parse_ssh_identification_line(&format!("SSH-2.0-{long}")),
+            None
+        );
         let boundary = "A".repeat(64);
         assert_eq!(
             parse_ssh_identification_line(&format!("SSH-2.0-{boundary}")),
@@ -1040,8 +1107,14 @@ mod tests {
             legacy.evidence[0].summary,
             "SSH identification observed; no authentication attempted"
         );
-        assert_eq!(legacy.evidence[0].facts.get("protocol"), Some(&json!("1.99")));
-        assert_eq!(legacy.evidence[0].facts.get("authenticationAttempted"), Some(&json!(false)));
+        assert_eq!(
+            legacy.evidence[0].facts.get("protocol"),
+            Some(&json!("1.99"))
+        );
+        assert_eq!(
+            legacy.evidence[0].facts.get("authenticationAttempted"),
+            Some(&json!(false))
+        );
         assert_eq!(
             legacy.coverage_gaps,
             vec![GAP_GATEWAY_OBSERVATION.to_owned(), GAP_SSH_SCOPE.to_owned()]
@@ -1076,7 +1149,10 @@ mod tests {
         assert_eq!(output.engine, "node-tls");
         assert!(output.conclusive);
         let ids: Vec<&str> = output.rules.iter().map(|r| r.rule_id.as_str()).collect();
-        assert_eq!(ids, vec!["tls.expired", "tls.gateway-trust", "tls.identity"]);
+        assert_eq!(
+            ids,
+            vec!["tls.expired", "tls.gateway-trust", "tls.identity"]
+        );
         assert_eq!(output.rules[0].severity, Severity::High);
         assert_eq!(output.rules[0].title, "TLS certificate is expired");
         assert_eq!(output.rules[1].severity, Severity::Medium);
@@ -1089,9 +1165,18 @@ mod tests {
             "Certificate identity does not match the checked name"
         );
         assert_eq!(output.evidence[0].facts.get("expired"), Some(&json!(true)));
-        assert_eq!(output.evidence[0].facts.get("expiringSoon"), Some(&json!(false)));
-        assert_eq!(output.evidence[0].facts.get("fingerprint256"), Some(&json!("AA:BB")));
-        assert_eq!(output.evidence[0].facts.get("negotiatedProtocol"), Some(&json!("TLSv1.3")));
+        assert_eq!(
+            output.evidence[0].facts.get("expiringSoon"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            output.evidence[0].facts.get("fingerprint256"),
+            Some(&json!("AA:BB"))
+        );
+        assert_eq!(
+            output.evidence[0].facts.get("negotiatedProtocol"),
+            Some(&json!("TLSv1.3"))
+        );
         assert_eq!(
             output.coverage_gaps,
             vec![GAP_GATEWAY_OBSERVATION.to_owned(), GAP_TLS_SCOPE.to_owned()]
@@ -1115,12 +1200,24 @@ mod tests {
         let ids: Vec<&str> = output.rules.iter().map(|r| r.rule_id.as_str()).collect();
         assert_eq!(ids, vec!["tls.expiring", "tls.not-yet-valid"]);
         assert_eq!(output.rules[0].severity, Severity::Low);
-        assert_eq!(output.rules[0].title, "TLS certificate expires within 30 days");
+        assert_eq!(
+            output.rules[0].title,
+            "TLS certificate expires within 30 days"
+        );
         assert_eq!(output.rules[1].severity, Severity::Medium);
         assert_eq!(output.rules[1].title, "TLS certificate is not yet valid");
-        assert_eq!(output.evidence[0].facts.get("expiringSoon"), Some(&json!(true)));
-        assert_eq!(output.evidence[0].facts.get("notYetValid"), Some(&json!(true)));
-        assert_eq!(output.evidence[0].facts.get("fingerprint256"), Some(&json!(null)));
+        assert_eq!(
+            output.evidence[0].facts.get("expiringSoon"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            output.evidence[0].facts.get("notYetValid"),
+            Some(&json!(true))
+        );
+        assert_eq!(
+            output.evidence[0].facts.get("fingerprint256"),
+            Some(&json!(null))
+        );
     }
 
     #[test]
@@ -1138,7 +1235,10 @@ mod tests {
         };
         let output = evaluate_tls_certificate("example.test", 443, &boundary);
         assert!(output.rules.is_empty());
-        assert_eq!(output.evidence[0].facts.get("expiringSoon"), Some(&json!(false)));
+        assert_eq!(
+            output.evidence[0].facts.get("expiringSoon"),
+            Some(&json!(false))
+        );
         assert!(output.conclusive);
     }
 
@@ -1158,11 +1258,20 @@ mod tests {
         let output = evaluate_tls_certificate("example.test", 443, &observation);
         assert!(!output.conclusive);
         assert!(output.rules.is_empty());
-        assert_eq!(output.evidence[0].facts.get("validFrom"), Some(&json!(null)));
+        assert_eq!(
+            output.evidence[0].facts.get("validFrom"),
+            Some(&json!(null))
+        );
         assert_eq!(output.evidence[0].facts.get("validTo"), Some(&json!(null)));
         assert_eq!(output.evidence[0].facts.get("expired"), Some(&json!(false)));
-        assert_eq!(output.evidence[0].facts.get("notYetValid"), Some(&json!(false)));
-        assert_eq!(output.evidence[0].facts.get("expiringSoon"), Some(&json!(false)));
+        assert_eq!(
+            output.evidence[0].facts.get("notYetValid"),
+            Some(&json!(false))
+        );
+        assert_eq!(
+            output.evidence[0].facts.get("expiringSoon"),
+            Some(&json!(false))
+        );
     }
 
     #[test]
@@ -1191,7 +1300,9 @@ mod tests {
 
     #[test]
     fn check_tls_is_fail_closed() {
-        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build();
         let Ok(runtime) = runtime else { return };
         let output = runtime.block_on(check_tls("example.test", 443, None, &Cancellation::new()));
         assert_eq!(output.engine, "node-tls");
@@ -1209,7 +1320,9 @@ mod tests {
 
     #[tokio::test]
     async fn check_ssh_reads_local_identification() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
         let port = listener.local_addr().expect("addr").port();
         tokio::spawn(async move {
             if let Ok((mut socket, _)) = listener.accept().await {
@@ -1225,19 +1338,27 @@ mod tests {
             output.evidence[0].facts.get("softwareIdentifier"),
             Some(&json!("OpenSSH_9.6"))
         );
-        assert_eq!(output.evidence[0].facts.get("protocol"), Some(&json!("2.0")));
+        assert_eq!(
+            output.evidence[0].facts.get("protocol"),
+            Some(&json!("2.0"))
+        );
     }
 
     #[tokio::test]
     async fn check_ssh_reports_closed_port() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
         let port = listener.local_addr().expect("addr").port();
         drop(listener);
         let output = check_ssh("127.0.0.1", port, &Cancellation::new()).await;
         assert!(!output.conclusive);
         assert_eq!(
             output.coverage_gaps,
-            vec![GAP_GATEWAY_OBSERVATION.to_owned(), GAP_SSH_FAILED.to_owned()]
+            vec![
+                GAP_GATEWAY_OBSERVATION.to_owned(),
+                GAP_SSH_FAILED.to_owned()
+            ]
         );
     }
 
@@ -1246,7 +1367,10 @@ mod tests {
         let cancellation = Cancellation::new();
         cancellation.cancel();
         let output = check_ssh("127.0.0.1", 9, &cancellation).await;
-        assert_eq!(output.coverage_gaps, vec![GAP_GATEWAY_OBSERVATION.to_owned()]);
+        assert_eq!(
+            output.coverage_gaps,
+            vec![GAP_GATEWAY_OBSERVATION.to_owned()]
+        );
         assert!(!output.conclusive);
     }
 }

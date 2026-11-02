@@ -316,8 +316,11 @@ impl Table {
     /// declaration order, then the columns of every composite `primaryKey({ columns })`
     /// entry in extra-config order.
     pub fn primary_key_columns(&self) -> Vec<&'static Column> {
-        let mut keys: Vec<&'static Column> =
-            self.columns.iter().filter(|column| column.primary_key).collect();
+        let mut keys: Vec<&'static Column> = self
+            .columns
+            .iter()
+            .filter(|column| column.primary_key)
+            .collect();
         for entry in self.primary_key_indexes() {
             for key in entry.columns {
                 if let Some(column) = self.column(key) {
@@ -344,16 +347,28 @@ pub static PROJECTS: Table = Table {
         Column::text("lastActiveAt", "last_active_at").not_null(),
         Column::text("status", "status").default_text("active"),
         Column::text("metadata", "metadata"),
-        Column::text("parentId", "parent_id").doc("Parent folder, or null at the root. Only `kind: 'folder'` rows may be parents."),
-        Column::text("instructions", "instructions").doc("Extra context injected into the system prompt of every chat below this node."),
+        Column::text("parentId", "parent_id")
+            .doc("Parent folder, or null at the root. Only `kind: 'folder'` rows may be parents."),
+        Column::text("instructions", "instructions")
+            .doc("Extra context injected into the system prompt of every chat below this node."),
         Column::text("description", "description").doc("Free-text description shown in the UI."),
-        Column::text("color", "color").doc("Palette token (e.g. \"blue\") or a `#rrggbb` value from the colour picker."),
-        Column::text("kind", "kind").not_null().default_text("workspace").doc("'workspace' (folder on disk) | 'folder' (pure chat category)"),
+        Column::text("color", "color")
+            .doc("Palette token (e.g. \"blue\") or a `#rrggbb` value from the colour picker."),
+        Column::text("kind", "kind")
+            .not_null()
+            .default_text("workspace")
+            .doc("'workspace' (folder on disk) | 'folder' (pure chat category)"),
     ],
     extra: &[
-        TableIndex::index("idx_projects_user_status", &["userId", "status", "lastActiveAt"]),
+        TableIndex::index(
+            "idx_projects_user_status",
+            &["userId", "status", "lastActiveAt"],
+        ),
         TableIndex::index("idx_projects_user_root", &["userId", "rootPath", "nodeId"]),
-        TableIndex::index("idx_projects_parent", &["userId", "parentId", "status", "lastActiveAt"]),
+        TableIndex::index(
+            "idx_projects_parent",
+            &["userId", "parentId", "status", "lastActiveAt"],
+        ),
     ],
 };
 
@@ -373,9 +388,10 @@ pub static SESSIONS: Table = Table {
         Column::text("metadata", "metadata").doc("'active' | 'archived' | 'deleted'"),
         Column::text("viewedAt", "viewed_at").doc("JSON"),
     ],
-    extra: &[
-        TableIndex::index("idx_sessions_status", &["status", "lastActiveAt"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_sessions_status",
+        &["status", "lastActiveAt"],
+    )],
 };
 
 /// `export const users` — SQL table `users`.
@@ -389,9 +405,7 @@ pub static USERS: Table = Table {
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_users_username", &["username"]),
-    ],
+    extra: &[TableIndex::index("idx_users_username", &["username"])],
 };
 
 /// `export const userSettings` — SQL table `user_settings`.
@@ -428,13 +442,18 @@ pub static PROVIDER_ACCOUNTS: Table = Table {
         Column::text("id", "id").primary_key(),
         Column::text("userId", "user_id").not_null(),
         Column::text("providerType", "provider_type").not_null(),
-        Column::text("nodeId", "node_id").not_null().default_text("gateway"),
+        Column::text("nodeId", "node_id")
+            .not_null()
+            .default_text("gateway"),
         Column::text("label", "label").not_null(),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::unique("idx_provider_accounts_user_node_type_label", &["userId", "nodeId", "providerType", "label"]),
+        TableIndex::unique(
+            "idx_provider_accounts_user_node_type_label",
+            &["userId", "nodeId", "providerType", "label"],
+        ),
         TableIndex::index("idx_provider_accounts_user", &["userId", "updatedAt"]),
     ],
 };
@@ -473,13 +492,16 @@ pub static ASSISTANT_PROFILES: Table = Table {
         Column::text("toolProfile", "tool_profile"),
         Column::text("enabledSkills", "enabled_skills"),
         Column::text("enabledPlugins", "enabled_plugins"),
-        Column::integer("isDefault", "is_default").not_null().default_integer(0),
+        Column::integer("isDefault", "is_default")
+            .not_null()
+            .default_integer(0),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_assistant_profiles_user", &["userId", "updatedAt"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_assistant_profiles_user",
+        &["userId", "updatedAt"],
+    )],
 };
 
 /// `export const auditLog` — SQL table `audit_log`.
@@ -488,7 +510,9 @@ pub static AUDIT_LOG: Table = Table {
     name: "audit_log",
     columns: &[
         Column::text("id", "id").primary_key(),
-        Column::text("timestamp", "timestamp").not_null().doc("UUIDv7"),
+        Column::text("timestamp", "timestamp")
+            .not_null()
+            .doc("UUIDv7"),
         Column::text("sessionId", "session_id").doc("ISO 8601 Context"),
         Column::text("surfaceType", "surface_type"),
         Column::text("deviceId", "device_id"),
@@ -501,7 +525,8 @@ pub static AUDIT_LOG: Table = Table {
         Column::text("signature", "signature").doc("Verification"),
         Column::text("parentActionId", "parent_action_id"),
         Column::text("status", "status").doc("Status"),
-        Column::text("consentMethod", "consent_method").doc("'pending','approved','executed','failed','reverted'"),
+        Column::text("consentMethod", "consent_method")
+            .doc("'pending','approved','executed','failed','reverted'"),
     ],
     extra: &[
         TableIndex::index("idx_audit_action_id", &["actionId"]),
@@ -518,7 +543,9 @@ pub static TRUST_LEVELS: Table = Table {
     name: "trust_levels",
     columns: &[
         Column::text("actionType", "action_type").primary_key(),
-        Column::integer("approvedCount", "approved_count").default_integer(0).doc("e.g. 'terminal.run'"),
+        Column::integer("approvedCount", "approved_count")
+            .default_integer(0)
+            .doc("e.g. 'terminal.run'"),
         Column::integer("revertedCount", "reverted_count").default_integer(0),
         Column::integer("currentLevel", "current_level").default_integer(0),
     ],
@@ -534,7 +561,9 @@ pub static CONSENT_LOG: Table = Table {
         Column::text("actionId", "action_id").not_null(),
         Column::text("toolName", "tool_name").not_null(),
         Column::text("decision", "decision").not_null(),
-        Column::text("decidedAt", "decided_at").not_null().doc("'approved','rejected','timeout'"),
+        Column::text("decidedAt", "decided_at")
+            .not_null()
+            .doc("'approved','rejected','timeout'"),
         Column::text("decidedVia", "decided_via"),
     ],
     extra: &[],
@@ -546,8 +575,12 @@ pub static CONSENT_SESSION_APPROVALS: Table = Table {
     name: "consent_session_approvals",
     columns: &[
         Column::text("sessionId", "session_id").primary_key(),
-        Column::integer("approveAll", "approve_all").not_null().default_integer(1),
-        Column::text("updatedAt", "updated_at").not_null().doc("1 = enabled"),
+        Column::integer("approveAll", "approve_all")
+            .not_null()
+            .default_integer(1),
+        Column::text("updatedAt", "updated_at")
+            .not_null()
+            .doc("1 = enabled"),
     ],
     extra: &[],
 };
@@ -592,7 +625,10 @@ pub static USER_SECRETS: Table = Table {
     ],
     extra: &[
         TableIndex::unique("idx_user_secrets_unique", &["userId", "type", "key"]),
-        TableIndex::index("idx_user_secrets_user_type", &["userId", "type", "updatedAt"]),
+        TableIndex::index(
+            "idx_user_secrets_user_type",
+            &["userId", "type", "updatedAt"],
+        ),
     ],
 };
 
@@ -604,15 +640,24 @@ pub static EMAIL_ACCOUNTS: Table = Table {
         Column::text("id", "id").primary_key(),
         Column::text("userId", "user_id"),
         Column::text("provider", "provider").not_null(),
-        Column::text("email", "email").not_null().doc("'gmail' | 'outlook'"),
-        Column::text("displayName", "display_name").not_null().default_text(""),
-        Column::text("status", "status").not_null().default_text("connected"),
+        Column::text("email", "email")
+            .not_null()
+            .doc("'gmail' | 'outlook'"),
+        Column::text("displayName", "display_name")
+            .not_null()
+            .default_text(""),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("connected"),
         Column::text("error", "error").doc("'connected' | 'error'"),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::unique("idx_email_accounts_unique", &["userId", "provider", "email"]),
+        TableIndex::unique(
+            "idx_email_accounts_unique",
+            &["userId", "provider", "email"],
+        ),
         TableIndex::index("idx_email_accounts_user", &["userId", "updatedAt"]),
     ],
 };
@@ -626,14 +671,21 @@ pub static CALENDAR_ACCOUNTS: Table = Table {
         Column::text("userId", "user_id"),
         Column::text("provider", "provider").not_null(),
         Column::text("email", "email").not_null().doc("'google'"),
-        Column::text("displayName", "display_name").not_null().default_text(""),
-        Column::text("status", "status").not_null().default_text("connected"),
+        Column::text("displayName", "display_name")
+            .not_null()
+            .default_text(""),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("connected"),
         Column::text("error", "error").doc("'connected' | 'error'"),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::unique("idx_calendar_accounts_unique", &["userId", "provider", "email"]),
+        TableIndex::unique(
+            "idx_calendar_accounts_unique",
+            &["userId", "provider", "email"],
+        ),
         TableIndex::index("idx_calendar_accounts_user", &["userId", "updatedAt"]),
     ],
 };
@@ -645,13 +697,18 @@ pub static DEVICE_CALENDAR_SNAPSHOTS: Table = Table {
     columns: &[
         Column::text("accountId", "account_id").primary_key(),
         Column::text("userId", "user_id"),
-        Column::text("calendars", "calendars").not_null().default_text("[]"),
-        Column::text("events", "events").not_null().default_text("[]"),
+        Column::text("calendars", "calendars")
+            .not_null()
+            .default_text("[]"),
+        Column::text("events", "events")
+            .not_null()
+            .default_text("[]"),
         Column::text("syncedAt", "synced_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_device_calendar_snapshots_user", &["userId", "syncedAt"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_device_calendar_snapshots_user",
+        &["userId", "syncedAt"],
+    )],
 };
 
 /// `export const reminders` — SQL table `reminders`.
@@ -664,18 +721,29 @@ pub static REMINDERS: Table = Table {
         Column::text("projectId", "project_id"),
         Column::text("sessionId", "session_id"),
         Column::text("content", "content").not_null(),
-        Column::text("sourceType", "source_type").not_null().default_text("agent"),
+        Column::text("sourceType", "source_type")
+            .not_null()
+            .default_text("agent"),
         Column::text("sourceId", "source_id"),
-        Column::text("sourceSurface", "source_surface").not_null().default_text("chat"),
-        Column::text("status", "status").not_null().default_text("active"),
+        Column::text("sourceSurface", "source_surface")
+            .not_null()
+            .default_text("chat"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("active"),
         Column::text("tags", "tags").not_null().default_text("[]"),
-        Column::integer("usageCount", "usage_count").not_null().default_integer(0),
+        Column::integer("usageCount", "usage_count")
+            .not_null()
+            .default_integer(0),
         Column::text("lastRetrievedAt", "last_retrieved_at"),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::index("idx_reminders_user_status", &["userId", "status", "updatedAt"]),
+        TableIndex::index(
+            "idx_reminders_user_status",
+            &["userId", "status", "updatedAt"],
+        ),
         TableIndex::index("idx_reminders_project", &["projectId", "updatedAt"]),
         TableIndex::index("idx_reminders_session", &["sessionId", "updatedAt"]),
     ],
@@ -689,13 +757,20 @@ pub static MESSAGES: Table = Table {
         Column::text("id", "id").primary_key(),
         Column::text("sessionId", "session_id").not_null(),
         Column::text("role", "role").not_null(),
-        Column::text("content", "content").not_null().doc("'user' | 'assistant'"),
+        Column::text("content", "content")
+            .not_null()
+            .doc("'user' | 'assistant'"),
         Column::text("toolCalls", "tool_calls"),
         Column::text("segments", "segments").doc("JSON array of executed tool calls (nullable)"),
-        Column::text("persona", "persona").doc("JSON array of MessageSegment for interleaved rendering (nullable)"),
-        Column::text("contextFlow", "context_flow").doc("JSON server-owned identity snapshot for this turn"),
-        Column::text("thinking", "thinking").doc("JSON snapshot of outbound LLM context for this assistant response"),
-        Column::text("createdAt", "created_at").not_null().doc("Chain-of-thought / reasoning content (nullable)"),
+        Column::text("persona", "persona")
+            .doc("JSON array of MessageSegment for interleaved rendering (nullable)"),
+        Column::text("contextFlow", "context_flow")
+            .doc("JSON server-owned identity snapshot for this turn"),
+        Column::text("thinking", "thinking")
+            .doc("JSON snapshot of outbound LLM context for this assistant response"),
+        Column::text("createdAt", "created_at")
+            .not_null()
+            .doc("Chain-of-thought / reasoning content (nullable)"),
     ],
     extra: &[
         TableIndex::index("idx_messages_session", &["sessionId", "createdAt"]),
@@ -716,8 +791,11 @@ pub static SUB_AGENT_HISTORY: Table = Table {
         Column::integer("rounds", "rounds"),
         Column::integer("durationMs", "duration_ms"),
         Column::text("segments", "segments"),
-        Column::text("toolCalls", "tool_calls").doc("JSON array of MessageSegment (lazy render fallback)"),
-        Column::text("createdAt", "created_at").not_null().doc("JSON array of executed tool calls"),
+        Column::text("toolCalls", "tool_calls")
+            .doc("JSON array of MessageSegment (lazy render fallback)"),
+        Column::text("createdAt", "created_at")
+            .not_null()
+            .doc("JSON array of executed tool calls"),
     ],
     extra: &[
         TableIndex::index("idx_sub_agent_history_session", &["sessionId", "createdAt"]),
@@ -734,11 +812,11 @@ pub static SESSION_EVENTS: Table = Table {
         Column::integer("logId", "log_id").not_null(),
         Column::text("type", "type").not_null(),
         Column::text("payload", "payload").not_null(),
-        Column::integer("createdAt", "created_at").not_null().doc("JSON serialized stream event"),
+        Column::integer("createdAt", "created_at")
+            .not_null()
+            .doc("JSON serialized stream event"),
     ],
-    extra: &[
-        TableIndex::primary_key(&["sessionId", "logId"]),
-    ],
+    extra: &[TableIndex::primary_key(&["sessionId", "logId"])],
 };
 
 /// `export const messageContextMetadata` — SQL table `message_context_metadata`.
@@ -746,8 +824,12 @@ pub static MESSAGE_CONTEXT_METADATA: Table = Table {
     var: "messageContextMetadata",
     name: "message_context_metadata",
     columns: &[
-        Column::text("messageId", "message_id").primary_key().references_cascade("messages", "id"),
-        Column::integer_boolean("hasMemoryProvenance", "has_memory_provenance").not_null().default_boolean(false),
+        Column::text("messageId", "message_id")
+            .primary_key()
+            .references_cascade("messages", "id"),
+        Column::integer_boolean("hasMemoryProvenance", "has_memory_provenance")
+            .not_null()
+            .default_boolean(false),
     ],
     extra: &[],
 };
@@ -760,11 +842,14 @@ pub static SESSION_STATE: Table = Table {
         Column::text("sessionId", "session_id").not_null(),
         Column::text("key", "key").not_null(),
         Column::text("value", "value"),
-        Column::text("updatedAt", "updated_at").not_null().doc("JSON-serialized"),
+        Column::text("updatedAt", "updated_at")
+            .not_null()
+            .doc("JSON-serialized"),
     ],
-    extra: &[
-        TableIndex::index("idx_session_state_session", &["sessionId"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_session_state_session",
+        &["sessionId"],
+    )],
 };
 
 /// `export const projectState` — SQL table `project_state`.
@@ -777,9 +862,10 @@ pub static PROJECT_STATE: Table = Table {
         Column::text("value", "value"),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_project_state_project", &["projectId"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_project_state_project",
+        &["projectId"],
+    )],
 };
 
 /// `export const architectureDiagrams` — SQL table `architecture_diagrams`.
@@ -795,7 +881,10 @@ pub static ARCHITECTURE_DIAGRAMS: Table = Table {
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::index("idx_architecture_diagrams_user_project", &["userId", "projectRoot"]),
+        TableIndex::index(
+            "idx_architecture_diagrams_user_project",
+            &["userId", "projectRoot"],
+        ),
         TableIndex::index("idx_architecture_diagrams_updated", &["updatedAt"]),
     ],
 };
@@ -809,22 +898,34 @@ pub static CODE_GRAPH_INDEXES: Table = Table {
         Column::text("userId", "user_id"),
         Column::text("repositoryId", "repository_id"),
         Column::text("projectRoot", "project_root").not_null(),
-        Column::text("provider", "provider").not_null().default_text("graphify"),
-        Column::text("status", "status").not_null().default_text("missing"),
+        Column::text("provider", "provider")
+            .not_null()
+            .default_text("graphify"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("missing"),
         Column::text("graphPath", "graph_path"),
         Column::text("graphVersion", "graph_version"),
         Column::text("sourceRevision", "source_revision"),
         Column::text("graphifyVersion", "graphify_version"),
         Column::text("stats", "stats"),
-        Column::text("graphRagStatus", "graphrag_status").not_null().default_text("not-prepared"),
+        Column::text("graphRagStatus", "graphrag_status")
+            .not_null()
+            .default_text("not-prepared"),
         Column::text("graphRagPath", "graphrag_path"),
         Column::text("error", "error"),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::unique("idx_code_graph_indexes_user_project", &["userId", "projectRoot"]),
-        TableIndex::index("idx_code_graph_indexes_repository", &["repositoryId", "updatedAt"]),
+        TableIndex::unique(
+            "idx_code_graph_indexes_user_project",
+            &["userId", "projectRoot"],
+        ),
+        TableIndex::index(
+            "idx_code_graph_indexes_repository",
+            &["repositoryId", "updatedAt"],
+        ),
         TableIndex::index("idx_code_graph_indexes_status", &["status", "updatedAt"]),
     ],
 };
@@ -839,9 +940,7 @@ pub static PERSONA_AGENTS: Table = Table {
         Column::text("data", "data").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_persona_agents_user", &["userId"]),
-    ],
+    extra: &[TableIndex::index("idx_persona_agents_user", &["userId"])],
 };
 
 /// `export const agentThreads` — SQL table `agent_threads`.
@@ -857,13 +956,24 @@ pub static AGENT_THREADS: Table = Table {
         Column::text("providerId", "provider_id").not_null(),
         Column::text("model", "model").doc("\"jait\" | \"codex\" | \"claude-code\""),
         Column::text("reasoningEffort", "reasoning_effort"),
-        Column::text("runtimeMode", "runtime_mode").not_null().default_text("full-access").doc("Provider-specific effort (\"high\", \"xhigh\", …)"),
-        Column::text("kind", "kind").not_null().default_text("delivery").doc("\"full-access\" | \"supervised\""),
+        Column::text("runtimeMode", "runtime_mode")
+            .not_null()
+            .default_text("full-access")
+            .doc("Provider-specific effort (\"high\", \"xhigh\", …)"),
+        Column::text("kind", "kind")
+            .not_null()
+            .default_text("delivery")
+            .doc("\"full-access\" | \"supervised\""),
         Column::text("skillIds", "skill_ids").doc("delivery | delegation"),
-        Column::text("workingDirectory", "working_directory").doc("JSON string[] override; null => use global enabled skills"),
+        Column::text("workingDirectory", "working_directory")
+            .doc("JSON string[] override; null => use global enabled skills"),
         Column::text("branch", "branch"),
-        Column::text("status", "status").not_null().default_text("running").doc("Git branch name"),
-        Column::text("providerSessionId", "provider_session_id").doc("running | completed | error | interrupted"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("running")
+            .doc("Git branch name"),
+        Column::text("providerSessionId", "provider_session_id")
+            .doc("running | completed | error | interrupted"),
         Column::text("error", "error").doc("Active provider session ID"),
         Column::text("prUrl", "pr_url"),
         Column::integer("prNumber", "pr_number"),
@@ -871,12 +981,17 @@ pub static AGENT_THREADS: Table = Table {
         Column::text("prBaseBranch", "pr_base_branch"),
         Column::text("prState", "pr_state"),
         Column::text("executionNodeId", "execution_node_id").doc("open | closed | merged"),
-        Column::text("executionNodeName", "execution_node_name").doc("Id of the FsNode executing this thread"),
+        Column::text("executionNodeName", "execution_node_name")
+            .doc("Id of the FsNode executing this thread"),
         Column::text("routingPlan", "routing_plan").doc("Human-readable node name"),
         Column::integer("changeFiles", "change_files").doc("JSON RoutingPlan from thread router"),
-        Column::integer("changeInsertions", "change_insertions").doc("persisted diff stats (files changed)"),
-        Column::integer("changeDeletions", "change_deletions").doc("persisted diff stats (lines added)"),
-        Column::text("createdAt", "created_at").not_null().doc("persisted diff stats (lines removed)"),
+        Column::integer("changeInsertions", "change_insertions")
+            .doc("persisted diff stats (files changed)"),
+        Column::integer("changeDeletions", "change_deletions")
+            .doc("persisted diff stats (lines added)"),
+        Column::text("createdAt", "created_at")
+            .not_null()
+            .doc("persisted diff stats (lines removed)"),
         Column::text("updatedAt", "updated_at").not_null(),
         Column::text("completedAt", "completed_at"),
     ],
@@ -894,9 +1009,13 @@ pub static THREAD_RECOVERY: Table = Table {
     name: "thread_recovery",
     columns: &[
         Column::text("threadId", "thread_id").primary_key(),
-        Column::integer("attempts", "attempts").not_null().default_integer(0),
+        Column::integer("attempts", "attempts")
+            .not_null()
+            .default_integer(0),
         Column::text("staleProviderSessionId", "stale_provider_session_id"),
-        Column::integer_boolean("pending", "pending").not_null().default_boolean(true),
+        Column::integer_boolean("pending", "pending")
+            .not_null()
+            .default_boolean(true),
     ],
     extra: &[],
 };
@@ -909,13 +1028,23 @@ pub static AGENT_THREAD_ACTIVITIES: Table = Table {
         Column::text("id", "id").primary_key(),
         Column::text("threadId", "thread_id").not_null(),
         Column::text("kind", "kind").not_null(),
-        Column::text("summary", "summary").not_null().doc("\"tool.start\" | \"tool.result\" | \"message\" | \"error\" | \"activity\""),
+        Column::text("summary", "summary")
+            .not_null()
+            .doc("\"tool.start\" | \"tool.result\" | \"message\" | \"error\" | \"activity\""),
         Column::text("payload", "payload"),
-        Column::text("createdAt", "created_at").not_null().doc("JSON"),
+        Column::text("createdAt", "created_at")
+            .not_null()
+            .doc("JSON"),
     ],
     extra: &[
-        TableIndex::index("idx_agent_thread_activities_thread", &["threadId", "createdAt"]),
-        TableIndex::index("idx_agent_thread_activities_kind_created_at", &["kind", "createdAt"]),
+        TableIndex::index(
+            "idx_agent_thread_activities_thread",
+            &["threadId", "createdAt"],
+        ),
+        TableIndex::index(
+            "idx_agent_thread_activities_kind_created_at",
+            &["kind", "createdAt"],
+        ),
     ],
 };
 
@@ -927,17 +1056,21 @@ pub static AUTOMATION_REPOSITORIES: Table = Table {
         Column::text("id", "id").primary_key(),
         Column::text("userId", "user_id").doc("UUIDv7"),
         Column::text("deviceId", "device_id"),
-        Column::text("name", "name").not_null().doc("which client device registered this repo"),
-        Column::text("defaultBranch", "default_branch").not_null().default_text("main"),
+        Column::text("name", "name")
+            .not_null()
+            .doc("which client device registered this repo"),
+        Column::text("defaultBranch", "default_branch")
+            .not_null()
+            .default_text("main"),
         Column::text("localPath", "local_path").not_null(),
         Column::text("githubUrl", "github_url"),
         Column::text("strategy", "strategy").doc("HTTPS clone URL for gateway-side cloning"),
-        Column::text("createdAt", "created_at").not_null().doc("Markdown strategy/instructions for agent threads"),
+        Column::text("createdAt", "created_at")
+            .not_null()
+            .doc("Markdown strategy/instructions for agent threads"),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_automation_repos_user", &["userId"]),
-    ],
+    extra: &[TableIndex::index("idx_automation_repos_user", &["userId"])],
 };
 
 /// `export const automationPlans` — SQL table `automation_plans`.
@@ -949,9 +1082,16 @@ pub static AUTOMATION_PLANS: Table = Table {
         Column::text("repoId", "repo_id").not_null().doc("UUIDv7"),
         Column::text("userId", "user_id"),
         Column::text("title", "title").not_null(),
-        Column::text("status", "status").not_null().default_text("draft"),
-        Column::text("tasks", "tasks").not_null().default_text("[]").doc("draft | active | completed | archived"),
-        Column::text("createdAt", "created_at").not_null().doc("JSON array of PlanTask objects"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("draft"),
+        Column::text("tasks", "tasks")
+            .not_null()
+            .default_text("[]")
+            .doc("draft | active | completed | archived"),
+        Column::text("createdAt", "created_at")
+            .not_null()
+            .doc("JSON array of PlanTask objects"),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
@@ -969,21 +1109,36 @@ pub static AUTOMATION_REPO_PROPOSALS: Table = Table {
         Column::text("repoId", "repo_id").not_null(),
         Column::text("userId", "user_id"),
         Column::text("message", "message").not_null(),
-        Column::text("status", "status").not_null().default_text("open"),
-        Column::text("priority", "priority").not_null().default_text("normal"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("open"),
+        Column::text("priority", "priority")
+            .not_null()
+            .default_text("normal"),
         Column::text("dueDate", "due_date"),
         Column::text("tags", "tags").not_null().default_text("[]"),
         Column::text("completedAt", "completed_at"),
-        Column::text("completionHistory", "completion_history").not_null().default_text("[]"),
+        Column::text("completionHistory", "completion_history")
+            .not_null()
+            .default_text("[]"),
         Column::text("sourceThreadId", "source_thread_id"),
         Column::text("sourceThreadTitle", "source_thread_title"),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
     extra: &[
-        TableIndex::index("idx_automation_repo_proposals_repo", &["repoId", "updatedAt"]),
-        TableIndex::index("idx_automation_repo_proposals_user", &["userId", "updatedAt"]),
-        TableIndex::index("idx_automation_repo_proposals_completed", &["repoId", "completedAt"]),
+        TableIndex::index(
+            "idx_automation_repo_proposals_repo",
+            &["repoId", "updatedAt"],
+        ),
+        TableIndex::index(
+            "idx_automation_repo_proposals_user",
+            &["userId", "updatedAt"],
+        ),
+        TableIndex::index(
+            "idx_automation_repo_proposals_completed",
+            &["repoId", "completedAt"],
+        ),
     ],
 };
 
@@ -996,17 +1151,27 @@ pub static NETWORK_HOSTS: Table = Table {
         Column::text("mac", "mac"),
         Column::text("hostname", "hostname"),
         Column::text("osVersion", "os_version"),
-        Column::text("openPorts", "open_ports").not_null().default_text("[]"),
-        Column::integer("sshReachable", "ssh_reachable").not_null().default_integer(0).doc("JSON number[]"),
-        Column::text("agentStatus", "agent_status").not_null().default_text("not-installed"),
+        Column::text("openPorts", "open_ports")
+            .not_null()
+            .default_text("[]"),
+        Column::integer("sshReachable", "ssh_reachable")
+            .not_null()
+            .default_integer(0)
+            .doc("JSON number[]"),
+        Column::text("agentStatus", "agent_status")
+            .not_null()
+            .default_text("not-installed"),
         Column::text("providers", "providers"),
-        Column::text("firstSeenAt", "first_seen_at").not_null().doc("JSON string[] | null"),
+        Column::text("firstSeenAt", "first_seen_at")
+            .not_null()
+            .doc("JSON string[] | null"),
         Column::text("lastSeenAt", "last_seen_at").not_null(),
         Column::text("scannedAt", "scanned_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_network_hosts_last_seen", &["lastSeenAt"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_network_hosts_last_seen",
+        &["lastSeenAt"],
+    )],
 };
 
 /// `export const nodes` — SQL table `nodes`.
@@ -1024,9 +1189,7 @@ pub static NODES: Table = Table {
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_nodes_last_seen", &["lastSeenAt"]),
-    ],
+    extra: &[TableIndex::index("idx_nodes_last_seen", &["lastSeenAt"])],
 };
 
 /// `export const nodePermissions` — SQL table `node_permissions`.
@@ -1036,12 +1199,15 @@ pub static NODE_PERMISSIONS: Table = Table {
     columns: &[
         Column::text("nodeId", "node_id").not_null(),
         Column::text("capability", "capability").not_null(),
-        Column::integer("granted", "granted").not_null().default_integer(0).doc("'terminal'|'filesystem'|'screen'|'voice'|'browser'|'camera'|'network'"),
-        Column::text("updatedAt", "updated_at").not_null().doc("0 = denied, 1 = granted"),
+        Column::integer("granted", "granted")
+            .not_null()
+            .default_integer(0)
+            .doc("'terminal'|'filesystem'|'screen'|'voice'|'browser'|'camera'|'network'"),
+        Column::text("updatedAt", "updated_at")
+            .not_null()
+            .doc("0 = denied, 1 = granted"),
     ],
-    extra: &[
-        TableIndex::primary_key(&["nodeId", "capability"]),
-    ],
+    extra: &[TableIndex::primary_key(&["nodeId", "capability"])],
 };
 
 /// `export const scheduledJobs` — SQL table `scheduled_jobs`.
@@ -1057,7 +1223,9 @@ pub static SCHEDULED_JOBS: Table = Table {
         Column::text("input", "input"),
         Column::text("sessionId", "session_id").doc("JSON object"),
         Column::text("projectRoot", "project_root"),
-        Column::integer("enabled", "enabled").not_null().default_integer(1),
+        Column::integer("enabled", "enabled")
+            .not_null()
+            .default_integer(1),
         Column::text("lastRunAt", "last_run_at"),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
@@ -1075,12 +1243,19 @@ pub static SCHEDULED_JOB_RUNS: Table = Table {
     columns: &[
         Column::text("id", "id").primary_key(),
         Column::text("jobId", "job_id").not_null().doc("UUIDv7"),
-        Column::text("status", "status").not_null().default_text("running"),
-        Column::text("triggeredBy", "triggered_by").not_null().default_text("schedule").doc("running | completed | failed"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("running"),
+        Column::text("triggeredBy", "triggered_by")
+            .not_null()
+            .default_text("schedule")
+            .doc("running | completed | failed"),
         Column::text("output", "output").doc("schedule | manual | maintenance"),
         Column::text("error", "error").doc("stdout/stderr or summary text"),
         Column::text("planId", "plan_id"),
-        Column::text("startedAt", "started_at").not_null().doc("FK → automation_plans.id if a fix plan was created"),
+        Column::text("startedAt", "started_at")
+            .not_null()
+            .doc("FK → automation_plans.id if a fix plan was created"),
         Column::text("completedAt", "completed_at"),
     ],
     extra: &[
@@ -1097,15 +1272,22 @@ pub static MOBILE_PUSH_REGISTRATIONS: Table = Table {
         Column::text("deviceId", "device_id").primary_key(),
         Column::text("userId", "user_id").not_null(),
         Column::text("token", "token").not_null(),
-        Column::text("platform", "platform").not_null().default_text("android"),
-        Column::integer("enabled", "enabled").not_null().default_integer(1),
+        Column::text("platform", "platform")
+            .not_null()
+            .default_text("android"),
+        Column::integer("enabled", "enabled")
+            .not_null()
+            .default_integer(1),
         Column::text("createdAt", "created_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
         Column::text("lastSeenAt", "last_seen_at").not_null(),
     ],
     extra: &[
         TableIndex::unique("idx_mobile_push_token", &["token"]),
-        TableIndex::index("idx_mobile_push_user_enabled", &["userId", "enabled", "lastSeenAt"]),
+        TableIndex::index(
+            "idx_mobile_push_user_enabled",
+            &["userId", "enabled", "lastSeenAt"],
+        ),
     ],
 };
 
@@ -1121,11 +1303,25 @@ pub static BROWSER_SESSIONS: Table = Table {
         Column::text("previewUrl", "preview_url"),
         Column::text("previewSessionId", "preview_session_id"),
         Column::text("browserId", "browser_id"),
-        Column::text("mode", "mode").not_null().default_text("shared"),
-        Column::text("origin", "origin").not_null().default_text("direct").doc("'shared' | 'isolated'"),
-        Column::text("controller", "controller").not_null().default_text("agent").doc("'attached' | 'managed' | 'direct'"),
-        Column::text("status", "status").not_null().default_text("ready").doc("'agent' | 'user' | 'observer'"),
-        Column::integer("secretSafe", "secret_safe").not_null().default_integer(0).doc("'ready' | 'running' | 'paused' | 'intervention-required' | 'closed'"),
+        Column::text("mode", "mode")
+            .not_null()
+            .default_text("shared"),
+        Column::text("origin", "origin")
+            .not_null()
+            .default_text("direct")
+            .doc("'shared' | 'isolated'"),
+        Column::text("controller", "controller")
+            .not_null()
+            .default_text("agent")
+            .doc("'attached' | 'managed' | 'direct'"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("ready")
+            .doc("'agent' | 'user' | 'observer'"),
+        Column::integer("secretSafe", "secret_safe")
+            .not_null()
+            .default_integer(0)
+            .doc("'ready' | 'running' | 'paused' | 'intervention-required' | 'closed'"),
         Column::text("storageProfile", "storage_profile"),
         Column::text("createdBy", "created_by").doc("JSON"),
         Column::text("createdAt", "created_at").not_null(),
@@ -1134,7 +1330,10 @@ pub static BROWSER_SESSIONS: Table = Table {
     extra: &[
         TableIndex::index("idx_browser_sessions_browser", &["browserId"]),
         TableIndex::index("idx_browser_sessions_preview", &["previewSessionId"]),
-        TableIndex::index("idx_browser_sessions_user_updated", &["createdBy", "updatedAt"]),
+        TableIndex::index(
+            "idx_browser_sessions_user_updated",
+            &["createdBy", "updatedAt"],
+        ),
     ],
 };
 
@@ -1147,12 +1346,21 @@ pub static BROWSER_INTERVENTIONS: Table = Table {
         Column::text("browserSessionId", "browser_session_id").not_null(),
         Column::text("threadId", "thread_id"),
         Column::text("chatSessionId", "chat_session_id"),
-        Column::text("kind", "kind").not_null().default_text("custom"),
+        Column::text("kind", "kind")
+            .not_null()
+            .default_text("custom"),
         Column::text("reason", "reason").not_null(),
         Column::text("instructions", "instructions").not_null(),
-        Column::text("status", "status").not_null().default_text("open"),
-        Column::integer("secretSafe", "secret_safe").not_null().default_integer(0).doc("'open' | 'resolved' | 'cancelled'"),
-        Column::integer("allowUserNote", "allow_user_note").not_null().default_integer(1),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("open"),
+        Column::integer("secretSafe", "secret_safe")
+            .not_null()
+            .default_integer(0)
+            .doc("'open' | 'resolved' | 'cancelled'"),
+        Column::integer("allowUserNote", "allow_user_note")
+            .not_null()
+            .default_integer(1),
         Column::text("requestedBy", "requested_by"),
         Column::text("resolvedBy", "resolved_by"),
         Column::text("userNote", "user_note"),
@@ -1160,8 +1368,14 @@ pub static BROWSER_INTERVENTIONS: Table = Table {
         Column::text("resolvedAt", "resolved_at"),
     ],
     extra: &[
-        TableIndex::index("idx_browser_interventions_session", &["browserSessionId", "requestedAt"]),
-        TableIndex::index("idx_browser_interventions_status", &["status", "requestedAt"]),
+        TableIndex::index(
+            "idx_browser_interventions_session",
+            &["browserSessionId", "requestedAt"],
+        ),
+        TableIndex::index(
+            "idx_browser_interventions_status",
+            &["status", "requestedAt"],
+        ),
     ],
 };
 
@@ -1176,8 +1390,13 @@ pub static PLUGINS: Table = Table {
         Column::text("description", "description"),
         Column::text("author", "author"),
         Column::text("path", "path").not_null(),
-        Column::text("status", "status").not_null().default_text("installed"),
-        Column::text("config", "config").not_null().default_text("{}").doc("'installed' | 'enabled' | 'disabled' | 'error'"),
+        Column::text("status", "status")
+            .not_null()
+            .default_text("installed"),
+        Column::text("config", "config")
+            .not_null()
+            .default_text("{}")
+            .doc("'installed' | 'enabled' | 'disabled' | 'error'"),
         Column::text("error", "error"),
         Column::text("installedAt", "installed_at").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
@@ -1220,9 +1439,10 @@ pub static TEAM_ROOMS: Table = Table {
         Column::text("rootAgentId", "root_agent_id").not_null(),
         Column::text("data", "data").not_null(),
     ],
-    extra: &[
-        TableIndex::index("idx_team_room_root", &["userId", "rootAgentId"]),
-    ],
+    extra: &[TableIndex::index(
+        "idx_team_room_root",
+        &["userId", "rootAgentId"],
+    )],
 };
 
 /// `export const teamMessages` — SQL table `team_room_messages`.
@@ -1235,9 +1455,10 @@ pub static TEAM_MESSAGES: Table = Table {
         Column::text("clientKey", "client_key").not_null(),
         Column::text("data", "data").not_null(),
     ],
-    extra: &[
-        TableIndex::unique("idx_team_message_key", &["roomId", "clientKey"]),
-    ],
+    extra: &[TableIndex::unique(
+        "idx_team_message_key",
+        &["roomId", "clientKey"],
+    )],
 };
 
 /// `export const agentGithubApps` — SQL table `agent_github_apps`.
@@ -1252,9 +1473,10 @@ pub static AGENT_GITHUB_APPS: Table = Table {
         Column::text("data", "data").not_null(),
         Column::text("updatedAt", "updated_at").not_null(),
     ],
-    extra: &[
-        TableIndex::unique("idx_agent_github_app_agent", &["userId", "agentId"]),
-    ],
+    extra: &[TableIndex::unique(
+        "idx_agent_github_app_agent",
+        &["userId", "agentId"],
+    )],
 };
 
 /// `export const teamDeliveries` — SQL table `team_room_deliveries`.
@@ -1270,9 +1492,7 @@ pub static TEAM_DELIVERIES: Table = Table {
         Column::text("status", "status").not_null(),
         Column::text("error", "error"),
     ],
-    extra: &[
-        TableIndex::index("idx_team_delivery_status", &["status"]),
-    ],
+    extra: &[TableIndex::index("idx_team_delivery_status", &["status"])],
 };
 
 /// `export const agentControl` — SQL table `agent_control`.
@@ -1281,7 +1501,9 @@ pub static AGENT_CONTROL: Table = Table {
     name: "agent_control",
     columns: &[
         Column::text("userId", "user_id").primary_key(),
-        Column::integer_boolean("halted", "halted").not_null().default_boolean(false),
+        Column::integer_boolean("halted", "halted")
+            .not_null()
+            .default_boolean(false),
         Column::text("reason", "reason"),
         Column::text("haltedAt", "halted_at"),
         Column::text("updatedAt", "updated_at").not_null(),
@@ -1531,7 +1753,10 @@ agentControl"
             .collect();
         // `grep -n "unique()" packages/gateway/src/db/schema.ts` → users.username and
         // auditLog.actionId are the only two unique columns in the source schema.
-        assert_eq!(unique, vec![("users", "username"), ("auditLog", "actionId")]);
+        assert_eq!(
+            unique,
+            vec![("users", "username"), ("auditLog", "actionId")]
+        );
     }
 
     #[test]
@@ -1579,11 +1804,23 @@ agentControl"
                     assert!(column.boolean_mode, "{}.{}", table.var, column.key)
                 }
                 Some(ColumnDefault::Integer(_)) => {
-                    assert_eq!(column.kind, ColumnKind::Integer, "{}.{}", table.var, column.key);
+                    assert_eq!(
+                        column.kind,
+                        ColumnKind::Integer,
+                        "{}.{}",
+                        table.var,
+                        column.key
+                    );
                     assert!(!column.boolean_mode, "{}.{}", table.var, column.key);
                 }
                 Some(ColumnDefault::Text(_)) => {
-                    assert_eq!(column.kind, ColumnKind::Text, "{}.{}", table.var, column.key)
+                    assert_eq!(
+                        column.kind,
+                        ColumnKind::Text,
+                        "{}.{}",
+                        table.var,
+                        column.key
+                    )
                 }
             }
         }
@@ -1615,8 +1852,9 @@ agentControl"
         for table in TABLES {
             for column in table.columns {
                 if let Some(reference) = column.reference {
-                    let target = table_by_var(reference.table)
-                        .unwrap_or_else(|| panic!("{}: unknown table {}", table.var, reference.table));
+                    let target = table_by_var(reference.table).unwrap_or_else(|| {
+                        panic!("{}: unknown table {}", table.var, reference.table)
+                    });
                     assert!(
                         target.column(reference.column).is_some(),
                         "{}: unknown column {}.{}",
@@ -1636,7 +1874,10 @@ agentControl"
             .filter(|table| table.primary_key_columns().is_empty())
             .map(|table| table.var)
             .collect();
-        assert_eq!(without, vec!["providerUsage", "sessionState", "projectState"]);
+        assert_eq!(
+            without,
+            vec!["providerUsage", "sessionState", "projectState"]
+        );
 
         let composite: Vec<(&str, Vec<&str>)> = TABLES
             .iter()
@@ -1662,7 +1903,11 @@ agentControl"
         assert_eq!(projects.primary_key_columns().len(), 1);
         assert_eq!(projects.primary_key_columns()[0].key, "id");
         assert_eq!(
-            projects.columns.iter().map(|column| column.key).collect::<Vec<_>>(),
+            projects
+                .columns
+                .iter()
+                .map(|column| column.key)
+                .collect::<Vec<_>>(),
             vec![
                 "id",
                 "userId",
@@ -1696,7 +1941,9 @@ agentControl"
         assert!(table_by_var("nope").is_none());
         assert!(sessions.column("nope").is_none());
         assert_eq!(
-            sessions.column("id").map(|column| (column.name, column.kind, column.primary_key)),
+            sessions
+                .column("id")
+                .map(|column| (column.name, column.kind, column.primary_key)),
             // TS: `id: text("id").primaryKey()` — sessions.id is text, not integer.
             Some(("id", ColumnKind::Text, true))
         );
@@ -1770,7 +2017,13 @@ agentControl"
                 .collect::<Vec<_>>(),
             vec!["sessionId", "logId"]
         );
-        assert!(config.table("providerUsage").expect("config").primary_key.is_empty());
+        assert!(
+            config
+                .table("providerUsage")
+                .expect("config")
+                .primary_key
+                .is_empty()
+        );
     }
 
     #[test]

@@ -42,7 +42,7 @@
 use std::cell::Cell;
 use std::fmt;
 
-use crate::db::schema::{namespace_order, relational_config, Table, TableRelationalConfig};
+use crate::db::schema::{Table, TableRelationalConfig, namespace_order, relational_config};
 
 // ── Minimal engine surface (the host side of the boundary) ───────────────────
 
@@ -454,7 +454,9 @@ impl SqliteStatement {
         if !self.raw_mode.get() || rows.is_empty() {
             return Ok(QueryRows::Objects(rows));
         }
-        Ok(QueryRows::Values(rows.into_iter().map(row_values).collect()))
+        Ok(QueryRows::Values(
+            rows.into_iter().map(row_values).collect(),
+        ))
     }
 
     /// `stmt.get(...params)`. Raw mode maps a present row through `Object.values`; a miss
@@ -968,9 +970,7 @@ mod tests {
         drizzle_error: Option<&'static str>,
     }
 
-    fn driver(
-        spec: &Option<(Arc<Mutex<FakeState>>, bool, bool)>,
-    ) -> Option<Box<dyn SqliteDriver>> {
+    fn driver(spec: &Option<(Arc<Mutex<FakeState>>, bool, bool)>) -> Option<Box<dyn SqliteDriver>> {
         spec.as_ref().map(|(state, fail_open, native_transaction)| {
             Box::new(FakeDriver {
                 state: Arc::clone(state),
@@ -1085,7 +1085,11 @@ mod tests {
         let error = open_raw_sqlite(&host, "test.db", &status).expect_err("fails");
         assert!(matches!(error, OpenError::Driver(_)));
         assert_ne!(error.to_string(), NO_BACKEND_ERROR);
-        assert_eq!(status.get(), Backend::BetterSqlite3, "untouched on load failure");
+        assert_eq!(
+            status.get(),
+            Backend::BetterSqlite3,
+            "untouched on load failure"
+        );
     }
 
     #[test]
@@ -1098,7 +1102,10 @@ mod tests {
         };
         let status = BackendStatus::new();
         let error = open_raw_sqlite(&host, "test.db", &status).expect_err("fails");
-        assert_eq!(error, OpenError::Driver(EngineError::new("constructor failed")));
+        assert_eq!(
+            error,
+            OpenError::Driver(EngineError::new("constructor failed"))
+        );
         // sqliteBackend was assigned before the constructor ran
         assert_eq!(status.get(), Backend::BunSqlite);
     }
@@ -1162,10 +1169,7 @@ mod tests {
             rows: vec![row(1, "alpha"), row(2, "beta")],
             ..FakeState::default()
         }));
-        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(
-            Arc::clone(&state),
-            false,
-        )));
+        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(Arc::clone(&state), false)));
         let statement = db.prepare("SELECT id, name FROM t").expect("prepared");
 
         assert!(!statement.is_raw());
@@ -1209,10 +1213,7 @@ mod tests {
         // explicit false disables raw mode again
         statement.raw(Some(false));
         assert!(!statement.is_raw());
-        assert_eq!(
-            statement.all(&[]).expect("all").as_objects(),
-            Some(&[][..])
-        );
+        assert_eq!(statement.all(&[]).expect("all").as_objects(), Some(&[][..]));
     }
 
     #[test]
@@ -1246,15 +1247,15 @@ mod tests {
     #[test]
     fn columns_falls_back_to_an_empty_list() {
         let state = Arc::new(Mutex::new(FakeState::default()));
-        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(
-            Arc::clone(&state),
-            false,
-        )));
+        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(Arc::clone(&state), false)));
         let statement = db.prepare("SELECT 1").expect("prepared");
         assert!(statement.columns().is_empty());
 
         state.lock().unwrap().columns = Some(vec!["id".to_string(), "name".to_string()]);
-        assert_eq!(statement.columns(), vec!["id".to_string(), "name".to_string()]);
+        assert_eq!(
+            statement.columns(),
+            vec!["id".to_string(), "name".to_string()]
+        );
     }
 
     // ── Transactions ──────────────────────────────────────────────────────
@@ -1262,10 +1263,7 @@ mod tests {
     #[test]
     fn transaction_shim_commits_and_rolls_back() {
         let state = Arc::new(Mutex::new(FakeState::default()));
-        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(
-            Arc::clone(&state),
-            false,
-        )));
+        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(Arc::clone(&state), false)));
 
         let committed = db
             .transaction()
@@ -1304,10 +1302,7 @@ mod tests {
             fail_exec: vec!["ROLLBACK".to_string()],
             ..FakeState::default()
         }));
-        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(
-            Arc::clone(&state),
-            false,
-        )));
+        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(Arc::clone(&state), false)));
         let error = db
             .transaction()
             .deferred(|_tx| Err::<(), &'static str>("original"))
@@ -1326,15 +1321,26 @@ mod tests {
         use std::time::Duration;
 
         let connection = rusqlite::Connection::open_in_memory().unwrap();
-        connection.execute_batch("CREATE TABLE counter(value INTEGER); INSERT INTO counter VALUES(0)").unwrap();
+        connection
+            .execute_batch("CREATE TABLE counter(value INTEGER); INSERT INTO counter VALUES(0)")
+            .unwrap();
         let worker = DatabaseWorker::new(connection, NonZeroU16::new(4).unwrap()).unwrap();
 
         let failure = worker_transaction(&worker, TransactionMode::Immediate, |tx| {
             tx.execute("UPDATE counter SET value = 99", [])?;
             Err::<(), _>(std::io::Error::other("body failed").into())
-        }).await;
-        assert!(matches!(failure, Err(crate::db::worker::DatabaseError::Operation(_))));
-        let value = worker.run(|db| Ok(db.query_row("SELECT value FROM counter", [], |row| row.get::<_, i64>(0))?)).await.unwrap();
+        })
+        .await;
+        assert!(matches!(
+            failure,
+            Err(crate::db::worker::DatabaseError::Operation(_))
+        ));
+        let value = worker
+            .run(
+                |db| Ok(db.query_row("SELECT value FROM counter", [], |row| row.get::<_, i64>(0))?),
+            )
+            .await
+            .unwrap();
         assert_eq!(value, 0);
 
         let (entered, started) = tokio::sync::oneshot::channel();
@@ -1346,13 +1352,22 @@ mod tests {
                 let _ = entered.send(());
                 wait.recv_timeout(Duration::from_secs(5))?;
                 Ok(())
-            }).await
+            })
+            .await
         });
-        tokio::time::timeout(Duration::from_secs(5), started).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_secs(5), started)
+            .await
+            .unwrap()
+            .unwrap();
         task.abort();
         let _ = task.await;
         release.send(()).unwrap();
-        let value = worker.run(|db| Ok(db.query_row("SELECT value FROM counter", [], |row| row.get::<_, i64>(0))?)).await.unwrap();
+        let value = worker
+            .run(
+                |db| Ok(db.query_row("SELECT value FROM counter", [], |row| row.get::<_, i64>(0))?),
+            )
+            .await
+            .unwrap();
         assert_eq!(value, 7, "the next job sees the finished transaction");
         worker.shutdown().await.unwrap();
     }
@@ -1363,10 +1378,7 @@ mod tests {
             fail_exec: vec!["COMMIT".to_string(), "ROLLBACK".to_string()],
             ..FakeState::default()
         }));
-        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(
-            Arc::clone(&state),
-            false,
-        )));
+        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(Arc::clone(&state), false)));
         let error = db
             .transaction()
             .deferred(|_tx| Ok::<(), &'static str>(()))
@@ -1387,10 +1399,7 @@ mod tests {
             fail_exec: vec!["BEGIN".to_string()],
             ..FakeState::default()
         }));
-        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(
-            Arc::clone(&state),
-            false,
-        )));
+        let db = SqliteDatabase::wrap_node_sqlite(Box::new(FakeDb::new(Arc::clone(&state), false)));
         let mut ran = false;
         let error = db
             .transaction()
@@ -1436,7 +1445,9 @@ mod tests {
         assert_eq!(config.schema.len(), 48);
         assert_eq!(config.table_names_map.len(), 48);
         assert_eq!(
-            config.table("messageContextMetadata").map(|entry| entry.db_name),
+            config
+                .table("messageContextMetadata")
+                .map(|entry| entry.db_name),
             Some("message_context_metadata")
         );
         assert_eq!(
@@ -1459,7 +1470,10 @@ mod tests {
             ..FakeHost::default()
         };
         let db = SqliteDatabase::new(
-            Box::new(FakeDb::new(Arc::new(Mutex::new(FakeState::default())), true)),
+            Box::new(FakeDb::new(
+                Arc::new(Mutex::new(FakeState::default())),
+                true,
+            )),
             Backend::BunSqlite,
         );
         let connection = create_drizzle(&host, &db).expect("drizzle");

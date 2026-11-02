@@ -51,8 +51,11 @@ describe("PreviewService", () => {
     expect(result?.sharedWithAgent).toBe(false);
     expect(registry.startSurface).not.toHaveBeenCalled();
     service.setSharedWithAgent("owner", true);
-    await expect(service.reload("owner")).rejects.toThrow("Take control");
-    expect(browser.reload).toHaveBeenCalledOnce();
+    const sharedResult = await service.reload("owner");
+    expect(sharedResult?.sharedWithAgent).toBe(true);
+    expect(sharedResult?.browserId).toBe("browser-1");
+    expect(browser.reload).toHaveBeenCalledTimes(2);
+    expect(() => service.assertAgentControl("browser-1")).not.toThrow();
   });
 
   it("navigates the owner's browser without recreating it or granting agent control", async () => {
@@ -76,7 +79,11 @@ describe("PreviewService", () => {
     expect(result?.sharedWithAgent).toBe(false);
     expect(registry.startSurface).not.toHaveBeenCalled();
     service.setSharedWithAgent("owner", true);
-    await expect(service.navigate("owner", "https://example.com/")).rejects.toThrow("Take control");
+    const sharedResult = await service.navigate("owner", "https://example.com/");
+    expect(sharedResult?.sharedWithAgent).toBe(true);
+    expect(sharedResult?.browserId).toBe("browser-1");
+    expect(() => service.assertAgentControl("browser-1")).not.toThrow();
+    await expect(service.navigate("owner", "file:///etc/passwd")).rejects.toThrow("HTTP");
   });
 
   it("cleans up a managed server when the preview browser fails", async () => {

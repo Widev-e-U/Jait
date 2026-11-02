@@ -5,7 +5,7 @@ use crate::{
     db::identifiers::uuidv7,
     runtime::blocking::BlockingLane,
     security::{
-        consent_manager::{ConsentManager, ConsentStatus, DecisionVia},
+        consent_manager::{ConsentManager, ConsentQueueEvent, ConsentStatus, DecisionVia},
         tool_permissions::ToolPermission,
     },
 };
@@ -23,6 +23,97 @@ use std::sync::Arc;
 /// Missing stores must deny access, rather than infer ownership from reachability.
 pub type ConsentOwnership = Arc<dyn Fn(&str, &str) -> Result<bool, String> + Send + Sync>;
 pub type ConsentAudit = Arc<dyn Fn(Value) -> Result<(), String> + Send + Sync>;
+
+/// Capture an ownership-filtered snapshot and its change subscription together.
+/// The caller must authenticate the user and limit connection admission. A wakeup
+/// or lag requires reconciliation of pending requests and missed decisions;
+/// a pending snapshot alone cannot recover decisions.
+/// Ownership errors fail the entire snapshot closed. Filtering runs in the bounded
+/// blocking lane because the host ownership adapter may consult storage.
+pub async fn subscribe_owned_pending(
+    manager: ConsentManager,
+    owns_session: ConsentOwnership,
+    user: String,
+    lane: BlockingLane,
+) -> Result<
+    (
+        Vec<Value>,
+        tokio::sync::broadcast::Receiver<ConsentQueueEvent>,
+    ),
+    String,
+> {
+    if user.trim().is_empty() {
+        return Err("authenticated user required".into());
+    }
+    lane.run(move || {
+        let (requests, changes) = manager
+            .try_subscribe_pending_changes()
+            .map_err(str::to_owned)?;
+        let mut visible = Vec::new();
+        for request in requests {
+            if owns_session(&request.session_id, &user)? {
+                visible.push(json!({"id":request.id,"sessionId":request.session_id}));
+            }
+        }
+        Ok((visible, changes))
+    })
+    .await
+    .map_err(|_| "consent snapshot unavailable".to_string())?
+}
+/// Refresh a live subscriber without consuming another admission slot. Keep the
+/// receiver alive while calling this, and treat queued notifications as wakeups.
+pub async fn refresh_owned_pending(
+    manager: ConsentManager,
+    owns_session: ConsentOwnership,
+    user: String,
+    lane: BlockingLane,
+) -> Result<Vec<Value>, String> {
+    if user.trim().is_empty() {
+        return Err("authenticated user required".into());
+    }
+    lane.run(move || {
+        let mut visible = Vec::new();
+        for request in manager.pending_snapshot().map_err(str::to_owned)? {
+            if owns_session(&request.session_id, &user)? {
+                visible.push(json!({"id":request.id,"sessionId":request.session_id}));
+            }
+        }
+        Ok(visible)
+    })
+    .await
+    .map_err(|_| "consent snapshot unavailable".to_string())?
+}
+/// Filter each live transition against current ownership before delivery.
+/// A recovery signal is an error, not a wire event: current clients do not
+/// understand it. The caller must stop delivery and reconcile missed decisions
+/// as well as pending requests; a pending-only snapshot cannot restore both.
+pub async fn filter_owned_event(
+    event: ConsentQueueEvent,
+    owns_session: ConsentOwnership,
+    user: String,
+    lane: BlockingLane,
+) -> Result<Option<Value>, String> {
+    if user.trim().is_empty() {
+        return Err("authenticated user required".into());
+    }
+    lane.run(move || {
+        match event {
+            ConsentQueueEvent::Required(request) => {
+                if !owns_session(&request.session_id, &user)? {
+                    return Ok(None);
+                }
+                Ok(Some(json!({"type":"consent.required", "sessionId":request.session_id, "payload":&*request})))
+            }
+            ConsentQueueEvent::Resolved { session_id, decision } => {
+                if !owns_session(&session_id, &user)? {
+                    return Ok(None);
+                }
+                Ok(Some(json!({"type":"consent.resolved", "sessionId":session_id, "payload":&*decision})))
+            }
+            ConsentQueueEvent::SnapshotRequired => Err("consent event recovery required".into()),
+        }
+    }).await.map_err(|_| "consent event unavailable".to_string())?
+}
 #[derive(Clone)]
 pub struct ConsentRoutes {
     pub auth: AuthState,
@@ -288,5 +379,158 @@ async fn handle(State(state): State<ConsentRoutes>, request: Request) -> Respons
                 json!({"statusCode":500,"error":"Internal Server Error","message":message}),
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod owned_snapshot_tests {
+    use super::*;
+    use crate::security::{
+        consent_manager::{ConsentRequestPolicy, RequestConsent},
+        contracts::Risk,
+        tool_permissions::{ConsentLevel, PolicySource},
+    };
+    use std::num::NonZeroU16;
+
+    fn request(session: &str) -> RequestConsent {
+        RequestConsent {
+            action_id: "action".into(),
+            tool_name: "tool".into(),
+            summary: "test".into(),
+            preview: Default::default(),
+            risk: Risk::High,
+            policy: ConsentRequestPolicy {
+                consent_level: ConsentLevel::Always,
+                description: "test".into(),
+                known_tool: true,
+                source: PolicySource::Profile,
+            },
+            session_id: session.into(),
+            timeout_ms: Some(60_000.0),
+        }
+    }
+    fn lane() -> BlockingLane {
+        BlockingLane::new(NonZeroU16::new(2).unwrap())
+    }
+
+    #[tokio::test]
+    async fn owned_snapshot_isolated_and_reconnect_observes_changes() {
+        let manager = ConsentManager::default();
+        let alice = manager.request_consent(request("alice")).unwrap();
+        let bob = manager.request_consent(request("bob")).unwrap();
+        let owns: ConsentOwnership = Arc::new(|session, user| Ok(session == user));
+        let (snapshot, mut changes) =
+            subscribe_owned_pending(manager.clone(), owns.clone(), "alice".into(), lane())
+                .await
+                .unwrap();
+        assert_eq!(
+            snapshot,
+            vec![json!({"id": alice.id, "sessionId": "alice"})]
+        );
+        manager.approve(&alice.id, None, None).unwrap();
+        assert!(changes.try_recv().is_ok());
+        let (snapshot, _) = subscribe_owned_pending(manager.clone(), owns, "alice".into(), lane())
+            .await
+            .unwrap();
+        assert!(snapshot.is_empty());
+        assert!(manager.get_request(&bob.id).is_some());
+    }
+
+    #[tokio::test]
+    async fn refresh_works_at_subscription_limit_and_rechecks_ownership() {
+        let manager = ConsentManager::default();
+        let request = manager.request_consent(request("alice")).unwrap();
+        let receivers: Vec<_> = (0..128)
+            .map(|_| manager.try_subscribe_pending_changes().unwrap().1)
+            .collect();
+        assert!(manager.try_subscribe_pending_changes().is_err());
+        let owns: ConsentOwnership = Arc::new(|session, user| Ok(session == user));
+        let snapshot = refresh_owned_pending(manager.clone(), owns.clone(), "alice".into(), lane())
+            .await
+            .unwrap();
+        assert_eq!(
+            snapshot,
+            vec![json!({"id": request.id, "sessionId": "alice"})]
+        );
+        let revoked: ConsentOwnership = Arc::new(|_, _| Ok(false));
+        assert!(
+            refresh_owned_pending(manager.clone(), revoked, "alice".into(), lane())
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let failure: ConsentOwnership = Arc::new(|_, _| Err("lookup failed".into()));
+        assert!(
+            refresh_owned_pending(manager, failure, "alice".into(), lane())
+                .await
+                .is_err()
+        );
+        drop(receivers);
+    }
+
+    #[tokio::test]
+    async fn live_events_recheck_ownership_and_fail_closed() {
+        let manager = ConsentManager::default();
+        let (_, mut changes) = manager.try_subscribe_pending_changes().unwrap();
+        let handle = manager.request_consent(request("alice")).unwrap();
+        manager.approve(&handle.id, None, None).unwrap();
+        let required = changes.try_recv().unwrap();
+        let resolved = changes.try_recv().unwrap();
+        let owns: ConsentOwnership = Arc::new(|session, user| Ok(session == user));
+        let event = filter_owned_event(required.clone(), owns.clone(), "alice".into(), lane())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(event["type"], "consent.required");
+        assert_eq!(event["payload"]["id"], handle.id);
+        assert!(
+            filter_owned_event(required, owns, "bob".into(), lane())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let revoked: ConsentOwnership = Arc::new(|_, _| Ok(false));
+        assert!(
+            filter_owned_event(resolved.clone(), revoked, "alice".into(), lane())
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let failure: ConsentOwnership = Arc::new(|_, _| Err("lookup failed".into()));
+        assert!(
+            filter_owned_event(resolved, failure, "alice".into(), lane())
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_signal_is_not_sent_as_an_unknown_wire_event() {
+        let owns: ConsentOwnership = Arc::new(|_, _| Ok(true));
+        let result = filter_owned_event(
+            ConsentQueueEvent::SnapshotRequired,
+            owns,
+            "alice".into(),
+            lane(),
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "consent event recovery required");
+    }
+
+    #[tokio::test]
+    async fn owned_snapshot_fails_closed_on_lookup_error_and_empty_user() {
+        let manager = ConsentManager::default();
+        manager.request_consent(request("alice")).unwrap();
+        let owns: ConsentOwnership = Arc::new(|_, _| Err("lookup failed".into()));
+        assert!(
+            subscribe_owned_pending(manager.clone(), owns.clone(), "alice".into(), lane())
+                .await
+                .is_err()
+        );
+        assert!(
+            subscribe_owned_pending(manager, owns, " ".into(), lane())
+                .await
+                .is_err()
+        );
     }
 }

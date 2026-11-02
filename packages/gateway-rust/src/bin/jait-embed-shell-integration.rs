@@ -23,10 +23,12 @@ fn resolve_root(configured: Option<OsString>, exe: &Path) -> Result<PathBuf, &'s
         return Ok(root);
     }
     let dir = exe.parent().ok_or("cannot locate executable directory")?;
-    let candidate = if matches!(
-        dir.file_name().and_then(|n| n.to_str()),
-        Some("bin" | "scripts")
-    ) {
+    // The original script always derives its root from its own scripts directory,
+    // even when source files are missing. Preserve the subsequent file error.
+    if dir.file_name().and_then(|name| name.to_str()) == Some("scripts") {
+        return Ok(dir.parent().unwrap_or(dir).to_path_buf());
+    }
+    let candidate = if dir.file_name().and_then(|name| name.to_str()) == Some("bin") {
         dir.parent().unwrap_or(dir)
     } else {
         dir
@@ -92,6 +94,13 @@ mod cli_tests {
         assert_eq!(
             resolve_root(Some("/explicit".into()), Path::new("/else/bin/generator")).unwrap(),
             PathBuf::from("/explicit")
+        );
+    }
+    #[test]
+    fn scripts_location_resolves_even_when_sources_are_missing() {
+        assert_eq!(
+            resolve_root(None, Path::new("/missing-package/scripts/generator")).unwrap(),
+            PathBuf::from("/missing-package")
         );
     }
     #[test]

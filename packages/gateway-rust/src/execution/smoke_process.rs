@@ -87,8 +87,10 @@ async fn terminate_with_timeout(child: Option<&mut Child>, deadline: Duration) -
 fn send_default_termination(child: &mut Child) -> io::Result<()> {
     let Some(pid) = child.id() else { return Ok(()) };
     let pid = i32::try_from(pid).map_err(|_| io::Error::other("child PID out of range"))?;
-    // SAFETY: kill has no pointer arguments. This is an unreaped child PID held
-    // by the caller; a racing exit cannot recycle it until it is reaped.
+    // SAFETY: kill has no pointer arguments. Exclusive reaping ownership is
+    // required: no external waitpid/waitid handler may reap this child. The
+    // mutable Child borrow prevents concurrent Tokio wait/try_wait calls, so
+    // a racing exit remains unreaped and its PID cannot be recycled here.
     if unsafe { libc::kill(pid, libc::SIGTERM) } == 0 {
         return Ok(());
     }
@@ -225,6 +227,27 @@ mod tests {
         terminate_child(Some(&mut child)).await.unwrap();
         assert!(has_exited(Some(&mut child)).unwrap());
         terminate_child(Some(&mut child)).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancelled_termination_retains_child_for_cleanup() {
+        let mut child = Command::new("/bin/sh")
+            .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        stdout.read_line(&mut line).await.unwrap();
+        assert_eq!(line, "ready\n");
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), terminate_child(Some(&mut child)))
+                .await
+                .is_err()
+        );
+        assert!(!has_exited(Some(&mut child)).unwrap());
+        child.kill().await.unwrap();
+        assert!(has_exited(Some(&mut child)).unwrap());
     }
 
     #[tokio::test]

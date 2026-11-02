@@ -18,6 +18,9 @@ pub mod contracts;
 pub mod tool_permissions;
 
 pub mod consent_manager;
+pub(crate) mod consent_replay;
+pub(crate) mod consent_replay_lifecycle;
+pub(crate) mod consent_replay_store;
 
 pub mod tool_profiles;
 
@@ -29,5 +32,5 @@ pub mod sandbox_manager;
 
 pub mod engines;
 pub mod host_software;
-pub mod protocols;
 pub mod index;
+pub mod protocols;

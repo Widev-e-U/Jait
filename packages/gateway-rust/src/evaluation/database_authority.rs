@@ -143,6 +143,12 @@ impl EvaluationDatabase {
     }
 }
 
+impl crate::db::worker::ConnectionOwner for EvaluationDatabase {
+    fn connection(&self) -> &Connection {
+        self.connection()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::private_directory::create_in;
@@ -170,6 +176,63 @@ mod tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.0).unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn worker_retains_directory_through_cancelled_started_job_and_shutdown() {
+        use crate::db::worker::DatabaseWorker;
+        use std::{num::NonZeroU16, time::Duration};
+        use tokio::sync::oneshot;
+
+        let fixture = Fixture::new();
+        let db = EvaluationDatabase::create(fixture.directory()).unwrap();
+        db.connection()
+            .execute_batch("CREATE TABLE sample(value INTEGER)")
+            .unwrap();
+        let worker = DatabaseWorker::new_owned(db, NonZeroU16::new(2).unwrap()).unwrap();
+        fs::rename(fixture.0.join("state"), fixture.0.join("moved")).unwrap();
+        fs::create_dir_all(fixture.0.join("state/data")).unwrap();
+        let (entered, started) = oneshot::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let scoped = worker.clone();
+        let task = tokio::spawn(async move {
+            scoped
+                .run(move |db| {
+                    entered.send(()).unwrap();
+                    wait.recv_timeout(Duration::from_secs(5)).unwrap();
+                    db.execute("INSERT INTO sample VALUES (42)", [])?;
+                    Ok(())
+                })
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), started)
+            .await
+            .unwrap()
+            .unwrap();
+        task.abort();
+        let _ = task.await;
+        // Poll shutdown once to close admission before releasing the blocked job.
+        // A scheduler yield alone does not establish that shutdown has started.
+        let shutdown = worker.shutdown();
+        tokio::pin!(shutdown);
+        let first_poll = std::future::poll_fn(|cx| {
+            std::task::Poll::Ready(std::future::Future::poll(shutdown.as_mut(), cx))
+        })
+        .await;
+        assert!(first_poll.is_pending());
+        release.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), shutdown)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!fixture.0.join("state/data/jait.db").exists());
+        let reopened = Connection::open(fixture.0.join("moved/data/jait.db")).unwrap();
+        assert_eq!(
+            reopened
+                .query_row("SELECT value FROM sample", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            42
+        );
     }
 
     #[test]

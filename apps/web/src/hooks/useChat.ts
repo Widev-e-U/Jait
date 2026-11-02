@@ -457,6 +457,9 @@ type RawSnapshotMessage = {
     output?: string
     data?: unknown
     streamingOutput?: string
+    streamingArgs?: string
+    streamIndex?: number
+    provisional?: boolean
     startedAt?: number
     completedAt?: number
     /** Ordered child segments of a sub-agent tool call (text/thinking/nested tool groups) so a reload replays the full interleaved layout. */
@@ -527,6 +530,9 @@ export function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStrea
                 data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
               },
           streamingOutput: tc.streamingOutput,
+          streamingArgs: tc.streamingArgs,
+          streamIndex: tc.streamIndex,
+          provisional: tc.provisional,
           childSegments: tc.childSegments,
           startedAt,
           completedAt: resolvedCompletedAt,
@@ -1148,6 +1154,7 @@ export function useChat(
           // Cumulative provider slot index (see agent-loop.ts): lets the stream
           // re-key a provisional `pending-N` id once the real id arrives.
           typeof data.index === 'number' ? data.index : undefined,
+          typeof data.provisional === 'boolean' ? data.provisional : undefined,
         )
         applyStreamSnapshot()
       } else if (data.type === 'tool_start') {

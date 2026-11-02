@@ -374,7 +374,11 @@ impl OsControlDriver for LinuxDesktopOsControlDriver {
             let direction = options.direction.unwrap_or(ScrollDirection::Down);
             let amount = js_round(options.amount.unwrap_or(1.0)).max(1.0);
             // Up/down map to wheel buttons 4/5; the TS driver uses 5 otherwise.
-            let click = if direction == ScrollDirection::Up { 4 } else { 5 };
+            let click = if direction == ScrollDirection::Up {
+                4
+            } else {
+                5
+            };
             let move_args = match (options.x, options.y) {
                 (Some(x), Some(y)) => {
                     format!("mousemove {} {} ", js_int(x), js_int(y))
@@ -606,7 +610,10 @@ mod tests {
             driver.scroll(None).await.unwrap();
         });
         let calls = shell.calls();
-        assert_eq!(calls[0].1, "DISPLAY=:99 xdotool mousemove 3 5 click --repeat 2 4");
+        assert_eq!(
+            calls[0].1,
+            "DISPLAY=:99 xdotool mousemove 3 5 click --repeat 2 4"
+        );
         assert_eq!(calls[1].1, "DISPLAY=:99 xdotool click --repeat 1 5");
     }
 

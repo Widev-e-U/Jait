@@ -10,11 +10,11 @@
 //! `JaitDB` in TS is the drizzle query-builder handle, which is TS-only; the native boundary
 //! exposes the underlying `rusqlite::Connection` instead (see `JaitDb`).
 
-pub use crate::db::{
-    MigrationError, apply_migrations_through, migrate_database, migration_inventory,
-    open_database, schema, schema_version, sqlite_shim, verify_schema,
-};
 pub use crate::db::sqlite_shim::{Backend as SqliteBackend, BackendStatus, SqliteDatabase};
+pub use crate::db::{
+    MigrationError, apply_migrations_through, migrate_database, migration_inventory, open_database,
+    schema, schema_version, sqlite_shim, verify_schema,
+};
 pub use crate::state_directory::{StatePathError, default_db_path, resolve_database_path};
 
 /// Stand-in for TS `type JaitDB = DrizzleDB`: the native handle a caller actually queries.
@@ -29,17 +29,15 @@ mod tests {
     fn barrel_exposes_the_same_surface_as_the_ts_index() {
         // Mirrors `export { openDatabase, migrateDatabase, verifySchema, getSchemaVersion,
         // defaultDbPath, resolveDatabasePath } from "./connection.js"`.
-        let _: fn(&Path) -> Result<JaitDb, Box<dyn std::error::Error + Send + Sync>> = open_database;
+        let _: fn(&Path) -> Result<JaitDb, Box<dyn std::error::Error + Send + Sync>> =
+            open_database;
         let _: fn(&JaitDb) -> Result<(), MigrationError> = migrate_database;
         let _: fn(&JaitDb) -> rusqlite::Result<usize> = verify_schema;
         let _: fn(&JaitDb) -> u32 = schema_version;
-        let _: fn(&Path, Option<&str>) -> Result<std::path::PathBuf, StatePathError> = default_db_path;
-        let resolved = resolve_database_path(
-            Some(":memory:"),
-            |_| None,
-            Path::new("/home/me"),
-        )
-        .expect("explicit path");
+        let _: fn(&Path, Option<&str>) -> Result<std::path::PathBuf, StatePathError> =
+            default_db_path;
+        let resolved = resolve_database_path(Some(":memory:"), |_| None, Path::new("/home/me"))
+            .expect("explicit path");
         assert_eq!(resolved, Path::new(":memory:"));
 
         // `export * as schema from "./schema.js"` — the namespace must expose table metadata.
@@ -74,7 +72,9 @@ mod tests {
 
         migrate_database(&connection).expect("migrate");
 
-        let expected = migration_inventory().last().map_or(0, |migration| migration.0);
+        let expected = migration_inventory()
+            .last()
+            .map_or(0, |migration| migration.0);
         assert_eq!(schema_version(&connection), expected);
         verify_schema(&connection).expect("schema verification passes after migration");
     }

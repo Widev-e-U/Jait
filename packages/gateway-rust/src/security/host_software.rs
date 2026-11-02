@@ -19,9 +19,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-use super::engines::{engine_version, parse_trivy, CommandRunner, EngineError, EngineName};
+use super::engines::{CommandRunner, EngineError, EngineName, engine_version, parse_trivy};
 use super::protocols::{
-    evidence, rule, AdapterResult, Cancellation, Confidence, RuleStatus, Severity,
+    AdapterResult, Cancellation, Confidence, RuleStatus, Severity, evidence, rule,
 };
 
 /// Directory names that never contribute to a software snapshot.
@@ -170,9 +170,7 @@ pub fn guarded_real_path(root: &Path, target: &Path) -> Result<PathBuf, HostErro
     let real = fs::canonicalize(&joined)
         .map_err(|error| HostError::Path(format!("path is not accessible: {error}")))?;
     if !real.starts_with(&root_real) {
-        return Err(HostError::Path(
-            "path escapes the project root".to_owned(),
-        ));
+        return Err(HostError::Path("path escapes the project root".to_owned()));
     }
     Ok(real)
 }
@@ -248,10 +246,7 @@ pub fn make_temp_dir(prefix: &str) -> Result<PathBuf, HostError> {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or(0);
-        let candidate = base.join(format!(
-            "{prefix}-{}-{counter}-{nanos}",
-            std::process::id()
-        ));
+        let candidate = base.join(format!("{prefix}-{}-{counter}-{nanos}", std::process::id()));
         match fs::create_dir(&candidate) {
             Ok(()) => {
                 fs::set_permissions(&candidate, fs::Permissions::from_mode(0o700))?;
@@ -553,12 +548,7 @@ pub fn parse_password_authentication(config: &str) -> Option<String> {
 }
 
 /// `addSshPolicy`: attach the file-directive evidence and derived findings.
-pub fn add_ssh_policy(
-    output: &mut AdapterResult,
-    target: &str,
-    port: Option<u16>,
-    config: &str,
-) {
+pub fn add_ssh_policy(output: &mut AdapterResult, target: &str, port: Option<u16>, config: &str) {
     if config.len() > MAX_SSH_CONFIG_BYTES {
         output.push_gap("SSH configuration exceeded the audit limit");
         return;
@@ -572,7 +562,9 @@ pub fn add_ssh_policy(
     );
     facts.insert(
         "passwordAuthenticationDirective".to_owned(),
-        password_authentication.clone().map_or(Value::Null, Value::String),
+        password_authentication
+            .clone()
+            .map_or(Value::Null, Value::String),
     );
     facts.insert("effectivePolicyConfirmed".to_owned(), Value::Bool(false));
     output.evidence.push(evidence(
@@ -675,15 +667,12 @@ pub fn parse_telemetry(
         let event: Value = serde_json::from_str(line)
             .map_err(|_| HostError::Parse("telemetry event is not valid JSON".to_owned()))?;
         let candidates: Vec<Option<String>> = match source {
-            "suricata" => vec![
-                text_at(&event, &["dest_ip"]),
-                text_at(&event, &["src_ip"]),
-            ],
+            "suricata" => vec![text_at(&event, &["dest_ip"]), text_at(&event, &["src_ip"])],
             "wazuh" => vec![text_at(&event, &["agent", "ip"])],
             other => {
                 return Err(HostError::Parse(format!(
                     "unsupported telemetry source {other}"
-                )))
+                )));
             }
         };
         let address = candidates
@@ -786,7 +775,10 @@ fn read_cache_version(database_cache: &Path) -> Result<String, HostError> {
         HostError::unavailable("trivy", "prepared Trivy database metadata is unreadable")
     })?;
     let parsed: Value = serde_json::from_str(&text).map_err(|_| {
-        HostError::unavailable("trivy", "prepared Trivy database metadata is not valid JSON")
+        HostError::unavailable(
+            "trivy",
+            "prepared Trivy database metadata is not valid JSON",
+        )
     })?;
     if parsed.get("Version").and_then(Value::as_u64) != Some(2) {
         return Err(HostError::unavailable(
@@ -941,8 +933,9 @@ pub async fn audit_host(
             if os == "linux" {
                 match fs::read_to_string("/etc/ssh/sshd_config") {
                     Ok(config) => add_ssh_policy(&mut output, target, Some(port), &config),
-                    Err(_) => output
-                        .push_gap("SSH configuration was unavailable to the gateway user"),
+                    Err(_) => {
+                        output.push_gap("SSH configuration was unavailable to the gateway user")
+                    }
                 }
             } else {
                 output.push_gap("SSH configuration audit currently supports Linux only");
@@ -1011,7 +1004,10 @@ pub async fn audit_host(
     }
     output.engine_version = format!("openssh:{client_version}");
     let mut facts = Map::new();
-    facts.insert("os".to_owned(), os.clone().map_or(Value::Null, Value::String));
+    facts.insert(
+        "os".to_owned(),
+        os.clone().map_or(Value::Null, Value::String),
+    );
     facts.insert(
         "release".to_owned(),
         release.clone().map_or(Value::Null, Value::String),
@@ -1140,7 +1136,10 @@ mod tests {
         let config = "PasswordAuthentication NO # trailing\nPasswordAuthentication yes\n";
         assert_eq!(parse_password_authentication(config), Some("no".to_owned()));
         let config = "  PermitRootLogin prohibit-password\n";
-        assert_eq!(parse_root_login(config), Some("prohibit-password".to_owned()));
+        assert_eq!(
+            parse_root_login(config),
+            Some("prohibit-password".to_owned())
+        );
         let config = "PermitRootLogin yes extra-token\nPermitRootLogin no\n";
         assert_eq!(parse_root_login(config), Some("no".to_owned()));
     }
@@ -1157,10 +1156,12 @@ mod tests {
         assert_eq!(output.rules.len(), 2);
         assert_eq!(output.rules[0].rule_id, "host.ssh-root-login");
         assert_eq!(output.rules[0].status, Some(RuleStatus::Suspected));
-        assert!(output
-            .coverage_gaps
-            .iter()
-            .all(|gap| !gap.contains("Missing directives")));
+        assert!(
+            output
+                .coverage_gaps
+                .iter()
+                .all(|gap| !gap.contains("Missing directives"))
+        );
     }
 
     #[test]
@@ -1168,19 +1169,23 @@ mod tests {
         let mut output = crate::security::protocols::result("gateway-readonly-audit");
         add_ssh_policy(&mut output, "10.0.0.5", None, "# empty\n");
         assert!(output.rules.is_empty());
-        assert!(output
-            .coverage_gaps
-            .iter()
-            .any(|gap| gap.contains("Missing directives")));
+        assert!(
+            output
+                .coverage_gaps
+                .iter()
+                .any(|gap| gap.contains("Missing directives"))
+        );
 
         let mut output = crate::security::protocols::result("gateway-readonly-audit");
         let oversized = "#".repeat(MAX_SSH_CONFIG_BYTES + 1);
         add_ssh_policy(&mut output, "10.0.0.5", None, &oversized);
         assert!(output.evidence.is_empty());
-        assert!(output
-            .coverage_gaps
-            .iter()
-            .any(|gap| gap.contains("exceeded the audit limit")));
+        assert!(
+            output
+                .coverage_gaps
+                .iter()
+                .any(|gap| gap.contains("exceeded the audit limit"))
+        );
     }
 
     fn suricata_alert(dest: &str, signature_id: &str) -> String {
@@ -1202,10 +1207,12 @@ mod tests {
         assert_eq!(output.rules.len(), 1);
         assert_eq!(output.rules[0].rule_id, "suricata.2000001");
         assert_eq!(output.evidence.len(), 1);
-        assert!(output
-            .coverage_gaps
-            .iter()
-            .any(|gap| gap.starts_with('2') && gap.contains("skipped")));
+        assert!(
+            output
+                .coverage_gaps
+                .iter()
+                .any(|gap| gap.starts_with('2') && gap.contains("skipped"))
+        );
     }
 
     #[test]

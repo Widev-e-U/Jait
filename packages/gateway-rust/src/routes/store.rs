@@ -2,7 +2,8 @@
 //! remain explicit authorized host ports; mounting performs no network or disk I/O.
 use super::auth::{self, AuthState, response};
 use crate::{
-    execution::command_timeout::number,
+    execution::{command_timeout::number, process_runner::ProcessCancellation},
+    security::http_auth::AuthUser,
     services::calendar::{js_text, truthy},
 };
 use axum::{
@@ -47,8 +48,23 @@ impl StoreError {
         }
     }
 }
-pub type StorePort =
-    Arc<dyn Fn(StoreOperation) -> BoxFuture<'static, Result<Value, StoreError>> + Send + Sync>;
+/// Identity identifies the caller; it does not authorize any host effect.
+#[derive(Clone)]
+pub struct StoreContext {
+    pub user: AuthUser,
+    pub cancellation: ProcessCancellation,
+}
+pub type StorePort = Arc<
+    dyn Fn(StoreContext, StoreOperation) -> BoxFuture<'static, Result<Value, StoreError>>
+        + Send
+        + Sync,
+>;
+struct CancelOnDrop(ProcessCancellation);
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        self.0.cancel();
+    }
+}
 #[derive(Clone)]
 pub struct StoreRoutes {
     pub auth: AuthState,
@@ -111,6 +127,7 @@ fn limit(fields: &BTreeMap<String, Value>) -> f64 {
 }
 async fn run(
     state: &StoreRoutes,
+    context: &StoreContext,
     method: &Method,
     path: &str,
     slug: String,
@@ -120,21 +137,24 @@ async fn run(
     let call = &state.port;
     if path == "/api/store/packages" {
         return Ok(
-            json!({"items":call(StoreOperation::ListPackages { limit: limit(&params) }).await?}),
+            json!({"items":call(context.clone(), StoreOperation::ListPackages { limit: limit(&params) }).await?}),
         );
     }
     if path == "/api/store/skills" {
-        let installed = call(StoreOperation::ListInstalled).await?;
+        let installed = call(context.clone(), StoreOperation::ListInstalled).await?;
         let search = params
             .get("q")
             .filter(|v| truthy(v))
             .or_else(|| params.get("sort").filter(|v| truthy(v)))
             .cloned()
             .unwrap_or(json!("tool workflow agent"));
-        let results = call(StoreOperation::Search {
-            query: search,
-            limit: limit(&params),
-        })
+        let results = call(
+            context.clone(),
+            StoreOperation::Search {
+                query: search,
+                limit: limit(&params),
+            },
+        )
         .await?;
         let rows = results
             .as_array()
@@ -153,7 +173,7 @@ async fn run(
             // Dropping a timed-out wait does not grant authority to repeat a host effect.
             if let Ok(Ok(detail)) = tokio::time::timeout(
                 Duration::from_secs(3),
-                call(StoreOperation::GetSkill(js_text(&slug))),
+                call(context.clone(), StoreOperation::GetSkill(js_text(&slug))),
             )
             .await
             {
@@ -185,17 +205,17 @@ async fn run(
     }
     match *method {
         Method::GET => {
-            let detail = call(StoreOperation::GetSkill(slug.clone())).await?;
-            let installed = call(StoreOperation::IsInstalled(slug)).await?;
+            let detail = call(context.clone(), StoreOperation::GetSkill(slug.clone())).await?;
+            let installed = call(context.clone(), StoreOperation::IsInstalled(slug)).await?;
             let mut result = spread(&detail);
             result.insert("installed".into(), installed);
             Ok(Value::Object(result))
         }
         Method::POST => Ok(
-            json!({"ok":true,"skill":call(StoreOperation::Install {slug,version:body.get("version").cloned()}).await?}),
+            json!({"ok":true,"skill":call(context.clone(), StoreOperation::Install {slug,version:body.get("version").cloned()}).await?}),
         ),
         Method::DELETE => {
-            call(StoreOperation::Uninstall(slug)).await?;
+            call(context.clone(), StoreOperation::Uninstall(slug)).await?;
             Ok(json!({"ok":true}))
         }
         _ => unreachable!(),
@@ -236,10 +256,15 @@ async fn handle(State(state): State<StoreRoutes>, request: Request) -> Response 
         Ok(v) => v,
         Err(e) => return *e,
     };
-    if let Err(e) = auth::require_user(&state.auth, &headers).await {
-        return *e;
-    }
-    match run(&state, &method, &path, slug, params, body).await {
+    let user = match auth::require_user(&state.auth, &headers).await {
+        Ok(user) => user,
+        Err(e) => return *e,
+    };
+    let cancellation = ProcessCancellation::default();
+    // This tracks the handler future's lifetime, not transport disconnect detection.
+    let _guard = CancelOnDrop(cancellation.clone());
+    let context = StoreContext { user, cancellation };
+    match run(&state, &context, &method, &path, slug, params, body).await {
         Ok(v) => response(200, v),
         Err(error) => {
             let message = error.message();
@@ -259,5 +284,209 @@ async fn handle(State(state): State<StoreRoutes>, request: Request) -> Response 
                 )
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod request_context_tests {
+    use super::*;
+    use crate::{db, security::http_auth};
+    use axum::body::Body;
+    use tokio::sync::mpsc;
+
+    fn request(user: &AuthUser) -> Request {
+        let token = http_auth::sign_auth_token(user, "store-context-test").unwrap();
+        Request::builder()
+            .uri("/api/store/packages")
+            .header("authorization", format!("Bearer {token}"))
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn request_identity_and_cancellation_are_isolated() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db::migrate_database(&db).unwrap();
+        db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('first','alice','fixture','old','old'),('second','bob','fixture','old','old')").unwrap();
+        let auth = AuthState::new(db, "store-context-test".into()).unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let port: StorePort = Arc::new(move |context, _| {
+            tx.send(context.clone()).unwrap();
+            Box::pin(async move {
+                if context.user.id == "first" {
+                    std::future::pending::<()>().await;
+                }
+                Ok(json!([]))
+            })
+        });
+        let state = StoreRoutes {
+            auth: auth.clone(),
+            port,
+        };
+        let first = AuthUser {
+            id: "first".into(),
+            username: "alice".into(),
+        };
+        let second = AuthUser {
+            id: "second".into(),
+            username: "bob".into(),
+        };
+        let first_task = tokio::spawn(handle(State(state.clone()), request(&first)));
+        let first_context = rx.recv().await.unwrap();
+        assert_eq!(first_context.user, first);
+        assert!(!first_context.cancellation.is_cancelled());
+        let response = handle(State(state), request(&second)).await;
+        assert_eq!(response.status(), 200);
+        let second_context = rx.recv().await.unwrap();
+        assert_eq!(second_context.user, second);
+        assert!(second_context.cancellation.is_cancelled());
+        assert!(!first_context.cancellation.is_cancelled());
+        first_task.abort();
+        assert!(first_task.await.unwrap_err().is_cancelled());
+        assert!(first_context.cancellation.is_cancelled());
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn non_array_search_result_fails_before_detail_lookups() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db::migrate_database(&db).unwrap();
+        db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('owner','alice','fixture','old','old')").unwrap();
+        let auth = AuthState::new(db, "store-context-test".into()).unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let port: StorePort = Arc::new(move |context, op| {
+            tx.send((context.cancellation, op.clone())).unwrap();
+            Box::pin(async move {
+                match op {
+                    StoreOperation::ListInstalled => Ok(json!([])),
+                    StoreOperation::Search { .. } => Ok(json!({"unexpected": true})),
+                    _ => panic!("search error must not start detail lookups"),
+                }
+            })
+        });
+        let user = AuthUser {
+            id: "owner".into(),
+            username: "alice".into(),
+        };
+        let mut req = request(&user);
+        *req.uri_mut() = "/api/store/skills".parse().unwrap();
+        let response = handle(
+            State(StoreRoutes {
+                auth: auth.clone(),
+                port,
+            }),
+            req,
+        )
+        .await;
+        assert_eq!(response.status(), 500);
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&body).unwrap(),
+            json!({"statusCode":500,"error":"Internal Server Error","message":"results.map is not a function"})
+        );
+        let first = rx.recv().await.unwrap();
+        let second = rx.recv().await.unwrap();
+        assert!(matches!(first.1, StoreOperation::ListInstalled));
+        assert!(matches!(second.1, StoreOperation::Search { .. }));
+        assert!(first.0.is_cancelled());
+        assert!(second.0.is_cancelled());
+        assert!(rx.try_recv().is_err());
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn aborting_search_cancels_all_pending_detail_lookups() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db::migrate_database(&db).unwrap();
+        db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('owner','alice','fixture','old','old')").unwrap();
+        let auth = AuthState::new(db, "store-context-test".into()).unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let port: StorePort = Arc::new(move |context, op| {
+            let tx = tx.clone();
+            Box::pin(async move {
+                match op {
+                    StoreOperation::ListInstalled => Ok(json!([])),
+                    StoreOperation::Search { .. } => {
+                        Ok(json!([{ "slug": "one" }, { "slug": "two" }]))
+                    }
+                    StoreOperation::GetSkill(slug) => {
+                        tx.send((slug, context.cancellation)).unwrap();
+                        std::future::pending().await
+                    }
+                    _ => panic!("unexpected operation"),
+                }
+            })
+        });
+        let user = AuthUser {
+            id: "owner".into(),
+            username: "alice".into(),
+        };
+        let mut req = request(&user);
+        *req.uri_mut() = "/api/store/skills".parse().unwrap();
+        let task = tokio::spawn(handle(
+            State(StoreRoutes {
+                auth: auth.clone(),
+                port,
+            }),
+            req,
+        ));
+        let first = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let second = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_ne!(first.0, second.0);
+        assert!(!first.1.is_cancelled());
+        assert!(!second.1.is_cancelled());
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(first.1.is_cancelled());
+        assert!(second.1.is_cancelled());
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn every_detail_operation_receives_the_request_context() {
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        db::migrate_database(&db).unwrap();
+        db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('owner','alice','fixture','old','old')").unwrap();
+        let auth = AuthState::new(db, "store-context-test".into()).unwrap();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let port: StorePort = Arc::new(move |context, op| {
+            tx.send(context).unwrap();
+            Box::pin(async move {
+                Ok(match op {
+                    StoreOperation::GetSkill(_) => json!({"name":"skill"}),
+                    StoreOperation::IsInstalled(_) => json!(true),
+                    _ => panic!("unexpected operation"),
+                })
+            })
+        });
+        let user = AuthUser {
+            id: "owner".into(),
+            username: "alice".into(),
+        };
+        let mut req = request(&user);
+        *req.uri_mut() = "/api/store/skills/example".parse().unwrap();
+        let response = handle(
+            State(StoreRoutes {
+                auth: auth.clone(),
+                port,
+            }),
+            req,
+        )
+        .await;
+        assert_eq!(response.status(), 200);
+        let first = rx.recv().await.unwrap();
+        let second = rx.recv().await.unwrap();
+        assert_eq!(first.user, user);
+        assert_eq!(second.user, user);
+        assert!(first.cancellation.is_cancelled());
+        assert!(second.cancellation.is_cancelled());
+        auth.shutdown().await.unwrap();
     }
 }

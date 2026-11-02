@@ -36,7 +36,7 @@ pub mod steering_dispatcher;
 
 pub mod acp_provider;
 
-pub mod jait_provider;
-pub mod ollama_stream;
 pub mod contracts;
 pub mod index;
+pub mod jait_provider;
+pub mod ollama_stream;

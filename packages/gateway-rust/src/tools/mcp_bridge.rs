@@ -44,7 +44,7 @@
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::tools::contracts::{ToolResult, ToolSource};
 use crate::tools::registry::{ExecutePort, ToolRegistry};
@@ -187,7 +187,11 @@ pub struct McpRawTool {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(rename = "inputSchema", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "inputSchema",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub input_schema: Option<crate::tools::contracts::ToolParametersSchema>,
 }
 
@@ -257,10 +261,18 @@ pub struct McpCallResult {
     pub content: Option<Vec<Value>>,
     #[serde(rename = "isError", default, skip_serializing_if = "Option::is_none")]
     pub is_error: Option<bool>,
-    #[serde(default, deserialize_with = "deserialize_present_value", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub structured_content: Option<Value>,
     /// SDK 1.30+ task-based variant that replaces `content`.
-    #[serde(default, deserialize_with = "deserialize_present_value", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub tool_result: Option<Value>,
 }
 
@@ -790,9 +802,13 @@ mod tests {
         let task: McpCallResult = serde_json::from_value(json!({
             "toolResult": null,
             "content": [{"type": "text", "text": "ignored"}]
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(task.tool_result, Some(Value::Null));
-        assert_eq!(serde_json::to_value(&task).unwrap()["toolResult"], Value::Null);
+        assert_eq!(
+            serde_json::to_value(&task).unwrap()["toolResult"],
+            Value::Null
+        );
         let result = serialize_tool_result(&task);
         assert_eq!(text_of(&result), "null");
         assert_eq!(result.data, Some(Value::Null));
@@ -800,7 +816,8 @@ mod tests {
         let structured: McpCallResult = serde_json::from_value(json!({
             "structuredContent": null,
             "content": [{"type": "text", "text": "visible"}]
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(structured.structured_content, Some(Value::Null));
         let result = serialize_tool_result(&structured);
         assert_eq!(text_of(&result), "visible");
@@ -808,11 +825,20 @@ mod tests {
 
         let absent: McpCallResult = serde_json::from_value(json!({
             "content": [{"type": "text", "text": "visible"}]
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(absent.tool_result, None);
         assert_eq!(absent.structured_content, None);
-        assert_eq!(serialize_tool_result(&absent).data, Some(json!(["visible"])));
-        assert!(serde_json::to_value(absent).unwrap().get("toolResult").is_none());
+        assert_eq!(
+            serialize_tool_result(&absent).data,
+            Some(json!(["visible"]))
+        );
+        assert!(
+            serde_json::to_value(absent)
+                .unwrap()
+                .get("toolResult")
+                .is_none()
+        );
     }
 
     #[test]
@@ -822,7 +848,10 @@ mod tests {
             Rc::new(|_, _, _| Box::pin(async { Ok(tool_result_of(true, String::new(), None)) }))
         }
         let host = FakeHost {
-            tools: vec![McpRawTool { name: "old".into(), ..Default::default() }],
+            tools: vec![McpRawTool {
+                name: "old".into(),
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let mut manager = McpManager::new(host);
@@ -831,13 +860,21 @@ mod tests {
         manager.connect_registered("srv", &mut registry, executor);
         assert_eq!(registry.list_names(), vec!["mcp.srv.old".to_string()]);
 
-        manager.bridge.host.tools = vec![McpRawTool { name: "new".into(), ..Default::default() }];
+        manager.bridge.host.tools = vec![McpRawTool {
+            name: "new".into(),
+            ..Default::default()
+        }];
         manager.connect_registered("srv", &mut registry, executor);
         assert_eq!(registry.list_names(), vec!["mcp.srv.new".to_string()]);
         manager.add_server(stdio_config("other"));
         manager.connect_registered("other", &mut registry, executor);
         manager.bridge.host.fail_connect = Some("failed".into());
-        assert_eq!(manager.connect_registered("srv", &mut registry, executor).status, McpConnectionStatus::Error);
+        assert_eq!(
+            manager
+                .connect_registered("srv", &mut registry, executor)
+                .status,
+            McpConnectionStatus::Error
+        );
         assert!(registry.list_names().contains(&"mcp.srv.new".to_string()));
         manager.remove_server_registered("srv", &mut registry);
         assert_eq!(registry.list_names(), vec!["mcp.other.new".to_string()]);
@@ -936,7 +973,10 @@ mod tests {
         };
         let out = serialize_tool_result(&result);
         assert_eq!(out.ok, json!(true));
-        assert_eq!(text_of(&out), "first\n{\"type\":\"resource\",\"uri\":\"file:///a\"}");
+        assert_eq!(
+            text_of(&out),
+            "first\n{\"type\":\"resource\",\"uri\":\"file:///a\"}"
+        );
         assert_eq!(out.data.unwrap().as_array().unwrap().len(), 2);
     }
 

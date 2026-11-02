@@ -99,11 +99,14 @@ impl GraphifyRunner {
         output_dir: &str,
         signal: Option<ProcessCancellation>,
     ) -> Result<RunResult, GraphError> {
+        check_cancelled(&signal)?;
         (self.ensure_runtime)().await?;
+        check_cancelled(&signal)?;
         tokio::fs::create_dir_all(output_dir)
             .await
             .map_err(|error| GraphError::io(error, "mkdir", output_dir))?;
         let version = self.version(project_root).await?;
+        check_cancelled(&signal)?;
         let mut env = self.runtime.env.clone();
         env.insert("GRAPHIFY_QUERY_LOG_DISABLE".into(), "1".into());
         let result = (self.execute)(ExecRequest {
@@ -136,4 +139,18 @@ impl GraphifyRunner {
             stderr: result.stderr,
         })
     }
+}
+
+pub(super) fn check_cancelled(signal: &Option<ProcessCancellation>) -> Result<(), GraphError> {
+    if signal
+        .as_ref()
+        .is_some_and(ProcessCancellation::is_cancelled)
+    {
+        return Err(GraphError {
+            name: "AbortError".into(),
+            code: Some(Box::new(serde_json::json!("ABORT_ERR"))),
+            ..GraphError::error("The operation was aborted")
+        });
+    }
+    Ok(())
 }

@@ -36,6 +36,8 @@ import { cn } from '@/lib/utils'
 import { alternateStreamingAction, resolvePromptSubmitAction, type DefaultStreamingAction } from '@/lib/prompt-submit-routing'
 import { JAIT_TERMINAL_REF_MIME, JAIT_PROJECT_REF_MIME, JAIT_CHAT_REF_MIME } from '@/lib/jait-dnd'
 import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
+import { API_URL } from '@/lib/gateway-url'
+import { getAuthToken } from '@/lib/auth-token'
 import {
   JAIT_REF_MIME,
   formatLineRange,
@@ -561,22 +563,24 @@ function insertSegmentsAtCursor(
   selection.addRange(nextRange)
 }
 
-function insertTextAtCursor(el: HTMLElement, text: string) {
+function insertTextAtCursor(el: HTMLElement, text: string): Text | undefined {
   if (!text) return
 
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) {
-    el.appendChild(document.createTextNode(text))
+    const textNode = document.createTextNode(text)
+    el.appendChild(textNode)
     moveCursorToEnd(el)
-    return
+    return textNode
   }
 
   const range = selection.getRangeAt(0)
   const ancestor = range.commonAncestorContainer
   if (ancestor !== el && !el.contains(ancestor)) {
-    el.appendChild(document.createTextNode(text))
+    const textNode = document.createTextNode(text)
+    el.appendChild(textNode)
     moveCursorToEnd(el)
-    return
+    return textNode
   }
 
   range.deleteContents()
@@ -588,6 +592,7 @@ function insertTextAtCursor(el: HTMLElement, text: string) {
   nextRange.collapse(true)
   selection.removeAllRanges()
   selection.addRange(nextRange)
+  return textNode
 }
 
 /** Move cursor to the end of a contentEditable element. */
@@ -1954,7 +1959,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const text = e.clipboardData.getData('text/plain')
     if (!text) return
     pushUndoSnapshot(true)
-    insertTextAtCursor(el, text)
+    const pastedNode = insertTextAtCursor(el, text)
     draftSegmentsRef.current = syncComposerSegments(el)
     const nextValue = getTextFromEditable(el)
     isSyncing.current = true
@@ -1962,6 +1967,36 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = false
     setIsEmpty(isTextEmpty(nextValue) && !hasChipRefs(el))
     scrollCaretIntoView(el)
+
+    // UUIDs are also used for other objects. Resolve a standalone pasted ID
+    // before turning it into a chat reference, leaving unknown IDs as text.
+    if (variant !== 'messenger' && pastedNode && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) {
+      void fetch(`${API_URL}/api/sessions/${encodeURIComponent(text)}`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+        signal: AbortSignal.timeout(5000),
+      }).then(async response => {
+        if (!response.ok) return
+        const session = await response.json() as { id?: string; name?: string; title?: string }
+        // The user may have edited, removed, or sent the paste while we looked it up.
+        if (session.id !== text || !el.isConnected || !el.contains(pastedNode) || pastedNode.data !== text) return
+        const selection = window.getSelection()
+        const caretInPaste = selection?.isCollapsed && selection.anchorNode === pastedNode
+        const chip = createChipNode({ type: 'chat', sessionId: text, name: session.name || session.title || text }, handleRemoveChip)
+        pastedNode.replaceWith(chip)
+        if (caretInPaste && selection) {
+          const range = document.createRange()
+          range.setStartAfter(chip)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+        draftSegmentsRef.current = syncComposerSegments(el)
+        isSyncing.current = true
+        onChange(getTextFromEditable(el))
+        isSyncing.current = false
+        setIsEmpty(false)
+      }).catch(() => { /* Keep the pasted text if the lookup fails. */ })
+    }
   }, [variant, addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments])
 
   // Drag-and-drop handlers

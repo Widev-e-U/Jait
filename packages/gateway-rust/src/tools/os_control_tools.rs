@@ -23,14 +23,14 @@ use std::sync::{Arc, LazyLock};
 
 use base64::Engine as _;
 use futures_util::future::BoxFuture;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::integrations::os_control::contracts::{
     MouseButton, OsClickOptions, OsControlDriver, OsExecOptions, OsKeyOptions, OsScrollOptions,
     OsTypeOptions,
 };
 use crate::tools::core_io::HostError;
-use crate::tools::validate::{validate_tool_input, ToolInput};
+use crate::tools::validate::{ToolInput, validate_tool_input};
 
 pub const OS_SCREENSHOT: &str = "os.screenshot";
 pub const OS_CLICK: &str = "os.click";
@@ -263,7 +263,10 @@ fn base64_utf8(bytes: &[u8]) -> String {
 }
 
 fn number(input: &Value, key: &str) -> Option<f64> {
-    input.get(key).and_then(Value::as_f64).filter(|value| value.is_finite())
+    input
+        .get(key)
+        .and_then(Value::as_f64)
+        .filter(|value| value.is_finite())
 }
 
 fn text(input: &Value, key: &str) -> Option<String> {
@@ -281,7 +284,9 @@ fn parse_button(input: &Value) -> Result<MouseButton, HostError> {
     }
 }
 
-fn parse_direction(input: &Value) -> Result<crate::integrations::os_control::contracts::ScrollDirection, HostError> {
+fn parse_direction(
+    input: &Value,
+) -> Result<crate::integrations::os_control::contracts::ScrollDirection, HostError> {
     use crate::integrations::os_control::contracts::ScrollDirection;
     match text(input, "direction").as_deref() {
         None | Some("down") => Ok(ScrollDirection::Down),
@@ -315,7 +320,9 @@ impl OsControlTools {
             OS_SCROLL => self.os_scroll_inner(input).await,
             OS_EXEC => self.os_exec_inner(input).await,
             OS_SANDBOX_LIST => self.os_sandbox_list_inner(input).await,
-            other => Err(HostError::Error(format!("Unknown OS control tool: {other}"))),
+            other => Err(HostError::Error(format!(
+                "Unknown OS control tool: {other}"
+            ))),
         };
         match result {
             Ok(value) => value,
@@ -398,7 +405,10 @@ impl OsControlTools {
             ))
         })?;
         Ok(success(
-            format!("Captured desktop of sandbox \"{}\".", binding.container_name),
+            format!(
+                "Captured desktop of sandbox \"{}\".",
+                binding.container_name
+            ),
             Some(json!({
                 "screenshot": {
                     "pngBase64": base64_utf8(&shot.png.0),
@@ -418,14 +428,17 @@ impl OsControlTools {
 
     async fn os_click_inner(&self, input: &Value) -> Result<Value, HostError> {
         let input = self.validated(OS_CLICK, input)?;
-        let x = number(&input, "x").ok_or_else(|| HostError::Error("x must be a finite number.".to_string()))?;
-        let y = number(&input, "y").ok_or_else(|| HostError::Error("y must be a finite number.".to_string()))?;
+        let x = number(&input, "x")
+            .ok_or_else(|| HostError::Error("x must be a finite number.".to_string()))?;
+        let y = number(&input, "y")
+            .ok_or_else(|| HostError::Error("y must be a finite number.".to_string()))?;
         let button = parse_button(&input)?;
         let clicks = match input.get("clicks") {
             None | Some(Value::Null) => None,
             Some(_) => {
-                let clicks = number(&input, "clicks")
-                    .ok_or_else(|| HostError::Error("clicks must be a finite number.".to_string()))?;
+                let clicks = number(&input, "clicks").ok_or_else(|| {
+                    HostError::Error("clicks must be a finite number.".to_string())
+                })?;
                 if clicks.fract() != 0.0 || clicks < 1.0 || clicks > MAX_CLICKS {
                     return Err(HostError::Error(format!(
                         "clicks must be an integer between 1 and {MAX_CLICKS}."
@@ -458,8 +471,10 @@ impl OsControlTools {
 
     async fn os_mouse_inner(&self, input: &Value) -> Result<Value, HostError> {
         let input = self.validated(OS_MOUSE, input)?;
-        let x = number(&input, "x").ok_or_else(|| HostError::Error("x must be a finite number.".to_string()))?;
-        let y = number(&input, "y").ok_or_else(|| HostError::Error("y must be a finite number.".to_string()))?;
+        let x = number(&input, "x")
+            .ok_or_else(|| HostError::Error("x must be a finite number.".to_string()))?;
+        let y = number(&input, "y")
+            .ok_or_else(|| HostError::Error("y must be a finite number.".to_string()))?;
         self.act_on("Mouse move", &input, move |driver| async move {
             driver.mouse_move(x, y).await
         })
@@ -475,7 +490,8 @@ impl OsControlTools {
 
     async fn os_type_inner(&self, input: &Value) -> Result<Value, HostError> {
         let input = self.validated(OS_TYPE, input)?;
-        let value = text(&input, "text").ok_or_else(|| HostError::Error("text is required.".to_string()))?;
+        let value = text(&input, "text")
+            .ok_or_else(|| HostError::Error("text is required.".to_string()))?;
         if value.is_empty() {
             return Err(HostError::Error("text must not be empty.".to_string()));
         }
@@ -497,7 +513,8 @@ impl OsControlTools {
 
     async fn os_keyboard_inner(&self, input: &Value) -> Result<Value, HostError> {
         let input = self.validated(OS_KEYBOARD, input)?;
-        let combo = text(&input, "combo").ok_or_else(|| HostError::Error("combo is required.".to_string()))?;
+        let combo = text(&input, "combo")
+            .ok_or_else(|| HostError::Error("combo is required.".to_string()))?;
         if combo.trim().is_empty() {
             return Err(HostError::Error("combo must not be empty.".to_string()));
         }
@@ -523,8 +540,9 @@ impl OsControlTools {
         let amount = match input.get("amount") {
             None | Some(Value::Null) => None,
             Some(_) => {
-                let amount = number(&input, "amount")
-                    .ok_or_else(|| HostError::Error("amount must be a finite number.".to_string()))?;
+                let amount = number(&input, "amount").ok_or_else(|| {
+                    HostError::Error("amount must be a finite number.".to_string())
+                })?;
                 if amount < 1.0 || amount > MAX_SCROLL_AMOUNT {
                     return Err(HostError::Error(format!(
                         "amount must be between 1 and {MAX_SCROLL_AMOUNT}."
@@ -555,7 +573,8 @@ impl OsControlTools {
 
     async fn os_exec_inner(&self, input: &Value) -> Result<Value, HostError> {
         let input = self.validated(OS_EXEC, input)?;
-        let command = text(&input, "command").ok_or_else(|| HostError::Error("command is required.".to_string()))?;
+        let command = text(&input, "command")
+            .ok_or_else(|| HostError::Error("command is required.".to_string()))?;
         if command.trim().is_empty() {
             return Err(HostError::Error("command must not be empty.".to_string()));
         }
@@ -563,10 +582,13 @@ impl OsControlTools {
         let timeout_ms = match input.get("timeoutMs") {
             None | Some(Value::Null) => None,
             Some(_) => {
-                let timeout = number(&input, "timeoutMs")
-                    .ok_or_else(|| HostError::Error("timeoutMs must be a finite number.".to_string()))?;
+                let timeout = number(&input, "timeoutMs").ok_or_else(|| {
+                    HostError::Error("timeoutMs must be a finite number.".to_string())
+                })?;
                 if timeout <= 0.0 {
-                    return Err(HostError::Error("timeoutMs must be greater than zero.".to_string()));
+                    return Err(HostError::Error(
+                        "timeoutMs must be greater than zero.".to_string(),
+                    ));
                 }
                 Some(timeout)
             }
@@ -576,14 +598,18 @@ impl OsControlTools {
             Some(Value::Object(entries)) => {
                 let mut map = BTreeMap::new();
                 for (key, value) in entries {
-                    let value = value.as_str().ok_or_else(|| {
-                        HostError::Error(format!("env[{key}] must be a string."))
-                    })?;
+                    let value = value
+                        .as_str()
+                        .ok_or_else(|| HostError::Error(format!("env[{key}] must be a string.")))?;
                     map.insert(key.clone(), value.to_string());
                 }
                 Some(map)
             }
-            Some(_) => return Err(HostError::Error("env must be an object of strings.".to_string())),
+            Some(_) => {
+                return Err(HostError::Error(
+                    "env must be an object of strings.".to_string(),
+                ));
+            }
         };
 
         let binding = self.resolve_binding(&input).await?;
@@ -618,7 +644,11 @@ impl OsControlTools {
                     .exit_code
                     .map(|code| code.to_string())
                     .unwrap_or_else(|| "undefined".to_string()),
-                if outcome.timed_out { " (timed out)" } else { "" }
+                if outcome.timed_out {
+                    " (timed out)"
+                } else {
+                    ""
+                }
             ));
             if let Value::Object(object) = &mut result {
                 object.insert("data".to_string(), data);
@@ -626,7 +656,10 @@ impl OsControlTools {
             return Ok(result);
         }
         Ok(success(
-            format!("Command completed on sandbox \"{}\".", binding.container_name),
+            format!(
+                "Command completed on sandbox \"{}\".",
+                binding.container_name
+            ),
             Some(data),
         ))
     }
@@ -748,9 +781,15 @@ mod tests {
             Box::pin(async { Ok(()) })
         }
 
-        fn scroll(&self, options: Option<OsScrollOptions>) -> BoxFuture<'_, Result<(), Self::Error>> {
+        fn scroll(
+            &self,
+            options: Option<OsScrollOptions>,
+        ) -> BoxFuture<'_, Result<(), Self::Error>> {
             let options = options.unwrap_or_default();
-            self.log(format!("scroll direction={:?} amount={:?}", options.direction, options.amount));
+            self.log(format!(
+                "scroll direction={:?} amount={:?}",
+                options.direction, options.amount
+            ));
             Box::pin(async { Ok(()) })
         }
 
@@ -758,7 +797,10 @@ mod tests {
             &'a self,
             command: &'a str,
             options: Option<OsExecOptions>,
-        ) -> BoxFuture<'a, Result<crate::integrations::os_control::contracts::SandboxRunResult, Self::Error>> {
+        ) -> BoxFuture<
+            'a,
+            Result<crate::integrations::os_control::contracts::SandboxRunResult, Self::Error>,
+        > {
             let options = options.unwrap_or_default();
             self.log(format!("exec {command} cwd={:?}", options.cwd));
             let ok = self.exec_result.ok;
@@ -766,13 +808,15 @@ mod tests {
             let exit_code = self.exec_result.exit_code;
             let timed_out = self.exec_result.timed_out;
             Box::pin(async move {
-                Ok(crate::integrations::os_control::contracts::SandboxRunResult {
-                    ok,
-                    output,
-                    exit_code,
-                    timed_out,
-                    container_name: "desk-1".to_string(),
-                })
+                Ok(
+                    crate::integrations::os_control::contracts::SandboxRunResult {
+                        ok,
+                        output,
+                        exit_code,
+                        timed_out,
+                        container_name: "desk-1".to_string(),
+                    },
+                )
             })
         }
     }
@@ -828,7 +872,7 @@ mod tests {
         }
     }
 
-        #[test]
+    #[test]
     fn metadata_lists_all_eight_tools() {
         let names: Vec<&str> = metadata()
             .as_array()
@@ -867,7 +911,9 @@ mod tests {
     async fn click_rejects_out_of_range_clicks_and_button() {
         let port = FakePort::with(Arc::new(FakeDriver::new()));
         let tools = OsControlTools::new(Arc::new(port));
-        let too_many = tools.call(OS_CLICK, &json!({ "x": 1, "y": 2, "clicks": 9 })).await;
+        let too_many = tools
+            .call(OS_CLICK, &json!({ "x": 1, "y": 2, "clicks": 9 }))
+            .await;
         assert_eq!(too_many["ok"], false);
         assert!(too_many["message"].as_str().unwrap().contains("clicks"));
         let bad_button = tools
@@ -881,7 +927,9 @@ mod tests {
     async fn screenshot_happy_path_returns_base64_png() {
         let port = FakePort::with(Arc::new(FakeDriver::new()));
         let tools = OsControlTools::new(Arc::new(port));
-        let result = tools.call(OS_SCREENSHOT, &json!({ "containerName": "desk-7" })).await;
+        let result = tools
+            .call(OS_SCREENSHOT, &json!({ "containerName": "desk-7" }))
+            .await;
         assert_eq!(result["ok"], true);
         assert_eq!(result["message"], "Captured desktop of sandbox \"desk-7\".");
         assert_eq!(result["data"]["screenshot"]["pngBase64"], "AQIDBA==");
@@ -926,26 +974,45 @@ mod tests {
             fn screenshot(&self) -> BoxFuture<'_, Result<OsScreenshot, Self::Error>> {
                 Box::pin(async { Err(HostError::Error("no display".to_string())) })
             }
-            fn click(&self, _x: f64, _y: f64, _o: Option<OsClickOptions>) -> BoxFuture<'_, Result<(), Self::Error>> {
+            fn click(
+                &self,
+                _x: f64,
+                _y: f64,
+                _o: Option<OsClickOptions>,
+            ) -> BoxFuture<'_, Result<(), Self::Error>> {
                 Box::pin(async { Err(HostError::Error("driver offline".to_string())) })
             }
             fn mouse_move(&self, _x: f64, _y: f64) -> BoxFuture<'_, Result<(), Self::Error>> {
                 Box::pin(async { Ok(()) })
             }
-            fn r#type<'a>(&'a self, _t: &'a str, _o: Option<OsTypeOptions>) -> BoxFuture<'a, Result<(), Self::Error>> {
+            fn r#type<'a>(
+                &'a self,
+                _t: &'a str,
+                _o: Option<OsTypeOptions>,
+            ) -> BoxFuture<'a, Result<(), Self::Error>> {
                 Box::pin(async { Ok(()) })
             }
-            fn key<'a>(&'a self, _c: &'a str, _o: Option<OsKeyOptions>) -> BoxFuture<'a, Result<(), Self::Error>> {
+            fn key<'a>(
+                &'a self,
+                _c: &'a str,
+                _o: Option<OsKeyOptions>,
+            ) -> BoxFuture<'a, Result<(), Self::Error>> {
                 Box::pin(async { Ok(()) })
             }
-            fn scroll(&self, _o: Option<OsScrollOptions>) -> BoxFuture<'_, Result<(), Self::Error>> {
+            fn scroll(
+                &self,
+                _o: Option<OsScrollOptions>,
+            ) -> BoxFuture<'_, Result<(), Self::Error>> {
                 Box::pin(async { Ok(()) })
             }
             fn exec<'a>(
                 &'a self,
                 _c: &'a str,
                 _o: Option<OsExecOptions>,
-            ) -> BoxFuture<'a, Result<crate::integrations::os_control::contracts::SandboxRunResult, Self::Error>> {
+            ) -> BoxFuture<
+                'a,
+                Result<crate::integrations::os_control::contracts::SandboxRunResult, Self::Error>,
+            > {
                 Box::pin(async { Err(HostError::Error("nope".to_string())) })
             }
         }
@@ -972,9 +1039,7 @@ mod tests {
         let driver = Arc::new(driver);
         let port = FakePort::with(Arc::clone(&driver));
         let tools = OsControlTools::new(Arc::new(port));
-        let result = tools
-            .call(OS_MOUSE, &json!({ "x": 3, "y": 4 }))
-            .await;
+        let result = tools.call(OS_MOUSE, &json!({ "x": 3, "y": 4 })).await;
         assert_eq!(result["ok"], true);
         assert_eq!(
             result["message"],
@@ -987,7 +1052,10 @@ mod tests {
     async fn type_and_keyboard_require_non_empty_payloads() {
         let port = FakePort::with(Arc::new(FakeDriver::new()));
         let tools = OsControlTools::new(Arc::new(port));
-        assert_eq!(tools.call(OS_TYPE, &json!({ "text": "" })).await["ok"], false);
+        assert_eq!(
+            tools.call(OS_TYPE, &json!({ "text": "" })).await["ok"],
+            false
+        );
         assert_eq!(
             tools.call(OS_KEYBOARD, &json!({ "combo": "   " })).await["ok"],
             false
@@ -1009,7 +1077,9 @@ mod tests {
         assert_eq!(log[0], "scroll direction=Some(Down) amount=None");
         let bad = tools.call(OS_SCROLL, &json!({ "amount": 0 })).await;
         assert_eq!(bad["ok"], false);
-        let bad_direction = tools.call(OS_SCROLL, &json!({ "direction": "sideways" })).await;
+        let bad_direction = tools
+            .call(OS_SCROLL, &json!({ "direction": "sideways" }))
+            .await;
         assert_eq!(bad_direction["ok"], false);
     }
 
@@ -1038,7 +1108,9 @@ mod tests {
         let tools = OsControlTools::new(Arc::new(port));
         assert_eq!(tools.call(OS_EXEC, &json!({})).await["ok"], false);
         assert_eq!(
-            tools.call(OS_EXEC, &json!({ "command": "ls", "timeoutMs": 0 })).await["ok"],
+            tools
+                .call(OS_EXEC, &json!({ "command": "ls", "timeoutMs": 0 }))
+                .await["ok"],
             false
         );
         let bad_env = tools
@@ -1047,7 +1119,10 @@ mod tests {
         assert_eq!(bad_env["ok"], false);
         assert!(bad_env["message"].as_str().unwrap().contains("env[A]"));
         let good = tools
-            .call(OS_EXEC, &json!({ "command": "ls", "cwd": "/tmp", "env": { "A": "1" } }))
+            .call(
+                OS_EXEC,
+                &json!({ "command": "ls", "cwd": "/tmp", "env": { "A": "1" } }),
+            )
             .await;
         assert_eq!(good["ok"], true);
         assert_eq!(good["message"], "Command completed on sandbox \"desk-1\".");

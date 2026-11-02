@@ -313,12 +313,15 @@ struct PendingConsent {
 impl Drop for PendingConsent {
     fn drop(&mut self) {
         if let Some(id) = self.id.take() {
+            let Some(entry) = self.manager.claim_cancelled(&id) else {
+                return;
+            };
             let manager = self.manager.clone();
             let permit = self.permit.take();
-            // Persistence may block: do not hold a Tokio worker during aborted-wait cleanup.
+            // Persistence may block: keep the permit through deferred finalization.
             tokio::task::spawn_blocking(move || {
                 let _permit = permit;
-                let _ = manager.reject(&id, Some(DecisionVia::Auto), Some("Cancelled".into()));
+                let _ = manager.finalize_cancelled(entry);
             });
         }
     }

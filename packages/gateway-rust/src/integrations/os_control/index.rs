@@ -20,7 +20,9 @@ pub use super::linux_desktop::LinuxDesktopOsControlDriver;
 //
 // The factory is the constructor `OsControlResolver::new`; `OsSandboxConnection` is
 // the native `OsSandboxConnection` enum (see `Gaps` for the factory name).
-pub use super::resolver::{OsControlResolver, OsSandboxConnection, OsSandboxInfo, WindowsSshConfig};
+pub use super::resolver::{
+    OsControlResolver, OsSandboxConnection, OsSandboxInfo, WindowsSshConfig,
+};
 
 // Gaps: TS exports from `os-control/index.ts` with no native counterpart.
 //

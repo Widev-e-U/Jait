@@ -15,3 +15,5 @@ pub mod process_runner;
 pub mod command_syntax;
 
 pub mod smoke_process;
+
+pub(crate) mod matrix_stack;

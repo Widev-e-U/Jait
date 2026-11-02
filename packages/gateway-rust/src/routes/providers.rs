@@ -44,15 +44,15 @@
 //! appear in a response or a log record.
 use crate::routes::auth::{self, AuthState};
 use axum::{
+    Router,
     body::Body,
     extract::{Path, State},
     http::HeaderMap,
     response::Response,
     routing::{get, patch, post},
-    Router,
 };
 use futures_util::future::BoxFuture;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -161,15 +161,21 @@ pub trait ProviderDirectory: Send + Sync {
     }
     /// TS `create(userId, body)`.
     fn create_account(&self, _user: &str, _body: &Map<String, Value>) -> Result<Value, StoreError> {
-        Err(StoreError::Unavailable("Provider accounts are unavailable".into()))
+        Err(StoreError::Unavailable(
+            "Provider accounts are unavailable".into(),
+        ))
     }
     /// TS `rename(accountId, userId, label)`.
     fn rename_account(&self, _id: &str, _user: &str, _label: &str) -> Result<Value, StoreError> {
-        Err(StoreError::Unavailable("Provider accounts are unavailable".into()))
+        Err(StoreError::Unavailable(
+            "Provider accounts are unavailable".into(),
+        ))
     }
     /// TS `delete(accountId, userId)`.
     fn delete_account(&self, _id: &str, _user: &str) -> Result<bool, StoreError> {
-        Err(StoreError::Unavailable("Provider accounts are unavailable".into()))
+        Err(StoreError::Unavailable(
+            "Provider accounts are unavailable".into(),
+        ))
     }
     /// TS `connectOpencodeGo(...)`.
     fn connect_opencode_go(
@@ -178,7 +184,11 @@ pub trait ProviderDirectory: Send + Sync {
         _user: &str,
         _body: &Map<String, Value>,
     ) -> BoxFuture<'static, Result<Value, StoreError>> {
-        Box::pin(async { Err(StoreError::Unavailable("Provider accounts are unavailable".into())) })
+        Box::pin(async {
+            Err(StoreError::Unavailable(
+                "Provider accounts are unavailable".into(),
+            ))
+        })
     }
     /// TS `refreshUsage(userId)` -> `{ [accountId]: error }` for failed quota reads.
     fn refresh_usage(&self, _user: &str) -> BoxFuture<'static, Map<String, Value>> {
@@ -218,7 +228,11 @@ impl AuthOutcome {
         if self.ok {
             return auth::response(200, payload);
         }
-        let status = if self.status == "unsupported" { 501 } else { 500 };
+        let status = if self.status == "unsupported" {
+            501
+        } else {
+            500
+        };
         auth::response(status, payload)
     }
 }
@@ -249,7 +263,11 @@ pub trait ProviderRuntime: Send + Sync {
     fn start_login(&self, id: &str, user: &str) -> BoxFuture<'static, AuthOutcome> {
         let (id, _user) = (id.to_string(), user.to_string());
         Box::pin(async move {
-            AuthOutcome::unsupported(&id, "login", &format!("Provider {id} does not support login"))
+            AuthOutcome::unsupported(
+                &id,
+                "login",
+                &format!("Provider {id} does not support login"),
+            )
         })
     }
     /// TS `provider.sendLoginInput(code)`.
@@ -260,7 +278,11 @@ pub trait ProviderRuntime: Send + Sync {
     fn logout(&self, id: &str, user: &str) -> BoxFuture<'static, AuthOutcome> {
         let (id, _user) = (id.to_string(), user.to_string());
         Box::pin(async move {
-            AuthOutcome::unsupported(&id, "logout", &format!("Provider {id} does not support logout"))
+            AuthOutcome::unsupported(
+                &id,
+                "logout",
+                &format!("Provider {id} does not support logout"),
+            )
         })
     }
     /// TS `provider.update(body)` from `POST /api/providers/:id/update`.
@@ -270,10 +292,16 @@ pub trait ProviderRuntime: Send + Sync {
         _user: &str,
         _body: &Map<String, Value>,
     ) -> Result<Value, StoreError> {
-        Err(StoreError::Unavailable("Provider update is unavailable".into()))
+        Err(StoreError::Unavailable(
+            "Provider update is unavailable".into(),
+        ))
     }
     /// TS `provider.listModels()`.
-    fn list_models(&self, _id: &str, _user: &str) -> BoxFuture<'static, Result<Vec<Value>, String>> {
+    fn list_models(
+        &self,
+        _id: &str,
+        _user: &str,
+    ) -> BoxFuture<'static, Result<Vec<Value>, String>> {
         Box::pin(async { Ok(Vec::new()) })
     }
     /// TS `provider.resetModels()` / `resetModelFetcherCaches()`.
@@ -356,7 +384,10 @@ pub fn ok_json(payload: Value) -> Response {
 /// are user-facing by design (RFC 8628) and stay readable.
 pub fn is_secret_key(key: &str) -> bool {
     let key = key.to_ascii_lowercase();
-    if matches!(key.as_str(), "devicecode" | "usercode" | "verificationuri" | "verification_uri") {
+    if matches!(
+        key.as_str(),
+        "devicecode" | "usercode" | "verificationuri" | "verification_uri"
+    ) {
         return false;
     }
     const NEEDLES: [&str; 12] = [
@@ -381,7 +412,10 @@ fn is_token_byte(byte: u8) -> bool {
 }
 
 fn token_run_len(input: &str) -> usize {
-    input.bytes().take_while(|byte| is_token_byte(*byte)).count()
+    input
+        .bytes()
+        .take_while(|byte| is_token_byte(*byte))
+        .count()
 }
 
 fn secret_prefix_len(input: &str) -> Option<usize> {
@@ -584,7 +618,10 @@ pub fn validate_base_url(raw: &str) -> Result<String, Response> {
         return Err(fail(400, "Base URL must be an http(s) URL"));
     }
     let after_scheme = trimmed.split_once("://").map(|x| x.1).unwrap_or_default();
-    let authority = after_scheme.split(['/', '?', '#']).next().unwrap_or_default();
+    let authority = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default();
     if authority.is_empty() {
         return Err(fail(400, "Base URL must include a host"));
     }
@@ -652,7 +689,10 @@ pub fn provider_entry(info: &Value, icon: Option<&str>) -> Value {
 pub fn router(state: ProviderRoutes) -> Router {
     Router::new()
         // account CRUD
-        .route("/api/provider-accounts", get(list_accounts).post(create_account))
+        .route(
+            "/api/provider-accounts",
+            get(list_accounts).post(create_account),
+        )
         .route(
             "/api/provider-accounts/{id}",
             patch(rename_account).delete(delete_account),
@@ -671,7 +711,10 @@ pub fn router(state: ProviderRoutes) -> Router {
         .route("/api/providers/{id}/update", post(update_provider))
         .route("/api/providers/{id}/auth/status", get(auth_status))
         .route("/api/providers/{id}/auth/login", post(auth_login))
-        .route("/api/providers/{id}/auth/login/input", post(auth_login_input))
+        .route(
+            "/api/providers/{id}/auth/login/input",
+            post(auth_login_input),
+        )
         .route("/api/providers/{id}/auth/logout", post(auth_logout))
         .route("/api/providers/omniroute/test", post(omniroute_test))
         .route("/api/providers/backend/test", post(backend_test))
@@ -934,7 +977,9 @@ async fn ollama_session(
     if let Some(session) = session.as_deref() {
         let verified = match state.probes.as_ref() {
             Some(probes) => probes.verify_ollama_session(session).await,
-            None => Err("Could not verify this session. Your saved session has not changed.".into()),
+            None => {
+                Err("Could not verify this session. Your saved session has not changed.".into())
+            }
         };
         if let Err(error) = verified {
             // Message is scrubbed: it may quote the upstream body verbatim.
@@ -1039,9 +1084,7 @@ async fn list_providers(
                 .unwrap_or_default()
                 .to_string();
             let info = runtime.info(&id, &user.id).unwrap_or(entry);
-            let icon = directory
-                .as_ref()
-                .and_then(|directory| directory.icon(&id));
+            let icon = directory.as_ref().and_then(|directory| directory.icon(&id));
             provider_entry(&info, icon.as_deref())
         })
         .collect();
@@ -1239,7 +1282,8 @@ fn parse_probe_request(body: Body) -> BoxFuture<'static, Result<ProbeRequest, Re
                 kind: None,
             });
         }
-        serde_json::from_slice::<ProbeRequest>(&bytes).map_err(|_| fail(400, "Invalid request body"))
+        serde_json::from_slice::<ProbeRequest>(&bytes)
+            .map_err(|_| fail(400, "Invalid request body"))
     })
 }
 
@@ -1299,7 +1343,10 @@ async fn backend_test(
     let Some(probes) = state.probes.as_ref() else {
         return fail(503, "Probing is unavailable");
     };
-    match probes.probe_backend(kind, &base_url, request.api_key()).await {
+    match probes
+        .probe_backend(kind, &base_url, request.api_key())
+        .await
+    {
         Ok(payload) => ok_json(payload),
         Err(error) => fail(502, redact_text(&error)),
     }
@@ -1412,10 +1459,12 @@ mod tests {
         assert_eq!(redacted["oauth"]["expiresAt"], json!(12));
         assert_eq!(redacted["accounts"][0]["session"], json!("[redacted]"));
         assert_eq!(redacted["accounts"][0]["label"], json!("work"));
-        assert!(redacted["accounts"][0]["notes"]
-            .as_str()
-            .expect("notes")
-            .contains("[redacted]"));
+        assert!(
+            redacted["accounts"][0]["notes"]
+                .as_str()
+                .expect("notes")
+                .contains("[redacted]")
+        );
         assert_eq!(redacted["ok"], json!(true));
         assert!(redacted.to_string().find("sk-abc").is_none());
         assert!(redacted.to_string().find("sk-xyz").is_none());
@@ -1436,7 +1485,13 @@ mod tests {
 
     #[tokio::test]
     async fn valid_code_input_rejects_blank_and_non_string() {
-        for value in [json!(""), json!("   "), json!("\u{feff}\u{feff}"), json!(12), json!(null)] {
+        for value in [
+            json!(""),
+            json!("   "),
+            json!("\u{feff}\u{feff}"),
+            json!(12),
+            json!(null),
+        ] {
             let response = valid_code_input(Some(&value)).expect_err("must reject");
             assert_eq!(status(&response), 400);
             let body = body_json(response).await;
@@ -1470,13 +1525,19 @@ mod tests {
             "ollama-key"
         );
         let oversized = json!("k".repeat(MAX_CREDENTIAL_INPUT + 1));
-        assert_eq!(status(&valid_ollama_api_key(Some(&oversized)).expect_err("too long")), 400);
+        assert_eq!(
+            status(&valid_ollama_api_key(Some(&oversized)).expect_err("too long")),
+            400
+        );
     }
 
     #[test]
     fn valid_ollama_session_clears_on_null() {
         assert_eq!(valid_ollama_session(None).expect("absent clears"), None);
-        assert_eq!(valid_ollama_session(Some(&json!(null))).expect("null clears"), None);
+        assert_eq!(
+            valid_ollama_session(Some(&json!(null))).expect("null clears"),
+            None
+        );
         assert_eq!(
             valid_ollama_session(Some(&json!(" cookie-value "))).expect("string"),
             Some("cookie-value".to_string())
@@ -1496,7 +1557,10 @@ mod tests {
             assert_eq!(status(&response), 400);
         }
         let long = json!("a".repeat(129));
-        assert_eq!(status(&valid_account_label(Some(&long)).expect_err("reject")), 400);
+        assert_eq!(
+            status(&valid_account_label(Some(&long)).expect_err("reject")),
+            400
+        );
     }
 
     #[tokio::test]
@@ -1508,7 +1572,10 @@ mod tests {
         assert_eq!(payload["error"], json!("Missing provider type"));
 
         body.insert("providerType".into(), json!("   "));
-        assert_eq!(status(&valid_account_create(&body).expect_err("blank")), 400);
+        assert_eq!(
+            status(&valid_account_create(&body).expect_err("blank")),
+            400
+        );
 
         body.insert("providerType".into(), json!(" opencode-go "));
         body.insert("label".into(), json!(" primary "));
@@ -1517,7 +1584,10 @@ mod tests {
         assert_eq!(label, "primary");
 
         body.insert("label".into(), json!(42));
-        assert_eq!(status(&valid_account_create(&body).expect_err("bad label")), 400);
+        assert_eq!(
+            status(&valid_account_create(&body).expect_err("bad label")),
+            400
+        );
     }
 
     #[tokio::test]
@@ -1538,7 +1608,10 @@ mod tests {
             assert_eq!(status(&response), 400, "accepted {bad}");
         }
         let too_long = format!("https://example.com/{}", "a".repeat(2048));
-        assert_eq!(status(&validate_base_url(&too_long).expect_err("long")), 400);
+        assert_eq!(
+            status(&validate_base_url(&too_long).expect_err("long")),
+            400
+        );
     }
 
     #[test]
@@ -1557,7 +1630,10 @@ mod tests {
     fn account_node_defaults_to_gateway() {
         assert_eq!(account_node(None), GATEWAY_NODE_NAME);
         assert_eq!(account_node(Some(&json!({}))), GATEWAY_NODE_NAME);
-        assert_eq!(account_node(Some(&json!({ "nodeId": "" }))), GATEWAY_NODE_NAME);
+        assert_eq!(
+            account_node(Some(&json!({ "nodeId": "" }))),
+            GATEWAY_NODE_NAME
+        );
         assert_eq!(account_node(Some(&json!({ "nodeId": "desk" }))), "desk");
     }
 

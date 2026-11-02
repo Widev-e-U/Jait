@@ -14,6 +14,17 @@ use tokio::sync::{mpsc, oneshot, watch};
 pub type OperationError = Box<dyn Error + Send + Sync>;
 type Job = Box<dyn FnOnce(&Connection) + Send>;
 
+/// Keeps any authority needed by a connection alive until the worker drains.
+pub(crate) trait ConnectionOwner: Send + 'static {
+    fn connection(&self) -> &Connection;
+}
+
+impl ConnectionOwner for Connection {
+    fn connection(&self) -> &Connection {
+        self
+    }
+}
+
 #[derive(Debug)]
 pub enum DatabaseError {
     Busy,
@@ -46,8 +57,8 @@ impl Error for DatabaseError {
 
 struct Inner {
     sender: Mutex<Option<mpsc::Sender<Job>>>,
-    finished: watch::Receiver<bool>,
-    thread: Mutex<Option<JoinHandle<()>>>,
+    finished: watch::Receiver<Option<bool>>,
+    thread: Mutex<Option<(JoinHandle<()>, watch::Sender<Option<bool>>)>>,
 }
 
 #[derive(Clone)]
@@ -59,23 +70,27 @@ pub struct DatabaseWorker {
 impl DatabaseWorker {
     /// Takes an explicit connection; never discovers state paths or opens live data.
     pub fn new(connection: Connection, capacity: NonZeroU16) -> io::Result<Self> {
+        Self::new_owned(connection, capacity)
+    }
+
+    /// Own the connection and its backing authority through all admitted work.
+    pub(crate) fn new_owned(owner: impl ConnectionOwner, capacity: NonZeroU16) -> io::Result<Self> {
         let (sender, mut receiver) = mpsc::channel::<Job>(usize::from(capacity.get()));
-        let (finished, completion) = watch::channel(false);
+        let (finished, completion) = watch::channel(None);
         let thread = thread::Builder::new()
             .name("jait-sqlite".into())
             .spawn(move || {
                 while let Some(job) = receiver.blocking_recv() {
-                    job(&connection);
+                    job(owner.connection());
                 }
-                drop(connection);
-                let _ = finished.send(true);
+                drop(owner);
             })?;
         Ok(Self {
             job_guard: None,
             inner: Arc::new(Inner {
                 sender: Mutex::new(Some(sender)),
                 finished: completion,
-                thread: Mutex::new(Some(thread)),
+                thread: Mutex::new(Some((thread, finished))),
             }),
         })
     }
@@ -140,22 +155,27 @@ impl DatabaseWorker {
             .lock()
             .map_err(|_| DatabaseError::WorkerUnavailable)?
             .take();
+        // Transfer the join to an independent task before yielding. The task owns
+        // the completion sender even if the initiating shutdown future is dropped.
+        {
+            let mut thread = self
+                .inner
+                .thread
+                .lock()
+                .map_err(|_| DatabaseError::WorkerUnavailable)?;
+            if let Some((thread, finished)) = thread.take() {
+                tokio::task::spawn_blocking(move || {
+                    finished.send_replace(Some(thread.join().is_ok()));
+                });
+            }
+        }
         let mut finished = self.inner.finished.clone();
-        finished
-            .wait_for(|done| *done)
+        let result = *finished
+            .wait_for(Option::is_some)
             .await
             .map_err(|_| DatabaseError::WorkerUnavailable)?;
-        let thread = self
-            .inner
-            .thread
-            .lock()
-            .map_err(|_| DatabaseError::WorkerUnavailable)?
-            .take();
-        if let Some(thread) = thread {
-            tokio::task::spawn_blocking(move || thread.join())
-                .await
-                .map_err(|_| DatabaseError::WorkerUnavailable)?
-                .map_err(|_| DatabaseError::WorkerUnavailable)?;
+        if result != Some(true) {
+            return Err(DatabaseError::WorkerUnavailable);
         }
         Ok(())
     }
@@ -289,6 +309,80 @@ mod tests {
             1
         );
         worker.shutdown().await.unwrap();
+    }
+
+    struct BlockingDropOwner {
+        connection: Connection,
+        entered: Option<oneshot::Sender<()>>,
+        release: std::sync::mpsc::Receiver<()>,
+        panic_on_drop: bool,
+    }
+
+    impl ConnectionOwner for BlockingDropOwner {
+        fn connection(&self) -> &Connection {
+            &self.connection
+        }
+    }
+
+    impl Drop for BlockingDropOwner {
+        fn drop(&mut self) {
+            self.entered.take().unwrap().send(()).unwrap();
+            self.release.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert!(!self.panic_on_drop, "fixture worker panic");
+        }
+    }
+
+    async fn shutdown_waiters_share_join_result(panic_on_drop: bool) {
+        let (entered, dropping) = oneshot::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let worker = DatabaseWorker::new_owned(
+            BlockingDropOwner {
+                connection: Connection::open_in_memory().unwrap(),
+                entered: Some(entered),
+                release: wait,
+                panic_on_drop,
+            },
+            NonZeroU16::new(1).unwrap(),
+        )
+        .unwrap();
+        let first_worker = worker.clone();
+        let first = tokio::spawn(async move { first_worker.shutdown().await });
+        tokio::time::timeout(Duration::from_secs(5), dropping)
+            .await
+            .unwrap()
+            .unwrap();
+        first.abort();
+        assert!(first.await.unwrap_err().is_cancelled());
+
+        let other_worker = worker.clone();
+        let second = tokio::spawn(async move { other_worker.shutdown().await });
+        let other_worker = worker.clone();
+        let third = tokio::spawn(async move { other_worker.shutdown().await });
+        tokio::task::yield_now().await;
+        assert!(!second.is_finished());
+        assert!(!third.is_finished());
+        release.send(()).unwrap();
+        for result in [
+            second.await.unwrap(),
+            third.await.unwrap(),
+            worker.shutdown().await,
+        ] {
+            if panic_on_drop {
+                assert!(matches!(result, Err(DatabaseError::WorkerUnavailable)));
+            } else {
+                result.unwrap();
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_and_concurrent_shutdown_wait_for_join() {
+        shutdown_waiters_share_join_result(false).await;
+    }
+
+    #[tokio::test]
+    async fn cancelled_and_concurrent_shutdown_share_worker_panic() {
+        shutdown_waiters_share_join_result(true).await;
     }
 
     #[tokio::test]

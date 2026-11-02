@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { getApiUrl } from '@/lib/gateway-url'
 
 // Keep expansion subtle and respect reduced-motion preferences.
-const GOAL_TRANSITION = 'transition-[height] [transition-duration:180ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none'
+const GOAL_TRANSITION = '[transition-duration:180ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none'
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
@@ -30,8 +30,19 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
     try { setCollapsed(localStorage.getItem(storageKey) === 'true') }
     catch { setCollapsed(false) }
   }, [mobile, storageKey])
+  const [closingWidth, setClosingWidth] = useState<number | null>(null)
+  useEffect(() => {
+    if (closingWidth === null) return
+    const timer = window.setTimeout(() => setClosingWidth(null), 180)
+    return () => window.clearTimeout(timer)
+  }, [closingWidth])
   const toggleCollapsed = () => {
     const next = !collapsed
+    if (mobile && next && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setClosingWidth(frameRef.current?.offsetWidth ?? null)
+    } else {
+      setClosingWidth(null)
+    }
     setCollapsed(next)
     if (mobile) return
     try { localStorage.setItem(storageKey, String(next)) }
@@ -78,8 +89,8 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
   // criteria keep their controls reachable, including by dragging the scrollbar.
   return (
     <div ref={frameRef} role={compact ? undefined : 'region'} aria-label={compact ? undefined : 'Chat loop goal'} data-testid="loop-goal-card"
-      className={`pointer-events-auto min-h-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain border bg-card/95 text-xs shadow-sm backdrop-blur-sm ${compact ? 'rounded-full' : 'rounded-xl'} ${GOAL_TRANSITION}`}
-      style={box ?? { width: compact ? 'max-content' : '100%' }}>
+      className={`pointer-events-auto min-h-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-contain relative border bg-card/95 text-xs shadow-sm backdrop-blur-sm ${compact && closingWidth === null ? 'rounded-full' : 'rounded-xl'} ${GOAL_TRANSITION} transition-[height]`}
+      style={box ? { ...box, width: closingWidth ?? box.width } : { width: compact ? 'max-content' : '100%' }}>
       <div ref={contentRef} className={compact ? 'px-3 py-1.5' : 'p-3'}>
         <button type="button" onClick={toggleCollapsed} aria-expanded={!collapsed} aria-controls={contentId} aria-label={collapsed ? 'Expand goal card' : 'Collapse goal card'} className={`flex w-full items-center rounded text-left text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${compact ? 'gap-1.5' : 'gap-2'}`}>
           {!compact && <ChevronDown aria-hidden="true" className={`size-3.5 shrink-0 transition-transform motion-reduce:transition-none ${collapsed ? '-rotate-90' : ''}`} />}
@@ -90,7 +101,9 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
             {compact && failed ? 'Stopped · error' : loop.status}
           </span>}
         </button>
-        <div id={contentId} hidden={collapsed} className="mt-2">
+        <div id={contentId} hidden={collapsed && closingWidth === null} inert={collapsed} aria-hidden={collapsed || undefined}
+          className={closingWidth !== null && collapsed ? 'pointer-events-none absolute left-3 top-[1.625rem] mt-2 opacity-0 transition-opacity duration-[180ms] motion-reduce:transition-none' : 'mt-2 opacity-100 transition-opacity duration-[180ms] motion-reduce:transition-none'}
+          style={closingWidth !== null && collapsed ? { width: Math.max(0, closingWidth - 24) } : undefined}>
           <p className="break-words font-medium leading-relaxed">{loop.goal}</p>
           {loop.summary && <p role={failed ? 'alert' : undefined} className={`mt-2 break-words ${failed ? 'text-destructive' : 'line-clamp-4 text-muted-foreground'}`}>{loop.summary}</p>}
           {failed && <p className="mt-2 text-muted-foreground">Automatic continuation stopped. Resolve the error, then resume the goal.</p>}

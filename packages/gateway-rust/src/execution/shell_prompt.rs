@@ -35,7 +35,9 @@ mod tests {
     fn detects_powershell_executables() {
         assert!(is_powershell_shell("pwsh"));
         assert!(is_powershell_shell("/usr/bin/pwsh"));
-        assert!(is_powershell_shell("C:\\Program Files\\PowerShell\\pwsh.exe"));
+        assert!(is_powershell_shell(
+            "C:\\Program Files\\PowerShell\\pwsh.exe"
+        ));
         assert!(is_powershell_shell("/usr/bin/powershell.exe"));
         assert!(!is_powershell_shell("/bin/bash"));
         assert!(!is_powershell_shell("mypwsh"));

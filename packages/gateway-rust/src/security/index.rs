@@ -21,14 +21,14 @@ pub use super::consent_manager::{
 
 // `export * from './tool-permissions.js'`
 pub use super::tool_permissions::{
+    ConsentLevel, PolicySource, ResolvedToolPermission, ToolPermission, ToolPermissionConfig,
     get_unknown_tool_permission, is_command_allowed, is_path_allowed_by_permission, match_glob,
-    requires_consent, resolve_tool_permission, ConsentLevel, PolicySource, ResolvedToolPermission,
-    ToolPermission, ToolPermissionConfig,
+    requires_consent, resolve_tool_permission,
 };
 
 // `export * from './tool-profiles.js'`
 pub use super::tool_profiles::{
-    extend_profile, get_profile, list_profiles, serialize_profile, ProfileName,
+    ProfileName, extend_profile, get_profile, list_profiles, serialize_profile,
 };
 
 // `export * from './trust-engine.js'`

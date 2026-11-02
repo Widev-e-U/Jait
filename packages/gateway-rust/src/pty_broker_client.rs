@@ -92,11 +92,7 @@ pub struct BrokerResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     /// PTY handle assigned by the broker.
-    #[serde(
-        rename = "ptyId",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "ptyId", default, skip_serializing_if = "Option::is_none")]
     pub pty_id: Option<String>,
     /// OS process id of the spawned shell.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -108,11 +104,7 @@ pub struct BrokerResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
     /// Exit status for `exit` events.
-    #[serde(
-        rename = "exitCode",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "exitCode", default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i64>,
     /// Terminating signal number, when the process was signalled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -201,12 +193,14 @@ impl PtyBrokerClient {
 
     /// Install the PTY-output callback (`onOutput`).
     pub fn set_output_handler(&self, handler: OutputHandler) {
-        self.lock().on_output = Some(handler);
+        let previous = self.lock().on_output.replace(handler);
+        drop(previous);
     }
 
     /// Install the PTY-exit callback (`onExit`).
     pub fn set_exit_handler(&self, handler: ExitHandler) {
-        self.lock().on_exit = Some(handler);
+        let previous = self.lock().on_exit.replace(handler);
+        drop(previous);
     }
 
     /// Whether the broker has announced readiness.
@@ -230,7 +224,10 @@ impl PtyBrokerClient {
             return;
         };
 
-        let is_event = message.event.as_deref().is_some_and(|event| !event.is_empty());
+        let is_event = message
+            .event
+            .as_deref()
+            .is_some_and(|event| !event.is_empty());
         if is_event {
             let event = message.event.clone().unwrap_or_default();
             let pty_id = message
@@ -317,9 +314,7 @@ impl PtyBrokerClient {
     /// Check `ok`/`error` on a response, mirroring `if (!resp.ok) throw ...`.
     fn check(response: BrokerResponse, cmd: &str) -> Result<BrokerResponse, BrokerError> {
         if response.ok != Some(true) {
-            let message = response
-                .error
-                .unwrap_or_else(|| format!("{cmd} failed"));
+            let message = response.error.unwrap_or_else(|| format!("{cmd} failed"));
             return Err(BrokerError::Failure(message));
         }
         Ok(response)
@@ -452,6 +447,36 @@ mod tests {
             client = client.with_rpc_timeout(timeout);
         }
         (io, client)
+    }
+
+    #[test]
+    fn replacing_handlers_drops_captures_after_unlocking() {
+        struct Reenter(std::sync::Weak<PtyBrokerClient>, Arc<AtomicUsize>);
+        impl Drop for Reenter {
+            fn drop(&mut self) {
+                let client = self.0.upgrade().unwrap();
+                assert!(
+                    client.inner.try_lock().is_ok(),
+                    "handler dropped under client lock"
+                );
+                let _ = client.is_ready();
+                self.1.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let client = Arc::new(PtyBrokerClient::new(Arc::new(RecordingIo::default())));
+        let drops = Arc::new(AtomicUsize::new(0));
+        let capture = Reenter(Arc::downgrade(&client), drops.clone());
+        client.set_output_handler(Arc::new(move |_, _| {
+            let _ = &capture;
+        }));
+        client.set_output_handler(Arc::new(|_, _| {}));
+        let capture = Reenter(Arc::downgrade(&client), drops.clone());
+        client.set_exit_handler(Arc::new(move |_, _, _| {
+            let _ = &capture;
+        }));
+        client.set_exit_handler(Arc::new(|_, _, _| {}));
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
     }
 
     #[test]
@@ -631,17 +656,17 @@ mod tests {
             client.spawn(&SpawnOptions::default()),
             deliver(&client, r#"{"id":1,"ok":true}"#),
         );
-        assert_eq!(result, Err(BrokerError::Failure("spawn failed".to_string())));
+        assert_eq!(
+            result,
+            Err(BrokerError::Failure("spawn failed".to_string()))
+        );
     }
 
     #[tokio::test]
     async fn rpc_timeout_reports_exact_message_and_clears_pending() {
         let (_, client) = client_with_io(Some(Duration::from_millis(5)));
         let error = client.write("pty-1", "data").await.unwrap_err();
-        assert_eq!(
-            error.message(),
-            "PTY broker RPC timeout: write".to_string()
-        );
+        assert_eq!(error.message(), "PTY broker RPC timeout: write".to_string());
         assert_eq!(client.pending_len(), 0);
     }
 

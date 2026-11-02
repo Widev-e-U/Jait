@@ -313,9 +313,7 @@ static GENERATED_JWT_SECRET: OnceLock<String> = OnceLock::new();
 static GENERATED_HOOK_SECRET: OnceLock<String> = OnceLock::new();
 
 fn generated_jwt_secret() -> &'static str {
-    GENERATED_JWT_SECRET
-        .get_or_init(random_hex_secret)
-        .as_str()
+    GENERATED_JWT_SECRET.get_or_init(random_hex_secret).as_str()
 }
 
 fn generated_hook_secret() -> &'static str {
@@ -341,9 +339,7 @@ fn fallback_bytes(out: &mut [u8; 32]) {
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(0);
     let addr = out.as_ptr() as usize as u64;
-    let mut state = nanos
-        .rotate_left(17)
-        .wrapping_mul(0x9E37_79B9_7F4A_7C15)
+    let mut state = nanos.rotate_left(17).wrapping_mul(0x9E37_79B9_7F4A_7C15)
         ^ addr.wrapping_mul(0xBF58_476D_1CE4_E5B9)
         ^ 0x2545_F491_4F6C_DD1D;
     for chunk in out.chunks_mut(8) {
@@ -523,11 +519,7 @@ pub fn load_with(lookup: impl Fn(&str) -> Option<String>) -> AppConfig {
         ),
         realtime_voice: string_or(lookup, "OPENAI_REALTIME_VOICE", "alloy"),
         voice_escalation_async_ms: parsed_u64_or(lookup, "JAIT_VOICE_ESCALATION_ASYNC_MS", 12_000),
-        voice_escalation_filler_ms: parsed_u64_or(
-            lookup,
-            "JAIT_VOICE_ESCALATION_FILLER_MS",
-            2_500,
-        ),
+        voice_escalation_filler_ms: parsed_u64_or(lookup, "JAIT_VOICE_ESCALATION_FILLER_MS", 2_500),
         stt_prompt: trimmed_or(lookup, "JAIT_STT_PROMPT", DEFAULT_STT_PROMPT),
         primary_gateway,
         primary_token: trimmed_or(lookup, "JAIT_PRIMARY_TOKEN", ""),
@@ -606,8 +598,7 @@ fn normalize_lexically(path: &Path) -> PathBuf {
         match component {
             Component::CurDir => {}
             Component::ParentDir => {
-                let can_pop =
-                    matches!(out.components().next_back(), Some(Component::Normal(_)));
+                let can_pop = matches!(out.components().next_back(), Some(Component::Normal(_)));
                 if can_pop {
                     out.pop();
                 } else if !absolute {
@@ -729,9 +720,17 @@ mod tests {
         assert_eq!(config.cors_origin, "http://localhost:3000");
         assert_eq!(config.node_env, "development");
         assert!(!config.jwt_secret.is_empty());
-        assert!(is_hex64(&config.jwt_secret), "jwt secret: {}", config.jwt_secret);
+        assert!(
+            is_hex64(&config.jwt_secret),
+            "jwt secret: {}",
+            config.jwt_secret
+        );
         assert!(!config.hook_secret.is_empty());
-        assert!(is_hex64(&config.hook_secret), "hook secret: {}", config.hook_secret);
+        assert!(
+            is_hex64(&config.hook_secret),
+            "hook secret: {}",
+            config.hook_secret
+        );
         assert_eq!(config.llm_provider, LlmProvider::Ollama);
         assert_eq!(config.llm_provider.as_str(), "ollama");
         assert_eq!(config.ollama_url, "http://localhost:11434");
@@ -778,7 +777,10 @@ mod tests {
 
     #[test]
     fn explicit_secrets_are_honoured_and_whitespace_falls_back() {
-        let explicit = load_pairs(&[("JWT_SECRET", "  jwt-abc  "), ("HOOK_SECRET", "\thook-xyz\n")]);
+        let explicit = load_pairs(&[
+            ("JWT_SECRET", "  jwt-abc  "),
+            ("HOOK_SECRET", "\thook-xyz\n"),
+        ]);
         assert_eq!(explicit.jwt_secret, "jwt-abc");
         assert_eq!(explicit.hook_secret, "hook-xyz");
 
@@ -908,12 +910,24 @@ mod tests {
             load_pairs(&[("CONTEXT_WINDOW", "100000")]).context_window,
             100_000
         );
-        assert_eq!(load_pairs(&[("CONTEXT_WINDOW", "8192")]).context_window, 8_192);
+        assert_eq!(
+            load_pairs(&[("CONTEXT_WINDOW", "8192")]).context_window,
+            8_192
+        );
         // "0" and NaN-ish garbage are falsy -> inference.
-        assert_eq!(load_pairs(&[("CONTEXT_WINDOW", "0")]).context_window, 128_000);
-        assert_eq!(load_pairs(&[("CONTEXT_WINDOW", "abc")]).context_window, 128_000);
+        assert_eq!(
+            load_pairs(&[("CONTEXT_WINDOW", "0")]).context_window,
+            128_000
+        );
+        assert_eq!(
+            load_pairs(&[("CONTEXT_WINDOW", "abc")]).context_window,
+            128_000
+        );
         // Empty string: no digits -> NaN -> inference.
-        assert_eq!(load_pairs(&[("CONTEXT_WINDOW", "")]).context_window, 128_000);
+        assert_eq!(
+            load_pairs(&[("CONTEXT_WINDOW", "")]).context_window,
+            128_000
+        );
         // The inference target is OPENAI_MODEL (never CONTEXT_WINDOW).
         assert_eq!(
             load_pairs(&[("OPENAI_MODEL", "gpt-5")]).context_window,
@@ -936,12 +950,21 @@ mod tests {
 
     #[test]
     fn numeric_fallbacks() {
-        assert_eq!(load_pairs(&[("OLLAMA_CONTEXT_LENGTH", "0")]).ollama_context_window, 32_768);
-        assert_eq!(load_pairs(&[("OLLAMA_CONTEXT_LENGTH", "16000")]).ollama_context_window, 16_000);
+        assert_eq!(
+            load_pairs(&[("OLLAMA_CONTEXT_LENGTH", "0")]).ollama_context_window,
+            32_768
+        );
+        assert_eq!(
+            load_pairs(&[("OLLAMA_CONTEXT_LENGTH", "16000")]).ollama_context_window,
+            16_000
+        );
         assert_eq!(load_empty().ollama_context_window, 32_768);
 
         assert_eq!(load_pairs(&[("JAIT_MAX_ROUNDS", "0")]).agent_max_rounds, 0);
-        assert_eq!(load_pairs(&[("JAIT_MAX_ROUNDS", "64")]).agent_max_rounds, 64);
+        assert_eq!(
+            load_pairs(&[("JAIT_MAX_ROUNDS", "64")]).agent_max_rounds,
+            64
+        );
         assert_eq!(load_empty().agent_max_rounds, 0);
 
         let zero_voice = load_pairs(&[

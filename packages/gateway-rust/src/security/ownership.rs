@@ -29,7 +29,10 @@ mod tests {
             assert_ownership(Some(Some("user-2")), "user-1", "Not found"),
             expected
         );
-        assert_eq!(assert_ownership(Some(None), "user-1", "Not found"), expected);
+        assert_eq!(
+            assert_ownership(Some(None), "user-1", "Not found"),
+            expected
+        );
         assert_eq!(assert_ownership(None, "user-1", "Not found"), expected);
     }
 }

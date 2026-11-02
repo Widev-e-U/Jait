@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     db,
-    providers::openai_stream::{ParsedStream, StreamFailure},
+    providers::openai_stream::{ParsedStream, SseDecoder, StreamFailure},
     runtime::chat_turn::TurnEvent,
     security::{consent_executor::ToolResult, http_auth::sign_auth_token},
 };
@@ -673,6 +673,67 @@ async fn full_consumer_channel_detaches_without_cancelling_turn() {
     assert!(!cancellation.is_cancelled());
     fixture.finish().await;
 }
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn abandoned_sink_keeps_serial_guard_until_started_write_finishes() {
+    let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    fixture
+        .auth
+        .with_database(move |db| {
+            let mut started = Some(started_tx);
+            db.progress_handler(
+                1,
+                Some(move || {
+                    if let Some(started) = started.take() {
+                        let _ = started.send(());
+                        let _ = release_rx.recv();
+                    }
+                    false
+                }),
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let serial = Arc::new(tokio::sync::Mutex::new(()));
+    let (sender, _receiver) = mpsc::channel(1);
+    let store =
+        SqliteTurnStore::new(fixture.auth.clone(), "owner".into(), "session".into()).unwrap();
+    let sink = event_sink(
+        sender,
+        ProcessCancellation::default(),
+        ChatLimits::default(),
+        store,
+        serial.clone(),
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(AtomicBool::new(false)),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let task = tokio::spawn(async move { sink(json!({"type":"token","content":"partial"})).await });
+    started_rx.await.unwrap();
+    task.abort();
+    let _ = task.await;
+    assert!(
+        serial.try_lock().is_err(),
+        "finalization must wait for the started write"
+    );
+    release_tx.send(()).unwrap();
+    let guard = tokio::time::timeout(Duration::from_secs(3), serial.lock())
+        .await
+        .unwrap();
+    drop(guard);
+    fixture.auth.with_database(|db| {
+        db.progress_handler(0, None::<fn() -> bool>)?;
+        let count: i64 = db.query_row(
+            "SELECT count(*) FROM session_events WHERE session_id='session' AND type='rust.chat.stream' AND payload LIKE '%partial%'",
+            [], |row| row.get(0))?;
+        assert_eq!(count, 1);
+        Ok(())
+    }).await.unwrap();
+    fixture.finish().await;
+}
+
 #[tokio::test]
 async fn shutdown_closes_new_turn_admission() {
     let fixture = Fixture::new(false, 1, ChatLimits::default()).await;
@@ -799,6 +860,118 @@ async fn stream_replays_durable_events_with_ascending_ids() {
 }
 
 #[tokio::test]
+async fn provisional_identity_survives_http_snapshot_and_reconnect() {
+    let fixture = Fixture::new(true, 0, ChatLimits::default()).await;
+    fixture
+        .factory
+        .provider
+        .retain
+        .store(true, Ordering::SeqCst);
+    let turn = fixture
+        .post("/api/chat")
+        .json(&json!({"session_id":"session","message":"hi"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(turn.status(), 200);
+    let sink = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(sink) = fixture.factory.provider.retained.lock().unwrap().clone() {
+                break sink;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let mut decoder = SseDecoder::default();
+    let first = format!(
+        "data: {}\n\n",
+        json!({"choices":[{"delta":{"tool_calls":[{"index":4,"function":{"name":"file_"}}]}}]})
+    );
+    for event in decoder.feed(first.as_bytes()).unwrap() {
+        sink(event).await.unwrap();
+    }
+    let projection: Value = fixture
+        .get("/api/sessions/session/messages?limit=5")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let calls = projection["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|m| m["toolCalls"].as_array().filter(|calls| !calls.is_empty()))
+        .unwrap();
+    assert_eq!(calls[0]["callId"], "pending-0");
+    assert_eq!(calls[0]["streamIndex"], 4);
+    assert_eq!(calls[0]["provisional"], true);
+    let before: i64 = fixture.auth.with_database(|db| Ok(db.query_row(
+        "SELECT MAX(log_id) FROM session_events WHERE session_id='session' AND type='rust.chat.stream'", [], |row| row.get(0)
+    )?)).await.unwrap();
+    let second = format!(
+        "data: {}\n\n",
+        json!({"choices":[{"delta":{"tool_calls":[{"index":4,"id":"real-4","function":{"name":"read"}}]}}]})
+    );
+    for event in decoder.feed(second.as_bytes()).unwrap() {
+        sink(event).await.unwrap();
+    }
+    let stream = fixture
+        .get("/api/sessions/session/stream")
+        .header("Last-Event-ID", before.to_string())
+        .send()
+        .await
+        .unwrap();
+    let body = read_frames(stream, 1).await;
+    let payloads = frame_payloads(&body);
+    assert_eq!(payloads[0]["call_id"], "real-4");
+    assert_eq!(payloads[0]["provisional"], false);
+    let projection: Value = fixture
+        .get("/api/sessions/session/messages?limit=5")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let calls = projection["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|m| m["toolCalls"].as_array().filter(|calls| !calls.is_empty()))
+        .unwrap();
+    assert_eq!(calls[0]["callId"], "real-4");
+    assert_eq!(calls[0]["provisional"], false);
+    assert_eq!(calls[0]["tool"], "file_read");
+    // Exercise the explicit identity contract independently of the provider's
+    // current compatibility guard for pending-prefixed real IDs.
+    sink(json!({"type":"tool_call_delta","call_id":"pending-1","index":7,"provisional":true,"name_delta":"other_"})).await.unwrap();
+    sink(json!({"type":"tool_call_delta","call_id":"pending-3","index":7,"provisional":false,"name_delta":"tool"})).await.unwrap();
+    let projection: Value = fixture
+        .get("/api/sessions/session/messages?limit=5")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let calls = projection["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|m| m["toolCalls"].as_array().filter(|calls| calls.len() == 2))
+        .unwrap();
+    assert_eq!(calls[1]["callId"], "pending-3");
+    assert_eq!(calls[1]["provisional"], false);
+    assert_eq!(calls[1]["tool"], "other_tool");
+    drop(turn);
+    fixture.finish().await;
+}
+
+#[tokio::test]
 async fn ui_events_route_resumes_after_last_event_id() {
     let fixture = Fixture::new(false, 2, ChatLimits::default()).await;
     let turn = fixture
@@ -903,4 +1076,152 @@ async fn stream_delivers_live_events_published_after_subscribe() {
     );
     drop(turn);
     fixture.finish().await;
+}
+
+#[tokio::test]
+async fn snapshot_retries_when_session_lease_completes_during_projection() {
+    let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
+    let lease = fixture.routes.admit("owner", "session").unwrap();
+    let started = Arc::new(tokio::sync::Barrier::new(2));
+    let resume = Arc::new(tokio::sync::Barrier::new(2));
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let active = fixture.routes.active.clone();
+    let task = {
+        let (started, resume, attempts) = (started.clone(), resume.clone(), attempts.clone());
+        tokio::spawn(async move {
+            consistent_snapshot(&active, "owner", "session", || {
+                let (started, resume, attempts) =
+                    (started.clone(), resume.clone(), attempts.clone());
+                async move {
+                    let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        started.wait().await;
+                        resume.wait().await;
+                    }
+                    Ok::<_, ()>(json!({"seq": attempt}))
+                }
+            })
+            .await
+            .unwrap()
+            .unwrap()
+        })
+    };
+    started.wait().await;
+    drop(lease);
+    resume.wait().await;
+    let value = task.await.unwrap();
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    assert_eq!(value["seq"], 1);
+    assert_eq!(value["streaming"], false);
+    assert!(fixture.routes.active.snapshots.lock().unwrap().is_empty());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn independent_session_activity_does_not_retry_snapshot() {
+    let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
+    let started = Arc::new(tokio::sync::Barrier::new(2));
+    let resume = Arc::new(tokio::sync::Barrier::new(2));
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let active = fixture.routes.active.clone();
+    let task = {
+        let (started, resume, attempts) = (started.clone(), resume.clone(), attempts.clone());
+        tokio::spawn(async move {
+            consistent_snapshot(&active, "owner", "session", || {
+                let (started, resume, attempts) =
+                    (started.clone(), resume.clone(), attempts.clone());
+                async move {
+                    if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                        started.wait().await;
+                        resume.wait().await;
+                    }
+                    Ok::<_, ()>(json!({"seq": 7}))
+                }
+            })
+            .await
+            .unwrap()
+            .unwrap()
+        })
+    };
+    started.wait().await;
+    for _ in 0..4 {
+        drop(fixture.routes.admit("owner", "other-session").unwrap());
+    }
+    resume.wait().await;
+    let value = task.await.unwrap();
+    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+    assert_eq!(value["seq"], 7);
+    assert_eq!(value["streaming"], false);
+    assert!(fixture.routes.active.snapshots.lock().unwrap().is_empty());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn snapshot_detects_a_complete_lease_between_projection_boundaries() {
+    let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
+    let started = Arc::new(tokio::sync::Barrier::new(2));
+    let resume = Arc::new(tokio::sync::Barrier::new(2));
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let active = fixture.routes.active.clone();
+    let task = {
+        let (started, resume, attempts) = (started.clone(), resume.clone(), attempts.clone());
+        tokio::spawn(async move {
+            consistent_snapshot(&active, "owner", "session", || {
+                let (started, resume, attempts) =
+                    (started.clone(), resume.clone(), attempts.clone());
+                async move {
+                    let attempt = attempts.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        started.wait().await;
+                        resume.wait().await;
+                    }
+                    Ok::<_, ()>(json!({"seq": attempt}))
+                }
+            })
+            .await
+            .unwrap()
+            .unwrap()
+        })
+    };
+    started.wait().await;
+    drop(fixture.routes.admit("owner", "session").unwrap());
+    resume.wait().await;
+    let value = task.await.unwrap();
+    assert_eq!(attempts.load(Ordering::SeqCst), 2);
+    assert_eq!(value["seq"], 1);
+    assert_eq!(value["streaming"], false);
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn repeated_same_session_changes_exhaust_snapshot_retries() {
+    let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
+    let routes = fixture.routes.clone();
+    let attempts = AtomicUsize::new(0);
+    let result = consistent_snapshot(&fixture.routes.active, "owner", "session", || {
+        attempts.fetch_add(1, Ordering::SeqCst);
+        drop(routes.admit("owner", "session").unwrap());
+        async { Ok::<_, ()>(json!({"seq": 0})) }
+    })
+    .await
+    .unwrap();
+    assert!(result.is_none());
+    assert_eq!(attempts.load(Ordering::SeqCst), 3);
+    assert!(fixture.routes.active.snapshots.lock().unwrap().is_empty());
+    fixture.finish().await;
+}
+
+#[tokio::test]
+async fn close_cancels_admitted_turn_and_rejects_new_turns() {
+    let fixture = Fixture::new(false, 0, ChatLimits::default()).await;
+    let lease = fixture.routes.admit("owner", "session").unwrap();
+    let cancellation = lease.cancellation.clone();
+    fixture.routes.close();
+    assert!(cancellation.is_cancelled());
+    assert!(fixture.routes.admit("owner", "other").is_err());
+    drop(lease);
+    fixture.routes.shutdown().await.unwrap();
+    let _ = fixture.shutdown.send(());
+    fixture.server.await.unwrap().unwrap();
+    fixture.auth.shutdown().await.unwrap();
 }
