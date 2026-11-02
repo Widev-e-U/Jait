@@ -239,9 +239,9 @@ mod tests {
                 "packages/gateway/src/tools/repo-proposal-tools.ts",
                 "packages/gateway/src/tools/repo-proposal-tools.test.ts",
                 "gateway-src-tools-repo-proposal-tools-test-e17a49aa",
-                "tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_61_3",
-                ".slice(0, 12)",
-                ".slice(0, 1)",
+                "tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_49_3",
+                "name: \"jait.todos\"",
+                "name: \"jait.changed\"",
             ),
             (
                 "packages/gateway/src/surfaces/filesystem.ts",
@@ -275,7 +275,10 @@ mod tests {
             check(&directory, &calls, &rules, &|| false).unwrap();
             assert!(copied.contains(from));
             fs::write(&subject, copied.replacen(from, to, 1)).unwrap();
-            let error = check(&directory, &calls, &rules, &|| false).unwrap_err();
+            let error = match check(&directory, &calls, &rules, &|| false) {
+                Err(error) => error,
+                Ok(()) => panic!("mutation survived for {source}: {from} -> {to}"),
+            };
             assert!(
                 error
                     .to_string()
