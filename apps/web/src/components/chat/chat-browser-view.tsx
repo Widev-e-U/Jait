@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Bot, GripHorizontal, Hand, Loader2, Maximize2, Minimize2, RotateCcw, Settings2 } from 'lucide-react'
+import { Bot, GripHorizontal, Hand, Loader2, Maximize2, Minimize2, Minus, RotateCcw, Settings2, Square } from 'lucide-react'
 import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { apiFetch } from '@/lib/api-fetch'
@@ -63,6 +63,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const panelRef = useRef<HTMLElement>(null)
   const [workspace, setWorkspace] = useState<HTMLElement | null>(null)
   const [sidebarInset, setSidebarInset] = useState(0)
+  const [mainSidebarInset, setMainSidebarInset] = useState(0)
   const [frame, setFrame] = useState({ width: 768, height: 468, top: PANEL_INSET })
   const [fullscreen, setFullscreen] = useState(false)
   const [maximized, setMaximized] = useState(false)
@@ -102,6 +103,9 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
         return rect.width > 0 && rect.height > 0 ? Math.max(edge, rect.right - bounds.left) : edge
       }, 0)
       setSidebarInset(Math.min(bounds.width, Math.max(0, right)))
+      const main = workspace!.querySelector<HTMLElement>('[aria-label="Workspace sidebar"]')
+      const mainRect = main?.getBoundingClientRect()
+      setMainSidebarInset(mainRect && mainRect.width > 0 && mainRect.height > 0 ? Math.min(bounds.width, Math.max(0, mainRect.right - bounds.left)) : 0)
     }
     function observeSidebars() {
       observer?.disconnect()
@@ -258,6 +262,12 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   if (!id) return null
   const agentInControl = state?.verified === true && state.sharedWithAgent
   const controlLabel = state?.sharedWithAgent ? 'Take control' : 'Share with agent'
+  // One control, three positions: thumbnail dock, floating window, workspace fill.
+  const size = !expanded ? 'minimized' : maximized ? 'workspace' : 'windowed'
+  const setSize = (next: 'minimized' | 'windowed' | 'workspace') => {
+    setMaximized(next === 'workspace')
+    setExpanded(next !== 'minimized')
+  }
   const controls = <>
     <TooltipHint content={`${state?.sharedWithAgent ? 'Shared with agent — you can also interact' : 'You are controlling'} · ${controlLabel}`}>
       <button type="button" aria-label={controlLabel} aria-busy={busyAction === 'control'}
@@ -288,11 +298,26 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
         </button>
       </div>
     </details>
-    <TooltipHint content="Minimize browser">
-      <button type="button" aria-label="Minimize browser" aria-expanded={expanded}
-        onClick={() => { if (optionsRef.current) optionsRef.current.open = false; setExpanded(false) }}
-        className="flex h-8 w-8 justify-center sm:w-auto shrink-0 items-center rounded border sm:px-2 hover:bg-muted">
-        <Minimize2 className="h-4 w-4" />
+    <div role="group" aria-label="Browser size" data-browser-size={size}
+      className="hidden h-8 shrink-0 items-center overflow-hidden rounded border sm:flex">
+      {([
+        ['minimized', Minus, 'Minimize browser'],
+        ['windowed', Square, 'Windowed browser'],
+        ['workspace', Maximize2, 'Fill workspace'],
+      ] as const).map(([value, Icon, label]) => (
+        <TooltipHint key={value} content={label}>
+          <button type="button" aria-label={label} aria-pressed={size === value} onClick={() => setSize(value)}
+            className={`flex h-full w-7 items-center justify-center border-l first:border-l-0 hover:bg-muted ${size === value ? 'bg-muted text-foreground' : 'text-muted-foreground'}`}>
+            <Icon className="h-3.5 w-3.5" />
+          </button>
+        </TooltipHint>
+      ))}
+    </div>
+    <TooltipHint content={`Browser size: ${size}`}>
+      <button type="button" aria-label={size === 'workspace' ? 'Minimize browser' : size === 'windowed' ? 'Fill workspace' : 'Windowed browser'}
+        onClick={() => setSize(size === 'workspace' ? 'minimized' : size === 'windowed' ? 'workspace' : 'windowed')}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded border hover:bg-muted sm:hidden">
+        {size === 'workspace' ? <Minimize2 className="h-4 w-4" /> : size === 'windowed' ? <Maximize2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
       </button>
     </TooltipHint>
   </>
@@ -306,29 +331,6 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
         ? 'flex flex-col rounded-xl [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'
         : 'overflow-hidden rounded-lg'}`}>
       <div aria-hidden="true" data-browser-border className={`pointer-events-none absolute inset-0 z-50 rounded-[inherit] ${agentInControl ? 'border-2 border-blue-500' : 'border border-border'}`} />
-      {expanded && <div className="flex h-7 shrink-0 items-center justify-between rounded-t-xl bg-muted/40 px-2">
-        <TooltipHint content="Drag to move · Arrow keys to move">
-          <button type="button" aria-label="Move browser"
-            className="flex h-full min-w-0 flex-1 touch-none items-center gap-1 text-muted-foreground md:cursor-move"
-            onPointerDown={event => beginGesture(event)} {...gestureEvents}
-            onDoubleClick={() => setMaximized(value => !value)}
-            onKeyDown={event => {
-              if (maximized || fullscreen || !event.key.startsWith('Arrow') || !window.matchMedia('(min-width: 768px) and (pointer: fine)').matches) return
-              event.preventDefault()
-              const step = event.shiftKey ? 40 : 10
-              setWindowBox(constrainBrowserWindow({ ...floatingBox,
-                left: floatingBox.left + (event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0),
-                top: floatingBox.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0),
-              }, frame))
-            }}><GripHorizontal className="hidden h-4 w-4 md:block" />Browser</button>
-        </TooltipHint>
-        <TooltipHint content={maximized ? 'Restore browser size' : 'Fill chat panel'}>
-          <button type="button" aria-label={maximized ? 'Restore browser size' : 'Fill chat panel'}
-            aria-pressed={maximized} onClick={() => setMaximized(value => !value)} className="flex h-6 w-7 items-center justify-center rounded hover:bg-muted">
-            {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          </button>
-        </TooltipHint>
-      </div>}
       {expanded && !maximized && !fullscreen && ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(edge => (
         <div key={edge} data-browser-resize={edge} aria-hidden="true"
           className="absolute z-50 hidden touch-none md:block" style={{
@@ -339,7 +341,21 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
       ))}
       {manipulating && <div className="absolute inset-0 z-40" />}
       <div className={expanded ? 'min-h-0 flex-1 rounded-b-xl [&_[data-browser-layout]]:rounded-b-xl' : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
-        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls }}>
+        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, leading: (<TooltipHint content="Drag to move · Arrow keys to move">
+          <button type="button" aria-label="Move browser"
+            className="hidden h-8 shrink-0 touch-none items-center text-muted-foreground md:flex md:cursor-move"
+            onPointerDown={event => beginGesture(event)} {...gestureEvents}
+            onDoubleClick={() => setMaximized(value => !value)}
+            onKeyDown={event => {
+              if (maximized || fullscreen || !event.key.startsWith('Arrow') || !window.matchMedia('(min-width: 768px) and (pointer: fine)').matches) return
+              event.preventDefault()
+              const step = event.shiftKey ? 40 : 10
+              setWindowBox(constrainBrowserWindow({ ...floatingBox,
+                left: floatingBox.left + (event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0),
+                top: floatingBox.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0),
+              }, frame))
+            }}><GripHorizontal className="hidden h-4 w-4 md:block" /></button>
+        </TooltipHint>) }}>
           <div className="h-full overflow-hidden rounded-b-xl">{state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
             hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
             : <p className="p-3 text-muted-foreground">No live browser is available for this chat.</p>}</div>
@@ -350,7 +366,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     </section>
   )
   return workspace ? createPortal(
-    <div data-browser-workspace-overlay className="pointer-events-none absolute inset-y-0 right-0 z-40" style={{ left: sidebarInset }}>{panel}</div>,
+    <div data-browser-workspace-overlay className="pointer-events-none absolute inset-y-0 right-0 z-40" style={{ left: maximized && expanded ? mainSidebarInset : sidebarInset }}>{panel}</div>,
     workspace,
   ) : panel
 }

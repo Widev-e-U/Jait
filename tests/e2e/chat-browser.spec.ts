@@ -50,6 +50,7 @@ test('chat browser supports takeover, sign-in interaction, sharing, reload and e
   await page.setViewportSize({ width: 390, height: 844 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: path.join(shotsDir, 'chat-browser-mobile.png'), fullPage: true })
+  await page.getByRole('button', { name: 'Fill workspace' }).click()
   await page.getByRole('button', { name: 'Minimize browser', exact: true }).click()
   await expect(frame).toHaveCount(1)
   await expect(page.getByRole('region', { name: 'Chat browser', exact: true })).toHaveAttribute('data-browser-minimized', 'true')
@@ -97,7 +98,7 @@ test('one sticky browser follows the conversation and minimizes without reconnec
   await expect(header.getByRole('textbox', { name: 'Browser URL' })).toBeVisible()
   await expect(header.getByRole('button', { name: 'Refresh page' })).toBeVisible()
   await expect(header.getByRole('button', { name: /^(Share with agent|Take control)$/ })).toBeVisible()
-  await expect(header.getByRole('button', { name: 'Minimize browser' })).toBeVisible()
+  await expect(header.getByRole('button', { name: 'Fill workspace' })).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Adjust view', exact: true })).toBeHidden()
   await panel.getByLabel('Browser view options', { exact: true }).click()
   await expect(panel.getByRole('button', { name: 'Adjust view', exact: true })).toBeVisible()
@@ -112,6 +113,7 @@ test('one sticky browser follows the conversation and minimizes without reconnec
   await expect(frame).toHaveCount(1)
   await scroll.evaluate(element => { element.scrollTop = 0 })
   await expect.poll(async () => Math.round((await panel.boundingBox())!.y)).toBe(Math.round(before!.y))
+  await page.getByRole('button', { name: 'Fill workspace' }).click()
   await page.getByRole('button', { name: 'Minimize browser', exact: true }).click()
   await expect(panel).toHaveAttribute('data-browser-minimized', 'true')
   // The shrink is animated, so the final box has to be awaited, not sampled.
@@ -183,6 +185,7 @@ test('the unified header navigates, refreshes and keeps the same browser through
   await panel.getByRole('button', { name: 'Refresh page' }).click()
   await expect.poll(() => reloads).toBe(2)
   expect(shared).toBe(true)
+  await panel.getByRole('button', { name: 'Fill workspace' }).click()
   await panel.getByRole('button', { name: 'Minimize browser' }).click()
   await panel.getByRole('button', { name: 'Expand browser' }).click()
   await expect(panel.getByRole('button', { name: /^(Share with agent|Take control)$/ })).toHaveText('Take control')
@@ -222,13 +225,13 @@ test('browser window moves and resizes within chat and restores after filling th
   await expect.poll(async () => Math.abs((await panel.boundingBox())!.width - (initial.width - 160))).toBeLessThan(2)
   const smaller = (await panel.boundingBox())!
   const handle = (await panel.getByRole('button', { name: 'Move browser', exact: true }).boundingBox())!
-  await page.mouse.move(handle.x + 80, handle.y + handle.height / 2)
+  await page.mouse.move(handle.x + 8, handle.y + handle.height / 2)
   await page.mouse.down()
-  await page.mouse.move(handle.x + 140, handle.y + handle.height / 2 + 50, { steps: 8 })
+  await page.mouse.move(handle.x + 68, handle.y + handle.height / 2 + 50, { steps: 8 })
   await page.mouse.up()
   await expect.poll(async () => Math.abs((await panel.boundingBox())!.x - (smaller.x + 60))).toBeLessThan(2)
   const moved = (await panel.boundingBox())!
-  await panel.getByRole('button', { name: 'Fill chat panel', exact: true }).click()
+  await panel.getByRole('button', { name: 'Fill workspace', exact: true }).click()
   await expect(panel).toHaveAttribute('data-browser-maximized', 'true')
   const parent = await panel.evaluate(el => { const p = el.offsetParent!; const b = p.getBoundingClientRect(); return { width: p.clientWidth, height: p.clientHeight, x: b.x, y: b.y } })
   await expect.poll(async () => Math.round((await panel.boundingBox())!.height)).toBe(parent.height)
@@ -236,7 +239,8 @@ test('browser window moves and resizes within chat and restores after filling th
   expect(filled.width).toBe(parent.width)
   expect(filled.x).toBe(parent.x)
   expect(filled.y).toBe(parent.y)
-  await panel.getByRole('button', { name: 'Restore browser size', exact: true }).click()
+  await panel.getByRole('button', { name: 'Minimize browser', exact: true }).click()
+  await panel.getByRole('button', { name: 'Expand browser', exact: true }).click()
   await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(moved.width))
   expect(Math.round((await panel.boundingBox())!.x)).toBe(Math.round(moved.x))
   await expect(page.frameLocator('iframe[title="Agent browser"]').locator('html')).toHaveAttribute('data-window-marker', 'same-browser')
@@ -244,7 +248,7 @@ test('browser window moves and resizes within chat and restores after filling th
   await expect(border).toHaveCSS('border-bottom-width', '2px')
   await expect(border).toHaveCSS('pointer-events', 'none')
   await page.screenshot({ path: path.resolve(shotsDir, 'chat-browser-window.png') })
-  await panel.getByRole('button', { name: 'Fill chat panel', exact: true }).click()
+  await panel.getByRole('button', { name: 'Fill workspace', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(panel).toHaveAttribute('data-browser-maximized', 'false')
 })
@@ -266,16 +270,17 @@ test('browser can cover the project and composer while staying clear of the side
   const composer = (await page.getByRole('textbox', { name: 'Chat draft' }).boundingBox())!
   const initial = (await panel.boundingBox())!
   const grip = (await handle.boundingBox())!
-  await page.mouse.move(grip.x + 50, grip.y + grip.height / 2)
+  await page.mouse.move(grip.x + 8, grip.y + grip.height / 2)
   await page.mouse.down()
-  await page.mouse.move(grip.x + 50 + sidebar.x + sidebar.width + 20 - initial.x, grip.y + grip.height / 2 + composer.y + composer.height - 20 - (initial.y + initial.height), { steps: 10 })
+  await page.mouse.move(grip.x + 8 + sidebar.x + sidebar.width + 20 - initial.x, grip.y + grip.height / 2 + composer.y + composer.height - 20 - (initial.y + initial.height), { steps: 10 })
   await page.mouse.up()
-  await expect.poll(async () => (await panel.boundingBox())!.x).toBeLessThan(project.x + project.width / 2)
   await expect.poll(async () => (await panel.boundingBox())!.y + (await panel.boundingBox())!.height).toBeGreaterThan(composer.y)
   const moved = (await panel.boundingBox())!
-  expect(moved.x).toBeGreaterThanOrEqual(sidebar.x + sidebar.width)
+  expect(moved.x).toBeGreaterThanOrEqual(project.x + project.width)
+  await panel.getByRole('button', { name: 'Fill workspace' }).click()
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.x)).toBe(Math.round(sidebar.x + sidebar.width))
   const onTop = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-browser-panel]') !== null, {
-    x: Math.max(moved.x + 10, composer.x + 10), y: Math.max(moved.y + 35, composer.y + 5),
+    x: project.x + 10, y: project.y + 50,
   })
   expect(onTop).toBe(true)
   expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-testid="fixture-sidebar"]') !== null, { x: sidebar.x + 10, y: sidebar.y + 40 })).toBe(true)

@@ -11,9 +11,10 @@ export interface BrowserAddressBarProps {
   sharedWithAgent: boolean
   disabled?: boolean
   controls?: ReactNode
+  leading?: ReactNode
 }
 
-export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWithAgent, disabled = false, controls, toolsOpen, onToggleTools }: BrowserAddressBarProps & {
+export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWithAgent, disabled = false, controls, leading, toolsOpen, onToggleTools }: BrowserAddressBarProps & {
   toolsOpen: boolean
   onToggleTools: () => void
 }) {
@@ -79,6 +80,7 @@ export function BrowserAddressBar({ sessionId, authToken, currentUrl, sharedWith
   return (
     <div className="shrink-0 border-b bg-muted/20 px-1.5 py-1.5 sm:px-3">
       <form data-browser-toolbar className="flex min-w-0 items-center gap-1 sm:gap-1.5" onSubmit={event => { event.preventDefault(); void navigate() }}>
+        {leading}
         <TooltipHint content={sharedWithAgent ? 'You and the agent can navigate' : 'Enter a URL and press Enter'}>
           <input
             aria-label="Browser URL"

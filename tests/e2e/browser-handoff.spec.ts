@@ -41,6 +41,7 @@ for (const choice of ['Done', "I'm not able to do it", 'Another reason']) {
     }))
     await page.goto('/chat-browser-repro.html?handoff=1')
     const panel = page.getByRole('region', { name: 'Chat browser', exact: true })
+    await panel.getByRole('button', { name: 'Fill workspace' }).click()
     await panel.getByRole('button', { name: 'Minimize browser' }).click()
     await expect(panel).toHaveAttribute('data-browser-minimized', 'true')
     await expect.poll(() => Boolean(deliver)).toBe(true)

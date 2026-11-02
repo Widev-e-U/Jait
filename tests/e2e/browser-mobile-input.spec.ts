@@ -49,7 +49,7 @@ for (const width of [320, 390]) {
     const urlBounds = (await url.boundingBox())!
     expect(urlBounds.width).toBeGreaterThanOrEqual(30)
     expect(panelBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height + 8)
-    for (const control of [url, panel.getByRole('button', { name: 'Go to URL' }), panel.getByRole('button', { name: 'Refresh page' }), panel.getByRole('button', { name: 'Browser tools', exact: true }), takeControl, panel.getByLabel('Browser view options', { exact: true }), panel.getByRole('button', { name: 'Minimize browser' })]) {
+    for (const control of [url, panel.getByRole('button', { name: 'Go to URL' }), panel.getByRole('button', { name: 'Refresh page' }), panel.getByRole('button', { name: 'Browser tools', exact: true }), takeControl, panel.getByLabel('Browser view options', { exact: true }), panel.getByRole('button', { name: 'Fill workspace' })]) {
       const bounds = (await control.boundingBox())!
       expect(bounds.x).toBeGreaterThanOrEqual(panelBounds.x)
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(panelBounds.x + panelBounds.width)
@@ -91,6 +91,7 @@ for (const width of [320, 390]) {
     await expect(draft).toHaveValue('Keep my draft')
     await keyboard.tap()
     await expect(draft).toBeHidden()
+    await panel.getByRole('button', { name: 'Fill workspace' }).tap()
     await panel.getByRole('button', { name: 'Minimize browser' }).tap()
     await expect(draft).toBeVisible()
     await panel.getByRole('button', { name: 'Expand browser' }).tap()
@@ -104,6 +105,7 @@ for (const width of [320, 390]) {
     await options.tap()
     await panel.getByRole('button', { name: 'Share with agent', exact: true }).tap()
     await expect(frame.getByRole('button', { name: 'Toggle keyboard' })).toBeVisible()
+    await panel.getByRole('button', { name: 'Fill workspace' }).tap()
     await panel.getByRole('button', { name: 'Minimize browser' }).tap()
     await panel.getByRole('button', { name: 'Expand browser' }).tap()
     await expect(panel.getByRole('button', { name: 'Take control', exact: true })).toBeVisible()

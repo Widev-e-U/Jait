@@ -108,6 +108,7 @@ for (const width of [390, 1100]) {
     expect(grants).toBe(1)
     expect(viewerLoads).toBe(1)
     await page.screenshot({ path: path.join(shots, `browser-control-agent-${width}.png`) })
+    await panel.getByRole('button', { name: 'Fill workspace' }).click()
     await panel.getByRole('button', { name: 'Minimize browser' }).click()
     await expect(panel).toHaveClass(/border-blue-500/)
   })

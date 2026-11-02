@@ -42,8 +42,8 @@ function BrowserChatFixture() {
     <div data-chat-composer-dock>{handoff.inlinePrompt}<textarea aria-label="Chat draft" defaultValue="Keep my draft" /></div>
   </main>
   return <TooltipProvider>{workspace ? <div data-browser-workspace className="relative flex h-screen overflow-hidden">
-    <aside data-browser-sidebar data-testid="fixture-sidebar" className="w-48 shrink-0 border-r bg-muted">Sidebar</aside>
-    <section data-testid="fixture-project" className="w-72 shrink-0 border-r bg-muted/50">Project panel</section>
+    <aside data-browser-sidebar aria-label="Workspace sidebar" data-testid="fixture-sidebar" className="w-48 shrink-0 border-r bg-muted">Sidebar</aside>
+    <section data-browser-sidebar data-testid="fixture-project" className="w-72 shrink-0 border-r bg-muted/50">Project panel</section>
     {chat}
   </div> : chat}</TooltipProvider>
 }
