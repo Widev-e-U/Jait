@@ -290,14 +290,15 @@ pub fn get_local_subnets(interfaces: &[LocalIpv4Interface]) -> Vec<String> {
     subnets
 }
 
-/// `mergeEntries`: later rows win, first-seen ordering is preserved.
+/// `mergeEntries`: first-seen ordering is preserved, `responsive` accumulates,
+/// and the first non-null `mac` is retained (`existing.mac ?? entry.mac`).
 pub fn merge_entries(rows: &[HostEntry]) -> Vec<HostEntry> {
     let mut out: Vec<HostEntry> = Vec::new();
     let mut index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for row in rows {
         match index.get(&row.ip) {
             Some(&i) => {
-                if row.mac.is_some() {
+                if out[i].mac.is_none() {
                     out[i].mac = row.mac.clone();
                 }
                 out[i].responsive = out[i].responsive || row.responsive;
