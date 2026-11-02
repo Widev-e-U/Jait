@@ -1,5 +1,42 @@
 # Native Rust gateway
 
+## Coverage inventory reconciliation continuation — 2026-11-02
+
+The coverage ledger now has exact parity with the inventory it tracks: 376
+component entries against `inventory_total` 376, covering all 370 original paths
+plus the six newer additions, with no original path unlisted. Statuses are 241
+verified, 83 implemented but unverified, 34 partial, and 18 absent. For the
+originals alone that is 236 verified, 83 implemented, 34 partial, and 17 absent;
+the newer additions remain five verified and one absent. "Implemented but
+unverified" and "partial" are kept separate from verified credit and none of the
+movement below awards verification.
+
+One entry was missing and has been added: `src/tools/browser-handoff.ts`, an
+inventory-pending newer addition with no native Rust behaviour. The only native
+touchpoint is tool registration metadata in `src/tools/contracts.rs`; it is
+recorded as absent rather than credited.
+
+Six focused-evidence hash notes had drifted from their sources. Each affected
+module was re-run on current source — `integrations::os_control::index` (2),
+`security::index` (5), `tools::agent_tools` (16), `tools::contracts` (16),
+`tools::index` (8), and `tools::mcp_bridge` (18) — all passing, and the notes were
+re-pinned to live SHA-256 values with the superseded values retained in the text.
+No status was promoted. `src/tools/mcp_bridge.rs` had advanced after the audit was
+written by a semantically equivalent Clippy-style simplification
+(`unwrap_or_else(Default::default)` to `unwrap_or_default()`, one insertion and
+four deletions), which is why its live hash differed; all 18 tests pass on the
+current content.
+
+A status-agnostic drift check over every pinned hash in the ledger reports zero
+drifted sources, and a semantic comparison against the committed baseline shows
+only additive changes — populated `targets`/`review` fields, appended evidence
+notes, re-pinned hashes, and the one inserted entry — with no entry, status,
+`native`, or contract record removed. This reconciliation establishes ledger
+consistency and focused module evidence only. It is not frozen-source validation,
+does not certify the remaining implemented, partial, and absent components, and
+does not change production readiness: the gateway remains TypeScript and the
+platform, replacement, and activation gates remain open.
+
 ## Application shutdown continuation — 2026-11-02
 
 The opt-in application closes store admission before draining chat. A focused
