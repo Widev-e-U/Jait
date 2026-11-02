@@ -249,14 +249,11 @@ for (const width of [390, 900, 1440]) {
       expect((await previous.boundingBox())!.y).toBe(previousTop)
       await page.getByRole('button', { name: 'Collapse goal card' }).click()
     }
-    await expect.poll(async () => {
-      const bounds = (await frame.boundingBox())!
-      return bounds.y + bounds.height
-    }).toBeLessThanOrEqual((await scroll.boundingBox())!.y)
     await page.screenshot({ path: path.resolve(__dirname, `../../.jait/shots/goal-overlay-${width}.png`) })
     await page.getByRole('button', { name: 'Toggle goal overlay' }).click()
     await expect(overlay).toHaveCount(0)
-    expect((await scroll.boundingBox())!.y).toBeLessThan(transcriptTop)
+    // Showing a goal must not reserve an opaque strip above the transcript.
+    expect((await scroll.boundingBox())!.y).toBe(transcriptTop)
   })
 }
 

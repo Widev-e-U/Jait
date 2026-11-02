@@ -254,7 +254,7 @@ test('browser window moves and resizes within chat and restores after filling th
 })
 
 
-test('browser can cover the project and composer while staying clear of the sidebar', async ({ page }) => {
+test('browser can be dragged over the sidebar and project panel', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.route('**/api/preview/session/chat-fixture', route => route.fulfill({ json: { session: { status: 'ready', url: '/noVNC/vnc_lite.html?path=api/live-view/6080/websockify', sharedWithAgent: true } } }))
   await page.route('**/api/preview/access', route => route.fulfill({ json: { url: route.request().postDataJSON().source } }))
@@ -272,11 +272,13 @@ test('browser can cover the project and composer while staying clear of the side
   const grip = (await handle.boundingBox())!
   await page.mouse.move(grip.x + 8, grip.y + grip.height / 2)
   await page.mouse.down()
-  await page.mouse.move(grip.x + 8 + sidebar.x + sidebar.width + 20 - initial.x, grip.y + grip.height / 2 + composer.y + composer.height - 20 - (initial.y + initial.height), { steps: 10 })
+  await page.mouse.move(grip.x + 8 + sidebar.x + 20 - initial.x, grip.y + grip.height / 2 + composer.y + composer.height - 20 - (initial.y + initial.height), { steps: 10 })
   await page.mouse.up()
   await expect.poll(async () => (await panel.boundingBox())!.y + (await panel.boundingBox())!.height).toBeGreaterThan(composer.y)
   const moved = (await panel.boundingBox())!
-  expect(moved.x).toBeGreaterThanOrEqual(project.x + project.width)
+  expect(moved.x).toBeLessThan(sidebar.x + sidebar.width)
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-browser-panel]') !== null, { x: sidebar.x + 30, y: moved.y + 30 })).toBe(true)
+  expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-browser-panel]') !== null, { x: project.x + 10, y: moved.y + 30 })).toBe(true)
   await panel.getByRole('button', { name: 'Fill workspace' }).click()
   await expect.poll(async () => Math.round((await panel.boundingBox())!.x)).toBe(Math.round(sidebar.x + sidebar.width))
   const onTop = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('[data-browser-panel]') !== null, {

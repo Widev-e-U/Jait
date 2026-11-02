@@ -766,7 +766,6 @@ export function DeveloperChatWorkspace({
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
           )}
-          {!showDebugPanel && loop && activeSessionId && <div aria-hidden="true" className="h-24 shrink-0" />}
           {showDebugPanel ? (
             // Trajectory/debug mode replaces only the transcript — the composer
             // and its controls stay, and auto-scroll keeps matching the chat.

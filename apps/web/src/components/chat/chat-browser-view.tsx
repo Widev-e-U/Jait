@@ -232,7 +232,10 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not restart the browser.') }
     finally { setBusyAction(null) }
   }
-  const defaultBox = panelBox(true, frame, keyboardOpen)
+  const defaultFrame = workspace ? { ...frame, width: Math.max(0, frame.width - sidebarInset) } : frame
+  const initialBox = panelBox(true, defaultFrame, keyboardOpen)
+  const defaultBox = { ...initialBox, left: initialBox.left + (workspace ? sidebarInset : 0) }
+  const minimizedBox = { ...panelBox(false, defaultFrame), left: PANEL_INSET + (workspace ? sidebarInset : 0) }
   const floatingBox = constrainBrowserWindow(windowBox ?? defaultBox, frame)
   const beginGesture = (event: ReactPointerEvent<HTMLElement>, edge?: string) => {
     if (event.button !== 0 || maximized || fullscreen || !window.matchMedia('(min-width: 768px) and (pointer: fine)').matches) return
@@ -324,8 +327,8 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const panel = (
     <section ref={panelRef} aria-label="Chat browser" data-browser-panel data-browser-controller={agentInControl ? 'agent' : 'user'} data-browser-minimized={!expanded} data-browser-keyboard-open={expanded && keyboardOpen}
       data-browser-maximized={maximized && expanded}
-      style={fullscreen ? undefined : !expanded ? panelBox(false, frame) : maximized
-        ? { left: 0, top: Math.max(0, frame.top - PANEL_INSET), width: frame.width, height: frame.height - Math.max(0, frame.top - PANEL_INSET) }
+      style={fullscreen ? undefined : !expanded ? minimizedBox : maximized
+        ? { left: workspace ? mainSidebarInset : 0, top: Math.max(0, frame.top - PANEL_INSET), width: frame.width - (workspace ? mainSidebarInset : 0), height: frame.height - Math.max(0, frame.top - PANEL_INSET) }
         : floatingBox}
       className={`absolute z-30 pointer-events-auto border ${agentInControl ? 'border-blue-500' : 'border-border'} bg-background text-xs shadow-lg ${manipulating ? 'transition-none select-none' : PANEL_TRANSITION} ${expanded
         ? 'flex flex-col rounded-xl [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'
@@ -366,7 +369,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     </section>
   )
   return workspace ? createPortal(
-    <div data-browser-workspace-overlay className="pointer-events-none absolute inset-y-0 right-0 z-40" style={{ left: maximized && expanded ? mainSidebarInset : sidebarInset }}>{panel}</div>,
+    <div data-browser-workspace-overlay className="pointer-events-none absolute inset-0 z-40">{panel}</div>,
     workspace,
   ) : panel
 }
