@@ -72,15 +72,27 @@ async fn compare(mut call: Value) {
     connection.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at)VALUES('owner','alice','fixture','old','old'),('other','bob','fixture','old','old')").unwrap();
     // Match the reference fixture: every named chat belongs to owner unless
     // a test explicitly declares it missing. This uses real native ownership.
-    let missing: Vec<&str> = call["missingChats"].as_array().into_iter().flatten()
-        .filter_map(Value::as_str).collect();
-    let threads: Vec<&str> = call["threadChats"].as_array().into_iter().flatten()
-        .filter_map(Value::as_str).collect();
+    let missing: Vec<&str> = call["missingChats"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
+    let threads: Vec<&str> = call["threadChats"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
     for step in call["steps"].as_array().into_iter().flatten() {
         let from_body = step["body"]["chatId"].as_str();
-        let from_path = step["path"].as_str().and_then(|path| path.strip_prefix("/api/screen-share/chat/"));
+        let from_path = step["path"]
+            .as_str()
+            .and_then(|path| path.strip_prefix("/api/screen-share/chat/"));
         for chat in [from_body, from_path].into_iter().flatten() {
-            if chat.is_empty() || missing.contains(&chat) { continue; }
+            if chat.is_empty() || missing.contains(&chat) {
+                continue;
+            }
             if threads.contains(&chat) {
                 connection.execute(
                     "INSERT OR IGNORE INTO agent_threads(id,user_id,title,provider_id,created_at,updated_at) VALUES(?1,'owner','fixture','fixture','old','old')",
@@ -323,22 +335,50 @@ async fn chat_sessions_join_approval_handoff_and_stop_are_isolated() {
 // Both implementations must reject another user before reading or changing a share.
 #[tokio::test]
 async fn chat_owned_share_rejects_other_user() {
-    let mut start = step("POST", "start", json!({"hostDeviceId":"host","chatId":"private",
-        "viewerDeviceIds":["viewer"],"initiatedBy":"agent"}));
+    let mut start = step(
+        "POST",
+        "start",
+        json!({"hostDeviceId":"host","chatId":"private",
+        "viewerDeviceIds":["viewer"],"initiatedBy":"agent"}),
+    );
     start["bind"] = json!("share");
-    let mut replace = step("POST", "start", json!({"hostDeviceId":"host","chatId":"private"}));
+    let mut replace = step(
+        "POST",
+        "start",
+        json!({"hostDeviceId":"host","chatId":"private"}),
+    );
     replace["user"] = json!("other");
     let mut lookup = get("chat/private");
     lookup["user"] = json!("other");
-    let mut join = step("POST", "join", json!({"sessionId":"$share","viewerDeviceId":"viewer"}));
+    let mut join = step(
+        "POST",
+        "join",
+        json!({"sessionId":"$share","viewerDeviceId":"viewer"}),
+    );
     join["user"] = json!("other");
-    let mut handoff = step("POST", "handoff", json!({"sessionId":"$share","chatId":"private","controlOwner":"user"}));
+    let mut handoff = step(
+        "POST",
+        "handoff",
+        json!({"sessionId":"$share","chatId":"private","controlOwner":"user"}),
+    );
     handoff["user"] = json!("other");
-    let mut transfer = step("POST", "transfer-control", json!({"sessionId":"$share","controllerDeviceId":"viewer"}));
+    let mut transfer = step(
+        "POST",
+        "transfer-control",
+        json!({"sessionId":"$share","controllerDeviceId":"viewer"}),
+    );
     transfer["user"] = json!("other");
-    let mut approval = step("POST", "approve", json!({"sessionId":"$share","approved":true}));
+    let mut approval = step(
+        "POST",
+        "approve",
+        json!({"sessionId":"$share","approved":true}),
+    );
     approval["user"] = json!("other");
-    let mut leave = step("POST", "leave", json!({"sessionId":"$share","viewerDeviceId":"viewer"}));
+    let mut leave = step(
+        "POST",
+        "leave",
+        json!({"sessionId":"$share","viewerDeviceId":"viewer"}),
+    );
     leave["user"] = json!("other");
     let mut stop = step("POST", "stop", json!({"sessionId":"$share"}));
     stop["user"] = json!("other");
@@ -348,24 +388,35 @@ async fn chat_owned_share_rejects_other_user() {
 
 #[tokio::test]
 async fn chat_ownership_covers_threads_and_missing_chats() {
-    let mut start = step("POST", "start", json!({"hostDeviceId":"host","chatId":"thread-chat"}));
+    let mut start = step(
+        "POST",
+        "start",
+        json!({"hostDeviceId":"host","chatId":"thread-chat"}),
+    );
     start["bind"] = json!("share");
     let mut other = get("chat/thread-chat");
     other["user"] = json!("other");
-    compare(json!({"threadChats":["thread-chat"],"missingChats":["absent"],
+    compare(
+        json!({"threadChats":["thread-chat"],"missingChats":["absent"],
         "devices":[device("host","desktop")],"steps":[
             start, other, get("chat/thread-chat"), get("chat/absent"),
             step("POST", "start", json!({"hostDeviceId":"host","chatId":"absent"})),
             get("chat/thread-chat")
-        ]})).await;
+        ]}),
+    )
+    .await;
 }
 
 // Leaving removes one viewer, preserves the other, and rejects a host or
 // stopped share. The injected ports do not yet model a native control lease.
 #[tokio::test]
 async fn viewer_leave_keeps_other_viewers_and_host_capture() {
-    let mut start = step("POST", "start", json!({"hostDeviceId":"host","chatId":"chat-a",
-        "viewerDeviceIds":["viewer-a","viewer-b"]}));
+    let mut start = step(
+        "POST",
+        "start",
+        json!({"hostDeviceId":"host","chatId":"chat-a",
+        "viewerDeviceIds":["viewer-a","viewer-b"]}),
+    );
     start["bind"] = json!("share");
     compare(json!({"devices":[device("host","desktop"),device("viewer-a","web"),device("viewer-b","web")],"steps":[
         start,
@@ -384,7 +435,11 @@ async fn viewer_leave_keeps_other_viewers_and_host_capture() {
 // handed off; malformed control-owner values are rejected rather than coerced.
 #[tokio::test]
 async fn handoff_rejects_unapproved_stopped_and_invalid_requests() {
-    let mut first = step("POST", "start", json!({"hostDeviceId":"host","chatId":"chat-a","initiatedBy":"agent"}));
+    let mut first = step(
+        "POST",
+        "start",
+        json!({"hostDeviceId":"host","chatId":"chat-a","initiatedBy":"agent"}),
+    );
     first["bind"] = json!("a");
     compare(json!({"devices":[device("host","desktop")],"steps":[
         first,
@@ -396,18 +451,24 @@ async fn handoff_rejects_unapproved_stopped_and_invalid_requests() {
         step("POST", "approve", json!({"sessionId":"$a","approved":true})),
         step("POST", "handoff", json!({"sessionId":"$a","chatId":"chat-a","controlOwner":"agent"})),
         get("chat/chat-a")
-    ]})).await;
+    ]}))
+    .await;
 }
 
 #[tokio::test]
 async fn replacing_a_chat_share_broadcasts_old_stop_first() {
-    let mut first = step("POST", "start", json!({"hostDeviceId":"host","chatId":"chat-a"}));
+    let mut first = step(
+        "POST",
+        "start",
+        json!({"hostDeviceId":"host","chatId":"chat-a"}),
+    );
     first["bind"] = json!("a");
     compare(json!({"devices":[device("host","desktop")],"steps":[
         first,
         step("POST", "start", json!({"hostDeviceId":"host","chatId":"chat-a"})),
         step("POST", "approve", json!({"sessionId":"$a","approved":true}))
-    ]})).await;
+    ]}))
+    .await;
 }
 
 #[tokio::test]
