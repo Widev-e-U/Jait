@@ -11,7 +11,7 @@ async function load() {
     const binding = 'import type { SteeringController, SteeringMessage } from "../tools/agent-loop.js";';
     if (dispatcher.split(binding).length !== 2) throw Error('Steering dispatcher binding changed');
     dispatcher = dispatcher.replace(binding, '');
-    const code = new Bun.Transpiler({ loader: 'ts' }).transformSync(controller.slice(start, end) + '\n' + dispatcher);
+    const code = new Bun.Transpiler({ loader: 'ts' }).transformSync("import { randomUUID } from 'node:crypto';\n" + controller.slice(start, end) + '\n' + dispatcher);
     const path = new URL('../../../.jait/artifacts/gateway-rust/steering-dispatcher/fixtures/' + createHash('sha256').update(code).digest('hex') + '.mjs', import.meta.url);
     await Bun.write(path, code);
     return import(path.href);
