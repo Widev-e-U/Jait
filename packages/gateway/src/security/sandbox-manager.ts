@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { commandSandboxGateway, commandSandboxOwner, commandSandboxOwnerAlive } from "./agent-sandbox-owner.js";
 import { startExecutorBackedBackgroundCommand, startSandboxBackgroundProcess, type SandboxBackgroundExecution } from "./sandbox-background-process.js";
 import { worktreeGitMountArgs } from "./worktree-sandbox.js";
@@ -13,7 +14,7 @@ import { join, resolve, sep } from "node:path";
  * We probe for `docker` first then fall back to `podman`.
  */
 let _containerBinary: string | null = null;
-const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:recovery-v3";
+const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:stagehand-v4";
 const BROWSER_SANDBOX_NAME_PREFIX = "jait-browser-sb-";
 const BROWSER_SANDBOX_HEALTH_TIMEOUT_MS = 3_000;
 const DEFAULT_MAX_BROWSER_SANDBOXES = 2;
@@ -145,6 +146,8 @@ export interface SandboxBrowserOptions {
   mountMode?: SandboxMountMode;
   networkEnabled?: boolean;
   hostGateway?: boolean;
+  /** Internal, read-only SDK assets; never supplied by a tool caller. */
+  stagehandExtensionPath?: string;
 }
 
 export interface SandboxBrowserResult {
@@ -525,11 +528,13 @@ export class SandboxManager {
       ...networkArgs,
       ...hostGatewayArgs,
       ...mountArgs,
+      ...(options.stagehandExtensionPath ? ["--mount", `type=bind,src=${options.stagehandExtensionPath},dst=${options.stagehandExtensionPath},readonly`,
+        "-e", `JAIT_STAGEHAND_EXTENSION_ORIGIN=${stagehandExtensionOrigin(options.stagehandExtensionPath)}`] : []),
       "-p",
       `${novncPort}:6080`,
       "-p",
       `${vncPort}:5900`,
-      ...(typeof cdpPort === "number" ? ["-p", `${cdpPort}:9223`] : []),
+      ...(typeof cdpPort === "number" ? ["-p", `${options.stagehandExtensionPath ? "127.0.0.1:" : ""}${cdpPort}:9223`] : []),
       SANDBOX_BROWSER_IMAGE,
     ];
 
@@ -1449,6 +1454,13 @@ export async function reserveLocalPort(): Promise<number> {
   });
 }
 
+export function stagehandExtensionOrigin(extensionPath: string): string {
+  // Chromium derives unpacked extension IDs from the absolute path (128 bits, a–p).
+  const id = createHash("sha256").update(extensionPath).digest("hex").slice(0, 32)
+    .replace(/[0-9a-f]/g, char => String.fromCharCode(97 + Number.parseInt(char, 16)));
+  return `chrome-extension://${id}`;
+}
+
 const SANDBOX_BROWSER_DOCKERFILE = `FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \\
@@ -1485,7 +1497,11 @@ done
 # A window manager is required for CDP fullscreen transitions on Xvfb.
 openbox &
 
-chromium --no-sandbox --kiosk --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 --app=about:blank &
+stagehand_args=()
+if [[ -n "\${JAIT_STAGEHAND_EXTENSION_ORIGIN:-}" ]]; then
+  stagehand_args=(--enable-unsafe-extension-debugging "--remote-allow-origins=$JAIT_STAGEHAND_EXTENSION_ORIGIN")
+fi
+chromium --no-sandbox "\${stagehand_args[@]}" --kiosk --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 --app=about:blank &
 
 (
   while true; do

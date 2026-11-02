@@ -95,7 +95,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     });
   });
 
-  it("starts sandbox browser with CDP and host gateway when requested", async () => {
+  it.each([false, true])("starts sandbox browser with CDP and host gateway (Stagehand: %s)", async (stagehand) => {
     const commands: string[][] = [];
     const manager = new SandboxManager(async (cmd) => {
       commands.push(cmd);
@@ -114,6 +114,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
       novncPort: 6601,
       vncPort: 6001,
       cdpPort: 9223,
+      ...(stagehand ? { stagehandExtensionPath: "/sdk/extension" } : {}),
       waitForCdp: false,
     });
 
@@ -124,10 +125,16 @@ describe("Sprint 13 — Docker Sandboxing", () => {
       cdpUrl: "http://127.0.0.1:9223",
     });
     const imageInspectCmd = commands.find((c) => c.join(" ").includes("image inspect"));
-    expect(imageInspectCmd?.join(" ")).toMatch(/(docker|podman) image inspect jait\/sandbox-browser:recovery-v3/);
+    expect(imageInspectCmd?.join(" ")).toMatch(/(docker|podman) image inspect jait\/sandbox-browser:stagehand-v4/);
     const runCmd = commands.find((c) => c.join(" ").includes("--add-host"));
     expect(runCmd?.join(" ")).toContain("--add-host host.docker.internal:");
-    expect(runCmd?.join(" ")).toContain("-p 9223:9223");
+    expect(runCmd?.join(" ")).toContain(stagehand ? "-p 127.0.0.1:9223:9223" : "-p 9223:9223");
+    if (stagehand) {
+      expect(runCmd?.join(" ")).toContain("--mount type=bind,src=/sdk/extension,dst=/sdk/extension,readonly");
+      expect(runCmd?.join(" ")).toMatch(/JAIT_STAGEHAND_EXTENSION_ORIGIN=chrome-extension:\/\/[a-p]{32}/);
+    } else {
+      expect(runCmd?.join(" ")).not.toContain("JAIT_STAGEHAND_EXTENSION_ORIGIN");
+    }
     expect(runCmd?.join(" ")).not.toContain("--network none");
   });
 

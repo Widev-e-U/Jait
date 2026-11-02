@@ -43,12 +43,13 @@
   },
   "homepage": "https://jait.dev",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.18.0"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.87.0",
     "@agentclientprotocol/codex-acp": "2.1.1",
     "@agentclientprotocol/sdk": "^1.7.0",
+    "@browserbasehq/stagehand": "4.3.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@fastify/static": "^9.3.0",

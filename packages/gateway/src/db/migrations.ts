@@ -1738,4 +1738,13 @@ export const migrations: Migration[] = [
       db.exec("CREATE TABLE IF NOT EXISTS agent_control (user_id TEXT PRIMARY KEY, halted INTEGER NOT NULL DEFAULT 0, reason TEXT, halted_at TEXT, updated_at TEXT NOT NULL)");
     },
   },
+  {
+    id: 76, name: "browser_workflows",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS browser_workflows (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, project_root TEXT NOT NULL, revision INTEGER NOT NULL, definition TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_browser_workflows_owner ON browser_workflows(user_id, project_root, updated_at)");
+      db.exec("CREATE TABLE IF NOT EXISTS browser_workflow_runs (id TEXT PRIMARY KEY, workflow_id TEXT NOT NULL, user_id TEXT NOT NULL, project_root TEXT NOT NULL, session_id TEXT NOT NULL, revision INTEGER NOT NULL, definition TEXT NOT NULL, status TEXT NOT NULL, next_step INTEGER NOT NULL, progress TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_browser_workflow_runs_owner ON browser_workflow_runs(user_id, project_root, created_at)");
+    },
+  },
 ];

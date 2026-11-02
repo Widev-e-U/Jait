@@ -1,5 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { join } from "node:path";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { SandboxManager, reserveLocalPort } from "../security/sandbox-manager.js";
 
@@ -87,6 +89,7 @@ async function startContainerLiveView(options?: {
     novncPort,
     vncPort,
     cdpPort,
+    stagehandExtensionPath: resolveStagehandExtensionPath(),
   });
   return {
     kind: "container",
@@ -243,4 +246,16 @@ async function reservePort(): Promise<number> {
       });
     });
   });
+}
+
+/** Asset lookup for an ESM-only package; works in Node, Bun and Vite test hosts. */
+export function resolveStagehandExtensionPath(): string {
+  const override = process.env["STAGEHAND_EXTENSION_DIRECTORY_PATH"];
+  if (override) return realpathSync(override);
+  const paths = createRequire(import.meta.url).resolve.paths("@browserbasehq/stagehand") ?? [];
+  for (const modules of paths) {
+    const candidate = join(modules, "@browserbasehq/stagehand/dist/extension");
+    if (existsSync(join(candidate, "manifest.json"))) return realpathSync(candidate);
+  }
+  throw new Error("Stagehand's bundled browser extension is missing. Reinstall gateway dependencies.");
 }

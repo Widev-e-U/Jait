@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { StagehandBrowserIntelligence, extractionFieldsSchema, type BrowserIntelligence } from "../services/browser-intelligence.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, win32 } from "node:path";
@@ -1311,4 +1313,69 @@ export function createBrowserSandboxStartTool(sandboxManager = new SandboxManage
       };
     },
   };
+}
+
+/** Shares the same visible-session and human-control boundary as other browser tools. */
+export function createBrowserIntelligenceTools(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+  intelligence: BrowserIntelligence = new StagehandBrowserIntelligence(),
+): ToolDefinition[] {
+  const instruction = z.string().trim().min(1).max(4000);
+  const observe = z.object({ instruction }).strict();
+  const extract = z.object({ instruction, fields: z.unknown() }).strict()
+    .transform(body => ({ ...body, fields: extractionFieldsSchema.parse(body.fields) }));
+  const check = z.object({ selector: z.string().min(1).max(1000), text: z.string().max(4000).optional() }).strict();
+  const fields = { type: "array", items: { type: "object", properties: {
+    name: { type: "string" }, description: { type: "string" }, type: { type: "string", enum: ["string", "number", "boolean", "strings"] },
+  }, required: ["name", "description", "type"] } };
+  return ["observe", "extract", "check"].map((operation): ToolDefinition => ({
+    name: `browser.${operation}`, tier: "standard", category: "browser", source: "builtin",
+    description: operation === "observe"
+      ? "Use Stagehand to discover controls in this chat's visible browser. Returns candidate workflow steps without executing them. Review then use normal browser tools; save successful steps with browser.workflow.save. Page content goes to the configured model; suppressed in secret-safe sessions. Requires a provider API key and Docker live browser."
+      : operation === "extract"
+        ? "Extract typed fields from the visible page using Stagehand. Return values are observations, not proof that a workflow completed. Page content goes to the configured model; suppressed in secret-safe sessions. Requires a provider API key and Docker live browser."
+        : "Check that an element exists and optionally contains the expected text, without model inference. Fails the workflow when its expected result is absent.",
+    parameters: operation === "check"
+      ? { type: "object", properties: { selector: { type: "string" }, text: { type: "string" } }, required: ["selector"] }
+      : { type: "object", properties: { instruction: { type: "string" }, ...(operation === "extract" ? { fields } : {}) }, required: operation === "extract" ? ["instruction", "fields"] : ["instruction"] },
+    async execute(input, context) {
+      const body = operation === "observe" ? observe.parse(input) : operation === "extract" ? extract.parse(input) : check.parse(input);
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      const preview = resolveActivePreviewSession(collaboration, context);
+      collaboration?.assertAgentControl(preview?.browserId);
+      const surface = await ensureBrowserSurface(registry, context, undefined, collaboration);
+      const assertCapture = () => {
+        collaboration?.assertAgentControl(surface.id);
+        if (isSecretSafeSession(resolveBrowserSessionMetadata(collaboration, surface.id))) {
+          throw new Error("Browser inference and checks are suppressed while this session is secret-safe. Return control after login first.");
+        }
+      };
+      assertCapture();
+      let data: unknown;
+      if (operation === "check") {
+        const expected = check.parse(body);
+        const inspection = await surface.inspect(expected.selector, context.signal);
+        assertCapture();
+        const target = inspection.target;
+        const ok = Boolean(target?.found && (expected.text === undefined || (target.text ?? "").includes(expected.text)));
+        return { ok, message: ok ? "Expected browser result verified" : "Expected browser result missing; workflow stopped", data: { matched: ok } };
+      }
+      try {
+        data = operation === "observe"
+          ? await intelligence.observe(surface, observe.parse(body).instruction, context)
+          : await intelligence.extract(surface, extract.parse(body).instruction, extract.parse(body).fields, context);
+      } catch (error) {
+        // SDK errors may echo page content or credentials; retain only safe configuration guidance.
+        const raw = error instanceof Error ? error.message : "";
+        const message = /incorrect api key|invalid api key|authentication|unauthorized|\b401\b/i.test(raw)
+          ? "Stagehand's model provider rejected the API key. Update that provider key in Settings before retrying."
+          : /^(Stagehand needs |Stagehand requires |The visible browser tab changed)/.test(raw)
+            ? raw : context.signal?.aborted ? "Cancelled" : "Stagehand could not read this page. Inspect the browser, configuration and extension compatibility before retrying.";
+        return { ok: false, message };
+      }
+      assertCapture();
+      return { ok: true, message: operation === "observe" ? "Discovered browser actions; review before executing" : "Structured browser extraction", data };
+    },
+  }));
 }

@@ -386,11 +386,14 @@ test('fast local policy skips test suites but retains static gates and selected 
 
 test('release prerequisites include skipped tests and stop on failure', async () => {
   const { RELEASE_TEST_STEPS, runReleaseTests } = await import('./release-tests.mjs');
-  assert.deepEqual(RELEASE_TEST_STEPS.map(([id])=>id), ['unit-tests','workflow-tests','browser-tools','rust-migration']);
-  assert.deepEqual(RELEASE_TEST_STEPS.at(-1).slice(1), ['bun',['run','test:gateway:rust','--full-contracts']]);
+  assert.deepEqual(RELEASE_TEST_STEPS.map(([id])=>id), ['unit-tests','workflow-tests','browser-tools']);
   const ran=[];
   runReleaseTests((command,args)=>ran.push([command,args]));
-  assert.deepEqual(ran.slice(1), RELEASE_TEST_STEPS.map(([,command,args])=>[command,args]));
+  const expected = RELEASE_TEST_STEPS.flatMap(([id,command,args]) => [
+    ...(id === 'browser-tools' ? [['node',['packages/gateway/node_modules/playwright/cli.js','install','chromium']]] : []),
+    [command,args],
+  ]);
+  assert.deepEqual(ran, expected);
   for(let failure=0;failure<ran.length;failure++) {
     let calls=0;
     assert.throws(()=>runReleaseTests(()=>{if(calls++===failure)throw Error('failed');}),/failed/);
@@ -434,4 +437,38 @@ test('launcher and native fingerprint share the same fixture expectation', async
   const source = await fs.readFile(new URL('../packages/gateway-rust/src/execution/local_deploy.rs', import.meta.url), 'utf8');
   assert.match(source, /"\.\.\/\.\.\/tests\/fixtures\/local-deploy-digest\.json"/, 'native parity test must read the shared manifest');
   assert.ok(manifest.digests.sources.length === 64, 'reference digest must be a sha256 hex string');
+});
+
+test('release evidence is reused only after success with matching inputs and expires', async t => {
+  const { runReleaseTests } = await import('./release-tests.mjs');
+  const cacheDirectory = await fixture(t);
+  let state = 'one';
+  const calls = [];
+  const run = (command, args) => calls.push([command, args]);
+  const options = { cache: true, cacheDirectory, fingerprint: (id) => `${id}:${state}` };
+  runReleaseTests(run, options);
+  assert.equal(calls.length, 4);
+  calls.length = 0;
+  runReleaseTests(run, options);
+  assert.equal(calls.length, 2); // Browser installation and real-browser test remain mandatory.
+  state = 'two';
+  calls.length = 0;
+  assert.throws(() => runReleaseTests(() => { throw Error('failure'); }, options), /failure/);
+  runReleaseTests(run, options);
+  assert.equal(calls.length, 4);
+  const recordPath = join(cacheDirectory, 'unit-tests.json');
+  const record = JSON.parse(await fs.readFile(recordPath, 'utf8'));
+  record.time = Date.now() - 25 * 60 * 60 * 1000;
+  await fs.writeFile(recordPath, JSON.stringify(record));
+  calls.length = 0;
+  runReleaseTests(run, options);
+  assert.equal(calls.length, 3);
+});
+
+test('release check scope retains gateway and Rust changes for Rust contracts', async () => {
+  const { affectsReleaseCheck } = await import('./release-check-cache.mjs');
+  assert.equal(affectsReleaseCheck('workflow-tests', 'apps/web/src/a.ts'), false);
+  assert.equal(affectsReleaseCheck('unit-tests', 'apps/web/src/a.ts'), true);
+  assert.equal(affectsReleaseCheck('rust-migration', 'packages/gateway/src/a.ts'), true);
+  assert.equal(affectsReleaseCheck('rust-migration', 'packages/gateway-rust/src/a.rs'), true);
 });

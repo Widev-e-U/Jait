@@ -354,7 +354,7 @@ export async function main(argv = process.argv.slice(2)) {
   };
   try {
     if (skipE2e) console.log('[local-deploy] E2E and UI fixture suites skipped by default; use --e2e to include them. Build, static checks and activation health checks remain required.');
-    if (skipTests) console.log('[local-deploy] Unit, workflow, browser-tool and Rust contract tests skipped; use --tests to include them. Release tests remain mandatory before version-up and push.');
+    if (skipTests) console.log('[local-deploy] Unit, workflow, browser-tool and Rust contract tests skipped; use --tests to include them. Unit, workflow and browser-tool tests remain mandatory before version-up and push.');
     const unit = 'jait-gateway.service';
     const service = await serviceInfo(unit);
     await fs.rm(workspace, { recursive: true, force: true });

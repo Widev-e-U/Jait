@@ -1,3 +1,5 @@
+import { createBrowserWorkflowTools } from "./browser-workflow-tools.js";
+import type { BrowserWorkflowService } from "../services/browser-workflows.js";
 import { configureContextEvidence, createContextReadTool } from "./context-evidence.js";
 import { createTerminalExecutionTool } from "./terminal-execution.js";
 import { createDecisionEvaluateTool } from "./decision.js";
@@ -50,6 +52,7 @@ export {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInspectTool,
+  createBrowserIntelligenceTools,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -210,6 +213,7 @@ import {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInspectTool,
+  createBrowserIntelligenceTools,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -311,6 +315,7 @@ import { createLoopTools } from "./loop-tools.js";
 import type { ChatLoopService } from "../services/chat-loops.js";
 
 export interface ToolRegistryDeps {
+  browserWorkflows?: BrowserWorkflowService;
   chatLoops?: ChatLoopService;
   scheduler?: SchedulerService;
   sessionService?: SessionService;
@@ -390,6 +395,7 @@ export function createToolRegistry(
   deps: ToolRegistryDeps = {},
 ): ToolRegistry {
   const tools = new ToolRegistry();
+  if (deps.browserWorkflows) for (const tool of createBrowserWorkflowTools(deps.browserWorkflows)) tools.register(tool);
   if (deps.sessionState) configureContextEvidence(deps.sessionState);
   tools.register(createContextReadTool());
 
@@ -644,6 +650,7 @@ export function createToolRegistry(
   tools.register(createBrowserNavigateTool(surfaceRegistry, deps.previewService));
   tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.previewService));
   tools.register(createBrowserInspectTool(surfaceRegistry, deps.previewService));
+  for (const tool of createBrowserIntelligenceTools(surfaceRegistry, deps.previewService)) tools.register(tool);
   for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService, deps.ws)) {
     tools.register(tool);
   }

@@ -40,3 +40,20 @@ test('shows parse errors and isolates untrusted diagram content', async ({ page 
   expect(dialogs).toEqual([])
   expect(external).toEqual([])
 })
+
+test('opens diagrams in the zoomable viewer on desktop and mobile', async ({ page }) => {
+  for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport)
+    const card = page.getByTestId('persisted')
+    await expect(card.frameLocator('iframe').locator('svg')).toBeVisible()
+    await card.getByRole('button', { name: /Expand diagram/ }).click()
+    const dialog = page.getByRole('dialog')
+    const image = dialog.locator('img')
+    await expect(image).toBeVisible()
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth)).toBeGreaterThan(0)
+    await dialog.getByRole('button', { name: 'Zoom in' }).click()
+    await expect(dialog.getByLabel('Image zoom')).toHaveText('150%')
+    await dialog.getByRole('button', { name: 'Close' }).click()
+    await expect(dialog).toHaveCount(0)
+  }
+})

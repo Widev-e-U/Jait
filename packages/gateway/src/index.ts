@@ -1,6 +1,7 @@
 import { getStateDirectory } from "./state-directory.js";
 // Must be the very first import — patches globalThis.crypto before jose loads
 import "./crypto-polyfill.js";
+import { BrowserWorkflowService } from "./services/browser-workflows.js";
 import { readTeamWork } from "./services/team-chat.js";
 
 import { loadConfig } from "./config.js";
@@ -779,6 +780,8 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     return executor.execute(toolName, input, context, options);
   };
 
+  const browserWorkflows = new BrowserWorkflowService(db, (name, input, context) => toolExecutor(name, input, context));
+
   let diskSpaceWatchdog: DiskSpaceWatchdog | undefined;
   const scheduler = new SchedulerService({
     db,
@@ -819,6 +822,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // here (channel.send, skills.manage, …) become advertised to the model as well,
   // because the provider now reads the registry through a late-bound accessor.
   const lateToolDeps: ToolRegistryDeps = {
+    browserWorkflows,
     scheduler,
     sessionService,
     startedAt: Date.now(),
@@ -1635,6 +1639,7 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     // Ensure the timer doesn't keep the process alive
     if (forceTimer.unref) forceTimer.unref();
     try {
+      browserWorkflows.stop();
       consentManager.cancelAll("shutdown");
       await jaitProvider.dispose();
       await pluginManager.disposeAll();

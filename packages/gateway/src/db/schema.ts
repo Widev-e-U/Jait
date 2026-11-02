@@ -878,3 +878,28 @@ export const agentControl = sqliteTable("agent_control", {
   haltedAt: text("halted_at"),
   updatedAt: text("updated_at").notNull(),
 });
+
+// Saved browser workflows are owner/project scoped; runs retain an immutable revision.
+export const browserWorkflows = sqliteTable("browser_workflows", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  projectRoot: text("project_root").notNull(),
+  revision: integer("revision").notNull(),
+  definition: text("definition").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+export const browserWorkflowRuns = sqliteTable("browser_workflow_runs", {
+  id: text("id").primaryKey(),
+  workflowId: text("workflow_id").notNull(),
+  userId: text("user_id").notNull(),
+  projectRoot: text("project_root").notNull(),
+  sessionId: text("session_id").notNull(),
+  revision: integer("revision").notNull(),
+  definition: text("definition").notNull(),
+  status: text("status").notNull(),
+  nextStep: integer("next_step").notNull(),
+  progress: text("progress").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

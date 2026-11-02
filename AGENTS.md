@@ -105,8 +105,10 @@ changing public versions or pushing. `--plan` shows the gates; `--prepare` runs
 the selected gates and stages without restarting. Build, typecheck, lint and activation health checks are mandatory. Unit, workflow,
 browser-tool and Rust migration/contract tests are skipped by default; include them
 with `--tests` when requested. Chromium E2E and UI fixture suites are independently
-opt-in with `--e2e`. Unit, workflow, browser-tool and full Rust checks are mandatory
-prerequisites of `node scripts/release.mjs` before version edits, commit and push. Build a frozen snapshot, preserve the running service arguments,
+opt-in with `--e2e`. Unit, workflow and browser-tool checks are mandatory
+prerequisites of `node scripts/release.mjs` before version edits, commit and push.
+Full Rust migration/contract checks are required for Rust gateway releases or changes,
+but are not required solely for a TypeScript release. Build a frozen snapshot, preserve the running service arguments,
 and use the independent activation controller with health rollback. See
 `docs/local-deployment.md` for evidence, limits and rollback. Public releases
 continue to use `node scripts/release.mjs`; local deployment never replaces it.
