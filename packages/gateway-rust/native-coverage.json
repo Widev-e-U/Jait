@@ -848,7 +848,7 @@
       "reviewed_at": null,
       "evidence": [
         "focused cargo test --lib integrations::os_control::index:: = 2 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/integrations/os_control/index.rs: pinned=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 live=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 (superseded 2026-11-02 note: old pin 8ced33ea2b28… vs then-live 463907ee1356…; focused integrations::os_control::index::tests = 2 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/integrations/os_control/index.rs: pinned=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 live=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 (superseded 2026-11-02 note: old pin 8ced33ea2b28\u2026 vs then-live 463907ee1356\u2026; focused integrations::os_control::index::tests = 2 passed / 0 failed on current source)"
       ],
       "remaining": "Barrel parity only; Windows/Linux/macOS desktop drivers are exercised only through host-port fakes, no live desktop-control interop."
     },
@@ -1326,6 +1326,30 @@
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
+    },
+    {
+      "reference": "packages/gateway/src/providers/session-idle.ts",
+      "reference_sha256": "f7ed7bec1fb482dfbc0078b736d4bbe910f01072a949a8fa08a40a1e70be3894",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
+    },
+    {
+      "reference": "packages/gateway/src/providers/session-process.ts",
+      "reference_sha256": "f06862e8abb85c644b731cc6f53ac1e3303b2f1e7d7724444d4e0b37cb2fbbcc",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
     },
     {
       "reference": "packages/gateway/src/providers/steering-dispatcher.ts",
@@ -2589,7 +2613,7 @@
       "reviewed_at": null,
       "evidence": [
         "focused cargo test --lib security::index:: = 5 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/security/index.rs: pinned=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 live=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 (superseded 2026-11-02 note: old pin bf0922cfe412… vs then-live c143d80d716d…; focused security::index::tests = 5 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/security/index.rs: pinned=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 live=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 (superseded 2026-11-02 note: old pin bf0922cfe412\u2026 vs then-live c143d80d716d\u2026; focused security::index::tests = 5 passed / 0 failed on current source)"
       ],
       "remaining": "Barrel parity only; documented Gaps: PathGuardOptions, SSRFGuardOptions, Windows*/LinuxDesktopSandbox* option+result types have no native structs, and TS type spellings are not aliased to native names."
     },
@@ -4074,7 +4098,7 @@
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Primary-link node service — native port of\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Primary-link node service \u2014 native port of\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
@@ -4346,6 +4370,18 @@
       "reviewed_at": null,
       "evidence": [],
       "remaining": null
+    },
+    {
+      "reference": "packages/gateway/src/services/screen-share-control.ts",
+      "reference_sha256": "89ef2e47799e93e25eb668ff8ea6e6b5290270de75f5992a0ff33478832f4134",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
     },
     {
       "reference": "packages/gateway/src/services/secret-input.ts",
@@ -4844,6 +4880,18 @@
       "remaining": null
     },
     {
+      "reference": "packages/gateway/src/surfaces/browser-cursor.cjs",
+      "reference_sha256": "be4f7a902d75af30754d67a5f7e70ec17d7b0c118018b344e92b68c94364060b",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
+    },
+    {
       "reference": "packages/gateway/src/surfaces/browser.ts",
       "reference_sha256": "dc8f2e6da185b23db13cd48e950f1fb7abfadd940795a6a5d8b89d929d35b07e",
       "status": "absent",
@@ -5161,7 +5209,7 @@
           "result": "16 passed; 0 failed",
           "log": ".jait/artifacts/gateway-rust/tools-port/agent-tools.log"
         },
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/agent_tools.rs: pinned=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 live=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 (superseded 2026-11-02 note: old pin 56dc7f6191ae… vs then-live e7341bc6a147…; focused tools::agent_tools::tests = 16 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/agent_tools.rs: pinned=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 live=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 (superseded 2026-11-02 note: old pin 56dc7f6191ae\u2026 vs then-live e7341bc6a147\u2026; focused tools::agent_tools::tests = 16 passed / 0 failed on current source)"
       ],
       "remaining": "Focused-only evidence (16/16 tools::agent_tools, log .jait/artifacts/gateway-rust/tools-port/agent-tools.log) => implemented, not verified. Runtime mounting of the agent tool descriptor in tools::mod.rs registry; SubAgentHost implemented only by test fake (no runtime loop/ACP wiring); description truncation uses chars().take(60) vs JS UTF-16 slice(0,60) (differs only for astral characters); no differential run against live ACP sub-agent."
     },
@@ -5411,7 +5459,7 @@
       "reviewed_at": null,
       "evidence": [
         "focused cargo test --lib tools::contracts:: = 16 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/contracts.rs: pinned=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 live=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 (superseded 2026-11-02 note: old pin f7d38a790271… vs then-live 9ed1797899c6…; focused tools::contracts = 16 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/contracts.rs: pinned=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 live=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 (superseded 2026-11-02 note: old pin f7d38a790271\u2026 vs then-live 9ed1797899c6\u2026; focused tools::contracts = 16 passed / 0 failed on current source)"
       ],
       "remaining": "Type/registration-level port only (tool contracts, JSON schemas, REGISTRATIONS table). Runtime tool-registry assembly still lives in TS tools/index.ts, recorded there as a reexport with native=None; no runtime mounting."
     },
@@ -5806,7 +5854,7 @@
           "result": "8 passed; 0 failed",
           "log": ".jait/artifacts/gateway-rust/tools-port/tools-index.log"
         },
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/index.rs: pinned=d4fea6578c02602fd12cab8c4400329a0178b366ef3598e273d0fcf7ac0f8a78 live=d4fea6578c02602fd12cab8c4400329a0178b366ef3598e273d0fcf7ac0f8a78 (superseded 2026-11-02 note: old pin 3ac7587216b4… vs then-live d4fea6578c02…; focused tools::index::tests = 8 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/index.rs: pinned=d4fea6578c02602fd12cab8c4400329a0178b366ef3598e273d0fcf7ac0f8a78 live=d4fea6578c02602fd12cab8c4400329a0178b366ef3598e273d0fcf7ac0f8a78 (superseded 2026-11-02 note: old pin 3ac7587216b4\u2026 vs then-live d4fea6578c02\u2026; focused tools::index::tests = 8 passed / 0 failed on current source)"
       ],
       "remaining": "Focused-only evidence (8/8 tools::index, log .jait/artifacts/gateway-rust/tools-port/tools-index.log) => implemented, not verified. PARTIAL: only persona_agent_id_for_context/persona_agent_id_for_thread + ThreadOwner/PersonaThreadLookup host ported; the createToolRegistry barrel that assembles the full tool list is not ported; no full 757-line barrel equivalence evidence. Upstream registers createBrowserOpenTool and injects computerSessions/screenShareControl dependencies; Rust has no browser.open implementation and no screen-share control coordinator wiring into computer control. Upstream gaps (pinned hash re-pinned after real upstream change): Rust does not register createBrowserOpenTool nor inject computerSessions/screenShareControl."
     },
@@ -5909,7 +5957,7 @@
       "reviewed_at": null,
       "evidence": [
         "focused cargo test --lib tools::mcp_bridge:: = 15 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/mcp_bridge.rs: pinned=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 live=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 (superseded 2026-11-02 note: old pin c8b6c3383608… vs then-live eb40a40d957e…; live advanced since audit eb40a40d957e… -> 0a28fba3c306…; focused tools::mcp_bridge::tests = 18 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/mcp_bridge.rs: pinned=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 live=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 (superseded 2026-11-02 note: old pin c8b6c3383608\u2026 vs then-live eb40a40d957e\u2026; live advanced since audit eb40a40d957e\u2026 -> 0a28fba3c306\u2026; focused tools::mcp_bridge::tests = 18 passed / 0 failed on current source)"
       ],
       "remaining": "No live MCP server interop: transport is behind a host port and tests use in-process fakes. Not runtime-mounted; config/status/tool ordering parity is covered by unit tests."
     },
@@ -6900,7 +6948,7 @@
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/terminal-tools.ts` — the\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/terminal-tools.ts` \u2014 the\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
       "reviewed_at": null,
       "evidence": [],
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
@@ -7028,6 +7076,18 @@
       "remaining": null
     },
     {
+      "reference": "packages/gateway/src/voice-assistant/router.ts",
+      "reference_sha256": "da4bf51e0a8cd9fe44d121f0ee3e1345430d98ebbc15f0a2ef1cd27d63a4b00e",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
+    },
+    {
       "reference": "packages/gateway/src/voice-assistant/service.ts",
       "reference_sha256": "9a39bef5cabcae37f32c7c5093ad4e79f67b85d15fb719302a1849c1206ef91b",
       "status": "partial",
@@ -7040,6 +7100,18 @@
       "reviewed_at": null,
       "evidence": [],
       "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/voice-assistant/tier-catalog.ts",
+      "reference_sha256": "04d27a2444f288f72b6af8219b44ef4983890ed5ed0b8c561a12db7d79e135d9",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
     },
     {
       "reference": "packages/gateway/src/voice-assistant/tools.ts",
@@ -7070,6 +7142,18 @@
       "remaining": "Mount VoiceRoutes in the production server and record focused contract evidence before verification credit."
     },
     {
+      "reference": "packages/gateway/src/voice/wake-candidate.ts",
+      "reference_sha256": "ded29d90229f075a27f23d1cda76a8436a2cc0844331dff72399cb79ce81aa21",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "targets": [],
+      "review": "Post-370-snapshot addition tracked for coverage only; no audit verdict yet and no native credit awarded.",
+      "reviewed_at": null,
+      "evidence": [],
+      "remaining": "Newer addition outside the original 370; no native implementation and no credit. Requires its own audit before grading."
+    },
+    {
       "reference": "packages/gateway/src/ws.ts",
       "reference_sha256": "d37be991329fc293bcc6bea311b7b90f03af9f65908dccf14d60b53d84530909",
       "status": "absent",
@@ -7082,5 +7166,5 @@
       "remaining": "No native implementation; component remains unported."
     }
   ],
-  "updated_at": "2026-11-02T09:44:53.731Z"
+  "updated_at": "2026-11-02T22:36:05.134Z"
 }

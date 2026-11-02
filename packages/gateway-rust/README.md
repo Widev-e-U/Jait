@@ -1,5 +1,28 @@
 # Native Rust gateway
 
+## Inventory growth reconciliation — 2026-11-02
+
+The inventory this ledger tracks grew after the previous reconciliation: it now
+enumerates 383 component paths rather than 376. Seven newer additions had landed
+in the repository without ledger entries. All seven are recorded as `absent` with
+their current source SHA-256, empty `native`/`contracts`/`targets`, and an
+explicit no-credit, no-audit-verdict review note: `providers/session-idle.ts`,
+`providers/session-process.ts`, `services/screen-share-control.ts`,
+`surfaces/browser-cursor.cjs`, `voice-assistant/router.ts`,
+`voice-assistant/tier-catalog.ts`, and `voice/wake-candidate.ts`. They carry no
+native Rust behaviour, so nothing is promoted.
+
+The ledger now has 383 entries against `inventory_total` 383, sorted by
+reference with no duplicates and no unlisted original path. Totals are 241
+verified, 83 implemented but unverified, 34 partial, and 25 absent. The 370
+originals are unchanged at 236 verified, 83 implemented, 34 partial, and 17
+absent; the 13 newer additions are five verified and eight absent.
+
+This is an inventory-parity correction only. It adds no component evidence,
+promotes no status, and does not certify any implemented, partial, or absent
+component. The gateway remains TypeScript, and the platform, replacement,
+activation, and production-readiness gates remain open.
+
 ## Coverage inventory reconciliation continuation — 2026-11-02
 
 The coverage ledger now has exact parity with the inventory it tracks: 376
