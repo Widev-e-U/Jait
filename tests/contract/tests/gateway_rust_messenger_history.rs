@@ -418,14 +418,16 @@ async fn decrypt_validates_the_room_first_and_always_uses_untrusted() {
         .await
         .expect("decrypted");
     assert_eq!(clear["content"]["body"], "hi");
-    let decrypts = log.decrypts.lock().unwrap();
-    assert_eq!(decrypts.len(), 1);
-    assert_eq!(decrypts[0].room_id, "!alpha:hs");
-    assert_eq!(decrypts[0].trust, TrustRequirement::Untrusted);
-    assert_eq!(
-        decrypts[0].event,
-        r#"{"type":"m.room.encrypted","content":{"ciphertext":"C"}}"#
-    );
+    {
+        let decrypts = log.decrypts.lock().unwrap();
+        assert_eq!(decrypts.len(), 1);
+        assert_eq!(decrypts[0].room_id, "!alpha:hs");
+        assert_eq!(decrypts[0].trust, TrustRequirement::Untrusted);
+        assert_eq!(
+            decrypts[0].event,
+            r#"{"type":"m.room.encrypted","content":{"ciphertext":"C"}}"#
+        );
+    }
 
     history.close().expect("close");
     let error = history
@@ -487,7 +489,7 @@ async fn create_imports_only_non_empty_exports_and_closes_the_machine_on_import_
         &FakeMachines {
             log,
             machine: FakeMachine::new(Arc::new(Log::default())),
-            initialize_error: Some(HistoryError::InvalidMatrixId("initialize failed".into())),
+            initialize_error: Some(HistoryError::InvalidMatrixId("initialize failed")),
         },
         "@alice:example.org",
         "DEVICE",

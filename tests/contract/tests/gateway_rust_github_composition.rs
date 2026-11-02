@@ -712,20 +712,21 @@ async fn payload_rejection_flows_through_canonical_port_and_shared_environment_c
         "ghs_recovered"
     );
     assert!(replies.lock().unwrap().is_empty());
-    let recorded = effects.lock().unwrap();
-    assert_eq!(recorded.len(), 5);
-    assert!(
-        recorded[3]
-            .1
-            .iter()
-            .any(|(k, v)| k == "authorization" && v == "Bearer ghs_first")
-    );
-    assert!(
-        !recorded
-            .iter()
-            .any(|(_, h)| h.iter().any(|(_, v)| v == "Bearer 7"))
-    );
-    drop(recorded);
+    {
+        let recorded = effects.lock().unwrap();
+        assert_eq!(recorded.len(), 5);
+        assert!(
+            recorded[3]
+                .1
+                .iter()
+                .any(|(k, v)| k == "authorization" && v == "Bearer ghs_first")
+        );
+        assert!(
+            !recorded
+                .iter()
+                .any(|(_, h)| h.iter().any(|(_, v)| v == "Bearer 7"))
+        );
+    }
     adapter.close();
     worker.shutdown().await.unwrap();
 }
