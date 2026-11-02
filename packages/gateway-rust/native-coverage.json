@@ -6,6 +6,164 @@
   "metric": "Equal weight per inventoried gateway source component with native implementation and reviewed focused contracts; not an estimate of effort or cutover readiness.",
   "components": [
     {
+      "reference": "packages/gateway/bin/compile-cache.mjs",
+      "reference_sha256": "31895501daeee912f6e3c3cfbe0a4afaa0e39f6adc9b2df32f83e03afe3b63d3",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Node compile-cache bootstrap; no Rust analogue.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
+      "reference": "packages/gateway/bin/desktop-host.mjs",
+      "reference_sha256": "c73025a01831ad5888fc7ec72c208ad13ad0025ff191294e7842929a7f987b84",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/execution/desktop_host_lock.rs",
+        "packages/gateway-rust/src/execution/desktop_host_secrets.rs",
+        "packages/gateway-rust/src/execution/desktop_parent_pipe.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Pieces exist but undeclared in mod.rs and unreferenced; orphaned.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/bin/install-runtime.mjs",
+      "reference_sha256": "97a3ab0ee6879dd5f90bd80e811e76325abdb2d849169f2c5ada55f18327fc68",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/services/code_graph/runtime.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: services/code_graph/runtime.rs implements runtime_paths/inspect/ensure for the Graphify runtime, but ensure() has no production caller: the only reference outside the module is PACKAGE_VERSION in cli_doctor.rs:981. Provisioning behaviour of install-runtime.mjs is therefore ported but not wired.",
+      "remaining": "Wire ensure() into the graphify install path and record focused contract evidence; then the component can be re-graded."
+    },
+    {
+      "reference": "packages/gateway/bin/jait.mjs",
+      "reference_sha256": "31250f0f47a7c8a2a336e2d427a878d3a93c6a0fe097207d5fbee9b9d805cf25",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/cli_doctor.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Only doctor subcommand ported; rest of CLI surface absent.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/bin/matrix-stack.mjs",
+      "reference_sha256": "eb0f939f5b4f8326572a0c0c4e9c62ea2e86df2e37f2e90e4f30b09bbd3aa363",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/execution/matrix_stack.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Planner declared pub(crate) but zero references; wiring documented as remaining work.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/bin/safe-update.mjs",
+      "reference_sha256": "6d0eb24aefe019cff0e12d1f605a92ad89be53baadc047a8c6b8a7d344d25577",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Node-only staged update/atomic swap; no Rust rollback module.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
+      "reference": "packages/gateway/scripts/bundle-messenger-runtime.mjs",
+      "reference_sha256": "f15405d3a29836564d2eb8cfdde247a0b20717d436d765a516dc9e08e37d7e9f",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Bun-based baileys bundling; no Rust counterpart.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
+      "reference": "packages/gateway/scripts/bundle-web.mjs",
+      "reference_sha256": "0260a7909b4a5dd0b15b2a239de2b4e5bb510ea81f6beaf1696c01cd147ac2b5",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/bundle_web.rs",
+        "packages/gateway-rust/src/bin/jait-bundle-web.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Module plus autobin exist; no package.json script or CI invokes the bin.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/scripts/copy-shell-integration.mjs",
+      "reference_sha256": "44c1039455c1c1e765e4ea709e4ffa74febbd5922626be252d127da4f553b6ea",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/copy_shell_integration.rs",
+        "packages/gateway-rust/src/bin/jait-copy-shell-integration.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Bin registered but wrapper self-described optional; build still uses Node script.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/scripts/embed-shell-integration.mjs",
+      "reference_sha256": "3c2f00d4b6700b54b124bab77eb49cdfd56cd3b284776b89cb9f14ac2be021ba",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/embed_shell_integration.rs",
+        "packages/gateway-rust/src/bin/jait-embed-shell-integration.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: No mod declaration in lib.rs; bin only reachable via optional unwired wrapper.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/scripts/package-desktop.mjs",
+      "reference_sha256": "45a130f6e2309d6e75540b8a3cc125ffec9900b49f859935a85f087189aee007",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Electron packaging in release CI only; no Rust counterpart.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
+      "reference": "packages/gateway/scripts/security-smoke.ts",
+      "reference_sha256": "a7fc477f25141a542d2ad4223fb28a9bb8c0718a23e544fbc9ce683ce23e8d82",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Unreferenced even in TS; no Rust smoke bin or test.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
+      "reference": "packages/gateway/scripts/smoke-desktop.mjs",
+      "reference_sha256": "b7365c848da89a603e0eaaf178d8b854eaa14862a03d42423ec9ebcf3085f358",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/execution/smoke_process.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Only cleanup helper ported; no Rust desktop smoke harness.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/scripts/smoke-process.mjs",
+      "reference_sha256": "bbea0014c890390e458fe77a1342baafbeeefb70b56d8a5973a3e80233fef820",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/execution/smoke_process.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Helper registered but zero call sites; no bin, test or script uses it.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/api-contracts.ts",
+      "reference_sha256": "d2b70c31d5ddfa52556d58600c4f32483e832fcaae25471f99cebc2b4f23676b",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Compile-time type-parity assertions only; contracts/mod.rs is a registered scaffold declaring domain contracts unported.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/channels/assistant.ts",
       "reference_sha256": "40fe3105f87656ea512441ffd65bcae2cc22f65e5fdb2ec04585de49eb2ed52c",
       "status": "verified",
@@ -28,6 +186,38 @@
       "review": "tests/contract/reviews/native-channel-assistant.md: all exported constants and formatting/context/host-zone branches; real-source comparison across canonical zones and aliases, historical seconds, DST, offset syntax, extended years and TimeClip, malformed Unicode fallback, four caught/restored source mutations. Injectable host timezone discovery; connector activation remains separate. 2026-10-25 reference runtime refresh: pinned IANA 2025b standard TZif data passes Bun 1.4.0 / ICU 78.3 comparisons, including America/Coyhaique; no host timezone fallback. Scheduler and channel-assistant targets pass (23 checks)."
     },
     {
+      "reference": "packages/gateway/src/channels/manager.ts",
+      "reference_sha256": "37028142365cd32e475b1a530c1cefb6cf3c7419ed42a44d604c362f86f34d5a",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/routes/channels.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: HTTP lifecycle/pair/status routes exist but no ChannelHost impl and router never mounted; shouldRespond/parseCommand/notify/deliver/reply pipeline missing.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/channels/msteams/connector.ts",
+      "reference_sha256": "04517f861d67e5dfbc3d972b86b4ac0c7e321bae1c3453e031e559869199c560",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/integrations/msteams.rs",
+        "packages/gateway-rust/src/integrations/msteams_auth.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Substantial Teams port (activity ingest, html strip, authorized send, listener) but neither file is declared in integrations/mod.rs; uncompiled, unreferenced orphan.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/channels/telegram/connector.ts",
+      "reference_sha256": "28878b366a19a4a9d64bbb17ed80851366501347a71c0dee04f0f2df877cc63f",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No Telegram module or file anywhere; only a token-extraction regex inlined in channels.rs sanitize. No polling, auth, command registration or send.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/channels/types.ts",
       "reference_sha256": "a58d1cf922b45d509b61205d2c37eabb74015f3d333d23e20694ce7a73b7327d",
       "status": "verified",
@@ -44,6 +234,29 @@
         "gateway_rust_channel_contracts"
       ],
       "review": "Declaration-only native records/callbacks/connector traits. Actual-source strict TypeScript positive/negative/signature fixtures, no runtime exports, 33 source-typed wire cases, required nullable QR and optional method absence. Four caught/restored mutations, including a real source signature change. No connector or channel-manager execution credit; reviewed Unicode/number/structural typing limits. See native-channel-contracts.md."
+    },
+    {
+      "reference": "packages/gateway/src/channels/whatsapp/connector.ts",
+      "reference_sha256": "b9f70a100ccdb78bcd260c402db8f81b5e6efc6e1b124e2f0f5071529cca5dd1",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/integrations/whatsapp.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Registered connector with close start/stop/send/ingest/text parity, but WhatsAppConnector is only constructed inside its own cfg(test) module; no production call site.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/clawhub/client.ts",
+      "reference_sha256": "83cfdc81bacd698397297d880f13689dc598350416c1949596612a498973053e",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/integrations/clawhub.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Reconciled by coverage audit: packages/gateway-rust/src/integrations/clawhub.rs (98 KB) is declared at integrations/mod.rs:11 and its ClawHubClient is consumed in production code at runtime/application.rs:239 (that file contains no #[cfg(test)] gate). Module documentation plus call-site wiring were confirmed directly against the live source; no line-by-line TS-vs-Rust diff has been recorded.",
+      "remaining": "Wired but unverified: no focused contract target or differential comparison is recorded for clawhub/client.ts, so it stays implemented-but-unverified. The supervised store constructor in runtime/server.rs remains test-only, so store integration is not production-proven either."
     },
     {
       "reference": "packages/gateway/src/cli/doctor.ts",
@@ -70,6 +283,15 @@
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
+      "reference": "packages/gateway/src/crypto-polyfill.ts",
+      "reference_sha256": "eb0164eb2bd4818703cb1f338511995fabbf34d12df8caa824ecd73d7c6d5232",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: Node-only globalThis.crypto/webcrypto shim for jose; Rust gets crypto from crates, so no counterpart file exists or is needed.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/db/connection.ts",
       "reference_sha256": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
       "status": "verified",
@@ -87,6 +309,19 @@
         "gateway_rust_storage"
       ],
       "review": "WAL, foreign keys and sync settings, migration error tracking, repair idempotence, rollback, backup and TypeScript reopen."
+    },
+    {
+      "reference": "packages/gateway/src/db/index.ts",
+      "reference_sha256": "a6ce0ba6b9b8259b1bcd6abd61f4204b529982217d7d3459164046a7f04ecdd6",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/db/index.rs",
+        "packages/gateway-rust/src/db/mod.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Barrel for the db package: re-exports the migration inventory/apply/verify surface, open_database, schema module, sqlite_shim backend types, the state-directory path helpers (including the newly ported default_db_path = state_directory(...)/data/jait.db) and the JaitDb connection alias. Deliberate deviation: TS openDatabase returns { db, sqlite } and defaults the path internally, while the Rust open_database takes an explicit path and returns the connection, with resolution left to state_directory::resolve_database_path.",
+      "remaining": "Focused native tests pass (db:: 39/39 including the four barrel surface tests, state_directory:: 8/8), but no consumer-level integration test resolves a path, opens, migrates and verifies through the barrel in one flow, so this stays implemented-but-unverified. Runtime wiring of the barrel into the CLI/runtime entry points is a separate integration item."
     },
     {
       "reference": "packages/gateway/src/db/migrations.ts",
@@ -108,6 +343,30 @@
       "review": "Every current-definition prefix 0..75 matches schema and populated workspace/session state; repository dedup/owner uniqueness and JSON-null failure. Historical released-schema corpus and platform recovery remain replacement gates."
     },
     {
+      "reference": "packages/gateway/src/db/schema.ts",
+      "reference_sha256": "b0b1ec7e842ba4c4bfd24c523ac2a350f92bc3de6dd12f50faa39f8949f57068",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/db/schema.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Native port of the drizzle schema module: all 48 sqliteTable definitions in source order with columns, primary keys, unique constraints and relations, plus the namespace-order accessor the JS barrel exposes. Table names, column kinds and unique-column sets were diffed against the TS source (48 sqliteTable calls in identical order) rather than trusted from the port.",
+      "remaining": "Focused native tests pass in db::schema but no TS-vs-Rust schema dump diff, generated-DDL comparison or migration round trip is recorded, so this stays implemented-but-unverified. The TS module is consumed by drizzle-kit generation; the Rust side has no generator equivalent, so DDL emission parity is unverified."
+    },
+    {
+      "reference": "packages/gateway/src/db/sqlite-shim.ts",
+      "reference_sha256": "910cc9a8d0448693e9a5e147f3af3e0fb61f65db1e0f175709147320cad44ba3",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/db/sqlite_shim.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Native port of the better-sqlite3 shim boundary: Backend/BackendStatus switching, SqliteDatabase statement preparation, run/get/all/values semantics including raw-mode empty results (as_objects == Some(&[]) and as_values == None), exec, pragma helpers and the same error strings for unsupported backends.",
+      "remaining": "Focused native tests pass in db::sqlite_shim but the module is exercised against rusqlite only; no better-sqlite3 differential run, no statement-cache timing assertions and no WAL/transaction cross-checks are recorded, so this stays implemented-but-unverified."
+    },
+    {
       "reference": "packages/gateway/src/db/uuidv7.ts",
       "reference_sha256": "78406d61c0f4953e4582b69c6577299cd2691251ba39bd82e13dae4fbe061875",
       "status": "verified",
@@ -122,6 +381,77 @@
         "gateway_rust_storage"
       ],
       "review": "Exact UUID bytes under deterministic timestamp/entropy and UUIDv7 random uniqueness/layout."
+    },
+    {
+      "reference": "packages/gateway/src/evaluation/agent-eval.ts",
+      "reference_sha256": "0609422917d7480ff6bbb504d649dad12599928289b8c8a4cb9935b9ec8af54d",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/evaluation/agent_eval.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Suite/verdict/event parsers ported, but the evaluation module is referenced only from lib.rs:15; no runtime or CLI path uses it.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/evaluation/isolated-gateway-child.ts",
+      "reference_sha256": "c821f4d51f7bb6ffb5e957d3021b8d3535c4687deb9bdf11208e494c3586473a",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/evaluation/mod.rs",
+        "packages/gateway-rust/src/evaluation/isolated_gateway_child.rs"
+      ],
+      "native_test_targets": [
+        "evaluation::isolated_gateway_child::host::tests::",
+        "evaluation::isolated_gateway_child::database_authority::tests::",
+        "evaluation::isolated_gateway_child::private_directory_tests::"
+      ],
+      "remaining": "Focused unit tests only (41 passed, 0 failed, 1085 filtered out in cargo test --lib evaluation::). No contract target, differential run or TS schema diff, so no verification credit. The host trait (open/migrate DB, evaluation user, settings update, token signing, gateway start, ready emit, cleanup cancel, gateway wait) is implemented behind IsolatedGatewayHost with an in-process test host and SQLite/libc fixtures; no real child process, real gateway boot or loopback interop is exercised. Runtime factory/CLI mounting is a separate integration item.",
+      "notes": "Native port of the isolated evaluation gateway child bootstrap: ordered prepare steps, private state directory with O_NOFOLLOW/handle-held authority, listener ownership and ready publication, watch cancellation before/during/after readiness, guarded cleanup that refuses replaced directories and retains authority for retry.",
+      "evidence": [
+        ".jait/artifacts/gateway-rust/chat-loops/continuation-20261028-clock-repair.md",
+        "cargo test --lib evaluation:: => 41 passed; 0 failed; 0 ignored; 1085 filtered out (2026-10-28)"
+      ],
+      "updated_at": "2026-10-28"
+    },
+    {
+      "reference": "packages/gateway/src/evaluation/isolated-gateway.ts",
+      "reference_sha256": "2b34bc931d6ddf5dd0f58bc74d7d97de9dc370059fd92ea7d46dfc87ec9577f0",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/evaluation/mod.rs",
+        "packages/gateway-rust/src/evaluation/isolated_gateway.rs"
+      ],
+      "native_test_targets": [
+        "evaluation::isolated_gateway::"
+      ],
+      "remaining": "Focused unit tests only: no contract target, differential run or TS schema diff, so no verification credit. The module covers isolated-gateway.ts and its child bootstrap contract (isolated-gateway-child.ts, sha c821f4d5...); host side (settings HTTP fetch, state-dir create/remove, child spawn, base env, uuid) is behind the IsolatedGatewayHost trait, so no real process is spawned here and runtime mounting is a separate integration item.",
+      "notes": "Native port of the isolated evaluation gateway supervisor: settings fetch, child env overrides, JAIT_EVAL_READY readiness parsing, stdout/stderr tails, watch-signal cancellation, SIGTERM->SIGKILL stop escalation with state-dir cleanup.",
+      "evidence": [],
+      "updated_at": "2026-10-27"
+    },
+    {
+      "reference": "packages/gateway/src/foundation.ts",
+      "reference_sha256": "aa84a2fc5e974e59afb7cd4717107bf6f5cad231775dc1318314f5158992bb97",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/lib.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: No curated foundation barrel: crate root exposes surfaces/security/tools/memory/plugins/sessions as separate modules, not one re-export facade.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/index.ts",
+      "reference_sha256": "85369b78a8c47b37f05f55e47d66ba675241be929ae3e4cced633ed7583e1cc9",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/main.rs",
+        "packages/gateway-rust/src/runtime/application.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Bootstrap exists in main.rs, but composition mounts only auth, sessions, chat and store versus the TS entrypoint's full service wiring.",
+      "remaining": "Wiring and focused contract evidence still required."
     },
     {
       "reference": "packages/gateway/src/lib/bounded-json.ts",
@@ -188,6 +518,23 @@
         "gateway_rust_command_helpers"
       ],
       "review": "Native yield/deadline policy with 199 actual TypeScript comparisons across type, rounding, boundary and nonfinite cases; fixes NaN propagation. See native-terminal-helpers.md for focused coverage and platform/activation limits. Full gate evidence required."
+    },
+    {
+      "reference": "packages/gateway/src/lib/network-scan.ts",
+      "reference_sha256": "184c122109b2a411a2972364ec875574d0cc14f987f1f9d7ad2b876167e896da",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/network_scan.rs"
+      ],
+      "native_test_targets": [
+        "network_scan::"
+      ],
+      "remaining": "Focused unit/integration tests only: no contract target, differential run or TS schema diff, so no verification credit. Not mounted on a runtime route/adapter; sweep still shells out to ping/arp/host via NetworkScanHost. Host effects behind NetworkScanHost (manual HostFuture alias since async-trait is unavailable).",
+      "notes": "Native port of the full discovery pipeline (ARP -> sweep -> quick probe -> detail probe -> health/topology/OS enrichment) behind the explicit NetworkScanHost trait.",
+      "evidence": [
+        "cargo test --lib -j2 network_scan:: -> 16 passed / 0 failed / 0 ignored (EXIT=0)"
+      ],
+      "updated_at": "2026-10-27"
     },
     {
       "reference": "packages/gateway/src/lib/persisted-tool-calls.ts",
@@ -349,6 +696,37 @@
       "review": "Production SQLite comparison of memory save/update/list/forget/expiry, scope filtering, provenance, createdAt preservation, omitted nullable expiry, inclusive UTC expiry boundaries, no-delete listing, duplicate IDs, trigger rollback and missing tables. Unknown imported scopes and malformed expiry strings retain reference data/lexical behavior. Callers must authorize storage/project/contact access; retrieval/dedup/log export and memory HTTP/tools are unported."
     },
     {
+      "reference": "packages/gateway/src/os-control/index.ts",
+      "reference_sha256": "1dbab303fbc11e3c530ced93636abb0a863f1a72116831ebcd4c0dc3025e6b45",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/integrations/os_control/index.rs"
+      ],
+      "native_sha256": {
+        "packages/gateway-rust/src/integrations/os_control/index.rs": "8ced33ea2b2897e27318bdd75a58d50291e21841c4903647ddf55e8e7964fbd1"
+      },
+      "native_test_targets": [
+        "integrations::os_control::index::tests"
+      ],
+      "evidence": [
+        "focused cargo test --lib integrations::os_control::index:: = 2 passed / 0 failed"
+      ],
+      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
+      "remaining": "Barrel parity only; Windows/Linux/macOS desktop drivers are exercised only through host-port fakes, no live desktop-control interop."
+    },
+    {
+      "reference": "packages/gateway/src/os-control/linux-desktop-driver.ts",
+      "reference_sha256": "50c0aacf6e2620e86bd3c4739ea02194627d87c8be33a99b4d8a932506050028",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/integrations/os_control/linux_desktop.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Native port of LinuxDesktopOsControlDriver over a narrowed LinuxDesktopShell port (exec_shell) instead of the full SandboxManager. Covers screenshot (import + base64 + IHDR size parse), click/mouseMove/type/key/scroll command construction, tool preflight via `command -v`, exec env/cwd prefixing and the xdotool keysym map (build_xdotool_keys). Display defaults to :99 and is configurable. Shell-quoting, xdotool escaping, JS Math.round/toFixed(3) formatting and the empty-combo rejection mirror the TS driver.",
+      "remaining": "Implemented but unverified: only focused unit tests in the module (command construction against a recording shell double); no live sandbox run against docker/Dockerfile.linux-desktop, no contract target, no TS-vs-Rust differential. Also not yet wired into the runtime driver resolver, which stays a separate integration item."
+    },
+    {
       "reference": "packages/gateway/src/os-control/resolver.ts",
       "reference_sha256": "9a9f2f99e36caa217714e813fbec852e5d06a074cc73e518ab78f19b7d6b2d69",
       "status": "verified",
@@ -382,6 +760,15 @@
         "gateway_rust_mail_os_contracts"
       ],
       "review": "Public declarations only: actual strict TypeScript positive/negative fixtures, exact JSON known-field roundtrips including optional-null/Buffer/nonfinite numbers and native async trait signature checks. Four component checks plus four transport checks, a native number check and three caught/restored mutations. No mailbox transport, desktop driver or production execution credit. See native-mail-os-contracts.md."
+    },
+    {
+      "reference": "packages/gateway/src/os-control/windows-driver.ts",
+      "reference_sha256": "b1e6acfecea94903fcc46f2f93588c69c084a5519039b3906d32cb67dd2205c7",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: The dockur Windows driver has no native port; only WindowsSshConfig, ResolverError and the OsDriverFactory trait exist.",
+      "remaining": "No native implementation; component remains unported."
     },
     {
       "reference": "packages/gateway/src/plugins/contracts.ts",
@@ -461,15 +848,15 @@
     },
     {
       "reference": "packages/gateway/src/providers/acp-provider.ts",
-      "reference_sha256": "dc1aaf462dfc832fc462fa2d426ca43e88219da7029db15775880b25cd54bd66",
-      "status": "implemented",
+      "reference_sha256": "472e6c2f0402bef6d8407d232c8a0752470952d4b95ef898623349c0147ef6c8",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/providers/acp_provider.rs"
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/providers/acp-provider.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
-      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/providers/acp-provider.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. Upstream adds Codex runtime resolution from the package store (CODEX_PATH) and a bounded path-free jaitDiagnostic record with stderr tail; packages/gateway-rust ACP code has no equivalent resolution or diagnostic persistence.",
+      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit. Upstream adds Codex runtime resolution from the package store (CODEX_PATH) and a bounded path-free jaitDiagnostic record with stderr tail; packages/gateway-rust ACP code has no equivalent resolution or diagnostic persistence. Upstream gaps (pinned hash re-pinned after real upstream change): Rust has no Codex package-store resolution CODEX_PATH path and no jaitDiagnostic persistence."
     },
     {
       "reference": "packages/gateway/src/providers/acp-registry.ts",
@@ -546,6 +933,44 @@
       "review": "Advertised-command selection and begin/complete state transitions, occupancy requirements, failure recovery and cooldown. Native provider transport is a caller port; this does not claim an ACP transport or complete model runtime. Feature-level parity and a combined native flow are mandatory. TypeScript loop/MCP acceptance is separately labeled reference-runtime evidence. See tests/contract/reviews/native-context-budget.md; source-bound validation is required."
     },
     {
+      "reference": "packages/gateway/src/providers/contracts.ts",
+      "reference_sha256": "1807cec881724a7267f77185e702d1d77ab39340b7e76b68c9dba6d78b6f6f8a",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/providers/contracts.rs"
+      ],
+      "native_sha256": {
+        "packages/gateway-rust/src/providers/contracts.rs": "ad02db02fef82697901d969d62fd8bb598b55c87986997890a931d911ffe1c99"
+      },
+      "native_test_targets": [
+        "providers::contracts::tests"
+      ],
+      "evidence": [
+        "focused cargo test --lib providers::contracts:: = 5 passed / 0 failed"
+      ],
+      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
+      "remaining": "Session boundary only. No type in providers::registry implements CliProviderAdapter yet, so no session lifecycle/approvals/steering is exercised against a real adapter; no runtime wiring."
+    },
+    {
+      "reference": "packages/gateway/src/providers/index.ts",
+      "reference_sha256": "36e041cfd4433676544d030a71e2604318e24e5e3d59d6efbf982fd797c83fa1",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/providers/index.rs"
+      ],
+      "native_sha256": {
+        "packages/gateway-rust/src/providers/index.rs": "ec63e4143840ab54495803a210f9633055b94df8f9c81c51e5396b82e8f0e64a"
+      },
+      "native_test_targets": [
+        "providers::index::tests"
+      ],
+      "evidence": [
+        "focused cargo test --lib providers::index:: = 4 passed / 0 failed"
+      ],
+      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
+      "remaining": "Barrel parity only: TS spellings for ProviderInfo and loadAcpProviderConfigs are not aliased; the native loader is providers::acp_registry::load_acp_registry_provider_configs. Behaviour lives in the owning modules."
+    },
+    {
       "reference": "packages/gateway/src/providers/jait-mcp.ts",
       "reference_sha256": "5b2545b02b0721eb967da170afbcc624dfe2b18c115e62fe93dd4a80bf48199f",
       "status": "verified",
@@ -576,7 +1001,7 @@
     },
     {
       "reference": "packages/gateway/src/providers/model-fetchers.ts",
-      "reference_sha256": "9cae80fd9a89c6fcc82d5115676c2477ad5245ffe35e914ef52721a6da23a6f7",
+      "reference_sha256": "3790bfbb91d0c81735da2edb94b2830dded53061cfa922b8850c165b2f8b1a1d",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/providers/model_fetchers.rs",
@@ -592,7 +1017,7 @@
       "targets": [
         "gateway_rust_model_fetchers"
       ],
-      "review": "Host component checks and source compiler/differential evidence pass. Native boundaries, mutation/reproduction evidence and activation limits are documented in native-model-fetchers.md. Full source-bound gate controls checkpoint credit; declarations earn no duplicate engine credit."
+      "review": "Host component checks and source compiler/differential evidence pass. Native boundaries, mutation/reproduction evidence and activation limits are documented in native-model-fetchers.md. Full source-bound gate controls checkpoint credit; declarations earn no duplicate engine credit. reconciled 2026-02-14: providers/model_fetchers.rs keeps OpenRouter per-1M-token pricing with prefix parse, Infinity and negative handling matching the upstream change."
     },
     {
       "reference": "packages/gateway/src/providers/opencode-credentials.ts",
@@ -751,6 +1176,34 @@
         "gateway_rust_provider_usage"
       ],
       "review": "Codex/ACP safe-integer counters and nullish fallbacks, cumulative baseline accounting and turn replacement, original insertion order and JS Number arithmetic, complete round summaries with optional counters and overflow serialization. Fourteen differential tests, five native regression tests, and four restored mutations caught by both suites. Accumulator inputs are typed nonnegative safe-integer counters; live provider execution remains separate."
+    },
+    {
+      "reference": "packages/gateway/src/pty-broker-client.ts",
+      "reference_sha256": "f3bfde6245b2bcc2d89493d7082a11c86d48de2193e329e8edf1712fb464d169",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/pty_broker_client.rs"
+      ],
+      "native_test_targets": [
+        "pty_broker_client::"
+      ],
+      "remaining": "Focused unit tests only: no contract target, differential run or TS schema diff, so no verification credit. Process launching/pumping is caller-owned behind the BrokerIo trait; no Node pty-broker.mjs child is spawned yet. Deviations: a stdin write failure surfaces as an error instead of being silently ignored (TS swallows it and hangs until the RPC timeout), and a spawn response without ptyId is reported as 'spawn failed' instead of leaking undefined.",
+      "notes": "Native port of the PTY broker JSON-lines RPC protocol: id sequencing from 1, pending-call map, output/exit event dispatch, stderr readiness marker, 10s startup / 15s RPC timeouts and byte-identical error strings.",
+      "evidence": [
+        "cargo test --lib -j2 pty_broker_client:: -> 12 passed; 0 failed; 0 ignored; 1062 filtered out (EXIT=0)"
+      ],
+      "updated_at": "2026-10-27"
+    },
+    {
+      "reference": "packages/gateway/src/pty-broker.mjs",
+      "reference_sha256": "6521e6fcc7a330457a59d1d5b6819323e1453a9da0bc4d8ef4f49ca46db918d5",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/pty_broker_client.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Only the client half of the JSON-line protocol is ported, and it is unwired: nothing calls it and no broker server counterpart exists.",
+      "remaining": "Wiring and focused contract evidence still required."
     },
     {
       "reference": "packages/gateway/src/routes/agent-control.ts",
@@ -1110,6 +1563,17 @@
       "remaining": "Native focused tests pass and tool exposure stays caller-controlled. No contract target has been run and no external MCP client has been exercised, so this stays implemented-but-unverified."
     },
     {
+      "reference": "packages/gateway/src/routes/messenger.ts",
+      "reference_sha256": "34135dcce0610a09ba7d91eb2dc47e6482053b7e361587a3726185b172967ac0",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/services/messenger_service.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: No /api/messenger route literals in Rust; messenger_service port registered (mod.rs:125) but zero production refs; bridge used only by tool.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
       "reference": "packages/gateway/src/routes/mobile.ts",
       "reference_sha256": "28744dabb27f382ada991d15d059284b7e377c96abeddbe559d0eb61762784d5",
       "status": "implemented",
@@ -1267,7 +1731,7 @@
     },
     {
       "reference": "packages/gateway/src/routes/screen-share.ts",
-      "reference_sha256": "ed18945f1a012b9c331cb0815fa08bbcbfb8f63e788d421e234c40036d7ea089",
+      "reference_sha256": "5a1e7961fa4c55724f5f8c5c5dca9f708ac128a501558a19459350ebfc77d32e",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/routes/screen_share.rs",
@@ -1282,7 +1746,7 @@
       "targets": [
         "gateway_rust_screen_share"
       ],
-      "review": "All eight authenticated native lifecycle routes and native device/session state reviewed in native-screen-share-http.md. Fourteen focused checks pass against actual TypeScript routes/service: auth and cookie origins, all platforms, coercion and poisoned-toString failure order, host/viewer permissions, duplicate/order/replacement/stop/transfer state, state-before-signaling exceptions, media port boundaries, typed and non-Error failures/statuses, cross-user global state and registration timestamp relationships. Poison regression fails before fix; three auth/controller/broadcast mutations are assertion-killed and restored. Strict Clippy, formatting and artifact checks pass. Full240 frozen gate pending under runs/screen-share-20261026. Explicit media/signaling host ports do not claim actual capture/recording/WebRTC or the entire shared screen-share package; production remains TypeScript."
+      "review": "All eight authenticated native lifecycle routes and native device/session state reviewed in native-screen-share-http.md. Fourteen focused checks pass against actual TypeScript routes/service: auth and cookie origins, all platforms, coercion and poisoned-toString failure order, host/viewer permissions, duplicate/order/replacement/stop/transfer state, state-before-signaling exceptions, media port boundaries, typed and non-Error failures/statuses, cross-user global state and registration timestamp relationships. Poison regression fails before fix; three auth/controller/broadcast mutations are assertion-killed and restored. Strict Clippy, formatting and artifact checks pass. Full240 frozen gate pending under runs/screen-share-20261026. Explicit media/signaling host ports do not claim actual capture/recording/WebRTC or the entire shared screen-share package; production remains TypeScript. reconciled 2026-02-14: routes/screen_share.rs exposes chat/approve/handoff/join/leave/stop with consent and chat scoping; services/screen_share.rs tracks controlOwner and pendingApproval."
     },
     {
       "reference": "packages/gateway/src/routes/secrets.ts",
@@ -1399,6 +1863,15 @@
       "review": "tests/contract/reviews/native-store-http.md"
     },
     {
+      "reference": "packages/gateway/src/routes/team-chat.ts",
+      "reference_sha256": "593616d52fe08a79ecd89617cf5a8330fb4cabfd9dd3402fb96a69c84a46bdba",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No /api/team-rooms literals and no team_chat route module; tool doc states it supplies no TeamChatService impl.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/routes/terminals.ts",
       "reference_sha256": "996e5f04094dabcd99ff7e9b91807b8adcf41191f7039b52ab3f2c37b9ca4ee5",
       "status": "implemented",
@@ -1462,6 +1935,15 @@
       "review": "Actual-source classification/precedence, full-message detection, host throwable display boundary, exact hint/detail UTF16 behavior. Three focused tests, four protocol checks, nine original tests and five caught/restored mutations pass. Native diagnostics only; JavaScript coercion and update execution are host boundaries. Full gate controls credit."
     },
     {
+      "reference": "packages/gateway/src/routes/update.ts",
+      "reference_sha256": "f020d3323769d0f2a554c1e26134d99c8f00baf3e1c1fa8d2443824141a40f92",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No /api/update/* or mobile-update literals anywhere; routes/update_failure.rs is only a helper port, registered but unreferenced.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/routes/user-questions.ts",
       "reference_sha256": "dca0a85d043a7b6ac4f08ac617f3ee99e7f5a1b11e62439879c34d52c989bfbe",
       "status": "verified",
@@ -1486,7 +1968,7 @@
     },
     {
       "reference": "packages/gateway/src/routes/voice.ts",
-      "reference_sha256": "c29833e35eeaad6b0e3fe88787de51b13612cd98d9532cf19af238db6ccc0d6c",
+      "reference_sha256": "ef8600a452ea6978b9851b0d32b00e838db922cfce5f87fb5884838204d356e1",
       "status": "implemented",
       "native": [
         "packages/gateway-rust/src/routes/voice.rs",
@@ -1494,8 +1976,8 @@
       ],
       "contracts": [],
       "targets": [],
-      "review": "Voice session create/status/stop and settings handlers over injected transcription and settings adapters, with native focused tests. Mounted through `with_voice`.",
-      "remaining": "Native focused tests pass. Audio streaming and provider transcription remain caller-supplied adapters with no differential evidence, so this stays implemented-but-unverified."
+      "review": "Voice session create/status/stop and settings handlers over injected transcription and settings adapters, with native focused tests. Mounted through `with_voice`. Upstream route forwards to wake-candidate.ts (added after the original 370-path inventory); no Rust wake-candidate module or equivalent route handling exists.",
+      "remaining": "Native focused tests pass. Audio streaming and provider transcription remain caller-supplied adapters with no differential evidence, so this stays implemented-but-unverified. Upstream route forwards to wake-candidate.ts (added after the original 370-path inventory); no Rust wake-candidate module or equivalent route handling exists."
     },
     {
       "reference": "packages/gateway/src/scheduler/contracts.ts",
@@ -1713,6 +2195,25 @@
       "review": "Bidirectional signed tokens, exact public paths and bearer parsing, missing/invalid/expired/not-yet-valid tokens, NumericDate types, purpose truthiness, HS256-only signatures, critical headers, cookie precedence and 401 responses. Signed duplicate b64 critical entries are accepted by the reference and retained; unsupported critical names and unencoded critical payloads are rejected."
     },
     {
+      "reference": "packages/gateway/src/security/index.ts",
+      "reference_sha256": "a36bef876ecf03553d66ff3d6777e66ddb95b51e1904fe558cf1ef023e7580ff",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/security/index.rs"
+      ],
+      "native_sha256": {
+        "packages/gateway-rust/src/security/index.rs": "bf0922cfe412beeb3a4e43cb3971b3d26aaef5762c1908fa2315d8ba2b0b7ad0"
+      },
+      "native_test_targets": [
+        "security::index::tests"
+      ],
+      "evidence": [
+        "focused cargo test --lib security::index:: = 5 passed / 0 failed"
+      ],
+      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
+      "remaining": "Barrel parity only; documented Gaps: PathGuardOptions, SSRFGuardOptions, Windows*/LinuxDesktopSandbox* option+result types have no native structs, and TS type spellings are not aliased to native names."
+    },
+    {
       "reference": "packages/gateway/src/security/ownership.ts",
       "reference_sha256": "9f2999fea4032faabc55fbf2ad2a12b2d15c61037aa76bc61af607d51a85e463",
       "status": "verified",
@@ -1913,6 +2414,18 @@
         "gateway_rust_control"
       ],
       "review": "Real filesystem comparisons for registered read-only common Git metadata mounts, spaces/relative pointers/CRLF/multiline markers, forged backlink/admin/common paths, colon rejection, symlink/dangling markers, ordinary checkouts and absent roots. Linux focused compatibility; platform mount execution remains a replacement gate."
+    },
+    {
+      "reference": "packages/gateway/src/server.ts",
+      "reference_sha256": "7d78ec3a51e9f92c8603d9ae80302d130ade031ea297050eb36f32026237f130",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/runtime/server.rs",
+        "packages/gateway-rust/src/runtime/application.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Gateway::bind wired from main, but composition mounts a strict subset: no ws, messenger, team-chat or update routes.",
+      "remaining": "Wiring and focused contract evidence still required."
     },
     {
       "reference": "packages/gateway/src/services/agent-control.ts",
@@ -2232,6 +2745,19 @@
       "review": "Read-only SQLite traces: session and independent thread owner filtering (including empty/unowned IDs), missing-resource responses, chronological recent message/activity limits/defaults/floors/caps, optional context/thinking/tool fields, omitted malformed JSON versus explicit parsed null, and visible query failures. Owner-filter mutation fails the same isolation assertion and restoration passes. Focused persisted JSON fields cover finite numbers and well-formed Unicode; legacy overflow literals and lone-surrogate JSON parsing remain unverified. Run on the bounded database worker."
     },
     {
+      "reference": "packages/gateway/src/services/code-graph/code-graphs.ts",
+      "reference_sha256": "b8afe57c4e94d6aa72b1ea31390706409ffa56345b8a24ab31433f75f357e211",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/services/code_graph/service.rs",
+        "packages/gateway-rust/src/routes/code_graph.rs",
+        "packages/gateway-rust/src/tools/code_graph.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Service, route and tool are registered, but nothing mounts CodeGraphRoutes and CodeGraphTools::for_service has zero callers.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
       "reference": "packages/gateway/src/services/code-graph/graphify-runner.ts",
       "reference_sha256": "d1463698f4bba307fe85c4839726e277676bf4a6e32a1d8d2acac29c9400c716",
       "status": "verified",
@@ -2290,7 +2816,7 @@
     },
     {
       "reference": "packages/gateway/src/services/computer-control.ts",
-      "reference_sha256": "dec3d64aa02272589a381e2b105f4e8d3877cebffb1261a9e36385ac392d736c",
+      "reference_sha256": "8d8a558b68c3f6d0daa132eee97ed7d4e3a75b63f972791bda211bdd22664053",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/services/computer_control.rs"
@@ -2303,7 +2829,7 @@
       "targets": [
         "gateway_rust_ephemeral"
       ],
-      "review": "Real TypeScript comparisons for transient state lifecycles, ownership/exclusivity, retained message references and bounded inline raster/CID decoding; restored mutation per component. See native-ephemeral.md."
+      "review": "Real TypeScript comparisons for transient state lifecycles, ownership/exclusivity, retained message references and bounded inline raster/CID decoding; restored mutation per component. See native-ephemeral.md. reconciled 2026-02-14: services/computer_control.rs added find_by_node and routes start() through it, matching the upstream lookup change."
     },
     {
       "reference": "packages/gateway/src/services/context-budget.ts",
@@ -2436,6 +2962,19 @@
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
+      "reference": "packages/gateway/src/services/email/index.ts",
+      "reference_sha256": "a140df87c20a1d1d30e18b4c6cd7b2f038f959a46b4b5ebf21589d686537183d",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/services/email/mod.rs",
+        "packages/gateway-rust/src/services/email/service.rs",
+        "packages/gateway-rust/src/routes/email.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: EmailService barrel and providers ported, but no composer mounts routes/email.rs and EmailTools is constructed only from tests.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
       "reference": "packages/gateway/src/services/email/inline-images.ts",
       "reference_sha256": "a9d69ff8f4a07dc65abc9ce1afef9b0a4024dda4ceea055d0390c9117ca6fbd9",
       "status": "verified",
@@ -2558,6 +3097,19 @@
       "targets": [],
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native forge operations. Reuses the canonical Git command authority and process pool.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
+    },
+    {
+      "reference": "packages/gateway/src/services/git.ts",
+      "reference_sha256": "b821399518269abe037bf6cb78346a069bf7f7586d8dd26dca104ec231af1c24",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/routes/git.rs",
+        "packages/gateway-rust/src/routes/git_execution.rs",
+        "packages/gateway-rust/src/routes/git_batch.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: 17 handlers ported; 9 deferred (commit flow, stacked actions, PR/forge checks) and GitRoutes is constructed only from tests.",
+      "remaining": "Wiring and focused contract evidence still required."
     },
     {
       "reference": "packages/gateway/src/services/github-pull-requests.ts",
@@ -2698,16 +3250,25 @@
       "review": "Complete native service reviewed in tests/contract/reviews/native-messenger-history.md. Eight focused contracts pass recovery validation, version/key agreement, scoped download, ordered decrypt/merge, import shapes, cancellation, Untrusted decryption, audit and single-shot close through deterministic crypto/machine ports. Full combined frozen239 gate passes under runs/messenger-history-gate2/checkpoints/239-report.json with Bun 1.4.0/ICU 78.3 and corrected assessment HTTP parity. No real Megolm interoperability, host shutdown or load claim; production remains TypeScript."
     },
     {
+      "reference": "packages/gateway/src/services/messenger-matrix-runtime.ts",
+      "reference_sha256": "1a02a0539d0b2177174b98fdbfc33644c9dc6191caf54a7275e209332b7f1d38",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: TS file only re-exports matrix-bot-sdk; crate has no Matrix SDK. matrix_stack.rs is unwired Docker planning; messenger_service.rs ports a different file.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/services/messenger-service.ts",
-      "reference_sha256": "5d99072c19e090568fa65ca2a0a2922d71d98be838ce59d4a94592406284ac61",
-      "status": "implemented",
+      "reference_sha256": "99bf5ed41bfb574c1fb987992b91e8b038e77bdd24cc46212fde913915c8eb58",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/services/messenger_service.rs"
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Matrix messenger connection service (native port of\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
-      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Matrix messenger connection service (native port of\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. Upstream adds status-room summary text, room topic (<=512) and a filename fallback for attachment-only messages; the Rust messenger service has none of these.",
+      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit. Upstream adds status-room summary text, room topic (<=512) and a filename fallback for attachment-only messages; the Rust messenger service has none of these. Upstream gaps (pinned hash re-pinned after real upstream change): Rust lacks status-room summary rollup, room topic (<=512 chars) handling and attachment filename fallback."
     },
     {
       "reference": "packages/gateway/src/services/mobile-push.ts",
@@ -2896,6 +3457,19 @@
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
+      "reference": "packages/gateway/src/services/preview.ts",
+      "reference_sha256": "3d2d75900b0d98303918496e54b6f86c52832bfc0f315dd95c5510d3741ab25f",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/services/preview_runner.rs",
+        "packages/gateway-rust/src/services/preview_process.rs",
+        "packages/gateway-rust/src/routes/preview.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Runner and process registered, but session/lifecycle drafts preview.rs and preview_host.rs are unregistered and no composer mounts routes/preview.rs.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
       "reference": "packages/gateway/src/services/primary-link.ts",
       "reference_sha256": "5f771c59bdf73aa9108dd3e4370391ea929b8cb8e08cb868ef4f6ca74afa8aa5",
       "status": "implemented",
@@ -2924,6 +3498,19 @@
         "gateway_rust_assignment"
       ],
       "review": "Real SQLite and filesystem metadata checks; owner and explicit repository checks, idempotent assignment, stale device reconciliation, symlink/file/directory metadata, Git probe/default fallbacks, exact event order and durable effects after storage failure. Git probing and broadcast transport are injected boundaries; those implementations receive no credit. Linux path semantics; supported-platform parity remains open."
+    },
+    {
+      "reference": "packages/gateway/src/services/project-search.ts",
+      "reference_sha256": "73bd1b7903c14809d2ee9a380f5bc1c00ee416e084ae24ea69723f52bb473cb1",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/services/project_search/mod.rs",
+        "packages/gateway-rust/src/services/project_watcher.rs",
+        "packages/gateway-rust/src/routes/project.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Bounded search/index port complete but consumed only by unmounted routes/project.rs and project_watcher; no production composer reaches it.",
+      "remaining": "Wiring and focused contract evidence still required."
     },
     {
       "reference": "packages/gateway/src/services/project-state.ts",
@@ -3290,6 +3877,15 @@
       "review": "Bounded decision resolution, validation, generic/TypeSafe requests, cache/backoff isolation/expiry/eviction, cancellation and ranking with original callback/fallback semantics. Twenty-one differential comparisons shared with the tool, ten native service regressions including real loopback transport checks, eight restored mutations across the pair caught by both suites, 13 original reference tests. JS UTF-16/finite JSON boundary; platform HTTP/JSON error wording and object-identity semantics are transport/ownership boundaries. Production wiring remains separate."
     },
     {
+      "reference": "packages/gateway/src/services/team-chat.ts",
+      "reference_sha256": "bb8648ee56ef532a65ecf0defb8860bb41c7e05f516c8b7295014a510b14373e",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No TeamChatService, teamRoot or recipient-ranking port; only a tool adapter that self-documents no service implementation.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/services/thread-defaults.ts",
       "reference_sha256": "5841b6096aa13fc04679d5026463b9e16834cd05ceeedf7eba4252ba5a28f80b",
       "status": "verified",
@@ -3371,6 +3967,17 @@
         "gateway_rust_session_http"
       ],
       "review": "Reviewed native provider/API title generation, scoped event filtering, completion/send-error ordering, subscription cleanup, exact deadline, credential/model/URL precedence, 512-token budget, response parsing and lossless UTF-16 normalization. Actual TypeScript comparisons; eight caught/restored isolated mutations. Engine-generated TypeError lexical diagnostics alone canonicalized. Review: tests/contract/reviews/native-thread-title-reconciliation.md. Host ports retain authorization, transport bounds and external cancellation; no provider/transport or activation credit."
+    },
+    {
+      "reference": "packages/gateway/src/services/threads.ts",
+      "reference_sha256": "59932ec872ddee76337ae3e8c61bf29c9910190969c18ebada9de08f2799dac1",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/routes/threads.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: ThreadService logic inlined in routes/threads.rs, but ThreadRoutes is never mounted outside its own file; history/router services unrefed.",
+      "remaining": "Wiring and focused contract evidence still required."
     },
     {
       "reference": "packages/gateway/src/services/usage-refresh-cache.ts",
@@ -3528,6 +4135,15 @@
       "review": "State path and explicit DB path precedence, test-mode refusal and ECMAScript whitespace. Platform-specific path rules still need supported-platform validation."
     },
     {
+      "reference": "packages/gateway/src/surfaces/browser.ts",
+      "reference_sha256": "dc8f2e6da185b23db13cd48e950f1fb7abfadd940795a6a5d8b89d929d35b07e",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No BrowserSurface/CDP driver; browser ops delegate to JaitPort. browser_devtools is a different TS path.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/surfaces/contracts.ts",
       "reference_sha256": "2e5e2860b3a64377a1b6c2c0ecac3809246d82512ec7b5d47be5f38719166a26",
       "status": "verified",
@@ -3563,6 +4179,28 @@
         "gateway_rust_filesystem"
       ],
       "review": "tests/contract/reviews/native-filesystem-surface.md: real TypeScript/native filesystem effects, complete lifecycle and operation API, backup retention/null/missing/restore, substitutions, byte/text decoding, path/secondary-endpoint denials, symlink policy, copy aliases/self/descendant rejection, OS errors and callback order. Twelve focused tests and five caught/restored source mutants. Linux fixture evidence; platform/resource/race acceptance and production mount remain separate."
+    },
+    {
+      "reference": "packages/gateway/src/surfaces/index.ts",
+      "reference_sha256": "9f1077ba6971cc2661f5ee30b8b78a3b096090a5ccc169ba18c950f2dc55eacb",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/surfaces/mod.rs",
+        "packages/gateway-rust/src/surfaces/registry.rs",
+        "packages/gateway-rust/src/surfaces/contracts.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Barrel partly mirrored: registry/contracts/filesystem ported; terminal, remote_terminal and browser submodules missing.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/surfaces/playwright-node-bridge.cjs",
+      "reference_sha256": "bd3527876e6b2189b07ae8cea4a9fed568174cda8ddd3fe900e6b9bfbbd711ad",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No Playwright/Node bridge: no playwright dependency, no child-process driver, no launch plumbing.",
+      "remaining": "No native implementation; component remains unported."
     },
     {
       "reference": "packages/gateway/src/surfaces/project-ui-sync.ts",
@@ -3616,6 +4254,15 @@
       "review": "tests/contract/reviews/native-remote-filesystem.md: actual-source differential behavior, callbacks/failures/identity and reviewed scope limits. Seven combined restored mutations; source-free DeepSeek decoder accepted only after actual Buffer comparisons. Full frozen gate controls credit; production activation remains separate."
     },
     {
+      "reference": "packages/gateway/src/surfaces/remote-terminal.ts",
+      "reference_sha256": "8130f29f665cdd1f4bf8bf1fe6a5301f9eb64eb166d24018b16b846397d3d367",
+      "status": "absent",
+      "native": [],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict ABSENT: No RemoteTerminalSurface; only a node_owner hook always returning None behind deny-by-default control.",
+      "remaining": "No native implementation; component remains unported."
+    },
+    {
       "reference": "packages/gateway/src/surfaces/shell-integration-assets.ts",
       "reference_sha256": "e174818ceca046cea4562d7fcdb5d9c970d33f2bdeda6477c4db5636eb8dc323",
       "status": "implemented",
@@ -3642,6 +4289,36 @@
         "gateway_rust_terminal"
       ],
       "review": "Retained-buffer offsets, partial-line prefix recovery, bounded command output bypassing live tail limits, end-marker trimming, empty buffers, fractional/nonfinite offsets and line limits across 223 cases. Removing command end bounds fails the same contract; restoration passes. Chunk-count input is the native nonnegative integer invariant. Current reference empty-range guard ported after the same matrix failed with partial versus empty output; restored suite passes. Evidence: terminal-empty-before.log and terminal-empty-after.log."
+    },
+    {
+      "reference": "packages/gateway/src/surfaces/terminal.ts",
+      "reference_sha256": "1dcc758d49e55186719e1a1dd786ee75a3f38cfb8a045bf0354085c9d68bceb9",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/routes/terminals.rs",
+        "packages/gateway-rust/src/surfaces/terminal_output.rs",
+        "packages/gateway-rust/src/surfaces/shell_integration_assets.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Control plane, output buffering, shell assets ported; PTY spawn is NoTerminalControl error stub, no spawn spec/shell list.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
+      "reference": "packages/gateway/src/tools/agent-acp-runner.ts",
+      "reference_sha256": "54b3677c9a375cc2419ca25540285e88551dbc2e2659d909d80285d5c6cb2519",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/tools/agent_acp_runner.rs"
+      ],
+      "contracts": [],
+      "targets": [
+        "tools::agent_acp_runner::tests"
+      ],
+      "review": "Native port of runAcpSpecialistTurn: account-scoped provider lookup and availability gating, runtime-mode resolution against the provider's advertised modes, system-prompt framing, MCP server refs, session start/stop, hard timeout, watch-channel abort, event filtering by session id, transcript segments (text/thinking/error/toolGroup with performative-tag stripping via strip_performative_tag), tool-call bookkeeping including results without a start and finalize() of unfinished calls, performative result mapping (success/refuse/failure/query) with the same placeholder messages, and best-effort approval forwarding through an injected decider. All transport concerns are behind AcpSpecialistHost/AcpSpecialistProvider.",
+      "remaining": "Focused-only evidence => implemented, not verified. Focused run tools::agent_acp_runner::tests 17 passed / 0 failed (2026-10-28). Provider/session lifecycle is an injected trait: no real CLI/ACP provider interop beyond the fake provider harness; MCP server refs and approval transport are not runtime-mounted.",
+      "evidence": [
+        "packages/gateway-rust/.evidence/tools-agent-acp-runner.log"
+      ]
     },
     {
       "reference": "packages/gateway/src/tools/agent-communication.ts",
@@ -3679,6 +4356,17 @@
       "review": "Actual TypeScript factory comparisons of full metadata, ordered owner/identity/service arguments, successful and failed dispatch, validation/defaults and caught/uncaught errors; isolated regressions caught and restored. See tests/contract/reviews/native-agent-github-tools.md. Explicit service ports retain engine policy and grant no service or production activation credit."
     },
     {
+      "reference": "packages/gateway/src/tools/agent-loop.ts",
+      "reference_sha256": "f71954b0eae7917aabc400399e2fbb01209d5c1290fb8cad6ba3cc75fc4afd1d",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/tools/agent_loop.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Substantial port (~82 public fns: message repair, serialisation, steering, tool-call queue) but never declared in tools/mod.rs, so not compiled.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
       "reference": "packages/gateway/src/tools/agent-message-tool.ts",
       "reference_sha256": "b6fadedfc1dfa1ec3a41eba477a57dd33740491ef5e67b8fbd17b29e4bcce7be",
       "status": "verified",
@@ -3695,6 +4383,30 @@
         "gateway_rust_runtime_tools"
       ],
       "review": "Metadata and swarm message execution with retained live arrays, sender/count defaults and invalid note behavior."
+    },
+    {
+      "reference": "packages/gateway/src/tools/agent-tools.ts",
+      "reference_sha256": "9245fb63f1d9a41ef114117070ade8f6184f17fb9d01ef921aa15a17cf2c1574",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/tools/agent_tools.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "Native port of agent_create/agent_list/agent_send over a SubAgentHost port: dotted metadata names and descriptions, prompt/details validation errors, allowed-tools normalization against DEFAULT_SUBAGENT_TOOLS, ACP-preferred-with-loop-fallback execution, cancellation short-circuit, performative parsing/stripping mirroring agent-communication.ts (regex ^\\s*\\[(tag)\\]\\s*), parent payload key sets for success {subAgentId,content,performative,segments,rounds,toolCalls,durationMs}, abort {subAgentId,partialContent,segments,rounds,toolCalls,durationMs} and error paths, plus renderSegments/renderToolCalls projections onto MessageSegment.content and the 8-key {callId,tool,args,ok,message,data,startedAt,completedAt} tool-call shape. reconciled 2026-02-14: tools/agent-tools-metadata.json carries the revised delegation guidance (parallelize only independent bounded work, file ownership, integration owner, no guaranteed isolation) verbatim.",
+      "remaining": "Focused-only evidence (16/16 tools::agent_tools, log .jait/artifacts/gateway-rust/tools-port/agent-tools.log) => implemented, not verified. Runtime mounting of the agent tool descriptor in tools::mod.rs registry; SubAgentHost implemented only by test fake (no runtime loop/ACP wiring); description truncation uses chars().take(60) vs JS UTF-16 slice(0,60) (differs only for astral characters); no differential run against live ACP sub-agent.",
+      "native_sha256": "56dc7f6191aed27d97bc40ccb6f2cff33e40e4ef7b132a2c7b59f73f12875d5d",
+      "native_test_targets": [
+        "tools::agent_tools::tests::"
+      ],
+      "evidence": [
+        {
+          "kind": "focused-unit-tests",
+          "command": "cargo test --locked --offline --manifest-path packages/gateway-rust/Cargo.toml --lib -j1 tools::agent_tools::tests::",
+          "result": "16 passed; 0 failed",
+          "log": ".jait/artifacts/gateway-rust/tools-port/agent-tools.log"
+        }
+      ]
     },
     {
       "reference": "packages/gateway/src/tools/architecture-tools.ts",
@@ -3716,15 +4428,15 @@
     },
     {
       "reference": "packages/gateway/src/tools/browser-tools.ts",
-      "reference_sha256": "2e2a38586822d4b436c304c17cbe149c0c8e5884819510b2a91b9eff763cbc5a",
-      "status": "implemented",
+      "reference_sha256": "8d61c102a9a035157c85b32d33b8825a93265052c24cce3a01e3f384554d1182",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/browser_tools.rs"
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/browser-tools.ts` (reduced scope).\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
-      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/browser-tools.ts` (reduced scope).\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. Upstream adds the browser.open tool with allowStart/requireLiveView guards and URL protocol validation; Rust lists browser.open in tool_names without an implementation and has no live-view gating.",
+      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit. Upstream adds the browser.open tool with allowStart/requireLiveView guards and URL protocol validation; Rust lists browser.open in tool_names without an implementation and has no live-view gating. Upstream gaps (pinned hash re-pinned after real upstream change): Rust lacks browser.open allowStart/requireLiveView guards and URL protocol validation."
     },
     {
       "reference": "packages/gateway/src/tools/calendar-tools.ts",
@@ -3854,15 +4566,15 @@
     },
     {
       "reference": "packages/gateway/src/tools/computer-tools.ts",
-      "reference_sha256": "fef6e44398b46a2aba7fa60453569b4841dfdd087477d03289289326034deddb",
-      "status": "implemented",
+      "reference_sha256": "bdb0d53cf975090790acda7720820d87c2454c7d6ebbc817fd1d9076d4068017",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/computer_tools.rs"
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/computer-tools.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
-      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/computer-tools.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. Upstream gates remote computer control on an agent-owned, approved, sharing screen-share session (requireAgentControl); Rust computer control performs no screen-share session check.",
+      "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit. Upstream gates remote computer control on an agent-owned, approved, sharing screen-share session (requireAgentControl); Rust computer control performs no screen-share session check. Upstream gaps (pinned hash re-pinned after real upstream change): Rust lacks requireAgentControl gating."
     },
     {
       "reference": "packages/gateway/src/tools/context-evidence.ts",
@@ -3881,6 +4593,25 @@
         "gateway_rust_context_budget"
       ],
       "review": "Factory metadata, scoped UTF-16 evidence projection/pagination, ownership and expiry, bounded ledgers and real SQLite session-state restoration/accounting. Canonical tool records remain untouched. Feature-level parity and a combined native flow are mandatory. TypeScript loop/MCP acceptance is separately labeled reference-runtime evidence. See tests/contract/reviews/native-context-budget.md; source-bound validation is required. 2026-10-24 tool UX refresh: Optional bounded literal search preserves scope/expiry and returns match offsets and context after reload; search and diagnostic recovery contracts pass."
+    },
+    {
+      "reference": "packages/gateway/src/tools/contracts.ts",
+      "reference_sha256": "4a362b7e4c418096e45a88714342b6d5d47805e0cce67c177e11e47b1bceecf6",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/tools/contracts.rs"
+      ],
+      "native_sha256": {
+        "packages/gateway-rust/src/tools/contracts.rs": "f7d38a79027114bcd415398c1c25b9e974e6310c818cc2df4041a486a4e82d52"
+      },
+      "native_test_targets": [
+        "tools::contracts::tests"
+      ],
+      "evidence": [
+        "focused cargo test --lib tools::contracts:: = 16 passed / 0 failed"
+      ],
+      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
+      "remaining": "Type/registration-level port only (tool contracts, JSON schemas, REGISTRATIONS table). Runtime tool-registry assembly still lives in TS tools/index.ts, recorded there as a reexport with native=None; no runtime mounting."
     },
     {
       "reference": "packages/gateway/src/tools/core/agent.ts",
@@ -4043,7 +4774,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/core/todo.ts",
-      "reference_sha256": "5c507f805af70dc7fed732269aa3d48879b3174cfd260822a00499590f0c5b92",
+      "reference_sha256": "b7d6048ee480dc47d4b98a75c328be175014fb881a9722d8474b4f01668a678e",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/session_todos.rs",
@@ -4057,7 +4788,7 @@
       "targets": [
         "gateway_rust_utility_tools"
       ],
-      "review": "Session todos: normalization, counts, live getter/result arrays, list replacement/clear, isolation and failed-update persistence."
+      "review": "Session todos: normalization, counts, live getter/result arrays, list replacement/clear, isolation and failed-update persistence. reconciled 2026-02-14: tools/session-todos-metadata.json carries the upstream description text verbatim."
     },
     {
       "reference": "packages/gateway/src/tools/core/web.ts",
@@ -4203,6 +4934,30 @@
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
+      "reference": "packages/gateway/src/tools/index.ts",
+      "reference_sha256": "62806b8cb2a071a09e97d645343fd09fa9167bc33f71165fea091af68f5f9334",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/tools/index.rs"
+      ],
+      "contracts": [],
+      "targets": [],
+      "review": "PARTIAL native port: persona_agent_id_for_context / persona_agent_id_for_thread resolution over an injected PersonaThreadLookup (ThreadOwner), rejecting empty ids, unknown threads, threads without a persona and threads owned by another user. The createToolRegistry barrel and the full tool list assembly from the 757-line TS module are NOT ported. Upstream registers createBrowserOpenTool and injects computerSessions/screenShareControl dependencies; Rust has no browser.open implementation and no screen-share control coordinator wiring into computer control.",
+      "remaining": "Focused-only evidence (8/8 tools::index, log .jait/artifacts/gateway-rust/tools-port/tools-index.log) => implemented, not verified. PARTIAL: only persona_agent_id_for_context/persona_agent_id_for_thread + ThreadOwner/PersonaThreadLookup host ported; the createToolRegistry barrel that assembles the full tool list is not ported; no full 757-line barrel equivalence evidence. Upstream registers createBrowserOpenTool and injects computerSessions/screenShareControl dependencies; Rust has no browser.open implementation and no screen-share control coordinator wiring into computer control. Upstream gaps (pinned hash re-pinned after real upstream change): Rust does not register createBrowserOpenTool nor inject computerSessions/screenShareControl.",
+      "native_sha256": "3ac7587216b4d295884f24de154c4b607c7ce67b38abd810028c314dcf06d2e8",
+      "native_test_targets": [
+        "tools::index::tests::"
+      ],
+      "evidence": [
+        {
+          "kind": "focused-unit-tests",
+          "command": "cargo test --locked --offline --manifest-path packages/gateway-rust/Cargo.toml --lib -j1 tools::index::tests::",
+          "result": "8 passed; 0 failed",
+          "log": ".jait/artifacts/gateway-rust/tools-port/tools-index.log"
+        }
+      ]
+    },
+    {
       "reference": "packages/gateway/src/tools/link-tools.ts",
       "reference_sha256": "b7ed587b54effc929fd9ab02b1e438935321d16ef1074d4f7425bae27e139e1d",
       "status": "verified",
@@ -4273,6 +5028,25 @@
         "gateway_rust_maintenance_tool"
       ],
       "review": "Complete tool metadata, dispatch and job identity, summaries, notifications, async ordering and error behavior. Real source comparisons, real native notification integration and two caught/restored mutations. Runner and scheduler earn no duplicate credit; full gate controls credit."
+    },
+    {
+      "reference": "packages/gateway/src/tools/mcp-bridge.ts",
+      "reference_sha256": "bf45a8b532bcd5df932881e2ed9990861c757f14399a3cae9d9db50702ad141a",
+      "status": "implemented",
+      "native": [
+        "packages/gateway-rust/src/tools/mcp_bridge.rs"
+      ],
+      "native_sha256": {
+        "packages/gateway-rust/src/tools/mcp_bridge.rs": "c8b6c3383608289b566934b6461075e31be898c88b78c2436cbf0d1a24c571a8"
+      },
+      "native_test_targets": [
+        "tools::mcp_bridge::tests"
+      ],
+      "evidence": [
+        "focused cargo test --lib tools::mcp_bridge:: = 15 passed / 0 failed"
+      ],
+      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
+      "remaining": "No live MCP server interop: transport is behind a host port and tests use in-process fakes. Not runtime-mounted; config/status/tool ordering parity is covered by unit tests."
     },
     {
       "reference": "packages/gateway/src/tools/memory-tools.ts",
@@ -4712,7 +5486,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/prompts/prompt-registry.ts",
-      "reference_sha256": "e55454fc8a430e42f51869a97053e9f9a21d90e5f8fa95e7bfade04e62db8e27",
+      "reference_sha256": "0745337c75b43d138cf0dd944ac3b8f3fda14667999e67bf5dbc1ec0de2a528a",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/prompts/mod.rs",
@@ -4727,7 +5501,7 @@
       "targets": [
         "gateway_rust_prompts"
       ],
-      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review."
+      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. reconciled 2026-02-14: prompts/mod.rs emits the liveBrowserUpdates block between toolDiscovery and projectArtifacts, matching upstream ordering."
     },
     {
       "reference": "packages/gateway/src/tools/prompts/qwen-prompt.ts",
@@ -4750,7 +5524,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/prompts/shared-sections.ts",
-      "reference_sha256": "25b3bed0df67d1523bbb05e54043ea5b018336ed6adc3744238b72905457372e",
+      "reference_sha256": "043186a43d339af8bd5f3b3d040880271baf56a721ee0d00373210ba6fdeabe3",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/prompts/mod.rs",
@@ -4769,7 +5543,7 @@
         "gateway_rust_prompts",
         "gateway_rust_terminal_execution"
       ],
-      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit."
+      "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit. reconciled 2026-02-14: prompts/assets.json adds LIVE_BROWSER_UPDATE_INSTRUCTIONS and mod.rs appends it to the LITE section only, matching upstream."
     },
     {
       "reference": "packages/gateway/src/tools/prompts/xai-prompt.ts",
@@ -4840,7 +5614,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/repo-proposal-tools.ts",
-      "reference_sha256": "43e8e5a6826543053ffb6739a7b3378df01de2d37022b39f550b88a340d514b8",
+      "reference_sha256": "206957ba359ce89771e7eab15a291a4dddb3e8ab48e4c7d5f048f01abcef52fc",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/repo_todos.rs",
@@ -4855,7 +5629,7 @@
       "targets": [
         "gateway_rust_repo_todo_tools"
       ],
-      "review": "Complete factory metadata and 192 actual TypeScript comparisons cover repository inference/explicit IDs, owner checks, optional fields, Unicode tag normalization, date clearing, UTF-16 previews, thread provenance and dependency failures. Six caught/restored mutations. Explicit service ports retain existing authorization and grant no underlying thread or production activation credit. See tests/contract/reviews/native-repo-todo-tools.md."
+      "review": "Complete factory metadata and 192 actual TypeScript comparisons cover repository inference/explicit IDs, owner checks, optional fields, Unicode tag normalization, date clearing, UTF-16 previews, thread provenance and dependency failures. Six caught/restored mutations. Explicit service ports retain existing authorization and grant no underlying thread or production activation credit. See tests/contract/reviews/native-repo-todo-tools.md. reconciled 2026-02-14: tools/repo-todo-metadata.json carries the upstream description text verbatim."
     },
     {
       "reference": "packages/gateway/src/tools/sandbox-background-terminal.ts",
@@ -4888,14 +5662,14 @@
     },
     {
       "reference": "packages/gateway/src/tools/screen-share-tools.ts",
-      "reference_sha256": "1482bf88f5ef7222894a556bfe91732adb38b9cbccfe57c5eb4d56a27319a60d",
+      "reference_sha256": "26845c11f6aa792fae61e021bd995d565ce6f9cdf05ace6e6498ec7d4d45c525",
       "status": "implemented",
       "native": [
         "packages/gateway-rust/src/tools/screen_share_tools.rs"
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/screen-share-tools.ts`\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/screen-share-tools.ts`\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. reconciled 2026-02-14: tools/screen_share_tools.rs sets initiated_by_agent/require_consent, matching upstream agent-initiated sharing.",
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
@@ -5047,7 +5821,7 @@
     },
     {
       "reference": "packages/gateway/src/tools/surface-tools.ts",
-      "reference_sha256": "9a0a8e390366cd3da8af0ba6c465cdef0d6f42b1026ade3e00a8de16c63a6e23",
+      "reference_sha256": "2c3c14ce436092586f8b1a70ed90331026bdb9111c61fc191183fed5fcb0900c",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/tools/surfaces.rs",
@@ -5061,7 +5835,7 @@
       "targets": [
         "gateway_rust_surface_tools"
       ],
-      "review": "Actual-source wrapper and real native/reference registry comparisons; lifecycle/defaults/failures, same-chat browser check, preview merging and exact UTF16 previews. Five caught/restored mutations. Browser engine remains an explicit policy-enforcing host port; full gate controls checkpoint credit."
+      "review": "Actual-source wrapper and real native/reference registry comparisons; lifecycle/defaults/failures, same-chat browser check, preview merging and exact UTF16 previews. Five caught/restored mutations. Browser engine remains an explicit policy-enforcing host port; full gate controls checkpoint credit. reconciled 2026-02-14: tools/surface-tools-metadata.json requires url for browser surfaces (allOf) and tools/surfaces.rs navigates to it, matching upstream."
     },
     {
       "reference": "packages/gateway/src/tools/swarm-mailbox.ts",
@@ -5130,14 +5904,14 @@
     },
     {
       "reference": "packages/gateway/src/tools/thread-tools.ts",
-      "reference_sha256": "a2d07c750e2c9b5e7e71d8744a5aefab0218fa101f4ef1d247e9db085cb5bbc3",
+      "reference_sha256": "0512d9ab388b8af805821b176a9b7843a32f608fdd107e9ac6079570cb9992c1",
       "status": "implemented",
       "native": [
         "packages/gateway-rust/src/tools/thread_tools.rs"
       ],
       "contracts": [],
       "targets": [],
-      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/thread-tools.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff.",
+      "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/thread-tools.ts`.\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. reconciled 2026-02-14: tools/thread-tools-metadata.json carries the new parallel-work guidance (explicit file ownership, isolated workspaces, single integration owner, interrupted-worker review) verbatim.",
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
@@ -5234,6 +6008,17 @@
       "review": "Metadata, speech validation, injected service context/error behavior and UTF-16/MIME result fields."
     },
     {
+      "reference": "packages/gateway/src/voice-assistant/service.ts",
+      "reference_sha256": "9a39bef5cabcae37f32c7c5093ad4e79f67b85d15fb719302a1849c1206ef91b",
+      "status": "partial",
+      "native": [
+        "packages/gateway-rust/src/voice_assistant/mod.rs"
+      ],
+      "contracts": [],
+      "review": "2026-02-14 audit verdict PARTIAL: Relay, session, tools and delegation submodules ported, but no VoiceAssistantService orchestrator and zero references outside the module.",
+      "remaining": "Wiring and focused contract evidence still required."
+    },
+    {
       "reference": "packages/gateway/src/voice-assistant/tools.ts",
       "reference_sha256": "45aba4aab832b7392efcdacfe3422a116c81aca482bbe3704ac9bf955f85404f",
       "status": "implemented",
@@ -5246,316 +6031,25 @@
       "remaining": "Reconciled but unverified: no focused contract target, differential comparison or TS-vs-Rust schema diff has been recorded for this path, so it stays implemented-but-unverified. The module docstring above is the current evidence; a focused gate is required before verification credit."
     },
     {
-      "reference": "packages/gateway/src/os-control/linux-desktop-driver.ts",
-      "reference_sha256": "50c0aacf6e2620e86bd3c4739ea02194627d87c8be33a99b4d8a932506050028",
-      "status": "implemented",
+      "reference": "packages/gateway/src/voice/service.ts",
+      "reference_sha256": "62ad6422e5528a58202ff886b13faaf38afac4828fa75e4266f8ad79a7b2a51f",
+      "status": "partial",
       "native": [
-        "packages/gateway-rust/src/integrations/os_control/linux_desktop.rs"
+        "packages/gateway-rust/src/voice/mod.rs"
       ],
       "contracts": [],
-      "targets": [],
-      "review": "Native port of LinuxDesktopOsControlDriver over a narrowed LinuxDesktopShell port (exec_shell) instead of the full SandboxManager. Covers screenshot (import + base64 + IHDR size parse), click/mouseMove/type/key/scroll command construction, tool preflight via `command -v`, exec env/cwd prefixing and the xdotool keysym map (build_xdotool_keys). Display defaults to :99 and is configurable. Shell-quoting, xdotool escaping, JS Math.round/toFixed(3) formatting and the empty-combo rejection mirror the TS driver.",
-      "remaining": "Implemented but unverified: only focused unit tests in the module (command construction against a recording shell double); no live sandbox run against docker/Dockerfile.linux-desktop, no contract target, no TS-vs-Rust differential. Also not yet wired into the runtime driver resolver, which stays a separate integration item."
+      "review": "2026-02-14 audit verdict PARTIAL: src/voice/mod.rs (lib.rs:52) and routes/voice.rs implement the service, but the routes are never mounted: routes/mod.rs only declares `pub mod voice;` and RuntimeBuilder::with_voice (runtime/server.rs:202) has zero callers.",
+      "remaining": "Mount VoiceRoutes in the production server and record focused contract evidence before verification credit."
     },
     {
-      "reference": "packages/gateway/src/lib/network-scan.ts",
-      "reference_sha256": "184c122109b2a411a2972364ec875574d0cc14f987f1f9d7ad2b876167e896da",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/network_scan.rs"
-      ],
-      "native_test_targets": [
-        "network_scan::"
-      ],
-      "remaining": "Focused unit/integration tests only: no contract target, differential run or TS schema diff, so no verification credit. Not mounted on a runtime route/adapter; sweep still shells out to ping/arp/host via NetworkScanHost. Host effects behind NetworkScanHost (manual HostFuture alias since async-trait is unavailable).",
-      "notes": "Native port of the full discovery pipeline (ARP -> sweep -> quick probe -> detail probe -> health/topology/OS enrichment) behind the explicit NetworkScanHost trait.",
-      "evidence": [
-        "cargo test --lib -j2 network_scan:: -> 16 passed / 0 failed / 0 ignored (EXIT=0)"
-      ],
-      "updated_at": "2026-10-27"
-    },
-    {
-      "reference": "packages/gateway/src/pty-broker-client.ts",
-      "reference_sha256": "f3bfde6245b2bcc2d89493d7082a11c86d48de2193e329e8edf1712fb464d169",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/pty_broker_client.rs"
-      ],
-      "native_test_targets": [
-        "pty_broker_client::"
-      ],
-      "remaining": "Focused unit tests only: no contract target, differential run or TS schema diff, so no verification credit. Process launching/pumping is caller-owned behind the BrokerIo trait; no Node pty-broker.mjs child is spawned yet. Deviations: a stdin write failure surfaces as an error instead of being silently ignored (TS swallows it and hangs until the RPC timeout), and a spawn response without ptyId is reported as 'spawn failed' instead of leaking undefined.",
-      "notes": "Native port of the PTY broker JSON-lines RPC protocol: id sequencing from 1, pending-call map, output/exit event dispatch, stderr readiness marker, 10s startup / 15s RPC timeouts and byte-identical error strings.",
-      "evidence": [
-        "cargo test --lib -j2 pty_broker_client:: -> 12 passed; 0 failed; 0 ignored; 1062 filtered out (EXIT=0)"
-      ],
-      "updated_at": "2026-10-27"
-    },
-    {
-      "reference": "packages/gateway/src/evaluation/isolated-gateway.ts",
-      "reference_sha256": "2b34bc931d6ddf5dd0f58bc74d7d97de9dc370059fd92ea7d46dfc87ec9577f0",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/evaluation/mod.rs",
-        "packages/gateway-rust/src/evaluation/isolated_gateway.rs"
-      ],
-      "native_test_targets": [
-        "evaluation::isolated_gateway::"
-      ],
-      "remaining": "Focused unit tests only: no contract target, differential run or TS schema diff, so no verification credit. The module covers isolated-gateway.ts and its child bootstrap contract (isolated-gateway-child.ts, sha c821f4d5...); host side (settings HTTP fetch, state-dir create/remove, child spawn, base env, uuid) is behind the IsolatedGatewayHost trait, so no real process is spawned here and runtime mounting is a separate integration item.",
-      "notes": "Native port of the isolated evaluation gateway supervisor: settings fetch, child env overrides, JAIT_EVAL_READY readiness parsing, stdout/stderr tails, watch-signal cancellation, SIGTERM->SIGKILL stop escalation with state-dir cleanup.",
-      "evidence": [],
-      "updated_at": "2026-10-27"
-    },
-    {
-      "reference": "packages/gateway/src/evaluation/isolated-gateway-child.ts",
-      "reference_sha256": "c821f4d51f7bb6ffb5e957d3021b8d3535c4687deb9bdf11208e494c3586473a",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/evaluation/mod.rs",
-        "packages/gateway-rust/src/evaluation/isolated_gateway_child.rs"
-      ],
-      "native_test_targets": [
-        "evaluation::isolated_gateway_child::host::tests::",
-        "evaluation::isolated_gateway_child::database_authority::tests::",
-        "evaluation::isolated_gateway_child::private_directory_tests::"
-      ],
-      "remaining": "Focused unit tests only (41 passed, 0 failed, 1085 filtered out in cargo test --lib evaluation::). No contract target, differential run or TS schema diff, so no verification credit. The host trait (open/migrate DB, evaluation user, settings update, token signing, gateway start, ready emit, cleanup cancel, gateway wait) is implemented behind IsolatedGatewayHost with an in-process test host and SQLite/libc fixtures; no real child process, real gateway boot or loopback interop is exercised. Runtime factory/CLI mounting is a separate integration item.",
-      "notes": "Native port of the isolated evaluation gateway child bootstrap: ordered prepare steps, private state directory with O_NOFOLLOW/handle-held authority, listener ownership and ready publication, watch cancellation before/during/after readiness, guarded cleanup that refuses replaced directories and retains authority for retry.",
-      "evidence": [
-        ".jait/artifacts/gateway-rust/chat-loops/continuation-20261028-clock-repair.md",
-        "cargo test --lib evaluation:: => 41 passed; 0 failed; 0 ignored; 1085 filtered out (2026-10-28)"
-      ],
-      "updated_at": "2026-10-28"
-    },
-    {
-      "reference": "packages/gateway/src/db/schema.ts",
-      "reference_sha256": "b0b1ec7e842ba4c4bfd24c523ac2a350f92bc3de6dd12f50faa39f8949f57068",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/db/schema.rs"
-      ],
+      "reference": "packages/gateway/src/ws.ts",
+      "reference_sha256": "d37be991329fc293bcc6bea311b7b90f03af9f65908dccf14d60b53d84530909",
+      "status": "absent",
+      "native": [],
       "contracts": [],
-      "targets": [],
-      "review": "Native port of the drizzle schema module: all 48 sqliteTable definitions in source order with columns, primary keys, unique constraints and relations, plus the namespace-order accessor the JS barrel exposes. Table names, column kinds and unique-column sets were diffed against the TS source (48 sqliteTable calls in identical order) rather than trusted from the port.",
-      "remaining": "Focused native tests pass in db::schema but no TS-vs-Rust schema dump diff, generated-DDL comparison or migration round trip is recorded, so this stays implemented-but-unverified. The TS module is consumed by drizzle-kit generation; the Rust side has no generator equivalent, so DDL emission parity is unverified."
-    },
-    {
-      "reference": "packages/gateway/src/db/sqlite-shim.ts",
-      "reference_sha256": "910cc9a8d0448693e9a5e147f3af3e0fb61f65db1e0f175709147320cad44ba3",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/db/sqlite_shim.rs"
-      ],
-      "contracts": [],
-      "targets": [],
-      "review": "Native port of the better-sqlite3 shim boundary: Backend/BackendStatus switching, SqliteDatabase statement preparation, run/get/all/values semantics including raw-mode empty results (as_objects == Some(&[]) and as_values == None), exec, pragma helpers and the same error strings for unsupported backends.",
-      "remaining": "Focused native tests pass in db::sqlite_shim but the module is exercised against rusqlite only; no better-sqlite3 differential run, no statement-cache timing assertions and no WAL/transaction cross-checks are recorded, so this stays implemented-but-unverified."
-    },
-    {
-      "reference": "packages/gateway/src/db/index.ts",
-      "reference_sha256": "a6ce0ba6b9b8259b1bcd6abd61f4204b529982217d7d3459164046a7f04ecdd6",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/db/index.rs",
-        "packages/gateway-rust/src/db/mod.rs"
-      ],
-      "contracts": [],
-      "targets": [],
-      "review": "Barrel for the db package: re-exports the migration inventory/apply/verify surface, open_database, schema module, sqlite_shim backend types, the state-directory path helpers (including the newly ported default_db_path = state_directory(...)/data/jait.db) and the JaitDb connection alias. Deliberate deviation: TS openDatabase returns { db, sqlite } and defaults the path internally, while the Rust open_database takes an explicit path and returns the connection, with resolution left to state_directory::resolve_database_path.",
-      "remaining": "Focused native tests pass (db:: 39/39 including the four barrel surface tests, state_directory:: 8/8), but no consumer-level integration test resolves a path, opens, migrates and verifies through the barrel in one flow, so this stays implemented-but-unverified. Runtime wiring of the barrel into the CLI/runtime entry points is a separate integration item."
-    },
-    {
-      "reference": "packages/gateway/src/tools/contracts.ts",
-      "reference_sha256": "4a362b7e4c418096e45a88714342b6d5d47805e0cce67c177e11e47b1bceecf6",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/tools/contracts.rs"
-      ],
-      "native_sha256": {
-        "packages/gateway-rust/src/tools/contracts.rs": "f7d38a79027114bcd415398c1c25b9e974e6310c818cc2df4041a486a4e82d52"
-      },
-      "native_test_targets": [
-        "tools::contracts::tests"
-      ],
-      "evidence": [
-        "focused cargo test --lib tools::contracts:: = 16 passed / 0 failed"
-      ],
-      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
-      "remaining": "Type/registration-level port only (tool contracts, JSON schemas, REGISTRATIONS table). Runtime tool-registry assembly still lives in TS tools/index.ts, recorded there as a reexport with native=None; no runtime mounting."
-    },
-    {
-      "reference": "packages/gateway/src/tools/mcp-bridge.ts",
-      "reference_sha256": "bf45a8b532bcd5df932881e2ed9990861c757f14399a3cae9d9db50702ad141a",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/tools/mcp_bridge.rs"
-      ],
-      "native_sha256": {
-        "packages/gateway-rust/src/tools/mcp_bridge.rs": "c8b6c3383608289b566934b6461075e31be898c88b78c2436cbf0d1a24c571a8"
-      },
-      "native_test_targets": [
-        "tools::mcp_bridge::tests"
-      ],
-      "evidence": [
-        "focused cargo test --lib tools::mcp_bridge:: = 15 passed / 0 failed"
-      ],
-      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
-      "remaining": "No live MCP server interop: transport is behind a host port and tests use in-process fakes. Not runtime-mounted; config/status/tool ordering parity is covered by unit tests."
-    },
-    {
-      "reference": "packages/gateway/src/providers/contracts.ts",
-      "reference_sha256": "1807cec881724a7267f77185e702d1d77ab39340b7e76b68c9dba6d78b6f6f8a",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/providers/contracts.rs"
-      ],
-      "native_sha256": {
-        "packages/gateway-rust/src/providers/contracts.rs": "ad02db02fef82697901d969d62fd8bb598b55c87986997890a931d911ffe1c99"
-      },
-      "native_test_targets": [
-        "providers::contracts::tests"
-      ],
-      "evidence": [
-        "focused cargo test --lib providers::contracts:: = 5 passed / 0 failed"
-      ],
-      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
-      "remaining": "Session boundary only. No type in providers::registry implements CliProviderAdapter yet, so no session lifecycle/approvals/steering is exercised against a real adapter; no runtime wiring."
-    },
-    {
-      "reference": "packages/gateway/src/providers/index.ts",
-      "reference_sha256": "36e041cfd4433676544d030a71e2604318e24e5e3d59d6efbf982fd797c83fa1",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/providers/index.rs"
-      ],
-      "native_sha256": {
-        "packages/gateway-rust/src/providers/index.rs": "ec63e4143840ab54495803a210f9633055b94df8f9c81c51e5396b82e8f0e64a"
-      },
-      "native_test_targets": [
-        "providers::index::tests"
-      ],
-      "evidence": [
-        "focused cargo test --lib providers::index:: = 4 passed / 0 failed"
-      ],
-      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
-      "remaining": "Barrel parity only: TS spellings for ProviderInfo and loadAcpProviderConfigs are not aliased; the native loader is providers::acp_registry::load_acp_registry_provider_configs. Behaviour lives in the owning modules."
-    },
-    {
-      "reference": "packages/gateway/src/security/index.ts",
-      "reference_sha256": "a36bef876ecf03553d66ff3d6777e66ddb95b51e1904fe558cf1ef023e7580ff",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/security/index.rs"
-      ],
-      "native_sha256": {
-        "packages/gateway-rust/src/security/index.rs": "bf0922cfe412beeb3a4e43cb3971b3d26aaef5762c1908fa2315d8ba2b0b7ad0"
-      },
-      "native_test_targets": [
-        "security::index::tests"
-      ],
-      "evidence": [
-        "focused cargo test --lib security::index:: = 5 passed / 0 failed"
-      ],
-      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
-      "remaining": "Barrel parity only; documented Gaps: PathGuardOptions, SSRFGuardOptions, Windows*/LinuxDesktopSandbox* option+result types have no native structs, and TS type spellings are not aliased to native names."
-    },
-    {
-      "reference": "packages/gateway/src/os-control/index.ts",
-      "reference_sha256": "1dbab303fbc11e3c530ced93636abb0a863f1a72116831ebcd4c0dc3025e6b45",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/integrations/os_control/index.rs"
-      ],
-      "native_sha256": {
-        "packages/gateway-rust/src/integrations/os_control/index.rs": "8ced33ea2b2897e27318bdd75a58d50291e21841c4903647ddf55e8e7964fbd1"
-      },
-      "native_test_targets": [
-        "integrations::os_control::index::tests"
-      ],
-      "evidence": [
-        "focused cargo test --lib integrations::os_control::index:: = 2 passed / 0 failed"
-      ],
-      "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified",
-      "remaining": "Barrel parity only; Windows/Linux/macOS desktop drivers are exercised only through host-port fakes, no live desktop-control interop."
-    },
-    {
-      "reference": "packages/gateway/src/tools/agent-tools.ts",
-      "reference_sha256": "a73d8ac9e2d86300cff72c97f8dabe1ce158ecfcb04edf4eeda7a76e3a68d545",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/tools/agent_tools.rs"
-      ],
-      "contracts": [],
-      "targets": [],
-      "review": "Native port of agent_create/agent_list/agent_send over a SubAgentHost port: dotted metadata names and descriptions, prompt/details validation errors, allowed-tools normalization against DEFAULT_SUBAGENT_TOOLS, ACP-preferred-with-loop-fallback execution, cancellation short-circuit, performative parsing/stripping mirroring agent-communication.ts (regex ^\\s*\\[(tag)\\]\\s*), parent payload key sets for success {subAgentId,content,performative,segments,rounds,toolCalls,durationMs}, abort {subAgentId,partialContent,segments,rounds,toolCalls,durationMs} and error paths, plus renderSegments/renderToolCalls projections onto MessageSegment.content and the 8-key {callId,tool,args,ok,message,data,startedAt,completedAt} tool-call shape.",
-      "remaining": "Focused-only evidence (16/16 tools::agent_tools, log .jait/artifacts/gateway-rust/tools-port/agent-tools.log) => implemented, not verified. Runtime mounting of the agent tool descriptor in tools::mod.rs registry; SubAgentHost implemented only by test fake (no runtime loop/ACP wiring); description truncation uses chars().take(60) vs JS UTF-16 slice(0,60) (differs only for astral characters); no differential run against live ACP sub-agent.",
-      "native_sha256": "56dc7f6191aed27d97bc40ccb6f2cff33e40e4ef7b132a2c7b59f73f12875d5d",
-      "native_test_targets": [
-        "tools::agent_tools::tests::"
-      ],
-      "evidence": [
-        {
-          "kind": "focused-unit-tests",
-          "command": "cargo test --locked --offline --manifest-path packages/gateway-rust/Cargo.toml --lib -j1 tools::agent_tools::tests::",
-          "result": "16 passed; 0 failed",
-          "log": ".jait/artifacts/gateway-rust/tools-port/agent-tools.log"
-        }
-      ]
-    },
-    {
-      "reference": "packages/gateway/src/tools/index.ts",
-      "reference_sha256": "31fd9ea0e577e90d6e4d5b35350706ee4ac621eb351dd20d2b5c210b7946285f",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/tools/index.rs"
-      ],
-      "contracts": [],
-      "targets": [],
-      "review": "PARTIAL native port: persona_agent_id_for_context / persona_agent_id_for_thread resolution over an injected PersonaThreadLookup (ThreadOwner), rejecting empty ids, unknown threads, threads without a persona and threads owned by another user. The createToolRegistry barrel and the full tool list assembly from the 757-line TS module are NOT ported.",
-      "remaining": "Focused-only evidence (8/8 tools::index, log .jait/artifacts/gateway-rust/tools-port/tools-index.log) => implemented, not verified. PARTIAL: only persona_agent_id_for_context/persona_agent_id_for_thread + ThreadOwner/PersonaThreadLookup host ported; the createToolRegistry barrel that assembles the full tool list is not ported; no full 757-line barrel equivalence evidence.",
-      "native_sha256": "3ac7587216b4d295884f24de154c4b607c7ce67b38abd810028c314dcf06d2e8",
-      "native_test_targets": [
-        "tools::index::tests::"
-      ],
-      "evidence": [
-        {
-          "kind": "focused-unit-tests",
-          "command": "cargo test --locked --offline --manifest-path packages/gateway-rust/Cargo.toml --lib -j1 tools::index::tests::",
-          "result": "8 passed; 0 failed",
-          "log": ".jait/artifacts/gateway-rust/tools-port/tools-index.log"
-        }
-      ]
-    },
-    {
-      "reference": "packages/gateway/src/tools/agent-acp-runner.ts",
-      "reference_sha256": "54b3677c9a375cc2419ca25540285e88551dbc2e2659d909d80285d5c6cb2519",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/tools/agent_acp_runner.rs"
-      ],
-      "contracts": [],
-      "targets": [
-        "tools::agent_acp_runner::tests"
-      ],
-      "review": "Native port of runAcpSpecialistTurn: account-scoped provider lookup and availability gating, runtime-mode resolution against the provider's advertised modes, system-prompt framing, MCP server refs, session start/stop, hard timeout, watch-channel abort, event filtering by session id, transcript segments (text/thinking/error/toolGroup with performative-tag stripping via strip_performative_tag), tool-call bookkeeping including results without a start and finalize() of unfinished calls, performative result mapping (success/refuse/failure/query) with the same placeholder messages, and best-effort approval forwarding through an injected decider. All transport concerns are behind AcpSpecialistHost/AcpSpecialistProvider.",
-      "remaining": "Focused-only evidence => implemented, not verified. Focused run tools::agent_acp_runner::tests 17 passed / 0 failed (2026-10-28). Provider/session lifecycle is an injected trait: no real CLI/ACP provider interop beyond the fake provider harness; MCP server refs and approval transport are not runtime-mounted.",
-      "evidence": [
-        "packages/gateway-rust/.evidence/tools-agent-acp-runner.log"
-      ]
-    },
-    {
-      "reference": "packages/gateway/src/clawhub/client.ts",
-      "reference_sha256": "83cfdc81bacd698397297d880f13689dc598350416c1949596612a498973053e",
-      "status": "implemented",
-      "native": [
-        "packages/gateway-rust/src/integrations/clawhub.rs"
-      ],
-      "contracts": [],
-      "targets": [],
-      "review": "Reconciled by coverage audit: packages/gateway-rust/src/integrations/clawhub.rs (98 KB) is declared at integrations/mod.rs:11 and its ClawHubClient is consumed in production code at runtime/application.rs:239 (that file contains no #[cfg(test)] gate). Module documentation plus call-site wiring were confirmed directly against the live source; no line-by-line TS-vs-Rust diff has been recorded.",
-      "remaining": "Wired but unverified: no focused contract target or differential comparison is recorded for clawhub/client.ts, so it stays implemented-but-unverified. The supervised store constructor in runtime/server.rs remains test-only, so store integration is not production-proven either."
+      "review": "2026-02-14 audit verdict ABSENT: transport/mod.rs declares transports unported; no WebSocketUpgrade or /ws path anywhere; WsControlPlane has no twin.",
+      "remaining": "No native implementation; component remains unported."
     }
   ],
-  "updated_at": "2026-11-02T08:20:26.953064+00:00"
+  "updated_at": "2026-11-02T08:55:56.194Z"
 }

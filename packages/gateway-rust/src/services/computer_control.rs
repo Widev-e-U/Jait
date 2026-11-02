@@ -111,6 +111,7 @@ impl ComputerControlSessionService {
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicI64, Ordering};
+    use std::sync::Arc;
 
     fn manual_clock(start: i64) -> (Clock, Arc<AtomicI64>) {
         let now = Arc::new(AtomicI64::new(start));
@@ -134,16 +135,16 @@ mod tests {
     }
 
     #[test]
-    fn find_by_node_prefers_earliest_created_session() {
+    fn find_by_node_ignores_stopped_leases() {
         let (clock, _now) = manual_clock(1_700_000_000_000);
         let mut service = ComputerControlSessionService::new(clock, 60_000);
         let first = service.start("chat-a", "node-1").unwrap();
-        // A second lease on a different node keeps the map insertion order distinct
-        // from the node binding, so the lookup must scan in insertion order.
-        let second = service.start("chat-b", "node-2").unwrap();
+        assert!(service.stop(&first.id).is_some());
+
+        let second = service.start("chat-b", "node-1").unwrap();
+        // The stopped lease must not linger in the insertion order and shadow the new one.
+        assert_eq!(service.find_by_node("node-1").unwrap().id, second.id);
         assert_ne!(first.id, second.id);
-        assert_eq!(service.find_by_node("node-1").unwrap().id, first.id);
-        assert_eq!(service.find_by_node("node-2").unwrap().id, second.id);
     }
 
     #[test]
