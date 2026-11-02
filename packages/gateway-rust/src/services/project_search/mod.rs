@@ -1,8 +1,8 @@
 //! Native bounded project enumeration, indexing and ranked search. No HTTP, shell,
 //! TS/Bun worker, ambient Git config or model interpretation of file contents.
 mod filesystem;
-pub mod primary_bridge;
 pub(crate) mod ignore;
+pub mod primary_bridge;
 pub mod ranking;
 mod ripgrep;
 mod walk;

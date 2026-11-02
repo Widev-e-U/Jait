@@ -404,8 +404,7 @@ async fn pre_cancelled_index_has_no_filesystem_or_database_effects() {
     let error = service
         .index(&project, Some("alice".into()), None, Some(signal))
         .await
-        .err()
-        .expect("cancelled index must fail");
+        .expect_err("cancelled index must fail");
     assert_eq!(error.name, "AbortError");
     assert!(!std::path::Path::new(&output).exists());
     assert_eq!(

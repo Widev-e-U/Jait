@@ -55,10 +55,12 @@ impl Error for DatabaseError {
     }
 }
 
+type WorkerThread = (JoinHandle<()>, watch::Sender<Option<bool>>);
+
 struct Inner {
     sender: Mutex<Option<mpsc::Sender<Job>>>,
     finished: watch::Receiver<Option<bool>>,
-    thread: Mutex<Option<(JoinHandle<()>, watch::Sender<Option<bool>>)>>,
+    thread: Mutex<Option<WorkerThread>>,
 }
 
 #[derive(Clone)]

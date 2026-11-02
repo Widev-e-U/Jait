@@ -1,5 +1,6 @@
 // Translated fixture from packages/gateway/src/tools/computer-tools.test.ts; expected literals are in tail_static.rs.
 import type { NodeState } from "@jait/shared";
+import type { ScreenShareService } from "@jait/screen-share";
 import { ComputerControlSessionService } from "../../../../packages/gateway/src/services/computer-control.js";
 import type { WsControlPlane } from "../../../../packages/gateway/src/ws.js";
 import { createComputerTools } from "../../../../packages/gateway/src/tools/computer-tools.js";
@@ -45,7 +46,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_65_3": {
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_66_3": {
 
 
 const context: ToolContext = {
@@ -93,7 +94,7 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
 }
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
   const found = tools.get(name);
@@ -128,7 +129,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_85_3": {
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_86_3": {
 
 
 const context: ToolContext = {
@@ -176,7 +177,93 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
+}
+function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
+  const found = tools.get(name);
+  if (!found) throw new Error(`Missing tool ${name}`);
+  return found as ToolDefinition<T>;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const f = setup();
+    const share = { chatId: "chat-a", controlOwner: "user", pendingApproval: false, status: "sharing" };
+    const screenShare = { getSessionsForNode: () => [share] } as unknown as ScreenShareService;
+    const tools = new Map(createComputerTools(f.ws, f.sessions, screenShare).map(item => [item.name, item] as const));
+    const sessionTool = tool<{ action: "start"; nodeId: string }>(tools, "computer.session");
+    __jait_capture(0, ((await sessionTool.execute({ action: "start", nodeId: "windows-a" }, context)).ok));
+    __jait_capture(1, (f.proxyToolOp.mock.calls));
+    share.controlOwner = "agent";
+    const started = await sessionTool.execute({ action: "start", nodeId: "windows-a" }, context);
+    __jait_capture(2, (started.ok));
+    const sessionId = (started.data as { session: { id: string } }).session.id;
+    share.controlOwner = "user";
+    const count = f.proxyToolOp.mock.calls.length;
+    const action = await tool<Record<string, unknown>>(tools, "computer.act").execute({ sessionId, action: "move", x: 1, y: 1 }, context);
+    __jait_capture(3, (action.ok));
+    __jait_capture(4, (f.proxyToolOp.mock.calls), (count));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_105_3": {
+
+
+const context: ToolContext = {
+  sessionId: "chat-a",
+  actionId: "action-a",
+  projectRoot: "/workspace",
+  requestedBy: "assistant",
+};
+function windowsNode(overrides: Partial<NodeState> = {}): NodeState {
+  return {
+    id: "windows-a",
+    name: "Windows PC",
+    platform: "windows",
+    role: "desktop",
+    lifecycle: "ready",
+    protocolVersion: 1,
+    capabilities: {
+      providers: [],
+      surfaces: ["computer"],
+      tools: ["computer.session", "computer.observe", "computer.act"],
+      screenShare: true,
+      voice: false,
+      preview: false,
+    },
+    connectedAt: new Date(0).toISOString(),
+    lastSeenAt: new Date(0).toISOString(),
+    ...overrides,
+  };
+}
+function setup(nodes: NodeState[] = [windowsNode()]) {
+  const proxyToolOp = vi.fn(async (_nodeId: string, tool: string) => ({
+    ok: true,
+    message: `${tool} completed`,
+    data: { accepted: true },
+  }));
+  const ws = {
+    getNodeRegistry: () => ({
+      version: 1,
+      serverTime: new Date().toISOString(),
+      nodes,
+    }),
+    proxyToolOp,
+  } as unknown as WsControlPlane;
+  const sessions = new ComputerControlSessionService();
+  const tools = new Map(
+    createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
+  );
+  return { tools, proxyToolOp, sessions, ws };
 }
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
   const found = tools.get(name);
@@ -214,7 +301,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_114_3": {
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_134_3": {
 
 
 const context: ToolContext = {
@@ -262,7 +349,7 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
 }
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
   const found = tools.get(name);
@@ -293,7 +380,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_126_3": {
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_146_3": {
 
 
 const context: ToolContext = {
@@ -341,7 +428,7 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
 }
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
   const found = tools.get(name);
@@ -377,7 +464,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_143_3": {
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_163_3": {
 
 
 const context: ToolContext = {
@@ -425,7 +512,7 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
 }
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
   const found = tools.get(name);
@@ -458,7 +545,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_176_3": {
 
 
 const context: ToolContext = {
@@ -506,7 +593,7 @@ function setup(nodes: NodeState[] = [windowsNode()]) {
   const tools = new Map(
     createComputerTools(ws, sessions).map((tool) => [tool.name, tool] as const),
   );
-  return { tools, proxyToolOp, sessions };
+  return { tools, proxyToolOp, sessions, ws };
 }
 function tool<T>(tools: Map<string, ToolDefinition>, name: string): ToolDefinition<T> {
   const found = tools.get(name);

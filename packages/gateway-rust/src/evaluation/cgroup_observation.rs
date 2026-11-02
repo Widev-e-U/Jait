@@ -88,8 +88,8 @@ mod tests {
 
     #[test]
     fn events_require_one_unambiguous_populated_value() {
-        assert_eq!(parse_populated(b"populated 0\nfrozen 0\n").unwrap(), false);
-        assert_eq!(parse_populated(b"populated 1\nfrozen 0\n").unwrap(), true);
+        assert!(!parse_populated(b"populated 0\nfrozen 0\n").unwrap());
+        assert!(parse_populated(b"populated 1\nfrozen 0\n").unwrap());
         for input in [
             b"frozen 0\n".as_slice(),
             b"populated 0\npopulated 1\n",

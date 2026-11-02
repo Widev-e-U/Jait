@@ -173,6 +173,287 @@ try {
 await (async()=>{
 
     const provider = new SlowStartProvider();
+    let alive = true;
+    const tracked = Object.assign(provider, { hasSession: () => alive });
+    const h = await harness(tracked, "idle-expiry-followup");
+    try {
+      await h.chat({ content: "Remember the fixture uses UTF-8" });
+      alive = false;
+      const originalStart = provider.startSession.getMockImplementation()!;
+      provider.startSession.mockImplementation(async options => {
+        const session = await originalStart(options);
+        alive = true;
+        return session;
+      });
+      const response = await h.chat({ content: "Continue the fixture" });
+      __jait_capture(0, (response.statusCode));
+      __jait_capture(1, (provider.startSession.mock.calls));
+      __jait_capture(2, (provider.sendTurn.mock.calls[1]?.[1]));
+      __jait_capture(3, (provider.sendTurn.mock.calls[1]?.[1]));
+    } finally { await h.close(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_157_3": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  jwtSecret: "prewarm-test-secret",
+};
+class SlowStartProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  /** Mirrors the ~3s ACP spawn observed in production, scaled down. */
+  static readonly START_MS = 300;
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    await new Promise((resolve) => setTimeout(resolve, SlowStartProvider.START_MS));
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emitForTest({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "ok" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+}
+async function harness(provider: CliProviderAdapter, name: string) {
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const providerRegistry = new ProviderRegistry();
+  providerRegistry.register(provider);
+  const sessionService = new SessionService(db);
+  const sessionState = new SessionStateService(db);
+  const userService = new UserService(db);
+  const user = userService.createUser(`${name}-user`, "password123");
+  const session = sessionService.create({ userId: user.id, name });
+  const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+  const app = await createServer(testConfig, {
+    db,
+    sqlite,
+    providerRegistry,
+    sessionService,
+    sessionState,
+    userService,
+  });
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  return {
+    app,
+    session,
+    headers,
+    prewarm: (payload: Record<string, unknown> = {}) => app.inject({
+      method: "POST",
+      url: "/api/chat/prewarm",
+      headers,
+      payload: { sessionId: session.id, provider: "codex", runtimeMode: "full-access", ...payload },
+    }),
+    chat: (payload: Record<string, unknown> = {}) => app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "hello",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+        ...payload,
+      },
+    }),
+    close: async () => {
+      await app.close();
+      sqlite.close();
+    },
+  };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const provider = new SlowStartProvider();
+    let alive = true;
+    const h = await harness(Object.assign(provider, { hasSession: () => alive }), "idle-expiry-prewarm");
+    try {
+      await h.prewarm();
+      alive = false;
+      const result = await h.prewarm();
+      __jait_capture(0, (result.json()));
+      __jait_capture(1, (provider.startSession.mock.calls));
+    } finally { await h.close(); }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_170_3": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  jwtSecret: "prewarm-test-secret",
+};
+class SlowStartProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  /** Mirrors the ~3s ACP spawn observed in production, scaled down. */
+  static readonly START_MS = 300;
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    await new Promise((resolve) => setTimeout(resolve, SlowStartProvider.START_MS));
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emitForTest({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "ok" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+}
+async function harness(provider: CliProviderAdapter, name: string) {
+  const { db, sqlite } = await openDatabase(":memory:");
+  migrateDatabase(sqlite);
+  const providerRegistry = new ProviderRegistry();
+  providerRegistry.register(provider);
+  const sessionService = new SessionService(db);
+  const sessionState = new SessionStateService(db);
+  const userService = new UserService(db);
+  const user = userService.createUser(`${name}-user`, "password123");
+  const session = sessionService.create({ userId: user.id, name });
+  const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+  const app = await createServer(testConfig, {
+    db,
+    sqlite,
+    providerRegistry,
+    sessionService,
+    sessionState,
+    userService,
+  });
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  return {
+    app,
+    session,
+    headers,
+    prewarm: (payload: Record<string, unknown> = {}) => app.inject({
+      method: "POST",
+      url: "/api/chat/prewarm",
+      headers,
+      payload: { sessionId: session.id, provider: "codex", runtimeMode: "full-access", ...payload },
+    }),
+    chat: (payload: Record<string, unknown> = {}) => app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "hello",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+        ...payload,
+      },
+    }),
+    close: async () => {
+      await app.close();
+      sqlite.close();
+    },
+  };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const provider = new SlowStartProvider();
     const h = await harness(provider, "prewarm-first-message");
 
     const prewarmed = await h.prewarm();
@@ -200,7 +481,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_191_3": {
 
 
 const testConfig = {
@@ -345,7 +626,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_178_3": {
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_213_3": {
 
 
 const testConfig = {
@@ -483,7 +764,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_193_3": {
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_228_3": {
 
 
 const testConfig = {
@@ -623,7 +904,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_210_3": {
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_245_3": {
 
 
 const testConfig = {
@@ -762,7 +1043,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_226_3": {
+case "tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_261_3": {
 
 
 const testConfig = {

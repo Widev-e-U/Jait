@@ -1315,7 +1315,7 @@ async fn file_diffs(State(state): State<GitRoutes>, request: Request) -> Respons
             let mut specs = Vec::new();
             for (path, status) in &candidates {
                 if status != "A" && status != "?" { specs.push(format!("{diff_base}:{path}")); }
-                if status != "D" { if let Some(topic) = &branch { specs.push(format!("{topic}:{path}")); } }
+                if status != "D" && let Some(topic) = &branch { specs.push(format!("{topic}:{path}")); }
             }
             let blobs = files_at_refs(&cwd, &specs);
             for (path, status) in candidates {

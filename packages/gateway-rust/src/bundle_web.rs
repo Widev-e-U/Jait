@@ -74,7 +74,11 @@ pub fn stage_web(source: &Path, destination: &Path) -> io::Result<BundleResult> 
 /// atomic exchange or a directory descriptor alone does not enforce these
 /// requirements. This API does not provide that replacement protocol.
 #[cfg(target_os = "linux")]
-pub fn publish_new_web(source: &Path, parent: &fs::File, name: &std::ffi::OsStr) -> io::Result<BundleResult> {
+pub fn publish_new_web(
+    source: &Path,
+    parent: &fs::File,
+    name: &std::ffi::OsStr,
+) -> io::Result<BundleResult> {
     use std::ffi::CString;
     use std::os::fd::AsRawFd;
     use std::os::unix::ffi::OsStrExt;
@@ -82,12 +86,19 @@ pub fn publish_new_web(source: &Path, parent: &fs::File, name: &std::ffi::OsStr)
 
     let mut components = Path::new(name).components();
     if !matches!(components.next(), Some(Component::Normal(_))) || components.next().is_some() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "publication name must be one normal path component"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "publication name must be one normal path component",
+        ));
     }
-    let destination = CString::new(name.as_bytes())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "publication name contains NUL"))?;
+    let destination = CString::new(name.as_bytes()).map_err(|_| {
+        io::Error::new(io::ErrorKind::InvalidInput, "publication name contains NUL")
+    })?;
     if !parent.metadata()?.is_dir() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "publication parent must be a directory"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "publication parent must be a directory",
+        ));
     }
     let stage = loop {
         let candidate = format!(".jait-web-stage-{}", uuid::Uuid::new_v4());
@@ -96,8 +107,10 @@ pub fn publish_new_web(source: &Path, parent: &fs::File, name: &std::ffi::OsStr)
         }
     };
     let stage_name = CString::new(stage.as_bytes()).expect("generated stage name contains no NUL");
-    let stage_path = std::path::PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd())).join(&stage);
-    let annotate = |error: io::Error| io::Error::new(error.kind(), format!("{error}; staging name: {stage}"));
+    let stage_path =
+        std::path::PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd())).join(&stage);
+    let annotate =
+        |error: io::Error| io::Error::new(error.kind(), format!("{error}; staging name: {stage}"));
     match stage_web(source, &stage_path).map_err(&annotate)? {
         BundleResult::MissingBuild => return Ok(BundleResult::MissingBuild),
         BundleResult::Staged => {}
@@ -105,7 +118,13 @@ pub fn publish_new_web(source: &Path, parent: &fs::File, name: &std::ffi::OsStr)
     // renameat2 with NOREPLACE fails closed on unsupported filesystems and if a
     // destination appears concurrently. Never fall back to a replacing rename.
     let result = unsafe {
-        libc::renameat2(parent.as_raw_fd(), stage_name.as_ptr(), parent.as_raw_fd(), destination.as_ptr(), libc::RENAME_NOREPLACE)
+        libc::renameat2(
+            parent.as_raw_fd(),
+            stage_name.as_ptr(),
+            parent.as_raw_fd(),
+            destination.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
     };
     if result != 0 {
         return Err(annotate(io::Error::last_os_error()));
@@ -115,7 +134,10 @@ pub fn publish_new_web(source: &Path, parent: &fs::File, name: &std::ffi::OsStr)
 
 fn ensure_staged_index(destination: &Path) -> io::Result<()> {
     if !fs::symlink_metadata(destination.join("index.html"))?.is_file() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "staged index.html is not a regular file"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "staged index.html is not a regular file",
+        ));
     }
     Ok(())
 }
@@ -198,7 +220,11 @@ fn same_file_snapshot(before: &fs::Metadata, after: &fs::Metadata) -> bool {
     }
     #[cfg(not(unix))]
     {
-        before.modified().ok().zip(after.modified().ok()).is_some_and(|(a, b)| a == b)
+        before
+            .modified()
+            .ok()
+            .zip(after.modified().ok())
+            .is_some_and(|(a, b)| a == b)
     }
 }
 
@@ -245,10 +271,18 @@ mod tests {
         fs::create_dir(&target).unwrap();
         fs::write(target.join("index.html"), b"old").unwrap();
         let parent = fs::File::open(&f.0).unwrap();
-        assert_eq!(publish_new_web(&source, &parent, "published".as_ref()).unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            publish_new_web(&source, &parent, "published".as_ref())
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
         assert_eq!(fs::read(target.join("index.html")).unwrap(), b"old");
         assert!(publish_new_web(&source, &parent, "../escape".as_ref()).is_err());
-        assert_eq!(publish_new_web(&source, &parent, "fresh".as_ref()).unwrap(), BundleResult::Staged);
+        assert_eq!(
+            publish_new_web(&source, &parent, "fresh".as_ref()).unwrap(),
+            BundleResult::Staged
+        );
         assert_eq!(fs::read(f.0.join("fresh/index.html")).unwrap(), b"new");
     }
     #[test]

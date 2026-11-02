@@ -50,6 +50,28 @@ const __jait_hook_254 = () => { clearSessionTodos(context.sessionId); clearSessi
 try {
 await (async()=>{
 
+    __jait_capture(0, (createTodoTool().description));
+    __jait_capture(1, (createTodoTool().description));
+  
+})();
+
+} finally {
+await __jait_hook_254();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_core_todo_test_ts_10_3": {
+
+
+const context = { sessionId: "todo-tests", actionId: "todo-action", projectRoot: "/project", requestedBy: "test" };
+const __jait_hook_254 = () => { clearSessionTodos(context.sessionId); clearSessionTodos("other-session"); };
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const tool = createTodoTool();
     const item = { id: 1, title: "Verify browser actions", status: "in-progress" as const };
     await tool.execute({ todoList: [item] }, context);
@@ -69,7 +91,7 @@ await __jait_hook_254();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_core_todo_test_ts_17_3": {
+case "tailstatic_packages_gateway_src_tools_core_todo_test_ts_21_3": {
 
 
 const context = { sessionId: "todo-tests", actionId: "todo-action", projectRoot: "/project", requestedBy: "test" };

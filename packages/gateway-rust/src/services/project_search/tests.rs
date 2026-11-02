@@ -1088,22 +1088,41 @@ fn installed_ripgrep_searches_only_scoped_file_bytes() {
 
 #[test]
 fn primary_bridge_confines_root_and_preserves_results_and_cancellation() {
-    use crate::services::primary_link::{ProjectSearchBridge, ProjectSearchMode, ProjectSearchRequest, RawSearchResult};
     use super::primary_bridge::PinnedPrimarySearchBridge;
+    use crate::services::primary_link::{
+        ProjectSearchBridge, ProjectSearchMode, ProjectSearchRequest, RawSearchResult,
+    };
     let fixture = Fixture::new();
     fixture.put("src/example.txt", "needle\n");
     let root = fixture.root();
     let budgets = Budgets::default();
     let cancel = Cancellation::default();
-    let bridge = PinnedPrimarySearchBridge { root: &root, budgets: &budgets, cancel: &cancel };
-    let mut request = ProjectSearchRequest { root: root.path().to_path_buf(), query: "needle".into(), mode: ProjectSearchMode::Content, ..Default::default() };
-    let RawSearchResult::Content { matches, .. } = bridge.search_project(&request).unwrap() else { panic!() };
+    let bridge = PinnedPrimarySearchBridge {
+        root: &root,
+        budgets: &budgets,
+        cancel: &cancel,
+    };
+    let mut request = ProjectSearchRequest {
+        root: root.path().to_path_buf(),
+        query: "needle".into(),
+        mode: ProjectSearchMode::Content,
+        ..Default::default()
+    };
+    let RawSearchResult::Content { matches, .. } = bridge.search_project(&request).unwrap() else {
+        panic!()
+    };
     assert_eq!(matches[0].relative_path, "src/example.txt");
     request.root = root.path().join("src");
     assert!(bridge.search_project(&request).is_err());
     request.root = root.path().to_path_buf();
     cancel.cancel();
-    assert!(bridge.search_project(&request).unwrap_err().message.contains("cancelled"));
+    assert!(
+        bridge
+            .search_project(&request)
+            .unwrap_err()
+            .message
+            .contains("cancelled")
+    );
 }
 
 #[tokio::test]
@@ -1114,21 +1133,50 @@ async fn primary_search_dispatch_uses_authorized_root_and_lane() {
     fixture.put("example.txt", "needle\n");
     let root = fixture.root();
     let lane = BlockingLane::new(std::num::NonZeroU16::new(1).unwrap());
-    let dispatch = PrimarySearchDispatch { root: root.clone(), lane: lane.clone() };
-    let args = serde_json::json!({"pattern":"needle"}).as_object().unwrap().clone();
+    let dispatch = PrimarySearchDispatch {
+        root: root.clone(),
+        lane: lane.clone(),
+    };
+    let args = serde_json::json!({"pattern":"needle"})
+        .as_object()
+        .unwrap()
+        .clone();
     let result = dispatch.run(PrimarySearchCall::Tool(args)).await.unwrap();
     assert_eq!(result["ok"], true);
-    let escaped = serde_json::json!({"pattern":"needle", "path":".."}).as_object().unwrap().clone();
-    let result = dispatch.run(PrimarySearchCall::Tool(escaped)).await.unwrap();
+    let escaped = serde_json::json!({"pattern":"needle", "path":".."})
+        .as_object()
+        .unwrap()
+        .clone();
+    let result = dispatch
+        .run(PrimarySearchCall::Tool(escaped))
+        .await
+        .unwrap();
     assert_eq!(result["ok"], false);
-    let fs_args = serde_json::json!({"path": root.path(), "query": "needle", "mode": "content"}).as_object().unwrap().clone();
+    let fs_args = serde_json::json!({"path": root.path(), "query": "needle", "mode": "content"})
+        .as_object()
+        .unwrap()
+        .clone();
     let result = dispatch.run(PrimarySearchCall::Fs(fs_args)).await.unwrap();
     assert_eq!(result["mode"], "content");
     assert_eq!(result["matches"][0]["file"], "example.txt");
-    let foreign_args = serde_json::json!({"path": root.path().parent().unwrap(), "query": "needle"}).as_object().unwrap().clone();
-    assert!(dispatch.run(PrimarySearchCall::Fs(foreign_args)).await.is_err());
+    let foreign_args =
+        serde_json::json!({"path": root.path().parent().unwrap(), "query": "needle"})
+            .as_object()
+            .unwrap()
+            .clone();
+    assert!(
+        dispatch
+            .run(PrimarySearchCall::Fs(foreign_args))
+            .await
+            .is_err()
+    );
     lane.close();
-    assert!(dispatch.run(PrimarySearchCall::Tool(Default::default())).await.is_err());
+    assert!(
+        dispatch
+            .run(PrimarySearchCall::Tool(Default::default()))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -1139,10 +1187,16 @@ async fn primary_search_dispatch_rejects_replaced_root() {
     fixture.put("project/old.txt", "old needle");
     let path = fixture.0.join("project");
     let root = ProjectRoot::open(&path).unwrap();
-    let dispatch = PrimarySearchDispatch { root, lane: BlockingLane::new(std::num::NonZeroU16::new(1).unwrap()) };
+    let dispatch = PrimarySearchDispatch {
+        root,
+        lane: BlockingLane::new(std::num::NonZeroU16::new(1).unwrap()),
+    };
     fs::rename(&path, fixture.0.join("original")).unwrap();
     fixture.put("project/new.txt", "replacement needle");
-    let args = serde_json::json!({"pattern":"needle"}).as_object().unwrap().clone();
+    let args = serde_json::json!({"pattern":"needle"})
+        .as_object()
+        .unwrap()
+        .clone();
     let result = dispatch.run(PrimarySearchCall::Tool(args)).await.unwrap();
     assert_eq!(result["ok"], false);
 }

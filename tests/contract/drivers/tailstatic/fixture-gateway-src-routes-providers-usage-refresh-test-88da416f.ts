@@ -108,7 +108,7 @@ await (async()=>{
       __jait_capture(1, (body.profiles[0].quotas));
       __jait_capture(2, (body.profiles[0].quotas[0]));
     } finally { await app.close(); }
-
+  
 })();
 
 } finally {
@@ -180,7 +180,7 @@ await (async()=>{
       __jait_capture(0, (body.profiles[0].quotas));
       __jait_capture(1, (body.profiles[0].quotas[0]));
     } finally { await app.close(); }
-
+  
 })();
 
 } finally {
@@ -249,7 +249,7 @@ await (async()=>{
       await request("force");
       __jait_capture(0, (refreshUsage.mock.calls));
     } finally { await app.close(); }
-
+  
 })();
 
 } finally {

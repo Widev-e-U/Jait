@@ -510,6 +510,104 @@ await (async()=>{
 
 break;
 }
+case "tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_222_3": {
+
+
+class FakeWs {
+  proxyCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown>; timeoutMs?: number }> = [];
+  fireAndForgetCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown> }> = [];
+
+  async proxyTerminalOp<T>(
+    nodeId: string,
+    op: string,
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<T> {
+    this.proxyCalls.push({ nodeId, op, params, timeoutMs });
+    if (op === "start") return { pid: 1234, shell: "/bin/bash" } as T;
+    return { ok: true } as T;
+  }
+
+  sendTerminalOp(nodeId: string, op: string, params: Record<string, unknown>): void {
+    this.fireAndForgetCalls.push({ nodeId, op, params });
+  }
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const surface = new RemoteTerminalSurface("term-paste", new FakeWs() as unknown as WsControlPlane, "node-1");
+    __jait_capture(0, (surface.bracketedPasteEnabled));
+    surface.ingestOutput("\x1b[?2004h");
+    __jait_capture(1, (surface.bracketedPasteEnabled));
+    __jait_capture(2, (surface.shellIntegrationReady));
+    surface.ingestOutput("\x1b[?2004h\x1b]633;B\x07");
+    __jait_capture(3, (surface.shellIntegrationReady));
+    await surface.waitForPrompt();
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_235_3": {
+
+
+class FakeWs {
+  proxyCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown>; timeoutMs?: number }> = [];
+  fireAndForgetCalls: Array<{ nodeId: string; op: string; params: Record<string, unknown> }> = [];
+
+  async proxyTerminalOp<T>(
+    nodeId: string,
+    op: string,
+    params: Record<string, unknown>,
+    timeoutMs?: number,
+  ): Promise<T> {
+    this.proxyCalls.push({ nodeId, op, params, timeoutMs });
+    if (op === "start") return { pid: 1234, shell: "/bin/bash" } as T;
+    return { ok: true } as T;
+  }
+
+  sendTerminalOp(nodeId: string, op: string, params: Record<string, unknown>): void {
+    this.fireAndForgetCalls.push({ nodeId, op, params });
+  }
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const surface = new RemoteTerminalSurface("term-exit", new FakeWs() as unknown as WsControlPlane, "node-1");
+    const removed = vi.fn();
+    const observer = vi.fn();
+    surface.addExitListener(removed);
+    surface.removeExitListener(removed);
+    surface.addExitListener(() => { throw new Error("observer failure"); });
+    surface.addExitListener(observer);
+    surface.ingestExit(7, "SIGTERM");
+    __jait_capture(0, (observer.mock.calls));
+    __jait_capture(1, (removed.mock.calls));
+    __jait_capture(2, (surface.state));
+    __jait_capture(3, (surface.getRecentOutput()));
+    const output = surface.getRecentOutput();
+    surface.ingestExit();
+    __jait_capture(4, (observer.mock.calls));
+    __jait_capture(5, (surface.getRecentOutput()), (output));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

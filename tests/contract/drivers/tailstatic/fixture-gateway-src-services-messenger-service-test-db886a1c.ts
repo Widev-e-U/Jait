@@ -1,6 +1,6 @@
 // Translated fixture from packages/gateway/src/services/messenger-service.test.ts; expected literals are in tail_static.rs.
 import { fileURLToPath } from 'node:url';
-import { MessengerService } from "../../../../packages/gateway/src/services/messenger-service.js";
+import { MessengerService, messengerHomeserver } from "../../../../packages/gateway/src/services/messenger-service.js";
 import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
@@ -319,6 +319,474 @@ await (async()=>{
 
 } finally {
 
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_87_3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (messengerHomeserver('https://matrix.example.org')));
+    __jait_capture(1, (messengerHomeserver('  https://matrix.example.org/  ')));
+    __jait_capture(2, (messengerHomeserver('https://matrix.example.org:8448/')));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_93_3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => messengerHomeserver('https://alice@matrix.example.org'));
+    __jait_thrown(1, () => messengerHomeserver('https://alice:secret@matrix.example.org'));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_98_3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => messengerHomeserver('https://matrix.example.org/?access_token=abc'));
+    __jait_thrown(1, () => messengerHomeserver('https://matrix.example.org/#/room'));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_103_3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => messengerHomeserver('https://matrix.example.org/_matrix/client'));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_107_3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => messengerHomeserver('http://matrix.example.org'));
+    __jait_capture(1, (messengerHomeserver('http://localhost:8008')));
+    __jait_capture(2, (messengerHomeserver('http://127.0.0.1:8008')));
+    __jait_capture(3, (messengerHomeserver('http://[::1]:8008')));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_114_3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => messengerHomeserver('ftp://matrix.example.org'));
+    __jait_thrown(1, () => messengerHomeserver('ws://matrix.example.org'));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each0": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const name = 'WhatsApp Status Broadcast';
+const topic = '';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { join: { '!status:test': {
+      state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name } },
+        { type: 'm.room.topic', state_key: '', content: { topic } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', membership: 'join' } },
+      ] },
+      timeline: { events: [{
+        event_id: '$story', type: 'm.room.message', sender: '@bob:test', origin_server_ts: Date.now(),
+        content: { msgtype: 'm.image', body: 'Evening sky', filename: 'sky.png', url: 'mxc://test/sky', info: { mimetype: 'image/png' } },
+      }] },
+    } } } });
+    const snapshot = c.snapshot('!status:test');
+    __jait_capture(0, (snapshot.rooms.find((room: any) => room.id === '!status:test')), ({ status: true, kind: 'status', topic }));
+    __jait_capture(1, (snapshot.messages));
+
+    await c.sync({ rooms: { join: { '!status:test': {
+      state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name: 'General chat' } },
+        { type: 'm.room.topic', state_key: '', content: { topic: 'Ordinary conversation' } },
+      ] }, timeline: { events: [] },
+    } } } });
+    const updated = c.snapshot('!status:test').rooms.find((room: any) => room.id === '!status:test');
+    __jait_captureType(2, (updated.status));
+    __jait_capture(3, (updated.kind));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each1": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const name = 'WhatsApp';
+const topic = 'Status updates from your contacts';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { join: { '!status:test': {
+      state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name } },
+        { type: 'm.room.topic', state_key: '', content: { topic } },
+        { type: 'm.room.member', state_key: '@bob:test', content: { displayname: 'Bob', membership: 'join' } },
+      ] },
+      timeline: { events: [{
+        event_id: '$story', type: 'm.room.message', sender: '@bob:test', origin_server_ts: Date.now(),
+        content: { msgtype: 'm.image', body: 'Evening sky', filename: 'sky.png', url: 'mxc://test/sky', info: { mimetype: 'image/png' } },
+      }] },
+    } } } });
+    const snapshot = c.snapshot('!status:test');
+    __jait_capture(0, (snapshot.rooms.find((room: any) => room.id === '!status:test')), ({ status: true, kind: 'status', topic }));
+    __jait_capture(1, (snapshot.messages));
+
+    await c.sync({ rooms: { join: { '!status:test': {
+      state: { events: [
+        { type: 'm.room.name', state_key: '', content: { name: 'General chat' } },
+        { type: 'm.room.topic', state_key: '', content: { topic: 'Ordinary conversation' } },
+      ] }, timeline: { events: [] },
+    } } } });
+    const updated = c.snapshot('!status:test').rooms.find((room: any) => room.id === '!status:test');
+    __jait_captureType(2, (updated.status));
+    __jait_capture(3, (updated.kind));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each0": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const protocol = 'go.mau.fi/mautrix-teams';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'A conversation' } },
+    ] } } } } });
+    __jait_capture(0, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: protocol, displayname: 'Microsoft Teams' } } },
+    ] }, timeline: { events: [] } } } } });
+    __jait_capture(1, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each1": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const protocol = 'msteams';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'A conversation' } },
+    ] } } } } });
+    __jait_capture(0, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: protocol, displayname: 'Microsoft Teams' } } },
+    ] }, timeline: { events: [] } } } } });
+    __jait_capture(1, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each2": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const protocol = 'teams';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'A conversation' } },
+    ] } } } } });
+    __jait_capture(0, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: protocol, displayname: 'Microsoft Teams' } } },
+    ] }, timeline: { events: [] } } } } });
+    __jait_capture(1, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each3": {
+
+
+function setup() {
+  const service = new MessengerService('test', fileURLToPath(new URL('../../../../.jait/artifacts/messenger-fixes/state', __jait_original_url)));
+  const c = (service as any).connection('test');
+  c.status = 'ready';
+  c.session = { userId: '@alice:test' };
+  c.client = { doRequest: vi.fn(), sendMessage: vi.fn().mockResolvedValue('$edit'), sendEvent: vi.fn().mockResolvedValue('$reaction'), redactEvent: vi.fn().mockResolvedValue('$redaction'), leaveRoom: vi.fn().mockResolvedValue(undefined) };
+  const message = (id: string, sender = '@alice:test', content = { body: 'original', msgtype: 'm.text' }) => ({ event_id: id, sender, type: 'm.room.message', origin_server_ts: 1, content });
+  const room = { summary: { id: '!room:test', membership: 'join' }, events: [message('$one')], states: [], receipts: {}, previous: 'page1' };
+  c.rooms.set('!room:test', room);
+  return { c, room, message };
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const protocol = 'microsoft-teams';
+
+try {
+await (async()=>{
+
+    const { c } = setup();
+    await c.sync({ rooms: { invite: { '!teams:test': { invite_state: { events: [
+      { type: 'm.room.name', state_key: '', content: { name: 'A conversation' } },
+    ] } } } } });
+    __jait_capture(0, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+    await c.sync({ rooms: { join: { '!teams:test': { state: { events: [
+      { type: 'm.bridge', state_key: 'teams', content: { protocol: { id: protocol, displayname: 'Microsoft Teams' } } },
+    ] }, timeline: { events: [] } } } } });
+    __jait_capture(1, (c.snapshot().rooms.find((r: any) => r.id === '!teams:test')));
+  
+})();
+
+} finally {
+
+}
 }
 }
 

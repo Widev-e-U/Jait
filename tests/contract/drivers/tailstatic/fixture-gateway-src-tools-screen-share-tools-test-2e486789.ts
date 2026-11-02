@@ -45,14 +45,19 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_23_3": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_28_3": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -80,14 +85,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_29_3": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_34_3": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -105,8 +115,11 @@ await (async()=>{
 
     const f = fixture();
     __jait_capture(0, ((await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, context)).ok));
+    // Agent-initiated shares are owned by the requesting chat and always need
+    // explicit consent from the node before capture starts.
     __jait_capture(1, (f.service.startShare.mock.calls));
     __jait_capture(2, (f.ws.sendScreenShareStartRequest.mock.calls));
+    // The panel is opened inside the owning chat, not gateway-wide.
     __jait_capture(3, (f.ws.sendUICommand.mock.calls));
   
 })();
@@ -118,14 +131,147 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_36_3": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_61_3": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
+    stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
+    startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
+    transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
+  };
+  const ws = {
+    getConnectedDeviceIds: () => ["host", "viewer"], sendScreenShareStartRequest: vi.fn(),
+    broadcastScreenShareState: vi.fn(), sendUICommand: vi.fn(),
+  };
+  return { state, service, ws, screenShare: service as unknown as ScreenShareService, control: ws as unknown as WsControlPlane };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const f = fixture();
+    f.service.getSessionForChat.mockReturnValue({ id: "old" });
+    f.service.getSession.mockReturnValue({ id: "old", status: "idle" });
+    const result = await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, context);
+    __jait_capture(0, (result.ok));
+    __jait_capture(1, (f.ws.broadcastScreenShareState.mock.calls[0]?.[0]));
+    __jait_capture(2, (f.ws.broadcastScreenShareState.mock.invocationCallOrder[0]), (f.ws.sendScreenShareStartRequest.mock.invocationCallOrder[0]!));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_70_3": {
+
+
+const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
+function fixture() {
+  const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
+  const service = {
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
+    stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
+    startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
+    transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
+  };
+  const ws = {
+    getConnectedDeviceIds: () => ["host", "viewer"], sendScreenShareStartRequest: vi.fn(),
+    broadcastScreenShareState: vi.fn(), sendUICommand: vi.fn(),
+  };
+  return { state, service, ws, screenShare: service as unknown as ScreenShareService, control: ws as unknown as WsControlPlane };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const f = fixture();
+    await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, { ...context, executionNodeId: "other-node" });
+    __jait_capture(0, (f.service.startShare.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_75_3": {
+
+
+const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
+function fixture() {
+  const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
+  const service = {
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
+    stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
+    startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
+    transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
+  };
+  const ws = {
+    getConnectedDeviceIds: () => ["host", "viewer"], sendScreenShareStartRequest: vi.fn(),
+    broadcastScreenShareState: vi.fn(), sendUICommand: vi.fn(),
+  };
+  return { state, service, ws, screenShare: service as unknown as ScreenShareService, control: ws as unknown as WsControlPlane };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const f = fixture();
+    const result = await createScreenShareTool(f.screenShare, f.control).execute({ action: "connect", targetDeviceId: "host" }, { ...context, sessionId: "" });
+    __jait_capture(0, (result.ok));
+    __jait_capture(1, (f.service.startShare.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_81_3": {
+
+
+const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
+function fixture() {
+  const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
+  const service = {
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -154,14 +300,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_41_3": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_86_3": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -178,8 +329,10 @@ try {
 await (async()=>{
 
     const f = fixture();
-    __jait_capture(0, ((await createScreenShareTool(f.screenShare).execute({ action: "disconnect" }, context)).ok));
+    f.service.getSessionForChat.mockReturnValue({ id: "owned-share" });
+    __jait_capture(0, ((await createScreenShareTool(f.screenShare, f.control).execute({ action: "disconnect" }, context)).ok));
     __jait_capture(1, (f.service.stopShare.mock.calls));
+    __jait_capture(2, (f.ws.broadcastScreenShareState.mock.calls));
   
 })();
 
@@ -190,14 +343,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each0": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_98_3_each0": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -231,14 +389,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each1": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_98_3_each1": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -272,14 +435,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each0": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_105_3_each0": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -312,14 +480,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each0": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_111_3_each0": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -354,14 +527,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each0": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_119_3_each0": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -393,14 +571,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each1": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_105_3_each1": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -433,14 +616,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each1": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_111_3_each1": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),
@@ -475,14 +663,19 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each1": {
+case "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_119_3_each1": {
 
 
 const context = { sessionId: "screen-tests", actionId: "screen-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const state = { devices: [{ id: "viewer", name: "Web viewer", platform: "web", capabilities: [] }, { id: "host", name: "Owned desktop", platform: "desktop", capabilities: [] }], activeSession: null };
   const service = {
-    getState: vi.fn().mockReturnValue(state), startShare: vi.fn().mockReturnValue({ id: "share-1" }),
+    getState: vi.fn().mockReturnValue(state), getSessionForChat: vi.fn().mockReturnValue(null), getSession: vi.fn().mockReturnValue(null),
+    startShare: vi.fn().mockReturnValue({
+      id: "share-1",
+      nodeId: "host",
+      reason: "The agent wants to view this screen in the chat.",
+    }),
     stopShare: vi.fn().mockReturnValue(state), captureScreen: vi.fn().mockReturnValue({ id: "capture-1" }),
     startRecording: vi.fn().mockReturnValue({ id: "recording-1" }), registerDevice: vi.fn().mockReturnValue({ id: "host" }),
     transferControl: vi.fn().mockReturnValue(state), updateViewerTransport: vi.fn().mockReturnValue(state),

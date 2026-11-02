@@ -478,7 +478,8 @@ async fn run_serialized_export<T: Send + 'static>(
     tokio::task::spawn_blocking(move || {
         let _guard = guard;
         work()
-    }).await
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -496,19 +497,28 @@ mod export_serialization_tests {
             run_serialized_export(first_lock, move || {
                 started_tx.send(()).unwrap();
                 release_rx.recv().unwrap();
-            }).await
+            })
+            .await
         });
         started_rx.await.unwrap();
         first.abort();
         assert!(first.await.unwrap_err().is_cancelled());
-        assert!(lock.try_lock().is_err(), "detached writer must retain the lock");
+        assert!(
+            lock.try_lock().is_err(),
+            "detached writer must retain the lock"
+        );
 
         let second_lock = lock.clone();
-        let second = tokio::spawn(async move {
-            run_serialized_export(second_lock, || 42).await.unwrap()
-        });
+        let second =
+            tokio::spawn(async move { run_serialized_export(second_lock, || 42).await.unwrap() });
         release_tx.send(()).unwrap();
-        assert_eq!(tokio::time::timeout(std::time::Duration::from_secs(5), second).await.unwrap().unwrap(), 42);
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(5), second)
+                .await
+                .unwrap()
+                .unwrap(),
+            42
+        );
     }
 }
 
@@ -584,13 +594,21 @@ fn read_graph_file_sync(path: &Path) -> std::io::Result<Vec<u8>> {
         ));
     }
     if metadata.len() > MAX_GRAPH_BYTES {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "graph exceeds 64 MiB limit"));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "graph exceeds 64 MiB limit",
+        ));
     }
     let mut contents = Vec::new();
     // The file can grow after metadata was read, so enforce the limit on reads too.
-    current.take(MAX_GRAPH_BYTES + 1).read_to_end(&mut contents)?;
+    current
+        .take(MAX_GRAPH_BYTES + 1)
+        .read_to_end(&mut contents)?;
     if contents.len() as u64 > MAX_GRAPH_BYTES {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "graph exceeds 64 MiB limit"));
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "graph exceeds 64 MiB limit",
+        ));
     }
     Ok(contents)
 }
@@ -615,8 +633,14 @@ mod secure_graph_read_tests {
         fs::create_dir_all(&base).unwrap();
         let base = fs::canonicalize(base).unwrap();
         let graph = base.join("graph.json");
-        fs::File::create(&graph).unwrap().set_len(64 * 1024 * 1024 + 1).unwrap();
-        assert_eq!(read_graph_file_sync(&graph).unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+        fs::File::create(&graph)
+            .unwrap()
+            .set_len(64 * 1024 * 1024 + 1)
+            .unwrap();
+        assert_eq!(
+            read_graph_file_sync(&graph).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
         fs::remove_dir_all(base).unwrap();
     }
 

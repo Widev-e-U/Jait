@@ -12019,9 +12019,12 @@
                   "chatId": null,
                   "nodeId": null,
                   "initiatedBy": "user",
-                  "reason": null,
-                  "requireConsent": false
+                  "requireConsent": false,
+                  "reason": null
                 }
+              ],
+              [
+                "state"
               ],
               [
                 "control",
@@ -12033,6 +12036,9 @@
                   "id": "share",
                   "active": true
                 }
+              ],
+              [
+                "state"
               ],
               [
                 "stop"
@@ -12149,6 +12155,9 @@
                 "record"
               ],
               [
+                "state"
+              ],
+              [
                 "stop"
               ]
             ]
@@ -12227,6 +12236,9 @@
               }
             ],
             "events": [
+              [
+                "state"
+              ],
               [
                 "control",
                 "d"
@@ -73846,7 +73858,7 @@
         "source": "packages/gateway/src/tools/repo-proposal-tools.ts",
         "source_test": "packages/gateway/src/tools/repo-proposal-tools.test.ts",
         "fixture": "gateway-src-tools-repo-proposal-tools-test-e17a49aa",
-        "test": "tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_61_3"
+        "test": "tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_63_3"
       }
     ],
     "assertions": [
@@ -73865,7 +73877,7 @@
         "source": "packages/gateway/src/tools/repo-proposal-tools.ts",
         "source_test": "packages/gateway/src/tools/repo-proposal-tools.test.ts",
         "fixture": "gateway-src-tools-repo-proposal-tools-test-e17a49aa",
-        "test": "tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_104_3"
+        "test": "tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_106_3"
       }
     ],
     "assertions": [
@@ -73979,7 +73991,7 @@
         "source": "packages/gateway/src/services/user-questions.ts",
         "source_test": "packages/gateway/src/routes/mcp-server.test.ts",
         "fixture": "gateway-src-routes-mcp-server-test-e2ec3efc",
-        "test": "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3"
+        "test": "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_76_3"
       }
     ],
     "assertions": [
@@ -74093,7 +74105,7 @@
         "source": "packages/gateway/src/tools/user-question-tools.ts",
         "source_test": "packages/gateway/src/routes/mcp-server.test.ts",
         "fixture": "gateway-src-routes-mcp-server-test-e2ec3efc",
-        "test": "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3"
+        "test": "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_76_3"
       }
     ],
     "assertions": [
@@ -75860,7 +75872,7 @@
         "source": "packages/gateway/src/tools/screen-share-tools.ts",
         "source_test": "packages/gateway/src/tools/screen-share-tools.test.ts",
         "fixture": "gateway-src-tools-screen-share-tools-test-2e486789",
-        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_23_3"
+        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_28_3"
       }
     ],
     "assertions": [
@@ -75879,7 +75891,7 @@
         "source": "packages/gateway/src/tools/screen-share-tools.ts",
         "source_test": "packages/gateway/src/tools/screen-share-tools.test.ts",
         "fixture": "gateway-src-tools-screen-share-tools-test-2e486789",
-        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_29_3"
+        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_34_3"
       }
     ],
     "assertions": [
@@ -75898,7 +75910,7 @@
         "source": "packages/gateway/src/tools/screen-share-tools.ts",
         "source_test": "packages/gateway/src/tools/screen-share-tools.test.ts",
         "fixture": "gateway-src-tools-screen-share-tools-test-2e486789",
-        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_36_3"
+        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_81_3"
       }
     ],
     "assertions": [
@@ -75917,7 +75929,7 @@
         "source": "packages/gateway/src/tools/screen-share-tools.ts",
         "source_test": "packages/gateway/src/tools/screen-share-tools.test.ts",
         "fixture": "gateway-src-tools-screen-share-tools-test-2e486789",
-        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_41_3"
+        "test": "tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_86_3"
       }
     ],
     "assertions": [
@@ -79716,7 +79728,7 @@
         "source": "packages/gateway/src/tools/computer-tools.ts",
         "source_test": "packages/gateway/src/tools/computer-tools.test.ts",
         "fixture": "gateway-src-tools-computer-tools-test-6897ac07",
-        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_65_3"
+        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_66_3"
       }
     ],
     "assertions": [
@@ -79735,7 +79747,7 @@
         "source": "packages/gateway/src/tools/computer-tools.ts",
         "source_test": "packages/gateway/src/tools/computer-tools.test.ts",
         "fixture": "gateway-src-tools-computer-tools-test-6897ac07",
-        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_85_3"
+        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_105_3"
       }
     ],
     "assertions": [
@@ -79754,7 +79766,7 @@
         "source": "packages/gateway/src/tools/computer-tools.ts",
         "source_test": "packages/gateway/src/tools/computer-tools.test.ts",
         "fixture": "gateway-src-tools-computer-tools-test-6897ac07",
-        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_114_3"
+        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_134_3"
       }
     ],
     "assertions": [
@@ -79773,7 +79785,7 @@
         "source": "packages/gateway/src/tools/computer-tools.ts",
         "source_test": "packages/gateway/src/tools/computer-tools.test.ts",
         "fixture": "gateway-src-tools-computer-tools-test-6897ac07",
-        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_126_3"
+        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_146_3"
       }
     ],
     "assertions": [
@@ -79792,7 +79804,7 @@
         "source": "packages/gateway/src/tools/computer-tools.ts",
         "source_test": "packages/gateway/src/tools/computer-tools.test.ts",
         "fixture": "gateway-src-tools-computer-tools-test-6897ac07",
-        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_143_3"
+        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_163_3"
       }
     ],
     "assertions": [
@@ -79811,7 +79823,7 @@
         "source": "packages/gateway/src/tools/computer-tools.ts",
         "source_test": "packages/gateway/src/tools/computer-tools.test.ts",
         "fixture": "gateway-src-tools-computer-tools-test-6897ac07",
-        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_156_3"
+        "test": "tailstatic_packages_gateway_src_tools_computer_tools_test_ts_176_3"
       }
     ],
     "assertions": [
@@ -81616,7 +81628,7 @@
         "source": "packages/gateway/src/services/provider-usage.ts",
         "source_test": "packages/gateway/src/services/provider-usage.test.ts",
         "fixture": "gateway-src-services-provider-usage-test-8fd65cd3",
-        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3"
+        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_330_3"
       }
     ],
     "assertions": [
@@ -81635,7 +81647,7 @@
         "source": "packages/gateway/src/services/provider-usage.ts",
         "source_test": "packages/gateway/src/services/provider-usage.test.ts",
         "fixture": "gateway-src-services-provider-usage-test-8fd65cd3",
-        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_326_3"
+        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_373_3"
       }
     ],
     "assertions": [
@@ -81654,7 +81666,7 @@
         "source": "packages/gateway/src/services/provider-usage.ts",
         "source_test": "packages/gateway/src/services/provider-usage.test.ts",
         "fixture": "gateway-src-services-provider-usage-test-8fd65cd3",
-        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_381_3"
+        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_428_3"
       }
     ],
     "assertions": [
@@ -81673,7 +81685,7 @@
         "source": "packages/gateway/src/services/provider-usage.ts",
         "source_test": "packages/gateway/src/services/provider-usage.test.ts",
         "fixture": "gateway-src-services-provider-usage-test-8fd65cd3",
-        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_418_3"
+        "test": "tailstatic_packages_gateway_src_services_provider_usage_test_ts_465_3"
       }
     ],
     "assertions": [
@@ -84856,7 +84868,7 @@
         "source": "packages/gateway/src/services/jait-llm.ts",
         "source_test": "packages/gateway/src/services/jait-llm.test.ts",
         "fixture": "gateway-src-services-jait-llm-test-0c0dadeb",
-        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_221_3"
+        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_254_3"
       }
     ],
     "assertions": [
@@ -84875,7 +84887,7 @@
         "source": "packages/gateway/src/services/jait-llm.ts",
         "source_test": "packages/gateway/src/services/jait-llm.test.ts",
         "fixture": "gateway-src-services-jait-llm-test-0c0dadeb",
-        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_234_3"
+        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_267_3"
       }
     ],
     "assertions": [
@@ -84894,7 +84906,7 @@
         "source": "packages/gateway/src/services/jait-llm.ts",
         "source_test": "packages/gateway/src/services/jait-llm.test.ts",
         "fixture": "gateway-src-services-jait-llm-test-0c0dadeb",
-        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_252_3"
+        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_285_3"
       }
     ],
     "assertions": [
@@ -84913,7 +84925,7 @@
         "source": "packages/gateway/src/services/jait-llm.ts",
         "source_test": "packages/gateway/src/services/jait-llm.test.ts",
         "fixture": "gateway-src-services-jait-llm-test-0c0dadeb",
-        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_276_3"
+        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_309_3"
       }
     ],
     "assertions": [
@@ -84932,7 +84944,7 @@
         "source": "packages/gateway/src/services/jait-llm.ts",
         "source_test": "packages/gateway/src/services/jait-llm.test.ts",
         "fixture": "gateway-src-services-jait-llm-test-0c0dadeb",
-        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_294_3"
+        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_327_3"
       }
     ],
     "assertions": [
@@ -84951,7 +84963,7 @@
         "source": "packages/gateway/src/services/jait-llm.ts",
         "source_test": "packages/gateway/src/services/jait-llm.test.ts",
         "fixture": "gateway-src-services-jait-llm-test-0c0dadeb",
-        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_306_1"
+        "test": "tailstatic_packages_gateway_src_services_jait_llm_test_ts_339_1"
       }
     ],
     "assertions": [
@@ -92275,7 +92287,7 @@
         "source": "packages/gateway/src/tools/preview-tools.ts",
         "source_test": "packages/gateway/src/tools/preview-tools.test.ts",
         "fixture": "gateway-src-tools-preview-tools-test-ab134d2d",
-        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_18_3"
+        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_45_3"
       }
     ],
     "assertions": [
@@ -92294,7 +92306,7 @@
         "source": "packages/gateway/src/tools/preview-tools.ts",
         "source_test": "packages/gateway/src/tools/preview-tools.test.ts",
         "fixture": "gateway-src-tools-preview-tools-test-ab134d2d",
-        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_89_3"
+        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_116_3"
       }
     ],
     "assertions": [
@@ -92313,7 +92325,7 @@
         "source": "packages/gateway/src/tools/preview-tools.ts",
         "source_test": "packages/gateway/src/tools/preview-tools.test.ts",
         "fixture": "gateway-src-tools-preview-tools-test-ab134d2d",
-        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_145_3"
+        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_172_3"
       }
     ],
     "assertions": [
@@ -92370,7 +92382,7 @@
         "source": "packages/gateway/src/tools/preview-tools.ts",
         "source_test": "packages/gateway/src/tools/preview-tools.test.ts",
         "fixture": "gateway-src-tools-preview-tools-test-ab134d2d",
-        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_306_3"
+        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_333_3"
       }
     ],
     "assertions": [
@@ -92389,7 +92401,7 @@
         "source": "packages/gateway/src/tools/preview-tools.ts",
         "source_test": "packages/gateway/src/tools/preview-tools.test.ts",
         "fixture": "gateway-src-tools-preview-tools-test-ab134d2d",
-        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_345_3"
+        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_372_3"
       }
     ],
     "assertions": [
@@ -92408,7 +92420,7 @@
         "source": "packages/gateway/src/tools/preview-tools.ts",
         "source_test": "packages/gateway/src/tools/preview-tools.test.ts",
         "fixture": "gateway-src-tools-preview-tools-test-ab134d2d",
-        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_377_3"
+        "test": "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_404_3"
       }
     ],
     "assertions": [

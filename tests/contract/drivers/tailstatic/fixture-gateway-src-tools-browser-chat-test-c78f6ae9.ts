@@ -1,8 +1,10 @@
 // Translated fixture from packages/gateway/src/tools/browser-chat.test.ts; expected literals are in tail_static.rs.
-import { createBrowserNavigateTool } from "../../../../packages/gateway/src/tools/browser-tools.js";
+import { createBrowserInspectTool, createBrowserNavigateTool } from "../../../../packages/gateway/src/tools/browser-tools.js";
 import { createSurfacesStartTool } from "../../../../packages/gateway/src/tools/surface-tools.js";
 import { createPreviewOpenTool } from "../../../../packages/gateway/src/tools/preview-tools.js";
 import { PreviewService } from "../../../../packages/gateway/src/services/preview.js";
+import { UserQuestionService } from "../../../../packages/gateway/src/services/user-questions.js";
+import { createBrowserHandoffTool } from "../../../../packages/gateway/src/tools/browser-handoff.js";
 import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
@@ -44,7 +46,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_32_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_36_3": {
 
 
 function fixture() {
@@ -52,11 +54,71 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
+        getEvents: () => [], getMetrics: async () => null,
+        getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
+      };
+      surfaces.set(id, browser);
+      return browser;
+    }),
+    stopSurface: vi.fn(async (id: string) => { surfaces.delete(id); }),
+  };
+  const service = new PreviewService(registry as any);
+  const tool = createBrowserNavigateTool(registry as any, service);
+  const context = (sessionId: string) => ({ sessionId, actionId: 'test', requestedBy: 'assistant', projectRoot: '/project' });
+  return { registry, service, tool, context };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, tool, context, registry } = fixture();
+    const chat = context('handoff-chat');
+    await tool.execute({ url: 'https://example.com' }, chat);
+    const browser = registry.getSurface(service.get('handoff-chat')!.browserId!);
+    const questions = new UserQuestionService();
+    const handoff = createBrowserHandoffTool(service, questions);
+    const waiting = handoff.execute({ message: 'Sign in directly in the browser.' }, chat);
+    __jait_capture(0, (service.get('handoff-chat')?.sharedWithAgent));
+    await __jait_rejected(1, tool.execute({ url: 'https://example.com/next' }, chat));
+    __jait_capture(2, (browser.navigate.mock.calls));
+    const [request] = questions.listPending('handoff-chat');
+    questions.submit(request.id, { answers: { browser: { selected: ['Done'], freeText: null, skipped: false } } });
+    __jait_capture(3, (await waiting));
+    await tool.execute({ url: 'https://example.com/next' }, chat);
+    __jait_capture(4, (browser.navigate.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_54_3": {
+
+
+function fixture() {
+  const surfaces = new Map<string, any>();
+  const registry = {
+    getSurface: (id: string) => surfaces.get(id),
+    startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
+      const browser = {
+        id, type: 'browser', state: 'running', sessionId: input.sessionId,
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -103,7 +165,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_53_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_75_3": {
 
 
 function fixture() {
@@ -111,11 +173,13 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -150,7 +214,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_61_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_83_3": {
 
 
 function fixture() {
@@ -158,11 +222,13 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -200,7 +266,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_72_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_94_3": {
 
 
 function fixture() {
@@ -208,11 +274,13 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -244,7 +312,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_77_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_99_3": {
 
 
 function fixture() {
@@ -252,11 +320,13 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -277,14 +347,15 @@ await (async()=>{
 
     const { registry, service, context } = fixture();
     const tool = createSurfacesStartTool(registry as any, service);
-    const a = await tool.execute({ type: 'browser' }, context('chat-a'));
-    const b = await tool.execute({ type: 'browser' }, context('chat-a'));
-    __jait_capture(0, (a.data?.browserSession));
-    __jait_capture(1, (a.data?.id), (b.data?.id));
-    __jait_capture(2, (registry.startSurface.mock.calls));
+    const a = await tool.execute({ type: 'browser', url: 'https://example.com/one' }, context('chat-a'));
+    const b = await tool.execute({ type: 'browser', url: 'https://example.com/two' }, context('chat-a'));
+    __jait_capture(0, (registry.getSurface(a.data!.id as string).navigate.mock.calls));
+    __jait_capture(1, (a.data?.browserSession));
+    __jait_capture(2, (a.data?.id), (b.data?.id));
+    __jait_capture(3, (registry.startSurface.mock.calls));
     service.setSharedWithAgent('chat-a', false);
-    __jait_capture(3, ((await tool.execute({ type: 'browser' }, context('chat-a'))).ok));
-    __jait_capture(4, (registry.startSurface.mock.calls));
+    __jait_capture(4, ((await tool.execute({ type: 'browser', url: 'https://example.com/three' }, context('chat-a'))).ok));
+    __jait_capture(5, (registry.startSurface.mock.calls));
   
 })();
 
@@ -295,7 +366,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_112_3": {
 
 
 function fixture() {
@@ -303,11 +374,60 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
+        getEvents: () => [], getMetrics: async () => null,
+        getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
+      };
+      surfaces.set(id, browser);
+      return browser;
+    }),
+    stopSurface: vi.fn(async (id: string) => { surfaces.delete(id); }),
+  };
+  const service = new PreviewService(registry as any);
+  const tool = createBrowserNavigateTool(registry as any, service);
+  const context = (sessionId: string) => ({ sessionId, actionId: 'test', requestedBy: 'assistant', projectRoot: '/project' });
+  return { registry, service, tool, context };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { registry, service, context } = fixture();
+    const inspect = createBrowserInspectTool(registry as any, service);
+    await __jait_rejected(0, inspect.execute({}, context('chat-a')));
+    __jait_capture(1, (registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_118_3": {
+
+
+function fixture() {
+  const surfaces = new Map<string, any>();
+  const registry = {
+    getSurface: (id: string) => surfaces.get(id),
+    startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
+      const browser = {
+        id, type: 'browser', state: 'running', sessionId: input.sessionId,
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -343,7 +463,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_98_3": {
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_127_3": {
 
 
 function fixture() {
@@ -351,11 +471,13 @@ function fixture() {
   const registry = {
     getSurface: (id: string) => surfaces.get(id),
     startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
       const browser = {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
-        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: {} }),
-        navigate: vi.fn().mockResolvedValue({ url: 'https://example.com/', title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null }),
-        inspect: async () => ({ snapshot: { url: 'about:blank', title: '', text: '', elements: [], activeElement: null, dialogs: [], obstruction: null } }),
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -374,11 +496,66 @@ function fixture() {
 try {
 await (async()=>{
 
-    const { service, tool, context } = fixture();
+    const { service, tool, context, registry } = fixture();
+    await tool.execute({ url: 'https://example.com/page' }, context('idle-chat'));
+    service.setSharedWithAgent('idle-chat', false);
+    const browserId = service.get('idle-chat')!.browserId!;
+    __jait_capture(0, (await service.suspendIdleAgentBrowser(browserId)));
+    __jait_capture(1, (service.get('idle-chat')));
+    const [first, second] = await Promise.all([service.restart('idle-chat'), service.restart('idle-chat')]);
+    __jait_capture(2, (first));
+    __jait_capture(3, (second?.browserId), (first?.browserId));
+    __jait_capture(4, (registry.getSurface(browserId).navigate.mock.calls));
+    __jait_capture(5, (registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_chat_test_ts_141_3": {
+
+
+function fixture() {
+  const surfaces = new Map<string, any>();
+  const registry = {
+    getSurface: (id: string) => surfaces.get(id),
+    startSurface: vi.fn(async (_type: string, id: string, input: any) => {
+      let currentUrl = 'about:blank';
+      const page = () => ({ url: currentUrl, title: 'Example', text: 'Hello', elements: [], activeElement: null, dialogs: [], obstruction: null });
+      const browser = {
+        id, type: 'browser', state: 'running', sessionId: input.sessionId,
+        snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
+        navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
+        inspect: async () => ({ snapshot: page() }),
+        getEvents: () => [], getMetrics: async () => null,
+        getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
+      };
+      surfaces.set(id, browser);
+      return browser;
+    }),
+    stopSurface: vi.fn(async (id: string) => { surfaces.delete(id); }),
+  };
+  const service = new PreviewService(registry as any);
+  const tool = createBrowserNavigateTool(registry as any, service);
+  const context = (sessionId: string) => ({ sessionId, actionId: 'test', requestedBy: 'assistant', projectRoot: '/project' });
+  return { registry, service, tool, context };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { service, tool, context, registry } = fixture();
     await tool.execute({ url: 'https://example.com' }, context('chat-a'));
     service.setSharedWithAgent('chat-a', false);
     __jait_capture(0, (await service.restart('chat-a')));
-    await __jait_rejected(1, tool.execute({ url: 'https://example.com' }, context('chat-a')));
+    __jait_capture(1, (registry.getSurface(service.get('chat-a')!.browserId!).navigate.mock.calls));
+    await __jait_rejected(2, tool.execute({ url: 'https://example.com' }, context('chat-a')));
   
 })();
 

@@ -382,18 +382,17 @@ const UNSUPPORTED_CHAT_OPTIONS: &[&str] = &[
 ];
 
 fn parse_chat_request(value: Value) -> Result<ChatBody, Box<Response>> {
-    if let Some(object) = value.as_object() {
-        if let Some(option) = UNSUPPORTED_CHAT_OPTIONS
+    if let Some(object) = value.as_object()
+        && let Some(option) = UNSUPPORTED_CHAT_OPTIONS
             .iter()
             .find(|key| object.contains_key(**key))
-        {
-            return Err(Box::new(response(
-                400,
-                json!({
-                    "error": "UNSUPPORTED_CHAT_OPTION", "option": option
-                }),
-            )));
-        }
+    {
+        return Err(Box::new(response(
+            400,
+            json!({
+                "error": "UNSUPPORTED_CHAT_OPTION", "option": option
+            }),
+        )));
     }
     serde_json::from_value(value)
         .map_err(|_| Box::new(response(400, json!({"error":"INVALID_CHAT_REQUEST"}))))
@@ -468,18 +467,18 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
     // cannot discard completion/error after cancellation.
     let (terminal_sender, terminal_receiver) = oneshot::channel();
     let serial = Arc::new(tokio::sync::Mutex::new(()));
-    let sink_closed = Arc::new(AtomicBool::new(false));
-    let delivery_failed = Arc::new(AtomicBool::new(false));
-    let stream_failed = Arc::new(AtomicBool::new(false));
+    let flags = StreamFlags {
+        closed: Arc::new(AtomicBool::new(false)),
+        delivery_failed: Arc::new(AtomicBool::new(false)),
+        stream_failed: Arc::new(AtomicBool::new(false)),
+    };
     let sink = event_sink(
         sender.clone(),
         cancellation.clone(),
         state.limits.clone(),
         store.clone(),
         serial.clone(),
-        sink_closed.clone(),
-        delivery_failed.clone(),
-        stream_failed.clone(),
+        flags.clone(),
     );
     let manager = state.manager.clone();
     let events = state.events.clone();
@@ -498,8 +497,8 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
             })
             .await;
         let _serial = serial.lock().await;
-        sink_closed.store(true, Ordering::Release);
-        let event = if stream_failed.load(Ordering::Acquire) {
+        flags.closed.store(true, Ordering::Release);
+        let event = if flags.stream_failed.load(Ordering::Acquire) {
             json!({"type":"error","message":"Chat stream could not be persisted"})
         } else {
             match result {
@@ -517,7 +516,7 @@ async fn chat(State(state): State<ChatRoutes>, request: Request) -> Response {
             let failure = json!({"type":"error","message":"Chat stream could not be persisted"});
             events.publish_failure(&session_id, &context.user_id, failure.to_string());
             failure
-        } else if delivery_failed.load(Ordering::Acquire) {
+        } else if flags.delivery_failed.load(Ordering::Acquire) {
             json!({"type":"replay_required"})
         } else {
             event
@@ -563,15 +562,21 @@ impl Drop for StreamTaskFailure {
         }
     }
 }
+/// Lifecycle flags shared by the sink and the turn task for one chat stream.
+#[derive(Clone, Default)]
+struct StreamFlags {
+    closed: Arc<AtomicBool>,
+    delivery_failed: Arc<AtomicBool>,
+    stream_failed: Arc<AtomicBool>,
+}
+
 fn event_sink(
     sender: mpsc::Sender<String>,
     cancellation: ProcessCancellation,
     limits: ChatLimits,
     store: SqliteTurnStore,
     serial: Arc<tokio::sync::Mutex<()>>,
-    closed: Arc<AtomicBool>,
-    delivery_failed: Arc<AtomicBool>,
-    stream_failed: Arc<AtomicBool>,
+    flags: StreamFlags,
 ) -> EventSink {
     let bytes = Arc::new(AtomicUsize::new(0));
     Arc::new(move |event| {
@@ -581,9 +586,7 @@ fn event_sink(
         let limits = limits.clone();
         let store = store.clone();
         let serial = serial.clone();
-        let closed = closed.clone();
-        let delivery_failed = delivery_failed.clone();
-        let stream_failed = stream_failed.clone();
+        let flags = flags.clone();
         Box::pin(async move {
             // Acquire before spawning, so abandoned waiters cannot queue detached
             // tasks. Once acquired, the task keeps the guard until SQLite replies
@@ -591,8 +594,8 @@ fn event_sink(
             let serial_guard = serial.lock_owned().await;
             tokio::spawn(async move {
                 let _serial = serial_guard;
-                let _panic_failure = StreamTaskFailure(stream_failed.clone());
-                if closed.load(Ordering::Acquire) || cancellation.is_cancelled() {
+                let _panic_failure = StreamTaskFailure(flags.stream_failed.clone());
+                if flags.closed.load(Ordering::Acquire) || cancellation.is_cancelled() {
                     return Err("Chat stream cancelled".into());
                 }
                 let data = format!("data: {event}\n\n");
@@ -605,16 +608,16 @@ fn event_sink(
                         })
                         .is_err()
                 {
-                    stream_failed.store(true, Ordering::Release);
+                    flags.stream_failed.store(true, Ordering::Release);
                     cancellation.cancel();
                     return Err("Chat stream limit reached".into());
                 }
                 if store.append_stream_event(event).await.is_err() {
-                    stream_failed.store(true, Ordering::Release);
+                    flags.stream_failed.store(true, Ordering::Release);
                     cancellation.cancel();
                     return Err("Chat stream could not be persisted".into());
                 }
-                if !delivery_failed.load(Ordering::Acquire) {
+                if !flags.delivery_failed.load(Ordering::Acquire) {
                     let delivered = tokio::select! {
                         biased;
                         _ = cancellation.wait_cancelled() => return Err("Chat stream cancelled".into()),
@@ -622,7 +625,7 @@ fn event_sink(
                             matches!(result, Ok(Ok(()))),
                     };
                     if !delivered {
-                        delivery_failed.store(true, Ordering::Release);
+                        flags.delivery_failed.store(true, Ordering::Release);
                     }
                 }
                 Ok(())

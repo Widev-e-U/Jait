@@ -340,10 +340,10 @@ pub async fn stream(
     if !frames.complete {
         queued.push_back("data: {\"type\":\"replay_required\"}\n\n".to_owned());
     }
-    if frames.complete {
-        if let Some(data) = failure {
-            queued.push_back(format!("data: {data}\n\n"));
-        }
+    if frames.complete
+        && let Some(data) = failure
+    {
+        queued.push_back(format!("data: {data}\n\n"));
     }
     let mut heartbeat =
         tokio::time::interval_at(tokio::time::Instant::now() + HEARTBEAT, HEARTBEAT);

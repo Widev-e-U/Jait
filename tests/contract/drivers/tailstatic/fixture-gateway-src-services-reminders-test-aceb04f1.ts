@@ -284,6 +284,44 @@ await __jait_hook_557();
 
 break;
 }
+case "tailstatic_packages_gateway_src_services_reminders_test_ts_139_1": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+const __jait_hook_407 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_557 = () => {
+  sqlite.close();
+};
+await __jait_hook_407();
+try {
+await (async()=>{
+
+  const prefix = "remember " + "a".repeat(269);
+  sqlite.prepare("INSERT INTO sessions(id,user_id,name,created_at,last_active_at) VALUES(?,?,?,?,?)")
+    .run("unicode-session", "owner", "Unicode", "2026-01-01", "2026-01-01");
+  sqlite.prepare("INSERT INTO messages(id,session_id,role,content,created_at) VALUES(?,?,?,?,?)")
+    .run("unicode-message", "unicode-session", "user", prefix + "🦀" + "b".repeat(20), "2026-01-01");
+  const service = new ReminderService(db);
+  __jait_capture(0, (service.scanOldChatsForMemory("owner")));
+  __jait_capture(1, (service.list({ userId: "owner" })[0]?.content), (prefix + "…"));
+  __jait_capture(2, (service.scanOldChatsForMemory("owner")));
+  __jait_capture(3, (service.list({ userId: "owner" })));
+
+})();
+
+} finally {
+await __jait_hook_557();
+}
+
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

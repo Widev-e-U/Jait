@@ -283,13 +283,10 @@ impl SurfaceRegistry {
                 state.surface_order.push(id.into());
             }
             let displaced = state.surfaces.insert(id.into(), surface.clone());
-            match input.properties.get("userId").and_then(Value::as_str) {
-                Some(user) => {
-                    state.owners.insert(id.into(), user.into());
-                }
-                None => {
-                    state.owners.remove(id);
-                }
+            // The reference registry only records an owner when the caller supplies
+            // one; an owner-less restart leaves any existing ownership in place.
+            if let Some(user) = input.properties.get("userId").and_then(Value::as_str) {
+                state.owners.insert(id.into(), user.into());
             }
             displaced
         };
@@ -614,7 +611,10 @@ mod tests {
                 let _ = self.0.registered_types();
             }
         }
-        struct ReentrantSurface(Reenter);
+        struct ReentrantSurface {
+            // Held only so its `Drop` re-enters the registry when the surface dies.
+            _reenter: Reenter,
+        }
         impl Surface for ReentrantSurface {
             fn id(&self) -> &str {
                 "same"
@@ -643,7 +643,11 @@ mod tests {
         let other = registry.clone();
         let (done, received) = mpsc::channel();
         std::thread::spawn(move || {
-            let make = || Arc::new(ReentrantSurface(Reenter(other.clone()))) as SurfaceRef;
+            let make = || {
+                Arc::new(ReentrantSurface {
+                    _reenter: Reenter(other.clone()),
+                }) as SurfaceRef
+            };
             other.register_instance("same", make());
             other.register_instance("same", make());
             assert!(other.unregister("same"));
@@ -1035,7 +1039,7 @@ mod tests {
                         },
                     ))
                 }));
-                finished.send(matches!(result, Err(_))).unwrap();
+                finished.send(result.is_err()).unwrap();
             }));
         }
         let first = entered_rx.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -1160,7 +1164,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn start_replacement_replaces_owner_with_instance() {
+    async fn start_replacement_sets_owner_only_when_supplied() {
         let registry = SurfaceRegistry::default();
         registry.register(Arc::new(TestFactory));
         registry.register_instance("same", Arc::new(TestSurface));
@@ -1186,7 +1190,8 @@ mod tests {
             .start_surface("filesystem", "same", input(None))
             .await
             .unwrap();
-        assert_eq!(registry.owner("same"), None);
+        // Reference parity: a restart without a `userId` leaves ownership alone.
+        assert_eq!(registry.owner("same").as_deref(), Some("new-owner"));
     }
 
     #[tokio::test]

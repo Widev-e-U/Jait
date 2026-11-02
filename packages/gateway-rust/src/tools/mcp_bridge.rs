@@ -200,10 +200,7 @@ pub fn to_mcp_tool_descriptor(raw: &McpRawTool) -> McpToolDescriptor {
     McpToolDescriptor {
         name: raw.name.clone(),
         description: raw.description.clone().unwrap_or_default(),
-        input_schema: raw
-            .input_schema
-            .clone()
-            .unwrap_or_else(crate::tools::contracts::ToolParametersSchema::default),
+        input_schema: raw.input_schema.clone().unwrap_or_default(),
     }
 }
 

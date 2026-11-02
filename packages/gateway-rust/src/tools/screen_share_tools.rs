@@ -323,10 +323,10 @@ impl ScreenShareTools {
         drop(service);
 
         if let Some(port) = &self.port {
-            if let Some(stopped) = stopped {
-                if let Err(error) = port(ScreenShareEffect::Broadcast(stopped)) {
-                    return fail(effect_error(&error));
-                }
+            if let Some(stopped) = stopped
+                && let Err(error) = port(ScreenShareEffect::Broadcast(stopped))
+            {
+                return fail(effect_error(&error));
             }
             let request = ScreenShareEffect::StartRequest {
                 session_id: display(&state["id"]),
@@ -362,12 +362,11 @@ impl ScreenShareTools {
             .map(|id| service.stop_session(Some(id)))
             .unwrap_or(Value::Null);
         drop(service);
-        if !state.is_null() {
-            if let Some(port) = &self.port {
-                if let Err(error) = port(ScreenShareEffect::Broadcast(state.clone())) {
-                    return fail(effect_error(&error));
-                }
-            }
+        if !state.is_null()
+            && let Some(port) = &self.port
+            && let Err(error) = port(ScreenShareEffect::Broadcast(state.clone()))
+        {
+            return fail(effect_error(&error));
         }
         success("Screen viewing session ended.", state)
     }

@@ -923,202 +923,202 @@ fn tailstatic_packages_gateway_src_channels_manager_test_ts_1189_3() {
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1203:3: stays quiet when switched off
+// packages/gateway/src/channels/manager.test.ts:1206:3: stays quiet when switched off
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1203_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1206_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1203_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1206_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toContain","negate":false,"expected":"found it"}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1215:3: is skipped for connectors that cannot edit messages
+// packages/gateway/src/channels/manager.test.ts:1222:3: is skipped for connectors that cannot edit messages
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1215_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1222_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1215_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1222_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1221:3: keeps the newest steps and counts the rest
+// packages/gateway/src/channels/manager.test.ts:1228:3: keeps the newest steps and counts the rest
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1221_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1228_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1221_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1228_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"4 earlier steps"},{"matcher":"toContain","negate":false,"expected":"• step11"},{"matcher":"toContain","negate":true,"expected":"• step3"}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1235:3: runs for the length of the turn and stops afterwards
+// packages/gateway/src/channels/manager.test.ts:1242:3: runs for the length of the turn and stops afterwards
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1235_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1242_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1235_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1242_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1257:3: stops even when the turn fails
+// packages/gateway/src/channels/manager.test.ts:1264:3: stops even when the turn fails
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1257_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1264_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1257_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1264_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1279:3: tells the agent which chat it is in and what the local time is
+// packages/gateway/src/channels/manager.test.ts:1286:3: tells the agent which chat it is in and what the local time is
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1279_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1286_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1279_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1286_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"conversationId: chat-9"},{"matcher":"toContain","negate":false,"expected":"Asia/Tokyo"},{"matcher":"toContain","negate":false,"expected":"channel: Fake (id: fake)"}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1304:3: sends a fixed reminder without running the model
+// packages/gateway/src/channels/manager.test.ts:1311:3: sends a fixed reminder without running the model
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1304_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1311_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1304_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1311_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["Anlage prüfen"]},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1321:3: works a prompted reminder out at delivery time and sends the answer
+// packages/gateway/src/channels/manager.test.ts:1328:3: works a prompted reminder out at delivery time and sends the answer
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1321_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1328_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1321_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1328_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["echo: What is on today?"]}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1336:3: waits for the reply in flight instead of interleaving with it
+// packages/gateway/src/channels/manager.test.ts:1343:3: waits for the reply in flight instead of interleaving with it
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1336_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1343_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1336_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1343_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toEqual","negate":false,"expected":["answer to slow question","answer to reminder"]}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1368:3: refuses to deliver into a channel that is not connected
+// packages/gateway/src/channels/manager.test.ts:1375:3: refuses to deliver into a channel that is not connected
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1368_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1375_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1368_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1375_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"s"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1374:3: refuses to deliver into a channel nobody registered
+// packages/gateway/src/channels/manager.test.ts:1381:3: refuses to deliver into a channel nobody registered
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1374_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1381_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1374_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1381_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":14,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"r"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"g"},{"id":7,"kind":"char","value":"i"},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1382:3: uses the channel's configured fallback first
+// packages/gateway/src/channels/manager.test.ts:1389:3: uses the channel's configured fallback first
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1382_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1389_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1382_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1389_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"model":"claude-sonnet-5","provider":{"__jait_type":"undefined"},"label":"claude-sonnet-5"}}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1387:3: carries the fallback's provider, so a CLI model routes correctly
+// packages/gateway/src/channels/manager.test.ts:1394:3: carries the fallback's provider, so a CLI model routes correctly
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1387_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1394_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1387_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1394_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"model":"opus","provider":"claude-code"}}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1393:3: falls back to the gateway default when the channel overrode it
+// packages/gateway/src/channels/manager.test.ts:1400:3: falls back to the gateway default when the channel overrode it
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1393_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1400_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1393_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1400_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"label":"claude-sonnet-5"}}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1398:3: gives up when the failing model already is the gateway default
+// packages/gateway/src/channels/manager.test.ts:1405:3: gives up when the failing model already is the gateway default
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1398_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1405_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1398_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1405_3"#,
         r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1407:3: recognises an expired login
+// packages/gateway/src/channels/manager.test.ts:1414:3: recognises an expired login
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1407_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1414_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1407_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1414_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1413:3: leaves ordinary failures alone, so they reach the user unchanged
+// packages/gateway/src/channels/manager.test.ts:1420:3: leaves ordinary failures alone, so they reach the user unchanged
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1413_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1420_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1413_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1420_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1455:3: answers on the fallback and says the main model is broken
+// packages/gateway/src/channels/manager.test.ts:1462:3: answers on the fallback and says the main model is broken
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1455_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1462_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1455_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1462_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"stringContaining","value":"couldn't authenticate"},"here is your answer"]}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1484:3: does not retry a failure the fallback cannot fix
+// packages/gateway/src/channels/manager.test.ts:1491:3: does not retry a failure the fallback cannot fix
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1484_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1491_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1484_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1491_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/channels/manager.test.ts:1505:3: keeps the channel on its chosen model — a rescue is not a decision
+// packages/gateway/src/channels/manager.test.ts:1512:3: keeps the channel on its chosen model — a rescue is not a decision
 #[test]
-fn tailstatic_packages_gateway_src_channels_manager_test_ts_1505_3() {
+fn tailstatic_packages_gateway_src_channels_manager_test_ts_1512_3() {
     tail_assertions::check(
         r#"gateway-src-channels-manager-test-dac20ccf"#,
-        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1505_3"#,
+        r#"tailstatic_packages_gateway_src_channels_manager_test_ts_1512_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"broken-model"}]"#,
     );
 }
@@ -3366,73 +3366,93 @@ fn tailstatic_packages_gateway_src_lib_security_host_software_test_ts_68_1() {
     );
 }
 
-// packages/gateway/src/lib/security/protocols.test.ts:21:3: detects a header issue, applies a fixture fix and observes the rule absent
+// packages/gateway/src/lib/security/protocols.test.ts:22:3: detects a header issue, applies a fixture fix and observes the rule absent
 #[test]
-fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_21_3() {
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_22_3() {
     tail_assertions::check(
         r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
-        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_21_3"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_22_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":["GET /","GET /"]},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":43,"kind":"alt","nodes":[{"id":21,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"r"},{"id":2,"kind":"char","value":"i"},{"id":3,"kind":"char","value":"v"},{"id":4,"kind":"char","value":"a"},{"id":5,"kind":"char","value":"t"},{"id":6,"kind":"char","value":"e"},{"id":7,"kind":"char","value":"-"},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"c"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"-"},{"id":15,"kind":"char","value":"c"},{"id":16,"kind":"char","value":"o"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"k"},{"id":19,"kind":"char","value":"i"},{"id":20,"kind":"char","value":"e"}]},{"id":42,"kind":"seq","nodes":[{"id":22,"kind":"char","value":"d"},{"id":23,"kind":"char","value":"i"},{"id":24,"kind":"char","value":"s"},{"id":25,"kind":"char","value":"c"},{"id":26,"kind":"char","value":"l"},{"id":27,"kind":"char","value":"o"},{"id":28,"kind":"char","value":"s"},{"id":29,"kind":"char","value":"e"},{"id":30,"kind":"char","value":" "},{"id":31,"kind":"char","value":"c"},{"id":32,"kind":"char","value":"r"},{"id":33,"kind":"char","value":"e"},{"id":34,"kind":"char","value":"d"},{"id":35,"kind":"char","value":"e"},{"id":36,"kind":"char","value":"n"},{"id":37,"kind":"char","value":"t"},{"id":38,"kind":"char","value":"i"},{"id":39,"kind":"char","value":"a"},{"id":40,"kind":"char","value":"l"},{"id":41,"kind":"char","value":"s"}]}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/lib/security/protocols.test.ts:39:3: never follows an out-of-scope redirect
+// packages/gateway/src/lib/security/protocols.test.ts:40:3: never follows an out-of-scope redirect
 #[test]
-fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_39_3() {
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_40_3() {
     tail_assertions::check(
         r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
-        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_39_3"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_40_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toContain","negate":true,"expected":"/logout"}]"#,
     );
 }
 
-// packages/gateway/src/lib/security/protocols.test.ts:50:3: bounds streamed bodies and handles cancellation
+// packages/gateway/src/lib/security/protocols.test.ts:51:3: keeps cancellation evidence stable after the request is destroyed
 #[test]
-fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_50_3() {
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_51_3() {
     tail_assertions::check(
         r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
-        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_50_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_51_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":["Gateway-side observation; WAN exposure and exploitability are not established.","HTTP check cancelled"]}]"#,
     );
 }
 
-// packages/gateway/src/lib/security/protocols.test.ts:59:3: reads %s without authentication or banner-CVE claims
-#[test]
-fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_59_3_each0() {
-    tail_assertions::check(
-        r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
-        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_59_3_each0"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"2.0"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":21,"kind":"alt","nodes":[{"id":15,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"f"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"x"},{"id":3,"kind":"char","value":"t"},{"id":4,"kind":"char","value":"u"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"e"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"c"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"s"}]},{"id":20,"kind":"seq","nodes":[{"id":16,"kind":"char","value":"C"},{"id":17,"kind":"char","value":"V"},{"id":18,"kind":"char","value":"E"},{"id":19,"kind":"char","value":"-"}]}]},"flags":""}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/lib/security/protocols.test.ts:59:3: reads %s without authentication or banner-CVE claims
-#[test]
-fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_59_3_each1() {
-    tail_assertions::check(
-        r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
-        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_59_3_each1"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"1.99"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":21,"kind":"alt","nodes":[{"id":15,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"f"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"x"},{"id":3,"kind":"char","value":"t"},{"id":4,"kind":"char","value":"u"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"e"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"c"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"s"}]},{"id":20,"kind":"seq","nodes":[{"id":16,"kind":"char","value":"C"},{"id":17,"kind":"char","value":"V"},{"id":18,"kind":"char","value":"E"},{"id":19,"kind":"char","value":"-"}]}]},"flags":""}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/lib/security/protocols.test.ts:69:3: rejects oversized or malformed identification
+// packages/gateway/src/lib/security/protocols.test.ts:69:3: bounds streamed bodies and handles cancellation
 #[test]
 fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_69_3() {
     tail_assertions::check(
         r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
         r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_69_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/lib/security/protocols.test.ts:78:3: reads %s without authentication or banner-CVE claims
+#[test]
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_78_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_78_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"2.0"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":21,"kind":"alt","nodes":[{"id":15,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"f"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"x"},{"id":3,"kind":"char","value":"t"},{"id":4,"kind":"char","value":"u"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"e"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"c"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"s"}]},{"id":20,"kind":"seq","nodes":[{"id":16,"kind":"char","value":"C"},{"id":17,"kind":"char","value":"V"},{"id":18,"kind":"char","value":"E"},{"id":19,"kind":"char","value":"-"}]}]},"flags":""}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/lib/security/protocols.test.ts:78:3: reads %s without authentication or banner-CVE claims
+#[test]
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_78_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_78_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"1.99"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":21,"kind":"alt","nodes":[{"id":15,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"f"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"x"},{"id":3,"kind":"char","value":"t"},{"id":4,"kind":"char","value":"u"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"e"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"c"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"s"}]},{"id":20,"kind":"seq","nodes":[{"id":16,"kind":"char","value":"C"},{"id":17,"kind":"char","value":"V"},{"id":18,"kind":"char","value":"E"},{"id":19,"kind":"char","value":"-"}]}]},"flags":""}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/lib/security/protocols.test.ts:88:3: rejects oversized or malformed identification
+#[test]
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_88_3() {
+    tail_assertions::check(
+        r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_88_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
 
-// packages/gateway/src/lib/security/protocols.test.ts:77:3: measures real certificate trust, identity and validity without exporting certificate names or keys
+// packages/gateway/src/lib/security/protocols.test.ts:96:3: measures real certificate trust, identity and validity without exporting certificate names or keys
 #[test]
-fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_77_3() {
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_96_3() {
     tail_assertions::check(
         r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
-        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_77_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":true,"expected":"PRIVATE KEY"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_96_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":true,"expected":"PRIVATE KEY"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"transport":"https","hstsEnabled":true,"bodyRetained":false}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/lib/security/protocols.test.ts:129:3: reports a socket failure as inconclusive without fabricated evidence
+#[test]
+fn tailstatic_packages_gateway_src_lib_security_protocols_test_ts_129_3() {
+    tail_assertions::check(
+        r#"gateway-src-lib-security-protocols-test-7abff4d3"#,
+        r#"tailstatic_packages_gateway_src_lib_security_protocols_test_ts_129_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toContain","negate":false,"expected":"HTTP request failed"}]"#,
     );
 }
 
@@ -4016,53 +4036,163 @@ fn tailstatic_packages_gateway_src_providers_acp_provider_attachments_test_ts_24
     );
 }
 
-// packages/gateway/src/providers/acp-provider-errors.test.ts:45:3: routes %s failure to error instead of assistant text/completion
+// packages/gateway/src/providers/acp-provider-errors.test.ts:51:3: routes %s failure to error instead of assistant text/completion
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each0() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_51_3_each0() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each0"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_51_3_each0"#,
         r#"[{"matcher":"toThrow","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Checking now. "},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"error"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-errors.test.ts:45:3: routes %s failure to error instead of assistant text/completion
+// packages/gateway/src/providers/acp-provider-errors.test.ts:51:3: routes %s failure to error instead of assistant text/completion
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each1() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_51_3_each1() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each1"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_51_3_each1"#,
         r#"[{"matcher":"toThrow","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Checking now. "},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"error"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-errors.test.ts:45:3: routes %s failure to error instead of assistant text/completion
+// packages/gateway/src/providers/acp-provider-errors.test.ts:51:3: routes %s failure to error instead of assistant text/completion
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each2() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_51_3_each2() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_45_3_each2"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_51_3_each2"#,
         r#"[{"matcher":"toThrow","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Checking now. "},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"error"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-errors.test.ts:59:3: preserves %s assistant output
+// packages/gateway/src/providers/acp-provider-errors.test.ts:65:3: retains bounded exception diagnostics without arbitrary paths
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_59_3_each0() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_65_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_59_3_each0"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_65_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Diagnostic: TypeError; RPC code -32603; RPC method turn/start; resume (index.js:123:4)"},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-errors.test.ts:79:3: rejects untrusted diagnostic code, method, and frames
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_79_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_79_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-errors.test.ts:92:3: preserves %s assistant output
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_92_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_92_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider-errors.test.ts:59:3: preserves %s assistant output
+// packages/gateway/src/providers/acp-provider-errors.test.ts:92:3: preserves %s assistant output
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_59_3_each1() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_92_3_each1() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-errors-test-155d5822"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_59_3_each1"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_errors_test_ts_92_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-mcp-binding.test.ts:5:3: overrides saved server names for each personal chat and account alias
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_mcp_binding_test_ts_5_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-mcp-binding-test-6c68ac2a"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_mcp_binding_test_ts_5_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"true"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-mcp-binding.test.ts:18:3: preserves other adapters' configuration
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_mcp_binding_test_ts_18_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-mcp-binding-test-6c68ac2a"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_mcp_binding_test_ts_18_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["false","false"]}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-startup.test.ts:8:1: disables an installed ACP launcher after initialization fails and recovers after refresh
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_startup_test_ts_8_1() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-startup-test-cde482e5"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_startup_test_ts_8_1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"installed":true,"available":false,"auth":{"login":false,"logout":false,"authenticated":null}}},{"matcher":"toContain","negate":false,"expected":"Junie startup failed"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"installed":true,"available":true,"unavailableReason":{"__jait_type":"undefined"}}}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each2() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each2"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:33:3: handles %s while retaining prompt ownership
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_33_3_each3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"conditional":true,"expected":"unknown outcome"},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:53:3: does not send steering when the provider did not negotiate it
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_53_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_53_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider-steering.test.ts:63:3: preserves stdio environment and remote headers across the SDK boundary
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_63_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-steering-test-bfaef63e"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_steering_test_ts_63_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"running"}]"#,
     );
 }
 
@@ -4096,562 +4226,582 @@ fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_483_3() {
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:523:3: emits a thinking event for agent_thought_chunk text blocks
+// packages/gateway/src/providers/acp-provider.test.ts:533:3: forwards available_commands_update as an activity event
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_523_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_533_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_523_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_533_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"type":"activity","sessionId":"s1","kind":"available_commands_update"}}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:549:3: forwards usage_update as an activity event
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_549_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_549_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"type":"activity","sessionId":"s1","kind":"usage_update"}}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:568:3: emits a thinking event for agent_thought_chunk text blocks
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_568_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_568_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"expected":{"type":"thinking","sessionId":"provider-session-1","content":"Let me inspect the request handler"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:550:3: preserves thinking chunk whitespace (wrapped=%s)
+// packages/gateway/src/providers/acp-provider.test.ts:595:3: preserves thinking chunk whitespace (wrapped=%s)
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_550_3_each0() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_595_3_each0() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_550_3_each0"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_595_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Let me inspect the handler.\n\nChecking next. "},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:550:3: preserves thinking chunk whitespace (wrapped=%s)
+// packages/gateway/src/providers/acp-provider.test.ts:595:3: preserves thinking chunk whitespace (wrapped=%s)
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_550_3_each1() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_595_3_each1() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_550_3_each1"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_595_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Let me inspect the handler.\n\nChecking next. "},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:573:3: unwraps nested content blocks from agent_thought_chunk
+// packages/gateway/src/providers/acp-provider.test.ts:618:3: unwraps nested content blocks from agent_thought_chunk
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_573_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_618_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_573_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_618_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"expected":{"type":"thinking","sessionId":"provider-session-1","content":"Nested reasoning here"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:602:3: drops non-text agent_thought_chunk content without crashing
+// packages/gateway/src/providers/acp-provider.test.ts:647:3: drops non-text agent_thought_chunk content without crashing
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_602_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_647_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_602_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_647_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:626:3: unwraps Codex code-mode Jait MCP calls
+// packages/gateway/src/providers/acp-provider.test.ts:671:3: unwraps Codex code-mode Jait MCP calls
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_626_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_671_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_626_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_671_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:663:3: unwraps Claude Code's Jait MCP calls (no server field, args nested under 'args')
+// packages/gateway/src/providers/acp-provider.test.ts:708:3: unwraps Claude Code's Jait MCP calls (no server field, args nested under 'args')
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_663_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_708_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_663_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_708_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"expected":{"type":"tool.start","sessionId":"provider-session-1","tool":"agent.spawn","callId":"call_ksc62mkz","args":{"description":"Test specialist","maxRounds":6,"prompt":"Do a quick read-only investigation"}}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:698:3: resolves Claude Code calling an already-loaded Jait MCP tool directly, without clobbering the tool's own 'title' arg
+// packages/gateway/src/providers/acp-provider.test.ts:743:3: resolves Claude Code calling an already-loaded Jait MCP tool directly, without clobbering the tool's own 'title' arg
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_698_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_743_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_698_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_743_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"expected":{"type":"tool.start","sessionId":"provider-session-1","tool":"user.ask","callId":"toolu_018FvvuoFm6VVnFMj4sGMK1u","args":{"title":"Inter-agent interaction model","questions":[{"id":"rendering","header":"Rendering","question":"..."}]}}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:741:3: emits read file paths from ACP locations instead of empty rawInput
+// packages/gateway/src/providers/acp-provider.test.ts:786:3: emits read file paths from ACP locations instead of empty rawInput
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_741_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_786_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_741_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_786_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"expected":{"type":"tool.start","sessionId":"provider-session-1","tool":"read","callId":"call-read","args":{"title":"Read file","kind":"read","locations":[{"path":"/tmp/jait-acp-capture/sample.txt"}],"path":"/tmp/jait-acp-capture/sample.txt"}}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:778:3: emits edit file paths and diff text from ACP diff content
+// packages/gateway/src/providers/acp-provider.test.ts:823:3: emits edit file paths and diff text from ACP diff content
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_778_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_823_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_778_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_823_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"expected":{"type":"tool.start","sessionId":"provider-session-1","tool":"edit","callId":"call-edit","args":{"title":"Editing files","kind":"edit","content":[{"type":"diff","path":"/tmp/jait-acp-capture/sample.txt","oldText":"Alpha\n","newText":"Beta\n","_meta":{"kind":"update"}}],"changes":[{"path":"/tmp/jait-acp-capture/sample.txt","oldText":"Alpha\n","newText":"Beta\n","kind":"update"}],"path":"/tmp/jait-acp-capture/sample.txt","search":"Alpha\n","replace":"Beta\n"}}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:847:3: re-emits an enriched tool.start when a tool_call_update carries the file path and diff
+// packages/gateway/src/providers/acp-provider.test.ts:892:3: re-emits an enriched tool.start when a tool_call_update carries the file path and diff
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_847_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_892_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_847_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_892_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"edit"},{"matcher":"toBe","negate":false,"expected":"/x/notes.txt"},{"matcher":"toBe","negate":false,"expected":"hello world"},{"matcher":"toBe","negate":false,"expected":"goodbye world"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:890:3: merges metadata across frames so a later update without kind still resolves the edit
-#[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_890_3() {
-    tail_assertions::check(
-        r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_890_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"edit"},{"matcher":"toBe","negate":false,"expected":"/x/notes.txt"},{"matcher":"toBe","negate":false,"expected":"hello world"},{"matcher":"toBe","negate":false,"expected":"goodbye world"}]"#,
-    );
-}
-
-// packages/gateway/src/providers/acp-provider.test.ts:926:3: stays out of the way unless explicitly switched on
-#[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_926_3() {
-    tail_assertions::check(
-        r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_926_3"#,
-        r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/providers/acp-provider.test.ts:935:3: applies to a provider built from a registry definition, not just the local defaults
+// packages/gateway/src/providers/acp-provider.test.ts:935:3: merges metadata across frames so a later update without kind still resolves the edit
 #[test]
 fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_935_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
         r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_935_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"edit"},{"matcher":"toBe","negate":false,"expected":"/x/notes.txt"},{"matcher":"toBe","negate":false,"expected":"hello world"},{"matcher":"toBe","negate":false,"expected":"goodbye world"}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:971:3: stays out of the way unless explicitly switched on
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_971_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_971_3"#,
+        r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:980:3: applies to a provider built from a registry definition, not just the local defaults
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_980_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_980_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ANTHROPIC_BASE_URL":"http://localhost:20128"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:957:3: launches built-in Codex ACP without npm cache resolution
+// packages/gateway/src/providers/acp-provider.test.ts:1002:3: launches built-in Codex ACP without npm cache resolution
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_957_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1002_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_957_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1002_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"@agentclientprotocol/codex-acp/dist/index.js"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:970:3: launches bundled Claude ACP and preserves adapter arguments
-#[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_970_3() {
-    tail_assertions::check(
-        r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_970_3"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"@agentclientprotocol/claude-agent-acp/dist/index.js"},{"matcher":"toBe","negate":false,"expected":"--example"}]"#,
-    );
-}
-
-// packages/gateway/src/providers/acp-provider.test.ts:984:3: keeps custom ACP adapter commands unchanged
-#[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_984_3() {
-    tail_assertions::check(
-        r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_984_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"command":"npx","args":["-y","custom-acp"]}}]"#,
-    );
-}
-
-// packages/gateway/src/providers/acp-provider.test.ts:996:3: keeps CODEX_CONFIG alongside the OmniRoute overlay
-#[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_996_3() {
-    tail_assertions::check(
-        r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_996_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"http://localhost:20128/v1"},{"matcher":"toBeTruthy","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/providers/acp-provider.test.ts:1015:3: points Claude Code at the router root, not the /v1 surface
+// packages/gateway/src/providers/acp-provider.test.ts:1015:3: launches bundled Claude ACP and preserves adapter arguments
 #[test]
 fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1015_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
         r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1015_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"@agentclientprotocol/claude-agent-acp/dist/index.js"},{"matcher":"toBe","negate":false,"expected":"--example"}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:1029:3: keeps custom ACP adapter commands unchanged
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1029_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1029_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"command":"npx","args":["-y","custom-acp"]}}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:1041:3: keeps CODEX_CONFIG alongside the OmniRoute overlay
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1041_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1041_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"http://localhost:20128/v1"},{"matcher":"toBeTruthy","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/acp-provider.test.ts:1060:3: points Claude Code at the router root, not the /v1 surface
+#[test]
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1060_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-acp-provider-test-5043e866"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1060_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ANTHROPIC_BASE_URL":"http://localhost:20128","ANTHROPIC_AUTH_TOKEN":"sk-omni"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1028:3: points Codex at the OpenAI-compatible /v1 surface
+// packages/gateway/src/providers/acp-provider.test.ts:1073:3: points Codex at the OpenAI-compatible /v1 surface
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1028_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1073_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1028_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1073_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"OPENAI_BASE_URL":"http://localhost:20128/v1","OPENAI_API_KEY":"omniroute"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1035:3: leaves providers without a vendor-endpoint override alone
+// packages/gateway/src/providers/acp-provider.test.ts:1080:3: leaves providers without a vendor-endpoint override alone
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1035_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1080_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1035_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1080_3"#,
         r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1042:3: keeps locally installed Pi available without creating a provider account
+// packages/gateway/src/providers/acp-provider.test.ts:1087:3: keeps locally installed Pi available without creating a provider account
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1042_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1087_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1042_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1087_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"command":"npx","args":["-y","pi-acp"],"availabilityCommand":"pi","auth":false}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1053:3: checks the host CLI required by an npx ACP wrapper
+// packages/gateway/src/providers/acp-provider.test.ts:1098:3: checks the host CLI required by an npx ACP wrapper
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1053_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1098_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1053_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1098_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"missing-jait-acp-host-cli"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1068:3: keeps the Jait core MCP namespace directly callable in Codex code mode
+// packages/gateway/src/providers/acp-provider.test.ts:1113:3: keeps the Jait core MCP namespace directly callable in Codex code mode
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1068_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1113_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1068_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1113_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"mcp__jait_core"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1075:3: keeps login-capable bundled ACP agents account-backed and includes Muse Code
+// packages/gateway/src/providers/acp-provider.test.ts:1120:3: keeps login-capable bundled ACP agents account-backed and includes Muse Code
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1075_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1120_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1075_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1120_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"command":"npx","availabilityCommand":"muse","args":["-y","@bex-co/muse-code-acp"]}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1086:3: exposes ACP-managed login for default ACP providers
+// packages/gateway/src/providers/acp-provider.test.ts:1131:3: exposes ACP-managed login for default ACP providers
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1086_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1131_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1086_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1131_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":false,"deviceCode":false}},{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":false,"deviceCode":false}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1101:3: rechecks authentication while a login process is active
+// packages/gateway/src/providers/acp-provider.test.ts:1146:3: rechecks authentication while a login process is active
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1101_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1146_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1101_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1146_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"authenticated":true}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1129:3: does not inherit gateway API keys into owned provider accounts
+// packages/gateway/src/providers/acp-provider.test.ts:1174:3: does not inherit gateway API keys into owned provider accounts
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1129_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1174_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1129_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1174_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1147:3: reports Codex ACP auth from CODEX_HOME credentials
+// packages/gateway/src/providers/acp-provider.test.ts:1192:3: reports Codex ACP auth from CODEX_HOME credentials
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1147_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1192_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1147_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1192_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":true,"deviceCode":false,"authenticated":true}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1173:3: uses account-scoped Codex credentials when the adapter id is an account id
+// packages/gateway/src/providers/acp-provider.test.ts:1218:3: uses account-scoped Codex credentials when the adapter id is an account id
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1173_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1218_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1173_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1218_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"codex"},{"matcher":"toBe","negate":false,"expected":"user-1"},{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":true,"authenticated":true}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1205:3: does not use OPENAI_API_KEY as Codex auth state
+// packages/gateway/src/providers/acp-provider.test.ts:1250:3: does not use OPENAI_API_KEY as Codex auth state
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1205_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1250_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1205_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1250_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":false,"deviceCode":false,"authenticated":false}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1230:3: keeps Codex logout available when env API key and local credentials coexist
+// packages/gateway/src/providers/acp-provider.test.ts:1275:3: keeps Codex logout available when env API key and local credentials coexist
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1230_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1275_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1230_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1275_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":true,"deviceCode":false,"authenticated":true}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"status":"completed"}},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1263:3: surfaces ACP model discovery failures instead of returning fallback models
+// packages/gateway/src/providers/acp-provider.test.ts:1308:3: surfaces ACP model discovery failures instead of returning fallback models
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1263_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1308_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1263_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1308_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Authentication required"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1281:3: uses base model config when ACP also advertises composite model-effort IDs
+// packages/gateway/src/providers/acp-provider.test.ts:1326:3: uses base model config when ACP also advertises composite model-effort IDs
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1281_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1326_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1281_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1326_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"id":"gpt-5.6-sol","name":"GPT-5.6-Sol","description":"Frontier coding model","isDefault":true,"reasoningEffortSupported":true,"supportedReasoningEfforts":[{"reasoningEffort":"low","description":"Fast responses"},{"reasoningEffort":"high","description":"Deep reasoning"}]}]}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1306:3: returns Codex fallback models when ACP model discovery times out
+// packages/gateway/src/providers/acp-provider.test.ts:1351:3: returns Codex fallback models when ACP model discovery times out
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1306_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1351_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1306_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1351_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"id":"gpt-5-codex","isDefault":true}}]}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1320:3: returns Claude Code alias models when ACP model metadata is unavailable
+// packages/gateway/src/providers/acp-provider.test.ts:1365:3: returns Claude Code alias models when ACP model metadata is unavailable
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1320_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1365_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1320_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1365_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"id":"default","isDefault":true}},{"__jait_matcher":"objectContaining","value":{"id":"fable"}},{"__jait_matcher":"objectContaining","value":{"id":"sonnet"}},{"__jait_matcher":"objectContaining","value":{"id":"opus"}},{"__jait_matcher":"objectContaining","value":{"id":"haiku"}},{"__jait_matcher":"objectContaining","value":{"id":"opusplan"}}]}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1339:3: does not describe Codex ACP model discovery auth errors as logged out when credentials exist
+// packages/gateway/src/providers/acp-provider.test.ts:1384:3: does not describe Codex ACP model discovery auth errors as logged out when credentials exist
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1339_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1384_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1339_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1384_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Codex is logged in, but the provider rejected model discovery: Authentication required. Check provider usage limits or account access."}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1360:3: returns device auth details from ACP terminal login output
+// packages/gateway/src/providers/acp-provider.test.ts:1405:3: returns device auth details from ACP terminal login output
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1360_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1405_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1360_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1405_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"status":"started","verificationUri":"https://auth.openai.com/codex/device","userCode":"1URT-UU74B"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1389:3: returns device auth details from the Copilot _meta terminal-auth extension
+// packages/gateway/src/providers/acp-provider.test.ts:1434:3: returns device auth details from the Copilot _meta terminal-auth extension
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1389_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1434_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1389_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1434_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"status":"started","verificationUri":"https://github.com/login/device","userCode":"362A-4FC3"}},{"matcher":"toContain","negate":false,"expected":"gh_token=unset"},{"matcher":"toContain","negate":false,"expected":"github_token=unset"},{"matcher":"toContain","negate":false,"expected":"copilot_github_token=unset"},{"matcher":"toBe","negate":false,"expected":"ghp_inherited_gateway_token"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1439:3: uses Codex CLI device auth without probing ACP for Codex login
+// packages/gateway/src/providers/acp-provider.test.ts:1484:3: uses Codex CLI device auth without probing ACP for Codex login
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1439_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1484_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1439_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1484_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"status":"started","verificationUri":"https://auth.openai.com/codex/device","userCode":"8K2R-X4D9"}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1470:3: exposes ACP-managed auth for custom ACP providers by default
+// packages/gateway/src/providers/acp-provider.test.ts:1515:3: exposes ACP-managed auth for custom ACP providers by default
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1470_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1515_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1470_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1515_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"login":true,"logout":false,"deviceCode":false}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1485:3: reports a successful generic ACP login to Settings
+// packages/gateway/src/providers/acp-provider.test.ts:1530:3: reports a successful generic ACP login to Settings
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1485_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1530_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1485_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1530_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"status":"started"}},{"matcher":"toMatchObject","negate":false,"expected":{"authenticated":true,"login":true,"logout":true}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1510:3: allows custom ACP providers to opt out of Jait auth actions
+// packages/gateway/src/providers/acp-provider.test.ts:1555:3: allows custom ACP providers to opt out of Jait auth actions
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1510_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1555_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1510_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1555_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"login":false,"logout":false,"deviceCode":false}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1568:3: does not advertise the hidden ACP terminal to providers
+// packages/gateway/src/providers/acp-provider.test.ts:1613:3: does not advertise the hidden ACP terminal to providers
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1568_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1613_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1568_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1613_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1713:3: applies explicit reasoning effort after a composite model selection
+// packages/gateway/src/providers/acp-provider.test.ts:1758:3: applies explicit reasoning effort after a composite model selection
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1713_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1758_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1713_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1758_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1745:3: applies the advertised thought-level config when starting a session
+// packages/gateway/src/providers/acp-provider.test.ts:1790:3: applies the advertised thought-level config when starting a session
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1745_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1790_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1745_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1790_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1774:3: uses the stable session model config without logging an error
+// packages/gateway/src/providers/acp-provider.test.ts:1819:3: uses the stable session model config without logging an error
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1774_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1819_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1774_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1819_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1804:3: surfaces a visible activity event instead of silently swallowing a rejected session/set_mode
+// packages/gateway/src/providers/acp-provider.test.ts:1849:3: surfaces a visible activity event instead of silently swallowing a rejected session/set_mode
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1804_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1849_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1804_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1849_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"type":"activity","kind":"stderr","summary":{"__jait_matcher":"stringContaining","value":"did not accept mode \"full-access\""}}}},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"type":"activity","kind":"stderr","summary":{"__jait_matcher":"stringContaining","value":"did not accept model \"some-model\""}}}}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1860:3: detects Copilot providers from id or registry metadata
+// packages/gateway/src/providers/acp-provider.test.ts:1905:3: detects Copilot providers from id or registry metadata
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1860_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1905_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1860_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1905_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1869:3: strips tokens that would shadow a Copilot login
+// packages/gateway/src/providers/acp-provider.test.ts:1914:3: strips tokens that would shadow a Copilot login
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1869_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1914_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1869_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1914_3"#,
         r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":"/usr/bin"},{"matcher":"toBe","negate":false,"expected":"/home/tester"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1880:3: leaves non-Copilot providers untouched
+// packages/gateway/src/providers/acp-provider.test.ts:1925:3: leaves non-Copilot providers untouched
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1880_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1925_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1880_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1925_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"ghp_inherited"},{"matcher":"toBe","negate":false,"expected":"ghp_inherited"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1887:3: lets an explicitly configured token win over the strip list
+// packages/gateway/src/providers/acp-provider.test.ts:1932:3: lets an explicitly configured token win over the strip list
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1887_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1932_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1887_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1932_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"github_pat_explicit"},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1897:3: applies the configured env with no per-call override (probe path)
+// packages/gateway/src/providers/acp-provider.test.ts:1942:3: applies the configured env with no per-call override (probe path)
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1897_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1942_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1897_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1942_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"github_pat_explicit"},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1909:3: honours custom stripEnv names without over-stripping
+// packages/gateway/src/providers/acp-provider.test.ts:1954:3: honours custom stripEnv names without over-stripping
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1909_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1954_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1909_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1954_3"#,
         r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":"ghp_inherited"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1916:3: applies per-call overrides after the configured env
+// packages/gateway/src/providers/acp-provider.test.ts:1961:3: applies per-call overrides after the configured env
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1916_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1961_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1916_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1961_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"override"},{"matcher":"toBe","negate":false,"expected":"baz"}]"#,
     );
 }
 
-// packages/gateway/src/providers/acp-provider.test.ts:1927:3: reports the inherited strip list per provider
+// packages/gateway/src/providers/acp-provider.test.ts:1972:3: reports the inherited strip list per provider
 #[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1927_3() {
+fn tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1972_3() {
     tail_assertions::check(
         r#"gateway-src-providers-acp-provider-test-5043e866"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1927_3"#,
+        r#"tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1972_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":["GH_TOKEN","GITHUB_TOKEN","COPILOT_GITHUB_TOKEN"]}},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
@@ -4705,6 +4855,7 @@ fn tailstatic_packages_gateway_src_providers_acp_registry_test_ts_157_3() {
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"id":"constructor","providerType":"constructor","registry":{"id":"constructor"}}}]"#,
     );
 }
+
 // packages/gateway/src/providers/acp-terminal.test.ts:5:3: settles exit and completion waits when no child process was created
 #[test]
 fn tailstatic_packages_gateway_src_providers_acp_terminal_test_ts_5_3() {
@@ -5886,82 +6037,92 @@ fn tailstatic_packages_gateway_src_providers_registry_test_ts_18_3_each1() {
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:31:3: does not grant full access when no mode is supplied
+// packages/gateway/src/providers/registry.test.ts:31:3: binds personal chat tools to their own chat without a project root
 #[test]
 fn tailstatic_packages_gateway_src_providers_registry_test_ts_31_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
         r#"tailstatic_packages_gateway_src_providers_registry_test_ts_31_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"personal-chat"},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/registry.test.ts:44:3: does not grant full access when no mode is supplied
+#[test]
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_44_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-registry-test-16dfa42a"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_44_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:36:3: splits Jait core and deferred tools into distinct MCP server refs
+// packages/gateway/src/providers/registry.test.ts:49:3: splits Jait core and deferred tools into distinct MCP server refs
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_36_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_49_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_36_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_49_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["jait_core","jait"]},{"matcher":"toEqual","negate":false,"expected":[{"origin":"https://gateway.example.test","pathname":"/mcp","sessionId":"session-1","projectRoot":"/workspace/project","toolSet":"core"},{"origin":"https://gateway.example.test","pathname":"/mcp","sessionId":"session-1","projectRoot":"/workspace/project","toolSet":"deferred"}]}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:59:3: omits the OmniRoute MCP server unless it is explicitly switched on
+// packages/gateway/src/providers/registry.test.ts:72:3: omits the OmniRoute MCP server unless it is explicitly switched on
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_59_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_72_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_59_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_72_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["jait_core","jait"]}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:65:3: appends the OmniRoute MCP server when switched on
+// packages/gateway/src/providers/registry.test.ts:78:3: appends the OmniRoute MCP server when switched on
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_65_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_78_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_65_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_78_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["jait_core","jait","omniroute"]}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:74:3: returns null when the switch is absent or not exactly 1
+// packages/gateway/src/providers/registry.test.ts:87:3: returns null when the switch is absent or not exactly 1
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_74_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_87_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_74_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_87_3"#,
         r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:80:3: returns null without a key, since the MCP endpoint always 401s unauthenticated
+// packages/gateway/src/providers/registry.test.ts:93:3: returns null without a key, since the MCP endpoint always 401s unauthenticated
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_80_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_93_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_80_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_93_3"#,
         r#"[{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:86:3: hangs the MCP endpoint off the router root, not the /v1 API surface
+// packages/gateway/src/providers/registry.test.ts:99:3: hangs the MCP endpoint off the router root, not the /v1 API surface
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_86_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_99_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_86_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_99_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"name":"omniroute","transport":"http","url":"http://nas:20128/api/mcp/stream","headers":{"Authorization":"Bearer sk-omni"}}}]"#,
     );
 }
 
-// packages/gateway/src/providers/registry.test.ts:103:3: authenticates via header, not env, because env is meaningless over HTTP
+// packages/gateway/src/providers/registry.test.ts:116:3: authenticates via header, not env, because env is meaningless over HTTP
 #[test]
-fn tailstatic_packages_gateway_src_providers_registry_test_ts_103_3() {
+fn tailstatic_packages_gateway_src_providers_registry_test_ts_116_3() {
     tail_assertions::check(
         r#"gateway-src-providers-registry-test-16dfa42a"#,
-        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_103_3"#,
+        r#"tailstatic_packages_gateway_src_providers_registry_test_ts_116_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"http://localhost:20128/api/mcp/stream"},{"matcher":"toEqual","negate":false,"expected":{"Authorization":"Bearer sk-omni"}},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
@@ -6053,6 +6214,96 @@ fn tailstatic_packages_gateway_src_providers_remote_cli_provider_test_ts_240_3()
         r#"gateway-src-providers-remote-cli-provider-test-5eeb2fd1"#,
         r#"tailstatic_packages_gateway_src_providers_remote_cli_provider_test_ts_240_3"#,
         r#"[{"matcher":"toContainEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/session-idle.test.ts:7:3: expires at ten minutes from the user message, not from the end of the turn
+#[test]
+fn tailstatic_packages_gateway_src_providers_session_idle_test_ts_7_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-session-idle-test-173ded92"#,
+        r#"tailstatic_packages_gateway_src_providers_session_idle_test_ts_7_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/providers/session-idle.test.ts:23:3: resets only the matching chat when a new user message arrives
+#[test]
+fn tailstatic_packages_gateway_src_providers_session_idle_test_ts_23_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-session-idle-test-173ded92"#,
+        r#"tailstatic_packages_gateway_src_providers_session_idle_test_ts_23_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/providers/session-idle.test.ts:38:3: protects long turns and approvals, then expires without granting another ten minutes
+#[test]
+fn tailstatic_packages_gateway_src_providers_session_idle_test_ts_38_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-session-idle-test-173ded92"#,
+        r#"tailstatic_packages_gateway_src_providers_session_idle_test_ts_38_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/providers/session-idle.test.ts:51:3: expires unused prewarms and permits a fresh session after expiry
+#[test]
+fn tailstatic_packages_gateway_src_providers_session_idle_test_ts_51_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-session-idle-test-173ded92"#,
+        r#"tailstatic_packages_gateway_src_providers_session_idle_test_ts_51_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/providers/steering-dispatcher.test.ts:13:3: keeps messages pending until acknowledgement and serializes arrivals
+#[test]
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_13_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_13_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":["[STEERING] first","[STEERING] second"]},{"matcher":"toEqual","negate":false,"expected":["q1","q2"]},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/providers/steering-dispatcher.test.ts:36:3: retains rejected messages for FIFO fallback (%s)
+#[test]
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each0"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["first","second"]}]"#,
+    );
+}
+
+// packages/gateway/src/providers/steering-dispatcher.test.ts:36:3: retains rejected messages for FIFO fallback (%s)
+#[test]
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_36_3_each1"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":["first","second"]}]"#,
+    );
+}
+
+// packages/gateway/src/providers/steering-dispatcher.test.ts:54:3: settles the current ack at the turn boundary and leaves later arrivals queued
+#[test]
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_54_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_54_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["after turn end"]}]"#,
+    );
+}
+
+// packages/gateway/src/providers/steering-dispatcher.test.ts:73:3: detaches on cancellation without emitting a late transcript marker
+#[test]
+fn tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_73_3() {
+    tail_assertions::check(
+        r#"gateway-src-providers-steering-dispatcher-test-43ee80ae"#,
+        r#"tailstatic_packages_gateway_src_providers_steering_dispatcher_test_ts_73_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":["after cancellation"]}]"#,
     );
 }
 
@@ -6706,6 +6957,116 @@ fn tailstatic_packages_gateway_src_routes_chat_image_test_ts_82_3() {
     );
 }
 
+// packages/gateway/src/routes/chat-loops.test.ts:85:3: runs hidden self-messages, checks progress and stops without completion notifications
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_85_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_85_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"completed","iteration":2}},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Run the regression test"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:101:3: restores a running loop after gateway startup without an open browser
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_101_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_101_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:112:3: preserves model selection without allowing saved UI state to retarget a continuation
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_112_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_112_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":"fixture-model"},{"matcher":"toContain","negate":false,"expected":"Fix the authorized target"},{"matcher":"toContain","negate":true,"expected":"Wrong hidden task"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:125:3: restores ordinary notifications for new turns after goal completion
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_125_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_125_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":false,"optional":true},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"completion","title":"Response ready · Fix goal"}},{"matcher":"toBe","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:139:3: cancel during the gap pauses continuation, and controls require ownership
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_139_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_139_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":401},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:150:3: blocks on pending human input and wakes when the wait is cleared
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_150_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_150_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"optional":true,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:161:3: stops on provider errors and resumes only on request
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_161_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_161_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"error"},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"attention","title":"Loop stopped"}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:170:3: exposes a stopped goal on a manual retry and continues automatically after resume
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_170_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_170_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"error"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Loop status: error"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Finish the saved migration"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"conditional":true,"optional":true,"expected":"Run the remaining regression"},{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"completed","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:195:3: continues a goal created mid-turn even when the model omits its check
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_195_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_195_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"optional":true,"expected":{"status":"completed","iteration":3}},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toContain","negate":false,"expected":"Verify completed work before repeating actions"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:206:3: a direct answer resumes a waiting goal and validates owner access
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_206_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_206_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"optional":true,"expected":"running"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"optional":true,"expected":1},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-loops.test.ts:222:3: waits for a user answer and sends attention instead of a completion notification
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_loops_test_ts_222_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-loops-test-9976ba7a"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_loops_test_ts_222_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":false,"optional":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"kind":"attention","title":"Loop needs your answer"}},{"matcher":"toBe","negate":false,"expected":"waiting"}]"#,
+    );
+}
+
 // packages/gateway/src/routes/chat-ollama-e2e.test.ts:89:3: streams a simple text response from Ollama
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
@@ -6899,62 +7260,82 @@ fn tailstatic_packages_gateway_src_routes_chat_prewarm_pending_test_ts_127_1() {
     );
 }
 
-// packages/gateway/src/routes/chat-prewarm.test.ts:135:3: moves the provider bootstrap off the first message
+// packages/gateway/src/routes/chat-prewarm.test.ts:135:3: replaces an expired conversation process and restores its saved chat context
 #[test]
 fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_135_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
         r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_135_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Remember the fixture uses UTF-8"},{"matcher":"toContain","negate":false,"expected":"Continue the fixture"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-prewarm.test.ts:157:3: replaces an expired prewarm instead of reporting it warm
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_157_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_157_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"started"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat-prewarm.test.ts:170:3: moves the provider bootstrap off the first message
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_170_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_170_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"started"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"\"type\":\"token\""},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-prewarm.test.ts:156:3: still sends Jait's system prompt on the first turn of a pre-warmed session
+// packages/gateway/src/routes/chat-prewarm.test.ts:191:3: still sends Jait's system prompt on the first turn of a pre-warmed session
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_191_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_191_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"Jait"},{"matcher":"toBeGreaterThan","negate":false,"expected":500},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-prewarm.test.ts:178:3: does not spawn twice when the message races the pre-warm
+// packages/gateway/src/routes/chat-prewarm.test.ts:213:3: does not spawn twice when the message races the pre-warm
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_178_3() {
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_213_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_178_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_213_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-prewarm.test.ts:193:3: replaces a pre-warmed session when the message asks for a different model
+// packages/gateway/src/routes/chat-prewarm.test.ts:228:3: replaces a pre-warmed session when the message asks for a different model
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_193_3() {
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_228_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_193_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_228_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"model":"opus"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-prewarm.test.ts:210:3: never restarts a session that is already holding a conversation
+// packages/gateway/src/routes/chat-prewarm.test.ts:245:3: never restarts a session that is already holding a conversation
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_210_3() {
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_245_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_210_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_245_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"status":"skipped","reason":"session-in-use"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat-prewarm.test.ts:226:3: skips non-CLI providers instead of spawning anything
+// packages/gateway/src/routes/chat-prewarm.test.ts:261:3: skips non-CLI providers instead of spawning anything
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_226_3() {
+fn tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_261_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-prewarm-test-4ee19357"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_226_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_prewarm_test_ts_261_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"skipped","reason":"not-a-cli-provider"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
@@ -7299,282 +7680,332 @@ fn tailstatic_packages_gateway_src_routes_chat_trajectory_test_ts_167_3() {
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:23:3: keeps Jait routing and user context without duplicating the full internal agent manual
+// packages/gateway/src/routes/chat.external-providers.test.ts:26:3: keeps Jait routing and user context without duplicating the full internal agent manual
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_23_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_26_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_23_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_26_3"#,
         r###"[{"matcher":"toContain","negate":false,"expected":"always use `jait.terminal`"},{"matcher":"toContain","negate":false,"expected":"/work/project"},{"matcher":"toContain","negate":false,"expected":"<skillDiscovery>"},{"matcher":"toContain","negate":true,"expected":"/skills/debugging/SKILL.md"},{"matcher":"toContain","negate":false,"expected":"Use the repository conventions."},{"matcher":"toContain","negate":true,"expected":"graph TD"},{"matcher":"toContain","negate":true,"expected":"## Preambles and progress updates"},{"matcher":"toBeLessThan","negate":false,"expected":12000}]"###,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:52:3: does not allow gateway CLI profiles in a remote project
+// packages/gateway/src/routes/chat.external-providers.test.ts:55:3: does not allow gateway CLI profiles in a remote project
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_52_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_55_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_52_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_55_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:60:3: recognizes edit-style tool names used by external providers
+// packages/gateway/src/routes/chat.external-providers.test.ts:63:3: recognizes edit-style tool names used by external providers
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_60_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_63_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_60_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_63_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"/tmp/a.ts"},{"matcher":"toBe","negate":false,"expected":"/tmp/b.ts"},{"matcher":"toBe","negate":false,"expected":"/tmp/c.ts"},{"matcher":"toBe","negate":false,"expected":"/tmp/d.ts"},{"matcher":"toBe","negate":false,"expected":"/tmp/e.ts"},{"matcher":"toBe","negate":false,"expected":"src/f.ts"},{"matcher":"toBe","negate":false,"expected":"src/g.ts"},{"matcher":"toBe","negate":false,"expected":"src/h.ts"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:71:3: ignores non-mutating tools
+// packages/gateway/src/routes/chat.external-providers.test.ts:74:3: ignores non-mutating tools
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_71_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_74_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_71_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_74_3"#,
         r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:79:3: keeps auth and provider limit errors stable as authentication required
+// packages/gateway/src/routes/chat.external-providers.test.ts:82:3: keeps auth and provider limit errors stable as authentication required
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_79_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_82_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_79_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_82_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Authentication required"},{"matcher":"toBe","negate":false,"expected":"Authentication required"},{"matcher":"toBe","negate":false,"expected":"Temporary provider outage"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:85:3: extracts actionable ACP details and distinguishes non-recoverable limits
+// packages/gateway/src/routes/chat.external-providers.test.ts:88:3: extracts actionable ACP details and distinguishes non-recoverable limits
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_85_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_88_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_85_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_88_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"out of credits"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:343:3: delivers uploaded images on first and reused turns, including display-segment uploads (recovery=%s)
+// packages/gateway/src/routes/chat.external-providers.test.ts:346:3: refreshes a %s goal in reused CLI sessions
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_343_3_each0() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_346_3_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_343_3_each0"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_346_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"<chatGoalLoop>"},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Finish saved migration"},{"matcher":"toContain","negate":false,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"conditional":true,"expected":"Workspace is out of credits"},{"matcher":"toBe","negate":false,"expected":"error"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat.external-providers.test.ts:346:3: refreshes a %s goal in reused CLI sessions
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_346_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_346_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"<chatGoalLoop>"},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Finish saved migration"},{"matcher":"toContain","negate":false,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"conditional":true,"expected":"Workspace is out of credits"},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat.external-providers.test.ts:382:3: delivers uploaded images on first and reused turns, including display-segment uploads (recovery=%s)
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_382_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_382_3_each0"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"colleague notes"},{"matcher":"toContain","negate":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:343:3: delivers uploaded images on first and reused turns, including display-segment uploads (recovery=%s)
+// packages/gateway/src/routes/chat.external-providers.test.ts:382:3: delivers uploaded images on first and reused turns, including display-segment uploads (recovery=%s)
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_343_3_each1() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_382_3_each1() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_343_3_each1"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_382_3_each1"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"colleague notes"},{"matcher":"toContain","negate":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:375:3: runs Codex without an API key for the configured OpenCode Go backend
+// packages/gateway/src/routes/chat.external-providers.test.ts:414:3: runs Codex without an API key for the configured OpenCode Go backend
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_375_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_414_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_375_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_414_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:395:3: allows a silent CLI turn to finish without interrupting it
+// packages/gateway/src/routes/chat.external-providers.test.ts:434:3: resumes an idle CLI after a delayed %s answer through HTTP
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_395_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_434_3_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_395_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_434_3_each0"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"status":"pending"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":2},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"full-access"},{"matcher":"toContain","negate":true,"expected":"Call browser.handoff with only requestId="}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat.external-providers.test.ts:434:3: resumes an idle CLI after a delayed %s answer through HTTP
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_434_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_434_3_each1"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"status":"pending"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":2},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"full-access"},{"matcher":"toContain","negate":true,"expected":"Call browser.handoff with only requestId="}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat.external-providers.test.ts:476:3: delivers background completions to an active CLI without exposing internal steering
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_476_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_476_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"private completion evidence"},{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toContain","negate":true,"expected":"\"type\":\"steering\""},{"matcher":"toContain","negate":true,"expected":"private completion evidence"},{"matcher":"toContain","negate":true,"expected":"[system-notification:"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":true,"expected":"private completion evidence"},{"matcher":"toContain","negate":true,"expected":"\"type\":\"steering\""}]"#,
+    );
+}
+
+// packages/gateway/src/routes/chat.external-providers.test.ts:521:3: allows a silent CLI turn to finish without interrupting it
+#[test]
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_521_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_521_3"#,
         r#"[{"matcher":"toHaveProperty","negate":true,"expected":"cliTurnTimeoutMs"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"finished after silent reasoning"},{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:424:3: streams actionable provider limit errors without retrying a fresh session
+// packages/gateway/src/routes/chat.external-providers.test.ts:550:3: streams actionable provider limit errors without retrying a fresh session
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_424_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_550_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_424_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_550_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"Your workspace is out of credits"},{"matcher":"toContain","negate":true,"expected":"\"type\":\"done\""},{"matcher":"toContain","negate":true,"expected":"\"message\":\"Internal error\""},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:453:3: passes the requested runtime mode to the provider and restarts when the mode changes
+// packages/gateway/src/routes/chat.external-providers.test.ts:579:3: passes the requested runtime mode to the provider and restarts when the mode changes
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_453_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_579_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_453_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_579_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"mode":"supervised"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"mode":"full-access"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:497:3: restarts the provider session when the selected model or reasoning effort changes
+// packages/gateway/src/routes/chat.external-providers.test.ts:623:3: restarts the provider session when the selected model or reasoning effort changes
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_497_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_623_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_497_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_623_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"model":"gpt-5.6-sol","reasoningEffort":"high"}},{"matcher":"toMatchObject","negate":false,"expected":{"model":"gpt-5.6-terra","reasoningEffort":"ultra"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:547:3: resolves supervised chat approval requests without leaving the stream open
+// packages/gateway/src/routes/chat.external-providers.test.ts:673:3: resolves supervised chat approval requests without leaving the stream open
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_547_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_673_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_547_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_673_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1","approval-request-1",true]},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"\"type\":\"approval_required\""},{"matcher":"toContain","negate":false,"expected":"\"request_id\":\"approval-request-1\""},{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:588:3: includes the Jait system prompt in the first external-provider turn without streaming the context trace
+// packages/gateway/src/routes/chat.external-providers.test.ts:714:3: includes the Jait system prompt in the first external-provider turn without streaming the context trace
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_588_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_714_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_588_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_714_3"#,
         r###"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"string"},{"matcher":"toContain","negate":false,"expected":"Jait session instructions:"},{"matcher":"toContain","negate":false,"expected":"Use the todo tool for multi-step work"},{"matcher":"toContain","negate":false,"expected":"always use `jait.terminal`"},{"matcher":"toContain","negate":true,"expected":"## Preambles and progress updates"},{"matcher":"toContain","negate":false,"expected":"User request:"},{"matcher":"toContain","negate":false,"expected":"fix the bug"},{"matcher":"toContain","negate":true,"expected":"\"type\":\"context_flow\""},{"matcher":"toContain","negate":true,"expected":"Jait pasted its external-provider system prompt into this new provider session turn."}]"###,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:624:3: sends the compact external-provider prompt even when the Jait backend is Ollama
+// packages/gateway/src/routes/chat.external-providers.test.ts:750:3: sends the compact external-provider prompt even when the Jait backend is Ollama
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_624_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_750_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_624_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_750_3"#,
         r###"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"string"},{"matcher":"toContain","negate":false,"expected":"Jait session instructions:"},{"matcher":"toContain","negate":false,"expected":"You are operating inside Jait, a tool-centric coding project."},{"matcher":"toContain","negate":false,"expected":"always use `jait.terminal`"},{"matcher":"toContain","negate":true,"expected":"The live preview is a controllable browser session."},{"matcher":"toContain","negate":true,"expected":"## Preambles and progress updates"}]"###,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:660:3: includes the Jait system prompt in external-provider context trace for reused sessions
+// packages/gateway/src/routes/chat.external-providers.test.ts:786:3: includes the Jait system prompt in external-provider context trace for reused sessions
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_660_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_786_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_660_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_786_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"second turn"},{"matcher":"toContain","negate":true,"expected":"\"type\":\"context_flow\""},{"matcher":"toContain","negate":true,"expected":"session=reused"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:703:3: sends the last four active chat messages when starting a new provider session mid-chat
+// packages/gateway/src/routes/chat.external-providers.test.ts:829:3: sends the last four active chat messages when starting a new provider session mid-chat
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_703_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_829_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_703_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_829_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"string"},{"matcher":"toContain","negate":false,"expected":"Recent active chat context (last 4 messages before this turn):"},{"matcher":"toContain","negate":true,"expected":"User: first turn"},{"matcher":"toContain","negate":false,"expected":"User: second turn"},{"matcher":"toContain","negate":false,"expected":"Assistant: ok"},{"matcher":"toContain","negate":false,"expected":"User: third turn"},{"matcher":"toContain","negate":false,"expected":"User request:\nfourth turn"},{"matcher":"toContain","negate":true,"expected":"\"type\":\"context_flow\""},{"matcher":"toContain","negate":true,"expected":"Recent active chat context (last 4 messages before this turn):"}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:756:3: persists and streams todo_list updates from Codex todo completions
+// packages/gateway/src/routes/chat.external-providers.test.ts:882:3: persists and streams todo_list updates from Codex todo completions
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_756_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_882_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_756_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_882_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"\"type\":\"todo_list\""},{"matcher":"toContain","negate":false,"expected":"\"title\":\"Trace bug\""},{"matcher":"toEqual","negate":false,"expected":{"todo_list":[{"id":1,"title":"Trace bug","status":"in-progress"},{"id":2,"title":"Patch bug","status":"not-started"}]}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:809:3: keeps external-provider tool calls interleaved with text after completion
+// packages/gateway/src/routes/chat.external-providers.test.ts:935:3: keeps external-provider tool calls interleaved with text after completion
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_809_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_935_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_809_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_935_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"Before tool.\n\nAfter tool."},{"matcher":"toEqual","negate":false,"expected":["tool-call-1"]},{"matcher":"toEqual","negate":false,"expected":[{"type":"text","content":"Before tool.\n"},{"type":"toolGroup","callIds":["tool-call-1"]},{"type":"text","content":"\nAfter tool."}]}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:858:3: clears the streaming flag instead of wedging the session when the requested provider is unavailable
+// packages/gateway/src/routes/chat.external-providers.test.ts:984:3: clears the streaming flag instead of wedging the session when the requested provider is unavailable
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_858_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_984_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_858_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_984_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"Unknown provider: totally-bogus-provider"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"streaming":false}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:896:3: preserves a cancelled external-provider partial answer after reload
+// packages/gateway/src/routes/chat.external-providers.test.ts:1022:3: preserves a cancelled external-provider partial answer after reload
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_896_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1022_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_896_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1022_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"cancelled":true}},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"Partial answer before cancellation."},{"matcher":"toEqual","negate":false,"expected":[{"type":"text","content":"Partial answer before cancellation."},{"type":"error","content":"Turn cancelled"}]}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:962:3: clears streaming when cancellation interrupts a hung provider sendTurn request
+// packages/gateway/src/routes/chat.external-providers.test.ts:1088:3: clears streaming when cancellation interrupts a hung provider sendTurn request
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_962_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1088_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_962_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1088_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":1},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"cancelled":true}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1"]},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"streaming":false}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:1041:3: stops a hung CLI session before restart and starts a fresh provider session
+// packages/gateway/src/routes/chat.external-providers.test.ts:1167:3: stops a hung CLI session before restart and starts a fresh provider session
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1041_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1167_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1041_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1167_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"optional":true,"expected":1},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1"]},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"restarted"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":["mock-session-1","mock-session-2"]},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:1125:3: captures estimated metrics for external-provider turns and serves them via the context-flow endpoint
+// packages/gateway/src/routes/chat.external-providers.test.ts:1251:3: captures estimated metrics for external-provider turns and serves them via the context-flow endpoint
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1125_3() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1251_3() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1125_3"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1251_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"codex"},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":0},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeGreaterThan","negate":false,"conditional":true,"expected":0},{"matcher":"toBeUndefined","negate":false,"conditional":true},{"matcher":"toMatchObject","negate":false,"expected":{"limit":{"__jait_matcher":"any","type":"Number"},"ratio":{"__jait_matcher":"any","type":"Number"}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:1200:1: marks replies completed after a reader leaves as new unread activity
+// packages/gateway/src/routes/chat.external-providers.test.ts:1326:1: marks replies completed after a reader leaves as new unread activity
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1200_1() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1326_1() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1200_1"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1326_1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toBeGreaterThan","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:1238:1: keeps remote CLI startup on the selected device (personal=%s)
+// packages/gateway/src/routes/chat.external-providers.test.ts:1364:1: keeps remote CLI startup on the selected device (personal=%s)
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1238_1_each0() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1364_1_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1238_1_each0"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1364_1_each0"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"workingDirectory":{"__jait_observed":0}}}],"hybrid":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"OS: Windows"},{"matcher":"toContain","negate":false,"expected":"Shell: PowerShell"},{"matcher":"toBe","negate":false,"conditional":true,"expected":"skipped"},{"matcher":"toContain","negate":false,"conditional":true,"expected":"unavailable"},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toBe","negate":false,"conditional":true,"expected":200},{"matcher":"toContain","negate":false,"conditional":true,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledTimes","negate":false,"conditional":true,"expected":1},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"objectContaining","value":{"workingDirectory":{"__jait_observed":0}}}],"hybrid":true},{"matcher":"toHaveBeenCalled","negate":false,"conditional":true},{"matcher":"toBe","negate":false,"conditional":true,"expected":403},{"matcher":"toBe","negate":false,"conditional":true,"expected":"NODE_FORBIDDEN"},{"matcher":"toHaveBeenCalledTimes","negate":false,"conditional":true,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/chat.external-providers.test.ts:1238:1: keeps remote CLI startup on the selected device (personal=%s)
+// packages/gateway/src/routes/chat.external-providers.test.ts:1364:1: keeps remote CLI startup on the selected device (personal=%s)
 #[test]
-fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1238_1_each1() {
+fn tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1364_1_each1() {
     tail_assertions::check(
         r#"gateway-src-routes-chat-external-providers-test-215a71f5"#,
-        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1238_1_each1"#,
+        r#"tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1364_1_each1"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"workingDirectory":{"__jait_observed":0}}}],"hybrid":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"OS: Windows"},{"matcher":"toContain","negate":false,"expected":"Shell: PowerShell"},{"matcher":"toBe","negate":false,"conditional":true,"expected":"skipped"},{"matcher":"toContain","negate":false,"conditional":true,"expected":"unavailable"},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toBe","negate":false,"conditional":true,"expected":200},{"matcher":"toContain","negate":false,"conditional":true,"expected":"\"type\":\"done\""},{"matcher":"toHaveBeenCalledTimes","negate":false,"conditional":true,"expected":1},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"objectContaining","value":{"workingDirectory":{"__jait_observed":0}}}],"hybrid":true},{"matcher":"toHaveBeenCalled","negate":false,"conditional":true},{"matcher":"toBe","negate":false,"conditional":true,"expected":403},{"matcher":"toBe","negate":false,"conditional":true,"expected":"NODE_FORBIDDEN"},{"matcher":"toHaveBeenCalledTimes","negate":false,"conditional":true,"expected":1}]"#,
     );
 }
@@ -7859,232 +8290,262 @@ fn tailstatic_packages_gateway_src_routes_mcp_server_image_test_ts_18_3() {
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:32:3: keeps a user question resumable across MCP call deadlines
+// packages/gateway/src/routes/mcp-server.test.ts:32:3: requires browser calls to bind their chat instead of borrowing last-active (authenticated=%s)
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":true}}},{"matcher":"toContain","negate":false,"expected":"explicit sessionId"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":false}}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:32:3: requires browser calls to bind their chat instead of borrowing last-active (authenticated=%s)
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":true}}},{"matcher":"toContain","negate":false,"expected":"explicit sessionId"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":false}}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:76:3: keeps a user question resumable across MCP call deadlines
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_76_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_76_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":false}}},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":false}}},{"matcher":"toContain","negate":false,"expected":"yes"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:60:3: keeps essential tools in a dedicated core MCP catalog
+// packages/gateway/src/routes/mcp-server.test.ts:104:3: pauses MCP actions until this chat's question is answered or cancelled
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_60_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_104_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_60_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_104_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/routes/mcp-server.test.ts:132:3: keeps essential tools in a dedicated core MCP catalog
+#[test]
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_132_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_132_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["todo","user_ask","tools_search","jait_terminal"]},{"matcher":"toEqual","negate":false,"expected":["terminal_run"]},{"matcher":"toMatchObject","negate":false,"expected":{"result":{"isError":true,"content":[{"text":"Unknown tool: terminal.run"}]}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:119:3: exposes only non-core builtin tools and allowlisted core tools over MCP
+// packages/gateway/src/routes/mcp-server.test.ts:191:3: exposes only non-core builtin tools and allowlisted core tools over MCP
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_119_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_191_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_119_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_191_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["jait.todos","user.ask","cron.add"]},{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"jait_todos","description":"Manage global Jait todo items","inputSchema":{"type":"object","properties":{"action":{"type":"string","enum":["list","add","update","remove"]},"todoId":{"type":"string"}},"required":["action"]},"annotations":{"destructiveHint":true,"readOnlyHint":true,"idempotentHint":true}},{"name":"user_ask","description":"Ask the user one or more structured questions","inputSchema":{"type":"object","properties":{"questions":{"type":"array"}},"required":["questions"]},"annotations":{"readOnlyHint":true,"idempotentHint":true}},{"name":"cron_add","description":"Create a cron job","inputSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]},"annotations":{"destructiveHint":true}}]}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:261:3: advertises human-friendly tool titles to MCP clients
+// packages/gateway/src/routes/mcp-server.test.ts:333:3: advertises human-friendly tool titles to MCP clients
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_261_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_333_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_261_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_333_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"name":"todo","title":"Todo"}},{"__jait_matcher":"objectContaining","value":{"name":"jait_terminal","title":"Terminal"}}]}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:289:3: builds the MCP callback base URL from forwarded headers
+// packages/gateway/src/routes/mcp-server.test.ts:361:3: builds the MCP callback base URL from forwarded headers
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_289_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_361_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_289_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_361_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"https://gateway.example.com"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:301:3: falls back to the incoming host header before config defaults
+// packages/gateway/src/routes/mcp-server.test.ts:373:3: falls back to the incoming host header before config defaults
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_301_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_373_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_301_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_373_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"http://127.0.0.1:4111"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:311:3: serves initialize over streamable HTTP MCP
+// packages/gateway/src/routes/mcp-server.test.ts:383:3: serves initialize over streamable HTTP MCP
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_311_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_383_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_311_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_383_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"2025-03-26"},{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"jait-gateway","version":"1.0.0"},"instructions":{"__jait_matcher":"stringContaining","value":"Use tools_search"}}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:359:3: serves streamable HTTP initialize on legacy /mcp/sse POST configs
+// packages/gateway/src/routes/mcp-server.test.ts:431:3: serves streamable HTTP initialize on legacy /mcp/sse POST configs
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_359_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_431_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_359_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_431_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","serverInfo":{"name":"jait-gateway"}}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:401:3: streams MCP tool progress over the streamable HTTP response
+// packages/gateway/src/routes/mcp-server.test.ts:473:3: streams MCP tool progress over the streamable HTTP response
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_401_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_473_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_401_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_473_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"text/event-stream"},{"matcher":"toContain","negate":false,"expected":"\"method\":\"notifications/progress\""},{"matcher":"toContain","negate":false,"expected":"\"message\":\"first\\n\""},{"matcher":"toContain","negate":false,"expected":"\"message\":\"second\\n\""},{"matcher":"toContain","negate":false,"expected":"\"id\":1"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:450:3: routes MCP terminal calls through the configured tool executor
+// packages/gateway/src/routes/mcp-server.test.ts:522:3: routes MCP terminal calls through the configured tool executor
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_450_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_522_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_450_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_522_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"result":{"content":[{"text":"remote execution"}],"isError":false}}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["jait.terminal",{"command":"pwd"},{"__jait_matcher":"objectContaining","value":{"sessionId":"remote-session","projectRoot":{"__jait_observed":0},"requestedBy":"mcp-client"}}],"hybrid":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:501:3: accepts initialized notifications over streamable HTTP MCP
+// packages/gateway/src/routes/mcp-server.test.ts:573:3: accepts initialized notifications over streamable HTTP MCP
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_501_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_573_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_501_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_573_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":202},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:530:3: passes session, project, and provider overrides into MCP tool context
+// packages/gateway/src/routes/mcp-server.test.ts:602:3: passes session, project, and provider overrides into MCP tool context
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_530_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_602_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_530_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_602_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"ok"}],"isError":false}}},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"web-session-123","projectRoot":"/tmp/project","userId":{"__jait_type":"undefined"},"providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:600:3: forwards MCP tool output chunks to the request progress callback
+// packages/gateway/src/routes/mcp-server.test.ts:672:3: forwards MCP tool output chunks to the request progress callback
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_600_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_672_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_600_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_672_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["first\n","second\n"]}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:634:3: rejects tool calls when no session can be resolved
+// packages/gateway/src/routes/mcp-server.test.ts:706:3: rejects tool calls when no session can be resolved
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_634_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_706_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_634_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_706_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Tool execution requires a sessionId. Authenticate with an active session or provide x-jait-session-id."}],"isError":true}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:676:3: uses the authenticated user's last active session for MCP tool calls
+// packages/gateway/src/routes/mcp-server.test.ts:748:3: uses the authenticated user's last active session for MCP tool calls
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_676_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_748_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_676_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_748_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:751:3: uses the global last active session for unauthenticated local MCP tool calls
+// packages/gateway/src/routes/mcp-server.test.ts:823:3: uses the global last active session for unauthenticated local MCP tool calls
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_751_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_823_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_751_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_823_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:826:3: passes the authenticated user into MCP tool context when a session override is provided
+// packages/gateway/src/routes/mcp-server.test.ts:898:3: passes the authenticated user into MCP tool context when a session override is provided
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_826_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_898_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_826_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_898_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"query-session","projectRoot":"/tmp/query-project","userId":"user-456"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:885:3: uses MCP URL query params as tool context overrides
+// packages/gateway/src/routes/mcp-server.test.ts:957:3: uses MCP URL query params as tool context overrides
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_885_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_957_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_885_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_957_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"query-session","projectRoot":"/tmp/query-project","userId":{"__jait_type":"undefined"},"providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:955:3: uses MCP tool arguments as context overrides
+// packages/gateway/src/routes/mcp-server.test.ts:1027:3: uses MCP tool arguments as context overrides
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_955_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1027_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_955_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1027_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"argument-session","projectRoot":"/tmp/argument-project","providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1040:3: infers provider, model, and runtime mode from the referenced session state
+// packages/gateway/src/routes/mcp-server.test.ts:1112:3: infers provider, model, and runtime mode from the referenced session state
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1040_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1112_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1040_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1112_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1134:3: resolves a worker's owner and execution context through %s
+// packages/gateway/src/routes/mcp-server.test.ts:1206:3: resolves a worker's owner and execution context through %s
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1134_3_each0() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1134_3_each0"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"isError":false}},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"isError":false,"content":[{"text":{"__jait_matcher":"stringContaining","value":"Persistent team rooms."}}]}},{"matcher":"toBe","negate":false,"expected":"other-user"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"/project/worker"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1134:3: resolves a worker's owner and execution context through %s
+// packages/gateway/src/routes/mcp-server.test.ts:1206:3: resolves a worker's owner and execution context through %s
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1134_3_each1() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each1() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1134_3_each1"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"isError":false}},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"isError":false,"content":[{"text":{"__jait_matcher":"stringContaining","value":"Persistent team rooms."}}]}},{"matcher":"toBe","negate":false,"expected":"other-user"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"/project/worker"}]"#,
     );
 }
 
-// packages/gateway/src/routes/mcp-server.test.ts:1222:3: persists and broadcasts todo_list updates for MCP todo calls
+// packages/gateway/src/routes/mcp-server.test.ts:1294:3: persists and broadcasts todo_list updates for MCP todo calls
 #[test]
-fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1222_3() {
+fn tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1294_3() {
     tail_assertions::check(
         r#"gateway-src-routes-mcp-server-test-e2ec3efc"#,
-        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1222_3"#,
+        r#"tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1294_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"todo_list":[{"id":1,"title":"Trace MCP sync","status":"in-progress"},{"id":2,"title":"Verify todo render","status":"not-started"}]}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
@@ -9319,6 +9780,156 @@ fn tailstatic_packages_gateway_src_routes_repo_proposals_generate_test_ts_176_3(
     );
 }
 
+// packages/gateway/src/routes/screen-share.test.ts:60:3: requires host consent even when a chat caller claims to be the user
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_60_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_60_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:71:3: rejects a different user before returning or mutating the share
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_71_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_71_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toMatchObject","negate":false,"expected":{"status":"sharing","pendingApproval":true,"viewers":[{"deviceId":"viewer"}]}},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":200}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:104:3: attaches a chat panel to the live share instead of starting a new one
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_104_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_104_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"chat-1"},{"matcher":"toEqual","negate":false,"expected":["web-1","web-2"]},{"matcher":"toBeGreaterThan","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:129:3: rejects an unknown session
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_129_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_129_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":404}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:142:3: refuses to add the host device as its own viewer
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_142_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_142_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":400}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:157:3: detaches one viewer while keeping the other viewer and capture active
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_157_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_157_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"sharing"},{"matcher":"toEqual","negate":false,"expected":["web-2"]},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":400}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:172:3: validates chat-owned route inputs and rejects unknown sessions
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_172_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_172_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toEqual","negate":false,"expected":{"state":0,"startRequest":0,"handoff":0,"relay":0}}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:193:3: returns the owning chat's share and removes it from lookup after stopping
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_193_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_193_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":"idle"},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":400}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:213:3: broadcasts the old session as stopped before replacing a chat share
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_213_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_213_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:227:3: cannot revive a stopped share with a late approval
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_227_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_227_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toBe","negate":false,"expected":"idle"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:242:3: does not request capture when a viewer joins an unapproved share
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_242_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_242_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:264:3: lets the owning chat move control and broadcasts the change
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_264_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_264_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"agent"},{"matcher":"toBe","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:280:3: refuses a different chat's attempt to take control
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_280_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_280_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":403},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:297:3: rejects handoff until approval and after stop, without broadcasting it
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_297_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_297_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/routes/screen-share.test.ts:316:3: requires a session id
+#[test]
+fn tailstatic_packages_gateway_src_routes_screen_share_test_ts_316_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-screen-share-test-d35d4254"#,
+        r#"tailstatic_packages_gateway_src_routes_screen_share_test_ts_316_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":400}]"#,
+    );
+}
+
 // packages/gateway/src/routes/security-assessments.test.ts:21:3: requires authentication for history and scope creation
 #[test]
 fn tailstatic_packages_gateway_src_routes_security_assessments_test_ts_21_3() {
@@ -9519,72 +10130,72 @@ fn tailstatic_packages_gateway_src_routes_team_chat_test_ts_273_3() {
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:106:3: assigns once, posts an attributed passive result from the native thread and completes honestly
+// packages/gateway/src/routes/team-execution.e2e.test.ts:108:3: assigns once, posts an attributed passive result from the native thread and completes honestly
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_106_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_108_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_106_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_108_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Developer"},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBeUndefined","negate":false},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:122:3: keeps quota failure as an error with no false result and no automatic retry
+// packages/gateway/src/routes/team-execution.e2e.test.ts:124:3: keeps quota failure as an error with no false result and no automatic retry
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_122_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_124_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_122_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_124_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toContain","negate":false,"expected":"API quota"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:136:3: stops semantic environment failures across different tools after the initial call and two retries
+// packages/gateway/src/routes/team-execution.e2e.test.ts:138:3: stops semantic environment failures across different tools after the initial call and two retries
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_136_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_138_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_136_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_138_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":"blocked"},{"matcher":"toContain","negate":false,"expected":"two retries"},{"matcher":"toBe","negate":false,"expected":3}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:151:3: resumes the same blocked task and completes after its dependency is repaired
+// packages/gateway/src/routes/team-execution.e2e.test.ts:153:3: resumes the same blocked task and completes after its dependency is repaired
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_151_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_153_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_151_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_153_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toBeTruthy","negate":false},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toMatchObject","negate":false,"expected":{"n":1}},{"matcher":"toHaveLength","negate":false,"expected":4},{"matcher":"toHaveLength","negate":false,"expected":5}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:174:3: halts repetitive successful reads when a full window produces no new evidence
+// packages/gateway/src/routes/team-execution.e2e.test.ts:176:3: halts repetitive successful reads when a full window produces no new evidence
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_174_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_176_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_174_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_176_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":40},{"matcher":"toHaveLength","negate":false,"expected":40},{"matcher":"toContain","negate":false,"expected":"no new evidence"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:187:3: rejects relay/helper thread creation by a saved-team agent
+// packages/gateway/src/routes/team-execution.e2e.test.ts:189:3: rejects relay/helper thread creation by a saved-team agent
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_187_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_189_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_187_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_189_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toContain","negate":false,"expected":"addressed team.chat assignments"},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/routes/team-execution.e2e.test.ts:198:3: recovers the original task and latest instruction without duplicating delivery or resetting failure limits
+// packages/gateway/src/routes/team-execution.e2e.test.ts:200:3: recovers the original task and latest instruction without duplicating delivery or resetting failure limits
 #[test]
-fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_198_3() {
+fn tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_200_3() {
     tail_assertions::check(
         r#"gateway-src-routes-team-execution-e2e-test-ebd2d174"#,
-        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_198_3"#,
+        r#"tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_200_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":200},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContain","negate":false,"expected":"Original task: Implement parser recovery."},{"matcher":"toContain","negate":false,"expected":"Latest instruction: Only change parser.ts; preserve its API."},{"matcher":"toBe","negate":true,"expected":"review"},{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
@@ -9729,402 +10340,412 @@ fn tailstatic_packages_gateway_src_routes_threads_diff_stats_test_ts_90_1() {
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:106:3: keeps %s failure terminal despite late provider completion
+// packages/gateway/src/routes/threads.test.ts:106:3: reopens a retired session on a follow-up and replays saved thread history
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_106_3_each0() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_106_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_106_3_each0"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_106_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Remember the parser accepts UTF-8"},{"matcher":"toContain","negate":false,"expected":"Continue with the parser"}]"#,
+    );
+}
+
+// packages/gateway/src/routes/threads.test.ts:134:3: keeps %s failure terminal despite late provider completion
+#[test]
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_134_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-routes-threads-test-9a6706c1"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_134_3_each0"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"conditional":true,"expected":1},{"matcher":"toBe","negate":false,"conditional":true,"expected":3}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:106:3: keeps %s failure terminal despite late provider completion
+// packages/gateway/src/routes/threads.test.ts:134:3: keeps %s failure terminal despite late provider completion
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_106_3_each1() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_134_3_each1() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_106_3_each1"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_134_3_each1"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"conditional":true,"expected":1},{"matcher":"toBe","negate":false,"conditional":true,"expected":3}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:145:3: persists interruption with immediate abort event = %s
+// packages/gateway/src/routes/threads.test.ts:173:3: persists interruption with immediate abort event = %s
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_145_3_each0() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_173_3_each0() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_145_3_each0"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_173_3_each0"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"interrupted"},{"matcher":"toBe","negate":false,"expected":"interrupted"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:145:3: persists interruption with immediate abort event = %s
+// packages/gateway/src/routes/threads.test.ts:173:3: persists interruption with immediate abort event = %s
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_145_3_each1() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_173_3_each1() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_145_3_each1"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_173_3_each1"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"interrupted"},{"matcher":"toBe","negate":false,"expected":"interrupted"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:170:3: resumes quota-failed work with the saved agent's new provider and default model
+// packages/gateway/src/routes/threads.test.ts:198:3: resumes quota-failed work with the saved agent's new provider and default model
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_170_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_198_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_170_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_198_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":404},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Fix parser without changing the public API."},{"matcher":"toContain","negate":false,"expected":"Remaining: test the fix."},{"matcher":"toContain","negate":false,"expected":"verify side effects before repeating actions"},{"matcher":"toMatchObject","negate":false,"expected":{"providerId":"claude-code","model":null,"branch":"fix/parser","status":"running","title":"Fix parser"}},{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:209:3: keeps failed work stopped when the newly selected provider is unavailable
+// packages/gateway/src/routes/threads.test.ts:237:3: keeps failed work stopped when the newly selected provider is unavailable
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_209_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_237_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_209_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_237_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toMatchObject","negate":false,"expected":{"status":"error","error":"Quota exhausted","providerId":"codex"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:226:3: automatically continues a running thread after a gateway restart with saved context
+// packages/gateway/src/routes/threads.test.ts:254:3: automatically continues a running thread after a gateway restart with saved context
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_226_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_254_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_226_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_254_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Fix the bug"},{"matcher":"toContain","negate":false,"expected":"Patched parser; still need validation."},{"matcher":"toContain","negate":false,"expected":"Remaining: run tests."},{"matcher":"toContain","negate":false,"expected":"verify side effects before repeating actions"},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:261:3: leaves idle, completed, manually interrupted and ownerless threads stopped
+// packages/gateway/src/routes/threads.test.ts:289:3: leaves idle, completed, manually interrupted and ownerless threads stopped
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_261_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_289_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_261_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_289_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:286:3: keeps recovery durable while a provider is offline without exhausting crash attempts
+// packages/gateway/src/routes/threads.test.ts:314:3: keeps recovery durable while a provider is offline without exhausting crash attempts
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_286_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_314_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_286_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_314_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toMatchObject","negate":false,"expected":{"pending":true,"attempts":0}},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toMatchObject","negate":false,"expected":{"attempts":1,"pending":false}},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:322:3: bounds repeated gateway crashes and recovers a crash between claim and start
+// packages/gateway/src/routes/threads.test.ts:350:3: bounds repeated gateway crashes and recovers a crash between claim and start
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_322_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_350_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_322_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_350_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"conditional":true,"expected":"running"},{"matcher":"toHaveLength","negate":false,"conditional":true,"expected":0},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"status":"error","error":{"__jait_matcher":"stringContaining","value":"repeated gateway failures"}}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:354:3: cancels recovery when the user stops it during session startup
+// packages/gateway/src/routes/threads.test.ts:382:3: cancels recovery when the user stops it during session startup
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_354_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_382_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_354_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_382_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1"]},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"interrupted"},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:388:3: checkpoints partial streamed progress and replaces it with the final assistant message
+// packages/gateway/src/routes/threads.test.ts:416:3: checkpoints partial streamed progress and replaces it with the final assistant message
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_388_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_416_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_388_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_416_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"content":"Partial progress finished."}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:410:3: waits for the original remote node and stops its surviving session before replacing it
+// packages/gateway/src/routes/threads.test.ts:438:3: waits for the original remote node and stops its surviving session before replacing it
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_410_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_438_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_410_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_438_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"pending":true,"attempts":0}},{"matcher":"toEqual","negate":false,"expected":["stop-session","start-session"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["original-node","stop-session",{"sessionId":"old-remote-session"},15000]},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:446:3: creates threads in idle state until a provider session actually starts
+// packages/gateway/src/routes/threads.test.ts:474:3: creates threads in idle state until a provider session actually starts
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_446_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_474_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_446_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_474_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toMatchObject","negate":false,"expected":{"title":"Helper","status":"idle","providerSessionId":null}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:480:3: persists agent profiles and links threads only for their owner
+// packages/gateway/src/routes/threads.test.ts:508:3: persists agent profiles and links threads only for their owner
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_480_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_508_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_480_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_508_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"id":"agent-1","name":"Researcher","skillIds":["research"]}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"role":"Analyst","reportsToId":"agent-1"}},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":400},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toBe","negate":false,"expected":"agent-1"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":[{"id":"agent-2","reportsToId":null}]},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:533:3: preserves chat references in persisted start and follow-up messages
+// packages/gateway/src/routes/threads.test.ts:561:3: preserves chat references in persisted start and follow-up messages
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_533_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_561_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_533_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_561_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:577:3: creates a literal jait thread when jait is selected
+// packages/gateway/src/routes/threads.test.ts:605:3: creates a literal jait thread when jait is selected
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_577_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_605_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_577_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_605_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toMatchObject","negate":false,"expected":{"title":"Helper","providerId":"jait","status":"idle","providerSessionId":null}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:616:3: creates threads from the selected chat provider, model, and runtime mode by default
+// packages/gateway/src/routes/threads.test.ts:644:3: creates threads from the selected chat provider, model, and runtime mode by default
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_616_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_644_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_616_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_644_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toMatchObject","negate":false,"expected":{"title":"Helper","providerId":"codex","model":"gpt-5-codex","runtimeMode":"supervised","status":"idle","providerSessionId":null}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:663:3: carries the requested reasoning effort from create through to the provider session
+// packages/gateway/src/routes/threads.test.ts:691:3: carries the requested reasoning effort from create through to the provider session
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_663_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_691_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_663_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_691_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toMatchObject","negate":false,"expected":{"reasoningEffort":"xhigh"}},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"xhigh"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:710:3: inherits the chat's reasoning effort when create doesn't name one
+// packages/gateway/src/routes/threads.test.ts:738:3: inherits the chat's reasoning effort when create doesn't name one
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_710_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_738_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_710_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_738_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toMatchObject","negate":false,"expected":{"reasoningEffort":"high"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:747:3: rejects a malformed reasoning effort rather than forwarding it
+// packages/gateway/src/routes/threads.test.ts:775:3: rejects a malformed reasoning effort rather than forwarding it
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_747_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_775_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_747_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_775_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:777:3: starts a literal jait thread when jait is selected
+// packages/gateway/src/routes/threads.test.ts:805:3: starts a literal jait thread when jait is selected
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_777_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_805_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_777_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_805_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"mock-session-1"},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:821:3: prepends the auto-matched skills block on the first thread turn
+// packages/gateway/src/routes/threads.test.ts:849:3: prepends the auto-matched skills block on the first thread turn
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_821_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_849_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_821_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_849_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"<skillDiscovery>"},{"matcher":"toContain","negate":false,"expected":"skills.search"},{"matcher":"toContain","negate":false,"expected":"Word / DOCX"},{"matcher":"toContain","negate":false,"expected":"Inspect the DOCX template"},{"matcher":"toContain","negate":true,"expected":"<available_skills>"},{"matcher":"toContain","negate":true,"expected":"C:/skills/word-docx/SKILL.md"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:879:3: uses thread-specific pinned skills when provided
+// packages/gateway/src/routes/threads.test.ts:907:3: uses thread-specific pinned skills when provided
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_879_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_907_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_879_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_907_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toContain","negate":false,"expected":"<skillDiscovery>"},{"matcher":"toContain","negate":false,"expected":"Word / DOCX"},{"matcher":"toContain","negate":true,"expected":"Browser Research"},{"matcher":"toContain","negate":true,"expected":"C:/skills/"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:943:3: starts and sends turns through claude-code threads
+// packages/gateway/src/routes/threads.test.ts:971:3: starts and sends turns through claude-code threads
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_943_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_971_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_943_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_971_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":201},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"mock-session-1"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"mock-session-1"},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1005:3: queues an intervention resume note onto the same running thread session
+// packages/gateway/src/routes/threads.test.ts:1033:3: queues an intervention resume note onto the same running thread session
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1005_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1033_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1005_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1033_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"status":"queued"}},{"matcher":"toHaveBeenNthCalledWith","negate":false,"expected":[2,"mock-session-1","User completed intervention on browser session bs_123. Note: Continue from the current page."]},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1063:3: wakes an already-completed thread via /send when a background command finishes late
+// packages/gateway/src/routes/threads.test.ts:1091:3: wakes an already-completed thread via /send when a background command finishes late
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1063_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1091_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1063_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1091_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"status":"queued"}},{"matcher":"toBe","negate":false,"expected":"mock-session-1"},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1125:3: drains persisted queued thread messages after the current turn completes
+// packages/gateway/src/routes/threads.test.ts:1153:3: drains persisted queued thread messages after the current turn completes
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1125_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1153_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1125_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1153_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"mock-session-1"},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1195:3: lists threads with a bounded page and hasMore
+// packages/gateway/src/routes/threads.test.ts:1223:3: lists threads with a bounded page and hasMore
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1195_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1223_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1195_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1223_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1231:3: rejects create-pr while a thread is not completed
+// packages/gateway/src/routes/threads.test.ts:1259:3: rejects create-pr while a thread is not completed
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1231_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1259_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1231_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1259_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":409},{"matcher":"toEqual","negate":false,"expected":{"error":"Thread must be completed before creating a pull request."}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1276:3: creates a PR for a completed thread and updates thread metadata
+// packages/gateway/src/routes/threads.test.ts:1304:3: creates a PR for a completed thread and updates thread metadata
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1276_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1304_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1276_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1304_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":42},{"matcher":"toBe","negate":false,"expected":"feat: implement feature"},{"matcher":"toBe","negate":false,"expected":"main"},{"matcher":"toBe","negate":false,"expected":"open"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1347:3: adds existing PR instructions to follow-up send turns
+// packages/gateway/src/routes/threads.test.ts:1375:3: adds existing PR instructions to follow-up send turns
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1347_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1375_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1347_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1375_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1",{"__jait_matcher":"stringContaining","value":"This thread already has an open pull request: https://github.com/acme/repo/pull/42."},{"__jait_type":"undefined"}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mock-session-1",{"__jait_matcher":"stringContaining","value":"commit and push them to the same branch"},{"__jait_type":"undefined"}]}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1400:3: adds existing PR instructions when restarting a completed thread with a new message
+// packages/gateway/src/routes/threads.test.ts:1428:3: adds existing PR instructions when restarting a completed thread with a new message
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1400_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1428_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1400_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1428_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1451:3: replays prior thread messages when restarting with a fresh provider session
+// packages/gateway/src/routes/threads.test.ts:1479:3: replays prior thread messages when restarting with a fresh provider session
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1451_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1479_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1451_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1479_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"stringContaining","value":"<thread-history>"}},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"stringContaining","value":"User: Investigate the flaky test"}},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"stringContaining","value":"Assistant: I found a race in the retry path."}},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"stringContaining","value":"Apply the fix now"}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1508:3: clears completedAt when resuming a thread through send
+// packages/gateway/src/routes/threads.test.ts:1536:3: clears completedAt when resuming a thread through send
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1508_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1536_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1508_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1536_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","completedAt":null}}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1554:3: marks the thread PR state as creating while PR creation is in flight
+// packages/gateway/src/routes/threads.test.ts:1582:3: marks the thread PR state as creating while PR creation is in flight
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1554_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1582_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1554_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1582_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":"creating"},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"main"},{"matcher":"toBe","negate":false,"expected":"open"}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1618:3: broadcasts the full thread row with running status updates
+// packages/gateway/src/routes/threads.test.ts:1646:3: broadcasts the full thread row with running status updates
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1618_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1646_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1618_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1646_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBeTruthy","negate":false},{"matcher":"toMatchObject","negate":false,"expected":{"type":"thread.status","payload":{"threadId":{"__jait_observed":0},"status":"running","thread":{"__jait_matcher":"objectContaining","value":{"id":{"__jait_observed":1},"status":"running","providerSessionId":"mock-session-1"}}}},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1676:3: persists assistant text between ACP tool calls as message activities
+// packages/gateway/src/routes/threads.test.ts:1704:3: persists assistant text between ACP tool calls as message activities
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1676_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1704_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1676_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1704_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Let me check that file."},{"matcher":"toBe","negate":false,"expected":"Let me check that file."},{"matcher":"toContain","negate":false,"expected":"The file contains the expected data."},{"matcher":"toBe","negate":false,"expected":"The file contains the expected data."},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeLessThan","negate":false,"dynamic":true},{"matcher":"toBeLessThan","negate":false,"dynamic":true},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1782:3: does not lose assistant text when only tokens arrive with no tool calls
+// packages/gateway/src/routes/threads.test.ts:1810:3: does not lose assistant text when only tokens arrive with no tool calls
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1782_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1810_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1782_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1810_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"Here is my explanation of the topic."}]"#,
     );
 }
 
-// packages/gateway/src/routes/threads.test.ts:1839:3: handles multiple tool calls with interleaved text
+// packages/gateway/src/routes/threads.test.ts:1867:3: handles multiple tool calls with interleaved text
 #[test]
-fn tailstatic_packages_gateway_src_routes_threads_test_ts_1839_3() {
+fn tailstatic_packages_gateway_src_routes_threads_test_ts_1867_3() {
     tail_assertions::check(
         r#"gateway-src-routes-threads-test-9a6706c1"#,
-        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1839_3"#,
+        r#"tailstatic_packages_gateway_src_routes_threads_test_ts_1867_3"#,
         r#"[{"matcher":"toEqual","negate":false,"optional":true,"expected":{"__jait_matcher":"stringContaining","value":{"__jait_observed":0}},"hybrid":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":"First I'll read the file."},{"matcher":"toBe","negate":false,"expected":"Now let me write the output."},{"matcher":"toBe","negate":false,"expected":"All done!"}]"#,
     );
 }
@@ -10356,6 +10977,16 @@ fn tailstatic_packages_gateway_src_routes_update_test_ts_355_3() {
         r#"gateway-src-routes-update-test-d0fe8216"#,
         r#"tailstatic_packages_gateway_src_routes_update_test_ts_355_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":401},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/routes/voice-wake.test.ts:11:3: requires authentication, respects a disabled decision tool, and rate-limits review
+#[test]
+fn tailstatic_packages_gateway_src_routes_voice_wake_test_ts_11_3() {
+    tail_assertions::check(
+        r#"gateway-src-routes-voice-wake-test-31dbfffa"#,
+        r#"tailstatic_packages_gateway_src_routes_voice_wake_test_ts_11_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":401},{"matcher":"toEqual","negate":false,"expected":{"activate":false}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toEqual","negate":false,"expected":{"activate":true}},{"matcher":"toEqual","negate":false,"expected":{"activate":false}},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
@@ -11983,6 +12614,76 @@ fn tailstatic_packages_gateway_src_security_tool_discovery_consent_test_ts_34_3(
     );
 }
 
+// packages/gateway/src/security/tool-permissions.test.ts:6:3: preserves legacy policy for canonical browser calls
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_permissions_test_ts_6_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-permissions-test-c9670fbd"#,
+        r#"tailstatic_packages_gateway_src_security_tool_permissions_test_ts_6_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/security/tool-permissions.test.ts:9:3: prefers the canonical policy even for a legacy call
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_permissions_test_ts_9_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-permissions-test-c9670fbd"#,
+        r#"tailstatic_packages_gateway_src_security_tool_permissions_test_ts_9_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/security/tool-permissions.test.ts:13:3: keeps ordinary and unknown tools scoped to their exact names
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_permissions_test_ts_13_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-permissions-test-c9670fbd"#,
+        r#"tailstatic_packages_gateway_src_security_tool_permissions_test_ts_13_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"knownTool":false,"consentLevel":"dangerous"}}]"#,
+    );
+}
+
+// packages/gateway/src/security/tool-profiles.test.ts:5:3: lists exactly the shipped profile names
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_5_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
+        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_5_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["minimal","coding","full"]}]"#,
+    );
+}
+
+// packages/gateway/src/security/tool-profiles.test.ts:9:3: rejects an unknown profile name instead of returning an empty map
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_9_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
+        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_9_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Unknown profile: yolo"},{"matcher":"toThrow","negate":false,"expected":"Unknown profile: nope"}]"#,
+    );
+}
+
+// packages/gateway/src/security/tool-profiles.test.ts:16:3: serializes a profile into ordered permissions that survive a round trip
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_16_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
+        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_16_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"minimal"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/security/tool-profiles.test.ts:24:3: lets overrides change permissions on a copy of the base profile
+#[test]
+fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_24_3() {
+    tail_assertions::check(
+        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
+        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_24_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"toolName":"custom.tool","permission":"allow"}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
 // packages/gateway/src/security/vnc-recovery.test.ts:6:3: restarts after a nonzero x11vnc exit despite errexit
 #[test]
 fn tailstatic_packages_gateway_src_security_vnc_recovery_test_ts_6_3() {
@@ -12864,22 +13565,92 @@ fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_2
     );
 }
 
-// packages/gateway/src/services/background-command-monitor.test.ts:284:3: does not complete or notify when onOutput cancels the session (token=%s)
+// packages/gateway/src/services/background-command-monitor.test.ts:299:3: inspects a running execution and reads its completed history
 #[test]
-fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_284_3_each0() {
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_299_3() {
     tail_assertions::check(
         r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
-        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_284_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_299_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"exec-1"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:318:3: cancels a running execution and records a cancelled snapshot
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_318_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_318_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"cancelled"},{"matcher":"toBe","negate":false,"expected":"exec-1"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":"cancelled"}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:331:3: returns null for an unknown execution
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_331_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_331_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:336:3: tracks an external process through its exit promise and records failed status
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_336_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_336_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"failed"},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"failed"}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:357:3: records a timed-out external process without notifying when shouldNotify is false
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_357_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_357_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"timed_out"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:370:3: finishes through the surface exit listener
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_370_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_370_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":"completed"}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:384:3: reports a timed-out execution through onTimeout
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_384_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_384_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"timed_out"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"timedOut":true}}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/background-command-monitor.test.ts:409:3: does not complete or notify when onOutput cancels the session (token=%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_409_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_409_3_each0"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/services/background-command-monitor.test.ts:284:3: does not complete or notify when onOutput cancels the session (token=%s)
+// packages/gateway/src/services/background-command-monitor.test.ts:409:3: does not complete or notify when onOutput cancels the session (token=%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_284_3_each1() {
+fn tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_409_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-background-command-monitor-test-2ab88832"#,
-        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_284_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_background_command_monitor_test_ts_409_3_each1"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
@@ -12991,6 +13762,206 @@ fn tailstatic_packages_gateway_src_services_calendar_service_test_ts_156_1() {
         r#"gateway-src-services-calendar-service-test-54e8d765"#,
         r#"tailstatic_packages_gateway_src_services_calendar_service_test_ts_156_1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Calendar OAuth token request failed: synthetic_boundary_fixture"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":18,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"i"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"v"},{"id":3,"kind":"char","value":"a"},{"id":4,"kind":"char","value":"l"},{"id":5,"kind":"char","value":"i"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":"x"},{"id":13,"kind":"char","value":"p"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"r"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:23:3: persists checkpoints, uses the next self-message once and keeps unrelated metadata
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_23_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_23_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","iteration":1,"nextMessage":"Implement the fix and rerun the test"}},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"goal":"Fix the issue","iteration":1,"summary":"Reproduced"}},{"matcher":"toBe","negate":false,"expected":"saved"},{"matcher":"toContain","negate":false,"expected":"Verify completed work before repeating actions"},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:37:3: rejects empty goals and false completion without verification for every criterion
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_37_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_37_3"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":24,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"a"},{"id":5,"kind":"char","value":"c"},{"id":6,"kind":"char","value":"c"},{"id":7,"kind":"char","value":"e"},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"a"},{"id":11,"kind":"char","value":"n"},{"id":12,"kind":"char","value":"c"},{"id":13,"kind":"char","value":"e"},{"id":14,"kind":"char","value":" "},{"id":15,"kind":"char","value":"c"},{"id":16,"kind":"char","value":"r"},{"id":17,"kind":"char","value":"i"},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"r"},{"id":21,"kind":"char","value":"i"},{"id":22,"kind":"char","value":"o"},{"id":23,"kind":"char","value":"n"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":8,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"w"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"o"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"l"}]},"flags":""}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:47:3: pause, replacement and resume invalidate stale agent checks
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_47_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_47_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"c"},{"id":1,"kind":"char","value":"h"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:59:3: pauses on cancellation and errors and preserves an explicit waiting checkpoint
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_59_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_59_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"waiting"},{"matcher":"toContain","negate":false,"expected":"Loop status: waiting"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:70:3: keeps stopped goals visible without granting permission to resume
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_70_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_70_3"#,
+        r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toContain","negate":false,"expected":"Loop status: error"},{"matcher":"toContain","negate":false,"expected":"Workspace is out of credits"},{"matcher":"toContain","negate":false,"expected":"All components verified"},{"matcher":"toContain","negate":false,"expected":"loop.resume before working on it"},{"matcher":"toContain","negate":false,"expected":"Background notifications and unrelated messages do not authorize resumption"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toContain","negate":false,"expected":"Loop status: paused"},{"matcher":"toContain","negate":false,"expected":"Before ending this turn"},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:89:3: collects submitted structured answers before continuing and preserves explicit pauses
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_89_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_89_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","checkedIteration":-1}},{"matcher":"toContain","negate":false,"expected":"requestId=\"question-1\""},{"matcher":"toBe","negate":false,"expected":"paused"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:98:3: does not copy autorun into question branches
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_98_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_98_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"running"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:106:3: tools reject unauthenticated and worker contexts
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_106_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_106_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:121:3: requires configured System One to accept completion and records its review
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_121_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_121_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"criteria 1"},{"matcher":"toMatchObject","negate":false,"expected":{"status":"completed","monitor":{"status":"accepted","model":"monitor-test"}}},{"matcher":"toContain","negate":false,"expected":"Regression test exit 0"},{"matcher":"toContain","negate":true,"expected":"test-key"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:135:3: rejects uncertain or missing criterion decisions
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_135_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_135_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","monitor":{"status":"rejected"}}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:144:3: pauses on monitor failure without leaking errors or accepting completion
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_144_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_144_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","monitor":{"status":"unavailable"}}},{"matcher":"toContain","negate":true,"expected":"private endpoint"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:152:3: does not overwrite pauses or replacement goals during model evaluation
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_152_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_152_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"changed"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:167:3: pauses after three stalled checkpoints and renews budgets only on explicit resume
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_167_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_167_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","stalledChecks":3}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","stalledChecks":0,"budgetStartIteration":3}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:179:3: bounds unchecked turns and total turns even without System One
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_179_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_179_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"paused"},{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","iteration":53}}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:192:3: awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_192_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_192_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"completed","monitor":{"status":"disabled"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"waiting"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:205:3: scrubs configured credentials and authorization text from review state
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_205_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_205_3"#,
+        r#"[{"matcher":"toContain","negate":true,"expected":"test-key"},{"matcher":"toContain","negate":true,"expected":"other-secret"},{"matcher":"toContain","negate":true,"expected":"user:password"},{"matcher":"toContain","negate":false,"expected":"[REDACTED]"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:218:3: pauses oversized review state without sending incomplete criteria
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_218_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_218_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"paused","monitor":{"status":"unavailable"}}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:227:3: allows verified completion after previous stalled checkpoints
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_227_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_227_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"completed"},{"matcher":"toBe","negate":false,"expected":"completed"}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:242:3: routes configured tool checks through System One and waits for the verdict
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_242_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_242_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"running","monitor":{"status":"rejected"}}}},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/chat-loops.test.ts:253:3: requires a separate supported verdict for every acceptance criterion
+#[test]
+fn tailstatic_packages_gateway_src_services_chat_loops_test_ts_253_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-chat-loops-test-de9f4589"#,
+        r#"tailstatic_packages_gateway_src_services_chat_loops_test_ts_253_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"status":"running","monitor":{"criteriaPassed":[true,false]}}},{"matcher":"toHaveProperty","negate":false,"expected":"criterion_1"}]"#,
     );
 }
 
@@ -13625,6 +14596,26 @@ fn tailstatic_packages_gateway_src_services_email_connection_test_ts_48_3_each3(
     );
 }
 
+// packages/gateway/src/services/email/gmail.test.ts:7:3: reads the profile email with a missing-field fallback: %j
+#[test]
+fn tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-email-gmail-test-601b1abf"#,
+        r#"tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://gmail.googleapis.com/gmail/v1/users/me/profile",{"__jait_matcher":"objectContaining","value":{"headers":{"Authorization":"Bearer test-token"}}}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/email/gmail.test.ts:7:3: reads the profile email with a missing-field fallback: %j
+#[test]
+fn tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-email-gmail-test-601b1abf"#,
+        r#"tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://gmail.googleapis.com/gmail/v1/users/me/profile",{"__jait_matcher":"objectContaining","value":{"headers":{"Authorization":"Bearer test-token"}}}]}]"#,
+    );
+}
+
 // packages/gateway/src/services/email/imap.test.ts:26:3: connects only to pinned IPs with TLS validation and requires SMTP STARTTLS
 #[test]
 fn tailstatic_packages_gateway_src_services_email_imap_test_ts_26_3() {
@@ -13984,6 +14975,7 @@ fn tailstatic_packages_gateway_src_services_email_service_test_ts_184_1() {
         r#"[{"matcher":"toThrow","negate":false,"expected":"OAuth token request failed: synthetic_boundary_fixture"},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":18,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"i"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"v"},{"id":3,"kind":"char","value":"a"},{"id":4,"kind":"char","value":"l"},{"id":5,"kind":"char","value":"i"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":"x"},{"id":13,"kind":"char","value":"p"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"r"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"d"}]},"flags":"i"}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
+
 // packages/gateway/src/services/execution-guard.test.ts:5:3: reports the sharing blocker across browser tools instead of a generic failure
 #[test]
 fn tailstatic_packages_gateway_src_services_execution_guard_test_ts_5_3() {
@@ -14744,62 +15736,82 @@ fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_210_3() {
     );
 }
 
-// packages/gateway/src/services/jait-llm.test.ts:221:3: returns trimmed content for a plain response
+// packages/gateway/src/services/jait-llm.test.ts:219:3: refuses a model-less chat turn instead of using a backend default model
 #[test]
-fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_221_3() {
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_219_3() {
     tail_assertions::check(
         r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
-        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_221_3"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_219_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"expensive-model"}]"#,
+    );
+}
+
+// packages/gateway/src/services/jait-llm.test.ts:240:3: honors the selected model on a strict turn
+#[test]
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_240_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_240_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"deepseek-v4.1-flash:cloud"}]"#,
+    );
+}
+
+// packages/gateway/src/services/jait-llm.test.ts:254:3: returns trimmed content for a plain response
+#[test]
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_254_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_254_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"hello world"}]"#,
     );
 }
 
-// packages/gateway/src/services/jait-llm.test.ts:234:3: flattens array-style content parts
+// packages/gateway/src/services/jait-llm.test.ts:267:3: flattens array-style content parts
 #[test]
-fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_234_3() {
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_267_3() {
     tail_assertions::check(
         r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
-        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_234_3"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_267_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"part one part two"}]"#,
     );
 }
 
-// packages/gateway/src/services/jait-llm.test.ts:252:3: throws instead of silently returning empty when a reasoning model exhausts max_tokens
+// packages/gateway/src/services/jait-llm.test.ts:285:3: throws instead of silently returning empty when a reasoning model exhausts max_tokens
 #[test]
-fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_252_3() {
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_285_3() {
     tail_assertions::check(
         r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
-        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_252_3"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_285_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":50,"kind":"alt","nodes":[{"id":38,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"s"},{"id":1,"kind":"char","value":"p"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"t"},{"id":5,"kind":"char","value":" "},{"id":6,"kind":"char","value":"i"},{"id":7,"kind":"char","value":"t"},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":" "},{"id":10,"kind":"char","value":"w"},{"id":11,"kind":"char","value":"h"},{"id":12,"kind":"char","value":"o"},{"id":13,"kind":"char","value":"l"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"t"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"k"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"n"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"b"},{"id":23,"kind":"char","value":"u"},{"id":24,"kind":"char","value":"d"},{"id":25,"kind":"char","value":"g"},{"id":26,"kind":"char","value":"e"},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":" "},{"id":29,"kind":"char","value":"r"},{"id":30,"kind":"char","value":"e"},{"id":31,"kind":"char","value":"a"},{"id":32,"kind":"char","value":"s"},{"id":33,"kind":"char","value":"o"},{"id":34,"kind":"char","value":"n"},{"id":35,"kind":"char","value":"i"},{"id":36,"kind":"char","value":"n"},{"id":37,"kind":"char","value":"g"}]},{"id":49,"kind":"seq","nodes":[{"id":39,"kind":"char","value":"m"},{"id":40,"kind":"char","value":"a"},{"id":41,"kind":"char","value":"x"},{"id":42,"kind":"char","value":"_"},{"id":43,"kind":"char","value":"t"},{"id":44,"kind":"char","value":"o"},{"id":45,"kind":"char","value":"k"},{"id":46,"kind":"char","value":"e"},{"id":47,"kind":"char","value":"n"},{"id":48,"kind":"char","value":"s"}]}]},"flags":""}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/jait-llm.test.ts:276:3: throws when only reasoning_content is present with no answer
+// packages/gateway/src/services/jait-llm.test.ts:309:3: throws when only reasoning_content is present with no answer
 #[test]
-fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_276_3() {
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_309_3() {
     tail_assertions::check(
         r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
-        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_276_3"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_309_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":20,"kind":"alt","nodes":[{"id":9,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"r"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"n"},{"id":6,"kind":"char","value":"i"},{"id":7,"kind":"char","value":"n"},{"id":8,"kind":"char","value":"g"}]},{"id":19,"kind":"seq","nodes":[{"id":10,"kind":"char","value":"n"},{"id":11,"kind":"char","value":"o"},{"id":12,"kind":"char","value":" "},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"n"},{"id":15,"kind":"char","value":"s"},{"id":16,"kind":"char","value":"w"},{"id":17,"kind":"char","value":"e"},{"id":18,"kind":"char","value":"r"}]}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/services/jait-llm.test.ts:294:3: throws with the finish reason when there is neither content nor reasoning
+// packages/gateway/src/services/jait-llm.test.ts:327:3: throws with the finish reason when there is neither content nor reasoning
 #[test]
-fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_294_3() {
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_327_3() {
     tail_assertions::check(
         r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
-        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_294_3"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_327_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":32,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":" "},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"n"},{"id":6,"kind":"char","value":"t"},{"id":7,"kind":"char","value":"e"},{"id":8,"kind":"char","value":"n"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"("},{"id":12,"kind":"char","value":"f"},{"id":13,"kind":"char","value":"i"},{"id":14,"kind":"char","value":"n"},{"id":15,"kind":"char","value":"i"},{"id":16,"kind":"char","value":"s"},{"id":17,"kind":"char","value":"h"},{"id":18,"kind":"char","value":"_"},{"id":19,"kind":"char","value":"r"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":"a"},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"o"},{"id":24,"kind":"char","value":"n"},{"id":25,"kind":"char","value":":"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"e"},{"id":28,"kind":"char","value":"r"},{"id":29,"kind":"char","value":"r"},{"id":30,"kind":"char","value":"o"},{"id":31,"kind":"char","value":"r"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/services/jait-llm.test.ts:306:1: requires a Go key and resolves the Go default instead of the OpenAI default
+// packages/gateway/src/services/jait-llm.test.ts:339:1: requires a Go key and resolves the Go default instead of the OpenAI default
 #[test]
-fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_306_1() {
+fn tailstatic_packages_gateway_src_services_jait_llm_test_ts_339_1() {
     tail_assertions::check(
         r#"gateway-src-services-jait-llm-test-0c0dadeb"#,
-        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_306_1"#,
+        r#"tailstatic_packages_gateway_src_services_jait_llm_test_ts_339_1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"needs an API key"},{"matcher":"toBe","negate":false,"expected":"glm-5.2"},{"matcher":"toBe","negate":false,"expected":"https://opencode.ai/zen/go/v1"}]"#,
     );
 }
@@ -14961,6 +15973,126 @@ fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_77_3() {
         r#"gateway-src-services-messenger-service-test-db886a1c"#,
         r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_77_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["!room:test"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["POST","/_matrix/client/v3/rooms/!room%3Atest/forget",{"__jait_type":"undefined"},{}]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:87:3: normalises an https homeserver to its origin
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_87_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_87_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"https://matrix.example.org"},{"matcher":"toBe","negate":false,"expected":"https://matrix.example.org"},{"matcher":"toBe","negate":false,"expected":"https://matrix.example.org:8448"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:93:3: rejects credentials in the url
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_93_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_93_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:98:3: rejects query strings and fragments
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_98_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_98_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:103:3: rejects any path beyond the server root
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_103_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_103_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:107:3: rejects plaintext http unless it is loopback
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_107_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_107_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toBe","negate":false,"expected":"http://localhost:8008"},{"matcher":"toBe","negate":false,"expected":"http://127.0.0.1:8008"},{"matcher":"toBe","negate":false,"expected":"http://[::1]:8008"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:114:3: rejects schemes other than http and https
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_114_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_114_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"},{"matcher":"toThrow","negate":false,"expected":"Use an HTTPS Matrix homeserver"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:122:3: projects status room metadata and preserves sender IDs and captions (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":[{"sender":"Bob","senderId":"@bob:test","body":"Evening sky","attachment":{"name":"sky.png","image":true}}]},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"status"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:122:3: projects status room metadata and preserves sender IDs and captions (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_122_3_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":[{"sender":"Bob","senderId":"@bob:test","body":"Evening sky","attachment":{"name":"sky.png","image":true}}]},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBe","negate":true,"expected":"status"}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each0"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each1"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each2() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each2"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
+    );
+}
+
+// packages/gateway/src/services/messenger-service.test.ts:155:3: recognizes Teams metadata after joining an invitation (%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each3() {
+    tail_assertions::check(
+        r#"gateway-src-services-messenger-service-test-db886a1c"#,
+        r#"tailstatic_packages_gateway_src_services_messenger_service_test_ts_155_3_each3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"membership":"invite","service":"Matrix"}},{"matcher":"toMatchObject","negate":false,"expected":{"membership":"join","service":"Teams"}}]"#,
     );
 }
 
@@ -15660,116 +16792,116 @@ fn tailstatic_packages_gateway_src_services_preview_test_ts_37_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
         r#"tailstatic_packages_gateway_src_services_preview_test_ts_37_3"#,
-        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toThrow","negate":false,"expected":"Take control"},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toThrow","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:58:3: navigates the owner's browser without recreating it or granting agent control
+// packages/gateway/src/services/preview.test.ts:61:3: navigates the owner's browser without recreating it or granting agent control
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_58_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_61_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_58_3"#,
-        r#"[{"matcher":"toThrow","negate":false,"expected":"HTTP"},{"matcher":"toThrow","negate":false,"expected":"HTTP"},{"matcher":"toThrow","negate":false,"expected":"credentials"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com/"]},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toThrow","negate":false,"expected":"Take control"}]"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_61_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"HTTP"},{"matcher":"toThrow","negate":false,"expected":"HTTP"},{"matcher":"toThrow","negate":false,"expected":"credentials"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com/"]},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"browser-1"},{"matcher":"toThrow","negate":true},{"matcher":"toThrow","negate":false,"expected":"HTTP"}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:82:3: cleans up a managed server when the preview browser fails
+// packages/gateway/src/services/preview.test.ts:89:3: cleans up a managed server when the preview browser fails
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_82_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_89_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_82_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_89_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"browser unavailable"},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["preview-browser-broken-browser","preview-failed"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:106:3: reuses an unchanged healthy preview and only recreates it on restart
+// packages/gateway/src/services/preview.test.ts:113:3: reuses an unchanged healthy preview and only recreates it on restart
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_106_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_113_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_106_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_113_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:128:3: gates agent browser control by the preview sharing state and preserves it on restart
+// packages/gateway/src/services/preview.test.ts:135:3: gates agent browser control by the preview sharing state and preserves it on restart
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_128_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_135_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_128_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_135_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":25,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"w"},{"id":12,"kind":"char","value":"i"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"h"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"t"},{"id":17,"kind":"char","value":"h"},{"id":18,"kind":"char","value":"e"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"a"},{"id":21,"kind":"char","value":"g"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":"n"},{"id":24,"kind":"char","value":"t"}]},"flags":"i"}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toThrow","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":25,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"},{"id":10,"kind":"char","value":" "},{"id":11,"kind":"char","value":"w"},{"id":12,"kind":"char","value":"i"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"h"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"t"},{"id":17,"kind":"char","value":"h"},{"id":18,"kind":"char","value":"e"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"a"},{"id":21,"kind":"char","value":"g"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":"n"},{"id":24,"kind":"char","value":"t"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:160:3: does not revive a preview stopped while its browser is starting
+// packages/gateway/src/services/preview.test.ts:167:3: does not revive a preview stopped while its browser is starting
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_160_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_167_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_160_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_167_3"#,
         r#"[{"matcher":"toHaveBeenCalledOnce","negate":false,"optional":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"stopped"},{"matcher":"toBeNull","negate":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["preview-browser-closing-session","preview-stop"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:186:3: attaches to an existing localhost target instead of spawning a managed preview
+// packages/gateway/src/services/preview.test.ts:193:3: attaches to an existing localhost target instead of spawning a managed preview
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_186_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_193_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_186_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_193_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"url"},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toBe","negate":false,"expected":"/noVNC/vnc_lite.html?path=api/live-view/6080/websockify"},{"matcher":"toMatchObject","negate":false,"expected":{"containerName":"live-view","novncUrl":"/noVNC/vnc_lite.html?path=api/live-view/6080/websockify"}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser","preview-browser-session-1",{"sessionId":"session-1","projectRoot":"/project/app","requireLiveView":true}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["http://127.0.0.1:4173/"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:239:3: attaches to an existing private-network target URL instead of spawning a managed preview
+// packages/gateway/src/services/preview.test.ts:246:3: attaches to an existing private-network target URL instead of spawning a managed preview
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_239_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_246_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_239_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_246_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"url"},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["http://172.17.0.1:4174/"]}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:282:3: returns the browser page snapshot in preview inspection results
+// packages/gateway/src/services/preview.test.ts:289:3: returns the browser page snapshot in preview inspection results
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_282_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_289_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_282_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_289_3"#,
         r#"[{"matcher":"toBeNull","negate":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"Title: Preview App"},{"matcher":"toContain","negate":false,"expected":"Active element: textbox - Search - input[name=\"q\"]"}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:367:3: passes selector diagnostics through preview inspection results
+// packages/gateway/src/services/preview.test.ts:374:3: passes selector diagnostics through preview inspection results
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_367_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_374_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_367_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_374_3"#,
         r##"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["#submit"]},{"matcher":"toMatchObject","negate":false,"expected":{"selector":"#submit","obscured":true}}]"##,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:437:3: requires live view for preview browser sessions
+// packages/gateway/src/services/preview.test.ts:444:3: requires live view for preview browser sessions
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_437_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_444_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_437_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_444_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser","preview-browser-session-1",{"sessionId":"session-1","projectRoot":"/project/app","requireLiveView":true}]},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"/api/dev-proxy/4173/"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"Preview browser did not expose a live VNC session"}]"#,
     );
 }
 
-// packages/gateway/src/services/preview.test.ts:479:3: coalesces duplicate start requests for the same chat session
+// packages/gateway/src/services/preview.test.ts:486:3: coalesces duplicate start requests for the same chat session
 #[test]
-fn tailstatic_packages_gateway_src_services_preview_test_ts_479_3() {
+fn tailstatic_packages_gateway_src_services_preview_test_ts_486_3() {
     tail_assertions::check(
         r#"gateway-src-services-preview-test-47671301"#,
-        r#"tailstatic_packages_gateway_src_services_preview_test_ts_479_3"#,
+        r#"tailstatic_packages_gateway_src_services_preview_test_ts_486_3"#,
         r#"[{"matcher":"toHaveBeenCalled","negate":false},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toBe","negate":false,"expected":"ready"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
@@ -16091,6 +17223,56 @@ fn tailstatic_packages_gateway_src_services_project_search_test_ts_311_3() {
         r#"gateway-src-services-project-search-test-cf987ce1"#,
         r#"tailstatic_packages_gateway_src_services_project_search_test_ts_311_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/project-watcher-generated-roots.test.ts:14:3: does not subscribe to generated root %s
+#[test]
+fn tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_14_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-project-watcher-generated-roots-test-47bea959"#,
+        r#"tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_14_3_each0"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/project-watcher-generated-roots.test.ts:14:3: does not subscribe to generated root %s
+#[test]
+fn tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_14_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-project-watcher-generated-roots-test-47bea959"#,
+        r#"tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_14_3_each1"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/project-watcher-generated-roots.test.ts:14:3: does not subscribe to generated root %s
+#[test]
+fn tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_14_3_each2() {
+    tail_assertions::check(
+        r#"gateway-src-services-project-watcher-generated-roots-test-47bea959"#,
+        r#"tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_14_3_each2"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/project-watcher-generated-roots.test.ts:26:3: unsubscribes a real project before switching to a generated root
+#[test]
+fn tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_26_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-project-watcher-generated-roots-test-47bea959"#,
+        r#"tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_26_3"#,
+        r#"[{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/project-watcher-generated-roots.test.ts:41:3: continues watching projects with similar directory names
+#[test]
+fn tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_41_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-project-watcher-generated-roots-test-47bea959"#,
+        r#"tailstatic_packages_gateway_src_services_project_watcher_generated_roots_test_ts_41_3"#,
+        r#"[{"matcher":"toHaveBeenCalledOnce","negate":false},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
@@ -16954,42 +18136,102 @@ fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_252_3() {
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:283:3: marks every Codex window as full when workspace credits are depleted
+// packages/gateway/src/services/provider-usage.test.ts:283:3: keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each0"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.15,"status":"allowed"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.18,"status":"allowed"}}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/provider-usage.test.ts:283:3: keeps included Codex usage available without extra credits (ordinaryUsageAllowed=%s)
+#[test]
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each1"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":0.15,"status":"allowed"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.18,"status":"allowed"}}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/provider-usage.test.ts:301:3: honors explicit Codex account blocks below the window limit: %j
+#[test]
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"rejected"}]"#,
+    );
+}
+
+// packages/gateway/src/services/provider-usage.test.ts:301:3: honors explicit Codex account blocks below the window limit: %j
+#[test]
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"rejected"}]"#,
+    );
+}
+
+// packages/gateway/src/services/provider-usage.test.ts:301:3: honors explicit Codex account blocks below the window limit: %j
+#[test]
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each2() {
+    tail_assertions::check(
+        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each2"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"rejected"}]"#,
+    );
+}
+
+// packages/gateway/src/services/provider-usage.test.ts:317:3: updates Codex window status after a fresh quota report
+#[test]
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_317_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_317_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/provider-usage.test.ts:330:3: marks every Codex window as full when workspace credits are depleted
+#[test]
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_330_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_330_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","utilization":1,"status":"rejected","planType":"team"}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"seven_day","utilization":0.63,"status":"rejected"}}]}}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:326:3: stores Ollama session, weekly and monthly usage metadata
+// packages/gateway/src/services/provider-usage.test.ts:373:3: stores Ollama session, weekly and monthly usage metadata
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_326_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_373_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_326_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_373_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":3},{"matcher":"toEqual","negate":false,"expected":["2026-03-11T10:00:00.000Z","2026-03-16T00:00:00.000Z","2026-04-01T00:00:00.000Z"]},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"rateLimitType":"five_hour","providerType":"ollama","utilization":0.25,"planType":"pro","models":[{"name":"gpt-oss","requestCount":4}]}},{"__jait_matcher":"objectContaining","value":{"rateLimitType":"monthly","utilization":0.6,"activityCost":"3.20"}}]}}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:381:3: keeps an observed Ollama rollover instead of re-guessing the next reset
+// packages/gateway/src/services/provider-usage.test.ts:428:3: keeps an observed Ollama rollover instead of re-guessing the next reset
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_381_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_428_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_381_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_428_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"2026-03-11T15:00:00.000Z"}]"#,
     );
 }
 
-// packages/gateway/src/services/provider-usage.test.ts:418:3: exposes the stored quota reset date for cached Ollama snapshots
+// packages/gateway/src/services/provider-usage.test.ts:465:3: exposes the stored quota reset date for cached Ollama snapshots
 #[test]
-fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_418_3() {
+fn tailstatic_packages_gateway_src_services_provider_usage_test_ts_465_3() {
     tail_assertions::check(
         r#"gateway-src-services-provider-usage-test-8fd65cd3"#,
-        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_418_3"#,
+        r#"tailstatic_packages_gateway_src_services_provider_usage_test_ts_465_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"resetsAt":"2026-09-20T13:45:00.000Z","updatedAt":"2026-09-20T13:45:00.000Z","utilization":0.25}}]"#,
     );
 }
@@ -17044,6 +18286,16 @@ fn tailstatic_packages_gateway_src_services_reminders_test_ts_116_3() {
     );
 }
 
+// packages/gateway/src/services/reminders.test.ts:139:1: keeps clipped chat memories valid UTF-16 and stable on repeated scans
+#[test]
+fn tailstatic_packages_gateway_src_services_reminders_test_ts_139_1() {
+    tail_assertions::check(
+        r#"gateway-src-services-reminders-test-aceb04f1"#,
+        r#"tailstatic_packages_gateway_src_services_reminders_test_ts_139_1"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"scanned":1,"created":1}},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":{"scanned":1,"created":0}},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
 // packages/gateway/src/services/repo-proposals.test.ts:33:3: stores and lists repo proposals newest first
 #[test]
 fn tailstatic_packages_gateway_src_services_repo_proposals_test_ts_33_3() {
@@ -17071,6 +18323,66 @@ fn tailstatic_packages_gateway_src_services_repo_proposals_test_ts_102_3() {
         r#"gateway-src-services-repo-proposals-test-25c674bb"#,
         r#"tailstatic_packages_gateway_src_services_repo_proposals_test_ts_102_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"any","type":"String"}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/screen-share-control.test.ts:31:3: binds a viewer to approved capture and maps input within the desktop
+#[test]
+fn tailstatic_packages_gateway_src_services_screen_share_control_test_ts_31_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-screen-share-control-test-1b57fcaf"#,
+        r#"tailstatic_packages_gateway_src_services_screen_share_control_test_ts_31_3"#,
+        r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["node","computer.act",{"__jait_matcher":"objectContaining","value":{"sessionId":{"__jait_observed":0},"x":1919,"y":0,"button":"left","expectedGeometry":{"__jait_observed":1},"includeScreenshot":false}},{"__jait_matcher":"objectContaining","value":{"sessionId":"chat"}}],"hybrid":true},{"matcher":"toBe","negate":false,"expected":"copied"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["node","computer.clipboard.write",{"__jait_matcher":"objectContaining","value":{"text":"paste","expectedGeometry":{"__jait_observed":0}}},{"__jait_matcher":"anything"}],"hybrid":true},{"matcher":"toThrow","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/services/screen-share-control.test.ts:45:3: rejects another chat, viewer, unapproved share, or agent-controlled share
+#[test]
+fn tailstatic_packages_gateway_src_services_screen_share_control_test_ts_45_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-screen-share-control-test-1b57fcaf"#,
+        r#"tailstatic_packages_gateway_src_services_screen_share_control_test_ts_45_3"#,
+        r#"[{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toThrow","negate":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/screen-share-control.test.ts:57:3: rejects multiple monitors and stops the approved host lease
+#[test]
+fn tailstatic_packages_gateway_src_services_screen_share_control_test_ts_57_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-screen-share-control-test-1b57fcaf"#,
+        r#"tailstatic_packages_gateway_src_services_screen_share_control_test_ts_57_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"single-monitor"},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["node","computer.session",{"__jait_matcher":"objectContaining","value":{"action":"stop"}},{"__jait_matcher":"anything"}]},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/screen-share-control.test.ts:65:3: remembers cancellation that arrives before the start request
+#[test]
+fn tailstatic_packages_gateway_src_services_screen_share_control_test_ts_65_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-screen-share-control-test-1b57fcaf"#,
+        r#"tailstatic_packages_gateway_src_services_screen_share_control_test_ts_65_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"cancelled"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/services/screen-share-control.test.ts:72:3: cancels a pending approval and cannot revive it when the host replies late
+#[test]
+fn tailstatic_packages_gateway_src_services_screen_share_control_test_ts_72_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-screen-share-control-test-1b57fcaf"#,
+        r#"tailstatic_packages_gateway_src_services_screen_share_control_test_ts_72_3"#,
+        r#"[{"matcher":"toBeTypeOf","negate":false,"optional":true,"expected":"function"},{"matcher":"toThrow","negate":false},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBeGreaterThan","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/screen-share-control.test.ts:91:3: revokes control when the host capture disappears
+#[test]
+fn tailstatic_packages_gateway_src_services_screen_share_control_test_ts_91_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-screen-share-control-test-1b57fcaf"#,
+        r#"tailstatic_packages_gateway_src_services_screen_share_control_test_ts_91_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Capture stopped"},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
@@ -18734,6 +20046,116 @@ fn tailstatic_packages_gateway_src_services_session_sql_test_ts_427_5() {
     );
 }
 
+// packages/gateway/src/services/session-waits.test.ts:27:3: fills in the default label, detail and blocking flag
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_27_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_27_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"key":"question:1","kind":"question","sessionId":"chat-a","label":"Waiting for your answer","blocking":true}},{"matcher":"toMatchObject","negate":false,"expected":{"blocking":false,"detail":"bun run build","label":"Waiting for a background command"}}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:46:3: broadcasts the full wait list for the session on every change
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_46_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_46_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[{"sessionId":"chat-a","keys":["question:1"]},{"sessionId":"chat-a","keys":["question:1","terminal:term-1"]}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:55:3: does not re-broadcast an identical raise
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_55_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_55_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:63:3: re-broadcasts when the same key changes detail
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_63_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_63_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["terminal:term-1"]},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"psql"}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:71:3: clears one wait by key and reports whether anything happened
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_71_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_71_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeUndefined","negate":false},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:80:3: clears every wait for one session and leaves other sessions alone
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_80_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_80_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":["browser:chat-b"]},{"matcher":"toEqual","negate":false,"expected":[{"sessionId":"chat-a","keys":[]}]}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:94:3: stays quiet when clearing a session that has nothing pending
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_94_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_94_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:99:3: orders blocking waits before background ones
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_99_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_99_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["browser","consent","background"]}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:106:3: snapshots every outstanding wait sorted for a stable reconnect payload
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_106_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_106_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["browser:chat-a","question:1","background:term-9"]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:119:3: builds stable keys from terminal and browser ids
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_119_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_119_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"terminal:term-1"},{"matcher":"toBe","negate":false,"expected":"browser:chat-a"},{"matcher":"toBe","negate":false,"expected":"background:term-1"}]"#,
+    );
+}
+
+// packages/gateway/src/services/session-waits.test.ts:125:3: drops the broadcaster on clearForTests
+#[test]
+fn tailstatic_packages_gateway_src_services_session_waits_test_ts_125_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-session-waits-test-d59e762f"#,
+        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_125_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
+    );
+}
+
 // packages/gateway/src/services/sessions.test.ts:23:3: starts new chats read and acknowledges only observed activity
 #[test]
 fn tailstatic_packages_gateway_src_services_sessions_test_ts_23_3() {
@@ -19764,175 +21186,206 @@ fn tailstatic_packages_gateway_src_services_thread_router_test_ts_91_1() {
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:16:3: keeps the requested title prompt stable
+// packages/gateway/src/services/thread-title.test.ts:18:3: keeps the requested title prompt stable
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_16_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_18_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_16_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_18_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"short task title"}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:20:3: normalizes provider output into a clean single-line title
+// packages/gateway/src/services/thread-title.test.ts:22:3: normalizes provider output into a clean single-line title
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_20_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_22_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_20_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_22_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fix manager thread selection"}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:26:3: preserves meaningful leading digits while stripping list prefixes
+// packages/gateway/src/services/thread-title.test.ts:28:3: preserves meaningful leading digits while stripping list prefixes
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_26_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_28_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_26_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_28_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"3D viewer crash fix"},{"matcher":"toBe","negate":false,"expected":"Fix project reload loop"}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:31:3: falls back when the provider returns no usable title
+// packages/gateway/src/services/thread-title.test.ts:33:3: falls back when the provider returns no usable title
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_31_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_33_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_31_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_33_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each0() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each0() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each0"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each1() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each1() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each1"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each2() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each2() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each2"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each4() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each4() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each4"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each4"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each5() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each5() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each5"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each5"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each6() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each6() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each6"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each6"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each7() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each7() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each7"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each7"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:35:3: rejects tool-protocol output as a title: %s
+// packages/gateway/src/services/thread-title.test.ts:37:3: rejects tool-protocol output as a title: %s
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each8() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each8() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each8"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each8"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fallback title"},{"matcher":"toBe","negate":false,"expected":""}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:50:3: preserves titles discussing tool-call markers
+// packages/gateway/src/services/thread-title.test.ts:52:3: preserves titles discussing tool-call markers
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_50_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_52_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_50_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_52_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Fix <tool_call> chat titles"}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:56:3: uses the selected Jait backend for title generation
+// packages/gateway/src/services/thread-title.test.ts:58:3: uses the selected Jait backend for title generation
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_56_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_58_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_56_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_58_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"https://openrouter.ai/api/v1/chat/completions"},{"matcher":"toBe","negate":false,"optional":true,"expected":"Bearer openrouter-test-key"},{"matcher":"toBe","negate":false,"optional":true,"expected":"xiaomi/mimo-v2-pro"},{"matcher":"toContain","negate":false,"optional":true,"expected":"short task title"},{"matcher":"toBe","negate":false,"expected":"Fix mimo backend selection"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:102:3: sends enough max_tokens for reasoning models via the Jait backend
+// packages/gateway/src/services/thread-title.test.ts:104:3: sends enough max_tokens for reasoning models via the Jait backend
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_102_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_104_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_102_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_104_3"#,
         r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":"http://localhost:11434/v1/chat/completions"},{"matcher":"toBe","negate":false,"optional":true,"expected":"glm-5.3-flash:cloud"},{"matcher":"toBeGreaterThanOrEqual","negate":false,"optional":true,"expected":512},{"matcher":"toContain","negate":false,"optional":true,"expected":"short task title"},{"matcher":"toBe","negate":false,"expected":"Fix chat naming bug"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/services/thread-title.test.ts:163:3: throws instead of returning empty when the reasoning budget is exhausted
+// packages/gateway/src/services/thread-title.test.ts:165:3: throws instead of returning empty when the reasoning budget is exhausted
 #[test]
-fn tailstatic_packages_gateway_src_services_thread_title_test_ts_163_3() {
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_165_3() {
     tail_assertions::check(
         r#"gateway-src-services-thread-title-test-13adae8a"#,
-        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_163_3"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_165_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":50,"kind":"alt","nodes":[{"id":38,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"s"},{"id":1,"kind":"char","value":"p"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"n"},{"id":4,"kind":"char","value":"t"},{"id":5,"kind":"char","value":" "},{"id":6,"kind":"char","value":"i"},{"id":7,"kind":"char","value":"t"},{"id":8,"kind":"char","value":"s"},{"id":9,"kind":"char","value":" "},{"id":10,"kind":"char","value":"w"},{"id":11,"kind":"char","value":"h"},{"id":12,"kind":"char","value":"o"},{"id":13,"kind":"char","value":"l"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"t"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"k"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"n"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"b"},{"id":23,"kind":"char","value":"u"},{"id":24,"kind":"char","value":"d"},{"id":25,"kind":"char","value":"g"},{"id":26,"kind":"char","value":"e"},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":" "},{"id":29,"kind":"char","value":"r"},{"id":30,"kind":"char","value":"e"},{"id":31,"kind":"char","value":"a"},{"id":32,"kind":"char","value":"s"},{"id":33,"kind":"char","value":"o"},{"id":34,"kind":"char","value":"n"},{"id":35,"kind":"char","value":"i"},{"id":36,"kind":"char","value":"n"},{"id":37,"kind":"char","value":"g"}]},{"id":49,"kind":"seq","nodes":[{"id":39,"kind":"char","value":"m"},{"id":40,"kind":"char","value":"a"},{"id":41,"kind":"char","value":"x"},{"id":42,"kind":"char","value":"_"},{"id":43,"kind":"char","value":"t"},{"id":44,"kind":"char","value":"o"},{"id":45,"kind":"char","value":"k"},{"id":46,"kind":"char","value":"e"},{"id":47,"kind":"char","value":"n"},{"id":48,"kind":"char","value":"s"}]}]},"flags":""}}]"#,
     );
 }
+
+// packages/gateway/src/services/thread-title.test.ts:214:3: clears the timeout when subscribing throws
+#[test]
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_214_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-thread-title-test-13adae8a"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_214_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"subscribe failed"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/thread-title.test.ts:224:3: cleans up when sendTurn throws synchronously
+#[test]
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_224_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-thread-title-test-13adae8a"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_224_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"send failed"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/services/thread-title.test.ts:235:3: removes the listener once when completion precedes a send rejection
+#[test]
+fn tailstatic_packages_gateway_src_services_thread_title_test_ts_235_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-thread-title-test-13adae8a"#,
+        r#"tailstatic_packages_gateway_src_services_thread_title_test_ts_235_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":""},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
 // packages/gateway/src/services/threads-diff-stats.test.ts:5:1: persists and resets all diff counters without losing other metadata
 #[test]
 fn tailstatic_packages_gateway_src_services_threads_diff_stats_test_ts_5_1() {
@@ -20060,6 +21513,36 @@ fn tailstatic_packages_gateway_src_services_user_questions_test_ts_80_3() {
         r#"gateway-src-services-user-questions-test-b94303d5"#,
         r#"tailstatic_packages_gateway_src_services_user_questions_test_ts_80_3"#,
         r#"[{"matcher":"toBeDefined","negate":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/services/user-questions.test.ts:98:3: wakes an idle %s once and retains its result
+#[test]
+fn tailstatic_packages_gateway_src_services_user_questions_test_ts_98_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-services-user-questions-test-b94303d5"#,
+        r#"tailstatic_packages_gateway_src_services_user_questions_test_ts_98_3_each0"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"status":"pending"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":{"status":"missing"}},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/user-questions.test.ts:98:3: wakes an idle %s once and retains its result
+#[test]
+fn tailstatic_packages_gateway_src_services_user_questions_test_ts_98_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-services-user-questions-test-b94303d5"#,
+        r#"tailstatic_packages_gateway_src_services_user_questions_test_ts_98_3_each1"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"status":"pending"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":{"status":"missing"}},{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/services/user-questions.test.ts:121:3: resumes an attached wait directly without starting another turn
+#[test]
+fn tailstatic_packages_gateway_src_services_user_questions_test_ts_121_3() {
+    tail_assertions::check(
+        r#"gateway-src-services-user-questions-test-b94303d5"#,
+        r#"tailstatic_packages_gateway_src_services_user_questions_test_ts_121_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"status":"answered","result":null}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
@@ -20279,26 +21762,26 @@ fn tailstatic_packages_gateway_src_sprint10_test_ts_7_3() {
     tail_assertions::check(
         r#"gateway-src-sprint10-test-4af46209"#,
         r#"tailstatic_packages_gateway_src_sprint10_test_ts_7_3"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"screen.share"},{"matcher":"toContain","negate":false,"expected":"screen.capture"},{"matcher":"toContain","negate":false,"expected":"screen.record"},{"matcher":"toContain","negate":false,"expected":"os_tool"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"host-1"},{"matcher":"toBe","negate":false,"expected":"viewer-1"},{"matcher":"toBe","negate":false,"expected":"viewer-1"},{"matcher":"toBe","negate":false,"expected":true}]"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"screen.share"},{"matcher":"toContain","negate":false,"expected":"screen.capture"},{"matcher":"toContain","negate":false,"expected":"screen.record"},{"matcher":"toContain","negate":false,"expected":"os_tool"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"host-1"},{"matcher":"toBe","negate":false,"expected":"viewer-1"},{"matcher":"toBe","negate":false,"expected":"viewer-1"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/sprint10.test.ts:71:3: keeps P2P under 100ms and falls back to TURN when degraded
+// packages/gateway/src/sprint10.test.ts:76:3: keeps P2P under 100ms and falls back to TURN when degraded
 #[test]
-fn tailstatic_packages_gateway_src_sprint10_test_ts_71_3() {
+fn tailstatic_packages_gateway_src_sprint10_test_ts_76_3() {
     tail_assertions::check(
         r#"gateway-src-sprint10-test-4af46209"#,
-        r#"tailstatic_packages_gateway_src_sprint10_test_ts_71_3"#,
+        r#"tailstatic_packages_gateway_src_sprint10_test_ts_76_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"p2p"},{"matcher":"toBeLessThan","negate":false,"expected":100},{"matcher":"toBe","negate":false,"expected":"turn"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/sprint10.test.ts:89:3: transfers control between authorized devices without restarting stream
+// packages/gateway/src/sprint10.test.ts:94:3: transfers control between authorized devices without restarting stream
 #[test]
-fn tailstatic_packages_gateway_src_sprint10_test_ts_89_3() {
+fn tailstatic_packages_gateway_src_sprint10_test_ts_94_3() {
     tail_assertions::check(
         r#"gateway-src-sprint10-test-4af46209"#,
-        r#"tailstatic_packages_gateway_src_sprint10_test_ts_89_3"#,
+        r#"tailstatic_packages_gateway_src_sprint10_test_ts_94_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"phone"},{"matcher":"toBe","negate":false,"expected":"sharing"}]"#,
     );
 }
@@ -21793,112 +23276,112 @@ fn tailstatic_packages_gateway_src_sprint4_test_ts_953_3() {
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:187:3: navigates and snapshots using browser tools
+// packages/gateway/src/sprint5.test.ts:188:3: navigates and snapshots using browser tools
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_187_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_188_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_187_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_188_3"#,
         r##"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"navigate:https://example.com"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"URL: https://example.com"},{"matcher":"toContain","negate":false,"expected":"Interactive elements:"},{"matcher":"toContain","negate":false,"expected":"Active element:"},{"matcher":"toBe","negate":false,"expected":"#email"},{"matcher":"toBe","negate":false,"expected":"Sign in"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"id"}]"##,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:213:3: returns structured browser inspection data
+// packages/gateway/src/sprint5.test.ts:214:3: returns structured browser inspection data
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_213_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_214_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_213_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_214_3"#,
         r##"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"#submit"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"dialog"},{"matcher":"toBe","negate":false,"expected":"#email"},{"matcher":"toBe","negate":false,"expected":"Sign in"}]"##,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:232:3: makes a connected node screenshot displayable by the gateway
+// packages/gateway/src/sprint5.test.ts:233:3: makes a connected node screenshot displayable by the gateway
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_232_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_233_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_232_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_233_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":27,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"."},{"id":1,"kind":"char","value":"j"},{"id":2,"kind":"char","value":"a"},{"id":3,"kind":"char","value":"i"},{"id":4,"kind":"char","value":"t"},{"id":5,"kind":"char","value":"/"},{"id":6,"kind":"char","value":"s"},{"id":7,"kind":"char","value":"h"},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"s"},{"id":11,"kind":"char","value":"/"},{"id":12,"kind":"char","value":"b"},{"id":13,"kind":"char","value":"r"},{"id":14,"kind":"char","value":"o"},{"id":15,"kind":"char","value":"w"},{"id":16,"kind":"char","value":"s"},{"id":17,"kind":"char","value":"e"},{"id":18,"kind":"char","value":"r"},{"id":19,"kind":"char","value":"-"},{"id":21,"kind":"repeat","node":{"id":20,"kind":"class","items":[{"low":"/","high":"/"}],"negate":true},"min":1,"max":null},{"id":22,"kind":"char","value":"."},{"id":23,"kind":"char","value":"p"},{"id":24,"kind":"char","value":"n"},{"id":25,"kind":"char","value":"g"},{"id":26,"kind":"end"}]},"flags":""}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:252:3: executes browser interaction tools
+// packages/gateway/src/sprint5.test.ts:254:3: executes browser interaction tools
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_252_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_254_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_252_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_254_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"test screenshot"},{"matcher":"toBe","negate":false,"expected":"test screenshot"},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":["click:#submit","type:#email:a@b.com","scroll:0,200","select:#country:US","wait:#ready:50",{"__jait_observed":0}]},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:283:3: adds obstruction diagnostics to click failures
+// packages/gateway/src/sprint5.test.ts:285:3: adds obstruction diagnostics to click failures
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_283_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_285_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_283_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_285_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":81,"kind":"alt","nodes":[{"id":24,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"C"},{"id":1,"kind":"char","value":"l"},{"id":2,"kind":"char","value":"i"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"k"},{"id":5,"kind":"char","value":" "},{"id":6,"kind":"char","value":"m"},{"id":7,"kind":"char","value":"a"},{"id":8,"kind":"char","value":"y"},{"id":9,"kind":"char","value":" "},{"id":10,"kind":"char","value":"b"},{"id":11,"kind":"char","value":"e"},{"id":12,"kind":"char","value":" "},{"id":13,"kind":"char","value":"i"},{"id":14,"kind":"char","value":"n"},{"id":15,"kind":"char","value":"t"},{"id":16,"kind":"char","value":"e"},{"id":17,"kind":"char","value":"r"},{"id":18,"kind":"char","value":"c"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"p"},{"id":21,"kind":"char","value":"t"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":"d"}]},{"id":66,"kind":"seq","nodes":[{"id":25,"kind":"char","value":"A"},{"id":26,"kind":"char","value":"n"},{"id":27,"kind":"char","value":"o"},{"id":28,"kind":"char","value":"t"},{"id":29,"kind":"char","value":"h"},{"id":30,"kind":"char","value":"e"},{"id":31,"kind":"char","value":"r"},{"id":32,"kind":"char","value":" "},{"id":33,"kind":"char","value":"e"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"e"},{"id":36,"kind":"char","value":"m"},{"id":37,"kind":"char","value":"e"},{"id":38,"kind":"char","value":"n"},{"id":39,"kind":"char","value":"t"},{"id":40,"kind":"char","value":" "},{"id":41,"kind":"char","value":"i"},{"id":42,"kind":"char","value":"s"},{"id":43,"kind":"char","value":" "},{"id":44,"kind":"char","value":"r"},{"id":45,"kind":"char","value":"e"},{"id":46,"kind":"char","value":"c"},{"id":47,"kind":"char","value":"e"},{"id":48,"kind":"char","value":"i"},{"id":49,"kind":"char","value":"v"},{"id":50,"kind":"char","value":"i"},{"id":51,"kind":"char","value":"n"},{"id":52,"kind":"char","value":"g"},{"id":53,"kind":"char","value":" "},{"id":54,"kind":"char","value":"p"},{"id":55,"kind":"char","value":"o"},{"id":56,"kind":"char","value":"i"},{"id":57,"kind":"char","value":"n"},{"id":58,"kind":"char","value":"t"},{"id":59,"kind":"char","value":"e"},{"id":60,"kind":"char","value":"r"},{"id":61,"kind":"char","value":" "},{"id":62,"kind":"char","value":"h"},{"id":63,"kind":"char","value":"i"},{"id":64,"kind":"char","value":"t"},{"id":65,"kind":"char","value":"s"}]},{"id":80,"kind":"seq","nodes":[{"id":67,"kind":"char","value":"i"},{"id":68,"kind":"char","value":"n"},{"id":69,"kind":"char","value":"s"},{"id":70,"kind":"char","value":"i"},{"id":71,"kind":"char","value":"d"},{"id":72,"kind":"char","value":"e"},{"id":73,"kind":"char","value":" "},{"id":74,"kind":"char","value":"d"},{"id":75,"kind":"char","value":"i"},{"id":76,"kind":"char","value":"a"},{"id":77,"kind":"char","value":"l"},{"id":78,"kind":"char","value":"o"},{"id":79,"kind":"char","value":"g"}]}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:294:3: redacts browser captures and suppresses screenshots for secret-safe sessions
+// packages/gateway/src/sprint5.test.ts:296:3: redacts browser captures and suppresses screenshots for secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_294_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_296_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_294_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_296_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"secret-safe"},{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true,"textPreview":"","interactiveElements":[],"activeElement":null,"dialogs":[],"obstruction":null}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"secret-safe"},{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true,"target":null,"dialogs":[]}},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"secret-safe"},{"matcher":"toContain","negate":true,"expected":"screenshot:artifacts/page-secret.png"}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:353:3: blocks private addresses in SSRF guard
+// packages/gateway/src/sprint5.test.ts:355:3: blocks private addresses in SSRF guard
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_353_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_355_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_353_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_355_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":20,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"B"},{"id":1,"kind":"char","value":"l"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"k"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"i"},{"id":11,"kind":"char","value":"v"},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"h"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"s"},{"id":19,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":20,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"B"},{"id":1,"kind":"char","value":"l"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"k"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"i"},{"id":11,"kind":"char","value":"v"},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"h"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"s"},{"id":19,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":20,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"B"},{"id":1,"kind":"char","value":"l"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"k"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"i"},{"id":11,"kind":"char","value":"v"},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"h"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"s"},{"id":19,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toThrow","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:361:3: web.fetch applies SSRF guard and returns payload
+// packages/gateway/src/sprint5.test.ts:363:3: web.fetch applies SSRF guard and returns payload
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_361_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_363_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_361_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_363_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":20,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"B"},{"id":1,"kind":"char","value":"l"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"c"},{"id":4,"kind":"char","value":"k"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"p"},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"i"},{"id":11,"kind":"char","value":"v"},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"t"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":" "},{"id":16,"kind":"char","value":"h"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"s"},{"id":19,"kind":"char","value":"t"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:375:3: web.search auto mode uses openai and supports brave with API key
+// packages/gateway/src/sprint5.test.ts:377:3: web.search auto mode uses openai and supports brave with API key
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_375_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_377_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_375_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_377_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"openai"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"brave"}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:414:3: web.search falls back to openai when keyed provider key is missing
+// packages/gateway/src/sprint5.test.ts:416:3: web.search falls back to openai when keyed provider key is missing
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_414_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_416_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_414_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_416_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"openai"},{"matcher":"toContain","negate":false,"expected":"Missing XAI_API_KEY"}]"#,
     );
 }
 
-// packages/gateway/src/sprint5.test.ts:443:3: web.search openai provider fails clearly when OPENAI_API_KEY is missing
+// packages/gateway/src/sprint5.test.ts:445:3: web.search openai provider fails clearly when OPENAI_API_KEY is missing
 #[test]
-fn tailstatic_packages_gateway_src_sprint5_test_ts_443_3() {
+fn tailstatic_packages_gateway_src_sprint5_test_ts_445_3() {
     tail_assertions::check(
         r#"gateway-src-sprint5-test-1e9a1618"#,
-        r#"tailstatic_packages_gateway_src_sprint5_test_ts_443_3"#,
+        r#"tailstatic_packages_gateway_src_sprint5_test_ts_445_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"openai"},{"matcher":"toContain","negate":false,"expected":"Missing OPENAI_API_KEY"}]"#,
     );
 }
@@ -22103,143 +23586,183 @@ fn tailstatic_packages_gateway_src_state_directory_test_ts_17_3() {
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:54:3: keeps auto mode on Bun for Windows unless explicitly overridden
+// packages/gateway/src/surfaces/browser-runtime.test.ts:55:3: keeps auto mode on Bun for Windows unless explicitly overridden
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_54_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_55_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_54_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_55_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"auto"}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:62:3: uses node-bridge when explicitly configured
+// packages/gateway/src/surfaces/browser-runtime.test.ts:63:3: uses node-bridge when explicitly configured
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_62_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_63_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_62_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_63_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"node-bridge"}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:70:3: uses in-process when explicitly configured
+// packages/gateway/src/surfaces/browser-runtime.test.ts:71:3: uses in-process when explicitly configured
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_70_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_71_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_70_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_71_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"in-process"}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:80:3: reports idle age and live-view container metadata
+// packages/gateway/src/surfaces/browser-runtime.test.ts:81:3: reports idle age and live-view container metadata
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_80_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_81_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_80_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_81_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"jait-browser-sb-test"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:132:3: reports an ended driver as unavailable in state and snapshots
+// packages/gateway/src/surfaces/browser-runtime.test.ts:133:3: reports an ended driver as unavailable in state and snapshots
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_132_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_133_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_132_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_133_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"running"},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"error"}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:150:3: passes a normal volume of console events through untouched
+// packages/gateway/src/surfaces/browser-runtime.test.ts:151:3: falls back to the default window, threshold and clock when no options are given
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_150_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_151_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_150_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_151_3"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"first"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"paused":false,"resumesAt":null,"dropped":0}}]"#,
+    );
+}
+
+// packages/gateway/src/surfaces/browser-runtime.test.ts:164:3: passes a normal volume of console events through untouched
+#[test]
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_164_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_164_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["a","b","c"]},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:163:3: pauses capture with a notice when a burst exceeds the window threshold
+// packages/gateway/src/surfaces/browser-runtime.test.ts:177:3: pauses capture with a notice when a burst exceeds the window threshold
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_163_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_177_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_163_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_177_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":4},{"matcher":"toMatchObject","negate":false,"expected":{"type":"console","level":"warn"}},{"matcher":"toContain","negate":false,"expected":"paused"},{"matcher":"toContain","negate":false,"expected":"flood detected"}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:182:3: drops console events during the cooldown but keeps other event types
+// packages/gateway/src/surfaces/browser-runtime.test.ts:196:3: drops console events during the cooldown but keeps other event types
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_182_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_196_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_182_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_196_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:200:3: resumes capture with a notice after the cooldown expires
+// packages/gateway/src/surfaces/browser-runtime.test.ts:214:3: resumes capture with a notice after the cooldown expires
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_200_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_214_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_200_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_214_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Console capture resumed after flood pause."},{"matcher":"toBe","negate":false,"expected":"after-pause"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:217:3: only counts events inside the sliding window toward the threshold
+// packages/gateway/src/surfaces/browser-runtime.test.ts:231:3: only counts events inside the sliding window toward the threshold
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_217_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_231_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_217_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_231_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":4}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:235:3: reuses an existing about:blank bootstrap page
+// packages/gateway/src/surfaces/browser-runtime.test.ts:249:3: reuses an existing about:blank bootstrap page
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_235_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_249_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_235_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_249_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:248:3: reuses an existing Chromium new-tab bootstrap page
+// packages/gateway/src/surfaces/browser-runtime.test.ts:262:3: reuses an existing Chromium new-tab bootstrap page
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_248_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_262_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_248_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_262_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:261:3: opens a page when there is no reusable blank page
+// packages/gateway/src/surfaces/browser-runtime.test.ts:275:3: opens a page when there is no reusable blank page
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_261_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_275_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_261_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_275_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/surfaces/browser-runtime.test.ts:273:3: ignores closed pages when reusing a bootstrap page
+// packages/gateway/src/surfaces/browser-runtime.test.ts:287:3: ignores closed pages when reusing a bootstrap page
 #[test]
-fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_273_3() {
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_287_3() {
     tail_assertions::check(
         r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
-        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_273_3"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_287_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/surfaces/browser-runtime.test.ts:303:3: follows the visible popup instead of automating a hidden original tab
+#[test]
+fn tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_303_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-browser-runtime-test-075f8227"#,
+        r#"tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_303_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/surfaces/filesystem.test.ts:20:3: copies directories and files to distinct destinations
+#[test]
+fn tailstatic_packages_gateway_src_surfaces_filesystem_test_ts_20_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-filesystem-test-89782bb2"#,
+        r#"tailstatic_packages_gateway_src_surfaces_filesystem_test_ts_20_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"fixture"},{"matcher":"toBe","negate":false,"expected":"fixture"}]"#,
+    );
+}
+
+// packages/gateway/src/surfaces/filesystem.test.ts:27:3: rejects self copies, descendants and symlink aliases before recursive copy
+#[test]
+fn tailstatic_packages_gateway_src_surfaces_filesystem_test_ts_27_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-filesystem-test-89782bb2"#,
+        r#"tailstatic_packages_gateway_src_surfaces_filesystem_test_ts_27_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":"Cannot copy a directory"},{"matcher":"toThrow","negate":false,"expected":"Cannot copy a directory"},{"matcher":"toThrow","negate":false,"expected":"Cannot copy a directory"},{"matcher":"toThrow","negate":false,"expected":"Cannot copy a directory"},{"matcher":"toThrow","negate":false}]"#,
     );
 }
 
@@ -22423,6 +23946,26 @@ fn tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_190_3() {
     );
 }
 
+// packages/gateway/src/surfaces/remote-terminal.test.ts:222:3: recognizes bracketed paste separately from shell prompt readiness
+#[test]
+fn tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_222_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-remote-terminal-test-6691b55a"#,
+        r#"tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_222_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/surfaces/remote-terminal.test.ts:235:3: notifies remaining observers once per exit even when one throws
+#[test]
+fn tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_235_3() {
+    tail_assertions::check(
+        r#"gateway-src-surfaces-remote-terminal-test-6691b55a"#,
+        r#"tailstatic_packages_gateway_src_surfaces_remote_terminal_test_ts_235_3"#,
+        r#"[{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":[7]},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"stopped"},{"matcher":"toContain","negate":false,"expected":"with code 7, signal SIGTERM"},{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":[null]},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
 // packages/gateway/src/surfaces/shell-integration-assets.test.ts:26:3: exposes a non-empty embedded copy for every shell integration script
 #[test]
 fn tailstatic_packages_gateway_src_surfaces_shell_integration_assets_test_ts_26_3() {
@@ -22603,7 +24146,7 @@ fn tailstatic_packages_gateway_src_terminal_completion_marker_test_ts_33_1() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:114:3: returns ok=true when sandbox exit code is zero
+// packages/gateway/src/terminal-tools.test.ts:128:3: returns ok=true when sandbox exit code is zero
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_128_3() {
     tail_assertions::check(
@@ -22613,7 +24156,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_128_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:126:3: rewrites host project paths to the sandbox mount path
+// packages/gateway/src/terminal-tools.test.ts:140:3: rewrites host project paths to the sandbox mount path
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3() {
     tail_assertions::check(
@@ -22623,7 +24166,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_140_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:140:3: rewrites quoted project file paths to the sandbox mount path
+// packages/gateway/src/terminal-tools.test.ts:154:3: rewrites quoted project file paths to the sandbox mount path
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_154_3() {
     tail_assertions::check(
@@ -22633,7 +24176,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_154_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:148:3: does not rewrite path prefixes that only partially match the project root
+// packages/gateway/src/terminal-tools.test.ts:162:3: does not rewrite path prefixes that only partially match the project root
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_162_3() {
     tail_assertions::check(
@@ -22643,7 +24186,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_162_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:156:3: executes sandbox commands inside a thread sandbox container when provided
+// packages/gateway/src/terminal-tools.test.ts:170:3: executes sandbox commands inside a thread sandbox container when provided
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_170_3() {
     tail_assertions::check(
@@ -22653,7 +24196,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_170_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:174:3: rewrites host paths before executing inside a thread sandbox container
+// packages/gateway/src/terminal-tools.test.ts:188:3: rewrites host paths before executing inside a thread sandbox container
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3() {
     tail_assertions::check(
@@ -22663,7 +24206,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_188_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:188:3: returns ok=false when sandbox exit code is non-zero
+// packages/gateway/src/terminal-tools.test.ts:202:3: returns ok=false when sandbox exit code is non-zero
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_202_3() {
     tail_assertions::check(
@@ -22673,7 +24216,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_202_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:199:3: returns ok=false when sandbox command times out
+// packages/gateway/src/terminal-tools.test.ts:213:3: returns ok=false when sandbox command times out
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_213_3() {
     tail_assertions::check(
@@ -22683,7 +24226,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_213_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:214:3: announces the terminal binding before the command is written to the PTY
+// packages/gateway/src/terminal-tools.test.ts:228:3: announces the terminal binding before the command is written to the PTY
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_228_3() {
     tail_assertions::check(
@@ -22693,7 +24236,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_228_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:272:3: announces the bounded output range when a background command finishes
+// packages/gateway/src/terminal-tools.test.ts:286:3: announces the bounded output range when a background command finishes
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_286_3() {
     tail_assertions::check(
@@ -22703,7 +24246,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_286_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:317:3: background mode appends a completion sentinel after the requested command
+// packages/gateway/src/terminal-tools.test.ts:331:3: background mode appends a completion sentinel after the requested command
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_331_3() {
     tail_assertions::check(
@@ -22713,7 +24256,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_331_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:356:3: persists the completed output range for a watched background command
+// packages/gateway/src/terminal-tools.test.ts:370:3: persists the completed output range for a watched background command
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_370_3() {
     tail_assertions::check(
@@ -22723,7 +24266,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_370_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:406:3: runs a background command in its own terminal, separate from the session default
+// packages/gateway/src/terminal-tools.test.ts:420:3: runs a background command in its own terminal, separate from the session default
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_420_3() {
     tail_assertions::check(
@@ -22733,7 +24276,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_420_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:438:3: starts a new terminal when the default terminal has a timed-out command
+// packages/gateway/src/terminal-tools.test.ts:452:3: starts a new terminal when the default terminal has a timed-out command
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_452_3() {
     tail_assertions::check(
@@ -22743,7 +24286,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_452_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:462:3: does not write a second command into an explicitly requested watched terminal
+// packages/gateway/src/terminal-tools.test.ts:476:3: does not write a second command into an explicitly requested watched terminal
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_476_3() {
     tail_assertions::check(
@@ -22753,7 +24296,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_476_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:498:3: reattaches a requested remote terminal after gateway surface state is lost
+// packages/gateway/src/terminal-tools.test.ts:512:3: reattaches a requested remote terminal after gateway surface state is lost
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_512_3() {
     tail_assertions::check(
@@ -22763,7 +24306,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_512_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:527:3: does not replace an unavailable requested remote terminal
+// packages/gateway/src/terminal-tools.test.ts:541:3: does not replace an unavailable requested remote terminal
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_541_3() {
     tail_assertions::check(
@@ -22773,7 +24316,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_541_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:555:3: does not replace an unavailable requested local terminal
+// packages/gateway/src/terminal-tools.test.ts:569:3: does not replace an unavailable requested local terminal
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3() {
     tail_assertions::check(
@@ -22783,7 +24326,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_569_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:569:3: completes when a non-OSC shell prompt returns
+// packages/gateway/src/terminal-tools.test.ts:583:3: completes when a non-OSC shell prompt returns
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_583_3() {
     tail_assertions::check(
@@ -22793,7 +24336,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_583_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:582:3: completes when a zsh-style path prompt returns
+// packages/gateway/src/terminal-tools.test.ts:596:3: completes when a zsh-style path prompt returns
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3() {
     tail_assertions::check(
@@ -22803,7 +24346,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_596_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:596:3: captures late output that arrives after prompt fallback starts settling
+// packages/gateway/src/terminal-tools.test.ts:610:3: captures late output that arrives after prompt fallback starts settling
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_610_3() {
     tail_assertions::check(
@@ -22813,7 +24356,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_610_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:611:3: moves the wait to background when no completion marker returns
+// packages/gateway/src/terminal-tools.test.ts:625:3: moves the wait to background when no completion marker returns
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_625_3() {
     tail_assertions::check(
@@ -22823,7 +24366,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_625_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:624:3: wraps single-line commands in bracketed paste for PSReadLine terminals
+// packages/gateway/src/terminal-tools.test.ts:638:3: wraps single-line commands in bracketed paste for PSReadLine terminals
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_638_3() {
     tail_assertions::check(
@@ -22833,7 +24376,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_638_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:665:3: requests an inline secret when a non-SSH terminal command asks for a password
+// packages/gateway/src/terminal-tools.test.ts:679:3: requests an inline secret when a non-SSH terminal command asks for a password
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_679_3() {
     tail_assertions::check(
@@ -22843,7 +24386,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_679_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:683:3: requests an inline secret when an SSH terminal command asks for a password
+// packages/gateway/src/terminal-tools.test.ts:697:3: requests an inline secret when an SSH terminal command asks for a password
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_697_3() {
     tail_assertions::check(
@@ -22853,7 +24396,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_697_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:701:3: does not request a secret for a completed test log containing password prompt fixtures
+// packages/gateway/src/terminal-tools.test.ts:715:3: does not request a secret for a completed test log containing password prompt fixtures
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_715_3() {
     tail_assertions::check(
@@ -22863,7 +24406,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_715_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:721:3: detects sudo password prompts
+// packages/gateway/src/terminal-tools.test.ts:735:3: detects sudo password prompts
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_735_3() {
     tail_assertions::check(
@@ -22873,7 +24416,7 @@ fn tailstatic_packages_gateway_src_terminal_tools_test_ts_735_3() {
     );
 }
 
-// packages/gateway/src/terminal-tools.test.ts:725:3: does not flag regular command output
+// packages/gateway/src/terminal-tools.test.ts:739:3: does not flag regular command output
 #[test]
 fn tailstatic_packages_gateway_src_terminal_tools_test_ts_739_3() {
     tail_assertions::check(
@@ -22923,7 +24466,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_89_1() {
     );
 }
 
-// packages/gateway/src/terminal-waiting.test.ts:current:113: returns bounded progress, enforces execution identity and cancels without rerunning
+// packages/gateway/src/terminal-waiting.test.ts:113:1: returns bounded progress, enforces execution identity and cancels without rerunning
 #[test]
 fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_113_1() {
     tail_assertions::check(
@@ -22933,7 +24476,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_113_1() {
     );
 }
 
-// packages/gateway/src/terminal-waiting.test.ts:current:134: rejects incomplete shell syntax before writing anything to a persistent terminal
+// packages/gateway/src/terminal-waiting.test.ts:134:1: rejects incomplete shell syntax before writing anything to a persistent terminal
 #[test]
 fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_134_1() {
     tail_assertions::check(
@@ -22943,7 +24486,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_134_1() {
     );
 }
 
-// packages/gateway/src/terminal-waiting.test.ts:current:148: reports deadline expiry during background startup inline without a duplicate wakeup
+// packages/gateway/src/terminal-waiting.test.ts:148:1: reports deadline expiry during background startup inline without a duplicate wakeup
 #[test]
 fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_148_1() {
     tail_assertions::check(
@@ -22953,7 +24496,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_148_1() {
     );
 }
 
-// packages/gateway/src/terminal-waiting.test.ts:current:160: never dispatches after cancellation during environment resolution (background=%s)
+// packages/gateway/src/terminal-waiting.test.ts:160:1: never dispatches after cancellation during environment resolution (background=%s)
 #[test]
 fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each0() {
     tail_assertions::check(
@@ -22963,7 +24506,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each0() {
     );
 }
 
-// packages/gateway/src/terminal-waiting.test.ts:current:160: never dispatches after cancellation during environment resolution (background=%s)
+// packages/gateway/src/terminal-waiting.test.ts:160:1: never dispatches after cancellation during environment resolution (background=%s)
 #[test]
 fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each1() {
     tail_assertions::check(
@@ -22973,7 +24516,7 @@ fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_160_1_each1() {
     );
 }
 
-// packages/gateway/src/terminal-waiting.test.ts:current:178: finishes from the real PTY exit even when the shell never returns a prompt
+// packages/gateway/src/terminal-waiting.test.ts:178:1: finishes from the real PTY exit even when the shell never returns a prompt
 #[test]
 fn tailstatic_packages_gateway_src_terminal_waiting_test_ts_178_1() {
     tail_assertions::check(
@@ -23380,6 +24923,146 @@ fn tailstatic_packages_gateway_src_tools_agent_loop_connection_error_test_ts_118
         r#"gateway-src-tools-agent-loop-connection-error-test-49ba3700"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_connection_error_test_ts_118_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:20:3: retries a plain 429 — the provider just wants the request later
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_20_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_20_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:24:3: retries a 429 with no body or unparseable body
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_24_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_24_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:29:3: does not retry exhausted quota — it will not clear in seconds
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_29_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_29_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:35:3: detects quota by message when the code is missing
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_35_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_35_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:40:3: classifies 429 delivered as a top-level error string
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_40_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_40_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:45:3: ignores every other status
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_45_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_45_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:53:3: reads delay-seconds
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_53_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_53_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":7000},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:58:3: reads an HTTP date relative to now
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_58_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_58_3"#,
+        r#"[{"matcher":"toBeNull","negate":true},{"matcher":"toBeGreaterThan","negate":false,"expected":2000},{"matcher":"toBeLessThanOrEqual","negate":false,"expected":5000}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:66:3: clamps a past date to zero rather than going negative
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_66_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_66_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:70:3: returns null for missing or garbage values
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_70_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_70_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:79:3: doubles from 2s and caps at 30s
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_79_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_79_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":2000},{"matcher":"toBe","negate":false,"expected":4000},{"matcher":"toBe","negate":false,"expected":8000},{"matcher":"toBe","negate":false,"expected":16000},{"matcher":"toBe","negate":false,"expected":30000},{"matcher":"toBe","negate":false,"expected":30000}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:88:3: prefers the provider's Retry-After
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_88_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_88_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":12000}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:92:3: caps an excessive Retry-After so a turn cannot stall for minutes
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_92_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_92_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":30000}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop-rate-limit.test.ts:96:3: treats a non-positive Retry-After as zero delay
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_96_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-rate-limit-test-b96353f5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_rate_limit_test_ts_96_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
@@ -24193,402 +25876,422 @@ fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1661_3() {
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1734:3: calls onPersist exactly once and reports persisted=true on normal completion
+// packages/gateway/src/tools/agent-loop.test.ts:1734:3: keeps internal steering hidden when received %s
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each0"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"private command output"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"hidden":true}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:1734:3: keeps internal steering hidden when received %s
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each1"#,
+        r#"[{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"private command output"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toContain","negate":true,"expected":"private command output"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toMatchObject","negate":false,"expected":{"hidden":true}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:1780:3: calls onPersist exactly once and reports persisted=true on normal completion
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1780_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1780_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Hello world"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"role":"assistant","content":"Hello world"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1782:3: emits a swarm mode notice without forcing any tool call
-#[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1782_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1782_3"#,
-        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"type":"mode_notice","mode":"swarm"}},{"matcher":"toBe","negate":false,"expected":"No specialists needed for this."},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
-    );
-}
-
-// packages/gateway/src/tools/agent-loop.test.ts:1828:3: runs specialist agent.spawn calls the model recommends concurrently
+// packages/gateway/src/tools/agent-loop.test.ts:1828:3: emits a swarm mode notice without forcing any tool call
 #[test]
 fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
         r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"type":"mode_notice","mode":"swarm"}},{"matcher":"toBe","negate":false,"expected":"No specialists needed for this."},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/tools/agent-loop.test.ts:1874:3: runs specialist agent.spawn calls the model recommends concurrently
+#[test]
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1874_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-agent-loop-test-b195b7af"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1874_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"type":"mode_notice","mode":"swarm"}},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"Swarm complete."},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toMatchObject","negate":false,"expected":{"tool":"agent.spawn","ok":true}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1900:3: blocks implementation tools the coordinator tries to use directly, forcing delegation
+// packages/gateway/src/tools/agent-loop.test.ts:1946:3: blocks implementation tools the coordinator tries to use directly, forcing delegation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1900_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1946_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1900_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1946_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"tool":"edit","ok":false}},{"matcher":"toContain","negate":false,"expected":"not available to the Swarm coordinator"},{"matcher":"toContain","negate":false,"expected":"agent tool"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:1966:3: gives concurrent agent.spawn calls a shared swarm round id, but not a solo call
+// packages/gateway/src/tools/agent-loop.test.ts:2012:3: gives concurrent agent.spawn calls a shared swarm round id, but not a solo call
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1966_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2012_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1966_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2012_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBeTruthy","negate":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2092:3: forces delegation once the coordinator has made several direct reads without ever calling agent
+// packages/gateway/src/tools/agent-loop.test.ts:2138:3: forces delegation once the coordinator has made several direct reads without ever calling agent
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2092_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2138_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2092_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2138_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Investigation done."},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2194:3: auto-continues when a text response is cut off by finish_reason=length
+// packages/gateway/src/tools/agent-loop.test.ts:2240:3: auto-continues when a text response is cut off by finish_reason=length
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2194_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2240_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2194_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2240_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"Part one and part two."},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2343:3: quarantines a ping-pong loop and lets the provider recover
+// packages/gateway/src/tools/agent-loop.test.ts:2389:3: quarantines a ping-pong loop and lets the provider recover
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2343_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2389_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2343_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2389_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBeLessThan","negate":false,"expected":40},{"matcher":"toBe","negate":false,"expected":"Recovered from the ping-pong loop."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2408:3: stops re-running a call that keeps returning the identical error
+// packages/gateway/src/tools/agent-loop.test.ts:2454:3: stops re-running a call that keeps returning the identical error
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2408_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2454_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2408_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2454_3"#,
         r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":3},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toContain","negate":false,"expected":"ripgrep is unavailable"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2473:3: bounds total repeats of one call even when the model ignores every nudge
+// packages/gateway/src/tools/agent-loop.test.ts:2519:3: bounds total repeats of one call even when the model ignores every nudge
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2473_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2519_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2473_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2519_3"#,
         r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":10}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2527:3: without maxRounds, ends normally when the model answers before the safety backstop
+// packages/gateway/src/tools/agent-loop.test.ts:2573:3: without maxRounds, ends normally when the model answers before the safety backstop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2527_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2573_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2527_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2573_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"All done."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2584:3: does not flag a legitimate multi-file read sequence
+// packages/gateway/src/tools/agent-loop.test.ts:2630:3: does not flag a legitimate multi-file read sequence
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2584_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2630_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2584_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2630_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Read all files."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2634:3: redirects a range-jitter read loop before it can consume the turn
+// packages/gateway/src/tools/agent-loop.test.ts:2680:3: redirects a range-jitter read loop before it can consume the turn
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2634_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2680_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2634_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2680_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeLessThan","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Recovered after the redundant reads were blocked."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2703:3: tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)
+// packages/gateway/src/tools/agent-loop.test.ts:2749:3: tolerates a handful of defensive re-reads without stopping (regression: two near-identical code blocks)
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2703_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2749_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2703_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2749_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":"Verified both handlers are patched."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2766:3: does not flag sequential non-overlapping reads that grow through a file
+// packages/gateway/src/tools/agent-loop.test.ts:2812:3: does not flag sequential non-overlapping reads that grow through a file
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2766_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2812_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2766_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2812_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"Read the whole file."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2824:3: quarantines an ignored duplicate call, continues with another tool, then restores it
+// packages/gateway/src/tools/agent-loop.test.ts:2870:3: quarantines an ignored duplicate call, continues with another tool, then restores it
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2824_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2870_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2824_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2870_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Recovered with a different approach."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":["read","read","read","search"]},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2915:3: keeps quarantining and recovers when a provider calls an unavailable tool
+// packages/gateway/src/tools/agent-loop.test.ts:2961:3: keeps quarantining and recovers when a provider calls an unavailable tool
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2915_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2961_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2915_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2961_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":7},{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Recovered after the unavailable call was rejected."},{"matcher":"toContain","negate":true,"expected":"Stopped:"},{"matcher":"toContain","negate":true,"expected":"DSML"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:2983:3: steers a turn that replays the same thinking + same rejected tool call every round, then stops as a backstop
+// packages/gateway/src/tools/agent-loop.test.ts:3029:3: steers a turn that replays the same thinking + same rejected tool call every round, then stops as a backstop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2983_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3029_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2983_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3029_3"#,
         r#"[{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":5},{"matcher":"toBeLessThan","negate":false,"expected":12},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":2},{"matcher":"toBeLessThan","negate":false,"expected":12},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":4,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"p"},{"id":3,"kind":"char","value":"e"}]},"flags":""}},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":13,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"r"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"s"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"n"},{"id":6,"kind":"char","value":"s"},{"id":7,"kind":"char","value":"e"},{"id":12,"kind":"alt","nodes":[{"id":9,"kind":"seq","nodes":[{"id":8,"kind":"class","items":[{"category":"W"}],"negate":false}]},{"id":11,"kind":"seq","nodes":[{"id":10,"kind":"end"}]}]}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3095:3: lets the model recover after being steered out of a replay loop instead of stopping
+// packages/gateway/src/tools/agent-loop.test.ts:3141:3: lets the model recover after being steered out of a replay loop instead of stopping
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3095_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3141_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3095_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3141_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"Fixed the streaming issue"},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":4}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3202:3: executes an identical tool call only once when the provider repeats it within one round
+// packages/gateway/src/tools/agent-loop.test.ts:3248:3: executes an identical tool call only once when the provider repeats it within one round
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3202_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3248_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3202_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3248_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3261:3: quarantines a repeated call hidden inside otherwise changing tool batches
+// packages/gateway/src/tools/agent-loop.test.ts:3307:3: quarantines a repeated call hidden inside otherwise changing tool batches
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3261_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3307_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3261_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3307_3"#,
         r#"[{"matcher":"toBeLessThan","negate":false,"expected":40},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Recovered from the changing batch loop."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3334:3: continues through an invisible checkpoint when the caller omits maxRounds
+// packages/gateway/src/tools/agent-loop.test.ts:3380:3: continues through an invisible checkpoint when the caller omits maxRounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3334_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3380_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3334_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3380_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Finished too late."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":12,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"P"},{"id":1,"kind":"char","value":"a"},{"id":2,"kind":"char","value":"u"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"d"},{"id":6,"kind":"char","value":" "},{"id":7,"kind":"char","value":"a"},{"id":8,"kind":"char","value":"f"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"r"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":81},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3386:3: compacts completed work inside the active turn before context pressure causes a duplicate-call loop
+// packages/gateway/src/tools/agent-loop.test.ts:3432:3: compacts completed work inside the active turn before context pressure causes a duplicate-call loop
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3386_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3432_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3386_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3432_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Recovered from the long investigation."},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":36,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"S"},{"id":1,"kind":"char","value":"t"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"p"},{"id":4,"kind":"char","value":"p"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"d"},{"id":7,"kind":"char","value":":"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"r"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"a"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"t"},{"id":19,"kind":"char","value":"h"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":" "},{"id":22,"kind":"char","value":"s"},{"id":23,"kind":"char","value":"a"},{"id":24,"kind":"char","value":"m"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":" "},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"o"},{"id":29,"kind":"char","value":"o"},{"id":30,"kind":"char","value":"l"},{"id":31,"kind":"char","value":" "},{"id":32,"kind":"char","value":"c"},{"id":33,"kind":"char","value":"a"},{"id":34,"kind":"char","value":"l"},{"id":35,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3472:3: does not quarantine a re-read whose earlier result compaction erased
+// packages/gateway/src/tools/agent-loop.test.ts:3518:3: does not quarantine a re-read whose earlier result compaction erased
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3472_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3518_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3472_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3518_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBe","negate":false,"expected":6},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3564:3: keeps tool results verbatim below the Codex-style trigger — no lossy truncation
+// packages/gateway/src/tools/agent-loop.test.ts:3610:3: keeps tool results verbatim below the Codex-style trigger — no lossy truncation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3564_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3610_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3564_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3610_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBeGreaterThan","negate":false,"expected":1},{"matcher":"toContain","negate":true,"expected":"compacted for context"},{"matcher":"toContain","negate":true,"expected":"[active-turn-summary]"},{"matcher":"toContain","negate":true,"expected":"[conversation-summary]"},{"matcher":"toHaveLength","negate":false,"expected":8},{"matcher":"toContain","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3636:3: keeps explicit round budgets bounded for specialist runs
+// packages/gateway/src/tools/agent-loop.test.ts:3682:3: keeps explicit round budgets bounded for specialist runs
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3636_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3682_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3636_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3682_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":26,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"P"},{"id":1,"kind":"char","value":"a"},{"id":2,"kind":"char","value":"u"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":"e"},{"id":5,"kind":"char","value":"d"},{"id":6,"kind":"char","value":" "},{"id":7,"kind":"char","value":"a"},{"id":8,"kind":"char","value":"f"},{"id":9,"kind":"char","value":"t"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"r"},{"id":12,"kind":"char","value":" "},{"id":13,"kind":"char","value":"2"},{"id":14,"kind":"char","value":" "},{"id":15,"kind":"char","value":"t"},{"id":16,"kind":"char","value":"o"},{"id":17,"kind":"char","value":"o"},{"id":18,"kind":"char","value":"l"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"r"},{"id":21,"kind":"char","value":"o"},{"id":22,"kind":"char","value":"u"},{"id":23,"kind":"char","value":"n"},{"id":24,"kind":"char","value":"d"},{"id":25,"kind":"char","value":"s"}]},"flags":""}},{"matcher":"toBe","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3679:3: caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly
+// packages/gateway/src/tools/agent-loop.test.ts:3725:3: caps the thinking persisted to history so long reasoning blocks don't grow context unboundedly
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3679_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3725_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3679_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3725_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeGreaterThan","negate":false,"expected":4000},{"matcher":"toBe","negate":false,"expected":4001},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3751:3: preserves DeepSeek reasoning during a text-only length continuation
+// packages/gateway/src/tools/agent-loop.test.ts:3797:3: preserves DeepSeek reasoning during a text-only length continuation
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3751_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3797_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3751_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3797_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3769:3: replays DeepSeek reasoning verbatim through a real tool round
+// packages/gateway/src/tools/agent-loop.test.ts:3815:3: replays DeepSeek reasoning verbatim through a real tool round
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3769_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3815_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3769_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3815_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Done."},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeGreaterThan","negate":false,"expected":4000},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3840:3: recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim
+// packages/gateway/src/tools/agent-loop.test.ts:3886:3: recovers instead of stopping when a thinking-only round repeats the same reasoning verbatim
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3840_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3886_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3840_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3886_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":"Recovered after the repeated reasoning was rejected."},{"matcher":"toContain","negate":true,"expected":"Stopped:"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3901:3: finishes with a persisted fallback answer when a round streams only timing-noise reasoning like 25.0s
+// packages/gateway/src/tools/agent-loop.test.ts:3947:3: finishes with a persisted fallback answer when a round streams only timing-noise reasoning like 25.0s
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3901_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3947_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3901_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3947_3"#,
         r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"reasoning without a final answer"},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"assistant"},{"matcher":"toContain","negate":false,"expected":"reasoning without a final answer"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"role":"assistant"}},{"matcher":"toContain","negate":false,"expected":"reasoning without a final answer"}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:3961:3: feeds answer-less reasoning back as an assistant turn so the retry request differs
+// packages/gateway/src/tools/agent-loop.test.ts:4007:3: feeds answer-less reasoning back as an assistant turn so the retry request differs
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3961_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4007_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3961_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4007_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Here is the answer."},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"produced reasoning but no answer"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4073:5: adds configured recovery advice without bypassing the forced-answer guard
+// packages/gateway/src/tools/agent-loop.test.ts:4119:5: adds configured recovery advice without bypassing the forced-answer guard
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4073_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4119_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4073_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4119_5"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"Here is what I found."}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4082:5: withholds tools to force an answer when nothing changes for many rounds
+// packages/gateway/src/tools/agent-loop.test.ts:4128:5: withholds tools to force an answer when nothing changes for many rounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4082_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4128_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4082_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4128_5"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"Here is what I found."},{"matcher":"toBeLessThan","negate":false,"expected":30}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4094:5: re-anchors on the goal once, not once per round
+// packages/gateway/src/tools/agent-loop.test.ts:4140:5: re-anchors on the goal once, not once per round
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4094_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4140_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4094_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4140_5"#,
         r#"[{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4105:5: keeps a single live copy of the periodic reminder instead of stacking one every 4 rounds
+// packages/gateway/src/tools/agent-loop.test.ts:4151:5: keeps a single live copy of the periodic reminder instead of stacking one every 4 rounds
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4105_5() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4151_5() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4105_5"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4151_5"#,
         r#"[{"matcher":"toBeTruthy","negate":false},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4121:3: re-executes the original tool and replaces its history entry
+// packages/gateway/src/tools/agent-loop.test.ts:4167:3: re-executes the original tool and replaces its history entry
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4121_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4167_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4121_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4167_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":true,"message":"ok","data":{"stdout":"test"}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"message":"ok","data":{"stdout":"test"},"retryCount":1}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4166:3: returns a not found error for unknown call ids
+// packages/gateway/src/tools/agent-loop.test.ts:4212:3: returns a not found error for unknown call ids
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4166_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4212_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4166_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4212_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Tool call missing-call not found"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4181:3: prefers the exact registered identity and records sorted collision claimants
+// packages/gateway/src/tools/agent-loop.test.ts:4227:3: prefers the exact registered identity and records sorted collision claimants
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4181_3() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4227_3() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4181_3"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4227_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"coverage_identity_tool"},{"matcher":"toBe","negate":false,"expected":"coverage_identity_tool"},{"matcher":"toContainEqual","negate":false,"expected":{"providerName":"coverage_identity_tool","internalNames":["coverage.identity.tool","coverage.identity_tool","coverage_identity_tool"]}}]"#,
     );
 }
 
-// packages/gateway/src/tools/agent-loop.test.ts:4192:1: preserves queued steering metadata when draining a tool-round boundary
+// packages/gateway/src/tools/agent-loop.test.ts:4238:1: preserves queued steering metadata when draining a tool-round boundary
 #[test]
-fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4192_1() {
+fn tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4238_1() {
     tail_assertions::check(
         r#"gateway-src-tools-agent-loop-test-b195b7af"#,
-        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4192_1"#,
+        r#"tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4238_1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[{"message":"provider text","displayContent":"visible text","queuedMessageId":"queued-coverage"}]},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
@@ -24753,73 +26456,173 @@ fn tailstatic_packages_gateway_src_tools_architecture_tools_test_ts_35_3() {
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:32:3: opens a usable agent preview and preserves takeover across reuse and replacement
+// packages/gateway/src/tools/browser-chat.test.ts:36:3: blocks browser actions throughout handoff and resumes only after Done
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_32_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_36_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_32_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_36_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"data":{"status":"done"}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-chat.test.ts:54:3: opens a usable agent preview and preserves takeover across reuse and replacement
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_54_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_54_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toThrow","negate":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toThrow","negate":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:53:3: exposes a live browser for each chat without starting a project server
+// packages/gateway/src/tools/browser-chat.test.ts:75:3: exposes a live browser for each chat without starting a project server
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_53_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_75_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_53_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_75_3"#,
         r#"[{"matcher":"toBe","negate":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"expected":{"sessionId":"chat-a","controller":"agent","previewUrl":"/noVNC/vnc_lite.html?path=api/live-view/6080/websockify"}},{"matcher":"toMatchObject","negate":false,"expected":{"sharedWithAgent":true,"processId":null,"origin":"agent"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:61:3: blocks browser tools during user takeover and permits explicit resumption
+// packages/gateway/src/tools/browser-chat.test.ts:83:3: blocks browser tools during user takeover and permits explicit resumption
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_61_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_83_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_61_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_83_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:72:3: rejects a browser owned by another chat
+// packages/gateway/src/tools/browser-chat.test.ts:94:3: rejects a browser owned by another chat
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_72_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_94_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_72_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_94_3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":12,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"a"},{"id":1,"kind":"char","value":"n"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"t"},{"id":4,"kind":"char","value":"h"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"r"},{"id":7,"kind":"char","value":" "},{"id":8,"kind":"char","value":"c"},{"id":9,"kind":"char","value":"h"},{"id":10,"kind":"char","value":"a"},{"id":11,"kind":"char","value":"t"}]},"flags":""}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:77:3: shows surfaces.start browsers in the chat and reuses the same browser
+// packages/gateway/src/tools/browser-chat.test.ts:99:3: shows surfaces.start browsers in the chat and reuses the same browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_77_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_99_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_77_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"sessionId":"chat-a","controller":"agent"}},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_99_3"#,
+        r#"[{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":["https://example.com/two",{"__jait_type":"undefined"}]},{"matcher":"toMatchObject","negate":false,"expected":{"sessionId":"chat-a","controller":"agent"}},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:89:3: deduplicates simultaneous browser starts
+// packages/gateway/src/tools/browser-chat.test.ts:112:3: does not create a blank browser when an inspection runs before navigation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_89_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_112_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_89_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_112_3"#,
+        r#"[{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":23,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"b"},{"id":1,"kind":"char","value":"r"},{"id":2,"kind":"char","value":"o"},{"id":3,"kind":"char","value":"w"},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"r"},{"id":7,"kind":"any"},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"p"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"n"},{"id":12,"kind":"char","value":" "},{"id":13,"kind":"char","value":"w"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"t"},{"id":16,"kind":"char","value":"h"},{"id":17,"kind":"char","value":" "},{"id":18,"kind":"char","value":"a"},{"id":19,"kind":"char","value":" "},{"id":20,"kind":"char","value":"U"},{"id":21,"kind":"char","value":"R"},{"id":22,"kind":"char","value":"L"}]},"flags":""}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-chat.test.ts:118:3: deduplicates simultaneous browser starts
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_118_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_118_3"#,
         r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-chat.test.ts:98:3: restarts an agent browser without creating a project server or dropping takeover
+// packages/gateway/src/tools/browser-chat.test.ts:127:3: recovers an idle browser with its page and takeover state
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_98_3() {
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_127_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_98_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"origin":"agent","sharedWithAgent":false,"processId":null}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}}]"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_127_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"status":"stopped","target":"https://example.com/page"}},{"matcher":"toMatchObject","negate":false,"expected":{"status":"ready","sharedWithAgent":false}},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com/page"]},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-chat.test.ts:141:3: restarts an agent browser without creating a project server or dropping takeover
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_chat_test_ts_141_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-chat-test-c78f6ae9"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_chat_test_ts_141_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"origin":"agent","sharedWithAgent":false,"processId":null}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com"]},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":10,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"s"},{"id":5,"kind":"char","value":"h"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"e"},{"id":9,"kind":"char","value":"d"}]},"flags":""}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:29:3: transfers control before asking and waits until Done explicitly returns it
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_29_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_29_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"sessionId":"chat","userId":"owner","requestedBy":"browser.handoff","expiresAt":null}},{"matcher":"toMatchObject","negate":false,"expected":{"allowFreeformInput":true,"options":[{"label":"Done"},{"label":"I'm not able to do it"}]}},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"done","browserId":"browser-chat"}}},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:46:3: reports inability without granting agent control or echoing private text
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_46_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_46_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"status":"unable"}}},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:54:3: cancels a stopped agent's question and leaves user control
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_54_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_54_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"cancelled"}}},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:64:3: does not return control to a restarted browser with the same ID
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_64_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_64_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"data":{"status":"browser_changed"}}},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:73:3: rejects missing browsers and invalid instructions before creating a request
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_73_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_73_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:81:3: keeps one MCP tool call attached across a long wait, without a detached continuation
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_81_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_81_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"data":{"status":"done"}}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/tools/browser-handoff.test.ts:106:3: returns an explicit reason while leaving the browser under user control
+#[test]
+fn tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_106_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-browser-handoff-test-067fb9b8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_handoff_test_ts_106_3"#,
+        r#"[{"matcher":"toBe","negate":false,"optional":true,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"data":{"status":"unable","reason":"The login page never loads"}}},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
@@ -24853,955 +26656,955 @@ fn tailstatic_packages_gateway_src_tools_browser_tools_collaboration_test_ts_85_
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:81:5: browser.navigate returns the loaded page
+// packages/gateway/src/tools/browser-tools-integration.test.ts:82:5: browser.navigate returns the loaded page
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"url":{"__jait_observed":0},"title":"Tool integration fixture","textPreview":{"__jait_matcher":"stringContaining","value":"Authorized asset inventory"}}},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:86:5: browser.snapshot captures real page text and controls
+// packages/gateway/src/tools/browser-tools-integration.test.ts:87:5: browser.snapshot captures real page text and controls
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"snapshot":{"__jait_matcher":"stringContaining","value":"Authorized asset inventory"}}}},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"id":"save"}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:91:5: browser.inspect diagnoses existing and missing elements
+// packages/gateway/src/tools/browser-tools-integration.test.ts:92:5: browser.inspect diagnoses existing and missing elements
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"target":{"found":true,"name":"Save"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"target":{"found":false}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:99:5: browser.click changes the DOM and returns the new state
+// packages/gateway/src/tools/browser-tools-integration.test.ts:100:5: browser.click changes the DOM and returns the new state
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"Asset saved"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:104:5: browser.type fills the real input
+// packages/gateway/src/tools/browser-tools-integration.test.ts:105:5: browser.type fills the real input
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"workstation-01"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:110:5: browser.select fires change events on a real select
+// packages/gateway/src/tools/browser-tools-integration.test.ts:111:5: browser.select fires change events on a real select
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"owned"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:115:5: browser.scroll moves an offscreen target into view
+// packages/gateway/src/tools/browser-tools-integration.test.ts:116:5: browser.scroll moves an offscreen target into view
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"data":{"target":{"offscreen":true}}}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"data":{"target":{"offscreen":false}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:120:5: browser.wait finds a real selector and reports timeouts
+// packages/gateway/src/tools/browser-tools-integration.test.ts:121:5: browser.wait finds a real selector and reports timeouts
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"t"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"m"},{"id":3,"kind":"char","value":"e"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"u"},{"id":6,"kind":"char","value":"t"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:126:5: screenshot.capture produces a standalone PNG
+// packages/gateway/src/tools/browser-tools-integration.test.ts:128:5: screenshot.capture produces a standalone PNG
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:132:5: screenshot.capture defaults into the project's .jait/shots directory
+// packages/gateway/src/tools/browser-tools-integration.test.ts:134:5: screenshot.capture defaults into the project's .jait/shots directory
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:140:5: browser.screenshot produces a displayable PNG
+// packages/gateway/src/tools/browser-tools-integration.test.ts:142:5: browser.screenshot produces a displayable PNG
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]},{"matcher":"toBeGreaterThan","negate":false,"expected":1000}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:81:5: browser.navigate returns the loaded page
+// packages/gateway/src/tools/browser-tools-integration.test.ts:82:5: browser.navigate returns the loaded page
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"url":{"__jait_observed":0},"title":"Tool integration fixture","textPreview":{"__jait_matcher":"stringContaining","value":"Authorized asset inventory"}}},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:86:5: browser.snapshot captures real page text and controls
+// packages/gateway/src/tools/browser-tools-integration.test.ts:87:5: browser.snapshot captures real page text and controls
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"snapshot":{"__jait_matcher":"stringContaining","value":"Authorized asset inventory"}}}},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"id":"save"}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:91:5: browser.inspect diagnoses existing and missing elements
+// packages/gateway/src/tools/browser-tools-integration.test.ts:92:5: browser.inspect diagnoses existing and missing elements
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"target":{"found":true,"name":"Save"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"target":{"found":false}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:99:5: browser.click changes the DOM and returns the new state
+// packages/gateway/src/tools/browser-tools-integration.test.ts:100:5: browser.click changes the DOM and returns the new state
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"Asset saved"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:104:5: browser.type fills the real input
+// packages/gateway/src/tools/browser-tools-integration.test.ts:105:5: browser.type fills the real input
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"workstation-01"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:110:5: browser.select fires change events on a real select
+// packages/gateway/src/tools/browser-tools-integration.test.ts:111:5: browser.select fires change events on a real select
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"owned"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:115:5: browser.scroll moves an offscreen target into view
+// packages/gateway/src/tools/browser-tools-integration.test.ts:116:5: browser.scroll moves an offscreen target into view
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"data":{"target":{"offscreen":true}}}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"data":{"target":{"offscreen":false}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:120:5: browser.wait finds a real selector and reports timeouts
+// packages/gateway/src/tools/browser-tools-integration.test.ts:121:5: browser.wait finds a real selector and reports timeouts
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"t"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"m"},{"id":3,"kind":"char","value":"e"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"u"},{"id":6,"kind":"char","value":"t"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:126:5: screenshot.capture produces a standalone PNG
+// packages/gateway/src/tools/browser-tools-integration.test.ts:128:5: screenshot.capture produces a standalone PNG
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:132:5: screenshot.capture defaults into the project's .jait/shots directory
+// packages/gateway/src/tools/browser-tools-integration.test.ts:134:5: screenshot.capture defaults into the project's .jait/shots directory
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:140:5: browser.screenshot produces a displayable PNG
+// packages/gateway/src/tools/browser-tools-integration.test.ts:142:5: browser.screenshot produces a displayable PNG
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]},{"matcher":"toBeGreaterThan","negate":false,"expected":1000}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:81:5: browser.navigate returns the loaded page
+// packages/gateway/src/tools/browser-tools-integration.test.ts:82:5: browser.navigate returns the loaded page
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"url":{"__jait_observed":0},"title":"Tool integration fixture","textPreview":{"__jait_matcher":"stringContaining","value":"Authorized asset inventory"}}},"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:86:5: browser.snapshot captures real page text and controls
+// packages/gateway/src/tools/browser-tools-integration.test.ts:87:5: browser.snapshot captures real page text and controls
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"snapshot":{"__jait_matcher":"stringContaining","value":"Authorized asset inventory"}}}},{"matcher":"toContainEqual","negate":false,"expected":{"__jait_matcher":"objectContaining","value":{"id":"save"}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:91:5: browser.inspect diagnoses existing and missing elements
+// packages/gateway/src/tools/browser-tools-integration.test.ts:92:5: browser.inspect diagnoses existing and missing elements
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"target":{"found":true,"name":"Save"}}}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"target":{"found":false}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:99:5: browser.click changes the DOM and returns the new state
+// packages/gateway/src/tools/browser-tools-integration.test.ts:100:5: browser.click changes the DOM and returns the new state
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"Asset saved"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:104:5: browser.type fills the real input
+// packages/gateway/src/tools/browser-tools-integration.test.ts:105:5: browser.type fills the real input
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"workstation-01"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:110:5: browser.select fires change events on a real select
+// packages/gateway/src/tools/browser-tools-integration.test.ts:111:5: browser.select fires change events on a real select
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"textPreview":{"__jait_matcher":"stringContaining","value":"owned"}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:115:5: browser.scroll moves an offscreen target into view
+// packages/gateway/src/tools/browser-tools-integration.test.ts:116:5: browser.scroll moves an offscreen target into view
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"data":{"target":{"offscreen":true}}}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"data":{"target":{"offscreen":false}}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:120:5: browser.wait finds a real selector and reports timeouts
+// packages/gateway/src/tools/browser-tools-integration.test.ts:121:5: browser.wait finds a real selector and reports timeouts
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatch","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":7,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"t"},{"id":1,"kind":"char","value":"i"},{"id":2,"kind":"char","value":"m"},{"id":3,"kind":"char","value":"e"},{"id":4,"kind":"char","value":"o"},{"id":5,"kind":"char","value":"u"},{"id":6,"kind":"char","value":"t"}]},"flags":"i"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:126:5: screenshot.capture produces a standalone PNG
+// packages/gateway/src/tools/browser-tools-integration.test.ts:128:5: screenshot.capture produces a standalone PNG
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:132:5: screenshot.capture defaults into the project's .jait/shots directory
+// packages/gateway/src/tools/browser-tools-integration.test.ts:134:5: screenshot.capture defaults into the project's .jait/shots directory
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools-integration.test.ts:140:5: browser.screenshot produces a displayable PNG
+// packages/gateway/src/tools/browser-tools-integration.test.ts:142:5: browser.screenshot produces a displayable PNG
 #[test]
 #[ignore = "original source skip or capability gate; unresolved"]
-fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-integration-test-e7dbc46d"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toEqual","negate":false,"expected":[137,80,78,71,13,10,26,10]},{"matcher":"toBeGreaterThan","negate":false,"expected":1000}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each0"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each0"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each0"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each0"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each0() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each0"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each1"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each1"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each1() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each1"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each2"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each2"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each2"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each2"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each2"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each2() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each2"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each2"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each3"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each4() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each4() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each4"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each4"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each4() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each4() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each4"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each4"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each4() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each4() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each4"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each4"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each4() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each4() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each4"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each4"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each4() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each4() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each4"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each4"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each4() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each4() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each4"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each4"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each5() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each5() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each5"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each5"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each5() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each5() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each5"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each5"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each5() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each5() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each5"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each5"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each5() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each5() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each5"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each5"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each5() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each5() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each5"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each5"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each5() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each5() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each5"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each5"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each6() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each6() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each6"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each6"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each6() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each6() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each6"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each6"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each6() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each6() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each6"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each6"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each6() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each6() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each6"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each6"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each6() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each6() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each6"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each6"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each6() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each6() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each6"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each6"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each7() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each7() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each7"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each7() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each7() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each7"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each7() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each7() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each7"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each7() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each7() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each7"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each7() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each7() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each7"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each7() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each7() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each7"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each7"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:81:3: uses the visible preview and returns the action result
+// packages/gateway/src/tools/browser-tools.test.ts:82:3: uses the visible preview and returns the action result
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each8() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each8() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each8"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"expected":[{"__jait_matcher":"stringContaining","value":".jait/shots/browser-"},{"__jait_observed":0}],"hybrid":true},{"matcher":"toHaveBeenCalledWith","negate":false,"conditional":true,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"conditional":true,"dynamic":true},{"matcher":"toEqual","negate":false,"conditional":true,"dynamic":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:103:3: does no work after cancellation
+// packages/gateway/src/tools/browser-tools.test.ts:104:3: does no work after cancellation
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each8() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each8() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each8"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Cancelled"}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:112:3: blocks agent actions while the user controls the browser
+// packages/gateway/src/tools/browser-tools.test.ts:113:3: blocks agent actions while the user controls the browser
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each8() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each8() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each8"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"controlled by user"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:120:3: does not create a hidden browser when the linked preview has stopped
+// packages/gateway/src/tools/browser-tools.test.ts:121:3: does not create a hidden browser when the linked preview has stopped
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each8() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each8() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each8"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"not running"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:127:3: reports browser action failures instead of returning success
+// packages/gateway/src/tools/browser-tools.test.ts:128:3: reports browser action failures instead of returning success
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each8() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each8() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each8"#,
         r#"[{"matcher":"toThrow","negate":false,"expected":"Browser disconnected"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:134:3: suppresses page contents in secret-safe sessions
+// packages/gateway/src/tools/browser-tools.test.ts:135:3: suppresses page contents in secret-safe sessions
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each8() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each8() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each8"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each8"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"captureSuppressed":true}},{"matcher":"toBe","negate":false,"conditional":true,"expected":false},{"matcher":"toHaveBeenCalled","negate":true,"conditional":true},{"matcher":"toMatchObject","negate":false,"conditional":true,"expected":{"textPreview":"","interactiveElements":[],"target":null}},{"matcher":"toContain","negate":true,"conditional":true,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:152:3: starts the chat browser with the active project and session
+// packages/gateway/src/tools/browser-tools.test.ts:153:3: starts the chat browser with the active project and session
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_152_3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_153_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_152_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_153_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:162:3: captures into the active project even when the gateway has another cwd
+// packages/gateway/src/tools/browser-tools.test.ts:163:3: captures into the active project even when the gateway has another cwd
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_162_3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_163_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_162_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_163_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"displayed in chat"},{"matcher":"toContain","negate":false,"expected":"Do not call image.view"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:174:3: copies a screenshot from the execution node when the capture is remote
+// packages/gateway/src/tools/browser-tools.test.ts:175:3: copies a screenshot from the execution node when the capture is remote
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_174_3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_175_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_174_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_175_3"#,
         r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["test-node","readBinary",{"path":"/remote/capture.png"}]},{"matcher":"toBe","negate":false,"expected":"remote-image"}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:185:3: does not conceal a successful click if the follow-up inspection fails
+// packages/gateway/src/tools/browser-tools.test.ts:186:3: does not conceal a successful click if the follow-up inspection fails
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_185_3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_186_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_185_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_186_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/browser-tools.test.ts:195:3: forwards ports and project mounting to the sandbox manager
+// packages/gateway/src/tools/browser-tools.test.ts:196:3: forwards ports and project mounting to the sandbox manager
 #[test]
-fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_195_3() {
+fn tailstatic_packages_gateway_src_tools_browser_tools_test_ts_196_3() {
     tail_assertions::check(
         r#"gateway-src-tools-browser-tools-test-75fcdacd"#,
-        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_195_3"#,
+        r#"tailstatic_packages_gateway_src_tools_browser_tools_test_ts_196_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true}]"#,
     );
 }
@@ -25905,6 +27708,7 @@ fn tailstatic_packages_gateway_src_tools_catalog_tools_test_ts_91_3() {
         r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":10000},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":["agent.profiles.bulky0","agent.profiles.bulky1"]}}]"#,
     );
 }
+
 // packages/gateway/src/tools/channel-tools.test.ts:45:3: splits at the first separator so colons in a chat id survive
 #[test]
 fn tailstatic_packages_gateway_src_tools_channel_tools_test_ts_45_3() {
@@ -26145,63 +27949,93 @@ fn tailstatic_packages_gateway_src_tools_code_graph_tools_test_ts_70_3() {
     );
 }
 
-// packages/gateway/src/tools/computer-tools.test.ts:65:3: lists Windows targets and explains why old desktop builds are unavailable
+// packages/gateway/src/tools/computer-tools.test.ts:66:3: lists Windows targets and explains why old desktop builds are unavailable
 #[test]
-fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_65_3() {
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_66_3() {
     tail_assertions::check(
         r#"gateway-src-tools-computer-tools-test-6897ac07"#,
-        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_65_3"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_66_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"__jait_matcher":"arrayContaining","value":[{"__jait_matcher":"objectContaining","value":{"nodeId":"windows-a","available":true}},{"__jait_matcher":"objectContaining","value":{"nodeId":"old-windows","available":false,"reason":{"__jait_matcher":"stringContaining","value":"Desktop update required"}}},{"__jait_matcher":"objectContaining","value":{"nodeId":"linux-a","available":false}}]}}]"#,
     );
 }
 
-// packages/gateway/src/tools/computer-tools.test.ts:85:3: starts a target-side session and routes actions through its node
+// packages/gateway/src/tools/computer-tools.test.ts:86:3: blocks agent input when the shared computer belongs to the viewer
 #[test]
-fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_85_3() {
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_86_3() {
     tail_assertions::check(
         r#"gateway-src-tools-computer-tools-test-6897ac07"#,
-        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_85_3"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_86_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/computer-tools.test.ts:105:3: starts a target-side session and routes actions through its node
+#[test]
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_105_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-computer-tools-test-6897ac07"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_105_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["windows-a","computer.session",{"__jait_matcher":"objectContaining","value":{"action":"start","sessionId":{"__jait_observed":0}}},{"__jait_matcher":"objectContaining","value":{"sessionId":"chat-a"}}],"hybrid":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":["windows-a","computer.act",{"__jait_matcher":"objectContaining","value":{"sessionId":{"__jait_observed":0},"action":"type","text":"hello im jait"}},{"__jait_matcher":"objectContaining","value":{"sessionId":"chat-a"}}],"hybrid":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/computer-tools.test.ts:114:3: rejects malformed actions before dispatch
+// packages/gateway/src/tools/computer-tools.test.ts:134:3: rejects malformed actions before dispatch
 #[test]
-fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_114_3() {
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_134_3() {
     tail_assertions::check(
         r#"gateway-src-tools-computer-tools-test-6897ac07"#,
-        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_114_3"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_134_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"click requires finite x and y coordinates"}},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/computer-tools.test.ts:126:3: prevents another chat from reusing a control session
+// packages/gateway/src/tools/computer-tools.test.ts:146:3: prevents another chat from reusing a control session
 #[test]
-fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_126_3() {
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_146_3() {
     tail_assertions::check(
         r#"gateway-src-tools-computer-tools-test-6897ac07"#,
-        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_126_3"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_146_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"belongs to another chat"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/computer-tools.test.ts:143:3: clears the gateway lease even when remote stop fails
+// packages/gateway/src/tools/computer-tools.test.ts:163:3: clears the gateway lease even when remote stop fails
 #[test]
-fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_143_3() {
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_163_3() {
     tail_assertions::check(
         r#"gateway-src-tools-computer-tools-test-6897ac07"#,
-        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_143_3"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_163_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"node disconnected"}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"sessions":[]}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/computer-tools.test.ts:156:3: cancels target startup after a transport timeout
+// packages/gateway/src/tools/computer-tools.test.ts:176:3: cancels target startup after a transport timeout
 #[test]
-fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_tools_computer_tools_test_ts_176_3() {
     tail_assertions::check(
         r#"gateway-src-tools-computer-tools-test-6897ac07"#,
-        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_tools_computer_tools_test_ts_176_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"message":{"__jait_matcher":"stringContaining","value":"timed out"}}},{"matcher":"toHaveBeenLastCalledWith","negate":false,"expected":["windows-a","computer.session",{"__jait_matcher":"objectContaining","value":{"action":"stop"}},{"__jait_matcher":"objectContaining","value":{"sessionId":{"__jait_observed":0}}}],"hybrid":true},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/context-evidence.test.ts:6:3: keeps terminal completion handles and diagnostics within the projection budget
+#[test]
+fn tailstatic_packages_gateway_src_tools_context_evidence_test_ts_6_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-context-evidence-test-0807c45e"#,
+        r#"tailstatic_packages_gateway_src_tools_context_evidence_test_ts_6_3"#,
+        r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":1024},{"matcher":"toBe","negate":false,"expected":"exec"},{"matcher":"toEqual","negate":false,"expected":{"complete":false}},{"matcher":"toContain","negate":false,"expected":"started"},{"matcher":"toContain","negate":false,"expected":"ERROR at completion"},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/context-evidence.test.ts:17:3: finds literal tail evidence, paginates matches and preserves owner/session/expiry checks
+#[test]
+fn tailstatic_packages_gateway_src_tools_context_evidence_test_ts_17_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-context-evidence-test-0807c45e"#,
+        r#"tailstatic_packages_gateway_src_tools_context_evidence_test_ts_17_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"ERROR 🦀 first"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"ERROR second"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
@@ -26535,22 +28369,32 @@ fn tailstatic_packages_gateway_src_tools_core_search_test_ts_272_1() {
     );
 }
 
-// packages/gateway/src/tools/core/todo.test.ts:6:3: replaces the complete plan and keeps sessions independent
+// packages/gateway/src/tools/core/todo.test.ts:6:3: directs persistent follow-ups to the saved todo tool
 #[test]
 fn tailstatic_packages_gateway_src_tools_core_todo_test_ts_6_3() {
     tail_assertions::check(
         r#"gateway-src-tools-core-todo-test-5ffc99e6"#,
         r#"tailstatic_packages_gateway_src_tools_core_todo_test_ts_6_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"temporary plan"},{"matcher":"toContain","negate":false,"expected":"jait.todos"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/core/todo.test.ts:10:3: replaces the complete plan and keeps sessions independent
+#[test]
+fn tailstatic_packages_gateway_src_tools_core_todo_test_ts_10_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-core-todo-test-5ffc99e6"#,
+        r#"tailstatic_packages_gateway_src_tools_core_todo_test_ts_10_3"#,
         r#"[{"matcher":"toEqual","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
     );
 }
 
-// packages/gateway/src/tools/core/todo.test.ts:17:3: copies inputs so later caller changes do not silently mutate the plan
+// packages/gateway/src/tools/core/todo.test.ts:21:3: copies inputs so later caller changes do not silently mutate the plan
 #[test]
-fn tailstatic_packages_gateway_src_tools_core_todo_test_ts_17_3() {
+fn tailstatic_packages_gateway_src_tools_core_todo_test_ts_21_3() {
     tail_assertions::check(
         r#"gateway-src-tools-core-todo-test-5ffc99e6"#,
-        r#"tailstatic_packages_gateway_src_tools_core_todo_test_ts_17_3"#,
+        r#"tailstatic_packages_gateway_src_tools_core_todo_test_ts_21_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Verify browser actions"}]"#,
     );
 }
@@ -28055,7 +29899,7 @@ fn tailstatic_packages_gateway_src_tools_persona_agent_tools_test_ts_64_3() {
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:9:3: exposes preview.open, not preview.start, through the schema path
+// packages/gateway/src/tools/preview-tools.test.ts:9:3: exposes browser tools while retaining legacy execution without duplicate schemas
 #[test]
 fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_9_3() {
     tail_assertions::check(
@@ -28065,82 +29909,92 @@ fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_9_3() {
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:18:3: starts a managed preview and broadcasts panel state
+// packages/gateway/src/tools/preview-tools.test.ts:26:3: requires a URL and opens it through the canonical browser tool
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_18_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_26_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_18_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_26_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"url"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser","browser-owned",{"sessionId":"owned","projectRoot":"/project","userId":"owner","requireLiveView":true}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com/path",{"__jait_type":"undefined"}]},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/preview-tools.test.ts:45:3: starts a managed preview and broadcasts panel state
+#[test]
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_45_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_45_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"sessionId":"session-123","target":"3000"}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"command":"dev-preview.open","data":{"target":"3000","projectRoot":"/project/app"}},"session-123"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["session-123",{"__jait_matcher":"objectContaining","value":{"type":"ui.state-sync","sessionId":"session-123","payload":{"key":"dev-preview.panel","value":{"open":true,"target":"3000","projectRoot":"/project/app","displayState":"connected","displayTarget":"3000"}}}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["session-123",{"dev-preview.panel":{"open":true,"target":"3000","projectRoot":"/project/app","displayState":"connected","displayTarget":"3000"}}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:89:3: uses the MCP session when starting previews from MCP calls
+// packages/gateway/src/tools/preview-tools.test.ts:116:3: uses the MCP session when starting previews from MCP calls
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_89_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_116_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_89_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_116_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"sessionId":"mcp-session","target":"8765"}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"command":"dev-preview.open","data":{"target":"8765","projectRoot":"/project/mcp"}},"mcp-session"]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mcp-session",{"__jait_matcher":"objectContaining","value":{"type":"ui.state-sync","sessionId":"mcp-session"}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["mcp-session",{"dev-preview.panel":{"open":true,"target":"8765","projectRoot":"/project/mcp","displayState":"connected","displayTarget":"8765"}}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:145:3: syncs the browser collaboration record when opening a preview
+// packages/gateway/src/tools/preview-tools.test.ts:172:3: syncs the browser collaboration record when opening a preview
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_145_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_172_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_145_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_172_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:177:3: does not open the preview panel when preview start fails
+// packages/gateway/src/tools/preview-tools.test.ts:204:3: does not open the preview panel when preview start fails
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_177_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_204_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_177_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_204_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"Preview failed: Preview server did not become ready"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["session-error",{"__jait_matcher":"objectContaining","value":{"type":"ui.state-sync","sessionId":"session-error","payload":{"key":"dev-preview.panel","value":{"open":false,"target":null,"projectRoot":"/project/error","displayState":"hidden","displayTarget":null}}}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["session-error",{"dev-preview.panel":{"open":false,"target":null,"projectRoot":"/project/error","displayState":"hidden","displayTarget":null}}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:239:3: does not open the preview panel when preview start fails
+// packages/gateway/src/tools/preview-tools.test.ts:266:3: does not open the preview panel when preview start fails
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_239_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_266_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_239_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_266_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toContain","negate":false,"expected":"Preview failed: Preview server did not become ready"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["session-error",{"__jait_matcher":"objectContaining","value":{"type":"ui.state-sync","sessionId":"session-error","payload":{"key":"dev-preview.panel","value":{"open":false,"target":null,"projectRoot":"/project/error","displayState":"hidden","displayTarget":null}}}}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["session-error",{"dev-preview.panel":{"open":false,"target":null,"projectRoot":"/project/error","displayState":"hidden","displayTarget":null}}]}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:306:3: omits screenshots by default and reports browser error counts
+// packages/gateway/src/tools/preview-tools.test.ts:333:3: omits screenshots by default and reports browser error counts
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_306_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_333_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_306_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_333_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"2 errors"},{"matcher":"toContain","negate":true,"expected":"screenshot included"},{"matcher":"toMatchObject","negate":false,"expected":{"browserId":"preview-browser-session-1","status":"ready","screenshot":null,"page":{"title":"Preview App"},"snapshot":"Title: Preview App"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:345:3: keeps screenshots when explicitly requested
+// packages/gateway/src/tools/preview-tools.test.ts:372:3: keeps screenshots when explicitly requested
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_345_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_372_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_345_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_372_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"screenshot included"},{"matcher":"toMatchObject","negate":false,"expected":{"screenshot":"base64-image"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/preview-tools.test.ts:377:3: restarts the preview session
+// packages/gateway/src/tools/preview-tools.test.ts:404:3: restarts the preview session
 #[test]
-fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_377_3() {
+fn tailstatic_packages_gateway_src_tools_preview_tools_test_ts_404_3() {
     tail_assertions::check(
         r#"gateway-src-tools-preview-tools-test-ab134d2d"#,
-        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_377_3"#,
+        r#"tailstatic_packages_gateway_src_tools_preview_tools_test_ts_404_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
@@ -28341,176 +30195,186 @@ fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_11_3() 
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
         r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_11_3"#,
-        r#"[{"matcher":"toContain","negate":false,"dynamic":true}]"#,
+        r#"[{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:15:3: keeps generated artifacts in the active project for $model
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:16:3: keeps generated artifacts in the active project for $model
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_15_3_each0() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_15_3_each0"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"<projectArtifacts>"},{"matcher":"toContain","negate":false,"expected":".jait/shots/"},{"matcher":"toContain","negate":false,"expected":".jait/artifacts/"},{"matcher":"toContain","negate":false,"expected":"Create the required directories"},{"matcher":"toContain","negate":false,"expected":"copy the finished artifact"},{"matcher":"toContain","negate":true,"expected":"> /tmp/out.txt"},{"matcher":"toContain","negate":false,"expected":"The tool card is the user-facing image display"},{"matcher":"toContain","negate":false,"expected":"do not follow them with image.view"},{"matcher":"toContain","negate":false,"expected":"do not repeat it in assistant messages"},{"matcher":"toContain","negate":false,"expected":"unless the user explicitly requests them"}]"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each0"#,
+        r#"[{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"<projectArtifacts>"},{"matcher":"toContain","negate":false,"expected":".jait/shots/"},{"matcher":"toContain","negate":false,"expected":".jait/artifacts/"},{"matcher":"toContain","negate":false,"expected":"Create the required directories"},{"matcher":"toContain","negate":false,"expected":"copy the finished artifact"},{"matcher":"toContain","negate":true,"expected":"> /tmp/out.txt"},{"matcher":"toContain","negate":false,"expected":"The tool card is the user-facing image display"},{"matcher":"toContain","negate":false,"expected":"do not follow them with image.view"},{"matcher":"toContain","negate":false,"expected":"do not repeat it in assistant messages"},{"matcher":"toContain","negate":false,"expected":"unless the user explicitly requests them"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:15:3: keeps generated artifacts in the active project for $model
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:16:3: keeps generated artifacts in the active project for $model
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_15_3_each1() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_15_3_each1"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"<projectArtifacts>"},{"matcher":"toContain","negate":false,"expected":".jait/shots/"},{"matcher":"toContain","negate":false,"expected":".jait/artifacts/"},{"matcher":"toContain","negate":false,"expected":"Create the required directories"},{"matcher":"toContain","negate":false,"expected":"copy the finished artifact"},{"matcher":"toContain","negate":true,"expected":"> /tmp/out.txt"},{"matcher":"toContain","negate":false,"expected":"The tool card is the user-facing image display"},{"matcher":"toContain","negate":false,"expected":"do not follow them with image.view"},{"matcher":"toContain","negate":false,"expected":"do not repeat it in assistant messages"},{"matcher":"toContain","negate":false,"expected":"unless the user explicitly requests them"}]"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each1"#,
+        r#"[{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"<projectArtifacts>"},{"matcher":"toContain","negate":false,"expected":".jait/shots/"},{"matcher":"toContain","negate":false,"expected":".jait/artifacts/"},{"matcher":"toContain","negate":false,"expected":"Create the required directories"},{"matcher":"toContain","negate":false,"expected":"copy the finished artifact"},{"matcher":"toContain","negate":true,"expected":"> /tmp/out.txt"},{"matcher":"toContain","negate":false,"expected":"The tool card is the user-facing image display"},{"matcher":"toContain","negate":false,"expected":"do not follow them with image.view"},{"matcher":"toContain","negate":false,"expected":"do not repeat it in assistant messages"},{"matcher":"toContain","negate":false,"expected":"unless the user explicitly requests them"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:15:3: keeps generated artifacts in the active project for $model
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:16:3: keeps generated artifacts in the active project for $model
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_15_3_each2() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each2() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_15_3_each2"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"<projectArtifacts>"},{"matcher":"toContain","negate":false,"expected":".jait/shots/"},{"matcher":"toContain","negate":false,"expected":".jait/artifacts/"},{"matcher":"toContain","negate":false,"expected":"Create the required directories"},{"matcher":"toContain","negate":false,"expected":"copy the finished artifact"},{"matcher":"toContain","negate":true,"expected":"> /tmp/out.txt"},{"matcher":"toContain","negate":false,"expected":"The tool card is the user-facing image display"},{"matcher":"toContain","negate":false,"expected":"do not follow them with image.view"},{"matcher":"toContain","negate":false,"expected":"do not repeat it in assistant messages"},{"matcher":"toContain","negate":false,"expected":"unless the user explicitly requests them"}]"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each2"#,
+        r#"[{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toContain","negate":false,"expected":"<projectArtifacts>"},{"matcher":"toContain","negate":false,"expected":".jait/shots/"},{"matcher":"toContain","negate":false,"expected":".jait/artifacts/"},{"matcher":"toContain","negate":false,"expected":"Create the required directories"},{"matcher":"toContain","negate":false,"expected":"copy the finished artifact"},{"matcher":"toContain","negate":true,"expected":"> /tmp/out.txt"},{"matcher":"toContain","negate":false,"expected":"The tool card is the user-facing image display"},{"matcher":"toContain","negate":false,"expected":"do not follow them with image.view"},{"matcher":"toContain","negate":false,"expected":"do not repeat it in assistant messages"},{"matcher":"toContain","negate":false,"expected":"unless the user explicitly requests them"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:33:3: includes the shared Jait external provider instructions
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:35:3: includes the shared Jait external provider instructions
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_33_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_35_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_33_3"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"<jaitExternalProvider>"},{"matcher":"toContain","negate":false,"expected":"You are operating inside Jait, a tool-centric coding project and gateway."},{"matcher":"toContain","negate":false,"expected":"Use Jait tools as the primary way to act."},{"matcher":"toContain","negate":false,"expected":"use that tool instead of provider-native or generic tools"},{"matcher":"toContain","negate":false,"expected":"always use `jait.terminal`"},{"matcher":"toContain","negate":false,"expected":"discover it first with the available tool discovery mechanism"},{"matcher":"toContain","negate":false,"expected":"Respect Jait project boundaries"},{"matcher":"toContain","negate":false,"expected":"use the todo tool even if you are operating through an external or CLI provider"},{"matcher":"toContain","negate":false,"expected":"first discover and use Jait memory or prior session search tools"},{"matcher":"toContain","negate":false,"expected":"If the user asks to open, switch, or use a project or repo"},{"matcher":"toContain","negate":false,"expected":"attach to an existing local target when available"},{"matcher":"toContain","negate":false,"expected":"The live preview is a controllable browser session."},{"matcher":"toContain","negate":false,"expected":"use `browser.inspect`, `browser.status`, and `browser.*` tools"},{"matcher":"toContain","negate":false,"expected":"Do not tell the user that browser tools cannot control the previewed browser unless a tool call fails"},{"matcher":"toContain","negate":false,"expected":"If `browser.open` fails, then fall back to opening the localhost URL directly in the browser surface."},{"matcher":"toContain","negate":false,"expected":"This guidance still applies when you are operating through an external or CLI provider inside Jait."},{"matcher":"toContain","negate":false,"expected":"You are working in the project: /tmp/project"}]"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_35_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"<jaitExternalProvider>"},{"matcher":"toContain","negate":false,"expected":"You are operating inside Jait, a tool-centric coding project and gateway."},{"matcher":"toContain","negate":false,"expected":"Use Jait tools as the primary way to act."},{"matcher":"toContain","negate":false,"expected":"use that tool instead of provider-native or generic tools"},{"matcher":"toContain","negate":false,"expected":"always use `jait.terminal`"},{"matcher":"toContain","negate":false,"expected":"discover it first with the available tool discovery mechanism"},{"matcher":"toContain","negate":false,"expected":"Respect Jait project boundaries"},{"matcher":"toContain","negate":false,"expected":"use the todo tool even if you are operating through an external or CLI provider"},{"matcher":"toContain","negate":false,"expected":"first discover and use Jait memory or prior session search tools"},{"matcher":"toContain","negate":false,"expected":"If the user asks to open, switch, or use a project or repo"},{"matcher":"toContain","negate":false,"expected":"use an existing development server or start the project"},{"matcher":"toContain","negate":false,"expected":"The live browser is controllable."},{"matcher":"toContain","negate":false,"expected":"use `browser.inspect`, `browser.status`, and `browser.*` tools"},{"matcher":"toContain","negate":false,"expected":"Do not tell the user that browser tools cannot control the browser unless a tool call fails"},{"matcher":"toContain","negate":false,"expected":"Call `browser.open` with that HTTP/HTTPS URL to load it immediately"},{"matcher":"toContain","negate":false,"expected":"This guidance still applies when you are operating through an external or CLI provider inside Jait."},{"matcher":"toContain","negate":false,"expected":"You are working in the project: /tmp/project"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:60:3: embeds folder context, outermost folder first
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:62:3: embeds folder context, outermost folder first
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_60_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_62_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_60_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_62_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"<projectInstructions>"},{"matcher":"toContain","negate":false,"expected":"casual tone"},{"matcher":"toContain","negate":false,"expected":"answer in english"},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:77:3: puts folder context after the global instruction file so it wins
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:79:3: puts folder context after the global instruction file so it wins
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_77_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_79_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_77_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_79_3"#,
         r#"[{"matcher":"toBeLessThan","negate":false,"conditional":true,"dynamic":true},{"matcher":"toComplete","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:92:3: omits the block entirely when no folder sets context
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:94:3: omits the block entirely when no folder sets context
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_92_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_94_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_92_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_94_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"<projectInstructions>"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:103:3: reaches lightweight local models too
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:105:3: reaches lightweight local models too
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_103_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_105_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_103_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_105_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"casual tone"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:118:3: keeps local model prompts compact
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:120:3: keeps local model prompts compact
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_118_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_120_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_118_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_120_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"<jaitExternalProvider>"},{"matcher":"toContain","negate":true,"expected":"You are operating inside Jait, a tool-centric coding project."},{"matcher":"toContain","negate":false,"expected":"Use Markdown in responses. Wrap filenames and symbols in backticks."},{"matcher":"toContain","negate":false,"expected":"The todo and user.ask tools are always available"},{"matcher":"toContain","negate":false,"expected":"call tools.search once with a broad description"},{"matcher":"toContain","negate":false,"expected":"Project: /tmp/project"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:137:3: includes structured user-question guidance
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:139:3: includes structured user-question guidance
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_137_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_139_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_137_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_139_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"<userQuestionInstructions>"},{"matcher":"toContain","negate":false,"expected":"user.ask tool"},{"matcher":"toContain","negate":false,"expected":"instead of ending your turn with a plain-text question"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:148:3: injects enabled skills into the system prompt
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:150:3: injects enabled skills into the system prompt
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_148_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_150_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_148_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_150_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"<skillDiscovery>"},{"matcher":"toContain","negate":false,"expected":"skills.search"},{"matcher":"toContain","negate":false,"expected":"skills.read"},{"matcher":"toContain","negate":true,"expected":"<available_skills>"},{"matcher":"toContain","negate":true,"expected":"C:/skills/word-docx/SKILL.md"},{"matcher":"toContain","negate":true,"expected":"<name>Word / DOCX</name>"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:179:3: injects response style instructions when requested
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:181:3: injects response style instructions when requested
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_179_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_181_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_179_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_181_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"<responseStyle>"},{"matcher":"toContain","negate":false,"expected":"Write in concise caveman style."},{"matcher":"toContain","negate":false,"expected":"If the topic is risky, subtle, or confusing, fall back to normal precise prose."}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:192:3: injects global SOUL instructions from JAIT_SOUL_PATH
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:194:3: injects global SOUL instructions from JAIT_SOUL_PATH
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_192_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_194_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_192_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_194_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"<globalJaitInstructions>"},{"matcher":"toContain","negate":false,"expected":"Always use chat.traces before memory.search for Jait chat IDs."}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:221:3: does not inject the skill evaluation appendix
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:223:3: injects the project architecture graph and truncates oversized graphs
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_221_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_223_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_221_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_223_3"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"<projectArchitecture>"},{"matcher":"toContain","negate":false,"expected":"A-->B"},{"matcher":"toContain","negate":false,"expected":"%% …truncated"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:242:3: does not inject the skill evaluation appendix
+#[test]
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_242_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_242_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"<skill-evaluation>"},{"matcher":"toContain","negate":true,"expected":"Always evaluate whether the requested work should become a reusable skill."}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:233:3: gives GLM (internal Jait provider) the full tool-rich prompt WITHOUT the external-provider block
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:254:3: gives GLM (internal Jait provider) the full tool-rich prompt WITHOUT the external-provider block
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_233_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_254_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_233_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_254_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"<jaitExternalProvider>"},{"matcher":"toContain","negate":true,"expected":"You are operating inside Jait, a tool-centric coding project and gateway."},{"matcher":"toContain","negate":true,"expected":"Prefer Jait tools as the primary way to act."},{"matcher":"toContain","negate":false,"expected":"Your name is Jait"},{"matcher":"toContain","negate":false,"expected":"Follow the user's requirements carefully"},{"matcher":"toContain","negate":false,"expected":"You are a highly sophisticated automated coding agent"},{"matcher":"toContain","negate":false,"expected":"keep going until the user's query is completely resolved"},{"matcher":"toContain","negate":false,"expected":"<toolCallFormat>"},{"matcher":"toContain","negate":false,"expected":"NEVER write tool names, function signatures, or JSON arguments as plain text"},{"matcher":"toContain","negate":false,"expected":"<toolUseInstructions>"},{"matcher":"toContain","negate":false,"expected":"The todo and user.ask tools are core tools and are always available"},{"matcher":"toContain","negate":false,"expected":"MUST call tools.search with one broad natural-language description"},{"matcher":"toContain","negate":false,"expected":"<searchInstructions>"},{"matcher":"toContain","negate":false,"expected":"<editingInstructions>"},{"matcher":"toContain","negate":false,"expected":"<taskTracking>"},{"matcher":"toContain","negate":false,"expected":"You are working in the project: /tmp/project"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:269:3: GLM prompt includes structured user-question guidance
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:290:3: GLM prompt includes structured user-question guidance
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_269_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_290_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_269_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_290_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"<userQuestionInstructions>"},{"matcher":"toContain","negate":false,"expected":"Use user.ask when:"}]"#,
     );
 }
 
-// packages/gateway/src/tools/prompts/prompt-registry.test.ts:279:3: resolves bare glm-* model ids (BigModel OpenAI-compatible API)
+// packages/gateway/src/tools/prompts/prompt-registry.test.ts:300:3: resolves bare glm-* model ids (BigModel OpenAI-compatible API)
 #[test]
-fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_279_3() {
+fn tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_300_3() {
     tail_assertions::check(
         r#"gateway-src-tools-prompts-prompt-registry-test-6872bb41"#,
-        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_279_3"#,
+        r#"tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_300_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"<jaitExternalProvider>"},{"matcher":"toContain","negate":false,"expected":"<toolCallFormat>"},{"matcher":"toContain","negate":false,"expected":"keep going until the user's query is completely resolved"},{"matcher":"toContain","negate":false,"expected":"MUST call tools.search with one broad natural-language description"}]"#,
     );
 }
@@ -28765,6 +30629,76 @@ fn tailstatic_packages_gateway_src_tools_registry_test_ts_311_3() {
     );
 }
 
+// packages/gateway/src/tools/registry.test.ts:331:3: registers browser handoffs only with both services and retains preview compatibility
+#[test]
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_331_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-registry-test-8ca5ea02"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_331_3"#,
+        r#"[{"matcher":"toBeDefined","negate":false},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeDefined","negate":false},{"matcher":"toMatch","negate":true,"expected":{"__jait_matcher":"textPattern","expr":{"id":39,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"r"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"v"},{"id":4,"kind":"char","value":"i"},{"id":5,"kind":"char","value":"e"},{"id":6,"kind":"char","value":"w"},{"id":7,"kind":"char","value":"."},{"id":38,"kind":"alt","nodes":[{"id":12,"kind":"seq","nodes":[{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"p"},{"id":10,"kind":"char","value":"e"},{"id":11,"kind":"char","value":"n"}]},{"id":17,"kind":"seq","nodes":[{"id":13,"kind":"char","value":"s"},{"id":14,"kind":"char","value":"t"},{"id":15,"kind":"char","value":"o"},{"id":16,"kind":"char","value":"p"}]},{"id":25,"kind":"seq","nodes":[{"id":18,"kind":"char","value":"r"},{"id":19,"kind":"char","value":"e"},{"id":20,"kind":"char","value":"s"},{"id":21,"kind":"char","value":"t"},{"id":22,"kind":"char","value":"a"},{"id":23,"kind":"char","value":"r"},{"id":24,"kind":"char","value":"t"}]},{"id":32,"kind":"seq","nodes":[{"id":26,"kind":"char","value":"s"},{"id":27,"kind":"char","value":"t"},{"id":28,"kind":"char","value":"a"},{"id":29,"kind":"char","value":"t"},{"id":30,"kind":"char","value":"u"},{"id":31,"kind":"char","value":"s"}]},{"id":37,"kind":"seq","nodes":[{"id":33,"kind":"char","value":"l"},{"id":34,"kind":"char","value":"o"},{"id":35,"kind":"char","value":"g"},{"id":36,"kind":"char","value":"s"}]}]}]},"flags":""}},{"matcher":"toBeDefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/registry.test.ts:345:3: defaults to the owning persona only inside that user's thread
+#[test]
+fn tailstatic_packages_gateway_src_tools_registry_test_ts_345_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-registry-test-8ca5ea02"#,
+        r#"tailstatic_packages_gateway_src_tools_registry_test_ts_345_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":"persona"}},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["owner","persona"]},{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":null}},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":null}},{"matcher":"toMatchObject","negate":false,"expected":{"currentAgentId":null}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/remote-executor-routing.test.ts:5:3: leaves ordinary calls untouched
+#[test]
+fn tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_5_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-remote-executor-routing-test-a437b480"#,
+        r#"tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_5_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/remote-executor-routing.test.ts:14:3: pins a terminal call to another connected device
+#[test]
+fn tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_14_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-remote-executor-routing-test-a437b480"#,
+        r#"tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_14_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"nodeId":"node-windows","forcesLocal":false,"input":{"command":"whoami"}}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/remote-executor-routing.test.ts:26:3: treats gateway/local aliases as the gateway machine
+#[test]
+fn tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_26_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-remote-executor-routing-test-a437b480"#,
+        r#"tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_26_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"nodeId":null,"forcesLocal":true,"input":{"command":"pwd"}}}]"#,
+    );
+}
+
+// packages/gateway/src/tools/remote-executor-routing.test.ts:36:3: rejects a device target on gateway-only tools instead of running locally
+#[test]
+fn tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_36_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-remote-executor-routing-test-a437b480"#,
+        r#"tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_36_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toContain","negate":false,"expected":"cannot run on another device"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/remote-executor-routing.test.ts:42:3: ignores a blank nodeId
+#[test]
+fn tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_42_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-remote-executor-routing-test-a437b480"#,
+        r#"tailstatic_packages_gateway_src_tools_remote_executor_routing_test_ts_42_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
 // packages/gateway/src/tools/remote-executor.test.ts:67:3: foreground terminal commands get the resolved command budget + grace
 #[test]
 fn tailstatic_packages_gateway_src_tools_remote_executor_test_ts_67_3() {
@@ -28965,22 +30899,22 @@ fn tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_49_3() {
     );
 }
 
-// packages/gateway/src/tools/repo-proposal-tools.test.ts:61:3: adds todo metadata and exposes todos in list results
+// packages/gateway/src/tools/repo-proposal-tools.test.ts:63:3: adds todo metadata and exposes todos in list results
 #[test]
-fn tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_61_3() {
+fn tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_63_3() {
     tail_assertions::check(
         r#"gateway-src-tools-repo-proposal-tools-test-e17a49aa"#,
-        r#"tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_61_3"#,
+        r#"tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_63_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"Saved a Jait todo"},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContain","negate":false,"expected":"Loaded 1 todo for Jait:"},{"matcher":"toContain","negate":false,"expected":"1. [open] Polish todo tags · high · due 2026-05-10"}]"#,
     );
 }
 
-// packages/gateway/src/tools/repo-proposal-tools.test.ts:104:3: updates and removes existing todo items
+// packages/gateway/src/tools/repo-proposal-tools.test.ts:106:3: updates and removes existing todo items
 #[test]
-fn tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_104_3() {
+fn tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_106_3() {
     tail_assertions::check(
         r#"gateway-src-tools-repo-proposal-tools-test-e17a49aa"#,
-        r#"tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_104_3"#,
+        r#"tailstatic_packages_gateway_src_tools_repo_proposal_tools_test_ts_106_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
@@ -29165,122 +31099,152 @@ fn tailstatic_packages_gateway_src_tools_sandbox_tools_test_ts_227_3() {
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:23:3: distinguishes the viewer from remote devices
+// packages/gateway/src/tools/screen-share-tools.test.ts:28:3: distinguishes the viewer from remote devices
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_23_3() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_28_3() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_23_3"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_28_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"localDeviceId":"viewer","devices":[{"id":"viewer","isCurrent":true},{"id":"host","isCurrent":false}]}}}]"#,
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:29:3: requests sharing from the selected host and opens the viewer
+// packages/gateway/src/tools/screen-share-tools.test.ts:34:3: requests sharing from the selected host and opens the viewer
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_29_3() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_34_3() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_29_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"hostDeviceId":"host","viewerDeviceIds":["viewer"]}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["share-1","host",["viewer"]]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"command":"screen-share.open","data":{"sessionId":"share-1","targetDeviceId":"host"}}]}]"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_34_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"hostDeviceId":"host","viewerDeviceIds":["viewer"],"chatId":"screen-tests","nodeId":"host","initiatedBy":"agent","requireConsent":true,"reason":"The agent wants to view this screen in the chat."}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["share-1","host",["viewer"],{"chatId":"screen-tests","nodeId":"host","initiatedBy":"agent","requireConsent":true,"reason":"The agent wants to view this screen in the chat."}]},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"command":"screen-share.open","data":{"sessionId":"share-1","targetDeviceId":"host","chatId":"screen-tests"}},"screen-tests"]}]"#,
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:36:3: requires a target before starting capture
+// packages/gateway/src/tools/screen-share-tools.test.ts:61:3: stops and announces an older share before asking the host to replace it
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_36_3() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_61_3() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_36_3"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_61_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"id":"old","status":"idle"}},{"matcher":"toBeLessThan","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:70:3: binds capture to the selected host rather than the agent execution node
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_70_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_70_3"#,
+        r#"[{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"__jait_matcher":"objectContaining","value":{"nodeId":"host"}}]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:75:3: requires an owning chat for agent capture
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_75_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_75_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:41:3: disconnects the active share
+// packages/gateway/src/tools/screen-share-tools.test.ts:81:3: requires a target before starting capture
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_41_3() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_81_3() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_41_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/tools/screen-share-tools.test.ts:51:3: returns the service capture or recording
-#[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each0() {
-    tail_assertions::check(
-        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each0"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/tools/screen-share-tools.test.ts:51:3: returns the service capture or recording
-#[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each1() {
-    tail_assertions::check(
-        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_51_3_each1"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/tools/screen-share-tools.test.ts:58:3: advertises payloads required by each supported action
-#[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each0() {
-    tail_assertions::check(
-        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each0"#,
-        r#"[{"matcher":"toHaveProperty","negate":false,"expected":"device"},{"matcher":"toHaveProperty","negate":false,"expected":"controllerDeviceId"},{"matcher":"toHaveProperty","negate":false,"expected":"transport"}]"#,
-    );
-}
-
-// packages/gateway/src/tools/screen-share-tools.test.ts:64:3: passes device and control changes to the service
-#[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each0() {
-    tail_assertions::check(
-        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each0"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"id":"host","name":"Owned desktop","platform":"desktop","authorized":false,"capabilities":[]}]},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["viewer"]}]"#,
-    );
-}
-
-// packages/gateway/src/tools/screen-share-tools.test.ts:72:3: rejects missing transport without changing state
-#[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each0() {
-    tail_assertions::check(
-        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_81_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:58:3: advertises payloads required by each supported action
+// packages/gateway/src/tools/screen-share-tools.test.ts:86:3: disconnects the active share
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each1() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_86_3() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_58_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_86_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["owned-share"]},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:98:3: returns the service capture or recording
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_98_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_98_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:98:3: returns the service capture or recording
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_98_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_98_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledOnce","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:105:3: advertises payloads required by each supported action
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_105_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_105_3_each0"#,
         r#"[{"matcher":"toHaveProperty","negate":false,"expected":"device"},{"matcher":"toHaveProperty","negate":false,"expected":"controllerDeviceId"},{"matcher":"toHaveProperty","negate":false,"expected":"transport"}]"#,
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:64:3: passes device and control changes to the service
+// packages/gateway/src/tools/screen-share-tools.test.ts:111:3: passes device and control changes to the service
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each1() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_111_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_64_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_111_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"id":"host","name":"Owned desktop","platform":"desktop","authorized":false,"capabilities":[]}]},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["viewer"]}]"#,
     );
 }
 
-// packages/gateway/src/tools/screen-share-tools.test.ts:72:3: rejects missing transport without changing state
+// packages/gateway/src/tools/screen-share-tools.test.ts:119:3: rejects missing transport without changing state
 #[test]
-fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each1() {
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_119_3_each0() {
     tail_assertions::check(
         r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
-        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_72_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_119_3_each0"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:105:3: advertises payloads required by each supported action
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_105_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_105_3_each1"#,
+        r#"[{"matcher":"toHaveProperty","negate":false,"expected":"device"},{"matcher":"toHaveProperty","negate":false,"expected":"controllerDeviceId"},{"matcher":"toHaveProperty","negate":false,"expected":"transport"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:111:3: passes device and control changes to the service
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_111_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_111_3_each1"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":[{"id":"host","name":"Owned desktop","platform":"desktop","authorized":false,"capabilities":[]}]},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["viewer"]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/screen-share-tools.test.ts:119:3: rejects missing transport without changing state
+#[test]
+fn tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_119_3_each1() {
+    tail_assertions::check(
+        r#"gateway-src-tools-screen-share-tools-test-2e486789"#,
+        r#"tailstatic_packages_gateway_src_tools_screen_share_tools_test_ts_119_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
     );
 }
@@ -29334,6 +31298,7 @@ fn tailstatic_packages_gateway_src_tools_screenshot_tools_test_ts_85_3() {
         r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
+
 // packages/gateway/src/tools/security-tools.test.ts:6:1: uses authenticated ownership and keeps assessment execution bound to the gateway
 #[test]
 fn tailstatic_packages_gateway_src_tools_security_tools_test_ts_6_1() {
@@ -29574,62 +31539,72 @@ fn tailstatic_packages_gateway_src_tools_stream_tool_call_slots_test_ts_55_3() {
     );
 }
 
-// packages/gateway/src/tools/surface-tools.test.ts:16:3: returns current snapshots and supported types
+// packages/gateway/src/tools/surface-tools.test.ts:21:3: returns current snapshots and supported types
 #[test]
-fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_16_3() {
+fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_21_3() {
     tail_assertions::check(
         r#"gateway-src-tools-surface-tools-test-faa1641a"#,
-        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_16_3"#,
+        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_21_3"#,
         r#"[{"matcher":"toMatchObject","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/surface-tools.test.ts:22:3: handles no active surfaces
+// packages/gateway/src/tools/surface-tools.test.ts:27:3: handles no active surfaces
 #[test]
-fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_22_3() {
+fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_27_3() {
     tail_assertions::check(
         r#"gateway-src-tools-surface-tools-test-faa1641a"#,
-        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_22_3"#,
+        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_27_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"0 active surface(s)."}]"#,
     );
 }
 
-// packages/gateway/src/tools/surface-tools.test.ts:29:3: starts a unique browser attached to the caller's project and session
-#[test]
-fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_29_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-surface-tools-test-faa1641a"#,
-        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_29_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser",{"__jait_matcher":"textPattern","expr":{"id":9,"kind":"seq","nodes":[{"id":0,"kind":"start"},{"id":1,"kind":"char","value":"b"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":"o"},{"id":4,"kind":"char","value":"w"},{"id":5,"kind":"char","value":"s"},{"id":6,"kind":"char","value":"e"},{"id":7,"kind":"char","value":"r"},{"id":8,"kind":"char","value":"-"}]},"flags":""},{"sessionId":{"__jait_observed":0},"projectRoot":{"__jait_observed":1}}],"hybrid":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/surface-tools.test.ts:34:3: reports launch failures to the user
+// packages/gateway/src/tools/surface-tools.test.ts:34:3: requires a URL and loads it in the chat browser
 #[test]
 fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_34_3() {
     tail_assertions::check(
         r#"gateway-src-tools-surface-tools-test-faa1641a"#,
         r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_34_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":true,"data":{"url":"https://example.com/"}}},{"matcher":"toHaveBeenCalledWith","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://example.com/",{"__jait_type":"undefined"}]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/surface-tools.test.ts:46:3: reports launch failures to the user
+#[test]
+fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_46_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-surface-tools-test-faa1641a"#,
+        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_46_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"ok":false,"message":"Chromium unavailable"}}]"#,
     );
 }
 
-// packages/gateway/src/tools/surface-tools.test.ts:41:3: reports stop outcome %s and forwards its reason
+// packages/gateway/src/tools/surface-tools.test.ts:51:3: does not require a URL for non-browser surfaces
 #[test]
-fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_41_3_each0() {
+fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_51_3() {
     tail_assertions::check(
         r#"gateway-src-tools-surface-tools-test-faa1641a"#,
-        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_41_3_each0"#,
+        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_51_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/surface-tools.test.ts:57:3: reports stop outcome %s and forwards its reason
+#[test]
+fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_57_3_each0() {
+    tail_assertions::check(
+        r#"gateway-src-tools-surface-tools-test-faa1641a"#,
+        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_57_3_each0"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser-1","test complete"]}]"#,
     );
 }
 
-// packages/gateway/src/tools/surface-tools.test.ts:41:3: reports stop outcome %s and forwards its reason
+// packages/gateway/src/tools/surface-tools.test.ts:57:3: reports stop outcome %s and forwards its reason
 #[test]
-fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_41_3_each1() {
+fn tailstatic_packages_gateway_src_tools_surface_tools_test_ts_57_3_each1() {
     tail_assertions::check(
         r#"gateway-src-tools-surface-tools-test-faa1641a"#,
-        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_41_3_each1"#,
+        r#"tailstatic_packages_gateway_src_tools_surface_tools_test_ts_57_3_each1"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["browser-1","test complete"]}]"#,
     );
 }
@@ -29838,7 +31813,7 @@ fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_60_
     );
 }
 
-// packages/gateway/src/tools/terminal-sandbox-background.test.ts:current:72: yields finite sandbox calls and reports their later completion once
+// packages/gateway/src/tools/terminal-sandbox-background.test.ts:72:3: yields finite sandbox calls and reports their later completion once
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_72_3() {
     tail_assertions::check(
@@ -29848,7 +31823,7 @@ fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_72_
     );
 }
 
-// packages/gateway/src/tools/terminal-sandbox-background.test.ts:80:3: launches a standalone sandbox with the original mount and resource restrictions
+// packages/gateway/src/tools/terminal-sandbox-background.test.ts:88:3: launches a standalone sandbox with the original mount and resource restrictions
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_88_3() {
     tail_assertions::check(
@@ -29858,7 +31833,7 @@ fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_88_
     );
 }
 
-// packages/gateway/src/tools/terminal-sandbox-background.test.ts:89:3: does not start an already cancelled command
+// packages/gateway/src/tools/terminal-sandbox-background.test.ts:97:3: does not start an already cancelled command
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_3() {
     tail_assertions::check(
@@ -29868,7 +31843,7 @@ fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_97_
     );
 }
 
-// packages/gateway/src/tools/terminal-sandbox-background.test.ts:97:3: stops startup on cancellation without falsely reporting success
+// packages/gateway/src/tools/terminal-sandbox-background.test.ts:105:3: stops startup on cancellation without falsely reporting success
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_105_3() {
     tail_assertions::check(
@@ -29878,7 +31853,7 @@ fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_105
     );
 }
 
-// packages/gateway/src/tools/terminal-sandbox-background.test.ts:109:3: cancels the scoped process and suppresses wakeup when session watching is stopped
+// packages/gateway/src/tools/terminal-sandbox-background.test.ts:117:3: cancels the scoped process and suppresses wakeup when session watching is stopped
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_sandbox_background_test_ts_117_3() {
     tail_assertions::check(
@@ -29978,393 +31953,443 @@ fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_81_3() {
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:87:3: collapses a source-map-sized line and resets SGR state after the cut
+// packages/gateway/src/tools/terminal-tools.test.ts:85:3: leaves output untouched when the per-line ceiling is disabled
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_87_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_85_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_87_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_85_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:93:3: keeps multi-line output whose lines all fit inside a longer total
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_93_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_93_3"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"expected":4},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:102:3: collapses a source-map-sized line and resets SGR state after the cut
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_102_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_102_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"\u001b[0m"},{"matcher":"toContain","negate":false,"expected":"chars elided"},{"matcher":"toBeLessThan","negate":false,"expected":2000}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:97:3: keeps the larger UI budget for large multi-line output
+// packages/gateway/src/tools/terminal-tools.test.ts:112:3: keeps the larger UI budget for large multi-line output
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_97_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_112_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_97_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_112_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200000},{"matcher":"toContain","negate":false,"expected":"…(middle truncated)…"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:105:3: passes small output through unchanged
+// packages/gateway/src/tools/terminal-tools.test.ts:120:3: passes small output through unchanged
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_105_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_120_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_105_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_120_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"short \u001b[31mred\u001b[0m"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:111:3: ignores output too small to be suspicious
+// packages/gateway/src/tools/terminal-tools.test.ts:126:3: ignores output too small to be suspicious
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_111_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_126_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_111_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_126_3"#,
         r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:116:3: measures output once it crosses the measurement threshold
+// packages/gateway/src/tools/terminal-tools.test.ts:131:3: measures output once it crosses the measurement threshold
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_116_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_131_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_116_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_131_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"totalChars":10000,"lineCount":1,"longestLineChars":10000}}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:124:3: flags one enormous line as generated/minified output
+// packages/gateway/src/tools/terminal-tools.test.ts:139:3: flags one enormous line as generated/minified output
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_124_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_139_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_124_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_139_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"output flood"},{"matcher":"toContain","negate":false,"expected":"longest line 120,000 chars"},{"matcher":"toContain","negate":false,"expected":"generated/minified"},{"matcher":"toContain","negate":false,"expected":"--include/--exclude"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:133:3: flags many ordinary lines as a flood too
+// packages/gateway/src/tools/terminal-tools.test.ts:148:3: flags many ordinary lines as a flood too
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_133_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_148_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_133_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_148_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"output flood"},{"matcher":"toContain","negate":false,"expected":"scope the command"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:142:3: rewrites the project root when used as a standalone path token
+// packages/gateway/src/tools/terminal-tools.test.ts:157:3: rewrites the project root when used as a standalone path token
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_142_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_157_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_142_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_157_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"cd \"/project\" && ls /project/src"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:149:3: does not rewrite sibling paths that only share the project prefix
+// packages/gateway/src/tools/terminal-tools.test.ts:164:3: does not rewrite sibling paths that only share the project prefix
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_149_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_164_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_149_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_164_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"ls /home/alice/project-backup /tmp/home/alice/project-backup"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:156:3: rewrites assignment-style command arguments without touching longer suffixes
+// packages/gateway/src/tools/terminal-tools.test.ts:171:3: rewrites assignment-style command arguments without touching longer suffixes
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_156_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_171_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_156_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_171_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"ROOT=/project pnpm --dir /project build && echo /home/alice/project.tmp"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:163:3: supports Windows-style project roots
+// packages/gateway/src/tools/terminal-tools.test.ts:178:3: supports Windows-style project roots
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_163_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_178_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_163_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_178_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"cd \"/project\" && type /project\\README.md"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:172:3: uses PowerShell status variables on Windows terminals
+// packages/gateway/src/tools/terminal-tools.test.ts:187:3: uses PowerShell status variables on Windows terminals
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_172_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_187_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_172_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_187_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"$LASTEXITCODE"},{"matcher":"toContain","negate":false,"expected":"Write-Output \"done:$jaitExitCode\""},{"matcher":"toContain","negate":true,"expected":"printf"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:180:3: uses the previous POSIX exit status on gateway terminals
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_180_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_180_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"printf '\\ndone:%s\\n' \"$?\""}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:195:3: pins the boundary at the chunk carrying the 633;D done marker
+// packages/gateway/src/tools/terminal-tools.test.ts:195:3: uses the previous POSIX exit status on gateway terminals
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_195_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_195_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":2}]"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"printf '\\ndone:%s\\n' \"$?\""}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:210:3: ignores a marker from a previous command when the current one started later
+// packages/gateway/src/tools/terminal-tools.test.ts:210:3: pins the boundary at the chunk carrying the 633;D done marker
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_210_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_210_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":3},{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:225:3: ignores a marker from a previous command when the current one started later
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_225_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_225_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":1}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:229:3: prefixes POSIX commands with pager/editor-disabling exports
+// packages/gateway/src/tools/terminal-tools.test.ts:244:3: prefixes POSIX commands with pager/editor-disabling exports
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_229_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_244_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_229_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_244_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"PAGER=cat"},{"matcher":"toContain","negate":false,"expected":"GIT_EDITOR=true"},{"matcher":"toContain","negate":false,"expected":"GIT_MERGE_AUTOEDIT=no"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:243:3: prepends the export block as its own line for multi-line commands
+// packages/gateway/src/tools/terminal-tools.test.ts:258:3: prepends the export block as its own line for multi-line commands
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_243_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_258_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_243_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_258_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":";\necho one\necho two"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:253:3: uses $env: assignment syntax for PowerShell shells
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_253_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_253_3"#,
-        r#"[{"matcher":"toContain","negate":false,"expected":"$env:PAGER = 'cat'"},{"matcher":"toContain","negate":false,"expected":"$env:GIT_EDITOR = 'true'"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":true,"expected":"export "}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:262:3: returns cmd.exe commands unchanged
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_262_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_262_3"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:268:3: treats non-PowerShell Unix shells as POSIX-flavored
+// packages/gateway/src/tools/terminal-tools.test.ts:268:3: uses $env: assignment syntax for PowerShell shells
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_268_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_268_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+        r#"[{"matcher":"toContain","negate":false,"expected":"$env:PAGER = 'cat'"},{"matcher":"toContain","negate":false,"expected":"$env:GIT_EDITOR = 'true'"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":true,"expected":"export "}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:277:3: leaves empty commands untouched
+// packages/gateway/src/tools/terminal-tools.test.ts:277:3: returns cmd.exe commands unchanged
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_277_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_277_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:283:3: treats non-PowerShell Unix shells as POSIX-flavored
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_283_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_283_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:292:3: leaves empty commands untouched
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_292_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_292_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":""},{"matcher":"toBe","negate":false,"expected":"   "}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:282:3: adds per-agent identity env to the POSIX prefix
+// packages/gateway/src/tools/terminal-tools.test.ts:297:3: adds per-agent identity env to the POSIX prefix
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_282_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_297_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_282_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_297_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"export "},{"matcher":"toContain","negate":false,"expected":"GH_TOKEN='ghs_installation_token'"},{"matcher":"toContain","negate":false,"expected":"GIT_AUTHOR_NAME='jait-agent'"},{"matcher":"toContain","negate":false,"expected":"PAGER=cat"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:295:3: quotes agent env values so metacharacters cannot break out
+// packages/gateway/src/tools/terminal-tools.test.ts:310:3: quotes agent env values so metacharacters cannot break out
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_295_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_310_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_295_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_310_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":["GH_TOKEN='a'\\''b; rm -rf / ;echo '\\''c'"]},{"matcher":"toContain","negate":false,"expected":"GH_TOKEN='a'\\''b'"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:306:3: uses $env: assignments for PowerShell agent env
+// packages/gateway/src/tools/terminal-tools.test.ts:321:3: uses $env: assignments for PowerShell agent env
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_306_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_321_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_306_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_321_3"#,
         r#"[{"matcher":"toContain","negate":false,"expected":"$env:GH_TOKEN = 'a''b'"},{"matcher":"toContain","negate":false,"expected":"$env:PAGER = 'cat'"},{"matcher":"toContain","negate":true,"expected":"export "}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:316:3: drops agent env entries that are not shell identifiers or are empty
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_316_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_316_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["GH_TOKEN='ok'"]}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:331:3: adds no agent env for cmd.exe or empty input
+// packages/gateway/src/tools/terminal-tools.test.ts:331:3: drops agent env entries that are not shell identifiers or are empty
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_331_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_331_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":["GH_TOKEN='ok'"]}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:346:3: adds no agent env for cmd.exe or empty input
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_346_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_346_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toBe","negate":false,"expected":"git log"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:340:3: expresses the POSIX entries as valid PowerShell $env: assignments
+// packages/gateway/src/tools/terminal-tools.test.ts:355:3: expresses the POSIX entries as valid PowerShell $env: assignments
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_340_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_355_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_340_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_355_3"#,
         r#"[{"matcher":"toHaveLength","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"$env:PAGER = 'cat'"},{"matcher":"toContain","negate":false,"expected":"$env:LESS = '-FRX'"},{"matcher":"toContain","negate":false,"expected":"$env:GIT_MERGE_AUTOEDIT = 'no'"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:347:3: recognizes cmd.exe shells case-insensitively
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_347_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_347_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:357:3: matches the less (END) marker at the output tail
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_357_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_357_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:362:3: matches man's pager prompts
+// packages/gateway/src/tools/terminal-tools.test.ts:362:3: recognizes cmd.exe shells case-insensitively
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_362_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_362_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:372:3: matches the less (END) marker at the output tail
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_372_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_372_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:367:3: matches a lone colon prompt line from less
+// packages/gateway/src/tools/terminal-tools.test.ts:377:3: matches man's pager prompts
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_367_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_377_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_367_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_377_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:382:3: matches a lone colon prompt line from less
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_382_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_382_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:371:3: ignores healthy output that merely ends with a colon-ish line
+// packages/gateway/src/tools/terminal-tools.test.ts:386:3: ignores healthy output that merely ends with a colon-ish line
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_371_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_386_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_371_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_386_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:383:3: flags pager artifacts anywhere in the timed-out output
+// packages/gateway/src/tools/terminal-tools.test.ts:398:3: flags pager artifacts anywhere in the timed-out output
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_383_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_398_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_383_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_398_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:387:3: stays quiet for plain command output
+// packages/gateway/src/tools/terminal-tools.test.ts:402:3: stays quiet for plain command output
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_387_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_402_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_387_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_402_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:394:3: wraps single-line PowerShell commands in bracketed paste markers
+// packages/gateway/src/tools/terminal-tools.test.ts:409:3: wraps single-line PowerShell commands in bracketed paste markers
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_394_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_409_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_394_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_409_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"\u001b[200~Get-Location\u001b[201~"},{"matcher":"toBe","negate":false,"expected":"\u001b[200~Get-Location\u001b[201~"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:403:3: passes commands through when the shell has no bracketed paste
+// packages/gateway/src/tools/terminal-tools.test.ts:418:3: passes commands through when the shell has no bracketed paste
 #[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_403_3() {
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_418_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_403_3"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_418_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"Get-Location"},{"matcher":"toBe","negate":false,"expected":"ls -la"}]"#,
     );
 }
 
-// packages/gateway/src/tools/terminal-tools.test.ts:410:3: passes commands through for non-PowerShell shells
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_410_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_410_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"ls -la"},{"matcher":"toBe","negate":false,"expected":"ls -la"},{"matcher":"toBe","negate":false,"expected":"dir"}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:416:3: passes multi-line input through unwrapped
-#[test]
-fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_416_3() {
-    tail_assertions::check(
-        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
-        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_416_3"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/tools/terminal-tools.test.ts:425:3: delivers multiline scripts and completion markers as one executable line
+// packages/gateway/src/tools/terminal-tools.test.ts:425:3: passes commands through for non-PowerShell shells
 #[test]
 fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_425_3() {
     tail_assertions::check(
         r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
         r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_425_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"ls -la"},{"matcher":"toBe","negate":false,"expected":"ls -la"},{"matcher":"toBe","negate":false,"expected":"dir"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:431:3: passes multi-line input through unwrapped
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_431_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_431_3"#,
+        r#"[{"matcher":"toBe","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:440:3: delivers multiline scripts and completion markers as one executable line
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_440_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_440_3"#,
         r#"[{"matcher":"toContain","negate":true,"expected":"\u001b[200~"},{"matcher":"toContain","negate":true,"expected":"\n"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:457:3: returns nothing when the budget is already exhausted
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_457_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_457_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":""},{"matcher":"toBe","negate":false,"expected":""}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:462:3: keeps a plain head slice while the budget is below the elision marker
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_462_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_462_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"zzzzz"},{"matcher":"toBe","negate":false,"expected":"zzzz"}]"#,
+    );
+}
+
+// packages/gateway/src/tools/terminal-tools.test.ts:467:3: elides the middle once the budget can hold both a head and a tail
+#[test]
+fn tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_467_3() {
+    tail_assertions::check(
+        r#"gateway-src-tools-terminal-tools-test-680bc55d"#,
+        r#"tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_467_3"#,
+        r#"[{"matcher":"toBeLessThanOrEqual","negate":false,"expected":400},{"matcher":"toContain","negate":false,"expected":"…(middle truncated)…"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
@@ -31027,6 +33052,7 @@ fn tailstatic_packages_gateway_src_tools_user_question_tools_test_ts_113_3() {
         r#"[{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false}},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toMatchObject","negate":false,"expected":{"ok":false,"message":"The user cancelled the question request."}},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
+
 // packages/gateway/src/tools/web-tools.test.ts:9:3: returns HTTP status and bounded page content
 #[test]
 fn tailstatic_packages_gateway_src_tools_web_tools_test_ts_9_3() {
@@ -31197,6 +33223,136 @@ fn tailstatic_packages_gateway_src_voice_assistant_background_test_ts_93_3() {
     );
 }
 
+// packages/gateway/src/voice-assistant/handoff.test.ts:22:3: forwards one initial request as a user turn after the upstream session starts
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_handoff_test_ts_22_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-handoff-test-66eeed5a"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_handoff_test_ts_22_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[{"type":"conversation.item.create","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"check my network"}]}}]},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toContainEqual","negate":false,"expected":{"type":"status","status":"thinking"}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:6:3: scores small talk as trivially easy
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_6_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_6_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:10:3: scores one-fact lookups as easy
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_10_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_10_3"#,
+        r#"[{"matcher":"toBeLessThan","negate":false,"expected":3}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:14:3: scores diagnosis and comparisons as deep
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_14_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_14_3"#,
+        r#"[{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":3},{"matcher":"toBeGreaterThanOrEqual","negate":false,"expected":3}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:19:3: recognises Jait state questions in the plural
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_19_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_19_3"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"expected":0}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:25:3: honours an explicit tier from the live model
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_25_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_25_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"tier":"fast","source":"explicit"}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:30:3: treats auto as unresolved and falls back to heuristics without System One
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_30_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_30_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"deep"},{"matcher":"toBe","negate":false,"expected":"heuristic"}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:39:3: never fails on empty input
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_39_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_39_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"tier":"fast"}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:68:3: picks the cheapest usable model for the fast tier
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_68_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_68_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"providerId":"jait","model":"fixture-cheap"}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:75:3: picks the strongest model for the deep tier and asks for its deepest effort
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_75_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_75_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"providerId":"jait","model":"fixture-strong","reasoningEffort":"high"}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:83:3: falls back to thread defaults when the catalogue is empty
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_83_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_83_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{}},{"matcher":"toEqual","negate":false,"expected":{}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:88:3: attaches a catalogue target to the route plan
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_88_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_88_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":{"providerId":"jait","model":"fixture-strong","reasoningEffort":"high"}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/router.test.ts:101:3: leaves the target empty when nothing is reachable
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_router_test_ts_101_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-router-test-66d41ee3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_router_test_ts_101_3"#,
+        r#"[{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
 // packages/gateway/src/voice-assistant/service.test.ts:14:3: tells the voice model when to answer locally and when to escalate
 #[test]
 fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_14_3() {
@@ -31207,33 +33363,143 @@ fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_14_3() {
     );
 }
 
-// packages/gateway/src/voice-assistant/service.test.ts:26:3: configures Realtime voice and semantic VAD defaults
+// packages/gateway/src/voice-assistant/service.test.ts:27:3: configures Realtime voice and semantic VAD defaults
 #[test]
-fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_26_3() {
+fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_27_3() {
     tail_assertions::check(
         r#"gateway-src-voice-assistant-service-test-55e03c50"#,
-        r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_26_3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_27_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":"shimmer"},{"matcher":"toEqual","negate":false,"expected":{"type":"semantic_vad","eagerness":"auto","create_response":true,"interrupt_response":true}}]"#,
     );
 }
 
-// packages/gateway/src/voice-assistant/service.test.ts:43:3: allows semantic VAD through env for slower but smarter turn timing
+// packages/gateway/src/voice-assistant/service.test.ts:44:3: allows semantic VAD through env for slower but smarter turn timing
 #[test]
-fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_43_3() {
+fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_44_3() {
     tail_assertions::check(
         r#"gateway-src-voice-assistant-service-test-55e03c50"#,
-        r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_43_3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_44_3"#,
         r#"[{"matcher":"toEqual","negate":false,"expected":{"type":"semantic_vad","eagerness":"low","create_response":true,"interrupt_response":true}}]"#,
     );
 }
 
-// packages/gateway/src/voice-assistant/service.test.ts:61:3: can disable automatic Realtime turn detection
+// packages/gateway/src/voice-assistant/service.test.ts:62:3: can disable automatic Realtime turn detection
 #[test]
-fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_61_3() {
+fn tailstatic_packages_gateway_src_voice_assistant_service_test_ts_62_3() {
     tail_assertions::check(
         r#"gateway-src-voice-assistant-service-test-55e03c50"#,
-        r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_61_3"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_service_test_ts_62_3"#,
         r#"[{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:36:3: ranks the cheapest usable model first for the fast tier
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_36_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_36_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"fixture-local"},{"matcher":"toBe","negate":false,"expected":"free"},{"matcher":"toContain","negate":false,"expected":"fixture-quick"},{"matcher":"toBe","negate":false,"expected":"cheap"}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:45:3: ranks a reasoning-capable model first for the deep tier
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_45_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_45_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"fixture-deep"},{"matcher":"toEqual","negate":false,"expected":["low","high"]}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:50:3: treats local backends as free and unpriced cloud models as unknown
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_50_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_50_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"free"},{"matcher":"toBe","negate":false,"expected":"unknown"}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:56:3: never ranks an unknown price as if it were free
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_56_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_56_3"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:61:3: carries published prices through to the candidate
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_61_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_61_3"#,
+        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"promptPerMTok":3,"completionPerMTok":15}}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:65:3: reports an empty catalogue when no backend answers
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_65_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_65_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:73:3: uses the injected probe and does not cache it
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_73_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_73_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":2},{"matcher":"toContain","negate":false,"expected":"fixture-local"},{"matcher":"toContain","negate":false,"expected":"fixture-quick"},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:91:3: returns an empty catalogue instead of throwing when the probe fails
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_91_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_91_3"#,
+        r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:107:3: asks for the lowest effort on the fast tier
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_107_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_107_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"low"}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:111:3: asks for the deepest effort on the deep tier
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_111_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_111_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"high"}]"#,
+    );
+}
+
+// packages/gateway/src/voice-assistant/tier-catalog.test.ts:115:3: omits effort for models that accept none
+#[test]
+fn tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_115_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8"#,
+        r#"tailstatic_packages_gateway_src_voice_assistant_tier_catalog_test_ts_115_3"#,
+        r#"[{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
@@ -31527,462 +33793,602 @@ fn tailstatic_packages_gateway_src_voice_service_test_ts_98_3() {
     );
 }
 
+// packages/gateway/src/voice/wake-candidate.test.ts:16:3: accepts only a high-confidence yes for a candidate address
+#[test]
+fn tailstatic_packages_gateway_src_voice_wake_candidate_test_ts_16_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-wake-candidate-test-84892480"#,
+        r#"tailstatic_packages_gateway_src_voice_wake_candidate_test_ts_16_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"Hey Jay"}]"#,
+    );
+}
+
+// packages/gateway/src/voice/wake-candidate.test.ts:21:3: does not send unrelated transcripts to the model
+#[test]
+fn tailstatic_packages_gateway_src_voice_wake_candidate_test_ts_21_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-wake-candidate-test-84892480"#,
+        r#"tailstatic_packages_gateway_src_voice_wake_candidate_test_ts_21_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/voice/wake-candidate.test.ts:26:3: fails closed when confidence is low, the model is unavailable, or it is not configured
+#[test]
+fn tailstatic_packages_gateway_src_voice_wake_candidate_test_ts_26_3() {
+    tail_assertions::check(
+        r#"gateway-src-voice-wake-candidate-test-84892480"#,
+        r#"tailstatic_packages_gateway_src_voice_wake_candidate_test_ts_26_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":2}]"#,
+    );
+}
+
+// packages/gateway/src/ws-chat-notifications.test.ts:40:3: broadcasts a notification event that carries the session identity
+#[test]
+fn tailstatic_packages_gateway_src_ws_chat_notifications_test_ts_40_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-chat-notifications-test-dc971836"#,
+        r#"tailstatic_packages_gateway_src_ws_chat_notifications_test_ts_40_3"#,
+        r#"[{"matcher":"toHaveBeenCalledTimes","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"user-1"},{"matcher":"toBe","negate":false,"expected":"notification"},{"matcher":"toBe","negate":false,"expected":"sess-1"},{"matcher":"toMatchObject","negate":false,"expected":{"id":"notif-1","title":"Finished","body":"Turn complete"}},{"matcher":"toBe","negate":false,"expected":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws-chat-notifications.test.ts:59:3: drops notifications that are not tied to a session
+#[test]
+fn tailstatic_packages_gateway_src_ws_chat_notifications_test_ts_59_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-chat-notifications-test-dc971836"#,
+        r#"tailstatic_packages_gateway_src_ws_chat_notifications_test_ts_59_3"#,
+        r#"[{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
 // packages/gateway/src/ws-computer-permissions.test.ts:5:3: requires input for control, screen for observation, and always permits stop
 #[test]
 fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_5_3() {
     tail_assertions::check(
         r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
         r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_5_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"screen"},{"matcher":"toBeUndefined","negate":false}]"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"screen"},{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBe","negate":false,"expected":"input"},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:178:3: routes Messenger requests only to the enabled owner's browser and rejects forged results
+// packages/gateway/src/ws-computer-permissions.test.ts:16:3: maps every remote tool family to the node capability that gates it
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_178_3() {
+fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_16_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
+        r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_16_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"terminal"},{"matcher":"toBe","negate":false,"expected":"terminal"},{"matcher":"toBe","negate":false,"expected":"terminal"},{"matcher":"toBe","negate":false,"expected":"filesystem"},{"matcher":"toBe","negate":false,"expected":"filesystem"},{"matcher":"toBe","negate":false,"expected":"filesystem"},{"matcher":"toBe","negate":false,"expected":"filesystem"},{"matcher":"toBe","negate":false,"expected":"filesystem"},{"matcher":"toBe","negate":false,"expected":"browser"},{"matcher":"toBe","negate":false,"expected":"browser"},{"matcher":"toBe","negate":false,"expected":"screen"},{"matcher":"toBe","negate":false,"expected":"voice"},{"matcher":"toBe","negate":false,"expected":"camera"}]"#,
+    );
+}
+
+// packages/gateway/src/ws-computer-permissions.test.ts:32:3: leaves unrelated tools ungated
+#[test]
+fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_32_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
+        r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_32_3"#,
+        r#"[{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false},{"matcher":"toBeUndefined","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws-computer-permissions.test.ts:40:3: returns null when the client is not subscribed to a session
+#[test]
+fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_40_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
+        r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_40_3"#,
+        r#"[{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws-computer-permissions.test.ts:45:3: accepts an omitted or matching session id
+#[test]
+fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_45_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
+        r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_45_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"session-a"},{"matcher":"toBe","negate":false,"expected":"session-a"},{"matcher":"toBe","negate":false,"expected":"session-a"},{"matcher":"toBe","negate":false,"expected":"session-a"}]"#,
+    );
+}
+
+// packages/gateway/src/ws-computer-permissions.test.ts:52:3: refuses to let a client address another session
+#[test]
+fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_52_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
+        r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_52_3"#,
+        r#"[{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws-computer-permissions.test.ts:56:3: ignores non-string session ids instead of throwing
+#[test]
+fn tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_56_3() {
+    tail_assertions::check(
+        r#"gateway-src-ws-computer-permissions-test-50a0bc53"#,
+        r#"tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_56_3"#,
+        r#"[{"matcher":"toBe","negate":false,"expected":"session-a"},{"matcher":"toBe","negate":false,"expected":"session-a"}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:183:3: routes Messenger requests only to the enabled owner's browser and rejects forged results
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_183_3() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_178_3"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_183_3"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toHaveBeenCalledOnce","negate":false,"optional":true},{"matcher":"toBe","negate":false,"expected":"messenger.request"},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toBe","negate":false,"expected":"connected"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:204:3: allows only the gateway owner to manage gateway permissions
+// packages/gateway/src/ws.test.ts:209:3: allows only the gateway owner to manage gateway permissions
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_204_3() {
+fn tailstatic_packages_gateway_src_ws_test_ts_209_3() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_204_3"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_209_3"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:217:3: restores only the authenticated owner's halt state on subscription
+// packages/gateway/src/ws.test.ts:222:3: restores only the authenticated owner's halt state on subscription
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_217_3() {
+fn tailstatic_packages_gateway_src_ws_test_ts_222_3() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_217_3"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_222_3"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toMatchObject","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:233:3: accepts connection and sends session.created on connect
+// packages/gateway/src/ws.test.ts:238:3: accepts connection and sends session.created on connect
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_233_3() {
+fn tailstatic_packages_gateway_src_ws_test_ts_238_3() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_233_3"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_238_3"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBeTruthy","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:243:3: clientCount increments and decrements on connect/disconnect
+// packages/gateway/src/ws.test.ts:248:3: clientCount increments and decrements on connect/disconnect
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_243_3() {
+fn tailstatic_packages_gateway_src_ws_test_ts_248_3() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_243_3"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_248_3"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:258:5: authenticates via query-string token (async — verified by subscribe)
+// packages/gateway/src/ws.test.ts:263:5: authenticates via query-string token (async — verified by subscribe)
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_258_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_263_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_258_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_263_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:279:5: authenticates via Authorization header (async — verified by subscribe)
+// packages/gateway/src/ws.test.ts:284:5: authenticates via Authorization header (async — verified by subscribe)
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_279_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_284_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_279_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_284_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:297:5: authenticates via 'authenticate' message
+// packages/gateway/src/ws.test.ts:302:5: authenticates via 'authenticate' message
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_297_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_302_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_297_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_302_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"user-3"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:315:5: rejects invalid token in non-dev mode
+// packages/gateway/src/ws.test.ts:320:5: rejects invalid token in non-dev mode
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_315_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_320_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_315_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_320_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:327:5: keeps development connections unauthenticated until login
+// packages/gateway/src/ws.test.ts:332:5: keeps development connections unauthenticated until login
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_327_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_332_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_327_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_332_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:346:5: rejects subscribe when not authenticated (non-dev mode)
+// packages/gateway/src/ws.test.ts:351:5: rejects subscribe when not authenticated (non-dev mode)
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_346_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_351_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_346_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_351_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"UNAUTHORIZED"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:358:5: allows subscribe after authentication
+// packages/gateway/src/ws.test.ts:363:5: allows subscribe after authentication
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_358_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_363_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_358_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_363_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"session-123"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:383:5: broadcasts to subscribed clients only
+// packages/gateway/src/ws.test.ts:388:5: broadcasts to subscribed clients only
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_383_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_388_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_383_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_388_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"action.started"},{"matcher":"toBe","negate":false,"expected":"hello"},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:423:5: broadcastAll sends to all connected clients
+// packages/gateway/src/ws.test.ts:428:5: broadcastAll sends to all connected clients
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_423_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_428_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_423_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_428_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:452:5: broadcasts streaming lifecycle updates to every client for the user
+// packages/gateway/src/ws.test.ts:457:5: broadcasts streaming lifecycle updates to every client for the user
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_452_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_457_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_452_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_457_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"background-session","streaming":false}},{"matcher":"toEqual","negate":false,"expected":{"sessionId":"background-session","streaming":false}},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:489:5: routes consent.approve to onConsentApprove callback
+// packages/gateway/src/ws.test.ts:494:5: routes consent.approve to onConsentApprove callback
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_489_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_494_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_489_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_494_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"req-1"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:505:5: routes consent.reject to onConsentReject callback with reason
+// packages/gateway/src/ws.test.ts:510:5: routes consent.reject to onConsentReject callback with reason
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_505_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_510_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_505_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_510_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"expected":{"requestId":"req-2","reason":"No"}}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:523:5: relays screen-share offers to other devices but not back to sender
+// packages/gateway/src/ws.test.ts:528:5: relays screen-share signals only between approved session participants
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_523_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_528_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_523_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"screen-share:offer"},{"matcher":"toBe","negate":false,"expected":"fake-sdp"},{"matcher":"toBeNull","negate":false}]"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_528_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"screen-share:offer"},{"matcher":"toBe","negate":false,"expected":"fake-sdp"},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:563:5: reports UI state updates with fallback to subscribed session and sender client id
+// packages/gateway/src/ws.test.ts:575:5: binds legacy start and stop requests to the real share and host consent
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_563_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_575_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_563_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_575_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toMatchObject","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalled","negate":true},{"matcher":"toHaveBeenCalledWith","negate":false,"optional":true,"dynamic":true}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:628:5: does not deliver chat-owned signaling to another user's matching device id
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_628_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_628_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"offer"},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"screen-share:state-update"},{"matcher":"toBe","negate":false,"expected":"screen-share:state-update"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"screen-share:start-request"},{"matcher":"toBe","negate":false,"expected":"screen-share:start-request"},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:670:5: routes each viewer's offer and ICE only to its peer
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_670_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_670_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"offer-a"},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"a-ice"},{"matcher":"toBeNull","negate":false},{"matcher":"toBe","negate":false,"expected":"b-ice"},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:711:5: reports UI state updates with fallback to subscribed session and sender client id
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_711_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_711_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:598:5: rejects UI state writes outside the subscribed session
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_598_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_598_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"SESSION_SCOPE_MISMATCH"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:627:5: authorizes session subscriptions before binding client state
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_627_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_627_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"SESSION_FORBIDDEN"},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":"owned-session"},{"matcher":"toBe","negate":false,"expected":true}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:651:5: replays terminal buffer on subscription and only streams to subscribed clients
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_651_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_651_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"surface.connected"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"buffered prompt>"},{"matcher":"toBe","negate":false,"expected":"terminal:term-sync"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"live output line"},{"matcher":"toBe","negate":false,"expected":"terminal:term-sync"},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":7},{"matcher":"toBeNull","negate":false}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:694:5: replays only terminal output produced after the requested command offset
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_694_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_694_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"current command output"},{"matcher":"toBe","negate":false,"expected":4}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:724:5: returns only authenticated device ids from connected clients
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_724_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_724_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"expected":["device-auth"]}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:746:5: increments terminal stream sequence numbers across output events
+// packages/gateway/src/ws.test.ts:746:5: rejects UI state writes outside the subscribed session
 #[test]
 fn tailstatic_packages_gateway_src_ws_test_ts_746_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
         r#"tailstatic_packages_gateway_src_ws_test_ts_746_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"SESSION_SCOPE_MISMATCH"},{"matcher":"toHaveBeenCalled","negate":true}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:775:5: authorizes session subscriptions before binding client state
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_775_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_775_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"SESSION_FORBIDDEN"},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":"owned-session"},{"matcher":"toBe","negate":false,"expected":true}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:799:5: replays terminal buffer on subscription and only streams to subscribed clients
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_799_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_799_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"surface.connected"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"buffered prompt>"},{"matcher":"toBe","negate":false,"expected":"terminal:term-sync"},{"matcher":"toBe","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toContain","negate":false,"expected":"live output line"},{"matcher":"toBe","negate":false,"expected":"terminal:term-sync"},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":7},{"matcher":"toBeNull","negate":false}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:842:5: replays only terminal output produced after the requested command offset
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_842_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_842_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"current command output"},{"matcher":"toBe","negate":false,"expected":4}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:872:5: returns only authenticated device ids from connected clients
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_872_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_872_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"expected":["device-auth"]}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:894:5: increments terminal stream sequence numbers across output events
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_894_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_894_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"terminal:term-seq"},{"matcher":"toBe","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"terminal:term-seq"},{"matcher":"toBe","negate":false,"expected":2}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:773:5: orders remote provider events per session
+// packages/gateway/src/ws.test.ts:921:5: orders remote provider events per session
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_773_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_921_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_773_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_921_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toEqual","negate":false,"expected":{"streamId":"provider:provider-session-1","seq":1}},{"matcher":"toEqual","negate":false,"expected":{"streamId":"provider:provider-session-1","seq":2}}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:803:5: orders remote tool output chunks per request
+// packages/gateway/src/ws.test.ts:951:5: orders remote tool output chunks per request
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_803_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_951_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_803_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_951_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"fs.node-registered"},{"matcher":"toBe","negate":false,"expected":"tool.op-request"},{"matcher":"toEqual","negate":false,"expected":{"ok":true}},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:864:5: proxies remote interactive terminal operations and forwards output
+// packages/gateway/src/ws.test.ts:1012:5: proxies remote interactive terminal operations and forwards output
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_864_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1012_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_864_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1012_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toContain","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":"terminal.op-request"},{"matcher":"toMatchObject","negate":false,"expected":{"op":"start","terminalId":"term-remote","sessionId":"terminal-session","projectRoot":"/tmp","cols":80,"rows":24}},{"matcher":"toEqual","negate":false,"expected":{"ok":true,"pid":42,"shell":"/bin/bash"}},{"matcher":"toEqual","negate":false,"expected":[{"terminalId":"term-remote","data":"ready\\n","nodeId":"remote-terminal-node"}]},{"matcher":"toBe","negate":false,"expected":"terminal.op-request"},{"matcher":"toMatchObject","negate":false,"expected":{"op":"input","terminalId":"term-remote","data":"pwd\\r"}},{"matcher":"toBeUndefined","negate":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:940:5: denies terminal ops by default on an unconfigured node (deny-all) and records to audit
+// packages/gateway/src/ws.test.ts:1088:5: denies terminal ops by default on an unconfigured node (deny-all) and records to audit
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_940_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1088_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_940_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1088_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":54,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":"m"},{"id":4,"kind":"char","value":"i"},{"id":5,"kind":"char","value":"s"},{"id":6,"kind":"char","value":"s"},{"id":7,"kind":"char","value":"i"},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"n"},{"id":10,"kind":"char","value":"_"},{"id":11,"kind":"char","value":"d"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"n"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":":"},{"id":18,"kind":"char","value":" "},{"id":19,"kind":"char","value":"n"},{"id":20,"kind":"char","value":"o"},{"id":21,"kind":"char","value":"d"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":" "},{"id":24,"kind":"char","value":"d"},{"id":25,"kind":"char","value":"e"},{"id":26,"kind":"char","value":"n"},{"id":27,"kind":"char","value":"y"},{"id":28,"kind":"char","value":"-"},{"id":29,"kind":"char","value":"n"},{"id":30,"kind":"char","value":"o"},{"id":31,"kind":"char","value":"d"},{"id":32,"kind":"char","value":"e"},{"id":33,"kind":"char","value":" "},{"id":34,"kind":"char","value":"n"},{"id":35,"kind":"char","value":"o"},{"id":36,"kind":"char","value":"t"},{"id":37,"kind":"char","value":" "},{"id":38,"kind":"char","value":"g"},{"id":39,"kind":"char","value":"r"},{"id":40,"kind":"char","value":"a"},{"id":41,"kind":"char","value":"n"},{"id":42,"kind":"char","value":"t"},{"id":43,"kind":"char","value":"e"},{"id":44,"kind":"char","value":"d"},{"id":45,"kind":"char","value":" "},{"id":46,"kind":"char","value":"t"},{"id":47,"kind":"char","value":"e"},{"id":48,"kind":"char","value":"r"},{"id":49,"kind":"char","value":"m"},{"id":50,"kind":"char","value":"i"},{"id":51,"kind":"char","value":"n"},{"id":52,"kind":"char","value":"a"},{"id":53,"kind":"char","value":"l"}]},"flags":""}},{"matcher":"toBe","negate":true,"expected":"terminal.op-request"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:976:5: denies agent-execution provider ops (CLI agent w/ full device access) by default
+// packages/gateway/src/ws.test.ts:1124:5: denies agent-execution provider ops (CLI agent w/ full device access) by default
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_976_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1124_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_976_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1124_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":57,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"p"},{"id":1,"kind":"char","value":"e"},{"id":2,"kind":"char","value":"r"},{"id":3,"kind":"char","value":"m"},{"id":4,"kind":"char","value":"i"},{"id":5,"kind":"char","value":"s"},{"id":6,"kind":"char","value":"s"},{"id":7,"kind":"char","value":"i"},{"id":8,"kind":"char","value":"o"},{"id":9,"kind":"char","value":"n"},{"id":10,"kind":"char","value":"_"},{"id":11,"kind":"char","value":"d"},{"id":12,"kind":"char","value":"e"},{"id":13,"kind":"char","value":"n"},{"id":14,"kind":"char","value":"i"},{"id":15,"kind":"char","value":"e"},{"id":16,"kind":"char","value":"d"},{"id":17,"kind":"char","value":":"},{"id":18,"kind":"char","value":" "},{"id":19,"kind":"char","value":"n"},{"id":20,"kind":"char","value":"o"},{"id":21,"kind":"char","value":"d"},{"id":22,"kind":"char","value":"e"},{"id":23,"kind":"char","value":" "},{"id":24,"kind":"char","value":"a"},{"id":25,"kind":"char","value":"g"},{"id":26,"kind":"char","value":"e"},{"id":27,"kind":"char","value":"n"},{"id":28,"kind":"char","value":"t"},{"id":29,"kind":"char","value":"-"},{"id":30,"kind":"char","value":"d"},{"id":31,"kind":"char","value":"e"},{"id":32,"kind":"char","value":"n"},{"id":33,"kind":"char","value":"y"},{"id":34,"kind":"char","value":"-"},{"id":35,"kind":"char","value":"n"},{"id":36,"kind":"char","value":"o"},{"id":37,"kind":"char","value":"d"},{"id":38,"kind":"char","value":"e"},{"id":39,"kind":"char","value":" "},{"id":40,"kind":"char","value":"n"},{"id":41,"kind":"char","value":"o"},{"id":42,"kind":"char","value":"t"},{"id":43,"kind":"char","value":" "},{"id":44,"kind":"char","value":"g"},{"id":45,"kind":"char","value":"r"},{"id":46,"kind":"char","value":"a"},{"id":47,"kind":"char","value":"n"},{"id":48,"kind":"char","value":"t"},{"id":49,"kind":"char","value":"e"},{"id":50,"kind":"char","value":"d"},{"id":51,"kind":"char","value":" "},{"id":52,"kind":"char","value":"a"},{"id":53,"kind":"char","value":"g"},{"id":54,"kind":"char","value":"e"},{"id":55,"kind":"char","value":"n"},{"id":56,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"n"},{"id":8,"kind":"char","value":"t"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"d"},{"id":11,"kind":"char","value":" "},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"g"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":"n"},{"id":16,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"n"},{"id":8,"kind":"char","value":"t"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"d"},{"id":11,"kind":"char","value":" "},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"g"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":"n"},{"id":16,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":17,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"n"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"t"},{"id":3,"kind":"char","value":" "},{"id":4,"kind":"char","value":"g"},{"id":5,"kind":"char","value":"r"},{"id":6,"kind":"char","value":"a"},{"id":7,"kind":"char","value":"n"},{"id":8,"kind":"char","value":"t"},{"id":9,"kind":"char","value":"e"},{"id":10,"kind":"char","value":"d"},{"id":11,"kind":"char","value":" "},{"id":12,"kind":"char","value":"a"},{"id":13,"kind":"char","value":"g"},{"id":14,"kind":"char","value":"e"},{"id":15,"kind":"char","value":"n"},{"id":16,"kind":"char","value":"t"}]},"flags":""}},{"matcher":"toBe","negate":true,"expected":"provider.op-request"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1028:5: round-trips node grants through nodes.list and nodes.update-permissions
+// packages/gateway/src/ws.test.ts:1176:5: round-trips node grants through nodes.list and nodes.update-permissions
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1028_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1176_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1028_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1176_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1078:5: refuses to forget a connected node and removes it after disconnect
+// packages/gateway/src/ws.test.ts:1226:5: refuses to forget a connected node and removes it after disconnect
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1078_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1226_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1078_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1226_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"NODE_ONLINE"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1110:5: accepts nodes.update-permissions with nodeId/grants at the message top level (web legacy shape)
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1110_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1110_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":true,"expected":"error"}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:1161:5: fast-fails terminal.start on nodes that do not claim interactiveTerminal support
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1161_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1161_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":38,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"d"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":" "},{"id":5,"kind":"char","value":"n"},{"id":6,"kind":"char","value":"o"},{"id":7,"kind":"char","value":"t"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"s"},{"id":10,"kind":"char","value":"u"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"p"},{"id":13,"kind":"char","value":"o"},{"id":14,"kind":"char","value":"r"},{"id":15,"kind":"char","value":"t"},{"id":16,"kind":"char","value":" "},{"id":17,"kind":"char","value":"i"},{"id":18,"kind":"char","value":"n"},{"id":19,"kind":"char","value":"t"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":"r"},{"id":22,"kind":"char","value":"a"},{"id":23,"kind":"char","value":"c"},{"id":24,"kind":"char","value":"t"},{"id":25,"kind":"char","value":"i"},{"id":26,"kind":"char","value":"v"},{"id":27,"kind":"char","value":"e"},{"id":28,"kind":"char","value":" "},{"id":29,"kind":"char","value":"t"},{"id":30,"kind":"char","value":"e"},{"id":31,"kind":"char","value":"r"},{"id":32,"kind":"char","value":"m"},{"id":33,"kind":"char","value":"i"},{"id":34,"kind":"char","value":"n"},{"id":35,"kind":"char","value":"a"},{"id":36,"kind":"char","value":"l"},{"id":37,"kind":"char","value":"s"}]},"flags":""}}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:1200:5: reconnects with same device id without creating duplicates
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1200_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1200_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"expected":["device-r1"]},{"matcher":"toEqual","negate":false,"expected":["device-r1"]}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:1225:5: returns a surface registry snapshot for root:/surfaces subscriptions
-#[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1225_5() {
-    tail_assertions::check(
-        r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1225_5"#,
-        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"surface.registry"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"surface-1"}]"#,
-    );
-}
-
-// packages/gateway/src/ws.test.ts:1258:5: returns pending approval IDs only for accessible sessions and clears on reconnect
+// packages/gateway/src/ws.test.ts:1258:5: accepts nodes.update-permissions with nodeId/grants at the message top level (web legacy shape)
 #[test]
 fn tailstatic_packages_gateway_src_ws_test_ts_1258_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
         r#"tailstatic_packages_gateway_src_ws_test_ts_1258_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toBe","negate":true,"expected":"error"}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:1309:5: fast-fails terminal.start on nodes that do not claim interactiveTerminal support
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_1309_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1309_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toThrow","negate":false,"expected":{"__jait_matcher":"textPattern","expr":{"id":38,"kind":"seq","nodes":[{"id":0,"kind":"char","value":"d"},{"id":1,"kind":"char","value":"o"},{"id":2,"kind":"char","value":"e"},{"id":3,"kind":"char","value":"s"},{"id":4,"kind":"char","value":" "},{"id":5,"kind":"char","value":"n"},{"id":6,"kind":"char","value":"o"},{"id":7,"kind":"char","value":"t"},{"id":8,"kind":"char","value":" "},{"id":9,"kind":"char","value":"s"},{"id":10,"kind":"char","value":"u"},{"id":11,"kind":"char","value":"p"},{"id":12,"kind":"char","value":"p"},{"id":13,"kind":"char","value":"o"},{"id":14,"kind":"char","value":"r"},{"id":15,"kind":"char","value":"t"},{"id":16,"kind":"char","value":" "},{"id":17,"kind":"char","value":"i"},{"id":18,"kind":"char","value":"n"},{"id":19,"kind":"char","value":"t"},{"id":20,"kind":"char","value":"e"},{"id":21,"kind":"char","value":"r"},{"id":22,"kind":"char","value":"a"},{"id":23,"kind":"char","value":"c"},{"id":24,"kind":"char","value":"t"},{"id":25,"kind":"char","value":"i"},{"id":26,"kind":"char","value":"v"},{"id":27,"kind":"char","value":"e"},{"id":28,"kind":"char","value":" "},{"id":29,"kind":"char","value":"t"},{"id":30,"kind":"char","value":"e"},{"id":31,"kind":"char","value":"r"},{"id":32,"kind":"char","value":"m"},{"id":33,"kind":"char","value":"i"},{"id":34,"kind":"char","value":"n"},{"id":35,"kind":"char","value":"a"},{"id":36,"kind":"char","value":"l"},{"id":37,"kind":"char","value":"s"}]},"flags":""}}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:1348:5: reconnects with same device id without creating duplicates
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_1348_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1348_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toEqual","negate":false,"expected":["device-r1"]},{"matcher":"toEqual","negate":false,"expected":["device-r1"]}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:1373:5: returns a surface registry snapshot for root:/surfaces subscriptions
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_1373_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1373_5"#,
+        r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"surface.registry"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"surface-1"}]"#,
+    );
+}
+
+// packages/gateway/src/ws.test.ts:1406:5: returns pending approval IDs only for accessible sessions and clears on reconnect
+#[test]
+fn tailstatic_packages_gateway_src_ws_test_ts_1406_5() {
+    tail_assertions::check(
+        r#"gateway-src-ws-test-e15862de"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1406_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"consent.pending-snapshot"},{"matcher":"toEqual","negate":false,"expected":{"requests":[{"id":"request-1","sessionId":"owned"}]}},{"matcher":"toEqual","negate":false,"expected":{"requests":[]}}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1277:5: returns the authoritative streaming-session snapshot after reconnect
+// packages/gateway/src/ws.test.ts:1425:5: returns the authoritative streaming-session snapshot after reconnect
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1277_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1425_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1277_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1425_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"session.streaming-snapshot"},{"matcher":"toEqual","negate":false,"expected":{"sessionIds":[]}}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1298:5: handles subscribe/auth race: rejects before auth and accepts after authenticate
+// packages/gateway/src/ws.test.ts:1446:5: handles subscribe/auth race: rejects before auth and accepts after authenticate
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1298_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1446_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1298_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1446_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"UNAUTHORIZED"},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBe","negate":false,"expected":"session.created"},{"matcher":"toBe","negate":false,"expected":true}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1343:5: routes a node-reported completion to the session that started it
+// packages/gateway/src/ws.test.ts:1491:5: routes a node-reported completion to the session that started it
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1343_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1491_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1343_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1491_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toMatchObject","negate":false,"expected":{"sessionId":"chat-session-1","command":"npm test","exitCode":1,"output":"3 failing"}}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1377:5: ignores completions for unknown or already-completed ids
+// packages/gateway/src/ws.test.ts:1525:5: ignores completions for unknown or already-completed ids
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1377_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1525_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1377_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1525_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":1},{"matcher":"toBe","negate":false,"expected":"done"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1414:5: ignores a completion sent by a different node
+// packages/gateway/src/ws.test.ts:1562:5: ignores a completion sent by a different node
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1414_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1562_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1414_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1562_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1443:5: drops pending completions when the node disconnects
+// packages/gateway/src/ws.test.ts:1591:5: drops pending completions when the node disconnects
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1443_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1591_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1443_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1591_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toHaveLength","negate":false,"expected":0},{"matcher":"toBe","negate":false,"expected":0}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1469:5: returns error for invalid JSON
+// packages/gateway/src/ws.test.ts:1617:5: returns error for invalid JSON
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1469_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1617_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1469_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1617_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toBe","negate":false,"expected":"Invalid JSON"}]"#,
     );
 }
 
-// packages/gateway/src/ws.test.ts:1483:5: returns error for unknown message type
+// packages/gateway/src/ws.test.ts:1631:5: returns error for unknown message type
 #[test]
-fn tailstatic_packages_gateway_src_ws_test_ts_1483_5() {
+fn tailstatic_packages_gateway_src_ws_test_ts_1631_5() {
     tail_assertions::check(
         r#"gateway-src-ws-test-e15862de"#,
-        r#"tailstatic_packages_gateway_src_ws_test_ts_1483_5"#,
+        r#"tailstatic_packages_gateway_src_ws_test_ts_1631_5"#,
         r#"[{"matcher":"toBeGreaterThan","negate":false,"optional":true,"expected":0},{"matcher":"toBe","negate":false,"expected":"error"},{"matcher":"toContain","negate":false,"expected":"Unknown message type"}]"#,
     );
 }
@@ -31994,184 +34400,5 @@ fn tailstatic_packages_gateway_src_routes_messenger_regression_test_ts_7_3() {
         r#"gateway-src-routes-messenger-regression-test-48609f68"#,
         r#"tailstatic_packages_gateway_src_routes_messenger_regression_test_ts_7_3"#,
         r#"[{"matcher":"toBe","negate":false,"expected":200},{"matcher":"toBe","negate":false,"expected":"disconnected"}]"#,
-    );
-}
-// packages/gateway/src/providers/acp-provider-startup.test.ts:8:1: disables an installed ACP launcher after initialization fails and recovers after refresh
-#[test]
-fn tailstatic_packages_gateway_src_providers_acp_provider_startup_test_ts_8_1() {
-    tail_assertions::check(
-        r#"gateway-src-providers-acp-provider-startup-test-cde482e5"#,
-        r#"tailstatic_packages_gateway_src_providers_acp_provider_startup_test_ts_8_1"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"installed":true,"available":false,"auth":{"login":false,"logout":false,"authenticated":null}}},{"matcher":"toContain","negate":false,"expected":"Junie startup failed"},{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toMatchObject","negate":false,"expected":{"installed":true,"available":true,"unavailableReason":{"__jait_type":"undefined"}}}]"#,
-    );
-}
-
-// packages/gateway/src/security/tool-profiles.test.ts:5:3: lists exactly the shipped profile names
-#[test]
-fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_5_3() {
-    tail_assertions::check(
-        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
-        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_5_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["minimal","coding","full"]}]"#,
-    );
-}
-
-// packages/gateway/src/security/tool-profiles.test.ts:9:3: rejects an unknown profile name instead of returning an empty map
-#[test]
-fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_9_3() {
-    tail_assertions::check(
-        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
-        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_9_3"#,
-        r#"[{"matcher":"toThrow","negate":false,"expected":"Unknown profile: yolo"},{"matcher":"toThrow","negate":false,"expected":"Unknown profile: nope"}]"#,
-    );
-}
-
-// packages/gateway/src/security/tool-profiles.test.ts:16:3: serializes a profile into ordered permissions that survive a round trip
-#[test]
-fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_16_3() {
-    tail_assertions::check(
-        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
-        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_16_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"minimal"},{"matcher":"toBeGreaterThan","negate":false,"expected":0},{"matcher":"toEqual","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/security/tool-profiles.test.ts:24:3: lets overrides change permissions on a copy of the base profile
-#[test]
-fn tailstatic_packages_gateway_src_security_tool_profiles_test_ts_24_3() {
-    tail_assertions::check(
-        r#"gateway-src-security-tool-profiles-test-52d190b3"#,
-        r#"tailstatic_packages_gateway_src_security_tool_profiles_test_ts_24_3"#,
-        r#"[{"matcher":"toMatchObject","negate":false,"expected":{"toolName":"custom.tool","permission":"allow"}},{"matcher":"toBe","negate":false,"dynamic":true}]"#,
-    );
-}
-
-// packages/gateway/src/services/email/gmail.test.ts:7:3: reads the profile email with a missing-field fallback: %j
-#[test]
-fn tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each0() {
-    tail_assertions::check(
-        r#"gateway-src-services-email-gmail-test-601b1abf"#,
-        r#"tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each0"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://gmail.googleapis.com/gmail/v1/users/me/profile",{"__jait_matcher":"objectContaining","value":{"headers":{"Authorization":"Bearer test-token"}}}]}]"#,
-    );
-}
-
-// packages/gateway/src/services/email/gmail.test.ts:7:3: reads the profile email with a missing-field fallback: %j
-#[test]
-fn tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each1() {
-    tail_assertions::check(
-        r#"gateway-src-services-email-gmail-test-601b1abf"#,
-        r#"tailstatic_packages_gateway_src_services_email_gmail_test_ts_7_3_each1"#,
-        r#"[{"matcher":"toBe","negate":false,"dynamic":true},{"matcher":"toHaveBeenCalledWith","negate":false,"expected":["https://gmail.googleapis.com/gmail/v1/users/me/profile",{"__jait_matcher":"objectContaining","value":{"headers":{"Authorization":"Bearer test-token"}}}]}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:27:3: fills in the default label, detail and blocking flag
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_27_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_27_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":{"key":"question:1","kind":"question","sessionId":"chat-a","label":"Waiting for your answer","blocking":true}},{"matcher":"toMatchObject","negate":false,"expected":{"blocking":false,"detail":"bun run build","label":"Waiting for a background command"}}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:46:3: broadcasts the full wait list for the session on every change
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_46_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_46_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":[{"sessionId":"chat-a","keys":["question:1"]},{"sessionId":"chat-a","keys":["question:1","terminal:term-1"]}]}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:55:3: does not re-broadcast an identical raise
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_55_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_55_3"#,
-        r#"[{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:63:3: re-broadcasts when the same key changes detail
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_63_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_63_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["terminal:term-1"]},{"matcher":"toHaveLength","negate":false,"expected":2},{"matcher":"toBe","negate":false,"expected":"psql"}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:71:3: clears one wait by key and reports whether anything happened
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_71_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_71_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":true},{"matcher":"toBeUndefined","negate":false},{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toBe","negate":false,"expected":false},{"matcher":"toHaveLength","negate":false,"expected":2}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:80:3: clears every wait for one session and leaves other sessions alone
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_80_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_80_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toEqual","negate":false,"expected":["browser:chat-b"]},{"matcher":"toEqual","negate":false,"expected":[{"sessionId":"chat-a","keys":[]}]}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:94:3: stays quiet when clearing a session that has nothing pending
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_94_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_94_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":[]}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:99:3: orders blocking waits before background ones
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_99_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_99_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["browser","consent","background"]}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:106:3: snapshots every outstanding wait sorted for a stable reconnect payload
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_106_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_106_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":["browser:chat-a","question:1","background:term-9"]},{"matcher":"toEqual","negate":false,"expected":[]}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:119:3: builds stable keys from terminal and browser ids
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_119_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_119_3"#,
-        r#"[{"matcher":"toBe","negate":false,"expected":"terminal:term-1"},{"matcher":"toBe","negate":false,"expected":"browser:chat-a"},{"matcher":"toBe","negate":false,"expected":"background:term-1"}]"#,
-    );
-}
-
-// packages/gateway/src/services/session-waits.test.ts:125:3: drops the broadcaster on clearForTests
-#[test]
-fn tailstatic_packages_gateway_src_services_session_waits_test_ts_125_3() {
-    tail_assertions::check(
-        r#"gateway-src-services-session-waits-test-d59e762f"#,
-        r#"tailstatic_packages_gateway_src_services_session_waits_test_ts_125_3"#,
-        r#"[{"matcher":"toEqual","negate":false,"expected":[]},{"matcher":"toHaveLength","negate":false,"expected":1}]"#,
     );
 }

@@ -5158,7 +5158,191 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each0": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1191 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const timing = "before model call";
+
+try {
+await (async()=>{
+
+    const notification = "[system-notification: background command finished]\nprivate command output";
+    const steering = new SteeringController();
+    if (timing === "before model call") steering.steer(notification, { hidden: true });
+    const history: AgentMessage[] = [{ role: "user", content: "Verify the fix." }];
+    const requests: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      requests.push(String(init?.body));
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"Verified."}}]}\n\n' +
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: [DONE]\n\n',
+          ));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+    const events: AgentLoopEvent[] = [];
+    const persisted = vi.fn();
+    const result = await runAgentLoop({
+      llm: { openaiApiKey: "test-key", openaiBaseUrl: "https://llm.test", openaiModel: "test-model", contextWindow: 100_000 },
+      history, toolSchemas: [], hasTools: false, sessionId: "hidden-background-steering", abort: new AbortController(),
+      maxRounds: 2, mode: "agent", onPersist: persisted,
+      onEvent: event => {
+        events.push(event);
+        if (timing === "during final response" && event.type === "token" && requests.length === 1) {
+          steering.steer(notification, { hidden: true });
+        }
+      },
+    }, async () => ({ ok: true, message: "" }), steering);
+
+    __jait_capture(0, (requests), (timing === "before model call" ? 1 : 2));
+    __jait_capture(1, (requests.at(-1)));
+    __jait_capture(2, (history.some(message => String(message.content).includes(notification))));
+    __jait_capture(3, (result.segments?.some(segment => segment.type === "steering")));
+    __jait_capture(4, (JSON.stringify(result)));
+    __jait_capture(5, (JSON.stringify(persisted.mock.calls)));
+    // The event is still emitted so trajectory/debug views can show it, but it is
+    // flagged hidden so chat surfaces never render it.
+    const steers = events.filter(event => event.type === "steering");
+    __jait_capture(6, (steers.length));
+    for (const steer of steers) __jait_capture(7, (steer));
+  
+})();
+
+} finally {
+await __jait_hook_1191();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1734_3_each1": {
+
+
+toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
+  name, description: name, parameters: { type: "object", properties: {} },
+})));
+function toolCall(id: string, name = "file_read"): OpenAIToolCall {
+  return {
+    id,
+    type: "function",
+    function: {
+      name,
+      arguments: "{}",
+    },
+  };
+}
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
+const LOOP_UNIT = "The user's message was: \"fix the provider selector\" — no.\n\n";
+const __jait_hook_1191 = () => {
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const timing = "during final response";
+
+try {
+await (async()=>{
+
+    const notification = "[system-notification: background command finished]\nprivate command output";
+    const steering = new SteeringController();
+    if (timing === "before model call") steering.steer(notification, { hidden: true });
+    const history: AgentMessage[] = [{ role: "user", content: "Verify the fix." }];
+    const requests: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      requests.push(String(init?.body));
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(
+            'data: {"choices":[{"delta":{"content":"Verified."}}]}\n\n' +
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+            'data: [DONE]\n\n',
+          ));
+          controller.close();
+        },
+      }), { status: 200 });
+    });
+    const events: AgentLoopEvent[] = [];
+    const persisted = vi.fn();
+    const result = await runAgentLoop({
+      llm: { openaiApiKey: "test-key", openaiBaseUrl: "https://llm.test", openaiModel: "test-model", contextWindow: 100_000 },
+      history, toolSchemas: [], hasTools: false, sessionId: "hidden-background-steering", abort: new AbortController(),
+      maxRounds: 2, mode: "agent", onPersist: persisted,
+      onEvent: event => {
+        events.push(event);
+        if (timing === "during final response" && event.type === "token" && requests.length === 1) {
+          steering.steer(notification, { hidden: true });
+        }
+      },
+    }, async () => ({ ok: true, message: "" }), steering);
+
+    __jait_capture(0, (requests), (timing === "before model call" ? 1 : 2));
+    __jait_capture(1, (requests.at(-1)));
+    __jait_capture(2, (history.some(message => String(message.content).includes(notification))));
+    __jait_capture(3, (result.segments?.some(segment => segment.type === "steering")));
+    __jait_capture(4, (JSON.stringify(result)));
+    __jait_capture(5, (JSON.stringify(persisted.mock.calls)));
+    // The event is still emitted so trajectory/debug views can show it, but it is
+    // flagged hidden so chat surfaces never render it.
+    const steers = events.filter(event => event.type === "steering");
+    __jait_capture(6, (steers.length));
+    for (const steer of steers) __jait_capture(7, (steer));
+  
+})();
+
+} finally {
+await __jait_hook_1191();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1780_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5247,7 +5431,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1782_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5336,7 +5520,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1828_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1874_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5451,7 +5635,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1900_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1946_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5560,7 +5744,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_1966_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2012_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5729,7 +5913,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2092_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2138_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5855,7 +6039,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2194_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2240_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -5959,7 +6143,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2343_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2389_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6156,7 +6340,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2408_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2454_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6353,7 +6537,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2473_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2519_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6539,7 +6723,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2527_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2573_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6728,7 +6912,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2584_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2630_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -6910,7 +7094,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2634_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2680_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7111,7 +7295,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2703_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2749_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7306,7 +7490,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2766_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2812_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7496,7 +7680,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2824_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2870_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7719,7 +7903,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2915_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2961_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -7919,7 +8103,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_2983_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3029_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8161,7 +8345,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3095_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3141_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8396,7 +8580,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3202_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3248_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8587,7 +8771,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3261_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3307_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8792,7 +8976,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3334_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3380_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -8976,7 +9160,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3386_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3432_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9194,7 +9378,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3472_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3518_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9416,7 +9600,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3564_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3610_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9620,7 +9804,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3636_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3682_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9795,7 +9979,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3679_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3725_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -9999,7 +10183,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3751_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3797_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10149,7 +10333,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3769_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3815_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10352,7 +10536,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3840_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3886_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10545,7 +10729,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3901_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3947_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10737,7 +10921,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_3961_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4007_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -10929,7 +11113,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4073_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4119_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11121,7 +11305,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4082_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4128_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11316,7 +11500,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4094_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4140_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11510,7 +11694,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4105_5": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4151_5": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11706,7 +11890,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4121_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4167_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11789,7 +11973,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4166_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4212_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11844,7 +12028,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4181_3": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4227_3": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({
@@ -11895,7 +12079,7 @@ await __jait_hook_1191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4192_1": {
+case "tailstatic_packages_gateway_src_tools_agent_loop_test_ts_4238_1": {
 
 
 toolDefsToSchemas(["file.read", "file.list", "web.search", "agent.spawn", "project.create", "project.assign_repository"].map(name => ({

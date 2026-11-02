@@ -791,7 +791,136 @@ await __jait_hook_316();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_221_3": {
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_219_3": {
+
+const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const originalFetch = globalThis.fetch;
+function ollamaLlm() {
+  return resolveJaitLlmConfig({ config, jaitBackend: "ollama" });
+}
+function completionsResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+const config = {
+  port: 0,
+  wsPort: 0,
+  host: "127.0.0.1",
+  logLevel: "silent",
+  corsOrigin: "*",
+  nodeEnv: "test",
+  jwtSecret: "test",
+  llmProvider: "ollama" as const,
+  ollamaUrl: "http://localhost:11434",
+  ollamaModel: "dummy",
+  openaiApiKey: "",
+  openaiModel: "gpt-4o",
+  openaiBaseUrl: "https://api.openai.com/v1",
+  contextWindow: 128000,
+  hookSecret: "test",
+  heartbeatCron: "* * * * *",
+  whisperUrl: "http://localhost:8178",
+};
+const __jait_hook_316 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    // Regression: a turn with no model used to fall through the ladder to
+    // apiKeys.OLLAMA_MODEL — so a session ran (and was billed) on
+    // deepseek-v4-pro while the user's selector said deepseek-v4.1-flash.
+    // Strict callers must fail instead of silently choosing a model.
+    __jait_thrown(0, () => resolveJaitLlmConfig({
+      config,
+      apiKeys: { OLLAMA_MODEL: "expensive-model" },
+      jaitBackend: "ollama",
+      strictModel: true,
+    }), (JaitConfigError));
+
+    // Same call without the strict flag keeps the documented fallback ladder,
+    // which background utilities still rely on.
+    __jait_capture(1, (resolveJaitLlmConfig({
+      config,
+      apiKeys: { OLLAMA_MODEL: "expensive-model" },
+      jaitBackend: "ollama",
+    }).openaiModel));
+  
+})();
+
+} finally {
+await __jait_hook_316();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_240_3": {
+
+const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
+const originalFetch = globalThis.fetch;
+function ollamaLlm() {
+  return resolveJaitLlmConfig({ config, jaitBackend: "ollama" });
+}
+function completionsResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+const config = {
+  port: 0,
+  wsPort: 0,
+  host: "127.0.0.1",
+  logLevel: "silent",
+  corsOrigin: "*",
+  nodeEnv: "test",
+  jwtSecret: "test",
+  llmProvider: "ollama" as const,
+  ollamaUrl: "http://localhost:11434",
+  ollamaModel: "dummy",
+  openaiApiKey: "",
+  openaiModel: "gpt-4o",
+  openaiBaseUrl: "https://api.openai.com/v1",
+  contextWindow: 128000,
+  hookSecret: "test",
+  heartbeatCron: "* * * * *",
+  whisperUrl: "http://localhost:8178",
+};
+const __jait_hook_316 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const llm = resolveJaitLlmConfig({
+      config,
+      apiKeys: { OLLAMA_MODEL: "expensive-model" },
+      requestedModel: "deepseek-v4.1-flash:cloud",
+      jaitBackend: "ollama",
+      strictModel: true,
+    });
+
+    __jait_capture(0, (llm.openaiModel));
+  
+})();
+
+} finally {
+await __jait_hook_316();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_254_3": {
 
 const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const originalFetch = globalThis.fetch;
@@ -850,7 +979,7 @@ await __jait_hook_316();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_234_3": {
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_267_3": {
 
 const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const originalFetch = globalThis.fetch;
@@ -914,7 +1043,7 @@ await __jait_hook_316();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_252_3": {
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_285_3": {
 
 const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const originalFetch = globalThis.fetch;
@@ -984,7 +1113,7 @@ await __jait_hook_316();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_276_3": {
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_309_3": {
 
 const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const originalFetch = globalThis.fetch;
@@ -1048,7 +1177,7 @@ await __jait_hook_316();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_294_3": {
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_327_3": {
 
 const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const originalFetch = globalThis.fetch;
@@ -1105,7 +1234,7 @@ await __jait_hook_316();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_306_1": {
+case "tailstatic_packages_gateway_src_services_jait_llm_test_ts_339_1": {
 
 const { encodeJaitModelId, serializeJaitBackendInstances } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const originalFetch = globalThis.fetch;

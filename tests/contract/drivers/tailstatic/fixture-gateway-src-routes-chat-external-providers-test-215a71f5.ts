@@ -1,5 +1,7 @@
 // Translated fixture from packages/gateway/src/routes/chat.external-providers.test.ts; expected literals are in tail_static.rs.
+import { UserQuestionService } from "../../../../packages/gateway/src/services/user-questions.js";
 import { EventEmitter } from "node:events";
+import { backgroundCommandMonitor } from "../../../../packages/gateway/src/services/background-command-monitor.js";
 import { AuditWriter } from "../../../../packages/gateway/src/services/audit.js";
 import { createServer } from "../../../../packages/gateway/src/server.js";
 import { loadConfig } from "../../../../packages/gateway/src/config.js";
@@ -7,6 +9,7 @@ import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/
 import type { CliProviderAdapter, ProviderEvent, ProviderInfo, ProviderSession, StartSessionOptions } from "../../../../packages/gateway/src/providers/contracts.js";
 import { ProviderRegistry } from "../../../../packages/gateway/src/providers/registry.js";
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
+import { ChatLoopService } from "../../../../packages/gateway/src/services/chat-loops.js";
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
 import { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
@@ -59,7 +62,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_23_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_26_3": {
 
 
 const testConfig = {
@@ -321,7 +324,7 @@ await (async()=>{
     __jait_capture(5, (prompt));
     __jait_capture(6, (prompt));
     __jait_capture(7, (prompt.length));
-
+  
 })();
 
 } finally {
@@ -331,7 +334,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_52_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_55_3": {
 
 
 const testConfig = {
@@ -572,7 +575,7 @@ await (async()=>{
     __jait_capture(0, (canUseGatewayProviderForProject("desktop-windows-node")));
     __jait_capture(1, (canUseGatewayProviderForProject("gateway")));
     __jait_capture(2, (canUseGatewayProviderForProject(null)));
-
+  
 })();
 
 } finally {
@@ -582,7 +585,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_60_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_63_3": {
 
 
 const testConfig = {
@@ -828,7 +831,7 @@ await (async()=>{
     __jait_capture(5, (getExternalFileMutationPath("edit", { relative_path: "src/f.ts" })));
     __jait_capture(6, (getExternalFileMutationPath("edit", { changes: [{ path: "src/g.ts" }] })));
     __jait_capture(7, (getExternalFileMutationPath("edit", { input: { changes: [{ file_path: "src/h.ts" }] } })));
-
+  
 })();
 
 } finally {
@@ -838,7 +841,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_71_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_74_3": {
 
 
 const testConfig = {
@@ -1079,7 +1082,7 @@ await (async()=>{
     __jait_captureType(0, (getExternalFileMutationPath("read", { path: "/tmp/a.ts" })));
     __jait_captureType(1, (getExternalFileMutationPath("web", { path: "/tmp/a.ts" })));
     __jait_captureType(2, (getExternalFileMutationPath("execute", { command: "echo hi" })));
-
+  
 })();
 
 } finally {
@@ -1089,7 +1092,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_79_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_82_3": {
 
 
 const testConfig = {
@@ -1330,7 +1333,7 @@ await (async()=>{
     __jait_capture(0, (normalizeProviderSessionError("Usage limit reached for this provider")));
     __jait_capture(1, (normalizeProviderSessionError("Please log in before continuing")));
     __jait_capture(2, (normalizeProviderSessionError("Temporary provider outage")));
-
+  
 })();
 
 } finally {
@@ -1340,7 +1343,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_85_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_88_3": {
 
 
 const testConfig = {
@@ -1589,7 +1592,7 @@ await (async()=>{
     __jait_capture(0, (getProviderRequestErrorMessage(error)));
     __jait_capture(1, (isNonRecoverableProviderRequestError(error)));
     __jait_capture(2, (isNonRecoverableProviderRequestError(new Error("Session process exited"))));
-
+  
 })();
 
 } finally {
@@ -1599,7 +1602,575 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_343_3_each0": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_346_3_each0": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent",
+  nodeEnv: "test",
+};
+async function authHeaders() {
+  const token = await signAuthToken({ id: "chat-provider-user", username: "tester" }, testConfig.jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+class MockChatProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string, _attachments?: unknown[]): Promise<void> => {
+    setTimeout(() => {
+      this.emit({ type: "token", sessionId, content: "ok" });
+      this.emit({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  listenerCountForTest(): number {
+    return this.emitter.listenerCount("event");
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitForTest(event);
+  }
+}
+class MockCreditErrorChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (): Promise<void> => {
+    throw Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+  });
+}
+class MockTodoChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        args: {
+          todoList: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        ok: true,
+        message: "Todo list updated (0/2 done). Working on: Trace bug",
+        data: {
+          items: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockCancelledChatProvider extends MockChatProvider {
+  partialEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.partialEmitted = true;
+      this.emitForTest({ type: "token", sessionId, content: "Partial answer before cancellation." });
+    }, 0);
+  });
+
+  override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+class MockHangingSendTurnChatProvider extends MockChatProvider {
+  private releaseSendTurn: (() => void) | null = null;
+
+  override readonly sendTurn = vi.fn(async (): Promise<void> => new Promise<void>((resolve) => {
+    this.releaseSendTurn = resolve;
+  }));
+
+  release(): void {
+    this.releaseSendTurn?.();
+    this.releaseSendTurn = null;
+  }
+}
+class MockHangingFirstTurnChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    if (this.sendTurn.mock.calls.length === 1) {
+      return new Promise<void>(() => {});
+    }
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "restarted" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockInterleavedToolChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        args: { path: "src/example.ts" },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        ok: true,
+        message: "Read src/example.ts",
+        data: { output: "example" },
+      });
+      this.emitForTest({ type: "token", sessionId, content: "\nAfter tool." });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockSilentChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "finished after silent reasoning" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 400);
+  });
+}
+class MockApprovalChatProvider extends MockChatProvider {
+  approvalEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.approvalEmitted = true;
+      this.emitForTest({
+        type: "tool.approval-required",
+        sessionId,
+        tool: "edit",
+        args: { path: "src/needs-approval.ts" },
+        requestId: "approval-request-1",
+      });
+    }, 0);
+  });
+
+  override readonly respondToApproval = vi.fn(async (sessionId: string, requestId: string, approved: boolean): Promise<void> => {
+    this.emitForTest({
+      type: "tool.result",
+      sessionId,
+      callId: "edit-call-1",
+      tool: "edit",
+      ok: approved,
+      message: approved ? "Approved" : "Rejected",
+      data: { requestId },
+    });
+    this.emitForTest({ type: "token", sessionId, content: approved ? "Approved and continuing." : "Rejected." });
+    this.emitForTest({ type: "turn.completed", sessionId });
+  });
+}
+async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const status = "error";
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("goal-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Saved goal" });
+    const chatLoops = new ChatLoopService(sessionService);
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry, chatLoops });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const send = (content: string) => app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content, provider: "codex", runtimeMode: "full-access" } });
+    try {
+      __jait_capture(0, ((await send("Inspect current work")).statusCode));
+      chatLoops.goal(session.id, "Finish saved migration", ["All components verified"]);
+      if (status === "error") chatLoops.finishTurn(session.id, "Workspace is out of credits");
+      else chatLoops.control(session.id, "pause");
+      __jait_capture(1, ((await send("Why did the goal stop?")).statusCode));
+      __jait_capture(2, (provider.startSession.mock.calls));
+      __jait_capture(3, (provider.sendTurn.mock.calls));
+      const prompt = provider.sendTurn.mock.calls[1]![1];
+      __jait_capture(4, (prompt));
+      __jait_capture(5, (prompt), (`Loop status: ${status}`));
+      __jait_capture(6, (prompt));
+      __jait_capture(7, (prompt));
+      if (status === "error") __jait_capture(8, (prompt));
+      // Asking about the failure grants no automatic resume authority.
+      __jait_capture(9, (chatLoops.get(session.id)?.status));
+    } finally { await app.close(); sqlite.close(); }
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_346_3_each1": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent",
+  nodeEnv: "test",
+};
+async function authHeaders() {
+  const token = await signAuthToken({ id: "chat-provider-user", username: "tester" }, testConfig.jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+class MockChatProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string, _attachments?: unknown[]): Promise<void> => {
+    setTimeout(() => {
+      this.emit({ type: "token", sessionId, content: "ok" });
+      this.emit({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  listenerCountForTest(): number {
+    return this.emitter.listenerCount("event");
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitForTest(event);
+  }
+}
+class MockCreditErrorChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (): Promise<void> => {
+    throw Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+  });
+}
+class MockTodoChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        args: {
+          todoList: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        ok: true,
+        message: "Todo list updated (0/2 done). Working on: Trace bug",
+        data: {
+          items: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockCancelledChatProvider extends MockChatProvider {
+  partialEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.partialEmitted = true;
+      this.emitForTest({ type: "token", sessionId, content: "Partial answer before cancellation." });
+    }, 0);
+  });
+
+  override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+class MockHangingSendTurnChatProvider extends MockChatProvider {
+  private releaseSendTurn: (() => void) | null = null;
+
+  override readonly sendTurn = vi.fn(async (): Promise<void> => new Promise<void>((resolve) => {
+    this.releaseSendTurn = resolve;
+  }));
+
+  release(): void {
+    this.releaseSendTurn?.();
+    this.releaseSendTurn = null;
+  }
+}
+class MockHangingFirstTurnChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    if (this.sendTurn.mock.calls.length === 1) {
+      return new Promise<void>(() => {});
+    }
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "restarted" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockInterleavedToolChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        args: { path: "src/example.ts" },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        ok: true,
+        message: "Read src/example.ts",
+        data: { output: "example" },
+      });
+      this.emitForTest({ type: "token", sessionId, content: "\nAfter tool." });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockSilentChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "finished after silent reasoning" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 400);
+  });
+}
+class MockApprovalChatProvider extends MockChatProvider {
+  approvalEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.approvalEmitted = true;
+      this.emitForTest({
+        type: "tool.approval-required",
+        sessionId,
+        tool: "edit",
+        args: { path: "src/needs-approval.ts" },
+        requestId: "approval-request-1",
+      });
+    }, 0);
+  });
+
+  override readonly respondToApproval = vi.fn(async (sessionId: string, requestId: string, approved: boolean): Promise<void> => {
+    this.emitForTest({
+      type: "tool.result",
+      sessionId,
+      callId: "edit-call-1",
+      tool: "edit",
+      ok: approved,
+      message: approved ? "Approved" : "Rejected",
+      data: { requestId },
+    });
+    this.emitForTest({ type: "token", sessionId, content: approved ? "Approved and continuing." : "Rejected." });
+    this.emitForTest({ type: "turn.completed", sessionId });
+  });
+}
+async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const status = "paused";
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("goal-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Saved goal" });
+    const chatLoops = new ChatLoopService(sessionService);
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService, providerRegistry, chatLoops });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const send = (content: string) => app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { sessionId: session.id, content, provider: "codex", runtimeMode: "full-access" } });
+    try {
+      __jait_capture(0, ((await send("Inspect current work")).statusCode));
+      chatLoops.goal(session.id, "Finish saved migration", ["All components verified"]);
+      if (status === "error") chatLoops.finishTurn(session.id, "Workspace is out of credits");
+      else chatLoops.control(session.id, "pause");
+      __jait_capture(1, ((await send("Why did the goal stop?")).statusCode));
+      __jait_capture(2, (provider.startSession.mock.calls));
+      __jait_capture(3, (provider.sendTurn.mock.calls));
+      const prompt = provider.sendTurn.mock.calls[1]![1];
+      __jait_capture(4, (prompt));
+      __jait_capture(5, (prompt), (`Loop status: ${status}`));
+      __jait_capture(6, (prompt));
+      __jait_capture(7, (prompt));
+      if (status === "error") __jait_capture(8, (prompt));
+      // Asking about the failure grants no automatic resume authority.
+      __jait_capture(9, (chatLoops.get(session.id)?.status));
+    } finally { await app.close(); sqlite.close(); }
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_382_3_each0": {
 
 
 const testConfig = {
@@ -1868,7 +2439,7 @@ await (async()=>{
     } finally {
       await app.close();
     }
-
+  
 })();
 
 } finally {
@@ -1879,7 +2450,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_343_3_each1": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_382_3_each1": {
 
 
 const testConfig = {
@@ -2148,7 +2719,7 @@ await (async()=>{
     } finally {
       await app.close();
     }
-
+  
 })();
 
 } finally {
@@ -2159,7 +2730,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_375_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_414_3": {
 
 
 const testConfig = {
@@ -2414,7 +2985,7 @@ await (async()=>{
     } finally {
       await app.close();
     }
-
+  
 })();
 
 } finally {
@@ -2424,7 +2995,877 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_395_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_434_3_each0": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent",
+  nodeEnv: "test",
+};
+async function authHeaders() {
+  const token = await signAuthToken({ id: "chat-provider-user", username: "tester" }, testConfig.jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+class MockChatProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string, _attachments?: unknown[]): Promise<void> => {
+    setTimeout(() => {
+      this.emit({ type: "token", sessionId, content: "ok" });
+      this.emit({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  listenerCountForTest(): number {
+    return this.emitter.listenerCount("event");
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitForTest(event);
+  }
+}
+class MockCreditErrorChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (): Promise<void> => {
+    throw Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+  });
+}
+class MockTodoChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        args: {
+          todoList: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        ok: true,
+        message: "Todo list updated (0/2 done). Working on: Trace bug",
+        data: {
+          items: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockCancelledChatProvider extends MockChatProvider {
+  partialEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.partialEmitted = true;
+      this.emitForTest({ type: "token", sessionId, content: "Partial answer before cancellation." });
+    }, 0);
+  });
+
+  override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+class MockHangingSendTurnChatProvider extends MockChatProvider {
+  private releaseSendTurn: (() => void) | null = null;
+
+  override readonly sendTurn = vi.fn(async (): Promise<void> => new Promise<void>((resolve) => {
+    this.releaseSendTurn = resolve;
+  }));
+
+  release(): void {
+    this.releaseSendTurn?.();
+    this.releaseSendTurn = null;
+  }
+}
+class MockHangingFirstTurnChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    if (this.sendTurn.mock.calls.length === 1) {
+      return new Promise<void>(() => {});
+    }
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "restarted" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockInterleavedToolChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        args: { path: "src/example.ts" },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        ok: true,
+        message: "Read src/example.ts",
+        data: { output: "example" },
+      });
+      this.emitForTest({ type: "token", sessionId, content: "\nAfter tool." });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockSilentChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "finished after silent reasoning" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 400);
+  });
+}
+class MockApprovalChatProvider extends MockChatProvider {
+  approvalEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.approvalEmitted = true;
+      this.emitForTest({
+        type: "tool.approval-required",
+        sessionId,
+        tool: "edit",
+        args: { path: "src/needs-approval.ts" },
+        requestId: "approval-request-1",
+      });
+    }, 0);
+  });
+
+  override readonly respondToApproval = vi.fn(async (sessionId: string, requestId: string, approved: boolean): Promise<void> => {
+    this.emitForTest({
+      type: "tool.result",
+      sessionId,
+      callId: "edit-call-1",
+      tool: "edit",
+      ok: approved,
+      message: approved ? "Approved" : "Rejected",
+      data: { requestId },
+    });
+    this.emitForTest({ type: "token", sessionId, content: approved ? "Approved and continuing." : "Rejected." });
+    this.emitForTest({ type: "turn.completed", sessionId });
+  });
+}
+async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const requestedBy = "user.ask";
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("question-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Browser handoff" });
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const questions = new UserQuestionService();
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService,
+      providerRegistry, userQuestionService: questions });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    try {
+      await app.inject({ method: "POST", url: "/api/chat", headers,
+        payload: { sessionId: session.id, content: "Continue after my answer", provider: "codex", runtimeMode: "full-access" } });
+      vi.useFakeTimers();
+      const id = questions.startResumable({ sessionId: session.id, userId: user.id, requestedBy,
+        questions: [{ id: "browser", header: "Browser", question: "Finish this step" }] });
+      const wait = questions.waitForAnswer(id, session.id, user.id);
+      await vi.advanceTimersByTimeAsync(60_000);
+      __jait_capture(0, (await wait));
+      vi.useRealTimers();
+      __jait_capture(1, (provider.sendTurn.mock.calls));
+      const submitted = await app.inject({ method: "POST", url: `/api/user-questions/requests/${id}/submit`, headers,
+        payload: { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } } });
+      __jait_capture(2, (submitted.statusCode));
+      await vi.waitFor(() => __jait_capture(3, (provider.sendTurn.mock.calls)));
+      __jait_capture(4, (provider.sendTurn.mock.calls[1]![1]), (`${requestedBy} with only requestId=`));
+      __jait_capture(5, (provider.startSession.mock.calls.at(-1)![0].mode));
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages`, headers });
+      __jait_capture(6, (history.body));
+    } finally {
+      vi.useRealTimers();
+      await app.close();
+      sqlite.close();
+    }
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_434_3_each1": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent",
+  nodeEnv: "test",
+};
+async function authHeaders() {
+  const token = await signAuthToken({ id: "chat-provider-user", username: "tester" }, testConfig.jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+class MockChatProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string, _attachments?: unknown[]): Promise<void> => {
+    setTimeout(() => {
+      this.emit({ type: "token", sessionId, content: "ok" });
+      this.emit({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  listenerCountForTest(): number {
+    return this.emitter.listenerCount("event");
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitForTest(event);
+  }
+}
+class MockCreditErrorChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (): Promise<void> => {
+    throw Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+  });
+}
+class MockTodoChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        args: {
+          todoList: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        ok: true,
+        message: "Todo list updated (0/2 done). Working on: Trace bug",
+        data: {
+          items: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockCancelledChatProvider extends MockChatProvider {
+  partialEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.partialEmitted = true;
+      this.emitForTest({ type: "token", sessionId, content: "Partial answer before cancellation." });
+    }, 0);
+  });
+
+  override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+class MockHangingSendTurnChatProvider extends MockChatProvider {
+  private releaseSendTurn: (() => void) | null = null;
+
+  override readonly sendTurn = vi.fn(async (): Promise<void> => new Promise<void>((resolve) => {
+    this.releaseSendTurn = resolve;
+  }));
+
+  release(): void {
+    this.releaseSendTurn?.();
+    this.releaseSendTurn = null;
+  }
+}
+class MockHangingFirstTurnChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    if (this.sendTurn.mock.calls.length === 1) {
+      return new Promise<void>(() => {});
+    }
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "restarted" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockInterleavedToolChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        args: { path: "src/example.ts" },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        ok: true,
+        message: "Read src/example.ts",
+        data: { output: "example" },
+      });
+      this.emitForTest({ type: "token", sessionId, content: "\nAfter tool." });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockSilentChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "finished after silent reasoning" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 400);
+  });
+}
+class MockApprovalChatProvider extends MockChatProvider {
+  approvalEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.approvalEmitted = true;
+      this.emitForTest({
+        type: "tool.approval-required",
+        sessionId,
+        tool: "edit",
+        args: { path: "src/needs-approval.ts" },
+        requestId: "approval-request-1",
+      });
+    }, 0);
+  });
+
+  override readonly respondToApproval = vi.fn(async (sessionId: string, requestId: string, approved: boolean): Promise<void> => {
+    this.emitForTest({
+      type: "tool.result",
+      sessionId,
+      callId: "edit-call-1",
+      tool: "edit",
+      ok: approved,
+      message: approved ? "Approved" : "Rejected",
+      data: { requestId },
+    });
+    this.emitForTest({ type: "token", sessionId, content: approved ? "Approved and continuing." : "Rejected." });
+    this.emitForTest({ type: "turn.completed", sessionId });
+  });
+}
+async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const requestedBy = "browser.handoff";
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("question-owner", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Browser handoff" });
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const questions = new UserQuestionService();
+    const app = await createServer(testConfig, { db, sqlite, sessionService, sessionState, userService,
+      providerRegistry, userQuestionService: questions });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    try {
+      await app.inject({ method: "POST", url: "/api/chat", headers,
+        payload: { sessionId: session.id, content: "Continue after my answer", provider: "codex", runtimeMode: "full-access" } });
+      vi.useFakeTimers();
+      const id = questions.startResumable({ sessionId: session.id, userId: user.id, requestedBy,
+        questions: [{ id: "browser", header: "Browser", question: "Finish this step" }] });
+      const wait = questions.waitForAnswer(id, session.id, user.id);
+      await vi.advanceTimersByTimeAsync(60_000);
+      __jait_capture(0, (await wait));
+      vi.useRealTimers();
+      __jait_capture(1, (provider.sendTurn.mock.calls));
+      const submitted = await app.inject({ method: "POST", url: `/api/user-questions/requests/${id}/submit`, headers,
+        payload: { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } } });
+      __jait_capture(2, (submitted.statusCode));
+      await vi.waitFor(() => __jait_capture(3, (provider.sendTurn.mock.calls)));
+      __jait_capture(4, (provider.sendTurn.mock.calls[1]![1]), (`${requestedBy} with only requestId=`));
+      __jait_capture(5, (provider.startSession.mock.calls.at(-1)![0].mode));
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages`, headers });
+      __jait_capture(6, (history.body));
+    } finally {
+      vi.useRealTimers();
+      await app.close();
+      sqlite.close();
+    }
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_476_3": {
+
+
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent",
+  nodeEnv: "test",
+};
+async function authHeaders() {
+  const token = await signAuthToken({ id: "chat-provider-user", username: "tester" }, testConfig.jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+class MockChatProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => {
+    const sessionId = `mock-session-${this.startSession.mock.calls.length}`;
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  });
+
+  readonly sendTurn = vi.fn(async (sessionId: string, _content?: string, _attachments?: unknown[]): Promise<void> => {
+    setTimeout(() => {
+      this.emit({ type: "token", sessionId, content: "ok" });
+      this.emit({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  listenerCountForTest(): number {
+    return this.emitter.listenerCount("event");
+  }
+
+  protected emitForTest(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitForTest(event);
+  }
+}
+class MockCreditErrorChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (): Promise<void> => {
+    throw Object.assign(new Error("Internal error"), {
+      code: -32603,
+      data: {
+        message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+        codexErrorInfo: "usageLimitExceeded",
+      },
+    });
+  });
+}
+class MockTodoChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        args: {
+          todoList: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        ok: true,
+        message: "Todo list updated (0/2 done). Working on: Trace bug",
+        data: {
+          items: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockCancelledChatProvider extends MockChatProvider {
+  partialEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.partialEmitted = true;
+      this.emitForTest({ type: "token", sessionId, content: "Partial answer before cancellation." });
+    }, 0);
+  });
+
+  override readonly interruptTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    this.emitForTest({ type: "session.error", sessionId, error: "Turn cancelled" });
+  });
+}
+class MockHangingSendTurnChatProvider extends MockChatProvider {
+  private releaseSendTurn: (() => void) | null = null;
+
+  override readonly sendTurn = vi.fn(async (): Promise<void> => new Promise<void>((resolve) => {
+    this.releaseSendTurn = resolve;
+  }));
+
+  release(): void {
+    this.releaseSendTurn?.();
+    this.releaseSendTurn = null;
+  }
+}
+class MockHangingFirstTurnChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    if (this.sendTurn.mock.calls.length === 1) {
+      return new Promise<void>(() => {});
+    }
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "restarted" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockInterleavedToolChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "Before tool.\n" });
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        args: { path: "src/example.ts" },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "tool-call-1",
+        tool: "read",
+        ok: true,
+        message: "Read src/example.ts",
+        data: { output: "example" },
+      });
+      this.emitForTest({ type: "token", sessionId, content: "\nAfter tool." });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
+}
+class MockSilentChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({ type: "token", sessionId, content: "finished after silent reasoning" });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 400);
+  });
+}
+class MockApprovalChatProvider extends MockChatProvider {
+  approvalEmitted = false;
+
+  override readonly sendTurn = vi.fn(async (sessionId: string, _content?: string): Promise<void> => {
+    setTimeout(() => {
+      this.approvalEmitted = true;
+      this.emitForTest({
+        type: "tool.approval-required",
+        sessionId,
+        tool: "edit",
+        args: { path: "src/needs-approval.ts" },
+        requestId: "approval-request-1",
+      });
+    }, 0);
+  });
+
+  override readonly respondToApproval = vi.fn(async (sessionId: string, requestId: string, approved: boolean): Promise<void> => {
+    this.emitForTest({
+      type: "tool.result",
+      sessionId,
+      callId: "edit-call-1",
+      tool: "edit",
+      ok: approved,
+      message: approved ? "Approved" : "Rejected",
+      data: { requestId },
+    });
+    this.emitForTest({ type: "token", sessionId, content: approved ? "Approved and continuing." : "Rejected." });
+    this.emitForTest({ type: "turn.completed", sessionId });
+  });
+}
+async function waitForAssertion(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const startedAt = Date.now();
+  let lastError: unknown;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const sessionId = "cli-hidden-background-completion";
+    const monitorSpy = vi.spyOn(backgroundCommandMonitor, "setCompletionHandler");
+    let completeCommand: () => Promise<void> = async () => {};
+    class BackgroundProvider extends MockChatProvider {
+      override readonly sendTurn = vi.fn(async (providerSessionId: string, _content?: string): Promise<void> => {
+        if (this.sendTurn.mock.calls.length === 1) await completeCommand();
+        setTimeout(() => {
+          this.emitForTest({ type: "token", sessionId: providerSessionId, content: "verified" });
+          this.emitForTest({ type: "turn.completed", sessionId: providerSessionId });
+        }, 0);
+      });
+    }
+    const provider = new BackgroundProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const handler = monitorSpy.mock.calls.at(-1)![0];
+    completeCommand = async () => { await handler({
+      sessionId, terminalId: "tty-hidden", command: "check-private-output", exitCode: 0,
+      output: "private completion evidence", durationMs: 1000,
+    }); };
+    try {
+      const headers = await authHeaders();
+      const response = await app.inject({
+        method: "POST", url: "/api/chat", headers,
+        payload: { content: "verify", sessionId, provider: "codex", runtimeMode: "full-access" },
+      });
+      __jait_capture(0, (response.statusCode));
+      __jait_capture(1, (provider.sendTurn.mock.calls));
+      __jait_capture(2, (provider.sendTurn.mock.calls[1]?.[1]));
+      __jait_capture(3, (response.body));
+      __jait_capture(4, (response.body));
+      __jait_capture(5, (response.body));
+      __jait_capture(6, (response.body));
+      const history = await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/messages`, headers });
+      __jait_capture(7, (history.statusCode));
+      __jait_capture(8, (history.body));
+      __jait_capture(9, (history.body));
+    } finally {
+      monitorSpy.mockRestore();
+      await app.close();
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_521_3": {
 
 
 const testConfig = {
@@ -2688,7 +4129,7 @@ await (async()=>{
     __jait_capture(4, (provider.interruptTurn.mock.calls));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -2698,7 +4139,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_424_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_550_3": {
 
 
 const testConfig = {
@@ -2962,7 +4403,7 @@ await (async()=>{
     __jait_capture(5, (provider.sendTurn.mock.calls));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -2972,7 +4413,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_453_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_579_3": {
 
 
 const testConfig = {
@@ -3251,7 +4692,7 @@ await (async()=>{
     __jait_capture(7, (provider.startSession.mock.calls[1]?.[0]));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -3261,7 +4702,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_497_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_623_3": {
 
 
 const testConfig = {
@@ -3540,7 +4981,7 @@ await (async()=>{
     __jait_capture(3, (provider.startSession.mock.calls[1]?.[0]));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -3550,7 +4991,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_547_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_673_3": {
 
 
 const testConfig = {
@@ -3826,7 +5267,7 @@ await (async()=>{
     __jait_capture(6, (response.body));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -3836,7 +5277,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_588_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_714_3": {
 
 
 const testConfig = {
@@ -4107,7 +5548,7 @@ await (async()=>{
     __jait_capture(9, (response.body));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -4117,7 +5558,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_624_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_750_3": {
 
 
 const testConfig = {
@@ -4388,7 +5829,7 @@ await (async()=>{
     __jait_capture(6, (firstTurnMessage));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -4398,7 +5839,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_660_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_786_3": {
 
 
 const testConfig = {
@@ -4676,7 +6117,7 @@ await (async()=>{
     __jait_capture(4, (response.body));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -4686,7 +6127,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_703_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_829_3": {
 
 
 const testConfig = {
@@ -4974,7 +6415,7 @@ await (async()=>{
     __jait_capture(12, (response.body));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -4984,7 +6425,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_756_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_882_3": {
 
 
 const testConfig = {
@@ -5267,7 +6708,7 @@ await (async()=>{
 
     await app.close();
     sqlite.close();
-
+  
 })();
 
 } finally {
@@ -5277,7 +6718,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_809_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_935_3": {
 
 
 const testConfig = {
@@ -5557,7 +6998,7 @@ await (async()=>{
     __jait_capture(4, (assistantMessage?.segments));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -5567,7 +7008,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_858_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_984_3": {
 
 
 const testConfig = {
@@ -5840,7 +7281,7 @@ await (async()=>{
     __jait_capture(3, (messagesResponse.json()));
 
     await app.close();
-
+  
 })();
 
 } finally {
@@ -5850,7 +7291,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_896_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1022_3": {
 
 
 const testConfig = {
@@ -6148,7 +7589,7 @@ await (async()=>{
 
     await app.close();
     sqlite.close();
-
+  
 })();
 
 } finally {
@@ -6158,7 +7599,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_962_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1088_3": {
 
 
 const testConfig = {
@@ -6472,7 +7913,7 @@ await (async()=>{
       await app.close();
       sqlite.close();
     }
-
+  
 })();
 
 } finally {
@@ -6482,7 +7923,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1041_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1167_3": {
 
 
 const testConfig = {
@@ -6798,7 +8239,7 @@ await (async()=>{
       await app.close();
       sqlite.close();
     }
-
+  
 })();
 
 } finally {
@@ -6808,7 +8249,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1125_3": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1251_3": {
 
 
 const testConfig = {
@@ -7117,7 +8558,7 @@ await (async()=>{
 
     await app.close();
     sqlite.close();
-
+  
 })();
 
 } finally {
@@ -7127,7 +8568,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1200_1": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1326_1": {
 
 
 const testConfig = {
@@ -7409,7 +8850,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1238_1_each0": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1364_1_each0": {
 
 
 const testConfig = {
@@ -7739,7 +9180,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1238_1_each1": {
+case "tailstatic_packages_gateway_src_routes_chat_external_providers_test_ts_1364_1_each1": {
 
 
 const testConfig = {

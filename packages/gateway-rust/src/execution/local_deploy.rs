@@ -446,13 +446,12 @@ fn digest_of(root: &Path, entries: &[Entry], dependencies: bool) -> Result<Strin
             std::sync::mpsc::sync_channel::<(usize, Result<Vec<u8>>)>(readers * FINGERPRINT_WINDOW);
         let counter = &cursor;
         let source = root;
-        let items = entries.as_ref();
         for _ in 0..readers {
             let sender = sender.clone();
             scope.spawn(move || {
                 loop {
                     let index = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let Some(entry) = items.get(index) else {
+                    let Some(entry) = entries.get(index) else {
                         break;
                     };
                     let payload = if entry.file && !entry.symlink {
@@ -471,7 +470,7 @@ fn digest_of(root: &Path, entries: &[Entry], dependencies: bool) -> Result<Strin
         // Out-of-order completions are buffered until their turn, so the stream stays
         // byte-for-byte identical to a single-threaded pass.
         let mut ready = BTreeMap::new();
-        for index in 0..entries.len() {
+        for (index, entry) in entries.iter().enumerate() {
             let payload = loop {
                 if let Some(payload) = ready.remove(&index) {
                     break payload;
@@ -483,13 +482,7 @@ fn digest_of(root: &Path, entries: &[Entry], dependencies: bool) -> Result<Strin
                     Err(_) => return Err("Deployment digest workers stopped".into()),
                 }
             };
-            feed_entry(
-                &mut hash,
-                root,
-                &entries[index],
-                dependencies,
-                Some(payload?),
-            )?;
+            feed_entry(&mut hash, root, entry, dependencies, Some(payload?))?;
         }
         Ok(())
     })?;

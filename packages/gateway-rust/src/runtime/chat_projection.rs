@@ -464,12 +464,12 @@ pub(crate) fn project_log(db: &Connection, session: &str) -> Result<(), Error> {
     Ok(())
 }
 
+/// (model cursor, frame cursor, frames, segments) reconstructed from the event log.
+type StreamTail = (String, String, Vec<Value>, Option<Vec<Value>>);
+
 // Reconstruct displayable frames after the last durable model record. The
 // transaction pins both this tail and the returned cursor to the same snapshot.
-fn stream_tail(
-    db: &Connection,
-    session: &str,
-) -> Result<(String, String, Vec<Value>, Option<Vec<Value>>), Error> {
+fn stream_tail(db: &Connection, session: &str) -> Result<StreamTail, Error> {
     let last_model: i64 = db.query_row(
         "SELECT COALESCE(MAX(log_id),0) FROM session_events WHERE session_id=? AND type=?",
         params![session, EVENT_TYPE],

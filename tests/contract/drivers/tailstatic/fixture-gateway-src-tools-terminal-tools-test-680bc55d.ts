@@ -314,7 +314,66 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_87_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_85_3": {
+
+
+function makeSurface(): RemoteTerminalSurface {
+  return new RemoteTerminalSurface(
+    "term-test",
+    {} as unknown as WsControlPlane,
+    "node-1",
+  );
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const line = `head:${"X".repeat(5_000)}:tail`;
+    const output = `ok\n${line}`;
+
+    __jait_capture(0, (collapseLongTerminalLines(output, 0)), (output));
+    __jait_capture(1, (collapseLongTerminalLines(output, -1)), (output));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_93_3": {
+
+
+function makeSurface(): RemoteTerminalSurface {
+  return new RemoteTerminalSurface(
+    "term-test",
+    {} as unknown as WsControlPlane,
+    "node-1",
+  );
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const output = "aaa\nbbb\nccc";
+
+    __jait_capture(0, (output.length));
+    __jait_capture(1, (collapseLongTerminalLines(output, 4)), (output));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_102_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -346,7 +405,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_97_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_112_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -376,7 +435,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_105_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_120_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -402,7 +461,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_111_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_126_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -429,7 +488,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_116_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_131_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -455,7 +514,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_124_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_139_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -486,7 +545,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_133_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_148_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -515,7 +574,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_142_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_157_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -544,7 +603,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_149_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_164_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -573,7 +632,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_156_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_171_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -602,7 +661,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_163_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_178_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -631,7 +690,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_172_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_187_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -661,7 +720,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_180_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_195_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -687,7 +746,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_195_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_210_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -724,7 +783,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_210_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_225_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -763,7 +822,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_229_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_244_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -799,7 +858,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_243_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_258_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -831,7 +890,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_253_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_268_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -862,7 +921,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_262_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_277_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -890,7 +949,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_268_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_283_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -921,7 +980,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_277_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_292_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -948,7 +1007,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_282_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_297_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -983,7 +1042,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_295_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_310_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1014,7 +1073,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_306_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_321_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1046,7 +1105,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_316_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_331_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1083,7 +1142,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_331_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_346_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1112,7 +1171,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_340_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_355_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1141,7 +1200,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_347_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_362_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1171,7 +1230,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_357_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_372_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1198,7 +1257,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_362_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_377_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1225,7 +1284,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_367_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_382_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1251,7 +1310,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_371_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_386_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1283,7 +1342,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_383_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_398_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1309,7 +1368,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_387_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_402_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1336,7 +1395,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_394_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_409_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1363,7 +1422,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_403_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_418_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1390,7 +1449,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_410_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_425_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1418,7 +1477,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_416_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_431_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1445,7 +1504,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_425_3": {
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_440_3": {
 
 
 function makeSurface(): RemoteTerminalSurface {
@@ -1468,6 +1527,93 @@ await (async()=>{
     const encoded = input.match(/FromBase64String\('([^']+)'\)/)![1];
     __jait_capture(3, (Buffer.from(encoded, "base64").toString("utf8")), (script));
     __jait_capture(4, (input.startsWith(". ([scriptblock]::Create(")));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_457_3": {
+
+
+function makeSurface(): RemoteTerminalSurface {
+  return new RemoteTerminalSurface(
+    "term-test",
+    {} as unknown as WsControlPlane,
+    "node-1",
+  );
+}
+/*__jait_scope_open__*/{
+const output = Array.from({ length: 50 }, () => "z".repeat(100)).join("\n");
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (truncateTerminalToolOutput(output, 0)));
+    __jait_capture(1, (truncateTerminalToolOutput(output, -1)));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_462_3": {
+
+
+function makeSurface(): RemoteTerminalSurface {
+  return new RemoteTerminalSurface(
+    "term-test",
+    {} as unknown as WsControlPlane,
+    "node-1",
+  );
+}
+/*__jait_scope_open__*/{
+const output = Array.from({ length: 50 }, () => "z".repeat(100)).join("\n");
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (truncateTerminalToolOutput(output, 5)));
+    __jait_capture(1, (truncateTerminalAnsiEcho(output, 4)));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_terminal_tools_test_ts_467_3": {
+
+
+function makeSurface(): RemoteTerminalSurface {
+  return new RemoteTerminalSurface(
+    "term-test",
+    {} as unknown as WsControlPlane,
+    "node-1",
+  );
+}
+/*__jait_scope_open__*/{
+const output = Array.from({ length: 50 }, () => "z".repeat(100)).join("\n");
+
+try {
+await (async()=>{
+
+    const truncated = truncateTerminalToolOutput(output, 400);
+    __jait_capture(0, (truncated.length));
+    __jait_capture(1, (truncated));
+    __jait_capture(2, (truncated.startsWith("zzzz")));
+    __jait_capture(3, (truncated.endsWith("zzzz")));
   
 })();
 

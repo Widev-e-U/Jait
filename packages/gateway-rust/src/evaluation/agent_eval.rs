@@ -63,7 +63,7 @@ fn relative_path(path: &str) -> bool {
     !path.is_empty()
         && !path.starts_with('/')
         && !path.contains('\\')
-        && !(path.as_bytes().len() >= 2
+        && !(path.len() >= 2
             && path.as_bytes()[0].is_ascii_alphabetic()
             && path.as_bytes()[1] == b':')
         && path

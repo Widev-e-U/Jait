@@ -63,7 +63,7 @@ enum TaskAdmission {
     AlreadyStarted,
     Accepted {
         task: Value,
-        plan: Option<PlanRecord>,
+        plan: Option<Box<PlanRecord>>,
     },
 }
 
@@ -104,7 +104,10 @@ fn admit_task(
     }
     let plan = service.get(id)?;
     tx.commit()?;
-    Ok(TaskAdmission::Accepted { task, plan })
+    Ok(TaskAdmission::Accepted {
+        task,
+        plan: plan.map(Box::new),
+    })
 }
 
 enum BulkAdmission {
@@ -112,7 +115,7 @@ enum BulkAdmission {
     NoTasks,
     Accepted {
         tasks: Vec<Value>,
-        plan: Option<PlanRecord>,
+        plan: Option<Box<PlanRecord>>,
     },
 }
 
@@ -147,7 +150,10 @@ fn admit_tasks(
         },
     )?;
     tx.commit()?;
-    Ok(BulkAdmission::Accepted { tasks, plan })
+    Ok(BulkAdmission::Accepted {
+        tasks,
+        plan: plan.map(Box::new),
+    })
 }
 
 async fn handle(State(s): State<PlanRoutes>, req: Request) -> Response {

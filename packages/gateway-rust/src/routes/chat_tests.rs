@@ -663,9 +663,11 @@ async fn full_consumer_channel_detaches_without_cancelling_turn() {
         ChatLimits::default(),
         store,
         Arc::new(tokio::sync::Mutex::new(())),
-        Arc::new(AtomicBool::new(false)),
-        delivery_failed.clone(),
-        Arc::new(AtomicBool::new(false)),
+        StreamFlags {
+            closed: Arc::new(AtomicBool::new(false)),
+            delivery_failed: delivery_failed.clone(),
+            stream_failed: Arc::new(AtomicBool::new(false)),
+        },
     );
     sink(json!({"type":"token","content":"one"})).await.unwrap();
     sink(json!({"type":"token","content":"two"})).await.unwrap();
@@ -706,9 +708,7 @@ async fn abandoned_sink_keeps_serial_guard_until_started_write_finishes() {
         ChatLimits::default(),
         store,
         serial.clone(),
-        Arc::new(AtomicBool::new(false)),
-        Arc::new(AtomicBool::new(false)),
-        Arc::new(AtomicBool::new(false)),
+        StreamFlags::default(),
     );
     let task = tokio::spawn(async move { sink(json!({"type":"token","content":"partial"})).await });
     started_rx.await.unwrap();
@@ -791,6 +791,27 @@ async fn read_frames(mut response: reqwest::Response, min_frames: usize) -> Stri
         }
     }
     text
+}
+
+/// Read until a frame of one of `kinds` has arrived. The turn log records the
+/// user request before the provider runs, so counting frames races that entry;
+/// tests that assert on provider output wait for the type instead.
+async fn read_until_type(mut response: reqwest::Response, kinds: &[&str]) -> String {
+    let mut text = String::new();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let found = frame_payloads(&text)
+            .iter()
+            .any(|payload| kinds.iter().any(|kind| payload["type"] == *kind));
+        if found {
+            return text;
+        }
+        let left = deadline.saturating_duration_since(tokio::time::Instant::now());
+        match tokio::time::timeout(left, response.chunk()).await {
+            Ok(Ok(Some(chunk))) => text.push_str(&String::from_utf8_lossy(&chunk)),
+            _ => return text,
+        }
+    }
 }
 
 /// Frame ids in arrival order: the browser resumes from the last one it saw.
@@ -1063,13 +1084,22 @@ async fn stream_delivers_live_events_published_after_subscribe() {
         .await
         .unwrap();
     assert_eq!(turn.status(), 200);
-    let body = read_frames(stream, 1).await;
+    // The turn log records the user request before the provider runs, so this
+    // waits for the provider's own frame instead of counting frames.
+    let body = read_until_type(stream, &["thinking"]).await;
     let payloads = frame_payloads(&body);
-    assert!(
-        !payloads.is_empty(),
-        "a subscriber attached before the turn must receive live frames"
+    // The log records the user turn itself as a `request` entry (and closes
+    // with `done`); chat_projection treats both as non-projection rows. The
+    // subscription point of this test is the provider stream, so skip them.
+    let streamed: Vec<_> = payloads
+        .iter()
+        .filter(|payload| !matches!(payload["type"].as_str(), Some("request" | "done")))
+        .collect();
+    assert_eq!(
+        streamed.first().map(|payload| &payload["type"]),
+        Some(&json!("thinking")),
+        "a subscriber attached before the turn must receive live provider frames"
     );
-    assert_eq!(payloads[0]["type"], "thinking");
     assert!(
         !frame_ids(&body).is_empty(),
         "live frames carry their log id"

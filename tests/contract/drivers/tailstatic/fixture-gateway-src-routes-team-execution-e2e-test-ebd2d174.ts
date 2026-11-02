@@ -57,7 +57,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_106_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_108_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -67,7 +67,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -99,7 +101,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -133,12 +135,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -159,13 +161,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_122_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_124_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -175,7 +177,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -207,7 +211,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -241,12 +245,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -265,13 +269,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_136_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_138_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -281,7 +285,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -313,7 +319,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -347,12 +353,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -372,13 +378,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_151_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_153_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -388,7 +394,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -420,7 +428,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -454,12 +462,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -487,13 +495,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_174_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_176_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -503,7 +511,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -535,7 +545,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -569,12 +579,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -592,13 +602,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_187_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_189_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -608,7 +618,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -640,7 +652,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -674,12 +686,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -695,13 +707,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_198_3": {
+case "tailstatic_packages_gateway_src_routes_team_execution_e2e_test_ts_200_3": {
 
 const { personaAgentProfileSchema } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/shared", __jait_original_dir):__jait_require.resolve("@jait/shared")));
 const FIXTURE_URL = "http://scripted-provider.invalid/v1";
@@ -711,7 +723,9 @@ const toolReply = (name: string, args: unknown, id = "fixture-call") => ({
 const finalReply = { choices: [{ delta: { content: "Fixture task finished." }, finish_reason: "stop" }] };
 const stream = (reply: unknown) => new Response(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
 async function eventually(check: () => Promise<boolean> | boolean, label: string) {
-  const deadline = Date.now() + 5000;
+  // A full native turn (two provider rounds + SQLite writes) can exceed 5s when the
+  // whole gateway suite runs in parallel; the budget is a load guard, not the assertion.
+  const deadline = Date.now() + 20_000;
   while (!(await check())) {
     if (Date.now() >= deadline) throw new Error(`Timed out: ${label}`);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -743,7 +757,7 @@ function fixtureTool(name: string, result: ToolResult) {
       parameters: { type: "object", properties: { attempt: { type: "number" } } },
       execute: async () => { executed.push(name); return result; } });
   }
-const __jait_hook_3127 = async () => {
+const __jait_hook_3304 = async () => {
     const artifacts = resolve(dirname(fileURLToPath(__jait_original_url)), "../../../../.jait/artifacts");
     mkdirSync(artifacts, { recursive: true });
     root = mkdtempSync(join(artifacts, "jait-execution-e2e-"));
@@ -777,12 +791,12 @@ const __jait_hook_3127 = async () => {
     const created = await app.inject({ method: "POST", url: "/api/team-rooms", headers, payload: { agentId: "Developer", sourceSessionId: source.id } });
     __jait_capture(0, (created.statusCode)); roomId = created.json().room.id;
   };
-const __jait_hook_5878 = async () => {
+const __jait_hook_6055 = async () => {
     await app?.close(); opened?.sqlite.close();
     globalThis.fetch = originalFetch; vi.unstubAllGlobals();
     if (root) rmSync(root, { recursive: true, force: true });
   };
-await __jait_hook_3127();
+await __jait_hook_3304();
 try {
 await (async()=>{
 
@@ -806,7 +820,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5878();
+await __jait_hook_6055();
 }
 }
 

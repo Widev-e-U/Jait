@@ -61,7 +61,141 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3_each0": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+let appsToClose: Array<ReturnType<typeof Fastify>> = [];
+const __jait_hook_1102 = async () => {
+  await Promise.all(appsToClose.map((app) => app.close()));
+  appsToClose = [];
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const authenticated = false;
+
+try {
+await (async()=>{
+
+    const owner = "browser-owner";
+    const personal = { id: "personal-chat", userId: owner, projectPath: null };
+    const project = { id: "project-chat", userId: owner, projectPath: "/project" };
+    let active = project;
+    const sessionService = {
+      lastActive: vi.fn(() => active),
+      getById: vi.fn((id: string) => id === personal.id ? personal : project),
+    } as unknown as SessionService;
+    const execute = vi.fn(async (_input: unknown, context: ToolContext) => ({
+      ok: true, message: "browser opened", data: { sessionId: context.sessionId },
+    }));
+    const registry = new ToolRegistry();
+    for (const name of ["browser.navigate", "browser.handoff", "preview.open", "surfaces.start"]) {
+      registry.register({ name, description: "Browser session routing test", tier: "standard",
+        category: name === "surfaces.start" ? "surfaces" : "browser", source: "builtin",
+        parameters: { type: "object", properties: {} }, execute });
+    }
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, { toolRegistry: registry, sessionService,
+      config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as AppConfig });
+    const headers = authenticated
+      ? { authorization: `Bearer ${await signAuthToken({ id: owner, username: owner }, "test-secret")}` } : {};
+    for (const endpoint of ["/mcp", "/mcp/sse"]) {
+      for (const name of ["browser_navigate", "browser_handoff", "preview_open", "surfaces_start"]) {
+        const payload = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: { type: "browser" } } };
+        const unbound = await app.inject({ method: "POST", url: endpoint, headers, payload });
+        __jait_capture(0, (unbound.json()));
+        __jait_capture(1, (JSON.stringify(unbound.json())));
+        __jait_capture(2, (execute.mock.calls));
+        // A newer project conversation, or switching the last-active chat, must
+        // never move browser actions or their handoff away from this personal chat.
+        for (const selected of [project, personal, project]) {
+          active = selected;
+          const bound = await app.inject({ method: "POST", url: `${endpoint}?sessionId=${personal.id}`, headers, payload });
+          __jait_capture(3, (bound.json()));
+          __jait_capture(4, (execute.mock.calls.at(-1)?.[1].sessionId), (personal.id));
+        }
+        execute.mockClear();
+      }
+    }
+  
+})();
+
+} finally {
+await __jait_hook_1102();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_32_3_each1": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+let appsToClose: Array<ReturnType<typeof Fastify>> = [];
+const __jait_hook_1102 = async () => {
+  await Promise.all(appsToClose.map((app) => app.close()));
+  appsToClose = [];
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const authenticated = true;
+
+try {
+await (async()=>{
+
+    const owner = "browser-owner";
+    const personal = { id: "personal-chat", userId: owner, projectPath: null };
+    const project = { id: "project-chat", userId: owner, projectPath: "/project" };
+    let active = project;
+    const sessionService = {
+      lastActive: vi.fn(() => active),
+      getById: vi.fn((id: string) => id === personal.id ? personal : project),
+    } as unknown as SessionService;
+    const execute = vi.fn(async (_input: unknown, context: ToolContext) => ({
+      ok: true, message: "browser opened", data: { sessionId: context.sessionId },
+    }));
+    const registry = new ToolRegistry();
+    for (const name of ["browser.navigate", "browser.handoff", "preview.open", "surfaces.start"]) {
+      registry.register({ name, description: "Browser session routing test", tier: "standard",
+        category: name === "surfaces.start" ? "surfaces" : "browser", source: "builtin",
+        parameters: { type: "object", properties: {} }, execute });
+    }
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, { toolRegistry: registry, sessionService,
+      config: { host: "127.0.0.1", port: 3000, jwtSecret: "test-secret" } as AppConfig });
+    const headers = authenticated
+      ? { authorization: `Bearer ${await signAuthToken({ id: owner, username: owner }, "test-secret")}` } : {};
+    for (const endpoint of ["/mcp", "/mcp/sse"]) {
+      for (const name of ["browser_navigate", "browser_handoff", "preview_open", "surfaces_start"]) {
+        const payload = { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: { type: "browser" } } };
+        const unbound = await app.inject({ method: "POST", url: endpoint, headers, payload });
+        __jait_capture(0, (unbound.json()));
+        __jait_capture(1, (JSON.stringify(unbound.json())));
+        __jait_capture(2, (execute.mock.calls));
+        // A newer project conversation, or switching the last-active chat, must
+        // never move browser actions or their handoff away from this personal chat.
+        for (const selected of [project, personal, project]) {
+          active = selected;
+          const bound = await app.inject({ method: "POST", url: `${endpoint}?sessionId=${personal.id}`, headers, payload });
+          __jait_capture(3, (bound.json()));
+          __jait_capture(4, (execute.mock.calls.at(-1)?.[1].sessionId), (personal.id));
+        }
+        execute.mockClear();
+      }
+    }
+  
+})();
+
+} finally {
+await __jait_hook_1102();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_76_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -109,7 +243,55 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_60_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_104_3": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+let appsToClose: Array<ReturnType<typeof Fastify>> = [];
+const __jait_hook_1102 = async () => {
+  await Promise.all(appsToClose.map((app) => app.close()));
+  appsToClose = [];
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const app = Fastify();
+    appsToClose.push(app);
+    const questions = new UserQuestionService();
+    const registry = new ToolRegistry();
+    const mutate = vi.fn(async () => ({ ok: true, message: "changed" }));
+    registry.register({ name: "file.write", tier: "standard", category: "filesystem", source: "builtin",
+      description: "Test mutation", parameters: { type: "object", properties: {} }, execute: mutate });
+    registry.register(createUserAskTool(questions));
+    registerMcpRoutes(app, { toolRegistry: registry, userQuestionService: questions,
+      config: { host: "127.0.0.1", port: 3000 } as AppConfig });
+    const call = async (sessionId: string, name: string, args = {}) => (await app.inject({
+      method: "POST", url: `/mcp?sessionId=${sessionId}`,
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } },
+    })).json();
+    const id = questions.startResumable({ sessionId: "waiting-chat", questions: [], requestedBy: "user.ask" });
+    const blocked = await call("waiting-chat", "file_write");
+    __jait_capture(0, (blocked.result.isError));
+    __jait_capture(1, (JSON.stringify(blocked)), (id));
+    __jait_capture(2, (mutate.mock.calls));
+    __jait_capture(3, ((await call("another-chat", "file_write")).result.isError));
+    __jait_capture(4, (mutate.mock.calls));
+    questions.submit(id, { answers: {} });
+    __jait_capture(5, ((await call("waiting-chat", "user_ask", { requestId: id })).result.isError));
+    __jait_capture(6, ((await call("waiting-chat", "file_write")).result.isError));
+    __jait_capture(7, (mutate.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_1102();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_132_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -183,7 +365,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_119_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_191_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -292,7 +474,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_261_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_333_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -337,7 +519,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_289_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_361_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -369,7 +551,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_301_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_373_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -399,7 +581,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_311_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_383_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -453,7 +635,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_359_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_431_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -506,7 +688,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_401_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_473_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -575,7 +757,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_450_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_522_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -633,7 +815,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_501_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_573_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -682,7 +864,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_530_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_602_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -758,7 +940,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_600_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_672_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -812,7 +994,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_634_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_706_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -864,7 +1046,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_676_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_748_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -959,7 +1141,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_751_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_823_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1054,7 +1236,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_826_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_898_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1129,7 +1311,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_885_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_957_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1212,7 +1394,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_955_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1027_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1311,7 +1493,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1040_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1112_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1425,7 +1607,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1134_3_each0": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each0": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1533,7 +1715,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1134_3_each1": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each1": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1641,7 +1823,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1222_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1294_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];

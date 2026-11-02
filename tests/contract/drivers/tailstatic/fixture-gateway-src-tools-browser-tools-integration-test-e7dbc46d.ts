@@ -1,8 +1,7 @@
 // Translated fixture from packages/gateway/src/tools/browser-tools-integration.test.ts; expected literals are in tail_static.rs.
 import { createServer, type Server } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { BrowserSurface } from "../../../../packages/gateway/src/surfaces/browser.js";
 import type { SurfaceRegistry } from "../../../../packages/gateway/src/surfaces/registry.js";
 import { ToolRegistry } from "../../../../packages/gateway/src/tools/registry.js";
@@ -52,7 +51,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -69,13 +68,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -108,11 +109,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -120,8 +121,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -130,15 +131,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -155,13 +156,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -194,11 +197,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -206,8 +209,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -218,15 +221,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -243,13 +246,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -282,11 +287,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -294,8 +299,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -305,15 +310,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -330,13 +335,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -369,11 +376,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -381,8 +388,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -391,15 +398,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -416,13 +423,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -455,11 +464,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -467,8 +476,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -478,15 +487,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -503,13 +512,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -542,11 +553,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -554,8 +565,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -564,15 +575,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -589,13 +600,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -628,11 +641,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -640,8 +653,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -652,15 +665,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -677,13 +690,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -716,11 +731,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -728,12 +743,13 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
-      __jait_capture(0, ((await tools.execute("browser.wait", { selector: "#save", timeoutMs: 100 }, context)).ok));
+      const found = await tools.execute("browser.wait", { selector: "#save", timeoutMs: 5000 }, context);
+      __jait_capture(0, (found.ok));
       const missing = await tools.execute("browser.wait", { selector: "#missing", timeoutMs: 100 }, context);
       __jait_capture(1, (missing.ok));
       __jait_capture(2, (missing.message));
@@ -741,15 +757,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -766,13 +782,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -805,11 +823,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -817,8 +835,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -830,15 +848,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -855,13 +873,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -894,11 +914,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -906,8 +926,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -921,15 +941,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -946,13 +966,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -985,11 +1007,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -997,8 +1019,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1013,15 +1035,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1038,13 +1060,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1077,11 +1101,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1089,8 +1113,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1099,15 +1123,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1124,13 +1148,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1163,11 +1189,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1175,8 +1201,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1187,15 +1213,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1212,13 +1238,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1251,11 +1279,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1263,8 +1291,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1274,15 +1302,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1299,13 +1327,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1338,11 +1368,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1350,8 +1380,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1360,15 +1390,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1385,13 +1415,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1424,11 +1456,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1436,8 +1468,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1447,15 +1479,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1472,13 +1504,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1511,11 +1545,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1523,8 +1557,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1533,15 +1567,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1558,13 +1592,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1597,11 +1633,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1609,8 +1645,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1621,15 +1657,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1646,13 +1682,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1685,11 +1723,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1697,12 +1735,13 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
-      __jait_capture(0, ((await tools.execute("browser.wait", { selector: "#save", timeoutMs: 100 }, context)).ok));
+      const found = await tools.execute("browser.wait", { selector: "#save", timeoutMs: 5000 }, context);
+      __jait_capture(0, (found.ok));
       const missing = await tools.execute("browser.wait", { selector: "#missing", timeoutMs: 100 }, context);
       __jait_capture(1, (missing.ok));
       __jait_capture(2, (missing.message));
@@ -1710,15 +1749,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1735,13 +1774,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1774,11 +1815,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1786,8 +1827,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1799,15 +1840,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1824,13 +1865,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1863,11 +1906,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1875,8 +1918,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1890,15 +1933,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1915,13 +1958,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -1954,11 +1999,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -1966,8 +2011,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -1982,15 +2027,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_81_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_82_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2007,13 +2052,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2046,11 +2093,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2058,8 +2105,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2068,15 +2115,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_86_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_87_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2093,13 +2140,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2132,11 +2181,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2144,8 +2193,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2156,15 +2205,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_91_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2181,13 +2230,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2220,11 +2271,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2232,8 +2283,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2243,15 +2294,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_99_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2268,13 +2319,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2307,11 +2360,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2319,8 +2372,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2329,15 +2382,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_104_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2354,13 +2407,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2393,11 +2448,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2405,8 +2460,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2416,15 +2471,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2441,13 +2496,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2480,11 +2537,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2492,8 +2549,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2502,15 +2559,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_115_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2527,13 +2584,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2566,11 +2625,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2578,8 +2637,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2590,15 +2649,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_120_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2615,13 +2674,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2654,11 +2715,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2666,12 +2727,13 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
-      __jait_capture(0, ((await tools.execute("browser.wait", { selector: "#save", timeoutMs: 100 }, context)).ok));
+      const found = await tools.execute("browser.wait", { selector: "#save", timeoutMs: 5000 }, context);
+      __jait_capture(0, (found.ok));
       const missing = await tools.execute("browser.wait", { selector: "#missing", timeoutMs: 100 }, context);
       __jait_capture(1, (missing.ok));
       __jait_capture(2, (missing.message));
@@ -2679,15 +2741,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2704,13 +2766,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2743,11 +2807,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2755,8 +2819,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2768,15 +2832,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_132_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2793,13 +2857,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2832,11 +2898,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2844,8 +2910,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2859,15 +2925,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_140_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2884,13 +2950,15 @@ const context = {
       sessionId: "browser-integration", actionId: "browser-integration-action",
       projectRoot: process.cwd(), requestedBy: "test",
     };
-const __jait_hook_1326 = async () => {
+const __jait_hook_1308 = async () => {
       vi.stubEnv("BROWSER_LIVE_VIEW", "false");
       vi.stubEnv("BROWSER_HEADLESS", "true");
       vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
       vi.stubEnv("BROWSER_CHANNEL", "");
       vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
-      directory = await mkdtemp(join(__jait_fixture_dir, "jait-browser-integration-"));
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
       server = createServer((_request, response) => {
         response.setHeader("Content-Type", "text/html");
         response.end(`<!doctype html><title>Tool integration fixture</title>
@@ -2923,11 +2991,11 @@ const __jait_hook_1326 = async () => {
       tools.register(createBrowserInspectTool(registry));
       for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
     };
-const __jait_hook_3679 = async () => { await surface.navigate(url); };
-const __jait_hook_3741 = async () => {
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
       await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
     };
-const __jait_hook_3864 = async () => {
+const __jait_hook_3967 = async () => {
       try { await surface?.stop(); } finally {
         if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
         if (directory) await rm(directory, { recursive: true, force: true });
@@ -2935,8 +3003,8 @@ const __jait_hook_3864 = async () => {
         vi.restoreAllMocks();
       }
     };
-await __jait_hook_1326();
-await __jait_hook_3679();
+await __jait_hook_1308();
+await __jait_hook_3782();
 try {
 await (async()=>{
 
@@ -2951,8 +3019,8 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3864();
-await __jait_hook_3741();
+await __jait_hook_3967();
+await __jait_hook_3844();
 }
 }
 }

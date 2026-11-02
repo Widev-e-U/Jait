@@ -154,8 +154,8 @@ pub fn parse_settings(bytes: &[u8], data_dir: &str, owner: HostOwner) -> Result<
         container: String,
         network: String,
     }
-    let stored: StoredConfig = serde_json::from_slice(bytes)
-        .map_err(|_| err("Invalid Matrix runtime settings"))?;
+    let stored: StoredConfig =
+        serde_json::from_slice(bytes).map_err(|_| err("Invalid Matrix runtime settings"))?;
     let config = Config {
         server_name: stored.server_name,
         port: stored.port,
@@ -179,7 +179,10 @@ pub struct StatusReport {
 /// is not ready. Docker's untrusted output is bounded and control characters
 /// rejected before it is displayed. Rejecting such output is stricter than the
 /// reference, which prints the trimmed output directly.
-pub fn status_report(inspect_stdout: &[u8], http_status: Option<u16>) -> Result<StatusReport, String> {
+pub fn status_report(
+    inspect_stdout: &[u8],
+    http_status: Option<u16>,
+) -> Result<StatusReport, String> {
     if inspect_stdout.len() > 4096 {
         return Err(err("Docker status output exceeds limit"));
     }
@@ -194,7 +197,6 @@ pub fn status_report(inspect_stdout: &[u8], http_status: Option<u16>) -> Result<
     })
 }
 
-
 /// Output for a status command after a successful Docker inspection and probe.
 /// The CLI owner must emit stdout before stderr and use `exit_code` as the
 /// process status. Inspection failures must stop before probing and are handled
@@ -206,12 +208,19 @@ pub struct StatusCliOutcome {
     pub exit_code: i32,
 }
 
-pub fn render_status_cli(inspect_stdout: &[u8], http_status: Option<u16>) -> Result<StatusCliOutcome, String> {
+pub fn render_status_cli(
+    inspect_stdout: &[u8],
+    http_status: Option<u16>,
+) -> Result<StatusCliOutcome, String> {
     let report = status_report(inspect_stdout, http_status)?;
     let mut stdout = format!("{}\n", report.container_status);
     if report.client_api_ready {
         stdout.push_str("Matrix client API is ready.\n");
-        Ok(StatusCliOutcome { stdout, stderr: String::new(), exit_code: 0 })
+        Ok(StatusCliOutcome {
+            stdout,
+            stderr: String::new(),
+            exit_code: 0,
+        })
     } else {
         Ok(StatusCliOutcome {
             stdout,
@@ -220,7 +229,6 @@ pub fn render_status_cli(inspect_stdout: &[u8], http_status: Option<u16>) -> Res
         })
     }
 }
-
 
 /// A future effect host must bind the lease to an authorized Docker daemon and
 /// project scope. Inspection and probing must enforce their respective output,
@@ -231,14 +239,39 @@ pub fn render_status_cli(inspect_stdout: &[u8], http_status: Option<u16>) -> Res
 /// methods must flush before returning and never interpret terminal controls.
 pub trait StatusHost {
     type Lease;
-    async fn inspect(&mut self, lease: &mut Self::Lease, effect: &Effect, cancellation: &mut tokio::sync::watch::Receiver<bool>) -> Result<Vec<u8>, ()>;
-    async fn probe(&mut self, lease: &mut Self::Lease, effect: &Effect, cancellation: &mut tokio::sync::watch::Receiver<bool>) -> Result<Option<u16>, ()>;
-    async fn stdout(&mut self, lease: &mut Self::Lease, text: &str, cancellation: &mut tokio::sync::watch::Receiver<bool>) -> Result<(), ()>;
-    async fn stderr(&mut self, lease: &mut Self::Lease, text: &str, cancellation: &mut tokio::sync::watch::Receiver<bool>) -> Result<(), ()>;
+    async fn inspect(
+        &mut self,
+        lease: &mut Self::Lease,
+        effect: &Effect,
+        cancellation: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> Result<Vec<u8>, ()>;
+    async fn probe(
+        &mut self,
+        lease: &mut Self::Lease,
+        effect: &Effect,
+        cancellation: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> Result<Option<u16>, ()>;
+    async fn stdout(
+        &mut self,
+        lease: &mut Self::Lease,
+        text: &str,
+        cancellation: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), ()>;
+    async fn stderr(
+        &mut self,
+        lease: &mut Self::Lease,
+        text: &str,
+        cancellation: &mut tokio::sync::watch::Receiver<bool>,
+    ) -> Result<(), ()>;
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum StatusError { InvalidPlan, Cancelled, EffectFailed, InvalidOutput }
+pub enum StatusError {
+    InvalidPlan,
+    Cancelled,
+    EffectFailed,
+    InvalidOutput,
+}
 
 /// Preserve the CLI's observable order: inspect, print status, then probe and
 /// print readiness. The caller supplies an already-authorized lease; this function
@@ -251,33 +284,87 @@ pub async fn execute_status<H: StatusHost>(
     owner: HostOwner,
     cancellation: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<i32, StatusError> {
-    let effects = plan(Command::Status, config, data_dir, owner).map_err(|_| StatusError::InvalidPlan)?;
-    if *cancellation.borrow() { return Err(StatusError::Cancelled); }
-    let inspected = host.inspect(lease, &effects[0], cancellation).await
-        .map_err(|_| if *cancellation.borrow() { StatusError::Cancelled } else { StatusError::EffectFailed })?;
+    let effects =
+        plan(Command::Status, config, data_dir, owner).map_err(|_| StatusError::InvalidPlan)?;
+    if *cancellation.borrow() {
+        return Err(StatusError::Cancelled);
+    }
+    let inspected = host
+        .inspect(lease, &effects[0], cancellation)
+        .await
+        .map_err(|_| {
+            if *cancellation.borrow() {
+                StatusError::Cancelled
+            } else {
+                StatusError::EffectFailed
+            }
+        })?;
     let report = status_report(&inspected, None).map_err(|_| StatusError::InvalidOutput)?;
-    if *cancellation.borrow() { return Err(StatusError::Cancelled); }
-    host.stdout(lease, &format!("{}\n", report.container_status), cancellation).await
-        .map_err(|_| if *cancellation.borrow() { StatusError::Cancelled } else { StatusError::EffectFailed })?;
-    if *cancellation.borrow() { return Err(StatusError::Cancelled); }
-    let probe = host.probe(lease, &effects[1], cancellation).await
-        .map_err(|_| if *cancellation.borrow() { StatusError::Cancelled } else { StatusError::EffectFailed })?;
-    if *cancellation.borrow() { return Err(StatusError::Cancelled); }
+    if *cancellation.borrow() {
+        return Err(StatusError::Cancelled);
+    }
+    host.stdout(
+        lease,
+        &format!("{}\n", report.container_status),
+        cancellation,
+    )
+    .await
+    .map_err(|_| {
+        if *cancellation.borrow() {
+            StatusError::Cancelled
+        } else {
+            StatusError::EffectFailed
+        }
+    })?;
+    if *cancellation.borrow() {
+        return Err(StatusError::Cancelled);
+    }
+    let probe = host
+        .probe(lease, &effects[1], cancellation)
+        .await
+        .map_err(|_| {
+            if *cancellation.borrow() {
+                StatusError::Cancelled
+            } else {
+                StatusError::EffectFailed
+            }
+        })?;
+    if *cancellation.borrow() {
+        return Err(StatusError::Cancelled);
+    }
     let outcome = render_status_cli(&inspected, probe).map_err(|_| StatusError::InvalidOutput)?;
     if outcome.exit_code == 0 {
-        host.stdout(lease, "Matrix client API is ready.\n", cancellation).await
-            .map_err(|_| if *cancellation.borrow() { StatusError::Cancelled } else { StatusError::EffectFailed })?;
+        host.stdout(lease, "Matrix client API is ready.\n", cancellation)
+            .await
+            .map_err(|_| {
+                if *cancellation.borrow() {
+                    StatusError::Cancelled
+                } else {
+                    StatusError::EffectFailed
+                }
+            })?;
     } else {
-        host.stderr(lease, &outcome.stderr, cancellation).await
-            .map_err(|_| if *cancellation.borrow() { StatusError::Cancelled } else { StatusError::EffectFailed })?;
+        host.stderr(lease, &outcome.stderr, cancellation)
+            .await
+            .map_err(|_| {
+                if *cancellation.borrow() {
+                    StatusError::Cancelled
+                } else {
+                    StatusError::EffectFailed
+                }
+            })?;
     }
-    if *cancellation.borrow() { return Err(StatusError::Cancelled); }
+    if *cancellation.borrow() {
+        return Err(StatusError::Cancelled);
+    }
     Ok(outcome.exit_code)
 }
 
-
 #[derive(Debug, PartialEq, Eq)]
-pub enum ReadinessProbeError { Cancelled, InvalidPort }
+pub enum ReadinessProbeError {
+    Cancelled,
+    InvalidPort,
+}
 
 /// A single direct HTTP/1.1 request to IPv4 loopback. This primitive grants no
 /// network authority: the host must authorize this exact effect at dispatch.
@@ -291,41 +378,76 @@ pub async fn probe_loopback_readiness(
     cancellation: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<Option<u16>, ReadinessProbeError> {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    if port == 0 { return Err(ReadinessProbeError::InvalidPort); }
-    if *cancellation.borrow() { return Err(ReadinessProbeError::Cancelled); }
+    if port == 0 {
+        return Err(ReadinessProbeError::InvalidPort);
+    }
+    if *cancellation.borrow() {
+        return Err(ReadinessProbeError::Cancelled);
+    }
     let request = async {
-        let mut socket = tokio::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port)).await.ok()?;
-        let bytes = format!("GET /_matrix/client/versions HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
+        let mut socket = tokio::net::TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port))
+            .await
+            .ok()?;
+        let bytes = format!(
+            "GET /_matrix/client/versions HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+        );
         socket.write_all(bytes.as_bytes()).await.ok()?;
         let mut total = 0usize;
         loop {
             let mut headers = Vec::new();
             while total < 16 * 1024 {
                 let mut byte = [0u8; 1];
-                if socket.read(&mut byte).await.ok()? == 0 { return None; }
+                if socket.read(&mut byte).await.ok()? == 0 {
+                    return None;
+                }
                 total += 1;
                 headers.push(byte[0]);
-                if headers.ends_with(b"\r\n\r\n") { break; }
+                if headers.ends_with(b"\r\n\r\n") {
+                    break;
+                }
             }
-            if !headers.ends_with(b"\r\n\r\n") { return None; }
+            if !headers.ends_with(b"\r\n\r\n") {
+                return None;
+            }
             let mut lines = headers.split(|b| *b == b'\n');
             let status_line = lines.next()?.strip_suffix(b"\r")?;
             for header in lines {
-                if header.is_empty() || header == b"\r" { continue; }
+                if header.is_empty() || header == b"\r" {
+                    continue;
+                }
                 let header = header.strip_suffix(b"\r")?;
                 let colon = header.iter().position(|b| *b == b':')?;
                 let (name, value) = header.split_at(colon);
-                if name.is_empty() || !name.iter().all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(b))
-                    || value[1..].iter().any(|b| *b < 32 && *b != b'\t' || *b == 127) { return None; }
+                if name.is_empty()
+                    || !name
+                        .iter()
+                        .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(b))
+                    || value[1..]
+                        .iter()
+                        .any(|b| *b < 32 && *b != b'\t' || *b == 127)
+                {
+                    return None;
+                }
             }
-            let rest = status_line.strip_prefix(b"HTTP/1.1 ").or_else(|| status_line.strip_prefix(b"HTTP/1.0 "))?;
-            if rest.len() < 3 || !rest[..3].iter().all(u8::is_ascii_digit)
-                || (rest.len() > 3 && rest[3] != b' ') { return None; }
-            let status = u16::from(rest[0] - b'0') * 100 + u16::from(rest[1] - b'0') * 10 + u16::from(rest[2] - b'0');
-            if !(100..=599).contains(&status) || status == 101 { return None; }
-            if status >= 200 { return Some(status); }
+            let rest = status_line
+                .strip_prefix(b"HTTP/1.1 ")
+                .or_else(|| status_line.strip_prefix(b"HTTP/1.0 "))?;
+            if rest.len() < 3
+                || !rest[..3].iter().all(u8::is_ascii_digit)
+                || (rest.len() > 3 && rest[3] != b' ')
+            {
+                return None;
+            }
+            let status = u16::from(rest[0] - b'0') * 100
+                + u16::from(rest[1] - b'0') * 10
+                + u16::from(rest[2] - b'0');
+            if !(100..=599).contains(&status) || status == 101 {
+                return None;
+            }
+            if status >= 200 {
+                return Some(status);
+            }
         }
-
     };
     tokio::select! {
         biased;
@@ -361,7 +483,9 @@ pub fn resolve_image_digest(output: &[u8]) -> Result<String, String> {
     }
     let digests: Vec<String> = serde_json::from_slice(output)
         .map_err(|_| err("Could not resolve a pinned image digest"))?;
-    let digest = digests.first().ok_or_else(|| err("Could not resolve a pinned image digest"))?;
+    let digest = digests
+        .first()
+        .ok_or_else(|| err("Could not resolve a pinned image digest"))?;
     let Some((name, hash)) = digest.rsplit_once("@sha256:") else {
         return Err(err("Invalid pinned image digest"));
     };
@@ -424,23 +548,41 @@ pub async fn execute_initialization<H: InitializationHost>(
     owner: HostOwner,
     cancellation: &mut tokio::sync::watch::Receiver<bool>,
 ) -> Result<Config, InitializationError> {
-    let initial = plan_init_pull(image, data_dir, owner).map_err(|_| InitializationError::InvalidPlan)?;
+    let initial =
+        plan_init_pull(image, data_dir, owner).map_err(|_| InitializationError::InvalidPlan)?;
     // Check all user-controlled settings before pulling or preparing anything.
     let mut preflight = config.clone();
     preflight.image = format!("preflight@sha256:{}", "0".repeat(64));
-    plan_init_generate(&preflight, data_dir, owner).map_err(|_| InitializationError::InvalidPlan)?;
+    plan_init_generate(&preflight, data_dir, owner)
+        .map_err(|_| InitializationError::InvalidPlan)?;
     if *cancellation.borrow() {
         return Err(InitializationError::Cancelled);
     }
-    let mut lease = host.begin_authorized(daemon, data_dir, cancellation).await
-        .map_err(|_| if *cancellation.borrow() { InitializationError::Cancelled } else { InitializationError::EffectFailed })?;
+    let mut lease = host
+        .begin_authorized(daemon, data_dir, cancellation)
+        .await
+        .map_err(|_| {
+            if *cancellation.borrow() {
+                InitializationError::Cancelled
+            } else {
+                InitializationError::EffectFailed
+            }
+        })?;
     let mut inspect = Vec::new();
     for (index, effect) in initial.iter().enumerate() {
         if *cancellation.borrow() {
             return Err(InitializationError::Cancelled);
         }
-        let output = host.execute_authorized(&mut lease, effect, cancellation).await
-            .map_err(|_| if *cancellation.borrow() { InitializationError::Cancelled } else { InitializationError::EffectFailed })?;
+        let output = host
+            .execute_authorized(&mut lease, effect, cancellation)
+            .await
+            .map_err(|_| {
+                if *cancellation.borrow() {
+                    InitializationError::Cancelled
+                } else {
+                    InitializationError::EffectFailed
+                }
+            })?;
         if output.len() > 64 * 1024 {
             return Err(InitializationError::InvalidInspectOutput);
         }
@@ -451,14 +593,24 @@ pub async fn execute_initialization<H: InitializationHost>(
     if *cancellation.borrow() {
         return Err(InitializationError::Cancelled);
     }
-    config.image = resolve_image_digest(&inspect).map_err(|_| InitializationError::InvalidInspectOutput)?;
-    let generate = plan_init_generate(&config, data_dir, owner).map_err(|_| InitializationError::InvalidPlan)?;
+    config.image =
+        resolve_image_digest(&inspect).map_err(|_| InitializationError::InvalidInspectOutput)?;
+    let generate = plan_init_generate(&config, data_dir, owner)
+        .map_err(|_| InitializationError::InvalidPlan)?;
     for effect in &generate {
         if *cancellation.borrow() {
             return Err(InitializationError::Cancelled);
         }
-        let output = host.execute_authorized(&mut lease, effect, cancellation).await
-            .map_err(|_| if *cancellation.borrow() { InitializationError::Cancelled } else { InitializationError::EffectFailed })?;
+        let output = host
+            .execute_authorized(&mut lease, effect, cancellation)
+            .await
+            .map_err(|_| {
+                if *cancellation.borrow() {
+                    InitializationError::Cancelled
+                } else {
+                    InitializationError::EffectFailed
+                }
+            })?;
         if output.len() > 64 * 1024 {
             return Err(InitializationError::EffectFailed);
         }
@@ -803,7 +955,13 @@ mod tests {
         let second = format!("registry.example/other@sha256:{}", "b".repeat(64));
         let output = serde_json::to_vec(&[&first, &second]).unwrap();
         assert_eq!(resolve_image_digest(&output).unwrap(), first);
-        for bad in [b"null".as_slice(), b"[]", b"[1]", b"not json", b"[\"--option\"]"] {
+        for bad in [
+            b"null".as_slice(),
+            b"[]",
+            b"[1]",
+            b"not json",
+            b"[\"--option\"]",
+        ] {
             assert!(resolve_image_digest(bad).is_err());
         }
         assert!(resolve_image_digest(&vec![b' '; 65_537]).is_err());
@@ -814,7 +972,10 @@ mod tests {
     #[test]
     fn settings_parser_checks_namespace_and_untrusted_json() {
         let dir = "/project/.jait/artifacts/matrix";
-        let owner = HostOwner { uid: 1000, gid: 1000 };
+        let owner = HostOwner {
+            uid: 1000,
+            gid: 1000,
+        };
         let config = config();
         let mut stored = serde_json::json!({
             "serverName": &config.server_name, "port": config.port,
@@ -845,75 +1006,209 @@ mod tests {
 
     #[test]
     fn status_cli_preserves_reference_output_and_failure_status() {
-        assert_eq!(render_status_cli(b" running\n", Some(204)).unwrap(), StatusCliOutcome {
-            stdout: "running\nMatrix client API is ready.\n".into(),
-            stderr: String::new(),
-            exit_code: 0,
-        });
+        assert_eq!(
+            render_status_cli(b" running\n", Some(204)).unwrap(),
+            StatusCliOutcome {
+                stdout: "running\nMatrix client API is ready.\n".into(),
+                stderr: String::new(),
+                exit_code: 0,
+            }
+        );
         for probe in [None, Some(302), Some(503)] {
-            assert_eq!(render_status_cli(b"exited\n", probe).unwrap(), StatusCliOutcome {
-                stdout: "exited\n".into(),
-                stderr: "Matrix client API is not ready yet. Inspect logs.\n".into(),
-                exit_code: 1,
-            });
+            assert_eq!(
+                render_status_cli(b"exited\n", probe).unwrap(),
+                StatusCliOutcome {
+                    stdout: "exited\n".into(),
+                    stderr: "Matrix client API is not ready yet. Inspect logs.\n".into(),
+                    exit_code: 1,
+                }
+            );
         }
     }
 
     #[tokio::test]
     async fn status_dispatch_orders_output_and_stops_on_inspect_failure() {
-        struct Host { events: Vec<String>, fail_inspect: bool }
+        struct Host {
+            events: Vec<String>,
+            fail_inspect: bool,
+        }
         impl StatusHost for Host {
             type Lease = ();
-            async fn inspect(&mut self, _: &mut (), _: &Effect, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Vec<u8>, ()> {
+            async fn inspect(
+                &mut self,
+                _: &mut (),
+                _: &Effect,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Vec<u8>, ()> {
                 self.events.push("inspect".into());
-                if self.fail_inspect { Err(()) } else { Ok(b"running\n".to_vec()) }
+                if self.fail_inspect {
+                    Err(())
+                } else {
+                    Ok(b"running\n".to_vec())
+                }
             }
-            async fn probe(&mut self, _: &mut (), _: &Effect, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Option<u16>, ()> {
-                self.events.push("probe".into()); Ok(None)
+            async fn probe(
+                &mut self,
+                _: &mut (),
+                _: &Effect,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Option<u16>, ()> {
+                self.events.push("probe".into());
+                Ok(None)
             }
-            async fn stdout(&mut self, _: &mut (), text: &str, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<(), ()> { self.events.push(format!("out:{text}")); Ok(()) }
-            async fn stderr(&mut self, _: &mut (), text: &str, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<(), ()> { self.events.push(format!("err:{text}")); Ok(()) }
+            async fn stdout(
+                &mut self,
+                _: &mut (),
+                text: &str,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<(), ()> {
+                self.events.push(format!("out:{text}"));
+                Ok(())
+            }
+            async fn stderr(
+                &mut self,
+                _: &mut (),
+                text: &str,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<(), ()> {
+                self.events.push(format!("err:{text}"));
+                Ok(())
+            }
         }
         let (_tx, mut cancel) = tokio::sync::watch::channel(false);
-        let owner = HostOwner { uid: 1000, gid: 1000 };
+        let owner = HostOwner {
+            uid: 1000,
+            gid: 1000,
+        };
         let dir = "/project/.jait/artifacts/matrix";
-        let mut host = Host { events: vec![], fail_inspect: false };
-        assert_eq!(execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await, Ok(1));
-        assert_eq!(host.events, ["inspect", "out:running\n", "probe", "err:Matrix client API is not ready yet. Inspect logs.\n"]);
-        let mut host = Host { events: vec![], fail_inspect: true };
-        assert_eq!(execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await, Err(StatusError::EffectFailed));
+        let mut host = Host {
+            events: vec![],
+            fail_inspect: false,
+        };
+        assert_eq!(
+            execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await,
+            Ok(1)
+        );
+        assert_eq!(
+            host.events,
+            [
+                "inspect",
+                "out:running\n",
+                "probe",
+                "err:Matrix client API is not ready yet. Inspect logs.\n"
+            ]
+        );
+        let mut host = Host {
+            events: vec![],
+            fail_inspect: true,
+        };
+        assert_eq!(
+            execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await,
+            Err(StatusError::EffectFailed)
+        );
         assert_eq!(host.events, ["inspect"]);
     }
 
     #[tokio::test]
     async fn status_dispatch_stops_on_invalid_output_cancellation_and_denial() {
         struct Host {
-            events: Vec<&'static str>, inspection: Vec<u8>,
-            cancel_at: Option<&'static str>, tx: tokio::sync::watch::Sender<bool>,
+            events: Vec<&'static str>,
+            inspection: Vec<u8>,
+            cancel_at: Option<&'static str>,
+            tx: tokio::sync::watch::Sender<bool>,
         }
-        impl Host { fn step(&mut self, name: &'static str) { self.events.push(name); if self.cancel_at == Some(name) { self.tx.send_replace(true); } } }
+        impl Host {
+            fn step(&mut self, name: &'static str) {
+                self.events.push(name);
+                if self.cancel_at == Some(name) {
+                    self.tx.send_replace(true);
+                }
+            }
+        }
         impl StatusHost for Host {
             type Lease = ();
-            async fn inspect(&mut self, _: &mut (), _: &Effect, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Vec<u8>, ()> { self.step("inspect"); Ok(self.inspection.clone()) }
-            async fn probe(&mut self, _: &mut (), _: &Effect, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Option<u16>, ()> { self.step("probe"); Err(()) }
-            async fn stdout(&mut self, _: &mut (), _: &str, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<(), ()> { self.step("stdout"); Ok(()) }
-            async fn stderr(&mut self, _: &mut (), _: &str, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<(), ()> { self.step("stderr"); Ok(()) }
+            async fn inspect(
+                &mut self,
+                _: &mut (),
+                _: &Effect,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Vec<u8>, ()> {
+                self.step("inspect");
+                Ok(self.inspection.clone())
+            }
+            async fn probe(
+                &mut self,
+                _: &mut (),
+                _: &Effect,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Option<u16>, ()> {
+                self.step("probe");
+                Err(())
+            }
+            async fn stdout(
+                &mut self,
+                _: &mut (),
+                _: &str,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<(), ()> {
+                self.step("stdout");
+                Ok(())
+            }
+            async fn stderr(
+                &mut self,
+                _: &mut (),
+                _: &str,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<(), ()> {
+                self.step("stderr");
+                Ok(())
+            }
         }
-        let owner = HostOwner { uid: 1000, gid: 1000 };
+        let owner = HostOwner {
+            uid: 1000,
+            gid: 1000,
+        };
         let dir = "/project/.jait/artifacts/matrix";
         let (tx, mut cancel) = tokio::sync::watch::channel(false);
-        let mut host = Host { events: vec![], inspection: b"bad\x1b[31m".to_vec(), cancel_at: None, tx: tx.clone() };
-        assert_eq!(execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await, Err(StatusError::InvalidOutput));
+        let mut host = Host {
+            events: vec![],
+            inspection: b"bad\x1b[31m".to_vec(),
+            cancel_at: None,
+            tx: tx.clone(),
+        };
+        assert_eq!(
+            execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await,
+            Err(StatusError::InvalidOutput)
+        );
         assert_eq!(host.events, ["inspect"]);
-        for (point, expected) in [("inspect", vec!["inspect"]), ("stdout", vec!["inspect", "stdout"])] {
+        for (point, expected) in [
+            ("inspect", vec!["inspect"]),
+            ("stdout", vec!["inspect", "stdout"]),
+        ] {
             tx.send_replace(false);
-            let mut host = Host { events: vec![], inspection: b"running".to_vec(), cancel_at: Some(point), tx: tx.clone() };
-            assert_eq!(execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await, Err(StatusError::Cancelled));
+            let mut host = Host {
+                events: vec![],
+                inspection: b"running".to_vec(),
+                cancel_at: Some(point),
+                tx: tx.clone(),
+            };
+            assert_eq!(
+                execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await,
+                Err(StatusError::Cancelled)
+            );
             assert_eq!(host.events, expected);
         }
         tx.send_replace(false);
-        let mut host = Host { events: vec![], inspection: b"running".to_vec(), cancel_at: None, tx };
-        assert_eq!(execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await, Err(StatusError::EffectFailed));
+        let mut host = Host {
+            events: vec![],
+            inspection: b"running".to_vec(),
+            cancel_at: None,
+            tx,
+        };
+        assert_eq!(
+            execute_status(&mut host, &mut (), &config(), dir, owner, &mut cancel).await,
+            Err(StatusError::EffectFailed)
+        );
         assert_eq!(host.events, ["inspect", "stdout", "probe"]);
     }
 
@@ -921,13 +1216,28 @@ mod tests {
     async fn loopback_probe_bounds_and_cancellation() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         for (response, expected) in [
-            (b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nX-Opaque: \xff\r\n\r\n".as_slice(), Some(200)),
-            (b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".as_slice(), Some(200)),
-            (b"HTTP/1.1 302 Found\r\nLocation: http://example.com/\r\n\r\n".as_slice(), Some(302)),
-            (b"HTTP/1.1 200 OK\r\ninvalid header\r\n\r\n".as_slice(), None),
+            (
+                b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nX-Opaque: \xff\r\n\r\n"
+                    .as_slice(),
+                Some(200),
+            ),
+            (
+                b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".as_slice(),
+                Some(200),
+            ),
+            (
+                b"HTTP/1.1 302 Found\r\nLocation: http://example.com/\r\n\r\n".as_slice(),
+                Some(302),
+            ),
+            (
+                b"HTTP/1.1 200 OK\r\ninvalid header\r\n\r\n".as_slice(),
+                None,
+            ),
             (b"HTTP/1.1 200 OK\r\n".as_slice(), None),
         ] {
-            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+            let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+                .await
+                .unwrap();
             let port = listener.local_addr().unwrap().port();
             let response = response.to_vec();
             let server = tokio::spawn(async move {
@@ -939,74 +1249,188 @@ mod tests {
                 stream.write_all(&response).await.unwrap();
             });
             let (_tx, mut cancel) = tokio::sync::watch::channel(false);
-            assert_eq!(probe_loopback_readiness(port, &mut cancel).await, Ok(expected));
+            assert_eq!(
+                probe_loopback_readiness(port, &mut cancel).await,
+                Ok(expected)
+            );
             server.await.unwrap();
         }
         let (tx, mut cancel) = tokio::sync::watch::channel(true);
-        assert_eq!(probe_loopback_readiness(12345, &mut cancel).await, Err(ReadinessProbeError::Cancelled));
+        assert_eq!(
+            probe_loopback_readiness(12345, &mut cancel).await,
+            Err(ReadinessProbeError::Cancelled)
+        );
         tx.send_replace(false);
-        assert_eq!(probe_loopback_readiness(0, &mut cancel).await, Err(ReadinessProbeError::InvalidPort));
+        assert_eq!(
+            probe_loopback_readiness(0, &mut cancel).await,
+            Err(ReadinessProbeError::InvalidPort)
+        );
     }
 
     #[tokio::test]
     async fn initialization_stops_after_denial_and_uses_one_daemon() {
-        struct Host { calls: usize, fail_at: Option<usize>, existing: bool }
+        struct Host {
+            calls: usize,
+            fail_at: Option<usize>,
+            existing: bool,
+        }
         impl InitializationHost for Host {
             type Daemon = u8;
             type Lease = u8;
-            async fn begin_authorized(&mut self, daemon: &u8, _: &str, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<u8, ()> {
-                if self.existing { return Err(()); }
+            async fn begin_authorized(
+                &mut self,
+                daemon: &u8,
+                _: &str,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<u8, ()> {
+                if self.existing {
+                    return Err(());
+                }
                 Ok(*daemon)
             }
-            async fn execute_authorized(&mut self, lease: &mut u8, effect: &Effect, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Vec<u8>, ()> {
+            async fn execute_authorized(
+                &mut self,
+                lease: &mut u8,
+                effect: &Effect,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Vec<u8>, ()> {
                 assert_eq!(*lease, 42);
                 self.calls += 1;
-                if self.fail_at == Some(self.calls) { return Err(()); }
+                if self.fail_at == Some(self.calls) {
+                    return Err(());
+                }
                 if matches!(effect, Effect::Docker { capture: true, .. }) {
-                    return Ok(serde_json::to_vec(&[format!("synapse@sha256:{}", "a".repeat(64))]).unwrap());
+                    return Ok(
+                        serde_json::to_vec(&[format!("synapse@sha256:{}", "a".repeat(64))])
+                            .unwrap(),
+                    );
                 }
                 Ok(Vec::new())
             }
         }
         let dir = "/project/.jait/artifacts/matrix";
-        let owner = HostOwner { uid: 1000, gid: 1000 };
+        let owner = HostOwner {
+            uid: 1000,
+            gid: 1000,
+        };
         let (_tx, mut rx) = tokio::sync::watch::channel(false);
-        let mut host = Host { calls: 0, fail_at: Some(2), existing: false };
-        assert_eq!(execute_initialization(&mut host, &42, "synapse:latest", config(), dir, owner, &mut rx).await, Err(InitializationError::EffectFailed));
+        let mut host = Host {
+            calls: 0,
+            fail_at: Some(2),
+            existing: false,
+        };
+        assert_eq!(
+            execute_initialization(
+                &mut host,
+                &42,
+                "synapse:latest",
+                config(),
+                dir,
+                owner,
+                &mut rx
+            )
+            .await,
+            Err(InitializationError::EffectFailed)
+        );
         assert_eq!(host.calls, 2);
-        let mut host = Host { calls: 0, fail_at: None, existing: false };
-        let result = execute_initialization(&mut host, &42, "synapse:latest", config(), dir, owner, &mut rx).await.unwrap();
+        let mut host = Host {
+            calls: 0,
+            fail_at: None,
+            existing: false,
+        };
+        let result = execute_initialization(
+            &mut host,
+            &42,
+            "synapse:latest",
+            config(),
+            dir,
+            owner,
+            &mut rx,
+        )
+        .await
+        .unwrap();
         assert!(result.image.starts_with("synapse@sha256:"));
         assert_eq!(host.calls, 6);
-        let mut host = Host { calls: 0, fail_at: None, existing: false };
+        let mut host = Host {
+            calls: 0,
+            fail_at: None,
+            existing: false,
+        };
         let mut bad = config();
         bad.container = "other".into();
-        assert_eq!(execute_initialization(&mut host, &42, "synapse:latest", bad, dir, owner, &mut rx).await, Err(InitializationError::InvalidPlan));
+        assert_eq!(
+            execute_initialization(&mut host, &42, "synapse:latest", bad, dir, owner, &mut rx)
+                .await,
+            Err(InitializationError::InvalidPlan)
+        );
         assert_eq!(host.calls, 0);
         host.existing = true;
-        assert_eq!(execute_initialization(&mut host, &42, "synapse:latest", config(), dir, owner, &mut rx).await, Err(InitializationError::EffectFailed));
+        assert_eq!(
+            execute_initialization(
+                &mut host,
+                &42,
+                "synapse:latest",
+                config(),
+                dir,
+                owner,
+                &mut rx
+            )
+            .await,
+            Err(InitializationError::EffectFailed)
+        );
         assert_eq!(host.calls, 0);
         let (tx, mut cancelled) = tokio::sync::watch::channel(false);
         tx.send(true).unwrap();
-        assert_eq!(execute_initialization(&mut host, &42, "synapse:latest", config(), dir, owner, &mut cancelled).await, Err(InitializationError::Cancelled));
+        assert_eq!(
+            execute_initialization(
+                &mut host,
+                &42,
+                "synapse:latest",
+                config(),
+                dir,
+                owner,
+                &mut cancelled
+            )
+            .await,
+            Err(InitializationError::Cancelled)
+        );
         assert_eq!(host.calls, 0);
     }
 
     #[tokio::test]
     async fn cancellation_stops_dispatch_and_releases_lease() {
-        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
         struct Lease(Arc<AtomicBool>);
         impl Drop for Lease {
-            fn drop(&mut self) { self.0.store(true, Ordering::SeqCst); }
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
         }
-        struct Host { calls: usize, tx: tokio::sync::watch::Sender<bool>, released: Arc<AtomicBool> }
+        struct Host {
+            calls: usize,
+            tx: tokio::sync::watch::Sender<bool>,
+            released: Arc<AtomicBool>,
+        }
         impl InitializationHost for Host {
             type Daemon = ();
             type Lease = Lease;
-            async fn begin_authorized(&mut self, _: &(), _: &str, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Lease, ()> {
+            async fn begin_authorized(
+                &mut self,
+                _: &(),
+                _: &str,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Lease, ()> {
                 Ok(Lease(self.released.clone()))
             }
-            async fn execute_authorized(&mut self, _: &mut Lease, _: &Effect, _: &mut tokio::sync::watch::Receiver<bool>) -> Result<Vec<u8>, ()> {
+            async fn execute_authorized(
+                &mut self,
+                _: &mut Lease,
+                _: &Effect,
+                _: &mut tokio::sync::watch::Receiver<bool>,
+            ) -> Result<Vec<u8>, ()> {
                 self.calls += 1;
                 self.tx.send(true).unwrap();
                 Ok(Vec::new())
@@ -1014,9 +1438,28 @@ mod tests {
         }
         let (tx, mut rx) = tokio::sync::watch::channel(false);
         let released = Arc::new(AtomicBool::new(false));
-        let mut host = Host { calls: 0, tx, released: released.clone() };
-        let owner = HostOwner { uid: 1000, gid: 1000 };
-        assert_eq!(execute_initialization(&mut host, &(), "synapse:latest", config(), "/project/.jait/artifacts/matrix", owner, &mut rx).await, Err(InitializationError::Cancelled));
+        let mut host = Host {
+            calls: 0,
+            tx,
+            released: released.clone(),
+        };
+        let owner = HostOwner {
+            uid: 1000,
+            gid: 1000,
+        };
+        assert_eq!(
+            execute_initialization(
+                &mut host,
+                &(),
+                "synapse:latest",
+                config(),
+                "/project/.jait/artifacts/matrix",
+                owner,
+                &mut rx
+            )
+            .await,
+            Err(InitializationError::Cancelled)
+        );
         assert_eq!(host.calls, 1);
         assert!(released.load(Ordering::SeqCst));
     }

@@ -455,10 +455,10 @@ fn parse_mac_at(line: &str, from: usize) -> Option<(String, usize)> {
                 break;
             }
         }
-        if groups == 6 {
-            if let Some(mac) = normalize_mac(&line[mac_start..i]) {
-                return Some((mac, i));
-            }
+        if groups == 6
+            && let Some(mac) = normalize_mac(&line[mac_start..i])
+        {
+            return Some((mac, i));
         }
         scan = mac_start + 1;
     }
@@ -606,10 +606,10 @@ pub fn parse_reverse_lookup_output(stdout: &str) -> Option<String> {
 /// `detectOsVersion` from the gateway health payload.
 pub fn detect_os_from_health(health: &Value) -> Option<String> {
     for key in ["osVersion", "os"] {
-        if let Some(value) = health.get(key).and_then(Value::as_str) {
-            if !value.is_empty() {
-                return Some(value.to_string());
-            }
+        if let Some(value) = health.get(key).and_then(Value::as_str)
+            && !value.is_empty()
+        {
+            return Some(value.to_string());
         }
     }
     None
@@ -799,10 +799,9 @@ async fn detect_os_version(host: &dyn NetworkScanHost, ip: &str) -> Option<Strin
             HTTP_TIMEOUT_MS,
         )
         .await
+        && let Some(os) = detect_os_from_health(&health)
     {
-        if let Some(os) = detect_os_from_health(&health) {
-            return Some(os);
-        }
+        return Some(os);
     }
     let banner = host.ssh_banner(ip, SSH_BANNER_TIMEOUT_MS).await?;
     detect_os_from_banner(&banner)

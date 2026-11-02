@@ -112,8 +112,11 @@ await (async()=>{
     __jait_capture(3, (result?.sharedWithAgent));
     __jait_capture(4, (registry.startSurface.mock.calls));
     service.setSharedWithAgent("owner", true);
-    await __jait_rejected(5, service.reload("owner"));
-    __jait_capture(6, (browser.reload.mock.calls));
+    const sharedResult = await service.reload("owner");
+    __jait_capture(5, (sharedResult?.sharedWithAgent));
+    __jait_capture(6, (sharedResult?.browserId));
+    __jait_capture(7, (browser.reload.mock.calls));
+    __jait_thrown(8, () => service.assertAgentControl("browser-1"));
   
 })();
 
@@ -124,7 +127,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_58_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_61_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -153,7 +156,11 @@ await (async()=>{
     __jait_capture(7, (result?.sharedWithAgent));
     __jait_capture(8, (registry.startSurface.mock.calls));
     service.setSharedWithAgent("owner", true);
-    await __jait_rejected(9, service.navigate("owner", "https://example.com/"));
+    const sharedResult = await service.navigate("owner", "https://example.com/");
+    __jait_capture(9, (sharedResult?.sharedWithAgent));
+    __jait_capture(10, (sharedResult?.browserId));
+    __jait_thrown(11, () => service.assertAgentControl("browser-1"));
+    await __jait_rejected(12, service.navigate("owner", "file:///etc/passwd"));
   
 })();
 
@@ -164,7 +171,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_82_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_89_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -204,7 +211,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_106_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_113_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -242,7 +249,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_128_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_135_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -290,7 +297,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_160_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_167_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -332,7 +339,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_186_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_193_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -394,7 +401,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_239_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_246_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -453,7 +460,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_282_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_289_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -554,7 +561,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_367_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_374_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -637,7 +644,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_437_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_444_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -691,7 +698,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_479_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_486_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");

@@ -164,6 +164,29 @@ fn failure(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
+/// Descriptors supplied by the parent when it adopts a running child host.
+/// Grouped so the state/data pairing cannot be confused positionally.
+pub struct AdoptedHost<'a> {
+    pub parent: File,
+    pub parent_label: &'a Path,
+    pub name: String,
+    pub state: File,
+    pub data: File,
+    pub secret: String,
+    pub factory: GatewayFactory,
+    pub ready: mpsc::Sender<String>,
+}
+
+/// Host arguments shared by the create and adopt paths.
+struct HostSetup<'a> {
+    parent: File,
+    parent_label: &'a Path,
+    name_c: CString,
+    secret: String,
+    factory: GatewayFactory,
+    ready: mpsc::Sender<String>,
+}
+
 impl NativeChildHost {
     pub fn create(
         parent: File,
@@ -180,13 +203,15 @@ impl NativeChildHost {
         let directory = private_directory::create_in(&parent, name).map_err(failure)?;
         let name_c = CString::new(name).map_err(failure)?;
         Self::from_directory(
-            parent,
-            parent_label,
-            name_c,
+            HostSetup {
+                parent,
+                parent_label,
+                name_c,
+                secret,
+                factory,
+                ready,
+            },
             directory,
-            secret,
-            factory,
-            ready,
             false,
         )
     }
@@ -194,16 +219,17 @@ impl NativeChildHost {
     /// Adopt descriptors supplied by the parent. The parent must keep exclusive
     /// removal authority until the child exits and must retain its own handles.
     /// The label is only a protocol label, never filesystem authority.
-    pub fn adopt(
-        parent: File,
-        parent_label: &Path,
-        name: &str,
-        state: File,
-        data: File,
-        secret: String,
-        factory: GatewayFactory,
-        ready: mpsc::Sender<String>,
-    ) -> Result<Self, String> {
+    pub fn adopt(host: AdoptedHost<'_>) -> Result<Self, String> {
+        let AdoptedHost {
+            parent,
+            parent_label,
+            name,
+            state,
+            data,
+            secret,
+            factory,
+            ready,
+        } = host;
         if !parent_label.is_absolute()
             || secret.trim().is_empty()
             || secret.len() > 4096
@@ -227,13 +253,15 @@ impl NativeChildHost {
         same_entry(&parent, &name_c, &state)?;
         same_entry(&state, c"data", &data)?;
         Self::from_directory(
-            parent,
-            parent_label,
-            name_c,
+            HostSetup {
+                parent,
+                parent_label,
+                name_c,
+                secret,
+                factory,
+                ready,
+            },
             PrivateDirectory { state, data },
-            secret,
-            factory,
-            ready,
             true,
         )
     }
@@ -254,16 +282,16 @@ impl NativeChildHost {
         let parent = File::from(parent.try_clone_to_owned().map_err(failure)?);
         let state = File::from(state.try_clone_to_owned().map_err(failure)?);
         let data = File::from(data.try_clone_to_owned().map_err(failure)?);
-        let mut host = Self::adopt(
+        let mut host = Self::adopt(AdoptedHost {
             parent,
             parent_label,
-            name,
+            name: name.to_owned(),
             state,
             data,
             secret,
             factory,
             ready,
-        )?;
+        })?;
         host.resources()?.handoff = Some(reserve_handoff(handoff)?);
         Ok(host)
     }
@@ -289,15 +317,18 @@ impl NativeChildHost {
     }
 
     fn from_directory(
-        parent: File,
-        parent_label: &Path,
-        name_c: CString,
+        setup: HostSetup<'_>,
         directory: PrivateDirectory,
-        secret: String,
-        factory: GatewayFactory,
-        ready: mpsc::Sender<String>,
         parent_removes: bool,
     ) -> Result<Self, String> {
+        let HostSetup {
+            parent,
+            parent_label,
+            name_c,
+            secret,
+            factory,
+            ready,
+        } = setup;
         let name = name_c.to_str().map_err(failure)?;
         let db_path = parent_label.join(name).join("data/jait.db");
         let (shutdown, _) = watch::channel(false);
@@ -733,11 +764,11 @@ impl IsolatedChildHost for NativeChildHost {
 
 impl Drop for Resources {
     fn drop(&mut self) {
-        if self.cleaned {
-            if let Some(index) = self.handoff.take() {
-                let mut fences = handoff_fences().lock().unwrap_or_else(|e| e.into_inner());
-                fences[index] = None;
-            }
+        if self.cleaned
+            && let Some(index) = self.handoff.take()
+        {
+            let mut fences = handoff_fences().lock().unwrap_or_else(|e| e.into_inner());
+            fences[index] = None;
         }
         // If cleanup was interrupted or failed, the pre-reserved slot retains
         // the lease even when an async cleanup task is cancelled by its runtime.
@@ -983,16 +1014,16 @@ mod tests {
         let parent = File::open(&fixture.0).unwrap();
         let directory = private_directory::create_in(&parent, "state").unwrap();
         let (ready, _) = mpsc::channel(1);
-        let mut host = NativeChildHost::adopt(
+        let mut host = NativeChildHost::adopt(AdoptedHost {
             parent,
-            &fixture.0,
-            "state",
-            directory.state,
-            directory.data,
-            SECRET.into(),
-            unused_factory(),
+            parent_label: &fixture.0,
+            name: "state".into(),
+            state: directory.state,
+            data: directory.data,
+            secret: SECRET.into(),
+            factory: unused_factory(),
             ready,
-        )
+        })
         .unwrap();
         host.cancel_cleanup().await.unwrap();
         assert!(fixture.0.join("state/data").is_dir());
@@ -1008,16 +1039,16 @@ mod tests {
         symlink("original", fixture.0.join("state")).unwrap();
         let (ready, _) = mpsc::channel(1);
         assert!(
-            NativeChildHost::adopt(
-                parent.try_clone().unwrap(),
-                &fixture.0,
-                "state",
-                directory.state.try_clone().unwrap(),
-                directory.data.try_clone().unwrap(),
-                SECRET.into(),
-                unused_factory(),
+            NativeChildHost::adopt(AdoptedHost {
+                parent: parent.try_clone().unwrap(),
+                parent_label: &fixture.0,
+                name: "state".into(),
+                state: directory.state.try_clone().unwrap(),
+                data: directory.data.try_clone().unwrap(),
+                secret: SECRET.into(),
+                factory: unused_factory(),
                 ready,
-            )
+            })
             .is_err()
         );
         fs::remove_file(fixture.0.join("state")).unwrap();
@@ -1029,16 +1060,16 @@ mod tests {
         .unwrap();
         let (ready, _) = mpsc::channel(1);
         assert!(
-            NativeChildHost::adopt(
+            NativeChildHost::adopt(AdoptedHost {
                 parent,
-                &fixture.0,
-                "state",
-                directory.state,
-                directory.data,
-                SECRET.into(),
-                unused_factory(),
+                parent_label: &fixture.0,
+                name: "state".into(),
+                state: directory.state,
+                data: directory.data,
+                secret: SECRET.into(),
+                factory: unused_factory(),
                 ready,
-            )
+            })
             .is_err()
         );
         assert!(fixture.0.join("state/data").is_dir());
@@ -1050,16 +1081,16 @@ mod tests {
         let parent = File::open(&fixture.0).unwrap();
         let directory = private_directory::create_in(&parent, "state").unwrap();
         let (ready, _) = mpsc::channel(1);
-        let mut host = NativeChildHost::adopt(
+        let mut host = NativeChildHost::adopt(AdoptedHost {
             parent,
-            &fixture.0,
-            "state",
-            directory.state,
-            directory.data,
-            SECRET.into(),
-            unused_factory(),
+            parent_label: &fixture.0,
+            name: "state".into(),
+            state: directory.state,
+            data: directory.data,
+            secret: SECRET.into(),
+            factory: unused_factory(),
             ready,
-        )
+        })
         .unwrap();
         host.resources().unwrap().startup_unconfirmed = true;
         assert!(
@@ -1085,16 +1116,16 @@ mod tests {
         let other = private_directory::create_in(&parent, "other").unwrap();
         let (ready, _) = mpsc::channel(1);
         assert!(
-            NativeChildHost::adopt(
+            NativeChildHost::adopt(AdoptedHost {
                 parent,
-                &fixture.0,
-                "state",
-                directory.state,
-                other.data,
-                SECRET.into(),
-                unused_factory(),
+                parent_label: &fixture.0,
+                name: "state".into(),
+                state: directory.state,
+                data: other.data,
+                secret: SECRET.into(),
+                factory: unused_factory(),
                 ready,
-            )
+            })
             .is_err()
         );
         assert!(fixture.0.join("state/data").is_dir());
@@ -1182,20 +1213,21 @@ mod tests {
         let mut host = fixture.host(unused_factory(), ready);
         let resources = host.resources().unwrap();
         let (first_finished, first_done) = oneshot::channel();
-        let mut effects = resources.effects.lock().unwrap();
-        effects.tasks.push(tokio::spawn(async move {
-            first_done.await.map_err(failure)?;
-            tokio::time::sleep(Duration::from_secs(4)).await;
-            Ok(())
-        }));
-        effects.tasks.push(tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(4)).await;
-            first_finished
-                .send(())
-                .map_err(|_| "receiver dropped".to_owned())?;
-            Ok(())
-        }));
-        drop(effects);
+        {
+            let mut effects = resources.effects.lock().unwrap();
+            effects.tasks.push(tokio::spawn(async move {
+                first_done.await.map_err(failure)?;
+                tokio::time::sleep(Duration::from_secs(4)).await;
+                Ok(())
+            }));
+            effects.tasks.push(tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(4)).await;
+                first_finished
+                    .send(())
+                    .map_err(|_| "receiver dropped".to_owned())?;
+                Ok(())
+            }));
+        }
         let started = tokio::time::Instant::now();
         assert!(
             resources
@@ -1416,7 +1448,9 @@ mod tests {
             let result = run_supervised(&mut host, "{}", &state, &db, SECRET, signal).await;
             (host, result)
         });
-        let address = tokio::time::timeout(Duration::from_secs(10), address)
+        // Guard only: the host may be starved while the rest of the suite runs
+        // in parallel, so allow ample headroom before declaring a hang.
+        let address = tokio::time::timeout(Duration::from_secs(60), address)
             .await
             .unwrap()
             .unwrap();

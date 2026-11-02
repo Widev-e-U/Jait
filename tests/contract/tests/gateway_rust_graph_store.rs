@@ -121,7 +121,7 @@ async fn native(call: &Value, work: &Path) -> Value {
         let repository = action["repository"].as_str().map(str::to_owned);
         let step: Result<Value, GraphError> = async {
             match action["op"].as_str().unwrap() {
-                "get" => service.get_index(project, user),
+                "get" => service.get_index(project, user).await,
                 "index" => {
                     service
                         .index(project, user.map(str::to_owned), repository, None)
@@ -160,7 +160,7 @@ async fn native(call: &Value, work: &Path) -> Value {
                     Ok(json!({"executed":true}))
                 }
                 "overwrite" => {
-                    let index = service.get_index(project, user)?;
+                    let index = service.get_index(project, user).await?;
                     tokio::fs::write(
                         index["graphPath"].as_str().unwrap(),
                         action["content"].as_str().unwrap(),

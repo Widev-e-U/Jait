@@ -99,7 +99,8 @@ impl EventBus {
     }
 
     /// Publish one committed event. A session with no subscribers costs a lock
-    /// and nothing else; the store calls this for every append.
+    /// and nothing else. Staged for the turn-event store; no caller is wired yet.
+    #[allow(dead_code)]
     pub(crate) fn publish(
         &self,
         session: &str,
@@ -136,15 +137,15 @@ impl EventBus {
             state
                 .failures
                 .retain(|_, (_, _, at)| at.elapsed() < Duration::from_secs(300));
-            if !state.failures.contains_key(session) && state.failures.len() >= MAX_SESSIONS {
-                if let Some(oldest) = state
+            if !state.failures.contains_key(session)
+                && state.failures.len() >= MAX_SESSIONS
+                && let Some(oldest) = state
                     .failures
                     .iter()
                     .min_by_key(|(_, (_, _, at))| *at)
                     .map(|(key, _)| key.clone())
-                {
-                    state.failures.remove(&oldest);
-                }
+            {
+                state.failures.remove(&oldest);
             }
             state
                 .failures

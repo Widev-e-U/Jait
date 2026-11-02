@@ -1751,7 +1751,1126 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_523_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_533_3": {
+
+
+const originalCodexHome = process.env.CODEX_HOME;
+const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalAcpViaOmniRoute = process.env.JAIT_ACP_VIA_OMNIROUTE;
+const fakeAcpAgentScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "test-login", name: "Test login" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpAuthRequiredScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32000, message: "Authentication required" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpModelTimeoutScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32000, message: "Operation timed out" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpNoModelsScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-no-models"
+        }
+      }) + "\\n");
+    } else if (request.method === "session/close") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpCompositeModelsWithConfigScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+let lastSelection = "initial";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-composite-models",
+          models: {
+            currentModelId: "gpt-5.6-sol[low]",
+            availableModels: [
+              {
+                modelId: "gpt-5.6-sol[low]",
+                name: "GPT-5.6-Sol (low)",
+                description: "Fast responses"
+              },
+              {
+                modelId: "gpt-5.6-sol[high]",
+                name: "GPT-5.6-Sol (high)",
+                description: "Deep reasoning"
+              }
+            ]
+          },
+          configOptions: [
+            {
+              type: "select",
+              id: "model",
+              name: "Model",
+              category: "model",
+              currentValue: "gpt-5.6-sol",
+              options: [
+                {
+                  value: "gpt-5.6-sol",
+                  name: "GPT-5.6-Sol",
+                  description: "Frontier coding model"
+                }
+              ]
+            },
+            {
+              type: "select",
+              id: "reasoning_effort",
+              name: "Reasoning effort",
+              category: "thought_level",
+              currentValue: "low",
+              options: [
+                { value: "low", name: "Low", description: "Fast responses" },
+                { value: "high", name: "High", description: "Deep reasoning" }
+              ]
+            }
+          ]
+        }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      const selectingModel = request.params.configId === "model"
+        && request.params.value === "gpt-5.6-sol[low]"
+        && lastSelection === "initial";
+      const selectingEffort = request.params.configId === "reasoning_effort"
+        && request.params.value === "high"
+        && lastSelection === "model";
+      const valid = selectingModel || selectingEffort;
+      if (selectingModel) lastSelection = "model";
+      if (selectingEffort) lastSelection = "effort";
+      process.stdout.write(JSON.stringify(valid
+        ? { jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }
+        : { jsonrpc: "2.0", id: request.id, error: { code: -32602, message: "Model must be selected before effort" } }
+      ) + "\\n");
+    } else if (request.method === "session/close") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpAgentAuthScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "login", name: "Provider Login" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "authenticate" || request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpTerminalAuthScript = `
+if (process.argv.includes("--login")) {
+  process.stdout.write([
+    "Follow these steps to sign in with ChatGPT using device code authorization:",
+    "1. Open this link in your browser and sign in to your account",
+    "   https://auth.openai.com/codex/device",
+    "2. Enter this one-time code (expires in 15 minutes)",
+    "   1URT-UU74B",
+    ""
+  ].join("\\n"));
+  setInterval(() => {}, 1000);
+} else {
+  process.stdin.setEncoding("utf8");
+  let buffer = "";
+  process.stdin.on("data", (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf("\\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      const request = JSON.parse(line);
+      if (request.method === "initialize") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            protocolVersion: 1,
+            agentCapabilities: { auth: { logout: {} } },
+            authMethods: [{ id: "chat-gpt", name: "ChatGPT", type: "terminal", args: ["--login"] }]
+          }
+        }) + "\\n");
+      } else if (request.method === "logout") {
+        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+      }
+    }
+  });
+}
+`;
+const fakeCopilotTerminalAuthScript = `
+if (process.argv.includes("--copilot-login")) {
+  const probe = [
+    "gh_token=" + (process.env.GH_TOKEN ?? "unset"),
+    "github_token=" + (process.env.GITHUB_TOKEN ?? "unset"),
+    "copilot_github_token=" + (process.env.COPILOT_GITHUB_TOKEN ?? "unset"),
+  ].join(" ");
+  // Mirrors the real \`copilot login\` output observed from the standalone CLI.
+  process.stdout.write([
+    probe,
+    "To authenticate, visit https://github.com/login/device and enter code 362A-4FC3",
+    "Waiting for authorization...",
+    "Failed to copy to clipboard. Please visit https://github.com/login/device and enter the code 362A-4FC3 manually.",
+    ""
+  ].join("\\n"));
+  setInterval(() => {}, 1000);
+} else {
+  process.stdin.setEncoding("utf8");
+  let buffer = "";
+  process.stdin.on("data", (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf("\\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      const request = JSON.parse(line);
+      if (request.method === "initialize") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            protocolVersion: 1,
+            agentCapabilities: {},
+            authMethods: [{
+              id: "copilot-login",
+              name: "Log in with Copilot CLI",
+              description: "Run \`copilot login\` to authenticate",
+              _meta: {
+                "terminal-auth": {
+                  label: "Copilot Login",
+                  command: process.execPath,
+                  args: [process.argv[1], "--copilot-login"]
+                }
+              }
+            }]
+          }
+        }) + "\\n");
+      }
+    }
+  });
+}
+`;
+const fakeCodexDeviceAuthScript = `
+process.stdout.write([
+  "Follow these steps to sign in with ChatGPT using device code authorization:",
+  "1. Open this link in your browser and sign in to your account",
+  "   https://auth.openai.com/codex/device",
+  "2. Enter this one-time code (expires in 15 minutes)",
+  "   8K2R-X4D9",
+  ""
+].join("\\n"));
+setInterval(() => {}, 1000);
+`;
+const fakeAcpBackgroundTerminalScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+let sessionId = null;
+let terminalCapability = null;
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      terminalCapability = request.params.clientCapabilities.terminal;
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      sessionId = "acp-session-1";
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId } }) + "\\n");
+    } else if (request.method === "session/set_mode") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    } else if (request.method === "session/prompt") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: {
+          sessionId,
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: String(terminalCapability) } },
+        },
+      }) + "\\n");
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { stopReason: "end_turn" } }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpModeRejectScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: "acp-session-1" } }) + "\\n");
+    } else if (request.method === "session/set_mode" || request.method === "session/set_model" || request.method === "session/set_config_option") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32601, message: "Method not found" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpConfigOptionModelScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: "acp-session-1" } }) + "\\n");
+    } else if (request.method === "session/set_model") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32601, message: "Method not found" }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpReasoningEffortScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "acp-session-1",
+          configOptions: [{
+            type: "select",
+            id: "effort",
+            name: "Effort",
+            category: "thought_level",
+            currentValue: "medium",
+            options: [
+              { value: "low", name: "Low" },
+              { value: "xhigh", name: "Extra high" }
+            ]
+          }]
+        }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      const valid = request.params.configId === "effort" && request.params.value === "xhigh";
+      process.stdout.write(JSON.stringify(valid
+        ? { jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }
+        : { jsonrpc: "2.0", id: request.id, error: { code: -32602, message: "Wrong reasoning effort" } }
+      ) + "\\n");
+    }
+  }
+});
+`;
+const __jait_hook_11905 = () => {
+  if (originalCodexHome === undefined) {
+    delete process.env.CODEX_HOME;
+  } else {
+    process.env.CODEX_HOME = originalCodexHome;
+  }
+  if (originalOpenAiApiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+  } else {
+    process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+  }
+  if (originalAnthropicApiKey === undefined) {
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+  }
+  // Vitest pools workers across files, so leaking this would silently reroute
+  // ACP providers in unrelated suites.
+  if (originalAcpViaOmniRoute === undefined) {
+    delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+  } else {
+    process.env.JAIT_ACP_VIA_OMNIROUTE = originalAcpViaOmniRoute;
+  }
+};
+/*__jait_scope_open__*/{
+function provider() {
+    return new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+  }
+
+try {
+await (async()=>{
+
+    const p = provider();
+    const events: ProviderEvent[] = [];
+    p.onEvent((event) => events.push(event));
+
+    p.handleSessionUpdate("s1", {
+      update: {
+        sessionUpdate: "available_commands_update",
+        availableCommands: [{ name: "cmd1" }, { name: "cmd2" }],
+      },
+    } as any);
+
+    __jait_capture(0, (events));
+    __jait_capture(1, (events[0]));
+  
+})();
+
+} finally {
+await __jait_hook_11905();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_549_3": {
+
+
+const originalCodexHome = process.env.CODEX_HOME;
+const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const originalAcpViaOmniRoute = process.env.JAIT_ACP_VIA_OMNIROUTE;
+const fakeAcpAgentScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "test-login", name: "Test login" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpAuthRequiredScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32000, message: "Authentication required" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpModelTimeoutScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32000, message: "Operation timed out" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpNoModelsScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-no-models"
+        }
+      }) + "\\n");
+    } else if (request.method === "session/close") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpCompositeModelsWithConfigScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+let lastSelection = "initial";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "session-composite-models",
+          models: {
+            currentModelId: "gpt-5.6-sol[low]",
+            availableModels: [
+              {
+                modelId: "gpt-5.6-sol[low]",
+                name: "GPT-5.6-Sol (low)",
+                description: "Fast responses"
+              },
+              {
+                modelId: "gpt-5.6-sol[high]",
+                name: "GPT-5.6-Sol (high)",
+                description: "Deep reasoning"
+              }
+            ]
+          },
+          configOptions: [
+            {
+              type: "select",
+              id: "model",
+              name: "Model",
+              category: "model",
+              currentValue: "gpt-5.6-sol",
+              options: [
+                {
+                  value: "gpt-5.6-sol",
+                  name: "GPT-5.6-Sol",
+                  description: "Frontier coding model"
+                }
+              ]
+            },
+            {
+              type: "select",
+              id: "reasoning_effort",
+              name: "Reasoning effort",
+              category: "thought_level",
+              currentValue: "low",
+              options: [
+                { value: "low", name: "Low", description: "Fast responses" },
+                { value: "high", name: "High", description: "Deep reasoning" }
+              ]
+            }
+          ]
+        }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      const selectingModel = request.params.configId === "model"
+        && request.params.value === "gpt-5.6-sol[low]"
+        && lastSelection === "initial";
+      const selectingEffort = request.params.configId === "reasoning_effort"
+        && request.params.value === "high"
+        && lastSelection === "model";
+      const valid = selectingModel || selectingEffort;
+      if (selectingModel) lastSelection = "model";
+      if (selectingEffort) lastSelection = "effort";
+      process.stdout.write(JSON.stringify(valid
+        ? { jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }
+        : { jsonrpc: "2.0", id: request.id, error: { code: -32602, message: "Model must be selected before effort" } }
+      ) + "\\n");
+    } else if (request.method === "session/close") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpAgentAuthScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "login", name: "Provider Login" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "authenticate" || request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpTerminalAuthScript = `
+if (process.argv.includes("--login")) {
+  process.stdout.write([
+    "Follow these steps to sign in with ChatGPT using device code authorization:",
+    "1. Open this link in your browser and sign in to your account",
+    "   https://auth.openai.com/codex/device",
+    "2. Enter this one-time code (expires in 15 minutes)",
+    "   1URT-UU74B",
+    ""
+  ].join("\\n"));
+  setInterval(() => {}, 1000);
+} else {
+  process.stdin.setEncoding("utf8");
+  let buffer = "";
+  process.stdin.on("data", (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf("\\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      const request = JSON.parse(line);
+      if (request.method === "initialize") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            protocolVersion: 1,
+            agentCapabilities: { auth: { logout: {} } },
+            authMethods: [{ id: "chat-gpt", name: "ChatGPT", type: "terminal", args: ["--login"] }]
+          }
+        }) + "\\n");
+      } else if (request.method === "logout") {
+        process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+      }
+    }
+  });
+}
+`;
+const fakeCopilotTerminalAuthScript = `
+if (process.argv.includes("--copilot-login")) {
+  const probe = [
+    "gh_token=" + (process.env.GH_TOKEN ?? "unset"),
+    "github_token=" + (process.env.GITHUB_TOKEN ?? "unset"),
+    "copilot_github_token=" + (process.env.COPILOT_GITHUB_TOKEN ?? "unset"),
+  ].join(" ");
+  // Mirrors the real \`copilot login\` output observed from the standalone CLI.
+  process.stdout.write([
+    probe,
+    "To authenticate, visit https://github.com/login/device and enter code 362A-4FC3",
+    "Waiting for authorization...",
+    "Failed to copy to clipboard. Please visit https://github.com/login/device and enter the code 362A-4FC3 manually.",
+    ""
+  ].join("\\n"));
+  setInterval(() => {}, 1000);
+} else {
+  process.stdin.setEncoding("utf8");
+  let buffer = "";
+  process.stdin.on("data", (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf("\\n")) >= 0) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      const request = JSON.parse(line);
+      if (request.method === "initialize") {
+        process.stdout.write(JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: {
+            protocolVersion: 1,
+            agentCapabilities: {},
+            authMethods: [{
+              id: "copilot-login",
+              name: "Log in with Copilot CLI",
+              description: "Run \`copilot login\` to authenticate",
+              _meta: {
+                "terminal-auth": {
+                  label: "Copilot Login",
+                  command: process.execPath,
+                  args: [process.argv[1], "--copilot-login"]
+                }
+              }
+            }]
+          }
+        }) + "\\n");
+      }
+    }
+  });
+}
+`;
+const fakeCodexDeviceAuthScript = `
+process.stdout.write([
+  "Follow these steps to sign in with ChatGPT using device code authorization:",
+  "1. Open this link in your browser and sign in to your account",
+  "   https://auth.openai.com/codex/device",
+  "2. Enter this one-time code (expires in 15 minutes)",
+  "   8K2R-X4D9",
+  ""
+].join("\\n"));
+setInterval(() => {}, 1000);
+`;
+const fakeAcpBackgroundTerminalScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+let sessionId = null;
+let terminalCapability = null;
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      terminalCapability = request.params.clientCapabilities.terminal;
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      sessionId = "acp-session-1";
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId } }) + "\\n");
+    } else if (request.method === "session/set_mode") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    } else if (request.method === "session/prompt") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        method: "session/update",
+        params: {
+          sessionId,
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: String(terminalCapability) } },
+        },
+      }) + "\\n");
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { stopReason: "end_turn" } }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpModeRejectScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: "acp-session-1" } }) + "\\n");
+    } else if (request.method === "session/set_mode" || request.method === "session/set_model" || request.method === "session/set_config_option") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32601, message: "Method not found" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpConfigOptionModelScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { sessionId: "acp-session-1" } }) + "\\n");
+    } else if (request.method === "session/set_model") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32601, message: "Method not found" }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }) + "\\n");
+    }
+  }
+});
+`;
+const fakeAcpReasoningEffortScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: { protocolVersion: 1, agentCapabilities: {}, authMethods: [] }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          sessionId: "acp-session-1",
+          configOptions: [{
+            type: "select",
+            id: "effort",
+            name: "Effort",
+            category: "thought_level",
+            currentValue: "medium",
+            options: [
+              { value: "low", name: "Low" },
+              { value: "xhigh", name: "Extra high" }
+            ]
+          }]
+        }
+      }) + "\\n");
+    } else if (request.method === "session/set_config_option") {
+      const valid = request.params.configId === "effort" && request.params.value === "xhigh";
+      process.stdout.write(JSON.stringify(valid
+        ? { jsonrpc: "2.0", id: request.id, result: { configOptions: [] } }
+        : { jsonrpc: "2.0", id: request.id, error: { code: -32602, message: "Wrong reasoning effort" } }
+      ) + "\\n");
+    }
+  }
+});
+`;
+const __jait_hook_11905 = () => {
+  if (originalCodexHome === undefined) {
+    delete process.env.CODEX_HOME;
+  } else {
+    process.env.CODEX_HOME = originalCodexHome;
+  }
+  if (originalOpenAiApiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+  } else {
+    process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+  }
+  if (originalAnthropicApiKey === undefined) {
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+  }
+  // Vitest pools workers across files, so leaking this would silently reroute
+  // ACP providers in unrelated suites.
+  if (originalAcpViaOmniRoute === undefined) {
+    delete process.env.JAIT_ACP_VIA_OMNIROUTE;
+  } else {
+    process.env.JAIT_ACP_VIA_OMNIROUTE = originalAcpViaOmniRoute;
+  }
+};
+/*__jait_scope_open__*/{
+function provider() {
+    return new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentScript],
+    });
+  }
+
+try {
+await (async()=>{
+
+    const p = provider();
+    const events: ProviderEvent[] = [];
+    p.onEvent((event) => events.push(event));
+
+    p.handleSessionUpdate("s1", {
+      update: {
+        sessionUpdate: "usage_update",
+        used: 1234,
+        size: 2000,
+      },
+    } as any);
+
+    __jait_capture(0, (events));
+    __jait_capture(1, (events[0]));
+  
+})();
+
+} finally {
+await __jait_hook_11905();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_568_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -2308,7 +3427,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_550_3_each0": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_595_3_each0": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -2868,7 +3987,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_550_3_each1": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_595_3_each1": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -3428,7 +4547,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_573_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_618_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -3987,7 +5106,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_602_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_647_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -4543,7 +5662,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_626_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_671_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -5114,7 +6233,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_663_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_708_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -5677,7 +6796,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_698_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_743_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -6245,7 +7364,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_741_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_786_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -6805,7 +7924,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_778_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_823_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -7371,7 +8490,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_847_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_892_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -7957,7 +9076,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_890_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_935_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -8534,7 +9653,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_926_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_971_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -9077,7 +10196,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_935_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_980_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -9632,7 +10751,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_957_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1002_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -10179,7 +11298,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_970_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1015_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -10727,7 +11846,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_984_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1029_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -11273,7 +12392,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_996_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1041_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -11826,7 +12945,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1015_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1060_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -12370,7 +13489,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1028_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1073_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -12908,7 +14027,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1035_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1080_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -13447,7 +14566,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1042_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1087_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -13985,7 +15104,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1053_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1098_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -14532,7 +15651,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1068_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1113_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -15073,7 +16192,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1075_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1120_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -15614,7 +16733,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1086_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1131_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -16155,7 +17274,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1101_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1146_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -16717,7 +17836,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1129_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1174_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -17269,7 +18388,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1147_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1192_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -17824,7 +18943,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1173_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1218_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -18386,7 +19505,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1205_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1250_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -18940,7 +20059,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1230_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1275_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -19499,7 +20618,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1263_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1308_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -20051,7 +21170,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1281_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1326_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -20598,7 +21717,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1306_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1351_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -21144,7 +22263,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1320_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1365_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -21690,7 +22809,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1339_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1384_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -22243,7 +23362,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1360_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1405_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -22801,7 +23920,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1389_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1434_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -23380,7 +24499,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1439_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1484_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -23940,7 +25059,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1470_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1515_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -24485,7 +25604,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1485_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1530_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -25037,7 +26156,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1510_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1555_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -25583,7 +26702,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1568_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1613_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -26148,7 +27267,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1713_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1758_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -26714,7 +27833,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1745_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1790_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -27278,7 +28397,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1774_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1819_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -27842,7 +28961,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1804_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1849_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -28414,7 +29533,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1860_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1905_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -28962,7 +30081,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1869_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1914_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -29514,7 +30633,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1880_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1925_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -30062,7 +31181,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1887_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1932_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -30613,7 +31732,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1897_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1942_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -31166,7 +32285,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1909_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1954_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -31714,7 +32833,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1916_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1961_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;
@@ -32266,7 +33385,7 @@ await __jait_hook_11905();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1927_3": {
+case "tailstatic_packages_gateway_src_providers_acp_provider_test_ts_1972_3": {
 
 
 const originalCodexHome = process.env.CODEX_HOME;

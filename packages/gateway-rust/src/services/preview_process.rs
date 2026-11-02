@@ -244,6 +244,7 @@ pub struct PreviewProcess {
 }
 impl PreviewProcess {
     #[cfg(test)]
+    #[allow(dead_code)] // Kept as the test constructor; not every suite uses it.
     pub(super) fn for_test(task: JoinHandle<Result<ProcessResult, String>>) -> Self {
         Self {
             port: 1,
@@ -600,7 +601,10 @@ mod expiry_queue_tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(matches!(result, Err(PreviewStartError::NoProcess(_))), "expiry should confirm process cleanup");
+        assert!(
+            matches!(result, Err(PreviewStartError::NoProcess(_))),
+            "expiry should confirm process cleanup"
+        );
         let result = tokio::time::timeout(Duration::from_secs(5), follower)
             .await
             .unwrap()

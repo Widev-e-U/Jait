@@ -8,6 +8,8 @@ pub mod isolated_gateway_child;
 
 // Compile the unregistered transport only for its focused draft tests.
 #[cfg(test)]
+// Staged chat transport for isolated evaluation runs; no caller wired yet.
+#[allow(dead_code)]
 mod agent_eval_chat;
 
 // Linux capability primitives; runtime handoff and recovery are not yet wired.

@@ -1,7 +1,9 @@
 // Translated fixture from packages/gateway/src/services/thread-title.test.ts; expected literals are in tail_static.rs.
+import type { ProviderEvent } from "../../../../packages/gateway/src/providers/contracts.js";
 import {
   THREAD_TITLE_PROMPT,
   generateTitleViaApi,
+  generateTitleViaTurn,
   normalizeGeneratedThreadTitle,
 } from "../../../../packages/gateway/src/services/thread-title.js";
 import { vi } from '../tailmock.ts';
@@ -45,11 +47,11 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_16_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_18_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -63,17 +65,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_20_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_22_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -87,17 +89,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_26_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_28_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -112,17 +114,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_31_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_33_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -136,17 +138,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each0": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each0": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -163,18 +165,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each1": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each1": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -191,18 +193,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each2": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each2": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -219,18 +221,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -247,18 +249,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each4": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each4": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -275,18 +277,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each5": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each5": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -303,18 +305,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each6": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each6": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -331,18 +333,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each7": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each7": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -359,18 +361,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_35_3_each8": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_37_3_each8": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -387,18 +389,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_50_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_52_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -412,17 +414,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_56_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_58_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -478,17 +480,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_102_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_104_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -559,17 +561,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_title_test_ts_163_3": {
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_165_3": {
 
 
 const originalFetch = globalThis.fetch;
-const __jait_hook_220 = () => {
+const __jait_hook_308 = () => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 };
@@ -623,7 +625,100 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_220();
+await __jait_hook_308();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_214_3": {
+
+
+const originalFetch = globalThis.fetch;
+const __jait_hook_308 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    try {
+      const provider = { onEvent: vi.fn(() => { throw new Error("subscribe failed"); }), sendTurn: vi.fn() };
+      await __jait_rejected(0, generateTitleViaTurn(provider as unknown as Parameters<typeof generateTitleViaTurn>[0], "s", "task"));
+      __jait_capture(1, (provider.sendTurn.mock.calls));
+      __jait_capture(2, (vi.getTimerCount()));
+    } finally { vi.useRealTimers(); }
+  
+})();
+
+} finally {
+await __jait_hook_308();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_224_3": {
+
+
+const originalFetch = globalThis.fetch;
+const __jait_hook_308 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    try {
+      const unsubscribe = vi.fn();
+      const provider = { onEvent: vi.fn(() => unsubscribe), sendTurn: vi.fn(() => { throw new Error("send failed"); }) };
+      await __jait_rejected(0, generateTitleViaTurn(provider as unknown as Parameters<typeof generateTitleViaTurn>[0], "s", "task"));
+      __jait_capture(1, (unsubscribe.mock.calls));
+      __jait_capture(2, (vi.getTimerCount()));
+    } finally { vi.useRealTimers(); }
+  
+})();
+
+} finally {
+await __jait_hook_308();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_thread_title_test_ts_235_3": {
+
+
+const originalFetch = globalThis.fetch;
+const __jait_hook_308 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const unsubscribe = vi.fn();
+    let listener: (event: ProviderEvent) => void = () => {};
+    const provider = {
+      onEvent: vi.fn((fn: (event: ProviderEvent) => void) => { listener = fn; return unsubscribe; }),
+      sendTurn: vi.fn(async () => { listener({ type: "turn.completed", sessionId: "s" } as ProviderEvent); throw new Error("late rejection"); }),
+    };
+    await __jait_captureResolved(0, (generateTitleViaTurn(provider as unknown as Parameters<typeof generateTitleViaTurn>[0], "s", "task")));
+    await Promise.resolve();
+    __jait_capture(1, (unsubscribe.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_308();
 }
 }
 

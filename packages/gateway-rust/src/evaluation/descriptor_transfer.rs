@@ -283,7 +283,7 @@ fn receive_message(
             }
             if (*hdr).cmsg_level == libc::SOL_SOCKET && (*hdr).cmsg_type == libc::SCM_RIGHTS {
                 let bytes = length - base;
-                if bytes % mem::size_of::<libc::c_int>() != 0 {
+                if !bytes.is_multiple_of(mem::size_of::<libc::c_int>()) {
                     malformed = true;
                 }
                 let data = libc::CMSG_DATA(hdr).cast::<libc::c_int>();

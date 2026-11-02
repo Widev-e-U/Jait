@@ -400,7 +400,7 @@ mod tests {
             descriptor_transfer::child_capability::ChildCapability,
             isolated_gateway_child::{
                 IsolatedChildHost,
-                host::{GatewayFactory, NativeChildHost},
+                host::{AdoptedHost, GatewayFactory, NativeChildHost},
             },
         };
         let fixture = Fixture::new();
@@ -431,29 +431,29 @@ mod tests {
             || -> GatewayFactory { Box::new(|_| Box::pin(async { Err("unused factory".into()) })) };
         let (ready, _) = tokio::sync::mpsc::channel(1);
         assert!(
-            NativeChildHost::adopt(
-                file(0),
-                &fixture.0,
-                "state",
-                file(2),
-                file(1),
-                "secret".into(),
-                factory(),
-                ready
-            )
+            NativeChildHost::adopt(AdoptedHost {
+                parent: file(0),
+                parent_label: &fixture.0,
+                name: "state".into(),
+                state: file(2),
+                data: file(1),
+                secret: "secret".into(),
+                factory: factory(),
+                ready,
+            })
             .is_err()
         );
         let (ready, _) = tokio::sync::mpsc::channel(1);
-        let mut host = NativeChildHost::adopt(
-            file(0),
-            &fixture.0,
-            "state",
-            file(1),
-            file(2),
-            "secret".into(),
-            factory(),
+        let mut host = NativeChildHost::adopt(AdoptedHost {
+            parent: file(0),
+            parent_label: &fixture.0,
+            name: "state".into(),
+            state: file(1),
+            data: file(2),
+            secret: "secret".into(),
+            factory: factory(),
             ready,
-        )
+        })
         .unwrap();
         host.cancel_cleanup().await.unwrap();
         drop(host);

@@ -77,10 +77,8 @@ impl SurfaceAccess for Fixture {
             .filter(|v| !v.is_null())
             .map(|v| AccessSurface {
                 session_id: v["sessionId"].as_str().map(String::from),
+                owner: self.0["owners"][id].as_str().map(String::from),
             }))
-    }
-    fn owner(&self, id: &str) -> AccessResult<Option<String>> {
-        Ok(self.0["owners"][id].as_str().map(String::from))
     }
 }
 impl ConsentAccess for Fixture {

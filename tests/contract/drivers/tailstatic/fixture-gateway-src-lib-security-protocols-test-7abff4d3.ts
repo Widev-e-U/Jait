@@ -1,5 +1,6 @@
 // Translated fixture from packages/gateway/src/lib/security/protocols.test.ts; expected literals are in tail_static.rs.
 import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { createServer as createNetServer } from "node:net";
 import { createServer as createTlsServer } from "node:tls";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -48,7 +49,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_21_3": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_22_3": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -59,7 +60,7 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 
 try {
@@ -85,13 +86,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_39_3": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_40_3": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -102,7 +103,7 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 
 try {
@@ -121,13 +122,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_50_3": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_51_3": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -138,7 +139,47 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const server = createHttpServer();
+    server.on("connection", socket => socket.on("error", () => {}));
+    const port = await listen(server);
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const controller = new AbortController();
+      const pending = checkHttp("127.0.0.1", port, false, controller.signal);
+      queueMicrotask(() => controller.abort());
+      const result = await pending;
+      await new Promise<void>(resolve => setImmediate(resolve));
+      __jait_capture(0, (result.conclusive));
+      __jait_capture(1, (result.evidence));
+      __jait_capture(2, (result.coverageGaps));
+    }
+  
+})();
+
+} finally {
+await __jait_hook_598();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_69_3": {
+
+
+const cleanup: Array<() => Promise<void>> = [];
+async function listen(server: ReturnType<typeof createNetServer>): Promise<number> {
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  cleanup.push(() => new Promise(resolve => server.close(() => resolve())));
+  const address = server.address(); if (!address || typeof address === "string") throw new Error("Expected port");
+  return address.port;
+}
+const signal = () => new AbortController().signal;
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 
 try {
@@ -153,13 +194,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_59_3_each0": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_78_3_each0": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -170,7 +211,7 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const protocol = "2.0";
@@ -190,14 +231,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_59_3_each1": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_78_3_each1": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -208,7 +249,7 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
 const protocol = "1.99";
@@ -228,14 +269,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_69_3": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_88_3": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -246,7 +287,7 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 
 try {
@@ -260,13 +301,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_77_3": {
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_96_3": {
 
 
 const cleanup: Array<() => Promise<void>> = [];
@@ -277,7 +318,7 @@ async function listen(server: ReturnType<typeof createNetServer>): Promise<numbe
   return address.port;
 }
 const signal = () => new AbortController().signal;
-const __jait_hook_534 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
 /*__jait_scope_open__*/{
 
 try {
@@ -293,16 +334,60 @@ await (async()=>{
     __jait_capture(2, (result.evidence[0]?.facts.expired));
     __jait_capture(3, (result.rules.some(rule => rule.ruleId === "tls.gateway-trust")));
     __jait_capture(4, (JSON.stringify(result)));
+    let hsts = false;
+    const httpsPort = await listen(createHttpsServer({ key: await readFile(join(directory, "key.pem")), cert: await readFile(join(directory, "cert.pem")) }, (_request, response) => {
+      if (hsts) response.setHeader("Strict-Transport-Security", "max-age=3600");
+      response.end("discard this fixture body");
+    }));
+    const missingHsts = await checkHttp("127.0.0.1", httpsPort, true, signal());
+    __jait_capture(5, (missingHsts.conclusive));
+    __jait_capture(6, (missingHsts.rules.some(rule => rule.ruleId === "http.hsts")));
+    hsts = true;
+    const fixedHsts = await checkHttp("127.0.0.1", httpsPort, true, signal());
+    __jait_capture(7, (fixedHsts.rules.some(rule => rule.ruleId === "http.hsts")));
+    __jait_capture(8, (fixedHsts.evidence[0]?.facts));
     const wrong = await checkTls("127.0.0.1", port, "other.invalid", signal());
-    __jait_capture(5, (wrong.rules.some(rule => rule.ruleId === "tls.identity")));
+    __jait_capture(9, (wrong.rules.some(rule => rule.ruleId === "tls.identity")));
     const now = Date.now(); vi.spyOn(Date, "now").mockReturnValue(now + 3 * 86400_000);
     const expired = await checkTls("127.0.0.1", port, "localhost", signal());
-    __jait_capture(6, (expired.rules.some(rule => rule.ruleId === "tls.expired")));
+    __jait_capture(10, (expired.rules.some(rule => rule.ruleId === "tls.expired")));
   
 })();
 
 } finally {
-await __jait_hook_534();
+await __jait_hook_598();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_lib_security_protocols_test_ts_129_3": {
+
+
+const cleanup: Array<() => Promise<void>> = [];
+async function listen(server: ReturnType<typeof createNetServer>): Promise<number> {
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  cleanup.push(() => new Promise(resolve => server.close(() => resolve())));
+  const address = server.address(); if (!address || typeof address === "string") throw new Error("Expected port");
+  return address.port;
+}
+const signal = () => new AbortController().signal;
+const __jait_hook_598 = async () => { vi.restoreAllMocks(); await Promise.all(cleanup.splice(0).map(fn => fn())); };
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const port = await listen(createNetServer(socket => socket.destroy()));
+    const result = await checkHttp("127.0.0.1", port, false, signal());
+    __jait_capture(0, (result.conclusive));
+    __jait_capture(1, (result.evidence));
+    __jait_capture(2, (result.coverageGaps));
+  
+})();
+
+} finally {
+await __jait_hook_598();
 }
 }
 

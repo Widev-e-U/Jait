@@ -131,15 +131,15 @@ pub(super) fn run(
                 Err(e) => return Err(Error::Io(e)),
             }
         }
-        if let Some(status) = child.0.try_wait().map_err(Error::Io)? {
-            if eof {
-                return match status.code() {
-                    Some(0 | 1) => Ok(Some((output, false))),
-                    _ => Err(Error::Input(
-                        "ripgrep search failed (invalid expression or process error)".into(),
-                    )),
-                };
-            }
+        if let Some(status) = child.0.try_wait().map_err(Error::Io)?
+            && eof
+        {
+            return match status.code() {
+                Some(0 | 1) => Ok(Some((output, false))),
+                _ => Err(Error::Input(
+                    "ripgrep search failed (invalid expression or process error)".into(),
+                )),
+            };
         }
         if !progressed {
             thread::sleep(Duration::from_millis(5));

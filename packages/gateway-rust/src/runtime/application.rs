@@ -563,7 +563,10 @@ mod ownership_tests {
         let result = supervisor
             .discovery_snapshot(context, |_| Box::pin(async { Ok(()) }))
             .await;
-        assert!(matches!(result, Err(error) if error.to_string() == "store is closed"));
+        assert_eq!(
+            result.err().map(|error| error.to_string()).as_deref(),
+            Some("store is closed")
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -669,7 +672,10 @@ mod ownership_tests {
         let result = supervisor
             .discovery_snapshot(context, |_| Box::pin(async { Ok(()) }))
             .await;
-        assert!(matches!(result, Err(error) if error.to_string() == "store is closed"));
+        assert_eq!(
+            result.err().map(|error| error.to_string()).as_deref(),
+            Some("store is closed")
+        );
         supervisor.shutdown().await;
         std::fs::remove_dir_all(root).unwrap();
     }

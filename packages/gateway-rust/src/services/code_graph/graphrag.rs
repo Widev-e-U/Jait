@@ -222,27 +222,49 @@ fn atomic_write(path: &Path, contents: &[u8]) -> io::Result<()> {
 /// the root, throughout derivation and export. Descriptor-relative traversal does
 /// not prevent an authorized directory from being moved by an external actor.
 #[cfg(unix)]
-pub fn open_export_namespace(root: &std::fs::File, components: &[&std::ffi::OsStr]) -> io::Result<std::fs::File> {
-    use std::{ffi::CString, os::{fd::{AsRawFd, FromRawFd}, unix::ffi::OsStrExt}};
+pub fn open_export_namespace(
+    root: &std::fs::File,
+    components: &[&std::ffi::OsStr],
+) -> io::Result<std::fs::File> {
+    use std::{
+        ffi::CString,
+        os::{
+            fd::{AsRawFd, FromRawFd},
+            unix::ffi::OsStrExt,
+        },
+    };
     if !root.metadata()?.is_dir() {
         return Err(io_error("export root capability is not a directory"));
     }
-    let names = components.iter().map(|component| {
-        let bytes = component.as_bytes();
-        if bytes.is_empty() || bytes == b"." || bytes == b".." || bytes.contains(&b'/') {
-            return Err(io_error("invalid export namespace component"));
-        }
-        CString::new(bytes).map_err(io_error)
-    }).collect::<io::Result<Vec<_>>>()?;
+    let names = components
+        .iter()
+        .map(|component| {
+            let bytes = component.as_bytes();
+            if bytes.is_empty() || bytes == b"." || bytes == b".." || bytes.contains(&b'/') {
+                return Err(io_error("invalid export namespace component"));
+            }
+            CString::new(bytes).map_err(io_error)
+        })
+        .collect::<io::Result<Vec<_>>>()?;
     let mut current = root.try_clone()?;
     for name in names {
         let made = unsafe { libc::mkdirat(current.as_raw_fd(), name.as_ptr(), 0o700) };
         if made != 0 {
             let error = io::Error::last_os_error();
-            if error.kind() != io::ErrorKind::AlreadyExists { return Err(error); }
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error);
+            }
         }
-        let fd = unsafe { libc::openat(current.as_raw_fd(), name.as_ptr(), libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC) };
-        if fd < 0 { return Err(io::Error::last_os_error()); }
+        let fd = unsafe {
+            libc::openat(
+                current.as_raw_fd(),
+                name.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
         current = unsafe { std::fs::File::from_raw_fd(fd) };
     }
     Ok(current)
@@ -267,23 +289,59 @@ pub fn write_graph_rag_export_in_directory(
 }
 
 #[cfg(unix)]
-fn atomic_write_at(directory: &std::fs::File, name: &std::ffi::OsStr, contents: &[u8]) -> io::Result<()> {
-    use std::{ffi::CString, io::Write, os::{fd::{AsRawFd, FromRawFd}, unix::ffi::OsStrExt}};
+fn atomic_write_at(
+    directory: &std::fs::File,
+    name: &std::ffi::OsStr,
+    contents: &[u8],
+) -> io::Result<()> {
+    use std::{
+        ffi::CString,
+        io::Write,
+        os::{
+            fd::{AsRawFd, FromRawFd},
+            unix::ffi::OsStrExt,
+        },
+    };
     let target = CString::new(name.as_bytes()).map_err(io_error)?;
-    if name.as_bytes().contains(&b'/') || name.as_bytes() == b"." || name.as_bytes() == b".." || name.is_empty() {
+    if name.as_bytes().contains(&b'/')
+        || name.as_bytes() == b"."
+        || name.as_bytes() == b".."
+        || name.is_empty()
+    {
         return Err(io_error("invalid export filename"));
     }
     let temporary = CString::new(format!(".jait-export-{}", uuid::Uuid::new_v4())).unwrap();
-    let fd = unsafe { libc::openat(directory.as_raw_fd(), temporary.as_ptr(), libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC, 0o600) };
-    if fd < 0 { return Err(io::Error::last_os_error()); }
+    let fd = unsafe {
+        libc::openat(
+            directory.as_raw_fd(),
+            temporary.as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o600,
+        )
+    };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
     let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
     let result = file.write_all(contents).and_then(|()| {
-        if unsafe { libc::renameat(directory.as_raw_fd(), temporary.as_ptr(), directory.as_raw_fd(), target.as_ptr()) } == 0 {
+        if unsafe {
+            libc::renameat(
+                directory.as_raw_fd(),
+                temporary.as_ptr(),
+                directory.as_raw_fd(),
+                target.as_ptr(),
+            )
+        } == 0
+        {
             Ok(())
-        } else { Err(io::Error::last_os_error()) }
+        } else {
+            Err(io::Error::last_os_error())
+        }
     });
     if result.is_err() {
-        unsafe { libc::unlinkat(directory.as_raw_fd(), temporary.as_ptr(), 0); }
+        unsafe {
+            libc::unlinkat(directory.as_raw_fd(), temporary.as_ptr(), 0);
+        }
     }
     result
 }
@@ -361,13 +419,20 @@ fn write_graph_rag_export_impl(
         let workers: Vec<_> = paths
             .iter()
             .zip(&contents)
-            .map(|(path, contents)| scope.spawn(move || {
-                #[cfg(unix)]
-                if let Some(directory) = directory {
-                    return atomic_write_at(directory, path.file_name().ok_or_else(|| io_error("missing export filename"))?, contents.as_bytes());
-                }
-                atomic_write(path, contents.as_bytes())
-            }))
+            .map(|(path, contents)| {
+                scope.spawn(move || {
+                    #[cfg(unix)]
+                    if let Some(directory) = directory {
+                        return atomic_write_at(
+                            directory,
+                            path.file_name()
+                                .ok_or_else(|| io_error("missing export filename"))?,
+                            contents.as_bytes(),
+                        );
+                    }
+                    atomic_write(path, contents.as_bytes())
+                })
+            })
             .collect();
         let mut first_error = None;
         for worker in workers {
@@ -400,13 +465,23 @@ mod atomic_write_tests {
         fs::create_dir_all(&outside).unwrap();
         let capability = fs::File::open(&root).unwrap();
         symlink(&outside, root.join("linked")).unwrap();
-        assert!(super::open_export_namespace(&capability, &["linked".as_ref(), "child".as_ref()]).is_err());
+        assert!(
+            super::open_export_namespace(&capability, &["linked".as_ref(), "child".as_ref()])
+                .is_err()
+        );
         assert!(!outside.join("child").exists());
-        assert!(super::open_export_namespace(&capability, &["new".as_ref(), "..".as_ref()]).is_err());
+        assert!(
+            super::open_export_namespace(&capability, &["new".as_ref(), "..".as_ref()]).is_err()
+        );
         assert!(!root.join("new").exists());
-        let namespace = super::open_export_namespace(&capability, &["owner".as_ref(), "export".as_ref()]).unwrap();
+        let namespace =
+            super::open_export_namespace(&capability, &["owner".as_ref(), "export".as_ref()])
+                .unwrap();
         super::atomic_write_at(&namespace, "entities.jsonl".as_ref(), b"safe").unwrap();
-        assert_eq!(fs::read(root.join("owner/export/entities.jsonl")).unwrap(), b"safe");
+        assert_eq!(
+            fs::read(root.join("owner/export/entities.jsonl")).unwrap(),
+            b"safe"
+        );
         fs::remove_dir_all(base).unwrap();
     }
 
@@ -446,13 +521,24 @@ mod atomic_write_tests {
         let snapshot = super::GraphSnapshot {
             nodes: vec![],
             edges: vec![],
-            index: super::GraphIndex { graph_version: Some("v1".into()) },
+            index: super::GraphIndex {
+                graph_version: Some("v1".into()),
+            },
         };
         let manifest = super::write_graph_rag_export_in_directory(
-            &snapshot, &directory, &original, &super::default_clock(),
-        ).unwrap();
+            &snapshot,
+            &directory,
+            &original,
+            &super::default_clock(),
+        )
+        .unwrap();
         assert_eq!(manifest.graph_version, "v1");
-        for name in ["entities.jsonl", "relationships.jsonl", "text_units.jsonl", "manifest.json"] {
+        for name in [
+            "entities.jsonl",
+            "relationships.jsonl",
+            "text_units.jsonl",
+            "manifest.json",
+        ] {
             assert!(moved.join(name).is_file(), "missing {name}");
             assert!(!outside.join(name).exists(), "escaped {name}");
         }

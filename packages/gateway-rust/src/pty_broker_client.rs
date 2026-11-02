@@ -243,12 +243,12 @@ impl PtyBrokerClient {
                         handler(&pty_id, data);
                     }
                 }
-            } else if event == "exit" {
-                if let Some(pty_id) = pty_id {
-                    let handler = self.lock().on_exit.clone();
-                    if let Some(handler) = handler {
-                        handler(&pty_id, message.exit_code.unwrap_or(-1), message.signal);
-                    }
+            } else if event == "exit"
+                && let Some(pty_id) = pty_id
+            {
+                let handler = self.lock().on_exit.clone();
+                if let Some(handler) = handler {
+                    handler(&pty_id, message.exit_code.unwrap_or(-1), message.signal);
                 }
             }
             return;
@@ -565,8 +565,9 @@ mod tests {
     #[test]
     fn output_and_exit_events_reach_handlers() {
         let (_, client) = client_with_io(None);
+        type ExitLog = Arc<Mutex<Vec<(String, i64, Option<i64>)>>>;
         let output: Arc<Mutex<Vec<(String, String)>>> = Arc::new(Mutex::new(Vec::new()));
-        let exits: Arc<Mutex<Vec<(String, i64, Option<i64>)>>> = Arc::new(Mutex::new(Vec::new()));
+        let exits: ExitLog = Arc::new(Mutex::new(Vec::new()));
 
         let output_sink = output.clone();
         client.set_output_handler(Arc::new(move |pty_id, data| {

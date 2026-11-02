@@ -59,7 +59,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_sprint5_test_ts_187_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_188_3": {
 
 
 const toolContext = {
@@ -69,6 +69,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -210,17 +211,17 @@ class MockBrowserDriver implements BrowserDriver {
 let registry: SurfaceRegistry;
 let driver: MockBrowserDriver;
 let projectRoot: string;
-const __jait_hook_5632 = () => {
+const __jait_hook_5721 = () => {
     projectRoot = mkdtempSync(join(__jait_fixture_dir, "jait-sprint5-"));
     toolContext.projectRoot = projectRoot;
     registry = new SurfaceRegistry();
     driver = new MockBrowserDriver();
     registry.register(new BrowserSurfaceFactory({ driverFactory: async () => driver }));
   };
-const __jait_hook_5932 = () => {
+const __jait_hook_6021 = () => {
     rmSync(projectRoot, { recursive: true, force: true });
   };
-await __jait_hook_5632();
+await __jait_hook_5721();
 try {
 await (async()=>{
 
@@ -251,13 +252,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5932();
+await __jait_hook_6021();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_213_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_214_3": {
 
 
 const toolContext = {
@@ -267,6 +268,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -408,17 +410,17 @@ class MockBrowserDriver implements BrowserDriver {
 let registry: SurfaceRegistry;
 let driver: MockBrowserDriver;
 let projectRoot: string;
-const __jait_hook_5632 = () => {
+const __jait_hook_5721 = () => {
     projectRoot = mkdtempSync(join(__jait_fixture_dir, "jait-sprint5-"));
     toolContext.projectRoot = projectRoot;
     registry = new SurfaceRegistry();
     driver = new MockBrowserDriver();
     registry.register(new BrowserSurfaceFactory({ driverFactory: async () => driver }));
   };
-const __jait_hook_5932 = () => {
+const __jait_hook_6021 = () => {
     rmSync(projectRoot, { recursive: true, force: true });
   };
-await __jait_hook_5632();
+await __jait_hook_5721();
 try {
 await (async()=>{
 
@@ -442,13 +444,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5932();
+await __jait_hook_6021();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_232_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_233_3": {
 
 
 const toolContext = {
@@ -458,6 +460,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -599,17 +602,17 @@ class MockBrowserDriver implements BrowserDriver {
 let registry: SurfaceRegistry;
 let driver: MockBrowserDriver;
 let projectRoot: string;
-const __jait_hook_5632 = () => {
+const __jait_hook_5721 = () => {
     projectRoot = mkdtempSync(join(__jait_fixture_dir, "jait-sprint5-"));
     toolContext.projectRoot = projectRoot;
     registry = new SurfaceRegistry();
     driver = new MockBrowserDriver();
     registry.register(new BrowserSurfaceFactory({ driverFactory: async () => driver }));
   };
-const __jait_hook_5932 = () => {
+const __jait_hook_6021 = () => {
     rmSync(projectRoot, { recursive: true, force: true });
   };
-await __jait_hook_5632();
+await __jait_hook_5721();
 try {
 await (async()=>{
 
@@ -619,6 +622,7 @@ await (async()=>{
     const screenshotTool = createBrowserInteractionTools(registry, undefined, { proxyFsOp } as any)
       .find((tool) => tool.name === "browser.screenshot")!;
 
+    await createBrowserNavigateTool(registry).execute({ url: "https://example.com" }, toolContext);
     const result = await screenshotTool.execute({ path: sourcePath }, {
       ...toolContext,
       executionNodeId: "remote-node",
@@ -634,13 +638,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5932();
+await __jait_hook_6021();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_252_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_254_3": {
 
 
 const toolContext = {
@@ -650,6 +654,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -791,17 +796,17 @@ class MockBrowserDriver implements BrowserDriver {
 let registry: SurfaceRegistry;
 let driver: MockBrowserDriver;
 let projectRoot: string;
-const __jait_hook_5632 = () => {
+const __jait_hook_5721 = () => {
     projectRoot = mkdtempSync(join(__jait_fixture_dir, "jait-sprint5-"));
     toolContext.projectRoot = projectRoot;
     registry = new SurfaceRegistry();
     driver = new MockBrowserDriver();
     registry.register(new BrowserSurfaceFactory({ driverFactory: async () => driver }));
   };
-const __jait_hook_5932 = () => {
+const __jait_hook_6021 = () => {
     rmSync(projectRoot, { recursive: true, force: true });
   };
-await __jait_hook_5632();
+await __jait_hook_5721();
 try {
 await (async()=>{
 
@@ -828,13 +833,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5932();
+await __jait_hook_6021();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_283_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_285_3": {
 
 
 const toolContext = {
@@ -844,6 +849,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -985,17 +991,17 @@ class MockBrowserDriver implements BrowserDriver {
 let registry: SurfaceRegistry;
 let driver: MockBrowserDriver;
 let projectRoot: string;
-const __jait_hook_5632 = () => {
+const __jait_hook_5721 = () => {
     projectRoot = mkdtempSync(join(__jait_fixture_dir, "jait-sprint5-"));
     toolContext.projectRoot = projectRoot;
     registry = new SurfaceRegistry();
     driver = new MockBrowserDriver();
     registry.register(new BrowserSurfaceFactory({ driverFactory: async () => driver }));
   };
-const __jait_hook_5932 = () => {
+const __jait_hook_6021 = () => {
     rmSync(projectRoot, { recursive: true, force: true });
   };
-await __jait_hook_5632();
+await __jait_hook_5721();
 try {
 await (async()=>{
 
@@ -1009,13 +1015,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5932();
+await __jait_hook_6021();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_294_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_296_3": {
 
 
 const toolContext = {
@@ -1025,6 +1031,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -1166,17 +1173,17 @@ class MockBrowserDriver implements BrowserDriver {
 let registry: SurfaceRegistry;
 let driver: MockBrowserDriver;
 let projectRoot: string;
-const __jait_hook_5632 = () => {
+const __jait_hook_5721 = () => {
     projectRoot = mkdtempSync(join(__jait_fixture_dir, "jait-sprint5-"));
     toolContext.projectRoot = projectRoot;
     registry = new SurfaceRegistry();
     driver = new MockBrowserDriver();
     registry.register(new BrowserSurfaceFactory({ driverFactory: async () => driver }));
   };
-const __jait_hook_5932 = () => {
+const __jait_hook_6021 = () => {
     rmSync(projectRoot, { recursive: true, force: true });
   };
-await __jait_hook_5632();
+await __jait_hook_5721();
 try {
 await (async()=>{
 
@@ -1211,13 +1218,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_5932();
+await __jait_hook_6021();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_353_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_355_3": {
 
 
 const toolContext = {
@@ -1227,6 +1234,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -1366,7 +1374,7 @@ class MockBrowserDriver implements BrowserDriver {
 }
 /*__jait_scope_open__*/{
 const originalFetch = globalThis.fetch;
-const __jait_hook_12733 = () => {
+const __jait_hook_12922 = () => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     delete process.env["OPENAI_API_KEY"];
@@ -1392,13 +1400,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_12733();
+await __jait_hook_12922();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_361_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_363_3": {
 
 
 const toolContext = {
@@ -1408,6 +1416,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -1547,7 +1556,7 @@ class MockBrowserDriver implements BrowserDriver {
 }
 /*__jait_scope_open__*/{
 const originalFetch = globalThis.fetch;
-const __jait_hook_12733 = () => {
+const __jait_hook_12922 = () => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     delete process.env["OPENAI_API_KEY"];
@@ -1579,13 +1588,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_12733();
+await __jait_hook_12922();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_375_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_377_3": {
 
 
 const toolContext = {
@@ -1595,6 +1604,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -1734,7 +1744,7 @@ class MockBrowserDriver implements BrowserDriver {
 }
 /*__jait_scope_open__*/{
 const originalFetch = globalThis.fetch;
-const __jait_hook_12733 = () => {
+const __jait_hook_12922 = () => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     delete process.env["OPENAI_API_KEY"];
@@ -1791,13 +1801,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_12733();
+await __jait_hook_12922();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_414_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_416_3": {
 
 
 const toolContext = {
@@ -1807,6 +1817,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -1946,7 +1957,7 @@ class MockBrowserDriver implements BrowserDriver {
 }
 /*__jait_scope_open__*/{
 const originalFetch = globalThis.fetch;
-const __jait_hook_12733 = () => {
+const __jait_hook_12922 = () => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     delete process.env["OPENAI_API_KEY"];
@@ -1993,13 +2004,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_12733();
+await __jait_hook_12922();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint5_test_ts_443_3": {
+case "tailstatic_packages_gateway_src_sprint5_test_ts_445_3": {
 
 
 const toolContext = {
@@ -2009,6 +2020,7 @@ const toolContext = {
   requestedBy: "test",
 };
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -2148,7 +2160,7 @@ class MockBrowserDriver implements BrowserDriver {
 }
 /*__jait_scope_open__*/{
 const originalFetch = globalThis.fetch;
-const __jait_hook_12733 = () => {
+const __jait_hook_12922 = () => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     delete process.env["OPENAI_API_KEY"];
@@ -2174,7 +2186,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_12733();
+await __jait_hook_12922();
 }
 }
 

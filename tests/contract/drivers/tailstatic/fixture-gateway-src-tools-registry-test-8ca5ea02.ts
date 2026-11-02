@@ -930,6 +930,117 @@ await (async()=>{
 
 break;
 }
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_331_3": {
+
+
+function context() {
+  return {
+    sessionId: "s-registry",
+    actionId: "a-registry",
+    projectRoot: process.cwd(),
+    requestedBy: "test",
+  };
+}
+function registerDiscoveryTool(
+  registry: ToolRegistry,
+  name: string,
+  description: string,
+  options: { tier?: "core" | "standard" | "external"; source?: "builtin" | "mcp" | `plugin:${string}`; priority?: number } = {},
+): void {
+  registry.register({
+    name,
+    description,
+    tier: options.tier ?? "standard",
+    category: options.source === "mcp" ? "external" : "meta",
+    source: options.source ?? "builtin",
+    discovery: options.priority == null ? undefined : { priority: options.priority },
+    parameters: { type: "object", properties: {} },
+    execute: async () => ({ ok: true, message: "completed" }),
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const registry = createToolRegistry(new SurfaceRegistry(), { userQuestionService: {}, previewService: {} } as any);
+    __jait_captureType(0, (registry.get("browser.handoff")));
+    for (const [legacy, canonical] of [["preview.open", "browser.open"], ["preview.stop", "browser.close"], ["preview.restart", "browser.restart"], ["preview.status", "browser.status"], ["preview.logs", "browser.logs"]]) {
+      __jait_captureType(1, (registry.get(canonical)));
+      __jait_captureType(2, (registry.get(legacy)));
+      __jait_capture(3, (registry.get(canonical)?.description));
+    }
+    __jait_captureType(4, (registry.get("preview.inspect")));
+    __jait_captureType(5, (createToolRegistry(new SurfaceRegistry(), { userQuestionService: {} } as any).get("browser.handoff")));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_registry_test_ts_345_3": {
+
+
+function context() {
+  return {
+    sessionId: "s-registry",
+    actionId: "a-registry",
+    projectRoot: process.cwd(),
+    requestedBy: "test",
+  };
+}
+function registerDiscoveryTool(
+  registry: ToolRegistry,
+  name: string,
+  description: string,
+  options: { tier?: "core" | "standard" | "external"; source?: "builtin" | "mcp" | `plugin:${string}`; priority?: number } = {},
+): void {
+  registry.register({
+    name,
+    description,
+    tier: options.tier ?? "standard",
+    category: options.source === "mcp" ? "external" : "meta",
+    source: options.source ?? "builtin",
+    discovery: options.priority == null ? undefined : { priority: options.priority },
+    parameters: { type: "object", properties: {} },
+    execute: async () => ({ ok: true, message: "completed" }),
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const service = { list: vi.fn(() => []), get: vi.fn(() => null), publicBaseUrl: () => "https://jait.invalid", webhookSecret: () => undefined };
+    const threads = { getById: vi.fn(() => ({ userId: "owner", personaAgentId: "persona" })), getPersonaAgent: vi.fn(() => ({ id: "persona" })) };
+    const registry = createToolRegistry(new SurfaceRegistry(), { agentGithubAppService: service, threadService: threads } as any);
+    const tool = registry.get("agent.github")!;
+    const own = await tool.execute({ action: "status" }, { ...context(), userId: "owner", threadId: "thread" });
+    __jait_capture(0, (own.data));
+    __jait_capture(1, (service.get.mock.calls));
+    service.get.mockClear();
+    const other = await tool.execute({ action: "status" }, { ...context(), userId: "other", threadId: "thread" });
+    __jait_capture(2, (other.data));
+    __jait_capture(3, (service.get.mock.calls));
+    const chat = await tool.execute({ action: "status" }, { ...context(), userId: "owner" });
+    __jait_capture(4, (chat.data));
+    threads.getPersonaAgent.mockReturnValueOnce(null as any);
+    const deleted = await tool.execute({ action: "status" }, { ...context(), userId: "owner", threadId: "thread" });
+    __jait_capture(5, (deleted.data));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

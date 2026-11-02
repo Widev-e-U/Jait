@@ -76,7 +76,7 @@ await (async()=>{
       session: { usage: 0.4, models: [], resetsAt: window.resetsAt }, weekly: { usage: 0.8, models: [], resetsAt: null },
     } });
     __jait_capture(1, (service.listForUser(["ollama"])), ([window.resetsAt]));
-
+  
 })();
 
 } finally {
@@ -120,7 +120,7 @@ await (async()=>{
       service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.5, models: [] } } });
       __jait_capture(1, (service.listForUser(["ollama"])));
     } finally { vi.useRealTimers(); }
-
+  
 })();
 
 } finally {
@@ -156,7 +156,7 @@ await (async()=>{
     const service = new ProviderUsageService(db);
     service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.42, models: [] } }, totals: { request_count: 50 } } as any);
     __jait_capture(0, (service.listForUser(["ollama"])));
-
+  
 })();
 
 } finally {
@@ -201,7 +201,7 @@ await (async()=>{
     __jait_capture(0, (service.listForUser(["ollama-1"])), ([activity.from,activity.until]));
     service.recordOllamaUsage("ollama-1", { limits: { weekly: { usage: 0.2, models: [] } } });
     __jait_capture(1, (service.listForUser(["ollama-1"])));
-
+  
 })();
 
 } finally {
@@ -246,7 +246,7 @@ await (async()=>{
     __jait_capture(0, (snapshots));
     __jait_capture(1, (snapshots[0]));
     __jait_capture(2, (snapshots[0].resetsAt), (new Date(1_700_000_000 * 1000).toISOString()));
-
+  
 })();
 
 } finally {
@@ -295,7 +295,7 @@ await (async()=>{
     __jait_capture(0, (snapshots));
     __jait_capture(1, (snapshots[0].status));
     __jait_capture(2, (snapshots[0].utilization));
-
+  
 })();
 
 } finally {
@@ -341,7 +341,7 @@ await (async()=>{
     __jait_capture(0, (service.listForUser(["account-1"])));
     __jait_capture(1, (service.listForUser(["account-1", "account-2"])));
     __jait_capture(2, (service.listForUser([])));
-
+  
 })();
 
 } finally {
@@ -391,7 +391,7 @@ await (async()=>{
 
     __jait_capture(0, (warning.mock.calls));
     __jait_capture(1, (warning.mock.calls));
-
+  
 })();
 
 } finally {
@@ -435,7 +435,7 @@ await (async()=>{
 
     __jait_capture(0, (warning.mock.calls));
     __jait_capture(1, (warning.mock.calls));
-
+  
 })();
 
 } finally {
@@ -490,7 +490,7 @@ await (async()=>{
       utilization: 0.96,
     });
     __jait_capture(1, (warning.mock.calls));
-
+  
 })();
 
 } finally {
@@ -534,7 +534,7 @@ await (async()=>{
     });
 
     __jait_capture(0, (warning.mock.calls));
-
+  
 })();
 
 } finally {
@@ -588,7 +588,7 @@ await (async()=>{
     const snapshots = service.listForUser(["codex-account"]);
     __jait_capture(0, (snapshots));
     __jait_capture(1, (snapshots), ([new Date(1_700_000_000 * 1000).toISOString()]));
-
+  
 })();
 
 } finally {
@@ -644,7 +644,7 @@ await (async()=>{
     const snapshots = service.listForUser(["codex-account"]);
     __jait_capture(0, (snapshots));
     __jait_capture(1, (snapshots[0]?.resetCredits));
-
+  
 })();
 
 } finally {
@@ -654,7 +654,281 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each0": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const ordinaryUsageAllowed = true;
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-plus", {
+      ordinaryUsageAllowed,
+      rateLimits: {
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+        secondary: { usedPercent: 18, windowDurationMins: 10_080 },
+        planType: "plus",
+        credits: { hasCredits: false, unlimited: false, balance: "0" },
+      },
+    });
+
+    __jait_capture(0, (service.listForUser(["codex-plus"])));
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each1": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const ordinaryUsageAllowed = undefined;
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-plus", {
+      ordinaryUsageAllowed,
+      rateLimits: {
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+        secondary: { usedPercent: 18, windowDurationMins: 10_080 },
+        planType: "plus",
+        credits: { hasCredits: false, unlimited: false, balance: "0" },
+      },
+    });
+
+    __jait_capture(0, (service.listForUser(["codex-plus"])));
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each0": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const block = { ordinaryUsageAllowed: false, rateLimits: {} };
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-blocked", {
+      ...block,
+      rateLimits: {
+        ...block.rateLimits,
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+      },
+    });
+    __jait_capture(0, (service.listForUser(["codex-blocked"])[0].status));
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each1": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const block = { rateLimits: { spendControlReached: true } };
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-blocked", {
+      ...block,
+      rateLimits: {
+        ...block.rateLimits,
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+      },
+    });
+    __jait_capture(0, (service.listForUser(["codex-blocked"])[0].status));
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each2": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const block = { rateLimits: { rateLimitReachedType: "workspace_member_credits_depleted" } };
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
+    service.recordCodexRateLimits("codex-blocked", {
+      ...block,
+      rateLimits: {
+        ...block.rateLimits,
+        primary: { usedPercent: 15, windowDurationMins: 300 },
+      },
+    });
+    __jait_capture(0, (service.listForUser(["codex-blocked"])[0].status));
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_317_3": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
+    for (const [usedPercent, status] of [[100, "rejected"], [95, "allowed_warning"], [15, "allowed"]] as const) {
+      service.recordCodexRateLimits("codex-plus", {
+        rateLimits: {
+          primary: { usedPercent, windowDurationMins: 300 },
+          credits: { hasCredits: false },
+        },
+      });
+      __jait_capture(0, (service.listForUser(["codex-plus"])[0].status), (status));
+    }
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_330_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -703,7 +977,7 @@ await (async()=>{
     const snapshots = service.listForUser(["codex-work"]);
     __jait_capture(0, (snapshots));
     __jait_capture(1, (snapshots));
-
+  
 })();
 
 } finally {
@@ -713,7 +987,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_326_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_373_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -769,7 +1043,7 @@ await (async()=>{
     } finally {
       vi.useRealTimers();
     }
-
+  
 })();
 
 } finally {
@@ -779,7 +1053,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_381_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_428_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -837,7 +1111,7 @@ await (async()=>{
     } finally {
       vi.useRealTimers();
     }
-
+  
 })();
 
 } finally {
@@ -847,7 +1121,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_418_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_465_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -881,7 +1155,7 @@ await (async()=>{
     }).run();
     const service = new ProviderUsageService(db);
     __jait_capture(0, (service.listForUser(["ollama"])[0]));
-
+  
 })();
 
 } finally {

@@ -60,7 +60,7 @@ await (async()=>{
 
     await tools.execute("os_tool", {
       action: "register-device",
-      device: { id: "host-1", name: "Primary Desktop", platform: "desktop", capabilities: ["capture", "input"] },
+      device: { id: "host-1", name: "Primary Desktop", platform: "desktop", capabilities: ["capture", "remote-input"] },
     }, {
       actionId: "a1",
       sessionId: "s1",
@@ -78,7 +78,7 @@ await (async()=>{
       requestedBy: "test",
     });
 
-    await tools.execute("screen.share", {
+    const share = await tools.execute("screen.share", {
       action: "start",
       hostDeviceId: "host-1",
       viewerDeviceIds: ["viewer-1"],
@@ -107,10 +107,15 @@ await (async()=>{
       } | null;
     };
     __jait_capture(5, (payload.devices));
-    __jait_capture(6, (payload.activeSession?.hostDeviceId));
-    __jait_capture(7, (payload.activeSession?.viewers[0]?.deviceId));
-    __jait_capture(8, (payload.activeSession?.controllerDeviceId));
-    __jait_capture(9, (payload.activeSession?.capabilities.remoteInput));
+    // Agent-initiated shares are owned by their chat and await host approval.
+    __jait_capture(6, (share.ok));
+    __jait_captureType(7, (payload.activeSession));
+    const scopedSession = screenShare.getSessionForChat("s1");
+    __jait_capture(8, (scopedSession?.pendingApproval));
+    __jait_capture(9, (scopedSession?.hostDeviceId));
+    __jait_capture(10, (scopedSession?.viewers[0]?.deviceId));
+    __jait_capture(11, (scopedSession?.controllerDeviceId));
+    __jait_capture(12, (scopedSession?.capabilities.remoteInput));
   
 })();
 
@@ -121,7 +126,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint10_test_ts_71_3": {
+case "tailstatic_packages_gateway_src_sprint10_test_ts_76_3": {
 
 const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 /*__jait_scope_open__*/{
@@ -154,7 +159,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint10_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_sprint10_test_ts_94_3": {
 
 const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 /*__jait_scope_open__*/{

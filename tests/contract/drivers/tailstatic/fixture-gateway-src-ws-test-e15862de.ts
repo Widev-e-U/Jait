@@ -2,6 +2,7 @@
 
 
 import { WsControlPlane } from "../../../../packages/gateway/src/ws.js";
+
 import type { AppConfig } from "../../../../packages/gateway/src/config.js";
 import { backgroundCommandMonitor } from "../../../../packages/gateway/src/services/background-command-monitor.js";
 import type { BackgroundCommandResult } from "../../../../packages/gateway/src/services/background-command-monitor.js";
@@ -47,10 +48,11 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_ws_test_ts_178_3": {
+case "tailstatic_packages_gateway_src_ws_test_ts_183_3": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -97,11 +99,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -109,11 +113,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -190,7 +196,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -203,10 +209,10 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -237,16 +243,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_204_3": {
+case "tailstatic_packages_gateway_src_ws_test_ts_209_3": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -293,11 +300,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -305,11 +314,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -386,7 +397,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -399,10 +410,10 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -416,16 +427,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_217_3": {
+case "tailstatic_packages_gateway_src_ws_test_ts_222_3": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -472,11 +484,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -484,11 +498,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -565,7 +581,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -578,10 +594,10 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -602,16 +618,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_233_3": {
+case "tailstatic_packages_gateway_src_ws_test_ts_238_3": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -658,11 +675,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -670,11 +689,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -751,7 +772,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -764,10 +785,10 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -782,16 +803,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_243_3": {
+case "tailstatic_packages_gateway_src_ws_test_ts_248_3": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -838,11 +860,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -850,11 +874,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -931,7 +957,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -944,10 +970,10 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -966,16 +992,17 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_258_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_263_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -1022,11 +1049,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -1034,11 +1063,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -1115,7 +1146,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -1128,11 +1159,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -1158,17 +1189,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_279_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_284_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -1215,11 +1247,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -1227,11 +1261,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -1308,7 +1344,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -1321,11 +1357,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -1348,17 +1384,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_297_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_302_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -1405,11 +1442,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -1417,11 +1456,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -1498,7 +1539,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -1511,11 +1552,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -1538,17 +1579,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_315_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_320_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -1595,11 +1637,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -1607,11 +1651,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -1688,7 +1734,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -1701,11 +1747,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -1722,17 +1768,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_327_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_332_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -1779,11 +1826,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -1791,11 +1840,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -1872,7 +1923,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -1885,11 +1936,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -1911,17 +1962,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_346_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_351_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -1968,11 +2020,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -1980,11 +2034,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -2061,7 +2117,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -2074,11 +2130,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -2095,17 +2151,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_358_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_363_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -2152,11 +2209,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -2164,11 +2223,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -2245,7 +2306,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -2258,11 +2319,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -2290,17 +2351,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_383_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_388_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -2347,11 +2409,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -2359,11 +2423,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -2440,7 +2506,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -2453,11 +2519,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -2502,17 +2568,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_423_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_428_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -2559,11 +2626,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -2571,11 +2640,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -2652,7 +2723,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -2665,11 +2736,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -2703,17 +2774,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_452_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_457_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -2760,11 +2832,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -2772,11 +2846,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -2853,7 +2929,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -2866,11 +2942,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -2909,17 +2985,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_489_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_494_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -2966,11 +3043,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -2978,11 +3057,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -3059,7 +3140,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -3072,11 +3153,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -3097,17 +3178,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_505_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_510_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -3154,11 +3236,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -3166,11 +3250,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -3247,7 +3333,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -3260,11 +3346,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -3285,17 +3371,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_523_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_528_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -3342,11 +3429,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -3354,11 +3443,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -3435,7 +3526,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -3448,66 +3539,74 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
       const token = await createToken("user-screen-share");
-
-      const host = openWs(port, { token });
-      await waitForOpen(host.ws);
-      await host.collector.next();
-      await new Promise((r) => setTimeout(r, 100));
-      host.ws.send(JSON.stringify({ type: "subscribe", sessionId: "session-share", deviceId: "host-device" }));
-      await host.collector.next();
-
-      const viewer = openWs(port, { token });
-      await waitForOpen(viewer.ws);
-      await viewer.collector.next();
-      await new Promise((r) => setTimeout(r, 100));
-      viewer.ws.send(JSON.stringify({ type: "subscribe", sessionId: "session-share", deviceId: "viewer-device" }));
-      await viewer.collector.next();
-
-      host.ws.send(
-        JSON.stringify({
-          type: "screen-share:offer",
-          payload: {
-            sessionId: "session-share",
-            hostDeviceId: "host-device",
-            viewerDeviceId: "viewer-device",
-            sdp: { type: "offer", sdp: "fake-sdp" },
-          },
-        }),
-      );
-
-      const relayed = await viewer.collector.next();
-      __jait_capture(1, (relayed.type));
-      __jait_capture(2, (relayed.payload.sdp.sdp));
-
-      const senderEcho = await host.collector.maybeNext(500);
-      __jait_captureType(3, (senderEcho));
-
-      host.ws.close();
-      viewer.ws.close();
+      const screenShare = new ScreenShareService();
+      for (const id of ["host-device", "viewer-device", "outsider-device"]) {
+        screenShare.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = screenShare.startShare({
+        hostDeviceId: "host-device", viewerDeviceIds: ["viewer-device"],
+        initiatedBy: "agent", requireConsent: true,
+      });
+      plane.screenShareSessionLookup = (id) => screenShare.getSession(id);
+      const connect = async (deviceId: string) => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", sessionId: "chat", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("host-device");
+      const viewer = await connect("viewer-device");
+      const outsider = await connect("outsider-device");
+      const offer = (id = session.id) => JSON.stringify({ type: "screen-share:offer", payload: {
+        sessionId: id, hostDeviceId: "host-device", sdp: "fake-sdp",
+      } });
+      try {
+        host.ws.send(offer());
+        __jait_captureType(1, (await viewer.collector.maybeNext(200))); // Await host consent.
+        screenShare.resolveApproval(session.id, true);
+        outsider.ws.send(offer());
+        __jait_captureType(2, (await viewer.collector.maybeNext(200))); // A non-member cannot inject signals.
+        host.ws.send(offer());
+        const relayed = await viewer.collector.next();
+        __jait_capture(3, (relayed.type));
+        __jait_capture(4, (relayed.payload.sdp));
+        __jait_captureType(5, (await host.collector.maybeNext(200)));
+        __jait_captureType(6, (await outsider.collector.maybeNext(200)));
+        host.ws.send(offer("unknown-session"));
+        __jait_captureType(7, (await viewer.collector.maybeNext(200)));
+        screenShare.stopShare(session.id);
+        host.ws.send(offer());
+        __jait_captureType(8, (await viewer.collector.maybeNext(200)));
+      } finally {
+        host.ws.close(); viewer.ws.close(); outsider.ws.close();
+      }
     
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_563_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_575_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -3554,11 +3653,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -3566,11 +3667,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -3647,7 +3750,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -3660,11 +3763,678 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
+try {
+await (async()=>{
+
+      const token = await createToken("user-screen-share-lifecycle");
+      const shares = new ScreenShareService();
+      for (const id of ["host", "viewer", "outsider"]) {
+        shares.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = shares.startShare({
+        hostDeviceId: "host", viewerDeviceIds: ["viewer"], chatId: "owned-chat",
+        initiatedBy: "agent", requireConsent: true, reason: "Please share",
+      });
+      plane.screenShareSessionLookup = id => shares.getSession(id);
+      plane.canAccessSession = (id, user) => id === "owned-chat" && user === "user-screen-share-lifecycle";
+      // This case tests lifecycle scoping with an already-granted node.
+      const permission = vi.spyOn(plane as unknown as { permissionDeniedError: () => Error | null }, "permissionDeniedError").mockReturnValue(null);
+      const stopped = vi.fn();
+      plane.onScreenShareStop = stopped;
+      const connect = async (deviceId: string) => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("host");
+      const viewer = await connect("viewer");
+      const outsider = await connect("outsider");
+      try {
+        const request = { type: "screen-share:start-request", payload: {
+          sessionId: session.id, hostDeviceId: "host", initiatedBy: "user", requireConsent: false, chatId: "forged",
+        } };
+        outsider.ws.send(JSON.stringify(request));
+        __jait_captureType(1, (await host.collector.maybeNext(100)));
+        viewer.ws.send(JSON.stringify({ ...request, payload: { ...request.payload, sessionId: "unknown" } }));
+        __jait_captureType(2, (await host.collector.maybeNext(100)));
+        viewer.ws.send(JSON.stringify(request));
+        const delivered = await host.collector.next();
+        __jait_capture(3, (delivered.payload), ({
+          sessionId: session.id, hostDeviceId: "host", viewerDeviceIds: ["viewer"],
+          initiatedBy: "agent", requireConsent: true, chatId: "owned-chat",
+        }));
+        outsider.ws.send(JSON.stringify({ type: "screen-share:stop-request", payload: { sessionId: session.id } }));
+        viewer.ws.send(JSON.stringify({ type: "screen-share:stop-request", payload: { sessionId: session.id } }));
+        await new Promise(resolve => setTimeout(resolve, 100));
+        __jait_capture(4, (stopped.mock.calls));
+        host.ws.send(JSON.stringify({ type: "screen-share:stop-request", payload: { sessionId: session.id } }));
+        await vi.waitFor(() => __jait_capture(5, (stopped.mock.calls), ([session.id])));
+      } finally {
+        permission.mockRestore();
+        host.ws.close(); viewer.ws.close(); outsider.ws.close();
+      }
+    
+})();
+
+} finally {
+await __jait_hook_8506();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_test_ts_628_5": {
+
+const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
+const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
+const TEST_SECRET = "test-jwt-secret-for-ws-tests";
+function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    port: 0,
+    wsPort: 0,
+    host: "127.0.0.1",
+    logLevel: "silent",
+    corsOrigin: "*",
+    nodeEnv: "test",
+    jwtSecret: TEST_SECRET,
+    ollamaUrl: "http://localhost:11434",
+    ollamaModel: "test",
+    ...overrides,
+  };
+}
+async function createToken(
+  sub: string,
+  secret = TEST_SECRET,
+): Promise<string> {
+  const key = new TextEncoder().encode(secret);
+  return new jose.SignJWT({ sub })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(key);
+}
+function createMessageCollector(ws: WebSocket) {
+  const queue: unknown[] = [];
+  const waiters: Array<(msg: unknown) => void> = [];
+
+  ws.on("message", (raw) => {
+    const parsed = JSON.parse(raw.toString());
+    const waiter = waiters.shift();
+    if (waiter) {
+      waiter(parsed);
+    } else {
+      queue.push(parsed);
+    }
+  });
+
+  return {
+    /** Get the next message, waiting up to `ms` milliseconds */
+    next(ms = 3000): Promise<any> {
+      const queued = queue.shift();
+      if (queued) return Promise.resolve(queued);
+      return new Promise((resolve, reject) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Check if a message arrives within `ms` — returns null if not */
+    async maybeNext(ms = 500): Promise<any | null> {
+      const queued = queue.shift();
+      if (queued) return queued;
+      return new Promise((resolve) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Shallow copy of the messages currently queued (no blocking) */
+    peekAll(): unknown[] {
+      return [...queue];
+    },
+    /** Remove and return the message at `index` from the queue */
+    removeAt(index: number): unknown {
+      return queue.splice(index, 1)[0];
+    },
+  };
+}
+function waitForOpen(ws: WebSocket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) return resolve();
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+}
+function openWs(port: number, opts?: { token?: string; headers?: Record<string, string> }) {
+  const url = opts?.token
+    ? `ws://127.0.0.1:${port}?token=${opts.token}`
+    : `ws://127.0.0.1:${port}`;
+  const ws = new WebSocket(url, { headers: opts?.headers });
+  const collector = createMessageCollector(ws);
+  return { ws, collector };
+}
+async function grantPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+  nodeId: string,
+  grants: Record<string, boolean>,
+): Promise<void> {
+  remote.ws.send(
+    JSON.stringify({ type: "nodes.update-permissions", payload: { nodeId, grants } }),
+  );
+  // Wait until a `nodes.permissions` broadcast reflecting the applied grants is
+  // queued. The update is processed synchronously, but a stale snapshot (e.g.
+  // from node registration) may already be queued, so we scan the queue for the
+  // target node's updated grant values. Stale snapshots for the target node are
+  // removed so the loop makes progress; all unrelated messages (fs.node-registered,
+  // node.updated, …) are left untouched for the rest of the test to consume.
+  for (;;) {
+    const queue = remote.collector.peekAll();
+    let madeProgress = false;
+    for (let i = 0; i < queue.length; i++) {
+      const msg = queue[i] as any;
+      if (msg.type !== "nodes.permissions") continue;
+      const node = (msg.payload?.nodes ?? []).find(
+        (n: any) => n.id === nodeId || n.nodeId === nodeId,
+      );
+      if (!node) continue;
+      const perms = node.permissions ?? node;
+      const matches = Object.entries(grants).every(
+        ([cap, expected]) => perms[cap] === expected,
+      );
+      remote.collector.removeAt(i);
+      if (matches) return;
+      // Stale snapshot for the target node — drop it and re-scan.
+      madeProgress = true;
+      break;
+    }
+    if (!madeProgress) await new Promise((r) => setTimeout(r, 30));
+  }
+}
+async function nextNodesPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+): Promise<any> {
+  for (;;) {
+    const msg = await remote.collector.next(3000);
+    if (msg.type === "nodes.permissions") return msg;
+  }
+}
+/*__jait_scope_open__*/{
+let plane: WsControlPlane;
+let port: number;
+let db: Awaited<ReturnType<typeof openDatabase>>["db"];
+const __jait_hook_5762 = async () => {
+    const config = makeConfig({ wsPort: 0 });
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    migrateDatabase(opened.sqlite);
+    plane = new WsControlPlane(config, db);
+    plane.canAccessTerminal = (_id, user) => Boolean(user);
+    plane.canAccessConsent = (_id, user) => Boolean(user);
+    plane.start();
+    const addr = (plane as any).wss?.address();
+    port = typeof addr === "object" ? addr.port : 0;
+    __jait_capture(0, (port));
+  };
+const __jait_hook_8506 = () => {
+    plane.stop();
+  };
+/*__jait_scope_open__*/{
+await __jait_hook_5762();
+try {
+await (async()=>{
+
+      const shares = new ScreenShareService();
+      for (const id of ["host", "viewer"]) {
+        shares.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = shares.startShare({ hostDeviceId: "host", viewerDeviceIds: ["viewer"], chatId: "private" });
+      plane.screenShareSessionLookup = id => shares.getSession(id);
+      plane.canAccessSession = (id, user) => id === "private" && user === "alice";
+      const connect = async (user: string, deviceId: string) => {
+        const client = openWs(port, { token: await createToken(user) });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("alice", "host");
+      const viewer = await connect("alice", "viewer");
+      const attacker = await connect("bob", "viewer");
+      try {
+        host.ws.send(JSON.stringify({ type: "screen-share:offer", payload: {
+          sessionId: session.id, hostDeviceId: "host", sdp: "offer",
+        } }));
+        __jait_capture(1, ((await viewer.collector.next()).payload.sdp));
+        __jait_captureType(2, (await attacker.collector.maybeNext(100)));
+        attacker.ws.send(JSON.stringify({ type: "screen-share:answer", payload: {
+          sessionId: session.id, viewerDeviceId: "viewer", sdp: "forged",
+        } }));
+        __jait_captureType(3, (await host.collector.maybeNext(100)));
+        plane.broadcastScreenShareState(session);
+        __jait_capture(4, ((await viewer.collector.next()).type));
+        __jait_capture(5, ((await host.collector.next()).type));
+        __jait_captureType(6, (await attacker.collector.maybeNext(100)));
+        plane.sendScreenShareStartRequest(session.id, "host", ["viewer"], { chatId: "private" });
+        __jait_capture(7, ((await viewer.collector.next()).type));
+        __jait_capture(8, ((await host.collector.next()).type));
+        __jait_captureType(9, (await attacker.collector.maybeNext(100)));
+      } finally {
+        host.ws.close(); viewer.ws.close(); attacker.ws.close();
+      }
+    
+})();
+
+} finally {
+await __jait_hook_8506();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_test_ts_670_5": {
+
+const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
+const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
+const TEST_SECRET = "test-jwt-secret-for-ws-tests";
+function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    port: 0,
+    wsPort: 0,
+    host: "127.0.0.1",
+    logLevel: "silent",
+    corsOrigin: "*",
+    nodeEnv: "test",
+    jwtSecret: TEST_SECRET,
+    ollamaUrl: "http://localhost:11434",
+    ollamaModel: "test",
+    ...overrides,
+  };
+}
+async function createToken(
+  sub: string,
+  secret = TEST_SECRET,
+): Promise<string> {
+  const key = new TextEncoder().encode(secret);
+  return new jose.SignJWT({ sub })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(key);
+}
+function createMessageCollector(ws: WebSocket) {
+  const queue: unknown[] = [];
+  const waiters: Array<(msg: unknown) => void> = [];
+
+  ws.on("message", (raw) => {
+    const parsed = JSON.parse(raw.toString());
+    const waiter = waiters.shift();
+    if (waiter) {
+      waiter(parsed);
+    } else {
+      queue.push(parsed);
+    }
+  });
+
+  return {
+    /** Get the next message, waiting up to `ms` milliseconds */
+    next(ms = 3000): Promise<any> {
+      const queued = queue.shift();
+      if (queued) return Promise.resolve(queued);
+      return new Promise((resolve, reject) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Check if a message arrives within `ms` — returns null if not */
+    async maybeNext(ms = 500): Promise<any | null> {
+      const queued = queue.shift();
+      if (queued) return queued;
+      return new Promise((resolve) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Shallow copy of the messages currently queued (no blocking) */
+    peekAll(): unknown[] {
+      return [...queue];
+    },
+    /** Remove and return the message at `index` from the queue */
+    removeAt(index: number): unknown {
+      return queue.splice(index, 1)[0];
+    },
+  };
+}
+function waitForOpen(ws: WebSocket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) return resolve();
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+}
+function openWs(port: number, opts?: { token?: string; headers?: Record<string, string> }) {
+  const url = opts?.token
+    ? `ws://127.0.0.1:${port}?token=${opts.token}`
+    : `ws://127.0.0.1:${port}`;
+  const ws = new WebSocket(url, { headers: opts?.headers });
+  const collector = createMessageCollector(ws);
+  return { ws, collector };
+}
+async function grantPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+  nodeId: string,
+  grants: Record<string, boolean>,
+): Promise<void> {
+  remote.ws.send(
+    JSON.stringify({ type: "nodes.update-permissions", payload: { nodeId, grants } }),
+  );
+  // Wait until a `nodes.permissions` broadcast reflecting the applied grants is
+  // queued. The update is processed synchronously, but a stale snapshot (e.g.
+  // from node registration) may already be queued, so we scan the queue for the
+  // target node's updated grant values. Stale snapshots for the target node are
+  // removed so the loop makes progress; all unrelated messages (fs.node-registered,
+  // node.updated, …) are left untouched for the rest of the test to consume.
+  for (;;) {
+    const queue = remote.collector.peekAll();
+    let madeProgress = false;
+    for (let i = 0; i < queue.length; i++) {
+      const msg = queue[i] as any;
+      if (msg.type !== "nodes.permissions") continue;
+      const node = (msg.payload?.nodes ?? []).find(
+        (n: any) => n.id === nodeId || n.nodeId === nodeId,
+      );
+      if (!node) continue;
+      const perms = node.permissions ?? node;
+      const matches = Object.entries(grants).every(
+        ([cap, expected]) => perms[cap] === expected,
+      );
+      remote.collector.removeAt(i);
+      if (matches) return;
+      // Stale snapshot for the target node — drop it and re-scan.
+      madeProgress = true;
+      break;
+    }
+    if (!madeProgress) await new Promise((r) => setTimeout(r, 30));
+  }
+}
+async function nextNodesPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+): Promise<any> {
+  for (;;) {
+    const msg = await remote.collector.next(3000);
+    if (msg.type === "nodes.permissions") return msg;
+  }
+}
+/*__jait_scope_open__*/{
+let plane: WsControlPlane;
+let port: number;
+let db: Awaited<ReturnType<typeof openDatabase>>["db"];
+const __jait_hook_5762 = async () => {
+    const config = makeConfig({ wsPort: 0 });
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    migrateDatabase(opened.sqlite);
+    plane = new WsControlPlane(config, db);
+    plane.canAccessTerminal = (_id, user) => Boolean(user);
+    plane.canAccessConsent = (_id, user) => Boolean(user);
+    plane.start();
+    const addr = (plane as any).wss?.address();
+    port = typeof addr === "object" ? addr.port : 0;
+    __jait_capture(0, (port));
+  };
+const __jait_hook_8506 = () => {
+    plane.stop();
+  };
+/*__jait_scope_open__*/{
+await __jait_hook_5762();
+try {
+await (async()=>{
+
+      const token = await createToken("user-screen-share-peers");
+      const shares = new ScreenShareService();
+      for (const id of ["host", "viewer-a", "viewer-b", "outsider"]) {
+        shares.registerDevice({ id, name: id, platform: "web", authorized: true, capabilities: [] });
+      }
+      const session = shares.startShare({ hostDeviceId: "host", viewerDeviceIds: ["viewer-a", "viewer-b"] });
+      plane.screenShareSessionLookup = id => shares.getSession(id);
+      const connect = async (deviceId: string) => {
+        const client = openWs(port, { token });
+        await waitForOpen(client.ws);
+        await client.collector.next();
+        client.ws.send(JSON.stringify({ type: "subscribe", deviceId }));
+        await client.collector.next();
+        return client;
+      };
+      const host = await connect("host");
+      const a = await connect("viewer-a");
+      const b = await connect("viewer-b");
+      const outsider = await connect("outsider");
+      try {
+        const send = (client: typeof host, type: string, payload: Record<string, unknown>) =>
+          client.ws.send(JSON.stringify({ type, payload: { sessionId: session.id, ...payload } }));
+        send(host, "screen-share:offer", { hostDeviceId: "host", toDeviceId: "viewer-a", sdp: "offer-a" });
+        __jait_capture(1, ((await a.collector.next()).payload.sdp));
+        __jait_captureType(2, (await b.collector.maybeNext(100)));
+        send(host, "screen-share:offer", { hostDeviceId: "host", sdp: "ambiguous" });
+        send(host, "screen-share:offer", { hostDeviceId: "host", toDeviceId: "outsider", sdp: "invalid" });
+        __jait_captureType(3, (await a.collector.maybeNext(100)));
+        __jait_captureType(4, (await outsider.collector.maybeNext(100)));
+        send(a, "screen-share:ice-candidate", { fromDeviceId: "viewer-a", candidate: "a-ice" });
+        __jait_capture(5, ((await host.collector.next()).payload.candidate));
+        __jait_captureType(6, (await b.collector.maybeNext(100)));
+        send(host, "screen-share:ice-candidate", { fromDeviceId: "host", toDeviceId: "viewer-b", candidate: "b-ice" });
+        __jait_capture(7, ((await b.collector.next()).payload.candidate));
+        __jait_captureType(8, (await a.collector.maybeNext(100)));
+      } finally {
+        host.ws.close(); a.ws.close(); b.ws.close(); outsider.ws.close();
+      }
+    
+})();
+
+} finally {
+await __jait_hook_8506();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_test_ts_711_5": {
+
+const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
+const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
+const TEST_SECRET = "test-jwt-secret-for-ws-tests";
+function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
+  return {
+    port: 0,
+    wsPort: 0,
+    host: "127.0.0.1",
+    logLevel: "silent",
+    corsOrigin: "*",
+    nodeEnv: "test",
+    jwtSecret: TEST_SECRET,
+    ollamaUrl: "http://localhost:11434",
+    ollamaModel: "test",
+    ...overrides,
+  };
+}
+async function createToken(
+  sub: string,
+  secret = TEST_SECRET,
+): Promise<string> {
+  const key = new TextEncoder().encode(secret);
+  return new jose.SignJWT({ sub })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("1h")
+    .sign(key);
+}
+function createMessageCollector(ws: WebSocket) {
+  const queue: unknown[] = [];
+  const waiters: Array<(msg: unknown) => void> = [];
+
+  ws.on("message", (raw) => {
+    const parsed = JSON.parse(raw.toString());
+    const waiter = waiters.shift();
+    if (waiter) {
+      waiter(parsed);
+    } else {
+      queue.push(parsed);
+    }
+  });
+
+  return {
+    /** Get the next message, waiting up to `ms` milliseconds */
+    next(ms = 3000): Promise<any> {
+      const queued = queue.shift();
+      if (queued) return Promise.resolve(queued);
+      return new Promise((resolve, reject) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Check if a message arrives within `ms` — returns null if not */
+    async maybeNext(ms = 500): Promise<any | null> {
+      const queued = queue.shift();
+      if (queued) return queued;
+      return new Promise((resolve) => {
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
+      });
+    },
+    /** Shallow copy of the messages currently queued (no blocking) */
+    peekAll(): unknown[] {
+      return [...queue];
+    },
+    /** Remove and return the message at `index` from the queue */
+    removeAt(index: number): unknown {
+      return queue.splice(index, 1)[0];
+    },
+  };
+}
+function waitForOpen(ws: WebSocket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (ws.readyState === WebSocket.OPEN) return resolve();
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+}
+function openWs(port: number, opts?: { token?: string; headers?: Record<string, string> }) {
+  const url = opts?.token
+    ? `ws://127.0.0.1:${port}?token=${opts.token}`
+    : `ws://127.0.0.1:${port}`;
+  const ws = new WebSocket(url, { headers: opts?.headers });
+  const collector = createMessageCollector(ws);
+  return { ws, collector };
+}
+async function grantPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+  nodeId: string,
+  grants: Record<string, boolean>,
+): Promise<void> {
+  remote.ws.send(
+    JSON.stringify({ type: "nodes.update-permissions", payload: { nodeId, grants } }),
+  );
+  // Wait until a `nodes.permissions` broadcast reflecting the applied grants is
+  // queued. The update is processed synchronously, but a stale snapshot (e.g.
+  // from node registration) may already be queued, so we scan the queue for the
+  // target node's updated grant values. Stale snapshots for the target node are
+  // removed so the loop makes progress; all unrelated messages (fs.node-registered,
+  // node.updated, …) are left untouched for the rest of the test to consume.
+  for (;;) {
+    const queue = remote.collector.peekAll();
+    let madeProgress = false;
+    for (let i = 0; i < queue.length; i++) {
+      const msg = queue[i] as any;
+      if (msg.type !== "nodes.permissions") continue;
+      const node = (msg.payload?.nodes ?? []).find(
+        (n: any) => n.id === nodeId || n.nodeId === nodeId,
+      );
+      if (!node) continue;
+      const perms = node.permissions ?? node;
+      const matches = Object.entries(grants).every(
+        ([cap, expected]) => perms[cap] === expected,
+      );
+      remote.collector.removeAt(i);
+      if (matches) return;
+      // Stale snapshot for the target node — drop it and re-scan.
+      madeProgress = true;
+      break;
+    }
+    if (!madeProgress) await new Promise((r) => setTimeout(r, 30));
+  }
+}
+async function nextNodesPermissions(
+  remote: { ws: WebSocket; collector: ReturnType<typeof createMessageCollector> },
+): Promise<any> {
+  for (;;) {
+    const msg = await remote.collector.next(3000);
+    if (msg.type === "nodes.permissions") return msg;
+  }
+}
+/*__jait_scope_open__*/{
+let plane: WsControlPlane;
+let port: number;
+let db: Awaited<ReturnType<typeof openDatabase>>["db"];
+const __jait_hook_5762 = async () => {
+    const config = makeConfig({ wsPort: 0 });
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    migrateDatabase(opened.sqlite);
+    plane = new WsControlPlane(config, db);
+    plane.canAccessTerminal = (_id, user) => Boolean(user);
+    plane.canAccessConsent = (_id, user) => Boolean(user);
+    plane.start();
+    const addr = (plane as any).wss?.address();
+    port = typeof addr === "object" ? addr.port : 0;
+    __jait_capture(0, (port));
+  };
+const __jait_hook_8506 = () => {
+    plane.stop();
+  };
+/*__jait_scope_open__*/{
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -3704,17 +4474,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_598_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_746_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -3761,11 +4532,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -3773,11 +4546,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -3854,7 +4629,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -3867,11 +4642,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -3905,17 +4680,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_627_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_775_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -3962,11 +4738,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -3974,11 +4752,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -4055,7 +4835,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -4068,11 +4848,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -4101,17 +4881,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_651_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_799_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -4158,11 +4939,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -4170,11 +4953,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -4251,7 +5036,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -4264,11 +5049,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -4316,17 +5101,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_694_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_842_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -4373,11 +5159,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -4385,11 +5173,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -4466,7 +5256,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -4479,11 +5269,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -4518,17 +5308,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_724_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_872_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -4575,11 +5366,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -4587,11 +5380,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -4668,7 +5463,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -4681,11 +5476,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -4712,17 +5507,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_746_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_894_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -4769,11 +5565,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -4781,11 +5579,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -4862,7 +5662,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -4875,11 +5675,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -4911,17 +5711,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_773_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_921_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -4968,11 +5769,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -4980,11 +5783,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -5061,7 +5866,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -5074,11 +5879,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -5113,17 +5918,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_803_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_951_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -5170,11 +5976,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -5182,11 +5990,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -5263,7 +6073,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -5276,11 +6086,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -5346,17 +6156,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_864_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1012_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -5403,11 +6214,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -5415,11 +6228,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -5496,7 +6311,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -5509,11 +6324,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -5585,17 +6400,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_940_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1088_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -5642,11 +6458,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -5654,11 +6472,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -5735,7 +6555,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -5748,11 +6568,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -5791,17 +6611,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_976_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1124_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -5848,11 +6669,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -5860,11 +6683,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -5941,7 +6766,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -5954,11 +6779,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -6007,17 +6832,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1028_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1176_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -6064,11 +6890,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -6076,11 +6904,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -6157,7 +6987,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -6170,11 +7000,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -6229,17 +7059,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1078_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1226_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -6286,11 +7117,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -6298,11 +7131,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -6379,7 +7214,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -6392,11 +7227,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -6433,17 +7268,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1110_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1258_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -6490,11 +7326,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -6502,11 +7340,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -6583,7 +7423,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -6596,11 +7436,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -6656,17 +7496,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1161_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1309_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -6713,11 +7554,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -6725,11 +7568,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -6806,7 +7651,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -6819,11 +7664,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -6865,17 +7710,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1200_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1348_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -6922,11 +7768,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -6934,11 +7782,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -7015,7 +7865,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -7028,11 +7878,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -7062,17 +7912,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1225_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1373_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -7119,11 +7970,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -7131,11 +7984,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -7212,7 +8067,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -7225,11 +8080,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -7267,17 +8122,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1258_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1406_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -7324,11 +8180,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -7336,11 +8194,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -7417,7 +8277,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -7430,11 +8290,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -7458,17 +8318,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1277_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1425_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -7515,11 +8376,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -7527,11 +8390,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -7608,7 +8473,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -7621,11 +8486,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
       const token = await createToken("user-streaming-sessions");
@@ -7651,17 +8516,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1298_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1446_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -7708,11 +8574,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -7720,11 +8588,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -7801,7 +8671,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -7814,11 +8684,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -7847,17 +8717,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1343_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1491_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -7904,11 +8775,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -7916,11 +8789,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -7997,7 +8872,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -8010,7 +8885,7 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
@@ -8028,7 +8903,7 @@ async function connectNode(user: string, nodeId: string) {
       await grantPermissions(remote, nodeId, { terminal: true });
       return remote;
     }
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -8062,17 +8937,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1377_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1525_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -8119,11 +8995,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -8131,11 +9009,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -8212,7 +9092,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -8225,7 +9105,7 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
@@ -8243,7 +9123,7 @@ async function connectNode(user: string, nodeId: string) {
       await grantPermissions(remote, nodeId, { terminal: true });
       return remote;
     }
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -8285,17 +9165,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1414_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1562_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -8342,11 +9223,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -8354,11 +9237,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -8435,7 +9320,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -8448,7 +9333,7 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
@@ -8466,7 +9351,7 @@ async function connectNode(user: string, nodeId: string) {
       await grantPermissions(remote, nodeId, { terminal: true });
       return remote;
     }
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -8500,17 +9385,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1443_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1591_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -8557,11 +9443,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -8569,11 +9457,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -8650,7 +9540,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -8663,7 +9553,7 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
@@ -8681,7 +9571,7 @@ async function connectNode(user: string, nodeId: string) {
       await grantPermissions(remote, nodeId, { terminal: true });
       return remote;
     }
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -8710,17 +9600,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1469_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1617_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -8767,11 +9658,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -8779,11 +9672,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -8860,7 +9755,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -8873,11 +9768,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -8896,17 +9791,18 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_ws_test_ts_1483_5": {
+case "tailstatic_packages_gateway_src_ws_test_ts_1631_5": {
 
 const { default: WebSocket } = await import((typeof Bun!=="undefined"?Bun.resolveSync("ws",__jait_original_dir):__jait_require.resolve("ws/package.json").replace(/package\.json$/,"wrapper.mjs")));
 const jose = await import((typeof Bun!=="undefined"?Bun.resolveSync("jose", __jait_original_dir):__jait_require.resolve("jose")));
+const { ScreenShareService } = await import((typeof Bun!=="undefined"?Bun.resolveSync("@jait/screen-share", __jait_original_dir):__jait_require.resolve("@jait/screen-share")));
 const TEST_SECRET = "test-jwt-secret-for-ws-tests";
 function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -8953,11 +9849,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return Promise.resolve(queued);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("WS message timeout")), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("WS message timeout"));
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Check if a message arrives within `ms` — returns null if not */
@@ -8965,11 +9863,13 @@ function createMessageCollector(ws: WebSocket) {
       const queued = queue.shift();
       if (queued) return queued;
       return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), ms);
-        waiters.push((msg) => {
-          clearTimeout(timer);
-          resolve(msg);
-        });
+        const waiter = (msg: unknown) => { clearTimeout(timer); resolve(msg); };
+        const timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          resolve(null);
+        }, ms);
+        waiters.push(waiter);
       });
     },
     /** Shallow copy of the messages currently queued (no blocking) */
@@ -9046,7 +9946,7 @@ async function nextNodesPermissions(
 let plane: WsControlPlane;
 let port: number;
 let db: Awaited<ReturnType<typeof openDatabase>>["db"];
-const __jait_hook_5433 = async () => {
+const __jait_hook_5762 = async () => {
     const config = makeConfig({ wsPort: 0 });
     const opened = await openDatabase(":memory:");
     db = opened.db;
@@ -9059,11 +9959,11 @@ const __jait_hook_5433 = async () => {
     port = typeof addr === "object" ? addr.port : 0;
     __jait_capture(0, (port));
   };
-const __jait_hook_8177 = () => {
+const __jait_hook_8506 = () => {
     plane.stop();
   };
 /*__jait_scope_open__*/{
-await __jait_hook_5433();
+await __jait_hook_5762();
 try {
 await (async()=>{
 
@@ -9082,7 +9982,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_8177();
+await __jait_hook_8506();
 }
 }
 }

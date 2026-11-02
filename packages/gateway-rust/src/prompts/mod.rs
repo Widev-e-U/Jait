@@ -486,32 +486,53 @@ mod tests {
     #[test]
     fn live_browser_updates_block_is_unconditional() {
         let live = shared("LIVE_BROWSER_UPDATE_INSTRUCTIONS").expect("shared live-browser text");
-        for ctx in [PromptContext::default(), PromptContext { project_root: Some("/tmp/p".into()), ..PromptContext::default() }] {
+        for ctx in [
+            PromptContext::default(),
+            PromptContext {
+                project_root: Some("/tmp/p".into()),
+                ..PromptContext::default()
+            },
+        ] {
             let prompt = built(&ctx);
             let expected = format!("\n\n<liveBrowserUpdates>\n{live}\n</liveBrowserUpdates>");
             assert_eq!(prompt.matches("<liveBrowserUpdates>").count(), 1);
-            assert!(prompt.contains(&expected), "live-browser block missing or altered");
+            assert!(
+                prompt.contains(&expected),
+                "live-browser block missing or altered"
+            );
         }
     }
 
     #[test]
     fn live_browser_updates_precedes_project_artifacts() {
-        let ctx = PromptContext { project_root: Some("/tmp/p".into()), ..PromptContext::default() };
+        let ctx = PromptContext {
+            project_root: Some("/tmp/p".into()),
+            ..PromptContext::default()
+        };
         let prompt = built(&ctx);
         let live = prompt.find("<liveBrowserUpdates>").unwrap();
         let artifacts = prompt.find("<projectArtifacts>").unwrap();
-        assert!(live < artifacts, "live-browser block must precede projectArtifacts");
+        assert!(
+            live < artifacts,
+            "live-browser block must precede projectArtifacts"
+        );
     }
 
     #[test]
     fn lite_external_section_ends_with_live_browser_text() {
         let live = shared("LIVE_BROWSER_UPDATE_INSTRUCTIONS").expect("shared live-browser text");
         let lite = shared("JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE").expect("shared lite text");
-        assert!(lite.ends_with(&format!("\n{live}")), "LITE section must end with the live-browser paragraph");
+        assert!(
+            lite.ends_with(&format!("\n{live}")),
+            "LITE section must end with the live-browser paragraph"
+        );
         // The TS parity contract: the lite variant appends the live-browser paragraph,
         // while the full variant ends at its "blocking condition" sentence and does not.
         let full = shared("JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS").expect("shared full text");
-        assert!(!full.ends_with(live), "full external section must not append the live-browser paragraph");
+        assert!(
+            !full.ends_with(live),
+            "full external section must not append the live-browser paragraph"
+        );
         assert!(lite.len() < full.len());
     }
 }

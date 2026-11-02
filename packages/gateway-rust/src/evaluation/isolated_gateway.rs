@@ -582,11 +582,11 @@ impl StartupRecoveryRegistry {
     // Never waits for a busy slot: exhaustion is reported before effects begin.
     fn reserve(&self) -> Option<Arc<tokio::sync::Mutex<StartupRecoveryEntry>>> {
         for slot in &self.slots {
-            if let Ok(mut entry) = slot.try_lock() {
-                if matches!(*entry, StartupRecoveryEntry::Free) {
-                    *entry = StartupRecoveryEntry::Reserved;
-                    return Some(slot.clone());
-                }
+            if let Ok(mut entry) = slot.try_lock()
+                && matches!(*entry, StartupRecoveryEntry::Free)
+            {
+                *entry = StartupRecoveryEntry::Reserved;
+                return Some(slot.clone());
             }
         }
         None
@@ -766,7 +766,7 @@ async fn start_isolated_gateway_owned(
         host: host.clone(),
         operation: spec.operation.clone(),
     };
-    let mut child = match host.spawn_child(&spec).await {
+    let child = match host.spawn_child(&spec).await {
         Ok(child) => child,
         Err(SpawnFailure::NoChild(error)) => {
             *entry = StartupRecoveryEntry::StateOnly {

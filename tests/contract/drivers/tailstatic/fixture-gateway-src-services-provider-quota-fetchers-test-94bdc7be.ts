@@ -61,7 +61,7 @@ try {
 await (async()=>{
 
     __jait_capture(0, (isOllamaUsageResponse({ limits: { session: { usage: 0.42, models: [] } }, totals: { request_count: 50 } })));
-
+  
 })();
 
 } finally {
@@ -91,7 +91,7 @@ await (async()=>{
     __jait_capture(1, (isOllamaUsageResponse({
         limits: { monthly: { usage: 0.6, models: [] } },
       })));
-
+  
 })();
 
 } finally {
@@ -126,7 +126,7 @@ await (async()=>{
     }
     __jait_capture(3, (isOllamaUsageResponse({ ...activity, from: "invalid" })));
     __jait_capture(4, (isOllamaUsageResponse({ ...activity, buckets: [{}] })));
-
+  
 })();
 
 } finally {
@@ -151,7 +151,7 @@ await (async()=>{
     __jait_capture(1, (isOllamaUsageResponse({
         limits: { monthly: { usage: "60%", models: [] } },
       })));
-
+  
 })();
 
 } finally {
@@ -185,7 +185,7 @@ await (async()=>{
     const probe = await probeOllamaAccount({ baseUrl: "https://ollama.com/", apiKey: "key-1" });
     __jait_capture(2, (probe));
     __jait_capture(3, (fetchMock.mock.calls));
-
+  
 })();
 
 } finally {
@@ -210,7 +210,7 @@ await (async()=>{
       JSON.stringify({ Email: "me@example.com", Name: "Me", Plan: "pro" }),
     )));
     await __jait_captureResolved(0, (probeOllamaAccount({ baseUrl: "http://localhost:11434" })));
-
+  
 })();
 
 } finally {
@@ -235,7 +235,7 @@ await (async()=>{
 
     const probe = await probeOllamaAccount({ apiKey: "bad" });
     __jait_capture(0, (probe));
-
+  
 })();
 
 } finally {
@@ -265,7 +265,7 @@ await (async()=>{
 
     const probe = await probeOllamaAccount({ baseUrl: "http://127.0.0.1:11434" });
     __jait_capture(0, (probe));
-
+  
 })();
 
 } finally {
@@ -297,7 +297,7 @@ await (async()=>{
 
     const usage = await fetchOllamaUsageFrom("http://127.0.0.1:11434/");
     __jait_capture(1, (usage.limits.weekly?.usage));
-
+  
 })();
 
 } finally {
@@ -321,7 +321,7 @@ await (async()=>{
     vi.stubGlobal("fetch", vi.fn(async () => new Response("unauthorized", { status: 401 })));
 
     await __jait_captureRejected(0, (fetchOllamaUsageFrom("https://ollama.com", "bad")));
-
+  
 })();
 
 } finally {
@@ -345,7 +345,7 @@ await (async()=>{
       probe: { reachable: false, account: null },
     });
     __jait_capture(0, (hint));
-
+  
 })();
 
 } finally {
@@ -369,7 +369,7 @@ await (async()=>{
       probe: { reachable: true, account: null },
     });
     __jait_capture(0, (hint));
-
+  
 })();
 
 } finally {
@@ -393,7 +393,7 @@ await (async()=>{
       probe: { reachable: true, account: null },
     });
     __jait_capture(0, (hint));
-
+  
 })();
 
 } finally {
@@ -421,7 +421,7 @@ await (async()=>{
     });
     __jait_capture(0, (hint));
     __jait_capture(1, (hint));
-
+  
 })();
 
 } finally {
@@ -446,7 +446,7 @@ await (async()=>{
     });
     __jait_capture(0, (hint));
     __jait_capture(1, (hint));
-
+  
 })();
 
 } finally {
@@ -467,7 +467,7 @@ await (async()=>{
 
     __jait_capture(0, (isCodexRateLimitsResponse({ rateLimits: { primary: window, secondary: null } })));
     __jait_capture(1, (isCodexRateLimitsResponse({ rateLimits: { primary: null, secondary: window } })));
-
+  
 })();
 
 } finally {
@@ -494,7 +494,7 @@ await (async()=>{
     __jait_capture(5, (isCodexRateLimitsResponse({ rateLimits: { primary: { usedPercent: 50, windowDurationMins: "300" } } })));
     __jait_capture(6, (isCodexRateLimitsResponse({ rateLimits: { secondary: {} } })));
     __jait_capture(7, (isCodexRateLimitsResponse({ rateLimits: "none" })));
-
+  
 })();
 
 } finally {
@@ -527,7 +527,7 @@ await (async()=>{
     __jait_capture(1, (isCodexRateLimitsResponse({ rateLimits: { primary: window }, rateLimitResetCredits: {} })));
     __jait_capture(2, (isCodexRateLimitsResponse({ rateLimits: { primary: window }, rateLimitResetCredits: { availableCount: 0, credits: [] } })));
     __jait_capture(3, (isCodexRateLimitsResponse({ rateLimits: { primary: window }, rateLimitResetCredits: null })));
-
+  
 })();
 
 } finally {
@@ -552,7 +552,7 @@ await (async()=>{
     __jait_capture(2, (isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: { credits: [{ grantedAt: "yesterday" }] } })));
     __jait_capture(3, (isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: { credits: [null] } })));
     __jait_capture(4, (isCodexRateLimitsResponse({ ...base, rateLimitResetCredits: 7 })));
-
+  
 })();
 
 } finally {
@@ -579,7 +579,7 @@ await (async()=>{
     __jait_capture(4, (isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: { codex: { primary: { usedPercent: "?" } } } })));
     __jait_capture(5, (isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: 3 })));
     __jait_capture(6, (isCodexRateLimitsResponse({ ...base, rateLimitsByLimitId: { codex: null } })));
-
+  
 })();
 
 } finally {
@@ -603,7 +603,7 @@ await (async()=>{
       rateLimitsByLimitId: { codex: { primary: { usedPercent: 1, windowDurationMins: null, resetsAt: null } } },
     };
     __jait_capture(0, (normalizeCodexRateLimits(response)), (response));
-
+  
 })();
 
 } finally {
@@ -637,7 +637,7 @@ await (async()=>{
     __jait_capture(3, (normalized.rateLimits.credits));
     __jait_capture(4, (normalized.rateLimits.rateLimitReachedType));
     __jait_capture(5, (normalized.rateLimits.spendControlReached));
-
+  
 })();
 
 } finally {
@@ -670,7 +670,7 @@ await (async()=>{
     __jait_capture(1, (normalizeCodexRateLimits(empty)), (empty));
     const bare: CodexRateLimitsResponse = { rateLimits: { primary: null, secondary: null } };
     __jait_capture(2, (normalizeCodexRateLimits(bare)), (bare));
-
+  
 })();
 
 } finally {

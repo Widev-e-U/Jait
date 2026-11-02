@@ -442,13 +442,8 @@ mod tests {
     /// Minimal executor so the focused tests can drive the boxed futures
     /// without pulling a runtime (all drivers complete on first poll).
     fn block_on<F: std::future::Future>(future: F) -> F::Output {
-        use std::task::{Context, Poll, Wake, Waker};
-        struct NoopWake;
-        impl Wake for NoopWake {
-            fn wake(self: std::sync::Arc<Self>) {}
-        }
-        let waker = Waker::from(std::sync::Arc::new(NoopWake));
-        let mut cx = Context::from_waker(&waker);
+        use std::task::{Context, Poll, Waker};
+        let mut cx = Context::from_waker(Waker::noop());
         let mut future = std::pin::pin!(future);
         loop {
             if let Poll::Ready(value) = future.as_mut().poll(&mut cx) {

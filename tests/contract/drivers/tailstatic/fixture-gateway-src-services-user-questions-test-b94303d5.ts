@@ -172,6 +172,127 @@ await __jait_hook_122();
 
 break;
 }
+case "tailstatic_packages_gateway_src_services_user_questions_test_ts_98_3_each0": {
+
+
+const __jait_hook_122 = () => {
+  vi.useRealTimers();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const tool = "user.ask";
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    const service = new UserQuestionService();
+    const wake = vi.fn();
+    service.onDetachedResolved = wake;
+    const id = service.startResumable({ sessionId: "chat", userId: "owner", requestedBy: tool,
+      questions: [{ id: "browser", header: "Browser", question: "Finish in the browser" }] });
+    const wait = service.waitForAnswer(id, "chat", "owner");
+    await vi.advanceTimersByTimeAsync(60_000);
+    __jait_capture(0, (await wait));
+    __jait_capture(1, (wake.mock.calls));
+    __jait_capture(2, (service.submit(id, { answers: {} }, "other")));
+    __jait_capture(3, (wake.mock.calls));
+    const result = { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } };
+    __jait_capture(4, (service.submit(id, result, "owner")));
+    __jait_capture(5, (wake.mock.calls));
+    __jait_capture(6, (wake.mock.calls[0]![0]), ({ id, sessionId: "chat", requestedBy: tool, status: "submitted" }));
+    __jait_capture(7, (service.submit(id, result, "owner")));
+    __jait_capture(8, (await service.waitForAnswer(id, "other-chat", "owner")));
+    __jait_capture(9, (await service.waitForAnswer(id, "chat", "owner")), ({ status: "answered", result }));
+    __jait_capture(10, (wake.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_122();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_user_questions_test_ts_98_3_each1": {
+
+
+const __jait_hook_122 = () => {
+  vi.useRealTimers();
+};
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const tool = "browser.handoff";
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    const service = new UserQuestionService();
+    const wake = vi.fn();
+    service.onDetachedResolved = wake;
+    const id = service.startResumable({ sessionId: "chat", userId: "owner", requestedBy: tool,
+      questions: [{ id: "browser", header: "Browser", question: "Finish in the browser" }] });
+    const wait = service.waitForAnswer(id, "chat", "owner");
+    await vi.advanceTimersByTimeAsync(60_000);
+    __jait_capture(0, (await wait));
+    __jait_capture(1, (wake.mock.calls));
+    __jait_capture(2, (service.submit(id, { answers: {} }, "other")));
+    __jait_capture(3, (wake.mock.calls));
+    const result = { answers: { browser: { selected: ["Done"], freeText: null, skipped: false } } };
+    __jait_capture(4, (service.submit(id, result, "owner")));
+    __jait_capture(5, (wake.mock.calls));
+    __jait_capture(6, (wake.mock.calls[0]![0]), ({ id, sessionId: "chat", requestedBy: tool, status: "submitted" }));
+    __jait_capture(7, (service.submit(id, result, "owner")));
+    __jait_capture(8, (await service.waitForAnswer(id, "other-chat", "owner")));
+    __jait_capture(9, (await service.waitForAnswer(id, "chat", "owner")), ({ status: "answered", result }));
+    __jait_capture(10, (wake.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_122();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_user_questions_test_ts_121_3": {
+
+
+const __jait_hook_122 = () => {
+  vi.useRealTimers();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.useFakeTimers();
+    const service = new UserQuestionService();
+    const wake = vi.fn();
+    service.onDetachedResolved = wake;
+    const id = service.startResumable({ sessionId: "chat", questions: [] });
+    const first = service.waitForAnswer(id, "chat");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await first;
+    const attached = service.waitForAnswer(id, "chat");
+    service.cancel(id);
+    __jait_capture(0, (await attached));
+    __jait_capture(1, (wake.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_122();
+}
+}
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

@@ -7,7 +7,7 @@ use crate::{
     routes::auth::AuthState,
     security::{
         consent_executor::*,
-        consent_manager::{ConsentManager, ConsentManagerOptions},
+        consent_manager::{ConsentManager, ConsentManagerOptions, ConsentStatus},
     },
 };
 use axum::{Json, Router, extract::State, response::IntoResponse, routing::post};
@@ -478,16 +478,18 @@ async fn cancellation_with_invalid_clock_removes_pending_consent() {
         .unwrap();
     assert!(!result.ok);
     tokio::time::timeout(Duration::from_secs(2), async {
-        while !consent.list_pending(Some("session")).is_empty() {
+        // Cancellation claims the request off the pending queue under the queue
+        // lock, while the terminal status is written by the deferred transition.
+        // Both must settle before the retained snapshot observes Rejected.
+        while !consent.list_pending(Some("session")).is_empty()
+            || request.snapshot().status == ConsentStatus::Pending
+        {
             tokio::task::yield_now().await;
         }
     })
     .await
     .unwrap();
-    assert_eq!(
-        request.snapshot().status,
-        crate::security::consent_manager::ConsentStatus::Rejected
-    );
+    assert_eq!(request.snapshot().status, ConsentStatus::Rejected);
     assert!(!consent.approve(&request.snapshot().id, None, None).unwrap());
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
@@ -594,7 +596,7 @@ async fn cancellation_claim_blocks_approval_and_retains_permit_until_finalized()
     }
     assert!(entered_result.is_ok());
     assert!(!result.ok);
-    assert_eq!(approval.unwrap(), false);
+    assert!(!approval.unwrap());
     assert_eq!(capacity.unwrap_err(), "tool execution capacity unavailable");
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {

@@ -50,7 +50,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each0": {
 
 
 const context: ToolContext = {
@@ -79,6 +79,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -154,7 +155,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each0": {
 
 
 const context: ToolContext = {
@@ -183,6 +184,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -244,7 +246,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each0": {
 
 
 const context: ToolContext = {
@@ -273,6 +275,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -334,7 +337,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each0": {
 
 
 const context: ToolContext = {
@@ -363,6 +366,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -423,7 +427,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each0": {
 
 
 const context: ToolContext = {
@@ -452,6 +456,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -512,7 +517,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each0": {
 
 
 const context: ToolContext = {
@@ -541,6 +546,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -610,7 +616,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each1": {
 
 
 const context: ToolContext = {
@@ -639,6 +645,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -714,7 +721,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each1": {
 
 
 const context: ToolContext = {
@@ -743,6 +750,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -804,7 +812,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each1": {
 
 
 const context: ToolContext = {
@@ -833,6 +841,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -894,7 +903,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each1": {
 
 
 const context: ToolContext = {
@@ -923,6 +932,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -983,7 +993,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each1": {
 
 
 const context: ToolContext = {
@@ -1012,6 +1022,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1072,7 +1083,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each1": {
 
 
 const context: ToolContext = {
@@ -1101,6 +1112,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1170,7 +1182,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each2": {
 
 
 const context: ToolContext = {
@@ -1199,6 +1211,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1274,7 +1287,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each2": {
 
 
 const context: ToolContext = {
@@ -1303,6 +1316,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1364,7 +1378,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each2": {
 
 
 const context: ToolContext = {
@@ -1393,6 +1407,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1454,7 +1469,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each2": {
 
 
 const context: ToolContext = {
@@ -1483,6 +1498,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1543,7 +1559,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each2": {
 
 
 const context: ToolContext = {
@@ -1572,6 +1588,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1632,7 +1649,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each2": {
 
 
 const context: ToolContext = {
@@ -1661,6 +1678,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1730,7 +1748,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each3": {
 
 
 const context: ToolContext = {
@@ -1759,6 +1777,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1834,7 +1853,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each3": {
 
 
 const context: ToolContext = {
@@ -1863,6 +1882,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -1924,7 +1944,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each3": {
 
 
 const context: ToolContext = {
@@ -1953,6 +1973,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2014,7 +2035,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each3": {
 
 
 const context: ToolContext = {
@@ -2043,6 +2064,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2103,7 +2125,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each3": {
 
 
 const context: ToolContext = {
@@ -2132,6 +2154,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2192,7 +2215,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each3": {
 
 
 const context: ToolContext = {
@@ -2221,6 +2244,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2290,7 +2314,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each4": {
 
 
 const context: ToolContext = {
@@ -2319,6 +2343,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2394,7 +2419,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each4": {
 
 
 const context: ToolContext = {
@@ -2423,6 +2448,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2484,7 +2510,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each4": {
 
 
 const context: ToolContext = {
@@ -2513,6 +2539,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2574,7 +2601,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each4": {
 
 
 const context: ToolContext = {
@@ -2603,6 +2630,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2663,7 +2691,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each4": {
 
 
 const context: ToolContext = {
@@ -2692,6 +2720,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2752,7 +2781,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each4": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each4": {
 
 
 const context: ToolContext = {
@@ -2781,6 +2810,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2850,7 +2880,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each5": {
 
 
 const context: ToolContext = {
@@ -2879,6 +2909,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -2954,7 +2985,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each5": {
 
 
 const context: ToolContext = {
@@ -2983,6 +3014,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3044,7 +3076,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each5": {
 
 
 const context: ToolContext = {
@@ -3073,6 +3105,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3134,7 +3167,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each5": {
 
 
 const context: ToolContext = {
@@ -3163,6 +3196,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3223,7 +3257,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each5": {
 
 
 const context: ToolContext = {
@@ -3252,6 +3286,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3312,7 +3347,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each5": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each5": {
 
 
 const context: ToolContext = {
@@ -3341,6 +3376,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3410,7 +3446,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each6": {
 
 
 const context: ToolContext = {
@@ -3439,6 +3475,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3514,7 +3551,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each6": {
 
 
 const context: ToolContext = {
@@ -3543,6 +3580,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3604,7 +3642,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each6": {
 
 
 const context: ToolContext = {
@@ -3633,6 +3671,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3694,7 +3733,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each6": {
 
 
 const context: ToolContext = {
@@ -3723,6 +3762,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3783,7 +3823,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each6": {
 
 
 const context: ToolContext = {
@@ -3812,6 +3852,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3872,7 +3913,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each6": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each6": {
 
 
 const context: ToolContext = {
@@ -3901,6 +3942,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -3970,7 +4012,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each7": {
 
 
 const context: ToolContext = {
@@ -3999,6 +4041,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4074,7 +4117,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each7": {
 
 
 const context: ToolContext = {
@@ -4103,6 +4146,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4164,7 +4208,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each7": {
 
 
 const context: ToolContext = {
@@ -4193,6 +4237,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4254,7 +4299,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each7": {
 
 
 const context: ToolContext = {
@@ -4283,6 +4328,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4343,7 +4389,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each7": {
 
 
 const context: ToolContext = {
@@ -4372,6 +4418,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4432,7 +4479,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each7": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each7": {
 
 
 const context: ToolContext = {
@@ -4461,6 +4508,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4530,7 +4578,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_81_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_82_3_each8": {
 
 
 const context: ToolContext = {
@@ -4559,6 +4607,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4634,7 +4683,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_103_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_104_3_each8": {
 
 
 const context: ToolContext = {
@@ -4663,6 +4712,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4724,7 +4774,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_112_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_113_3_each8": {
 
 
 const context: ToolContext = {
@@ -4753,6 +4803,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4814,7 +4865,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_120_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_121_3_each8": {
 
 
 const context: ToolContext = {
@@ -4843,6 +4894,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4903,7 +4955,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_127_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_128_3_each8": {
 
 
 const context: ToolContext = {
@@ -4932,6 +4984,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -4992,7 +5045,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_134_3_each8": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_135_3_each8": {
 
 
 const context: ToolContext = {
@@ -5021,6 +5074,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -5090,7 +5144,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_152_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_153_3": {
 
 
 const context: ToolContext = {
@@ -5119,6 +5173,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -5179,7 +5234,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_162_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_163_3": {
 
 
 const context: ToolContext = {
@@ -5208,6 +5263,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -5270,7 +5326,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_174_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_175_3": {
 
 
 const context: ToolContext = {
@@ -5299,6 +5355,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -5360,7 +5417,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_185_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_186_3": {
 
 
 const context: ToolContext = {
@@ -5389,6 +5446,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),
@@ -5447,7 +5505,7 @@ await __jait_hook_2191();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_195_3": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_test_ts_196_3": {
 
 
 const context: ToolContext = {
@@ -5476,6 +5534,7 @@ const artifacts: string[] = [];
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),

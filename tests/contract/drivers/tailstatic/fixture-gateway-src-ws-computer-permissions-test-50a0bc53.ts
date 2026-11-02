@@ -1,5 +1,5 @@
 // Translated fixture from packages/gateway/src/ws-computer-permissions.test.ts; expected literals are in tail_static.rs.
-import { nodeCapabilityForTool } from "../../../../packages/gateway/src/ws.js";
+import { nodeCapabilityForTool, resolveSessionScopedClientTarget } from "../../../../packages/gateway/src/ws.js";
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -51,7 +51,144 @@ await (async()=>{
     __jait_capture(0, (nodeCapabilityForTool("computer.session", { action: "start" })));
     __jait_capture(1, (nodeCapabilityForTool("computer.act", { action: "click" })));
     __jait_capture(2, (nodeCapabilityForTool("computer.observe", {})));
-    __jait_captureType(3, (nodeCapabilityForTool("computer.session", { action: "stop" })));
+    __jait_capture(3, (nodeCapabilityForTool("computer.geometry", {})));
+    __jait_capture(4, (nodeCapabilityForTool("computer.clipboard.read", {})));
+    __jait_capture(5, (nodeCapabilityForTool("computer.clipboard.write", {})));
+    __jait_capture(6, (nodeCapabilityForTool("computer.future-action", {})));
+    __jait_captureType(7, (nodeCapabilityForTool("computer.session", { action: "stop" })));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_16_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (nodeCapabilityForTool("terminal.exec")));
+    __jait_capture(1, (nodeCapabilityForTool("shell.run")));
+    __jait_capture(2, (nodeCapabilityForTool("command.spawn")));
+    __jait_capture(3, (nodeCapabilityForTool("file.read")));
+    __jait_capture(4, (nodeCapabilityForTool("fs.write")));
+    __jait_capture(5, (nodeCapabilityForTool("read.file")));
+    __jait_capture(6, (nodeCapabilityForTool("write.file")));
+    __jait_capture(7, (nodeCapabilityForTool("search.files")));
+    __jait_capture(8, (nodeCapabilityForTool("browser.navigate")));
+    __jait_capture(9, (nodeCapabilityForTool("web.fetch")));
+    __jait_capture(10, (nodeCapabilityForTool("screen.capture")));
+    __jait_capture(11, (nodeCapabilityForTool("voice.transcribe")));
+    __jait_capture(12, (nodeCapabilityForTool("camera.snapshot")));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_32_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_captureType(0, (nodeCapabilityForTool("messenger.send")));
+    __jait_captureType(1, (nodeCapabilityForTool("computer")));
+    __jait_captureType(2, (nodeCapabilityForTool("filesystem.read")));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_40_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_captureType(0, (resolveSessionScopedClientTarget(null, "session-b")));
+    __jait_captureType(1, (resolveSessionScopedClientTarget(null, undefined)));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_45_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (resolveSessionScopedClientTarget("session-a", undefined)));
+    __jait_capture(1, (resolveSessionScopedClientTarget("session-a", null)));
+    __jait_capture(2, (resolveSessionScopedClientTarget("session-a", "")));
+    __jait_capture(3, (resolveSessionScopedClientTarget("session-a", "session-a")));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_52_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_captureType(0, (resolveSessionScopedClientTarget("session-a", "session-b")));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_ws_computer_permissions_test_ts_56_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (resolveSessionScopedClientTarget("session-a", 42)));
+    __jait_capture(1, (resolveSessionScopedClientTarget("session-a", { id: "session-b" })));
   
 })();
 

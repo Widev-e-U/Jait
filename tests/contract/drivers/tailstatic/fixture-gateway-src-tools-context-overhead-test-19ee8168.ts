@@ -61,7 +61,7 @@ await (async()=>{
     __jait_capture(1, (prompt.length));
     __jait_capture(2, (prompt));
     __jait_capture(3, (prompt));
-
+  
 })();
 
 } finally {
@@ -85,7 +85,7 @@ await (async()=>{
     const result = await catalog.execute({}, { sessionId: "audit", actionId: "overview", projectRoot: ".", requestedBy: "test" });
     __jait_capture(0, (JSON.stringify(result).length));
     __jait_capture(1, ((result.data as any).matches));
-
+  
 })();
 
 } finally {
@@ -111,7 +111,7 @@ await (async()=>{
     __jait_capture(0, (text));
     __jait_capture(1, (text));
     __jait_capture(2, (result.data.terminalOutputAnsi));
-
+  
 })();
 
 } finally {
@@ -135,7 +135,7 @@ await (async()=>{
     __jait_capture(0, (text.length));
     const data = JSON.parse(text.slice(text.indexOf("{")));
     __jait_capture(1, (data.truncated));
-
+  
 })();
 
 } finally {
@@ -158,7 +158,7 @@ await (async()=>{
       last: { inputTokens: 26210, cachedInputTokens: 7168, outputTokens: 62, totalTokens: 26272 },
     } }, "provider-session");
     __jait_capture(0, (events));
-
+  
 })();
 
 } finally {

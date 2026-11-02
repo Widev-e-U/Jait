@@ -110,8 +110,8 @@ impl ComputerControlSessionService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicI64, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicI64, Ordering};
 
     fn manual_clock(start: i64) -> (Clock, Arc<AtomicI64>) {
         let now = Arc::new(AtomicI64::new(start));
@@ -172,6 +172,9 @@ mod tests {
             session.id
         )));
         let other_owner = service.start("chat-b", "node-1").unwrap_err();
-        assert_eq!(other_owner, "Computer node-1 is already controlled by another chat");
+        assert_eq!(
+            other_owner,
+            "Computer node-1 is already controlled by another chat"
+        );
     }
 }

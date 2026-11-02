@@ -426,7 +426,10 @@ mod tests {
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 ));
             fs::create_dir_all(&root).unwrap();
-            Self(root)
+            // `copy_symlink` stores absolute, lexically normalized targets
+            // (see `relative_link_dot_segments_are_normalized_lexically`), so
+            // the fixture root must not carry `..` segments of its own.
+            Self(root.canonicalize().unwrap())
         }
         fn write(&self, path: &str, bytes: &[u8]) {
             let path = self.0.join(path);

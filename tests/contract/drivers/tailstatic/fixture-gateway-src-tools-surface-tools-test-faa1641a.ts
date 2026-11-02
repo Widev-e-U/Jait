@@ -1,4 +1,5 @@
 // Translated fixture from packages/gateway/src/tools/surface-tools.test.ts; expected literals are in tail_static.rs.
+import { validateToolInput } from "../../../../packages/gateway/src/tools/validate.js";
 import type { SurfaceRegistry } from "../../../../packages/gateway/src/surfaces/registry.js";
 import { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "../../../../packages/gateway/src/tools/surface-tools.js";
 import { vi } from '../tailmock.ts';
@@ -42,19 +43,23 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_16_3": {
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_21_3": {
 
 
 const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
   const registry = {
     registeredTypes: ["browser", "terminal", "filesystem"],
     listSnapshots: vi.fn().mockReturnValue([snapshot]),
-    startSurface: vi.fn().mockResolvedValue({ snapshot: () => snapshot }),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
     stopSurface: vi.fn().mockResolvedValue(true),
   };
-  return { snapshot, registry, service: registry as unknown as SurfaceRegistry };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
 }
 /*__jait_scope_open__*/{
 
@@ -75,19 +80,23 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_22_3": {
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_27_3": {
 
 
 const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
   const registry = {
     registeredTypes: ["browser", "terminal", "filesystem"],
     listSnapshots: vi.fn().mockReturnValue([snapshot]),
-    startSurface: vi.fn().mockResolvedValue({ snapshot: () => snapshot }),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
     stopSurface: vi.fn().mockResolvedValue(true),
   };
-  return { snapshot, registry, service: registry as unknown as SurfaceRegistry };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
 }
 /*__jait_scope_open__*/{
 
@@ -107,19 +116,23 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_29_3": {
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_34_3": {
 
 
 const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
   const registry = {
     registeredTypes: ["browser", "terminal", "filesystem"],
     listSnapshots: vi.fn().mockReturnValue([snapshot]),
-    startSurface: vi.fn().mockResolvedValue({ snapshot: () => snapshot }),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
     stopSurface: vi.fn().mockResolvedValue(true),
   };
-  return { snapshot, registry, service: registry as unknown as SurfaceRegistry };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
 }
 /*__jait_scope_open__*/{
 
@@ -127,8 +140,15 @@ try {
 await (async()=>{
 
     const f = fixture();
-    __jait_capture(0, ((await createSurfacesStartTool(f.service).execute({ type: "browser" }, context)).ok));
-    __jait_capture(1, (f.registry.startSurface.mock.calls), ([context.sessionId,context.projectRoot]));
+    const tool = createSurfacesStartTool(f.service);
+    __jait_capture(0, (validateToolInput(tool.parameters, { type: "browser" }).valid));
+    __jait_capture(1, (validateToolInput(tool.parameters, { type: "terminal" }).valid));
+    __jait_capture(2, ((await tool.execute({ type: "browser" }, context)).ok));
+    __jait_capture(3, ((await tool.execute({ type: "browser", url: "file:///etc/passwd" }, context)).ok));
+    __jait_capture(4, (f.registry.startSurface.mock.calls));
+    __jait_capture(5, (await tool.execute({ type: "browser", url: "https://example.com/" }, context)));
+    __jait_capture(6, (f.registry.startSurface.mock.calls), (["browser",`browser-${context.sessionId}`,{ sessionId: context.sessionId, projectRoot: context.projectRoot, userId: undefined }]));
+    __jait_capture(7, (f.surface.navigate.mock.calls));
   
 })();
 
@@ -139,19 +159,23 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_34_3": {
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_46_3": {
 
 
 const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
   const registry = {
     registeredTypes: ["browser", "terminal", "filesystem"],
     listSnapshots: vi.fn().mockReturnValue([snapshot]),
-    startSurface: vi.fn().mockResolvedValue({ snapshot: () => snapshot }),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
     stopSurface: vi.fn().mockResolvedValue(true),
   };
-  return { snapshot, registry, service: registry as unknown as SurfaceRegistry };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
 }
 /*__jait_scope_open__*/{
 
@@ -160,7 +184,7 @@ await (async()=>{
 
     const f = fixture();
     f.registry.startSurface.mockRejectedValue(new Error("Chromium unavailable"));
-    __jait_capture(0, (await createSurfacesStartTool(f.service).execute({ type: "browser" }, context)));
+    __jait_capture(0, (await createSurfacesStartTool(f.service).execute({ type: "browser", url: "https://example.com/" }, context)));
   
 })();
 
@@ -171,19 +195,58 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_41_3_each0": {
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_51_3": {
 
 
 const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
   const registry = {
     registeredTypes: ["browser", "terminal", "filesystem"],
     listSnapshots: vi.fn().mockReturnValue([snapshot]),
-    startSurface: vi.fn().mockResolvedValue({ snapshot: () => snapshot }),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
     stopSurface: vi.fn().mockResolvedValue(true),
   };
-  return { snapshot, registry, service: registry as unknown as SurfaceRegistry };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const f = fixture();
+    __jait_capture(0, ((await createSurfacesStartTool(f.service).execute({ type: "terminal" }, context)).ok));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_57_3_each0": {
+
+
+const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
+function fixture() {
+  const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
+  const registry = {
+    registeredTypes: ["browser", "terminal", "filesystem"],
+    listSnapshots: vi.fn().mockReturnValue([snapshot]),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
+    stopSurface: vi.fn().mockResolvedValue(true),
+  };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{
@@ -207,19 +270,23 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_41_3_each1": {
+case "tailstatic_packages_gateway_src_tools_surface_tools_test_ts_57_3_each1": {
 
 
 const context = { sessionId: "surface-tests", actionId: "surface-action", projectRoot: "/project", requestedBy: "test" };
 function fixture() {
   const snapshot = { id: "browser-1", type: "browser", state: "running", sessionId: context.sessionId };
+  const page = { url: "https://example.com/", title: "Example", text: "Loaded", elements: [] };
+  const surface = { ...snapshot, snapshot: () => snapshot, navigate: vi.fn().mockResolvedValue(page) };
+  let started = false;
   const registry = {
     registeredTypes: ["browser", "terminal", "filesystem"],
     listSnapshots: vi.fn().mockReturnValue([snapshot]),
-    startSurface: vi.fn().mockResolvedValue({ snapshot: () => snapshot }),
+    getSurface: vi.fn(() => started ? surface : undefined),
+    startSurface: vi.fn(async () => { started = true; return surface; }),
     stopSurface: vi.fn().mockResolvedValue(true),
   };
-  return { snapshot, registry, service: registry as unknown as SurfaceRegistry };
+  return { snapshot, surface, registry, service: registry as unknown as SurfaceRegistry };
 }
 /*__jait_scope_open__*/{
 /*__jait_scope_open__*/{

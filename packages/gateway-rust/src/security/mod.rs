@@ -18,8 +18,13 @@ pub mod contracts;
 pub mod tool_permissions;
 
 pub mod consent_manager;
+// Staged consent-replay surface: the store and lifecycle are not yet wired to
+// request handling, so their items are dead code by construction.
+#[allow(dead_code)]
 pub(crate) mod consent_replay;
+#[allow(dead_code)]
 pub(crate) mod consent_replay_lifecycle;
+#[allow(dead_code)]
 pub(crate) mod consent_replay_store;
 
 pub mod tool_profiles;

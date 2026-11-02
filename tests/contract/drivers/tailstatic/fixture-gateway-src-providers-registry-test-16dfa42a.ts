@@ -134,6 +134,42 @@ const __jait_hook_553 = () => {
 try {
 await (async()=>{
 
+    delete process.env.JAIT_OMNIROUTE_MCP;
+    const registry = new ProviderRegistry();
+    const personal = registry.buildJaitMcpServerRefs({ host: "127.0.0.1", port: 8000 }, undefined, { sessionId: "personal-chat" });
+    registry.buildJaitMcpServerRefs({ host: "127.0.0.1", port: 8000 }, undefined, { sessionId: "other-chat", projectRoot: "/project" });
+    __jait_capture(0, (personal));
+    for (const ref of personal) {
+      const url = new URL(ref.url!);
+      __jait_capture(1, (url.searchParams.get("sessionId")));
+      __jait_capture(2, (url.searchParams.has("projectRoot")));
+    }
+  
+})();
+
+} finally {
+await __jait_hook_553();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_44_3": {
+
+
+const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
+const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+const __jait_hook_553 = () => {
+  for (const key of ENV_KEYS) {
+    if (originalEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = originalEnv[key];
+  }
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const ref = new ProviderRegistry().buildJaitMcpServerRef({ host: "127.0.0.1", port: 8000 });
     __jait_capture(0, (new URL(ref.url!).searchParams.has("runtimeMode")));
   
@@ -146,7 +182,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_36_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_49_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
@@ -189,7 +225,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_59_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_72_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
@@ -218,7 +254,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_65_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_78_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
@@ -248,7 +284,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_74_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_87_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
@@ -277,7 +313,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_80_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_93_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
@@ -306,7 +342,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_86_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_99_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;
@@ -341,7 +377,7 @@ await __jait_hook_553();
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_registry_test_ts_103_3": {
+case "tailstatic_packages_gateway_src_providers_registry_test_ts_116_3": {
 
 
 const ENV_KEYS = ["JAIT_OMNIROUTE_MCP", "OMNIROUTE_API_KEY", "OMNIROUTE_BASE_URL"] as const;

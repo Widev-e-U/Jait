@@ -18,6 +18,7 @@ use std::{
         fd::{AsRawFd, FromRawFd},
         unix::fs::{FileExt, MetadataExt},
     },
+    time::{Duration, Instant},
 };
 
 const PENDING: &[u8] = b"jait-evaluation-cleanup-v1\npending\n";
@@ -96,13 +97,38 @@ fn open(parent: &File, record_name: &str, create: bool) -> io::Result<File> {
     Ok(file)
 }
 
+// A child forked from this process transiently inherits this open file
+// description, and flock() is held by the description rather than the
+// descriptor: releasing our copy does not release the lock until the forked
+// child reaches execve(). Retry through that short window instead of reporting
+// foreign ownership; a genuinely held record still fails closed, only after
+// LOCK_RETRY_WINDOW. Retries never grant the lock, they just delay the verdict.
+const LOCK_RETRY_WINDOW: Duration = Duration::from_millis(50);
+const LOCK_RETRY_STEP: Duration = Duration::from_millis(1);
+
+fn lock_exclusive(file: &File) -> io::Result<()> {
+    let deadline = Instant::now() + LOCK_RETRY_WINDOW;
+    loop {
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+            return Ok(());
+        }
+        let error = io::Error::last_os_error();
+        let retryable = matches!(
+            error.kind(),
+            io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted
+        );
+        if !retryable || Instant::now() >= deadline {
+            return Err(error);
+        }
+        std::thread::sleep(LOCK_RETRY_STEP);
+    }
+}
+
 // Metadata can change between opening the record and acquiring its lock. Check
 // it again while holding the lock; this does not exclude uncooperative same-UID
 // writers and is not by itself authority to clean up a recovered operation.
 fn lock_and_validate(file: &File) -> io::Result<()> {
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
+    lock_exclusive(file)?;
     validate_file(file)
 }
 // A lock on a renamed inode is not a lock on the current record name. This

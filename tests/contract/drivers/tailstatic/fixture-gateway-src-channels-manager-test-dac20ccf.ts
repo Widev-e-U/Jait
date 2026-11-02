@@ -8250,6 +8250,9 @@ await (async()=>{
     await mgr.start("fake");
 
     connector.emit({ text: "find something", isSelfChat: true });
+    // Generous cap: this loop returns as soon as both conditions hold, so the
+    // deadline only bounds a genuine hang. 2 s was tight enough to fail when
+    // the machine is loaded (parallel deploy gates saturating the cores).
     const deadline = Date.now() + 20_000; while (!connector.sent.some(m => m.text === "found it") || !connector.live.some(m => m.text.includes("✅ Done"))) { if (Date.now() >= deadline) throw new Error("Progress reply did not complete"); await new Promise(r => setTimeout(r, 5)); }
 
     __jait_capture(0, (connector.live));
@@ -8267,7 +8270,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1203_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1206_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -8395,7 +8398,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1215_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1222_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -8513,7 +8516,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1221_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1228_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -8634,7 +8637,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1235_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1242_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -8717,8 +8720,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_46164 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_46164();
+const __jait_hook_46627 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_46627();
 try {
 await (async()=>{
 
@@ -8751,7 +8754,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1257_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1264_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -8834,8 +8837,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_46164 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_46164();
+const __jait_hook_46627 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_46627();
 try {
 await (async()=>{
 
@@ -8863,7 +8866,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1279_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1286_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -8946,8 +8949,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_47601 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_47601();
+const __jait_hook_48064 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_48064();
 try {
 await (async()=>{
 
@@ -8978,7 +8981,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1304_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1311_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9061,8 +9064,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_48556 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_48556();
+const __jait_hook_49019 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_49019();
 try {
 await (async()=>{
 
@@ -9090,7 +9093,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1321_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1328_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9173,8 +9176,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_48556 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_48556();
+const __jait_hook_49019 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_49019();
 try {
 await (async()=>{
 
@@ -9200,7 +9203,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1336_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1343_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9283,8 +9286,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_48556 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_48556();
+const __jait_hook_49019 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_49019();
 try {
 await (async()=>{
 
@@ -9324,7 +9327,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1368_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1375_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9407,8 +9410,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_48556 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_48556();
+const __jait_hook_49019 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_49019();
 try {
 await (async()=>{
 
@@ -9424,7 +9427,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1374_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1381_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9507,8 +9510,8 @@ function modelLabels(sent: OutboundMessage): string[] {
 }
 /*__jait_scope_open__*/{
 let sqlite: SqliteDatabase;
-const __jait_hook_48556 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_48556();
+const __jait_hook_49019 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_49019();
 try {
 await (async()=>{
 
@@ -9524,7 +9527,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1382_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1389_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9621,7 +9624,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1387_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1394_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9720,7 +9723,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1393_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1400_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9817,7 +9820,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1398_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1405_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -9917,7 +9920,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1407_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1414_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -10016,7 +10019,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1413_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1420_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -10114,7 +10117,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1455_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1462_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -10226,8 +10229,8 @@ function managerWithRealGenerator(fetchImpl: typeof fetch) {
     mgr.register(connector);
     return { mgr, connector, restore: () => { globalThis.fetch = original; } };
   }
-const __jait_hook_53083 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_53083();
+const __jait_hook_53546 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_53546();
 try {
 await (async()=>{
 
@@ -10264,7 +10267,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1484_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1491_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -10376,8 +10379,8 @@ function managerWithRealGenerator(fetchImpl: typeof fetch) {
     mgr.register(connector);
     return { mgr, connector, restore: () => { globalThis.fetch = original; } };
   }
-const __jait_hook_53083 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_53083();
+const __jait_hook_53546 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_53546();
 try {
 await (async()=>{
 
@@ -10409,7 +10412,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_channels_manager_test_ts_1505_3": {
+case "tailstatic_packages_gateway_src_channels_manager_test_ts_1512_3": {
 
 
 class FakeConnector implements ChannelConnector {
@@ -10521,8 +10524,8 @@ function managerWithRealGenerator(fetchImpl: typeof fetch) {
     mgr.register(connector);
     return { mgr, connector, restore: () => { globalThis.fetch = original; } };
   }
-const __jait_hook_53083 = async () => { sqlite = await openRawSqlite(":memory:"); };
-await __jait_hook_53083();
+const __jait_hook_53546 = async () => { sqlite = await openRawSqlite(":memory:"); };
+await __jait_hook_53546();
 try {
 await (async()=>{
 

@@ -286,10 +286,10 @@ async fn handle(State(state): State<ScreenShareRoutes>, request: Request) -> Res
         Ok(service) => chat_for_request(&service, &path, &body),
         Err(_) => return auth::internal_error(),
     };
-    if let Some(chat_id) = chat {
-        if let Err(error) = authorize_chat(&state.auth, &chat_id, &user.id).await {
-            return error;
-        }
+    if let Some(chat_id) = chat
+        && let Err(error) = authorize_chat(&state.auth, &chat_id, &user.id).await
+    {
+        return error;
     }
     // No await under this domain lock. The host supplies synchronous bounded
     // enqueue ports, preserving per-request state/broadcast/start ordering.

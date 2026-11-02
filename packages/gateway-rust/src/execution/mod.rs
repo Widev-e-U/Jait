@@ -16,4 +16,7 @@ pub mod command_syntax;
 
 pub mod smoke_process;
 
+// Staged runtime surface: no caller is wired up yet, so its items are dead
+// code by construction. Remove this allow once execution dispatch uses it.
+#[allow(dead_code)]
 pub(crate) mod matrix_stack;
