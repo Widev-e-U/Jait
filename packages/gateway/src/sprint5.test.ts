@@ -29,6 +29,7 @@ const toolContext = {
 };
 
 class MockBrowserDriver implements BrowserDriver {
+  liveView = { display: ":99", vncPort: 5900, websockifyPort: 6080, novncUrl: "/live" };
   calls: string[] = [];
   currentUrl = "about:blank";
   failClickSelector: string | null = null;
@@ -236,6 +237,7 @@ describe("Sprint 5 — Browser surface and tools", () => {
     const screenshotTool = createBrowserInteractionTools(registry, undefined, { proxyFsOp } as any)
       .find((tool) => tool.name === "browser.screenshot")!;
 
+    await createBrowserNavigateTool(registry).execute({ url: "https://example.com" }, toolContext);
     const result = await screenshotTool.execute({ path: sourcePath }, {
       ...toolContext,
       executionNodeId: "remote-node",

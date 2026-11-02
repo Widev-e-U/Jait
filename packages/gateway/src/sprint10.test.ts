@@ -15,7 +15,7 @@ describe("Sprint 10 — Screen Sharing (WebRTC control plane)", () => {
 
     await tools.execute("os_tool", {
       action: "register-device",
-      device: { id: "host-1", name: "Primary Desktop", platform: "desktop", capabilities: ["capture", "input"] },
+      device: { id: "host-1", name: "Primary Desktop", platform: "desktop", capabilities: ["capture", "remote-input"] },
     }, {
       actionId: "a1",
       sessionId: "s1",

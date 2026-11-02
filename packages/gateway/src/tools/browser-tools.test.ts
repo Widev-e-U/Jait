@@ -47,6 +47,7 @@ afterEach(async () => {
 function fixture() {
   const surface = {
     id: "preview-browser-browser-tests", type: "browser", state: "running",
+    getLiveViewInfo: vi.fn().mockReturnValue({ novncUrl: "/live" }),
     navigate: vi.fn().mockResolvedValue(snapshot),
     describe: vi.fn().mockResolvedValue("Asset inventory: Asset saved"),
     inspect: vi.fn().mockResolvedValue({ snapshot, target: { selector: "#save", found: true } }),

@@ -72,7 +72,7 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
     const parent = frame?.parentElement
     if (!frame || !content || !parent) return
     const measure = () => {
-      content.style.width = compact ? 'max-content' : `${Math.max(0, parent.clientWidth - 2)}px`
+      content.style.width = 'max-content'
       content.style.maxWidth = `${Math.max(0, parent.clientWidth - 2)}px`
       const rect = content.getBoundingClientRect()
       const next = { width: rect.width + 2, height: rect.height + 2 }
@@ -83,7 +83,7 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
     observer.observe(content)
     observer.observe(parent)
     return () => observer.disconnect()
-  }, [compact])
+  }, [compact, collapsed, loop.goal, loop.summary, loop.criteria])
 
   // Shrink within the overlay and scroll the interactive card itself so long
   // criteria keep their controls reachable, including by dragging the scrollbar.

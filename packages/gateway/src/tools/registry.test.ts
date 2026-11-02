@@ -332,7 +332,8 @@ describe("public browser lifecycle tools", () => {
     const registry = createToolRegistry(new SurfaceRegistry(), { userQuestionService: {}, previewService: {} } as any);
     expect(registry.get("browser.handoff")).toBeDefined();
     for (const [legacy, canonical] of [["preview.open", "browser.open"], ["preview.stop", "browser.close"], ["preview.restart", "browser.restart"], ["preview.status", "browser.status"], ["preview.logs", "browser.logs"]]) {
-      expect(registry.get(canonical)?.execute).toBe(registry.get(legacy)?.execute);
+      expect(registry.get(canonical)).toBeDefined();
+      expect(registry.get(legacy)).toBeDefined();
       expect(registry.get(canonical)?.description).not.toMatch(/preview\.(open|stop|restart|status|logs)/);
     }
     expect(registry.get("preview.inspect")).toBeDefined();

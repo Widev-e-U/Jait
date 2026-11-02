@@ -727,23 +727,6 @@ export function DeveloperChatWorkspace({
   }
 
   const loop = readChatLoop(sessionMetadata)
-  // The goal card docks into the gutter left of the transcript instead of
-  // covering the conversation. The measured panel width includes surrounding
-  // chrome, so measure the composer itself; fall back to the column formula
-  // until that element exists.
-  const [composerLeft, setComposerLeft] = useState(0)
-  useEffect(() => {
-    if (isMobile || !loop || !activeSessionId || showDebugPanel) return
-    const overlay = document.querySelector<HTMLElement>('[data-testid="chat-goal-overlay"]')
-    const parent = overlay?.offsetParent as HTMLElement | null | undefined
-    if (!parent) return
-    const composer = parent.querySelector<HTMLElement>('[data-testid="chat-composer"]')
-    if (!composer) return
-    const left = Math.round(composer.getBoundingClientRect().left - parent.getBoundingClientRect().left)
-    setComposerLeft(prev => (prev === left ? prev : left))
-  }, [chatPanelWidth, isMobile, showDebugPanel, loop, activeSessionId])
-  const goalGutter = composerLeft > 0 ? composerLeft : getChatTranscriptColumnLeft(chatPanelWidth, false)
-  const useNarrowGoalLayout = !isMobile && goalGutter >= 232
   const isProjectChat = Boolean(activeProjectId || activeProjectRoot)
 
   return (
@@ -767,13 +750,10 @@ export function DeveloperChatWorkspace({
             </div>
           )}
           {!showDebugPanel && loop && activeSessionId && (
-            // Floating card, never full width: on a rail layout it docks inside the
-            // gutter so it stays clear of the composer; with a narrow gutter it may
-            // overlap the transcript, but only partially.
+            // The card may grow for readable text, but never beyond half the chat panel.
             <div
               data-testid="chat-goal-overlay"
-              style={useNarrowGoalLayout ? { maxWidth: Math.max(0, goalGutter - 16) } : undefined}
-              className={`pointer-events-none absolute z-40 flex flex-col items-start bg-transparent ${isMobile ? 'top-14 left-4 w-[17rem] max-w-[calc(100%-2rem)] max-h-[calc(100%-64px)]' : useNarrowGoalLayout ? 'top-12 left-2 w-[17rem] max-h-[calc(100%-64px)]' : 'top-2 left-4 w-80 max-w-[calc(100%-2rem)] max-h-[calc(100%-16px)]'}`}
+              className={`pointer-events-none absolute z-40 flex w-1/2 max-w-[32rem] flex-col items-start bg-transparent ${isMobile ? 'top-14 left-2 max-h-[calc(100%-64px)]' : 'top-12 left-2 max-h-[calc(100%-64px)]'}`}
             >
               <ChatLoopGoal loop={loop} sessionId={activeSessionId} token={token} mobile={isMobile} />
             </div>
@@ -786,6 +766,7 @@ export function DeveloperChatWorkspace({
               <ContextIndicator usage={contextUsage} messages={messages} compact={isMobile} />
             </div>
           )}
+          {!showDebugPanel && loop && activeSessionId && <div aria-hidden="true" className="h-24 shrink-0" />}
           {showDebugPanel ? (
             // Trajectory/debug mode replaces only the transcript — the composer
             // and its controls stay, and auto-scroll keeps matching the chat.

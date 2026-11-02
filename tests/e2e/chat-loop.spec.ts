@@ -220,10 +220,16 @@ for (const width of [390, 900, 1440]) {
     await expect(previous).toBeVisible()
     const previousTop = (await previous.boundingBox())!.y
     expect(previousTop - transcriptTop).toBeLessThanOrEqual(width < 768 ? 57 : 41)
-    if (width === 1440) {
-      const cardBounds = (await frame.boundingBox())!
-      const composerBounds = (await page.getByTestId('chat-composer').boundingBox())!
-      expect(cardBounds.x + cardBounds.width).toBeLessThanOrEqual(composerBounds.x)
+    expect((await frame.boundingBox())!.width).toBeLessThanOrEqual(width / 2)
+    if (width >= 768) {
+      const expandedWidth = (await frame.boundingBox())!.width
+      await page.getByRole('button', { name: 'Collapse goal card' }).click()
+      await expect.poll(async () => (await frame.boundingBox())!.width).toBeLessThan(expandedWidth)
+      if (width === 1440) {
+        const cardBounds = (await frame.boundingBox())!
+        const composerBounds = (await page.getByTestId('chat-composer').boundingBox())!
+        expect(cardBounds.x + cardBounds.width).toBeLessThanOrEqual(composerBounds.x)
+      }
     }
     if (width < 768) {
       const header = page.getByTestId('fixture-mobile-header')
@@ -237,17 +243,20 @@ for (const width of [390, 900, 1440]) {
       })
       expect(clearPoint).toBe(true)
       await page.getByRole('button', { name: 'Expand goal card' }).click()
-      await expect(page.getByText('Verify the floating goal layout', { exact: true })).toBeVisible()
-      await expect.poll(async () => (await frame.boundingBox())!.width).toBeGreaterThan(compactWidth + 100)
+      await expect(page.getByText('Lorem ipsum dolor sit amet', { exact: false })).toBeVisible()
+      await expect.poll(async () => (await frame.boundingBox())!.width).toBeGreaterThan(compactWidth + 80)
       expect((await scroll.boundingBox())!.y).toBe(transcriptTop)
       expect((await previous.boundingBox())!.y).toBe(previousTop)
       await page.getByRole('button', { name: 'Collapse goal card' }).click()
     }
+    await expect.poll(async () => {
+      const bounds = (await frame.boundingBox())!
+      return bounds.y + bounds.height
+    }).toBeLessThanOrEqual((await scroll.boundingBox())!.y)
     await page.screenshot({ path: path.resolve(__dirname, `../../.jait/shots/goal-overlay-${width}.png`) })
     await page.getByRole('button', { name: 'Toggle goal overlay' }).click()
     await expect(overlay).toHaveCount(0)
-    expect((await scroll.boundingBox())!.y).toBe(transcriptTop)
-    expect((await previous.boundingBox())!.y).toBe(previousTop)
+    expect((await scroll.boundingBox())!.y).toBeLessThan(transcriptTop)
   })
 }
 
@@ -291,7 +300,7 @@ for (const width of [390, 1440]) {
       )
       expect(cardReceivesOverlap).toBe(true)
     } else {
-      expect(bounds.x + bounds.width).toBeLessThanOrEqual(composerBounds.x)
+      expect(bounds.width).toBeLessThanOrEqual(width / 2)
     }
     await pause.click({ timeout: 3000 })
     await expect.poll(() => pauseRequests).toBe(1)

@@ -450,10 +450,11 @@ describe('gateway-drained queue messages', () => {
     const src = source()
     // Set inside the single-consumer send path, cleared inside the turn-start
     // handler, and matched on trimmed content with a bounded arrival window.
-    expect(src).toContain('localPendingSendRef.current = { content, at: Date.now() }')
+    expect(src).toContain('const pendingSend = { content, at: Date.now() }')
+    expect(src).toContain('localPendingSendRef.current = pendingSend')
     expect(src).toContain('localPendingSendRef.current = null')
     expect(src).toContain('LOCAL_SEND_TURN_START_TOLERANCE_MS')
-    expect(src).toContain('safeTrim(pending.content) === startedContent')
+    expect(src).toContain('safeTrim(pending.content) !== startedContent')
   })
 
   it('still releases the chat POST body on the single-consumer path', () => {
