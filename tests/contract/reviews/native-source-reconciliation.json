@@ -2616,7 +2616,7 @@
     },
     {
       "path": "packages/gateway/src/tools/prompts/prompt-registry.ts",
-      "sha256": "e55454fc8a430e42f51869a97053e9f9a21d90e5f8fa95e7bfade04e62db8e27",
+      "sha256": "0745337c75b43d138cf0dd944ac3b8f3fda14667999e67bf5dbc1ec0de2a528a",
       "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review.",
       "cases": [
         {
@@ -2710,7 +2710,7 @@
     },
     {
       "path": "packages/gateway/src/tools/prompts/shared-sections.ts",
-      "sha256": "25b3bed0df67d1523bbb05e54043ea5b018336ed6adc3744238b72905457372e",
+      "sha256": "043186a43d339af8bd5f3b3d040880271baf56a721ee0d00373210ba6fdeabe3",
       "review": "Native model/mode selection and context assembly; exact embedded immutable prose, metadata, reminders and shared sections; custom registration order, real file precedence, UTF-8 recovery and UTF-16 truncation. See native-prompts review. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit. Catalog/context-evidence prose freshness: shortened catalog/lite instructions match regenerated embedded assets; all 12 prompt-target checks pass (2026-10-23), no new component credit. Browser handoff prose freshness: reviewed the single added shared instruction and its verbatim propagation to 14 embedded text fields; native selection and assembly remain unchanged. Regenerated assets and all 12 gateway_rust_prompts checks passed (2026-10-23); existing credit only. 2026-10-24 tool UX refresh: Browser project guidance now uses the canonical browser tool family; prompt and terminal contracts pass. 2026-10-25 navigation prose refresh: reviewed description-only source drift, regenerated native immutable assets; focused prompt, utility and terminal-execution targets pass. No added component credit.",
       "cases": [
         {
@@ -3164,7 +3164,7 @@
     },
     {
       "path": "packages/gateway/src/services/computer-control.ts",
-      "sha256": "dec3d64aa02272589a381e2b105f4e8d3877cebffb1261a9e36385ac392d736c",
+      "sha256": "8d8a558b68c3f6d0daa132eee97ed7d4e3a75b63f972791bda211bdd22664053",
       "review": "Real TypeScript comparisons for transient state lifecycles, ownership/exclusivity, retained message references and bounded inline raster/CID decoding; restored mutation per component. See native-ephemeral.md.",
       "cases": [
         {
@@ -3633,7 +3633,7 @@
     },
     {
       "path": "packages/gateway/src/tools/core/todo.ts",
-      "sha256": "5c507f805af70dc7fed732269aa3d48879b3174cfd260822a00499590f0c5b92",
+      "sha256": "b7d6048ee480dc47d4b98a75c328be175014fb881a9722d8474b4f01668a678e",
       "review": "Session todos: normalization, counts, live getter/result arrays, list replacement/clear, isolation and failed-update persistence.",
       "cases": [
         {
