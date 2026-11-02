@@ -56,6 +56,12 @@ async function defaultExecute(
   }
 }
 
+function checkCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw Object.assign(new Error("The operation was aborted"), { name: "AbortError", code: "ABORT_ERR" });
+  }
+}
+
 export class GraphifyRunner {
   private readonly command: string;
   private readonly execute: NonNullable<GraphifyRunnerOptions["execute"]>;
@@ -87,9 +93,12 @@ export class GraphifyRunner {
     outputDir: string;
     signal?: AbortSignal;
   }): Promise<GraphifyRunResult> {
+    checkCancelled(params.signal);
     await this.ensureRuntime();
+    checkCancelled(params.signal);
     await mkdir(params.outputDir, { recursive: true });
     const version = await this.getVersion(params.projectRoot);
+    checkCancelled(params.signal);
     const result = await this.execute(
       this.command,
       [

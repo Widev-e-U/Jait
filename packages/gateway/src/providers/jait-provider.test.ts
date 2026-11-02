@@ -37,6 +37,12 @@ describe("prepareJaitThreadSandboxToolInput", () => {
     });
   });
 
+  it("leaves malformed command inputs unchanged for downstream validation", () => {
+    const invalid = ["not", "an object"];
+    expect(prepareJaitThreadSandboxToolInput("execute", invalid)).toBe(invalid);
+    expect(prepareJaitThreadSandboxToolInput("execute", null)).toBeNull();
+  });
+
   it("leaves non-command tools unchanged", () => {
     const input = { path: "packages/gateway/src/providers/jait-provider.ts" };
     expect(prepareJaitThreadSandboxToolInput("file.read", input)).toBe(input);

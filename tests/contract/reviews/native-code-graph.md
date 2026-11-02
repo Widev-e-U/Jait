@@ -70,3 +70,15 @@ The code-graph HTTP ownership/remote-node adapter is reviewed separately in
 Supported Windows process behavior, full platform/resource/recovery gates, and
 production activation are separate from these focused Linux checks. The process executor
 adds explicit bounds; it does not establish filesystem authorization by itself.
+
+## Cancellation compatibility decision (2026-11-02)
+
+An already-cancelled Graphify build now fails with `AbortError`/`ABORT_ERR`
+before runtime preparation or runner output creation. Previously the TypeScript
+runner prepared the runtime and queried the version before forwarding the signal
+to extraction. `CodeGraphService` forwards its caller's signal and records build
+errors; no response schema changes. This deliberately makes cancellation earlier
+and avoids starting work for a cancelled request. The TypeScript runner regression
+and the `gateway_rust_graphify` differential cases cover the new behavior. The
+service may create its own output directory and building record before calling
+this runner, so the no-setup guarantee applies to the runner itself.

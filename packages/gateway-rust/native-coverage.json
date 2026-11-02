@@ -3231,7 +3231,7 @@
     },
     {
       "reference": "packages/gateway/src/services/code-graph/graphify-runner.ts",
-      "reference_sha256": "d1463698f4bba307fe85c4839726e277676bf4a6e32a1d8d2acac29c9400c716",
+      "reference_sha256": "131d5064465ec890de2dc56bae142dc6626947e62eb8547c0d040ea928aafe82",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/services/code_graph/runner.rs",
