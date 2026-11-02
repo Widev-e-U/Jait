@@ -124,6 +124,12 @@ describe("voice assistant tools", () => {
     });
   });
 
+  it("resolves an approximate location from the lookup response", async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ city: "Oslo", region: "Oslo", country_name: "Norway", latitude: 59.9, longitude: 10.7 }), { status: 200 })) as typeof fetch;
+    const result = await executeVoiceTool("get_location", {}, { config: loadConfig(), userApiKeys: { JAIT_LOCATION: "", LOCATION: "" } });
+    expect(JSON.parse(result)).toMatchObject({ city: "Oslo", country: "Norway", latitude: 59.9, source: "ip" });
+  });
+
   it("uses configured location when weather city is omitted", async () => {
     process.env["JAIT_LOCATION"] = "Berlin";
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
