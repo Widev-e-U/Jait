@@ -1,8 +1,8 @@
 {
   "format": 1,
   "inventory": "tests/contract/coverage.json",
-  "inventory_total": 376,
-  "inventory_total_note": "The migration goal covers the original 370 paths in .jait/artifacts/gateway-rust/chat-loops/original-370-components.json. The current inventory contains 376 paths: those originals plus six post-snapshot additions: packages/gateway/src/providers/context-control.ts, packages/gateway/src/providers/steering-dispatcher.ts, packages/gateway/src/services/context-budget.ts, packages/gateway/src/services/context-cache.ts, packages/gateway/src/tools/browser-handoff.ts, packages/gateway/src/tools/context-evidence.ts. Report original and added component verification separately; aggregate credit is not original-370 completion.",
+  "inventory_total": 383,
+  "inventory_total_note": "The migration goal covers the original 370 paths in .jait/artifacts/gateway-rust/chat-loops/original-370-components.json. The current inventory contains 383 paths: those originals plus thirteen post-snapshot additions: packages/gateway/src/providers/context-control.ts, packages/gateway/src/providers/steering-dispatcher.ts, packages/gateway/src/services/context-budget.ts, packages/gateway/src/services/context-cache.ts, packages/gateway/src/tools/browser-handoff.ts, packages/gateway/src/tools/context-evidence.ts, packages/gateway/src/providers/session-idle.ts, packages/gateway/src/providers/session-process.ts, packages/gateway/src/services/screen-share-control.ts, packages/gateway/src/surfaces/browser-cursor.cjs, packages/gateway/src/voice-assistant/router.ts, packages/gateway/src/voice-assistant/tier-catalog.ts, packages/gateway/src/voice/wake-candidate.ts. The seven newest additions carry no native credit pending review. Report original and added component verification separately; aggregate credit is not original-370 completion.",
   "metric": "Equal weight per inventoried gateway source component with native implementation and reviewed focused contracts; not an estimate of effort or cutover readiness.",
   "components": [
     {
