@@ -58,6 +58,27 @@ describe("PreviewService", () => {
     expect(() => service.assertAgentControl("browser-1")).not.toThrow();
   });
 
+  it("moves through history without replacing the browser or changing control", async () => {
+    const browser = {
+      id: "browser-1", sessionId: "owner", type: "browser", state: "running",
+      history: vi.fn().mockResolvedValue({ url: "https://example.com/previous" }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue(null),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("owner", browser as any, undefined, false);
+    expect(await service.history("missing", "back")).toBeNull();
+    expect(await service.history("owner", "back")).toMatchObject({ browserId: "browser-1", sharedWithAgent: false });
+    expect(browser.history).toHaveBeenCalledWith("back");
+    service.setSharedWithAgent("owner", true);
+    expect(await service.history("owner", "forward")).toMatchObject({ browserId: "browser-1", sharedWithAgent: true });
+    expect(browser.history).toHaveBeenCalledWith("forward");
+    registry.getSurface.mockReturnValueOnce(null as any);
+    expect(await service.history("owner", "back")).toBeNull();
+    expect(registry.startSurface).not.toHaveBeenCalled();
+  });
+
   it("navigates the owner's browser without recreating it or granting agent control", async () => {
     const browser = {
       id: "browser-1", sessionId: "owner", type: "browser", state: "running",

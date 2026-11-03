@@ -121,6 +121,45 @@ export function parseProjectLinkTarget(href?: string | null): ProjectLinkTarget 
   return target
 }
 
+// Bare file names only count with an extension that is clearly a file, so
+// `node.js`, `e.g.` or a version like `v1.2` stay plain code.
+const KNOWN_FILE_EXTENSIONS = new Set([
+  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'json', 'jsonc', 'md', 'mdx', 'markdown', 'txt', 'log', 'csv', 'tsv',
+  'py', 'rb', 'go', 'rs', 'java', 'kt', 'kts', 'swift', 'dart', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'php', 'lua',
+  'sh', 'bash', 'zsh', 'ps1', 'sql', 'css', 'scss', 'sass', 'less', 'html', 'htm', 'vue', 'svelte', 'xml', 'svg',
+  'yml', 'yaml', 'toml', 'ini', 'conf', 'env', 'lock', 'gradle', 'properties', 'dockerfile',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'ico', 'pdf',
+])
+
+/**
+ * A path written as inline code in a chat message (`src/a.ts`, `./x.png`,
+ * `docs/guide.md:12`, `/abs/file.ts:3:1`). Relative paths are returned as-is;
+ * the opener resolves them against the chat's project.
+ */
+export function parseInlinePathCandidate(text: string): ProjectLinkTarget | null {
+  const trimmed = text.trim()
+  if (!trimmed || trimmed.length > 300 || /\s/.test(trimmed) || /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return null
+  const match = trimmed.match(/^(.*?)(?::(\d+)(?::(\d+))?)?$/)
+  const path = match?.[1] ?? ''
+  if (!/^(?:[A-Za-z]:[\\/]|[./~]|[\w@-])[\w@~+.\\/-]*$/.test(path) || path.includes('//')) return null
+  const baseName = path.split(/[\\/]/).pop() ?? ''
+  const extension = baseName.includes('.') ? baseName.split('.').pop()!.toLowerCase() : ''
+  const hasDirectory = /[\\/]/.test(path.replace(/[\\/]+$/, ''))
+  if (!extension || !/^[a-z0-9]{1,10}$/.test(extension)) return null
+  if (!hasDirectory && !KNOWN_FILE_EXTENSIONS.has(extension)) return null
+  const target: ProjectLinkTarget = { path }
+  if (match?.[2]) target.line = Number.parseInt(match[2], 10)
+  if (match?.[3]) target.column = Number.parseInt(match[3], 10)
+  return target
+}
+
+/** Resolve a chat path against the project root; absolute paths pass through. */
+export function resolveProjectPath(path: string, projectRoot?: string | null): string {
+  if (isAbsoluteProjectPath(path) || !projectRoot) return path
+  const relative = path.replace(/\\/g, '/').replace(/^\.\//, '')
+  return `${projectRoot.replace(/[\\/]+$/, '')}/${relative}`
+}
+
 export function isPathWithinProject(path: string, projectRoot?: string | null): boolean {
   if (!projectRoot) return false
 

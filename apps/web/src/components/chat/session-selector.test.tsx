@@ -525,3 +525,16 @@ it('highlights every open chat across projects and removes closed highlights', (
   expect(render(['session-1', 'personal']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(2)
   expect(render(['session-1']).match(/bg-secondary\/70 cursor-default/g)).toHaveLength(1)
 })
+
+it('offers a separate new chat control when the latest chat is open', () => {
+  const project = createProject()
+  const projectRow = (markup: string) => markup.match(/class="group grid w-full grid-cols-\[auto,minmax\(0,1fr\),auto\][^"]*"/)?.[0] ?? ''
+  const render = (onNewChatInProject?: (projectId: string) => void) => renderToStaticMarkup(<SessionSelector
+    projects={[project]} activeProjectId="project-1" activeSessionId="session-1"
+    onSelectProject={() => {}} onNewChatInProject={onNewChatInProject} onCreateProject={() => {}}
+    onRemoveProject={() => {}} onChangeDirectory={() => {}}
+  />)
+  expect(projectRow(render())).toContain('cursor-default')
+  expect(projectRow(render(() => {}))).toContain('cursor-default')
+  expect(render(() => {})).toContain('aria-label="New chat in Jait"')
+})

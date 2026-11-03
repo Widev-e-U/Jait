@@ -1,4 +1,4 @@
-import type { UserMessageSegment } from '@/lib/user-message-segments'
+import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 
 export function createOptimisticMessageId(prefix: 'user' | 'assistant'): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -9,6 +9,7 @@ export function createOptimisticMessageId(prefix: 'user' | 'assistant'): string 
 
 export interface OptimisticUserMessageLike {
   id: string
+  clientMessageId?: string
   /** Stable UI identity across optimistic-to-persisted reconciliation. */
   renderId?: string
   role: 'user' | 'assistant'
@@ -22,20 +23,26 @@ export function createOptimisticAssistantPlaceholder(id: string): OptimisticUser
   return { id, role: 'assistant', content: '', optimistic: true }
 }
 
+/** The gateway appends ` [attached: name]` to the persisted content of a prompt with uploads. */
+const ATTACHED_SUFFIX = /(?:\s*\[attached: [^\]]*\])+\s*$/
+
+/**
+ * What the user actually sees in the bubble. The optimistic copy and the
+ * persisted row describe the same prompt in different shapes: the gateway
+ * rewrites `content` (attachment markers, inlined file references) and
+ * re-serializes the segments, so comparing raw content or segment JSON never
+ * matched those prompts — the persisted row rendered in place *and* the
+ * optimistic one stayed appended at the bottom, forever.
+ */
 function getUserRenderSignature(message: OptimisticUserMessageLike): string | null {
   if (message.role !== 'user') return null
-  const hasDisplaySegments = Array.isArray(message.displaySegments) && message.displaySegments.length > 0
-  const normalizedContent = (typeof message.content === 'string' ? message.content : '').trim()
-  const displayContent = typeof message.displayContent === 'string'
-    ? message.displayContent.trim()
+  const segmentText = Array.isArray(message.displaySegments) && message.displaySegments.length > 0
+    ? userMessageTextFromSegments(message.displaySegments)
     : ''
-  const normalizedDisplay = displayContent === normalizedContent ? '' : displayContent
-  return JSON.stringify({
-    role: 'user',
-    content: normalizedContent,
-    displayContent: normalizedDisplay,
-    displaySegments: hasDisplaySegments ? message.displaySegments : null,
-  })
+  const displayContent = typeof message.displayContent === 'string' ? message.displayContent : ''
+  const content = typeof message.content === 'string' ? message.content : ''
+  const visible = (segmentText || displayContent || content).replace(ATTACHED_SUFFIX, '')
+  return visible.replace(/\s+/g, ' ').trim()
 }
 
 export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUserMessageLike>(
@@ -43,10 +50,18 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
   currentMessages: T[],
 ): T[] {
   const snapshotUserCounts = new Map<string, number>()
+  // A persisted prompt this client already renders under its own id is not the
+  // server copy of a pending send. Counting it let an older identical prompt
+  // ("go on", "continue") swallow the new optimistic one, which then vanished
+  // until the next reload.
+  const renderedPersistedIds = new Set(
+    currentMessages.filter(message => !message.optimistic).map(message => message.id),
+  )
 
   for (const message of snapshotMessages) {
+    if (renderedPersistedIds.has(message.id)) continue
     const signature = getUserRenderSignature(message)
-    if (!signature) continue
+    if (signature === null) continue
     snapshotUserCounts.set(signature, (snapshotUserCounts.get(signature) ?? 0) + 1)
   }
 
@@ -69,12 +84,18 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
       continue
     }
 
-    const signature = getUserRenderSignature(message)
-    if (!signature) {
-      unmatchedOptimisticMessages.push(message)
-      preserveNextOptimisticAssistant = true
+    // New clients use the same durable ID for their optimistic message. A
+    // different client's identical prompt must never consume this one.
+    if (message.id.startsWith('user-')) {
+      if (snapshotMessages.some(saved => saved.clientMessageId === message.id)) {
+        preserveNextOptimisticAssistant = false
+      } else {
+        unmatchedOptimisticMessages.push(message)
+        preserveNextOptimisticAssistant = true
+      }
       continue
     }
+    const signature = getUserRenderSignature(message) ?? ''
     const matchedCount = snapshotUserCounts.get(signature) ?? 0
     if (matchedCount > 0) {
       snapshotUserCounts.set(signature, matchedCount - 1)
@@ -89,9 +110,9 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
   const snapshotIds = new Set(snapshotMessages.map(message => message.id))
   const pendingUsers = new Map<string, T[]>()
   for (const message of currentMessages) {
-    if (!message.optimistic || snapshotIds.has(message.id)) continue
+    if (!message.optimistic || snapshotIds.has(message.id) || message.id.startsWith('user-')) continue
     const signature = getUserRenderSignature(message)
-    if (!signature) continue
+    if (signature === null) continue
     const pending = pendingUsers.get(signature) ?? []
     pending.push(message)
     pendingUsers.set(signature, pending)
@@ -102,9 +123,9 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
   const currentIndices = new Map(currentMessages.map((message, index) => [message.id, index]))
   let matchedPromptIndex: number | undefined
   const reconciled = snapshotMessages.map(message => {
-    const existing = currentById.get(message.id)
+    const existing = currentById.get(message.id) ?? (message.clientMessageId ? currentById.get(message.clientMessageId) : undefined)
     const signature = getUserRenderSignature(message)
-    let matched = existing ?? (signature ? pendingUsers.get(signature)?.shift() : undefined)
+    let matched = existing ?? (signature !== null ? pendingUsers.get(signature)?.shift() : undefined)
     // The response belongs to this same reconciled turn. Its temporary row
     // must keep its measurements and detached reading anchor as well.
     if (!matched && message.role === 'assistant' && matchedPromptIndex != null) {

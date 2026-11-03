@@ -5,6 +5,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
+import { AuditWriter } from "../services/audit.js";
 import { signAuthToken } from "../security/http-auth.js";
 import {
   createServer as createHttpServer,
@@ -206,6 +207,29 @@ describe("server-side queued chat processing", () => {
     expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
   });
 
+  it("persists the client message ID and rejects a duplicate", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("message-identity", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Identity" });
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const payload = { sessionId: session.id, content: "continue", clientMessageId: "user-12345678-1234" };
+    const sent = await app.inject({ method: "POST", url: "/api/chat", headers, payload });
+    expect(sent.statusCode).toBe(200);
+    const response = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+    const messages = (response.json() as { messages: Array<{ id: string; role: string; clientMessageId?: string }> }).messages;
+    expect(messages.find(message => message.role === "user")?.clientMessageId).toBe(payload.clientMessageId);
+    const duplicate = await app.inject({ method: "POST", url: "/api/chat", headers, payload });
+    expect(duplicate.statusCode).toBe(409);
+  });
+
   it("does not resend an already-drained queue id through the client fallback, including after restart", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -354,6 +378,48 @@ describe("server-side queued chat processing", () => {
     await serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
     expect(await readUserMessages()).toEqual(["sent directly while ws down"]);
     expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
+  });
+
+  it("drains a queue written only over HTTP, as when a mobile WebSocket died silently", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = {
+      ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("http-queue-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "HTTP queue" });
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService, audit: new AuditWriter(db) });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+
+    // No turn is running and no WS copy arrives: the PATCH is the only signal.
+    const patch = await app.inject({
+      method: "PATCH", url: `/api/sessions/${session.id}/state`, headers,
+      payload: { queued_messages: [{ id: "q-http", content: "queued from the phone" }] },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    await vi.waitFor(async () => {
+      const response = await app!.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+      const messages = response.json().messages as Array<{ role: string; content: string }>;
+      expect(messages.map((message) => message.content)).toEqual(["queued from the phone", "Echo: queued from the phone"]);
+    });
+    expect(sessionState.get(session.id, ["queued_messages"]).queued_messages).toBeUndefined();
+
+    // A late HTTP copy of the same snapshot must neither resend the message nor
+    // leave it behind as a ghost entry.
+    await app.inject({
+      method: "PATCH", url: `/api/sessions/${session.id}/state`, headers,
+      payload: { queued_messages: [{ id: "q-http", content: "queued from the phone" }] },
+    });
+    await vi.waitFor(() => expect(sessionState.get(session.id, ["queued_messages"]).queued_messages).toBeUndefined());
+    const after = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+    expect(after.json().messages.filter((message: { role: string }) => message.role === "user")).toHaveLength(1);
   });
 
   it("drains persisted queued_messages without any connected client", async () => {

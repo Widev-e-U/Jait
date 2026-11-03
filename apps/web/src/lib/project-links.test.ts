@@ -3,8 +3,34 @@ import {
   getProjectRootForPath,
   isAbsoluteProjectPath,
   isPathWithinProject,
+  parseInlinePathCandidate,
   parseProjectLinkTarget,
+  resolveProjectPath,
 } from './project-links'
+
+describe('parseInlinePathCandidate', () => {
+  it('recognizes relative and absolute file paths, with line and column', () => {
+    expect(parseInlinePathCandidate('src/hooks/useChat.ts')).toEqual({ path: 'src/hooks/useChat.ts' })
+    expect(parseInlinePathCandidate('./shots/a.png')).toEqual({ path: './shots/a.png' })
+    expect(parseInlinePathCandidate('docs/guide.md:12')).toEqual({ path: 'docs/guide.md', line: 12 })
+    expect(parseInlinePathCandidate('/home/x/app.ts:3:7')).toEqual({ path: '/home/x/app.ts', line: 3, column: 7 })
+    expect(parseInlinePathCandidate('README.md')).toEqual({ path: 'README.md' })
+  })
+
+  it('leaves code that only looks a bit like a path alone', () => {
+    for (const text of ['useChat()', 'e.g.', 'v1.2', 'foo.bar', 'npm run dev', 'https://x.dev/a.ts', 'a//b.ts', 'src/', 'Array.prototype.map']) {
+      expect(parseInlinePathCandidate(text), text).toBeNull()
+    }
+  })
+})
+
+describe('resolveProjectPath', () => {
+  it('joins relative paths onto the project root and keeps absolute ones', () => {
+    expect(resolveProjectPath('./src/a.ts', '/p/app/')).toBe('/p/app/src/a.ts')
+    expect(resolveProjectPath('/abs/b.ts', '/p/app')).toBe('/abs/b.ts')
+    expect(resolveProjectPath('c.ts', null)).toBe('c.ts')
+  })
+})
 
 describe('project-links', () => {
   it('detects Windows and Unix absolute project paths', () => {

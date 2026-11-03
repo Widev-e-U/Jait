@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Archive, ChevronRight, Folder, Loader2, MessageSquare, PanelRightOpen, Search, WifiOff } from 'lucide-react'
+import { Archive, ChevronRight, Folder, Loader2, MessageSquare, PanelRightOpen, Pencil, Search, WifiOff } from 'lucide-react'
 import { buildProjectTree, flattenProjectTree } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import type { ProjectRecord } from '@/hooks/useProjects'
@@ -20,6 +20,7 @@ const SUBMENU_CLOSE_DELAY_MS = 180
  * only the top-level rows count here.
  */
 export function getSessionContextMenuHeight(options: {
+  showRename?: boolean
   showOpenInPanel?: boolean
   showMoveSection: boolean
   showStreamingNote: boolean
@@ -28,6 +29,7 @@ export function getSessionContextMenuHeight(options: {
 }): number {
   const ROW_HEIGHT = 30
   let height = 8 // menu padding
+  if (options.showRename) height += ROW_HEIGHT
   if (options.showOpenInPanel) height += ROW_HEIGHT
   if (options.showMoveSection) {
     height += ROW_HEIGHT // "Move to project" parent row
@@ -208,6 +210,7 @@ export interface SessionContextMenuProps {
   onMoveSession?: (sessionId: string, projectId: string | null) => void
   onArchiveSession?: (sessionId: string) => void
   onOpenInPanel?: (sessionId: string, projectId: string | null) => void
+  onRename?: (sessionId: string) => void
   /**
    * Looks up projects beyond the ones the sidebar has paged in. Without it the
    * picker can only offer the visible projects.
@@ -227,6 +230,7 @@ export function SessionContextMenu({
   onMoveSession,
   onArchiveSession,
   onOpenInPanel,
+  onRename,
   onSearchProjects,
   onClose,
 }: SessionContextMenuProps) {
@@ -302,6 +306,22 @@ export function SessionContextMenu({
         onPointerDown={(event) => event.stopPropagation()}
         onContextMenu={(event) => event.stopPropagation()}
       >
+        {onRename && (
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent focus:bg-accent focus:text-accent-foreground"
+            onClick={() => {
+              onRename(sessionId)
+              onClose()
+            }}
+            onPointerEnter={scheduleSubmenuClose}
+          >
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="truncate text-xs">Rename chat</span>
+          </button>
+        )}
+
         {onOpenInPanel && (
           <button
             type="button"

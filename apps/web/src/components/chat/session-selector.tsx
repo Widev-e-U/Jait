@@ -1,10 +1,12 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
-import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
+import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger , TooltipHint } from '@/components/ui/tooltip'
 import {
@@ -53,6 +55,12 @@ interface SessionSelectorProps {
   searchLoading?: boolean
   onSearch?: (query: string) => void
   onSelectProject: (projectId: string) => void
+  /**
+   * When set, clicking a project or folder row starts a new chat there; only a
+   * chat row opens an existing chat. Without it the row opens the latest chat.
+   */
+  onNewChatInProject?: (projectId: string) => void
+  onRenameSession?: (sessionId: string, name: string) => void | Promise<unknown>
   onSelectProjectSession?: (projectId: string, sessionId: string) => void
   onSelectPersonalSession?: (sessionId: string) => void
   onArchiveSession?: (sessionId: string) => void
@@ -195,6 +203,8 @@ export function SessionSelector({
   searchLoading = false,
   onSearch,
   onSelectProject,
+  onNewChatInProject,
+  onRenameSession,
   onSelectProjectSession,
   onSelectPersonalSession,
   onArchiveSession,
@@ -391,11 +401,31 @@ export function SessionSelector({
     return validateProjectMove(projects, draggedId, targetId) === null
   }, [onMoveProject, projects],)
 
-  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel)
+  const hasSessionContextMenu = Boolean(onArchiveSession || onMoveSession || onOpenSessionInPanel || onRenameSession)
+
+  const [renameTarget, setRenameTarget] = useState<{ sessionId: string; name: string } | null>(null)
+  const [renameSaving, setRenameSaving] = useState(false)
+  const startRename = (sessionId: string) => {
+    const session = projects.flatMap((project) => project.sessions).find((item) => item.id === sessionId)
+      ?? personalSessions.find((item) => item.id === sessionId)
+    setRenameTarget({ sessionId, name: session?.name ?? '' })
+  }
+  const submitRename = async () => {
+    const name = renameTarget?.name.trim()
+    if (!renameTarget || !name || !onRenameSession) return
+    setRenameSaving(true)
+    try {
+      await onRenameSession(renameTarget.sessionId, name)
+      setRenameTarget(null)
+    } finally {
+      setRenameSaving(false)
+    }
+  }
 
   const openSessionContextMenu = (x: number, y: number, sessionId: string, projectId: string | null) => {
     if (!hasSessionContextMenu) return
     const menuHeight = getSessionContextMenuHeight({
+      showRename: Boolean(onRenameSession),
       showOpenInPanel: Boolean(onOpenSessionInPanel),
       showMoveSection: Boolean(onMoveSession),
       showStreamingNote: streamingSessionIds?.has(sessionId) ?? false,
@@ -641,6 +671,10 @@ export function SessionSelector({
                     : null
                   const offline = isNodeOffline(project.nodeId, onlineNodeIds)
                   const pathMissing = project.rootPathStatus === 'missing'
+                  // The folder colour tints the leading icon instead of adding a
+                  // dot, so coloured and plain rows keep their titles aligned.
+                  const folderColor = resolveProjectColor(project.color)
+                  const folderIconStyle = folderColor ? { color: folderColor } : undefined
                   const repository = getProjectRepository(project, repositories)
                   const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
                   const sortedSessions = [...project.sessions]
@@ -725,7 +759,8 @@ export function SessionSelector({
                       onClick={() => {
                         if (consumedByProjectMenu()) return
                         onDismiss?.()
-                        if (!offline && !isLatestProjectSessionActive) onSelectProject(project.id)
+                        if (offline) return
+                        if (!isLatestProjectSessionActive) onSelectProject(project.id)
                       }}
                       {...projectRowMenuHandlers(project.id)}
                     >
@@ -734,7 +769,10 @@ export function SessionSelector({
                           type="button"
                           aria-label={isCollapsed ? 'Expand folder' : 'Collapse folder'}
                           aria-expanded={!isCollapsed}
-                          className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                          // Touch devices widen labelled buttons to 2.5rem; keep the
+                          // icon slot as narrow as a folder icon and grow the hit area instead.
+                          className="relative mt-0.5 flex h-3.5 w-3.5 !min-w-0 shrink-0 items-center justify-center rounded text-muted-foreground before:absolute before:-inset-2 hover:text-foreground"
+                          style={folderIconStyle}
                           onClick={(e) => { e.stopPropagation(); toggleFolder(project.id) }}
                         >
                           {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -742,13 +780,12 @@ export function SessionSelector({
                       ) : pathMissing ? (
                         <FolderX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
                       ) : isActiveProject ? (
-                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" style={folderIconStyle} />
                       ) : (
-                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" style={folderIconStyle} />
                       )}
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-                          <ProjectColorDot color={project.color} />
                           {project.sessions.some(session => approvalSessionIds?.has(session.id)) && (
                             <TooltipHint content="Chat waiting for approval">
                               <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Chat waiting for approval" />
@@ -831,6 +868,16 @@ export function SessionSelector({
                         )}
                       </div>
                       <div className="mt-0.5 flex shrink-0 items-center self-start">
+                        {onNewChatInProject && (
+                          <TooltipHint content="New chat">
+                            <Button variant="ghost" size="icon" aria-label={`New chat in ${project.title || (isFolder ? 'folder' : 'project')}`}
+                              disabled={offline} className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                              onClick={(event) => { event.stopPropagation(); onDismiss?.(); onNewChatInProject(project.id) }}
+                              onContextMenu={(event) => event.stopPropagation()}>
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipHint>
+                        )}
                         {!isFolder && showEditorModeStatus && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -886,6 +933,13 @@ export function SessionSelector({
                             </DropdownMenuTrigger>
                           )}
                           <DropdownMenuContent align="end" side="right" className="min-w-[10rem]">
+                            {onNewChatInProject && (
+                              <DropdownMenuItem className="gap-2" disabled={offline}
+                                onSelect={() => { onDismiss?.(); onNewChatInProject(project.id) }}>
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>New chat</span>
+                              </DropdownMenuItem>
+                            )}
                             {onEditProject && (
                               <DropdownMenuItem
                                 className="gap-2"
@@ -1259,10 +1313,42 @@ export function SessionSelector({
               onMoveSession={onMoveSession}
               onArchiveSession={onArchiveSession}
               onOpenInPanel={onOpenSessionInPanel}
+              onRename={onRenameSession ? startRename : undefined}
               onSearchProjects={onSearchProjects}
               onClose={() => setSessionContextMenu(null)}
             />
           )}
+
+          <Dialog open={renameTarget !== null} onOpenChange={(open) => { if (!open && !renameSaving) setRenameTarget(null) }}>
+            {/* Above the mobile navigation drawer (z-[61]) the list lives in. */}
+            <DialogContent className="z-[70] sm:max-w-sm" overlayClassName="z-[70]">
+              <DialogHeader>
+                <DialogTitle>Rename chat</DialogTitle>
+              </DialogHeader>
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void submitRename()
+                }}
+              >
+                <Input
+                  autoFocus
+                  aria-label="Chat name"
+                  value={renameTarget?.name ?? ''}
+                  maxLength={200}
+                  onChange={(event) => setRenameTarget((current) => current && { ...current, name: event.target.value })}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <DialogFooter>
+                  <Button type="button" variant="ghost" onClick={() => setRenameTarget(null)} disabled={renameSaving}>Cancel</Button>
+                  <Button type="submit" disabled={renameSaving || !renameTarget?.name.trim()}>
+                    {renameSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>

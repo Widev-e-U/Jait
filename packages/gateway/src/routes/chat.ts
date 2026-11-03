@@ -1771,6 +1771,7 @@ const DEFAULT_UI_MESSAGE_LIMIT = 5;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = {
+  clientMessageId?: string;
   persona?: PersonaChatSnapshot;
   id: string;
   role: "user" | "assistant" | "system";
@@ -2144,7 +2145,7 @@ function windowMessages<T>(messages: T[], limit: number, before?: number): {
 
 type PersistedUIMessageRow = Pick<
   typeof messagesTable.$inferSelect,
-  "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona"
+  "id" | "role" | "content" | "toolCalls" | "segments" | "thinking" | "persona"
 > & {
   contextMetadataId: string | null;
   hasMemoryProvenance: boolean | null;
@@ -2168,6 +2169,7 @@ function rowToUIMsg(sessionId: string, row: PersistedUIMessageRow, visibleIndex:
     persona: readPersonaSnapshot(row.persona),
     content,
   };
+  if (row.role === "user" && row.id.startsWith("user-")) msg.clientMessageId = row.id;
   if (row.toolCalls) {
     try { msg.toolCalls = JSON.parse(row.toolCalls); } catch { /* ignore */ }
   }
@@ -2250,6 +2252,7 @@ function persistedMessageWindow(
   const rows = start < end
     ? db
       .select({
+        id: messagesTable.id,
         role: messagesTable.role,
         content: messagesTable.content,
         toolCalls: messagesTable.toolCalls,
@@ -3332,10 +3335,10 @@ export function registerChatRoutes(
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string, persona?: PersonaChatSnapshot, clientMessageId?: string): void {
     if (!db) return;
     try {
-      const messageId = randomUUID();
+      const messageId = clientMessageId ?? randomUUID();
       persistSubAgentHistories(db, sessionId, messageId, toolCalls);
       db.insert(messagesTable)
         .values({
@@ -3614,6 +3617,10 @@ export function registerChatRoutes(
         : typeof body["session_id"] === "string"
           ? (body["session_id"] as string)
           : randomUUID();
+    // The client supplies a unique message ID so snapshots cannot confuse two
+    // identical prompts from different clients. Older clients remain supported.
+    const clientMessageId = typeof body["clientMessageId"] === "string" && /^user-[a-zA-Z0-9-]{8,100}$/.test(body["clientMessageId"])
+      ? body["clientMessageId"] : undefined;
     let chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     let isQuestionBranch = false;
     const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
@@ -3717,6 +3724,10 @@ export function registerChatRoutes(
       }
       isQuestionBranch = isQuestionBranchMetadata(session.metadata);
       if (isQuestionBranch) chatMode = "ask";
+    }
+
+    if (clientMessageId && db?.select({ id: messagesTable.id }).from(messagesTable).where(eq(messagesTable.id, clientMessageId)).get()) {
+      return reply.status(409).send({ error: "MESSAGE_ID_ALREADY_EXISTS" });
     }
 
     if (body["_loopRevision"] !== undefined) {
@@ -4013,10 +4024,10 @@ export function registerChatRoutes(
         }
       }
       history.push({ role: "user", content: contentParts as unknown as string, segments: displaySegments, persona });
-      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona);
+      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId);
     } else {
       history.push({ role: "user", content, segments: displaySegments, persona });
-      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona);
+      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson, undefined, undefined, persona, clientMessageId);
     }
     if (!systemNotification && getConsumedQueueIds(sessionId).size > 0) {
       // Only save the receipt once the user turn has been recorded.
