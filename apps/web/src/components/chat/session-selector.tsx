@@ -770,7 +770,9 @@ export function SessionSelector({
                           type="button"
                           aria-label={isCollapsed ? 'Expand folder' : 'Collapse folder'}
                           aria-expanded={!isCollapsed}
-                          className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                          // Touch devices widen labelled buttons to 2.5rem; keep the
+                          // icon slot as narrow as a folder icon and grow the hit area instead.
+                          className="relative mt-0.5 flex h-3.5 w-3.5 !min-w-0 shrink-0 items-center justify-center rounded text-muted-foreground before:absolute before:-inset-2 hover:text-foreground"
                           style={folderIconStyle}
                           onClick={(e) => { e.stopPropagation(); toggleFolder(project.id) }}
                         >
