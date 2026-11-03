@@ -22,7 +22,6 @@ import {
   getChatCacheScope,
   INITIAL_CHAT_HISTORY_MESSAGE_LIMIT,
   readCachedChatHistory,
-  readCachedStartupChat,
   reconcileChatHistory,
   reuseUnchangedMessages,
   selectImmediateChatHistory,
@@ -31,7 +30,6 @@ import {
 import { normalizeMessageSegments } from '@/lib/stream-segments'
 import { createMessageStream, snapshotToChatMessageUpdates, type MessageStreamSnapshot, type MessageStreamWriter } from '@/lib/message-stream'
 import { createStreamRenderScheduler } from '@/lib/stream-render-scheduler'
-import { createStartupChatCacheWriter } from '@/lib/startup-chat-cache-writer'
 import {
   openSessionEventSubscription,
   type SessionEventSubscription,
@@ -806,8 +804,6 @@ export function useChat(
    * adopted by chat B's subscription.
    */
   const pendingAssistantPlaceholderRef = useRef<{ sessionId: string; messageId: string } | null>(null)
-  const startupCacheWriterRef = useRef<ReturnType<typeof createStartupChatCacheWriter> | null>(null)
-  if (!startupCacheWriterRef.current) startupCacheWriterRef.current = createStartupChatCacheWriter()
   const restartInFlightRef = useRef(false)
   const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
@@ -816,8 +812,6 @@ export function useChat(
   const subscriptionRef = useRef<SessionEventSubscription | null>(null)
   const documentWasHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false)
   const browserWasOfflineRef = useRef(typeof navigator !== 'undefined' ? !navigator.onLine : false)
-
-  useEffect(() => () => startupCacheWriterRef.current?.flush(), [])
 
   useEffect(() => {
     if (
@@ -828,17 +822,6 @@ export function useChat(
       || state.messages.length === 0
     ) return
 
-    startupCacheWriterRef.current?.schedule({
-      scope: cacheScope,
-      sessionId,
-      history: {
-        messages: state.messages,
-        hasMore: state.hasMore,
-        totalMessages: state.totalMessages,
-        streaming: state.isLoading,
-        sessionLastActiveAt,
-      },
-    })
     const timer = window.setTimeout(() => {
       void writeCachedChatHistory(cacheScope, sessionId, {
         messages: state.messages,
@@ -881,7 +864,6 @@ export function useChat(
   // two-consumers-on-one-turn problem the direct stream used to create.
   useLayoutEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
-    startupCacheWriterRef.current?.flush()
     const preserveExistingMessages = preserveMessagesOnNextResumeRef.current
     preserveMessagesOnNextResumeRef.current = false
     requestVersionRef.current += 1
@@ -922,11 +904,6 @@ export function useChat(
     const runId = ++subscriptionRunIdRef.current
     const isCurrent = () => !cancelled && subscriptionRunIdRef.current === runId
 
-    const startupCache = selectImmediateChatHistory(
-      readCachedStartupChat(cacheScope, sessionId),
-      sessionLastActiveAtRef.current,
-    )
-
     // Show a skeleton (never cached messages) until the fresh server snapshot
     // is received, evaluated and merged. Rendering cached messages immediately
     // caused a stale-then-sudden-update flash once the snapshot arrived.
@@ -934,11 +911,11 @@ export function useChat(
       ...prev,
       readActivity: undefined,
       messages: preserveExistingMessages ? prev.messages : [],
-      isLoading: startupCache?.streaming === true,
+      isLoading: false,
       isLoadingHistory: !preserveExistingMessages,
       error: null,
-      hasMore: startupCache?.hasMore ?? false,
-      totalMessages: startupCache?.totalMessages ?? 0,
+      hasMore: false,
+      totalMessages: 0,
     }))
     if (!preserveExistingMessages) setChangedFiles([])
     setContextUsage(null)

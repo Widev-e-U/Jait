@@ -4,7 +4,8 @@ import { loadConfig } from "../config.js";
 import { signAuthToken } from "../security/http-auth.js";
 import { registerUpdateRoutes, __resetUpdateCaches } from "./update.js";
 
-const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn() }));
+const updateMocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), discard: vi.fn(), exec: vi.fn() }));
+vi.mock("node:child_process", () => ({ exec: updateMocks.exec }));
 vi.mock("../../bin/safe-update.mjs", () => ({
   prepareUpdate: updateMocks.prepare,
   launchSystemdUpdate: updateMocks.launch,
@@ -365,6 +366,41 @@ describe("mobile update route", () => {
     expect(response.statusCode).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
 
+    await app.close();
+  });
+});
+
+
+describe("version checks", () => {
+  it("shares a bounded async check while other requests remain responsive", async () => {
+    let finish!: (error: Error | null, stdout: string) => void;
+    updateMocks.exec.mockImplementation((_cmd, _options, callback) => { finish = callback; });
+    const { app, headers } = await createUpdateServer();
+    const first = app.inject({ method: "GET", url: "/api/update/check", headers }).then((r) => r);
+    const second = app.inject({ method: "GET", url: "/api/update/check", headers }).then((r) => r);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    expect((await app.inject("/does-not-exist")).statusCode).toBe(404);
+    expect(updateMocks.exec).toHaveBeenCalledTimes(1);
+    expect(updateMocks.exec).toHaveBeenCalledWith("npm view @jait/gateway version", expect.objectContaining({
+      timeout: 15_000, maxBuffer: 65_536, windowsHide: true,
+    }), expect.any(Function));
+    finish(null, "99.0.0\n");
+    for (const result of await Promise.all([first, second])) {
+      expect(result.statusCode).toBe(200);
+      expect(result.json()).toMatchObject({ latestVersion: "99.0.0", hasUpdate: true });
+    }
+    await app.close();
+  });
+
+  it("returns failures and allows a later retry", async () => {
+    updateMocks.exec.mockImplementationOnce((_cmd, _options, callback) => callback(new Error("timed out"), ""));
+    updateMocks.exec.mockImplementationOnce((_cmd, _options, callback) => callback(null, "99.0.0"));
+    const { app, headers } = await createUpdateServer();
+    const failed = await app.inject({ method: "GET", url: "/api/update/check", headers });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json()).toMatchObject({ error: "Failed to check for updates", detail: "timed out" });
+    expect((await app.inject({ method: "GET", url: "/api/update/check", headers })).statusCode).toBe(200);
+    expect(updateMocks.exec).toHaveBeenCalledTimes(2);
     await app.close();
   });
 });

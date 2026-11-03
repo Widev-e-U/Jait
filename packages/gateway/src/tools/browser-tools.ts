@@ -14,6 +14,7 @@ type BrowserCollaborationService = {
   getSessionByPreviewSessionId(id: string): BrowserSessionRecord | null;
   getSessionByBrowserId(id: string): BrowserSessionRecord | null;
   assertAgentControl(id?: string): void;
+  restart?(sessionId: string): Promise<unknown>;
   attachAgentBrowser?(sessionId: string, browser: BrowserSurface, projectRoot?: string): void;
 };
 type BrowserSessionRecord = {
@@ -160,7 +161,13 @@ async function ensureBrowserSurface(
   assertPreviewBrowserSelection(previewSession, browserId);
 
   if (previewSession?.browserId) {
-    const preview = registry.getSurface(previewSession.browserId);
+    let preview = registry.getSurface(previewSession.browserId);
+    if (allowStart && previewSession.origin === "agent" && context.sessionId &&
+        (preview?.type !== "browser" || preview.state !== "running") && collaboration?.restart) {
+      collaboration.assertAgentControl(previewSession.browserId);
+      await collaboration.restart(context.sessionId);
+      preview = registry.getSurface(previewSession.browserId);
+    }
     if (preview?.type === "browser" && preview.state === "running") {
       if (requireLiveView && !(preview as BrowserSurface).getLiveViewInfo()) throw new Error("The browser did not expose a live view.");
       return preview as BrowserSurface;
@@ -300,7 +307,12 @@ export function createBrowserOpenTool(
   return {
     ...tool,
     name: "browser.open",
-    description: "Open the required HTTP/HTTPS URL immediately in the live browser for this chat. Start a project server separately before opening its URL.",
+    description: "Start a live browser session for this chat and open the required HTTP/HTTPS URL immediately. Automatically creates the browser and live view on first use; reuses the same session afterward. For project previews, start the project server before opening its URL.",
+    discovery: {
+      aliases: ["browser", "preview", "browser startup", "start browser session", "initial browser URL"],
+      capabilities: ["open URL", "initialize browser session", "live browser", "web browsing", "project preview"],
+      priority: 12,
+    },
     async execute(input, context) {
       if (!context.sessionId?.trim()) return { ok: false, message: "A valid chat session is required to open a browser." };
       return tool.execute(input, context);

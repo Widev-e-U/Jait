@@ -201,6 +201,11 @@ export class ProviderUsageService {
     }
     if (!isOllamaQuotaUsageResponse(response)) return;
     this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, "request_activity"))).run();
+    if (response.source === "balance") {
+      for (const [type, limit] of [["five_hour", response.limits.session], ["seven_day", response.limits.weekly], ["monthly", response.limits.monthly]] as const) {
+        if (!limit) this.db.delete(providerUsage).where(and(eq(providerUsage.accountId, accountId), eq(providerUsage.rateLimitType, type))).run();
+      }
+    }
     const buckets = [
       ["five_hour", response.limits.session, 300],
       ["seven_day", response.limits.weekly, 10_080],
@@ -245,19 +250,21 @@ export class ProviderUsageService {
         providerType: "ollama",
         status: utilization >= 1 ? "rejected" : utilization >= WARNING_THRESHOLD ? "allowed_warning" : "allowed",
         utilization,
-        resetsAt: response.source === "settings" ? limit.resetsAt ?? null : resetWindow.resetsAt,
+        resetsAt: (response.source === "settings" || response.source === "balance") ? limit.resetsAt ?? null : resetWindow.resetsAt,
         isUsingOverage: false,
         raw: {
           planType: planType ?? null,
           windowDurationMins,
           accountLabel: accountLabel ?? null,
           windowStartAt: resetWindow.windowStartAt,
-          resetSource: response.source === "settings" ? (limit.resetsAt ? "provider-reported" : null) : resetWindow.source,
+          resetSource: (response.source === "settings" || response.source === "balance") ? (limit.resetsAt ? "provider-reported" : null) : resetWindow.source,
           models: limit.models.map((model) => ({
             name: model.name,
             requestCount: model.request_count,
           })),
-          activityCost: response.activity?.cost ?? null,
+          activityCost: response.source === "balance" && rateLimitType === "monthly" && response.includedBalance != null && response.includedAllowance != null
+            ? `$${(response.includedAllowance - response.includedBalance).toFixed(2)} of $${response.includedAllowance.toFixed(2)} included` : response.activity?.cost ?? null,
+          credits: response.source === "balance" && rateLimitType === "monthly" && response.purchasedBalance != null ? { balance: response.purchasedBalance.toFixed(2) } : null,
         },
       });
     }

@@ -16,6 +16,7 @@ function compactPersistedToolCall(
   detailBytes: number,
   textBytes: number,
   markCompacted: boolean,
+  metadataOnly = false,
 ): Record<string, unknown> {
   const record = value && typeof value === "object"
     ? value as Record<string, unknown>
@@ -40,10 +41,10 @@ function compactPersistedToolCall(
   for (const key of ["startedAt", "completedAt", "retryCount"] as const) {
     if (typeof record[key] === "number" && Number.isFinite(record[key])) compact[key] = record[key];
   }
-  if (typeof record["output"] === "string") {
+  if (!metadataOnly && typeof record["output"] === "string") {
     compact["output"] = limitUtf8(record["output"], textBytes);
   }
-  if (record["data"] !== undefined) compact["data"] = compactJson(record["data"]);
+  if (!metadataOnly && record["data"] !== undefined) compact["data"] = compactJson(record["data"]);
   if (markCompacted) compact["storageCompacted"] = true;
   return compact;
 }
@@ -73,33 +74,26 @@ export function serializePersistedToolCalls(
     [Math.min(initialDetailBytes, 512), Math.min(initialTextBytes, 512)],
   ] as const;
 
-  for (const [detailBytes, textBytes] of passes) {
-    const compact = parsed.map((entry, index) =>
-      compactPersistedToolCall(
-        entry,
-        index,
-        detailBytes,
-        textBytes,
-        options.markCompacted === true,
+  // Encode each entry once per pass and stop as soon as the pass cannot fit.
+  // Re-stringifying the growing prefix made long checkpoint writes quadratic.
+  const encode = (detailBytes: number, textBytes: number, metadataOnly: boolean): string | null => {
+    const parts: string[] = [];
+    let bytes = 2; // []
+    for (const [index, entry] of parsed.entries()) {
+      const part = JSON.stringify(compactPersistedToolCall(
+        entry, index, detailBytes, textBytes, options.markCompacted === true, metadataOnly,
       ));
-    const serialized = JSON.stringify(compact);
-    if (Buffer.byteLength(serialized, "utf8") <= maxBytes) return serialized;
-  }
+      const nextBytes = bytes + (parts.length ? 1 : 0) + Buffer.byteLength(part, "utf8");
+      if (nextBytes > maxBytes) return metadataOnly ? `[${parts.join(",")}]` : null;
+      parts.push(part);
+      bytes = nextBytes;
+    }
+    return `[${parts.join(",")}]`;
+  };
 
-  const metadataOnly: Record<string, unknown>[] = [];
-  for (const [index, entry] of parsed.entries()) {
-    const compact = compactPersistedToolCall(
-      entry,
-      index,
-      128,
-      128,
-      options.markCompacted === true,
-    );
-    delete compact["data"];
-    delete compact["output"];
-    const candidate = JSON.stringify([...metadataOnly, compact]);
-    if (Buffer.byteLength(candidate, "utf8") > maxBytes) break;
-    metadataOnly.push(compact);
+  for (const [detailBytes, textBytes] of passes) {
+    const serialized = encode(detailBytes, textBytes, false);
+    if (serialized !== null) return serialized;
   }
-  return JSON.stringify(metadataOnly);
+  return encode(128, 128, true);
 }

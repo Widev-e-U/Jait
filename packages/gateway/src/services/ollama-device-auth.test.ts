@@ -51,44 +51,18 @@ describe("Ollama device authentication", () => {
     expect(isLocalOllamaUrl(url)).toBe(false);
   });
 
-  it("falls back on a local 404, verifies the account, then loads signed usage", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response("missing", { status: 404 }))
-      .mockResolvedValueOnce(json({ Email: account.email, Name: account.name, Plan: "pro" }))
-      .mockResolvedValueOnce(json(usage));
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(fetchSignedInOllamaUsage("http://localhost:11434", account)).resolves.toEqual(usage);
-    expect(readFile).toHaveBeenCalledWith("/test/ollama-key", "utf8");
-    expect(fetchMock.mock.calls[0][1].headers).toBeUndefined();
-    for (const [url, init] of fetchMock.mock.calls.slice(1)) {
-      const parsed = new URL(url);
-      expect(parsed.origin).toBe("https://ollama.com");
-      expect(init.redirect).toBe("error");
-      const signature = init.headers.Authorization.split(":")[1];
-      expect(verify(null, Buffer.from(`${init.method},${parsed.pathname}${parsed.search}`), publicKey, Buffer.from(signature, "base64"))).toBe(true);
-    }
-    expect(new URL(fetchMock.mock.calls[1][0]).pathname).toBe("/api/me");
-    expect(new URL(fetchMock.mock.calls[2][0]).pathname).toBe("/api/usage");
+  it("reads monthly credits and the provider-reported reset from balance", async () => {
+    const balance = { included: { balance_usd: 53.5, allowance_usd: 60, period: { from: "2026-11-02T07:43:54Z", until: "2026-12-02T07:43:54Z" } }, purchased: { balance_usd: 5 } };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(balance)));
+    const result = await fetchOllamaDeviceUsage(account, privateKey);
+    expect(result).toMatchObject({ source: "balance", includedBalance: 53.5, includedAllowance: 60, purchasedBalance: 5, limits: { monthly: { resetsAt: "2026-12-02T07:43:54.000Z" } } });
+    expect("limits" in result && result.limits.monthly?.usage).toBeCloseTo(6.5 / 60);
   });
 
-  it("accepts request activity through the signed-in device fallback", async () => {
-    const activity = { range: "7d", scope: "self", granularity: "day", from: "2026-09-30T00:00:00Z", until: "2026-10-07T11:29:42Z", totals: { request_count: 10388 }, buckets: [] };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("missing", { status: 404 }))
-      .mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(activity)));
-    await expect(fetchSignedInOllamaUsage("http://localhost:11434", account)).resolves.toEqual(activity);
-  });
-
-  it("uses an existing daemon usage endpoint without opening credentials", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(usage)));
-    await expect(fetchSignedInOllamaUsage("http://localhost:11434", account)).resolves.toEqual(usage);
+  it("does not use device credentials for a remote daemon", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("missing", { status: 404 })));
+    await expect(fetchSignedInOllamaUsage("http://remote:11434", account)).rejects.toMatchObject({ status: 404 });
     expect(readFile).not.toHaveBeenCalled();
-  });
-
-  it.each([["http://remote:11434", 404], ["http://localhost:11434", 401], ["http://localhost:11434", 500]])("does not read credentials for %s status %s", async (url, status) => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response("error", { status }));
-    vi.stubGlobal("fetch", fetchMock);
-    await expect(fetchSignedInOllamaUsage(url, account)).rejects.toMatchObject({ status });
-    expect(readFile).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it.each([{ Email: "someone@example.com", Name: account.name }, {}, null])("rejects an unverified account before fetching usage", async (body) => {
@@ -99,13 +73,13 @@ describe("Ollama device authentication", () => {
   });
 
   it("accepts lowercase account fields", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(usage)));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(new Response("missing", { status: 404 })).mockResolvedValueOnce(json(usage)));
     await expect(fetchOllamaDeviceUsage(account, privateKey)).resolves.toEqual(usage);
   });
 
   it("rejects malformed quota responses", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json({ limits: {} })));
-    await expect(fetchOllamaDeviceUsage(account, privateKey)).rejects.toThrow("unexpected usage response");
+    await expect(fetchOllamaDeviceUsage(account, privateKey)).rejects.toThrow("unexpected balance response");
   });
 
   it("reports unreadable keys without exposing filesystem errors or sending a request", async () => {

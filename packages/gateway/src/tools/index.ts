@@ -657,10 +657,14 @@ export function createToolRegistry(
   // Legacy preview calls retain the managed project runner. New browser opens load a URL directly.
   tools.registerCompatibility(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
   tools.register(createBrowserOpenTool(surfaceRegistry, deps.previewService));
+  // Status is a read-only compatibility endpoint, not a browser startup entry point.
+  // Discovery must lead with browser.open, whose required URL creates the live session.
+  const previewStatus = createPreviewStatusTool(deps.previewService);
+  tools.registerCompatibility(previewStatus);
+  tools.registerCompatibility({ ...previewStatus, name: "browser.status" });
   const browserLifecycle = [
     [createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService), "browser.close"],
     [createPreviewRestartTool(deps.previewService), "browser.restart"],
-    [createPreviewStatusTool(deps.previewService), "browser.status"],
     [createPreviewLogsTool(deps.previewService), "browser.logs"],
   ] as const;
   for (const [legacy, name] of browserLifecycle) {

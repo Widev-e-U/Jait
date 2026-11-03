@@ -4266,11 +4266,19 @@ export function registerChatRoutes(
     safeWrite(`data: ${JSON.stringify(requestEvent)}\n\n`);
     emitToSubscribers(sessionId, requestEvent);
 
+    const providerLabel = providerRegistry?.getForUser(requestProvider ?? "jait", authUser.id)?.info.name
+      ?? (requestProvider === "jait" && config.llmProvider === "openai" ? "OpenAI" : "Ollama");
+
+    // Include turn preparation in the cancellation and error handling path.
+    try {
     const matchedSkillIds = new Set(matchSkills(content, promptCtx.skills ?? []));
     const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
     const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
-    const relevantMemory = await retrieveRelevantMemoryContext(memoryService, content, userApiKeys);
+    const relevantMemory = await waitForCliProviderRequest(
+      () => retrieveRelevantMemoryContext(memoryService, content, userApiKeys),
+      streamAbort.signal,
+    );
     const memoryToolCall = relevantMemory?.flow.retrieved.length
       ? buildSyntheticMemoryToolCall(content, memoryService)
       : null;
@@ -4290,9 +4298,6 @@ export function registerChatRoutes(
     const memoryBlock = relevantMemory?.block;
     const syntheticToolCalls = [turnSkillToolCall, memoryToolCall].filter((call): call is PersistedToolCall => !!call);
 
-    const providerLabel = providerRegistry?.getForUser(requestProvider ?? "jait", authUser.id)?.info.name
-      ?? (requestProvider === "jait" && config.llmProvider === "openai" ? "OpenAI" : "Ollama");
-
     // Create steering controller for this session
     const steering = new SteeringController(activeTurnId);
     sessionSteeringControllers.set(sessionId, steering);
@@ -4305,11 +4310,7 @@ export function registerChatRoutes(
     });
 
     // ── Turn body ───────────────────────────────────────────────────────────
-    // Inner guard: covers the CLI path and the agentic loop so provider
-    // failures are reported inline. The enclosing `finally` opened near the
-    // top of this handler still tears the session registries down afterwards,
-    // whatever throws here.
-    try {
+    // The enclosing guard also reports failures during turn preparation.
       let usedCliProvider = false;
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {

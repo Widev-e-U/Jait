@@ -10,7 +10,7 @@
 const GITHUB_REPO = "Widev-e-U/Jait";
 
 import type { FastifyInstance } from "fastify";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
 import { createRequire } from "node:module";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
@@ -143,17 +143,27 @@ export function registerUpdateRoutes(
   config: AppConfig,
   deps: { shutdown: () => Promise<void>; port: number },
 ): void {
+  // Concurrent callers share one bounded subprocess, including failed checks.
+  let latestVersionCheck: Promise<string> | undefined;
+
   /** Check for a newer version on npm. */
   app.get("/api/update/check", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
     try {
-      const latest = execSync("npm view @jait/gateway version", {
-        encoding: "utf8",
-        timeout: 15_000,
-        windowsHide: true,
-      }).trim();
+      latestVersionCheck ??= new Promise<string>((resolve, reject) => {
+        exec("npm view @jait/gateway version", {
+          encoding: "utf8",
+          timeout: 15_000,
+          windowsHide: true,
+          maxBuffer: 64 * 1_024,
+        }, (error, stdout) => {
+          if (error) reject(error);
+          else resolve(stdout.trim());
+        });
+      }).finally(() => { latestVersionCheck = undefined; });
+      const latest = await latestVersionCheck;
 
       const hasUpdate = latest !== CURRENT_VERSION && compareVersions(latest, CURRENT_VERSION) > 0;
 

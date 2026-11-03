@@ -12,6 +12,9 @@ describe("createPreviewOpenTool", () => {
     const names = new Set(schemas.map((schema) => schema.function.name));
 
     expect(names.has("browser_open")).toBe(true);
+    expect(names.has("browser_status")).toBe(false);
+    expect(tools.get("browser.status")).toBeDefined();
+    expect(tools.rankSearch("browser preview session startup", { limit: 1 })[0]?.tool.name).toBe("browser.open");
     expect(names.has("preview_open")).toBe(false);
     expect(tools.get("preview.open")).toBeDefined();
     expect(tools.list().some(tool => tool.name.startsWith("preview."))).toBe(false);

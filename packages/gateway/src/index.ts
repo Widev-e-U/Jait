@@ -210,7 +210,6 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   const sessionSqlService = new SessionSqlService(sqlite);
   const chatTracesService = new ChatTracesService(sqlite);
   const databaseRetention = new DatabaseRetentionService(sqlite);
-  const diskJanitor = new DiskJanitor(sqlite);
 
   const repoService = new RepositoryService(db);
   const gitService = new GitService();
@@ -264,6 +263,20 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
   providerUsageService.attachNotifications(notifications);
+
+  // Reclaim disk jait allocates but never frees. The notify hook matters: when
+  // scratch lives in a shared sticky temp root, the entries may belong to
+  // another account (CI runs as `ci-builder`) and this process cannot unlink
+  // them. Without a user-visible notice the janitor retries silently forever and
+  // the only symptom is a "disk full" warning nobody can act on.
+  const diskJanitor = new DiskJanitor(
+    sqlite,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    (title, body) => notifications.warning(title, body),
+  );
 
   // Attention layer — every blocking prompt gets one keyed item so answering on
   // any device revokes the notification on all the others.

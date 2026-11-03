@@ -2,7 +2,7 @@ import { createPrivateKey, createPublicKey, sign, type KeyObject } from "node:cr
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fetchOllamaUsageFrom, isOllamaUsageResponse, OllamaUsageError, type OllamaCloudAccount, type OllamaUsageResponse } from "./provider-quota-fetchers.js";
+import { fetchOllamaUsageFrom, isOllamaUsageResponse, parseOllamaBalance, OllamaUsageError, type OllamaCloudAccount, type OllamaUsageResponse } from "./provider-quota-fetchers.js";
 
 /** Only the gateway's local daemon can use the gateway's device credentials. */
 export function isLocalOllamaUrl(baseUrl: string): boolean {
@@ -94,14 +94,15 @@ export async function fetchOllamaDeviceUsage(account: OllamaCloudAccount, key?: 
   // Refuse to attach a different local installation's quota to this backend.
   const matches = account.email ? email === account.email : Boolean(account.name && name === account.name);
   if (!matches) throw new Error("Ollama device key belongs to a different or unverified account. Use the matching daemon key or an Ollama Cloud API key.");
+  try { return parseOllamaBalance(await signedRequest(deviceKey, "GET", "/api/balance")); } catch (error) {
+    if (!(error instanceof OllamaUsageError) || error.status !== 404) throw error;
+  }
   const usage = await signedRequest(deviceKey, "GET", "/api/usage");
   if (!isOllamaUsageResponse(usage)) throw new Error("Ollama returned an unexpected usage response");
   return usage;
 }
 
 export async function fetchSignedInOllamaUsage(baseUrl: string, account: OllamaCloudAccount): Promise<OllamaUsageResponse> {
-  try { return await fetchOllamaUsageFrom(baseUrl); } catch (error) {
-    if (!(error instanceof OllamaUsageError) || error.status !== 404 || !isLocalOllamaUrl(baseUrl)) throw error;
-  }
-  return fetchOllamaDeviceUsage(account);
+  if (isLocalOllamaUrl(baseUrl)) return fetchOllamaDeviceUsage(account);
+  return fetchOllamaUsageFrom(baseUrl);
 }

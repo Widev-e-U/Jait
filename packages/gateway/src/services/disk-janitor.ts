@@ -19,7 +19,7 @@ import { getStateDirectory } from "../state-directory.js";
  */
 
 import { existsSync, type Dirent } from "node:fs";
-import { readdir, rm, stat } from "node:fs/promises";
+import { readdir, rm, rmdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import type { SqliteDatabase } from "../db/index.js";
@@ -62,6 +62,12 @@ export interface DiskJanitorReport {
   sandboxStorage: ReapedEntry[];
   bytesReclaimed: number;
   errors: string[];
+  /**
+   * Scratch entries that are stale but cannot be unlinked by this process.
+   * The usual cause is a shared temp root with the sticky bit set, holding
+   * directories created by another account (CI runs as its own user).
+   */
+  blockedForeignOwned: number;
   skippedReason?: "disabled" | "already-running" | "stopped";
 }
 
@@ -129,9 +135,22 @@ export function isInside(root: string, candidate: string): boolean {
   return resolved !== resolvedRoot && resolved.startsWith(`${resolvedRoot}${sep}`);
 }
 
-/** Recursive size of a directory. Best-effort; unreadable entries count as 0. */
-export async function directorySize(path: string): Promise<number> {
-  let total = 0;
+export interface TreeMeasurement {
+  bytes: number;
+  /**
+   * Newest mtime anywhere in the tree. A directory's own mtime only moves when
+   * direct children are added or removed, so it says nothing about files being
+   * written deep inside — the age gate must use this instead.
+   */
+  newestMtimeMs: number;
+}
+
+/** Recursive size and newest write time of a path. Best-effort. */
+export async function measureTree(path: string): Promise<TreeMeasurement> {
+  const result: TreeMeasurement = { bytes: 0, newestMtimeMs: 0 };
+  const note = (mtimeMs: number): void => {
+    if (mtimeMs > result.newestMtimeMs) result.newestMtimeMs = mtimeMs;
+  };
   const walk = async (current: string): Promise<void> => {
     let entries: Dirent<string>[];
     try {
@@ -148,18 +167,38 @@ export async function directorySize(path: string): Promise<number> {
       }
       try {
         const info = await stat(child);
-        total += info.size;
+        result.bytes += info.size;
+        note(info.mtimeMs);
       } catch { /* best effort */ }
     }
   };
   try {
     const info = await stat(path);
-    if (!info.isDirectory()) return info.size;
+    note(info.mtimeMs);
+    if (!info.isDirectory()) {
+      result.bytes = info.size;
+      return result;
+    }
   } catch {
-    return 0;
+    return result;
   }
   await walk(path);
-  return total;
+  return result;
+}
+
+/** Recursive size of a directory. Best-effort; unreadable entries count as 0. */
+export async function directorySize(path: string): Promise<number> {
+  return (await measureTree(path)).bytes;
+}
+
+/** True when `path` is a directory carrying the sticky bit (e.g. /tmp). */
+async function isStickyDirectory(path: string): Promise<boolean> {
+  try {
+    const info = await stat(path);
+    return info.isDirectory() && (info.mode & 0o1_000) !== 0;
+  } catch {
+    return false;
+  }
 }
 
 interface ThreadLookupRow {
@@ -187,6 +226,12 @@ export class DiskJanitor {
   private running = false;
   private stopped = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** Paths whose reap failed with EACCES/EPERM during the current pass. */
+  private permissionFailures: string[] = [];
+  /** Scratch entries left alone because another account owns them in sticky temp. */
+  private blockedForeignOwned = 0;
+  /** Last permission-block signature reported, so intervals do not repeat it. */
+  private lastPermissionAlert = "";
 
   constructor(
     private sqlite: SqliteDatabase,
@@ -194,6 +239,13 @@ export class DiskJanitor {
     private logger: DiskJanitorLogger = consoleLogger,
     private git: Pick<GitService, "cleanupWorktreeWithOptions"> = new GitService(),
     private roots: DiskJanitorRoots = defaultDiskJanitorRoots(),
+    /**
+     * Optional user-facing channel. Console logging is invisible when the
+     * gateway runs as a service, which is exactly how "disk stays full and
+     * nobody knows why" happens: the janitor retries the same undeletable
+     * directories every six hours and only writes to a log nobody reads.
+     */
+    private notify?: (title: string, body: string) => void,
   ) {}
 
   /** Report what a run would remove, without touching disk. */
@@ -281,6 +333,7 @@ export class DiskJanitor {
       sandboxStorage: [],
       bytesReclaimed: 0,
       errors: [],
+      blockedForeignOwned: 0,
       skippedReason,
     };
   }
@@ -289,10 +342,15 @@ export class DiskJanitor {
     const dryRun = options.dryRun ?? false;
     const now = options.now ?? new Date();
     const report = this.emptyReport(dryRun);
+    this.permissionFailures = [];
+    this.blockedForeignOwned = 0;
 
     report.worktrees = await this.reapWorktrees(now, dryRun, report.errors);
     report.sandboxStorage = await this.reapSandboxStorage(now, dryRun, report.errors);
     report.tempScratch = await this.reapTempScratch(now, dryRun, report.errors);
+    report.blockedForeignOwned = this.blockedForeignOwned;
+
+    if (!dryRun) await this.reportPermissionBlocks(report);
 
     report.bytesReclaimed = [
       ...report.worktrees,
@@ -382,9 +440,65 @@ export class DiskJanitor {
         }
         reaped.push({ path, bytes, reason: decision.reason });
       }
+
+      await this.reapEmptyContainer(repoPath, now, dryRun, reaped, errors);
     }
 
     return reaped;
+  }
+
+  /**
+   * Remove a per-repo container once it holds no worktrees.
+   *
+   * `worktrees/<repo>/` is created eagerly the first time a project is
+   * executed and is never removed when its last worktree goes away, so every
+   * project ever run leaves an empty directory behind. Because the scan above
+   * looks one level below these containers, they were invisible to the janitor:
+   * a run that reaped all 400 worktrees of a test fixture still left 400 empty
+   * containers, and the next run read them as "repo dirs with nothing to do".
+   *
+   * Only genuinely empty directories are considered, removal uses rmdir (which
+   * refuses to touch a non-empty directory), and the age gate keeps a project
+   * that is about to receive a worktree safe.
+   */
+  private async reapEmptyContainer(
+    path: string,
+    now: Date,
+    dryRun: boolean,
+    reaped: ReapedEntry[],
+    errors: string[],
+  ): Promise<void> {
+    if (!isInside(this.roots.worktrees, path)) return;
+
+    let entries: string[];
+    try {
+      entries = await readdir(path);
+    } catch (err) {
+      errors.push(`worktree container unreadable (${path}): ${String(err)}`);
+      return;
+    }
+    if (entries.length > 0) return;
+
+    let mtimeMs = 0;
+    try {
+      mtimeMs = (await stat(path)).mtimeMs;
+    } catch {
+      return;
+    }
+    if (now.getTime() - mtimeMs < this.policy.orphanWorktreeGraceMs) return;
+
+    if (!dryRun) {
+      try {
+        await rmdir(path);
+      } catch (err) {
+        // Something appeared between the readdir and the rmdir: leave it alone.
+        if ((err as NodeJS.ErrnoException).code !== "ENOTEMPTY") {
+          errors.push(`empty worktree container reap failed (${path}): ${String(err)}`);
+        }
+        return;
+      }
+    }
+    reaped.push({ path, bytes: 0, reason: "empty worktree container" });
   }
 
   private async shouldReapWorktree(
@@ -453,12 +567,16 @@ export class DiskJanitor {
       }
       if (now.getTime() - mtimeMs < this.policy.sandboxStorageMaxAgeMs) continue;
 
-      const bytes = await directorySize(path);
+      const { bytes, newestMtimeMs } = await measureTree(path);
+      // A VM disk written to recently is still in use, whatever its own mtime says.
+      if (now.getTime() - newestMtimeMs < this.policy.sandboxStorageMaxAgeMs) continue;
+
       if (!dryRun) {
         try {
           await rm(path, { recursive: true, force: true });
         } catch (err) {
           errors.push(`sandbox storage reap failed (${path}): ${String(err)}`);
+          this.notePermissionFailure(path, err);
           continue;
         }
       }
@@ -480,6 +598,12 @@ export class DiskJanitor {
     const root = this.roots.temp;
     const sandboxRoot = resolve(this.roots.sandboxStorage);
     const reaped: ReapedEntry[] = [];
+    // In a sticky temp root (the /tmp every Linux host ships) unlink is reserved
+    // for the entry's owner, so entries created by another account are not ours
+    // to remove. Detect that up front: it keeps dry runs honest and stops the
+    // periodic pass from retrying thousands of guaranteed EPERM failures.
+    const sticky = await isStickyDirectory(root);
+    const selfUid = process.getuid?.();
 
     let entries: string[];
     try {
@@ -506,12 +630,30 @@ export class DiskJanitor {
       }
       if (now.getTime() - mtimeMs < this.policy.tempScratchMaxAgeMs) continue;
 
-      const bytes = await directorySize(path);
+      const { bytes, newestMtimeMs } = await measureTree(path);
+      // Guard against reaping scratch that something is still writing into: the
+      // top-level mtime is frozen as long as no new child is created.
+      if (now.getTime() - newestMtimeMs < this.policy.tempScratchMaxAgeMs) continue;
+
+      if (sticky && selfUid !== undefined) {
+        let ownerUid: number;
+        try {
+          ownerUid = (await stat(path)).uid;
+        } catch {
+          continue;
+        }
+        if (ownerUid !== selfUid) {
+          this.blockedForeignOwned += 1;
+          continue;
+        }
+      }
+
       if (!dryRun) {
         try {
           await rm(path, { recursive: true, force: true });
         } catch (err) {
           errors.push(`temp scratch reap failed (${path}): ${String(err)}`);
+          this.notePermissionFailure(path, err);
           continue;
         }
       }
@@ -519,5 +661,37 @@ export class DiskJanitor {
     }
 
     return reaped;
+  }
+
+  private notePermissionFailure(path: string, err: unknown): void {
+    if (/EACCES|EPERM|permission denied/i.test(String(err))) {
+      this.permissionFailures.push(path);
+    }
+  }
+
+  /**
+   * Surface undeletable scratch once per distinct condition, with the command
+   * that actually fixes it. Retrying silently forever is what makes a stuck
+   * temp directory look like a permanent "disk full" warning.
+   */
+  private async reportPermissionBlocks(report: DiskJanitorReport): Promise<void> {
+    if (this.permissionFailures.length === 0 && report.blockedForeignOwned === 0) return;
+    const root = this.roots.temp;
+    const days = Math.round(this.policy.tempScratchMaxAgeMs / DAY_MS);
+    const foreign = report.blockedForeignOwned;
+    const signature = `${root}:${foreign}:${this.permissionFailures.length}`;
+    if (signature === this.lastPermissionAlert) return;
+    this.lastPermissionAlert = signature;
+
+    const body = foreign > 0
+      ? `${foreign} jait-* entr${foreign === 1 ? "y" : "ies"} in ${root} belong to another user, ` +
+        `and the sticky bit prevents this process (uid ${String(process.getuid?.())}) from removing them. ` +
+        `Clear them as root: sudo find ${root} -maxdepth 1 -name 'jait-*' -mtime +${days} -exec rm -rf {} +`
+      : `${this.permissionFailures.length} jait-* entr${this.permissionFailures.length === 1 ? "y" : "ies"} in ` +
+        `${root} could not be removed (permission denied). Check ownership and directory permissions at ` +
+        `${this.permissionFailures[0]}.`;
+
+    this.logger.warn(`[disk-janitor] ${body}`);
+    this.notify?.("Disk cleanup blocked", body);
   }
 }

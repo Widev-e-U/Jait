@@ -107,7 +107,8 @@ function UsageBar({ quota }: { quota: UsageQuotaSnapshot }) {
           </TooltipHint>
         )}
         <span>Updated {formatDateTime(quota.updatedAt)}</span>
-        {quota.activityCost && <span>Cost {quota.activityCost}</span>}
+        {quota.activityCost && <span>{quota.providerType === 'ollama' && quota.rateLimitType === 'monthly' ? quota.activityCost : `Cost ${quota.activityCost}`}</span>}
+        {quota.providerType === 'ollama' && quota.rateLimitType === 'monthly' && quota.credits?.balance != null && <span>Purchased credits ${quota.credits.balance}</span>}
       </div>
       {quota.quotaRefreshMissing && <p className="text-xs text-muted-foreground">Last reported quota. The latest Ollama response did not refresh session or weekly usage.</p>}
       {quota.requestCount != null && <p className="text-xs text-muted-foreground">This response contains request activity only; it does not refresh subscription quota.</p>}

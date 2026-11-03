@@ -138,6 +138,28 @@ describe('chat agent browser', () => {
     expect(registry.startSurface).toHaveBeenCalledTimes(2);
   });
 
+  it('opens the next URL after idle suspension without a separate restart call', async () => {
+    const { service, tool, context, registry } = fixture();
+    const chat = context('idle-open');
+    await tool.execute({ url: 'https://example.com/page' }, chat);
+    const browserId = service.get('idle-open')!.browserId!;
+    await service.suspendIdleAgentBrowser(browserId);
+    const result = await tool.execute({ url: 'https://example.com/next' }, chat);
+    expect(result).toMatchObject({ ok: true, data: { browserId, url: 'https://example.com/next' } });
+    expect(registry.startSurface).toHaveBeenCalledTimes(2);
+    expect(service.get('idle-open')).toMatchObject({ status: 'ready', sharedWithAgent: true });
+  });
+
+  it('preserves user takeover when opening a suspended browser', async () => {
+    const { service, tool, context, registry } = fixture();
+    const chat = context('idle-takeover');
+    await tool.execute({ url: 'https://example.com/page' }, chat);
+    service.setSharedWithAgent('idle-takeover', false);
+    await service.suspendIdleAgentBrowser(service.get('idle-takeover')!.browserId!);
+    await expect(tool.execute({ url: 'https://example.com/next' }, chat)).rejects.toThrow(/not shared/);
+    expect(registry.startSurface).toHaveBeenCalledTimes(1);
+  });
+
   it('restarts an agent browser without creating a project server or dropping takeover', async () => {
     const { service, tool, context, registry } = fixture();
     await tool.execute({ url: 'https://example.com' }, context('chat-a'));

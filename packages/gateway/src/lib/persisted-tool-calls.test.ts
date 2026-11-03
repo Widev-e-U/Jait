@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { serializePersistedToolCalls } from "./persisted-tool-calls.js";
 
 describe("serializePersistedToolCalls", () => {
@@ -148,4 +148,31 @@ describe("serializePersistedToolCalls", () => {
     expect(parsed[0]["retryCount"]).toBe(2);
     expect(parsed[0]["status"]).toBe("completed");
   });
+  it("serializes long metadata fallbacks with linear work", () => {
+    const entries = Array.from({ length: 1_500 }, (_, i) => ({
+      callId: `call-${i}`, tool: "read", args: {}, ok: true,
+      message: "🦀".repeat(200), output: "x".repeat(1_000), data: { body: "x".repeat(1_000) },
+    }));
+    const raw = JSON.stringify(entries);
+    const stringify = JSON.stringify;
+    let arrayItems = 0;
+    const spy = vi.spyOn(JSON, "stringify").mockImplementation(((value: unknown) => {
+      if (Array.isArray(value)) arrayItems += value.length;
+      return stringify(value);
+    }) as typeof JSON.stringify);
+    let serialized: string | null;
+    try {
+      serialized = serializePersistedToolCalls(raw);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(arrayItems).toBeLessThanOrEqual(entries.length * 4);
+    expect(Buffer.byteLength(serialized!, "utf8")).toBeLessThanOrEqual(512_000);
+    const result = JSON.parse(serialized!);
+    expect(result.length).toBeGreaterThan(500);
+    expect(result[0].callId).toBe("call-0");
+    expect(result.at(-1).callId).toBe(`call-${result.length - 1}`);
+    expect(result.every((entry: Record<string, unknown>) => !("data" in entry) && !("output" in entry))).toBe(true);
+  });
+
 });

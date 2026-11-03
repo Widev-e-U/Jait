@@ -1,6 +1,28 @@
 import { test, expect } from '@playwright/test'
 
 test.describe('useChat stream resume lifecycle', () => {
+  test('streams without synchronously reading or rewriting transcript startup snapshots', async ({ page }) => {
+    await page.addInitScript(() => {
+      const calls: string[] = []
+      Reflect.set(window, '__startupTranscriptStorageCalls', calls)
+      for (const method of ['getItem', 'setItem'] as const) {
+        const original = Storage.prototype[method]
+        Storage.prototype[method] = function (key: string, value?: string) {
+          if (key.startsWith('jait:startup-chat:')) calls.push(method)
+          return method === 'getItem'
+            ? original.call(this, key)
+            : original.call(this, key, value!)
+        } as typeof original
+      }
+    })
+    await page.goto('/use-chat-resume-repro.html')
+    await expect(page.getByTestId('message-count')).toHaveText('2')
+    await expect(page.getByTestId('loading')).toHaveText('true')
+    // Cover the former 750 ms periodic transcript write.
+    await page.waitForTimeout(1_000)
+    expect(await page.evaluate(() => Reflect.get(window, '__startupTranscriptStorageCalls'))).toEqual([])
+  })
+
   test('does not duplicate a user message when turn start arrives before POST headers', async ({ page }) => {
     await page.goto('/use-chat-resume-repro.html?early-start=1')
     await expect(page.getByTestId('stream-fetch-count')).toHaveText('1')

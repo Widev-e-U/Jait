@@ -52,6 +52,8 @@
     "check:artifacts": "node scripts/check-artifact-paths.mjs",
     "healthcheck": "bun run release:check && bun run check:artifacts && bun run typecheck && bun run build && bun run test && bun run lint",
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache",
+    "disk:janitor": "bun scripts/disk-janitor.ts",
+    "disk:janitor:apply": "bun scripts/disk-janitor.ts --apply",
     "test:contract:coverage": "node tests/contract/run.mjs coverage",
     "test:contract:translated": "node tests/contract/run.mjs translated-report",
     "test:contract:matcher-differential": "node tests/contract/tooling/matcher-differential.mjs",

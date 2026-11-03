@@ -200,7 +200,7 @@ export function registerProviderRoutes(
       // instead relies on the credentials it stored during `ollama signin`.
       const usageApiKey = cloud ? explicitCloudApiKey || backendApiKey : explicitCloudApiKey;
 
-      const probe = apiKeys["OLLAMA_SESSION_COOKIE"] ? { reachable: true, account: null } : await probeOllamaAccount({
+      const probe = await probeOllamaAccount({
         baseUrl: backend.baseUrl,
         apiKey: usageApiKey,
       });
@@ -222,11 +222,11 @@ export function registerProviderRoutes(
       try {
         // Browser sessions expose dashboard quota. API/device authentication
         // remains available for servers that publish quota through /api/usage.
-        const usage = apiKeys["OLLAMA_SESSION_COOKIE"]
-          ? await fetchOllamaSettingsUsage(apiKeys["OLLAMA_SESSION_COOKIE"])
-          : usageApiKey
+        const usage = usageApiKey
           ? await fetchOllamaUsage(usageApiKey)
-          : await fetchSignedInOllamaUsage(backend.baseUrl, probe.account!);
+          : probe.account
+          ? await fetchSignedInOllamaUsage(backend.baseUrl, probe.account)
+          : await fetchOllamaSettingsUsage(apiKeys["OLLAMA_SESSION_COOKIE"]!);
         deps.providerUsageService.recordOllamaUsage(
           quotaAccountId,
           usage,

@@ -414,12 +414,12 @@ export class AgentsApi {
   }
 
   private _modelsInflight = new Map<string, Promise<ProviderModelsResponse>>()
-  private _modelsCachedAt = new Map<string, number>()
+  private _modelsCache = new Map<string, { result: ProviderModelsResponse; cachedAt: number }>()
 
   /** Drop the in-memory model cache so the next fetch pulls a fresh catalogue. */
   resetProviderModels(): void {
     this._modelsInflight.clear()
-    this._modelsCachedAt.clear()
+    this._modelsCache.clear()
   }
 
   async refreshProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
@@ -435,12 +435,15 @@ export class AgentsApi {
   async listProviderModels(providerId: ProviderId, nodeId?: string | null): Promise<ProviderModelsResponse> {
     const effectiveNodeId = providerId === 'jait' ? 'gateway' : nodeId?.trim() || 'gateway'
     const cacheKey = `${providerId}:${effectiveNodeId}`
-    const now = Date.now()
-    const cachedAt = this._modelsCachedAt.get(cacheKey) ?? 0
+    // Pending discovery can take longer than the cache TTL (remote CLI probes
+    // allow 90 seconds). Always share it until it settles.
     const existing = this._modelsInflight.get(cacheKey)
-    if (existing && now - cachedAt < 15_000) return existing
+    if (existing) return existing
+    const cached = this._modelsCache.get(cacheKey)
+    // Catalogues are stable across chat switches; explicit refresh/login flows
+    // can invalidate them through resetProviderModels().
+    if (cached && Date.now() - cached.cachedAt < 5 * 60_000) return cached.result
 
-    this._modelsCachedAt.set(cacheKey, now)
     const promise = (async () => {
       const nodeQuery = effectiveNodeId === 'gateway' ? '' : `?nodeId=${encodeURIComponent(effectiveNodeId)}`
       const res = await fetch(`${API_URL}/api/providers/${providerId}/models${nodeQuery}`, {
@@ -453,9 +456,14 @@ export class AgentsApi {
       return res.json() as Promise<ProviderModelsResponse>
     })()
     this._modelsInflight.set(cacheKey, promise)
-    promise.catch(() => {
+    void promise.then((result) => {
+      // Reset/refresh may have started a replacement while this was pending.
+      if (this._modelsInflight.get(cacheKey) !== promise) return
       this._modelsInflight.delete(cacheKey)
-      this._modelsCachedAt.delete(cacheKey)
+      this._modelsCache.set(cacheKey, { result, cachedAt: Date.now() })
+    }, () => {
+      if (this._modelsInflight.get(cacheKey) !== promise) return
+      this._modelsInflight.delete(cacheKey)
     })
     return promise
   }

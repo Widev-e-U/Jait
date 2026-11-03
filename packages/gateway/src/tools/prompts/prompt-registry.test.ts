@@ -52,7 +52,7 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("If the user asks to open, switch, or use a project or repo");
     expect(prompt).toContain("use an existing development server or start the project");
     expect(prompt).toContain("The live browser is controllable.");
-    expect(prompt).toContain("use `browser.inspect`, `browser.status`, and `browser.*` tools");
+    expect(prompt).toContain("use `browser.inspect` and `browser.*` tools");
     expect(prompt).toContain("Do not tell the user that browser tools cannot control the browser unless a tool call fails");
     expect(prompt).toContain("Call `browser.open` with that HTTP/HTTPS URL to load it immediately");
     expect(prompt).toContain("This guidance still applies when you are operating through an external or CLI provider inside Jait.");

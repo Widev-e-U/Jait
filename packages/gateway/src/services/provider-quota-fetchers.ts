@@ -56,7 +56,10 @@ export interface OllamaUsageLimit {
 }
 
 export interface OllamaQuotaUsageResponse {
-  source?: "settings";
+  source?: "settings" | "balance";
+  purchasedBalance?: number;
+  includedBalance?: number;
+  includedAllowance?: number;
   limits: {
     session?: OllamaUsageLimit;
     weekly?: OllamaUsageLimit;
@@ -65,6 +68,32 @@ export interface OllamaQuotaUsageResponse {
   activity?: {
     cost?: string;
     period?: { type?: string; starting_at?: string; ending_at?: string };
+  };
+}
+
+/** Convert Ollama's balance response without inferring missing values. */
+export function parseOllamaBalance(value: unknown): OllamaQuotaUsageResponse {
+  if (!value || typeof value !== "object") throw new Error("Ollama returned an unexpected balance response");
+  const body = value as any;
+  const included = body.included;
+  const limits: OllamaQuotaUsageResponse["limits"] = {};
+  const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  if (included && finite(included.allowance_usd) && included.allowance_usd > 0 && finite(included.balance_usd)) {
+    const reset = included.period?.until;
+    if (typeof reset !== "string" || !Number.isFinite(Date.parse(reset))) throw new Error("Ollama returned an invalid balance period");
+    limits.monthly = { usage: Math.max(0, Math.min(1, 1 - included.balance_usd / included.allowance_usd)), models: [], resetsAt: new Date(reset).toISOString() };
+  }
+  for (const name of ["session", "weekly"] as const) {
+    const bucket = included?.[name];
+    if (bucket && finite(bucket.remaining_percent) && bucket.remaining_percent <= 100 && typeof bucket.resets_at === "string" && Number.isFinite(Date.parse(bucket.resets_at))) {
+      limits[name] = { usage: 1 - bucket.remaining_percent / 100, models: [], resetsAt: new Date(bucket.resets_at).toISOString() };
+    }
+  }
+  if (!Object.keys(limits).length) throw new Error("Ollama returned an unexpected balance response");
+  return { source: "balance", limits,
+    ...(finite(included?.balance_usd) ? { includedBalance: included.balance_usd } : {}),
+    ...(finite(included?.allowance_usd) ? { includedAllowance: included.allowance_usd } : {}),
+    ...(finite(body.purchased?.balance_usd) ? { purchasedBalance: body.purchased.balance_usd } : {}),
   };
 }
 
