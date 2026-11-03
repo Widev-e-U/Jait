@@ -39,14 +39,19 @@ it("removes a session without contacting the provider", async () => {
   } finally { await app.close(); }
 });
 it("refreshes dashboard quota even when the daemon is offline and avoids claiming daemon identity", async () => {
-  const mock = vi.fn().mockResolvedValue(new Response(html)); vi.stubGlobal("fetch", mock);
+  const mock = vi.fn()
+    .mockRejectedValueOnce(new Error("daemon offline"))
+    .mockResolvedValueOnce(new Response(html));
+  vi.stubGlobal("fetch", mock);
   const { app, token, recordOllamaUsage } = await setup({ OLLAMA_URL: "http://localhost:11434", OLLAMA_SESSION_COOKIE: "session" });
   try {
     const headers = { authorization: `Bearer ${token}` };
     expect((await app.inject({ url: "/api/provider-usage/summary?refresh=0", headers })).statusCode).toBe(200);
     expect(mock).not.toHaveBeenCalled();
     expect((await app.inject({ url: "/api/provider-usage/summary", headers })).statusCode).toBe(200);
-    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(mock.mock.calls[0]?.[0]).toBe("http://localhost:11434/api/me");
+    expect(mock.mock.calls[1]?.[0]).toBe("https://ollama.com/settings");
     expect(recordOllamaUsage).toHaveBeenCalledWith("jait-backend:user-1:ollama", expect.objectContaining({ source: "settings" }), null, null);
   } finally { await app.close(); }
 });
@@ -66,21 +71,23 @@ it("includes Go backend profiles and refreshes with their saved key", async () =
 
 it("deduplicates simultaneous usage refreshes and serves local snapshots on reopen", async () => {
   let finish!: (value: Response) => void;
-  const mock = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
+  const mock = vi.fn((url: string) => url === "http://localhost:11434/api/me"
+    ? Promise.reject(new Error("daemon offline"))
+    : new Promise<Response>(resolve => { finish = resolve; }));
   vi.stubGlobal("fetch", mock);
   const { app, token, recordOllamaUsage } = await setup({ OLLAMA_URL: "http://localhost:11434", OLLAMA_SESSION_COOKIE: "session" });
   try {
     const headers = { authorization: `Bearer ${token}` };
     const first = app.inject({ url: "/api/provider-usage/summary", headers }).then(r => r);
     const second = app.inject({ url: "/api/provider-usage/summary", headers }).then(r => r);
-    await vi.waitFor(() => expect(mock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(mock).toHaveBeenCalledTimes(2));
     // A cache-only read must not wait behind slow provider work.
     expect((await app.inject({ url: "/api/provider-usage/summary?refresh=0", headers })).statusCode).toBe(200);
     finish(new Response(html));
     expect((await first).statusCode).toBe(200);
     expect((await second).statusCode).toBe(200);
     expect((await app.inject({ url: "/api/provider-usage/summary", headers })).statusCode).toBe(200);
-    expect(mock).toHaveBeenCalledTimes(1);
+    expect(mock).toHaveBeenCalledTimes(2);
     expect(recordOllamaUsage).toHaveBeenCalledTimes(1);
   } finally { await app.close(); }
 });
