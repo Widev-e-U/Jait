@@ -157,6 +157,27 @@ export function shouldApplySessionScopedWsEvent(
   return typeof eventSessionId === 'string' && eventSessionId === activeSessionId
 }
 
+/** `resume` and `visibilitychange` often fire together on Android. */
+const WAKE_RECONNECT_DEDUPE_MS = 2_000
+
+/**
+ * Whether a wake signal (visibility, Capacitor `resume`, `online`) should
+ * replace the UI socket. A socket that died in the background still reports
+ * OPEN, so a wake always reconnects — unless a fresh socket was just opened
+ * for the same wake, or this is an always-on desktop node that never paused.
+ */
+export function shouldReconnectUiSocketAfterWake(params: {
+  isAlwaysOnNode: boolean
+  hidden: boolean
+  hasSocket: boolean
+  sinceLastWakeReconnectMs: number
+  force?: boolean
+}): boolean {
+  if (params.isAlwaysOnNode || params.hidden) return false
+  if (params.force || !params.hasSocket) return true
+  return params.sinceLastWakeReconnectMs >= WAKE_RECONNECT_DEDUPE_MS
+}
+
 /**
  * Callback for thread-related WS events (thread.created, thread.updated, etc.).
  * `eventType` is the full WS event type (e.g. "thread.created").
@@ -903,6 +924,29 @@ export function useUICommands(opts: UseUICommandsOptions) {
       }
     }
 
+    // Android WebViews do not always flip `visibilityState` when the app comes
+    // back; Capacitor's `resume` and a network comeback are the only signals.
+    // A socket that died in the background still reports OPEN, and `send()` on
+    // it silently drops — a queued chat message then never reaches the gateway.
+    let lastWakeReconnectAt = 0
+    const reconnectAfterWake = (force = false) => {
+      if (!mountedRef.current) return
+      const now = Date.now()
+      if (!shouldReconnectUiSocketAfterWake({
+        isAlwaysOnNode,
+        hidden: typeof document !== 'undefined' && document.hidden,
+        hasSocket: wsRef.current != null,
+        sinceLastWakeReconnectMs: now - lastWakeReconnectAt,
+        force,
+      })) return
+      lastWakeReconnectAt = now
+      pausedForHiddenDocument = false
+      clearReconnectTimer()
+      closeSocket()
+      connect()
+    }
+    const handleWake = () => reconnectAfterWake()
+
     // Desktop always-on nodes keep their connection live while hidden to the
     // tray; browsers/capacitor pause and reconnect on visibility changes.
     const handleVisibilityChange = () => {
@@ -925,8 +969,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       // missed broadcasts. Reconnect unconditionally so the gateway re-pushes
       // the authoritative `session.streaming-snapshot` and the sidebar never
       // keeps a stale streaming spinner after the tab was hidden.
-      closeSocket()
-      connect()
+      reconnectAfterWake(true)
     }
 
     const readVisibleNotification = () => notificationSyncRef.current?.readVisible()
@@ -934,7 +977,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
     connect()
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibilityChange)
+      document.addEventListener('resume', handleWake)
     }
+    window.addEventListener('online', handleWake)
 
     // Set up Desktop IPC listener for provider events from child processes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -989,7 +1034,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       clearReconnectTimer()
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange)
+        document.removeEventListener('resume', handleWake)
       }
+      window.removeEventListener('online', handleWake)
       // Clean up Desktop IPC listener
       if (detectPlatform() === 'desktop' && window.jaitDesktop?.removeGatewayEventListener) {
         window.jaitDesktop.removeGatewayEventListener()

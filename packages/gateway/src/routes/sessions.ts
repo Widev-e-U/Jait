@@ -433,6 +433,16 @@ export function registerSessionRoutes(
         return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Body must be a JSON object of key→value pairs" });
       }
       sessionState.set(id, body);
+      // Clients write the queue over both WS and this route. A mobile WebSocket
+      // that died without closing swallows the WS copy, so the drain must also
+      // run here — otherwise a message queued after the turn already ended
+      // waits until the next turn completes, which never comes.
+      if (Object.prototype.hasOwnProperty.call(body, "queued_messages")) {
+        const appWithQueueDrain = app as typeof app & {
+          drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+        };
+        void appWithQueueDrain.drainQueuedChatMessages?.(id);
+      }
       return { ok: true };
     });
   }
