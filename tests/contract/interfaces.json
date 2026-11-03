@@ -18242,7 +18242,7 @@
     },
     {
       "path": "packages/gateway/src/routes/project.ts",
-      "fingerprint": "1343bb7054a48bb3",
+      "fingerprint": "65cf2341204c7a3c",
       "migration_owner": "R04-http",
       "status": "pending",
       "required_test_ids": [],
@@ -18254,27 +18254,27 @@
         "packages/gateway/src/routes/project.ts#dependency:449",
         "packages/gateway/src/routes/project.ts#dependency:485",
         "packages/gateway/src/routes/project.ts#dependency:528",
-        "packages/gateway/src/routes/project.ts#platform:29382",
-        "packages/gateway/src/routes/project.ts#platform:29426",
+        "packages/gateway/src/routes/project.ts#platform:29501",
+        "packages/gateway/src/routes/project.ts#platform:29545",
         "packages/gateway/src/routes/project.ts#route:11356",
         "packages/gateway/src/routes/project.ts#route:12265",
-        "packages/gateway/src/routes/project.ts#route:14463",
-        "packages/gateway/src/routes/project.ts#route:15971",
-        "packages/gateway/src/routes/project.ts#route:16872",
-        "packages/gateway/src/routes/project.ts#route:17895",
-        "packages/gateway/src/routes/project.ts#route:19059",
-        "packages/gateway/src/routes/project.ts#route:20685",
-        "packages/gateway/src/routes/project.ts#route:21568",
-        "packages/gateway/src/routes/project.ts#route:22716",
-        "packages/gateway/src/routes/project.ts#route:24105",
-        "packages/gateway/src/routes/project.ts#route:25222",
-        "packages/gateway/src/routes/project.ts#route:26290",
-        "packages/gateway/src/routes/project.ts#route:27566",
-        "packages/gateway/src/routes/project.ts#route:30539",
+        "packages/gateway/src/routes/project.ts#route:14582",
+        "packages/gateway/src/routes/project.ts#route:16090",
+        "packages/gateway/src/routes/project.ts#route:16991",
+        "packages/gateway/src/routes/project.ts#route:18014",
+        "packages/gateway/src/routes/project.ts#route:19178",
+        "packages/gateway/src/routes/project.ts#route:20804",
+        "packages/gateway/src/routes/project.ts#route:21687",
+        "packages/gateway/src/routes/project.ts#route:22835",
+        "packages/gateway/src/routes/project.ts#route:24224",
+        "packages/gateway/src/routes/project.ts#route:25341",
+        "packages/gateway/src/routes/project.ts#route:26409",
+        "packages/gateway/src/routes/project.ts#route:27685",
+        "packages/gateway/src/routes/project.ts#route:30658",
         "packages/gateway/src/routes/project.ts#route:5160",
         "packages/gateway/src/routes/project.ts#route:5828"
       ],
-      "claims_fingerprint": "f176dade591c9f06",
+      "claims_fingerprint": "86474286fa926f02",
       "claims": [
         {
           "id": "packages/gateway/src/routes/project.ts#dependency:237",
@@ -18361,11 +18361,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#platform:29382",
+          "id": "packages/gateway/src/routes/project.ts#platform:29501",
           "kind": "platform",
           "name": "win32",
-          "start": 29382,
-          "end": 29389,
+          "start": 29501,
+          "end": 29508,
           "fingerprint": "2ff1776a53ead0f2",
           "details": {
             "resolution": "source branch candidate; support and CI evidence pending"
@@ -18375,11 +18375,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#platform:29426",
+          "id": "packages/gateway/src/routes/project.ts#platform:29545",
           "kind": "platform",
           "name": "darwin",
-          "start": 29426,
-          "end": 29434,
+          "start": 29545,
+          "end": 29553,
           "fingerprint": "df9e0b81d2e8d820",
           "details": {
             "resolution": "source branch candidate; support and CI evidence pending"
@@ -18411,8 +18411,8 @@
           "kind": "route",
           "name": "/api/project/read",
           "start": 12265,
-          "end": 14382,
-          "fingerprint": "38737f3c6a01b38c",
+          "end": 14501,
+          "fingerprint": "2faf1b234bd1a16f",
           "details": {
             "methods": "GET",
             "receiver": "app",
@@ -18425,11 +18425,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:14463",
+          "id": "packages/gateway/src/routes/project.ts#route:14582",
           "kind": "route",
           "name": "/api/project/write",
-          "start": 14463,
-          "end": 15893,
+          "start": 14582,
+          "end": 16012,
           "fingerprint": "cb5a6d767eea9dfe",
           "details": {
             "methods": "POST",
@@ -18443,11 +18443,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:15971",
+          "id": "packages/gateway/src/routes/project.ts#route:16090",
           "kind": "route",
           "name": "/api/project/stat",
-          "start": 15971,
-          "end": 16790,
+          "start": 16090,
+          "end": 16909,
           "fingerprint": "6625d3334d5508e1",
           "details": {
             "methods": "GET",
@@ -18461,11 +18461,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:16872",
+          "id": "packages/gateway/src/routes/project.ts#route:16991",
           "kind": "route",
           "name": "/api/project/undo",
-          "start": 16872,
-          "end": 17804,
+          "start": 16991,
+          "end": 17923,
           "fingerprint": "9265db72135618cf",
           "details": {
             "methods": "POST",
@@ -18479,11 +18479,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:17895",
+          "id": "packages/gateway/src/routes/project.ts#route:18014",
           "kind": "route",
           "name": "/api/project/backup",
-          "start": 17895,
-          "end": 18973,
+          "start": 18014,
+          "end": 19092,
           "fingerprint": "eee7d1cc4a698c5e",
           "details": {
             "methods": "GET",
@@ -18497,11 +18497,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:19059",
+          "id": "packages/gateway/src/routes/project.ts#route:19178",
           "kind": "route",
           "name": "/api/project/apply-diff",
-          "start": 19059,
-          "end": 20591,
+          "start": 19178,
+          "end": 20710,
           "fingerprint": "12673f46a0d8dd9b",
           "details": {
             "methods": "POST",
@@ -18515,11 +18515,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:20685",
+          "id": "packages/gateway/src/routes/project.ts#route:20804",
           "kind": "route",
           "name": "/api/project/undo-all",
-          "start": 20685,
-          "end": 21502,
+          "start": 20804,
+          "end": 21621,
           "fingerprint": "b3a35302d76fb798",
           "details": {
             "methods": "POST",
@@ -18533,11 +18533,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:21568",
+          "id": "packages/gateway/src/routes/project.ts#route:21687",
           "kind": "route",
           "name": "/api/project/delete",
-          "start": 21568,
-          "end": 22650,
+          "start": 21687,
+          "end": 22769,
           "fingerprint": "8dc85a74a3210b54",
           "details": {
             "methods": "POST",
@@ -18551,11 +18551,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:22716",
+          "id": "packages/gateway/src/routes/project.ts#route:22835",
           "kind": "route",
           "name": "/api/project/rename",
-          "start": 22716,
-          "end": 24027,
+          "start": 22835,
+          "end": 24146,
           "fingerprint": "f5bd897708354bbf",
           "details": {
             "methods": "POST",
@@ -18569,11 +18569,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:24105",
+          "id": "packages/gateway/src/routes/project.ts#route:24224",
           "kind": "route",
           "name": "/api/project/move",
-          "start": 24105,
-          "end": 25154,
+          "start": 24224,
+          "end": 25273,
           "fingerprint": "0122c0dc3b1d5008",
           "details": {
             "methods": "POST",
@@ -18587,11 +18587,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:25222",
+          "id": "packages/gateway/src/routes/project.ts#route:25341",
           "kind": "route",
           "name": "/api/project/create-file",
-          "start": 25222,
-          "end": 26218,
+          "start": 25341,
+          "end": 26337,
           "fingerprint": "47d2eaaae12029b3",
           "details": {
             "methods": "POST",
@@ -18605,11 +18605,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:26290",
+          "id": "packages/gateway/src/routes/project.ts#route:26409",
           "kind": "route",
           "name": "/api/project/create-directory",
-          "start": 26290,
-          "end": 27261,
+          "start": 26409,
+          "end": 27380,
           "fingerprint": "6576549e2f571f11",
           "details": {
             "methods": "POST",
@@ -18623,11 +18623,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:27566",
+          "id": "packages/gateway/src/routes/project.ts#route:27685",
           "kind": "route",
           "name": "/api/project/reveal",
-          "start": 27566,
-          "end": 30395,
+          "start": 27685,
+          "end": 30514,
           "fingerprint": "e34f905dc36fa861",
           "details": {
             "methods": "POST",
@@ -18641,11 +18641,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/routes/project.ts#route:30539",
+          "id": "packages/gateway/src/routes/project.ts#route:30658",
           "kind": "route",
           "name": "/api/project/search",
-          "start": 30539,
-          "end": 35412,
+          "start": 30658,
+          "end": 35531,
           "fingerprint": "ec75d39540b81bf5",
           "details": {
             "methods": "GET",
@@ -21220,7 +21220,7 @@
     },
     {
       "path": "packages/gateway/src/routes/sessions.ts",
-      "fingerprint": "6b4e7d0d5cbddc98",
+      "fingerprint": "56011b305e1b6328",
       "migration_owner": "R04-http",
       "status": "pending",
       "required_test_ids": [],
@@ -21243,7 +21243,7 @@
         "packages/gateway/src/routes/sessions.ts#route:8335",
         "packages/gateway/src/routes/sessions.ts#route:9344"
       ],
-      "claims_fingerprint": "7961c16dd261ba28",
+      "claims_fingerprint": "0f48aa939cc136a5",
       "claims": [
         {
           "id": "packages/gateway/src/routes/sessions.ts#dependency:1068",
@@ -21386,8 +21386,8 @@
           "kind": "route",
           "name": "/api/sessions/:id/state",
           "start": 17791,
-          "end": 18536,
-          "fingerprint": "5c515d5ca050b69f",
+          "end": 19126,
+          "fingerprint": "ffc8e369a97c70e7",
           "details": {
             "methods": "PATCH",
             "receiver": "app",
