@@ -10,4 +10,7 @@ pub mod skills;
 
 pub mod clawhub;
 
+pub mod msteams;
+pub mod msteams_auth;
+
 pub mod whatsapp;
