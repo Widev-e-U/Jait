@@ -4,6 +4,22 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.965](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.965) — 2026-11-03
+
+- test: cover browser history behavior — d2424b2a
+- chore(contracts): recapture browser interface inventory — d7404087
+- feat: add PDF search and compact browser controls — 5a2dedd7
+- fix: address project chat and PDF review feedback — b01e5698
+- fix(web): keep the folder chevron icon-sized on touch devices — 36f8aaad
+- fix(web): tint the folder icon instead of a dot so sidebar titles align — 9635b509
+- chore(contracts): recapture interface manifest for shifted project route offsets — 55ff4351
+- fix: deliver chat queue entries from Android after a silent socket drop — e3f3038c
+- test(web): cover chat rename menu, project new-chat click and preview kinds — 8f79134d
+- feat(web): rename chats from the sidebar; a project click opens a new-chat view — ab57ab13
+- feat(web): open file paths from chat in the viewer, with PDF and markdown preview — a4ecb2ee
+- feat(web): bullet and numbered lists in the chat composer — e1984dbc
+- fix(web): stop duplicated and vanishing chat messages, recover silent streams — 60c50c25
+
 ## [v0.1.964](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.964) — 2026-11-03
 
 - test(gateway): account for daemon probes in quota refresh fixtures — ac39324d
