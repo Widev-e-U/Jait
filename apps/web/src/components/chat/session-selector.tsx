@@ -1,7 +1,7 @@
 import { useUrlSearchState } from '@/hooks/useUrlSearchState'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import { CircleQuestionMark, ShieldQuestion, Folder, FolderOpen, FolderInput, FolderX, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, GitBranch, Search, MoreVertical, ChevronRight, ChevronDown, FolderPlus, Settings2, CornerUpLeft, Code } from 'lucide-react'
-import { buildProjectTree, flattenProjectTree, validateProjectMove } from '@jait/shared'
+import { buildProjectTree, flattenProjectTree, resolveProjectColor, validateProjectMove } from '@jait/shared'
 import { ProjectColorDot } from '@/components/project/project-color-picker'
 import { getSessionContextMenuHeight, SessionContextMenu } from '@/components/chat/session-context-menu'
 import { Button } from '@/components/ui/button'
@@ -671,6 +671,10 @@ export function SessionSelector({
                     : null
                   const offline = isNodeOffline(project.nodeId, onlineNodeIds)
                   const pathMissing = project.rootPathStatus === 'missing'
+                  // The folder colour tints the leading icon instead of adding a
+                  // dot, so coloured and plain rows keep their titles aligned.
+                  const folderColor = resolveProjectColor(project.color)
+                  const folderIconStyle = folderColor ? { color: folderColor } : undefined
                   const repository = getProjectRepository(project, repositories)
                   const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
                   const sortedSessions = [...project.sessions]
@@ -767,6 +771,7 @@ export function SessionSelector({
                           aria-label={isCollapsed ? 'Expand folder' : 'Collapse folder'}
                           aria-expanded={!isCollapsed}
                           className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                          style={folderIconStyle}
                           onClick={(e) => { e.stopPropagation(); toggleFolder(project.id) }}
                         >
                           {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -774,13 +779,12 @@ export function SessionSelector({
                       ) : pathMissing ? (
                         <FolderX className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />
                       ) : isActiveProject ? (
-                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" style={folderIconStyle} />
                       ) : (
-                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" style={folderIconStyle} />
                       )}
                       <div className="min-w-0 overflow-hidden">
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-                          <ProjectColorDot color={project.color} />
                           {project.sessions.some(session => approvalSessionIds?.has(session.id)) && (
                             <TooltipHint content="Chat waiting for approval">
                               <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Chat waiting for approval" />
