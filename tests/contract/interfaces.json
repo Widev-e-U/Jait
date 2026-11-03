@@ -200,7 +200,7 @@
     },
     {
       "path": "packages/gateway/bin/desktop-host.mjs",
-      "fingerprint": "d1a057f746e2ca95",
+      "fingerprint": "ae388d9f5e994e33",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -1746,7 +1746,7 @@
     },
     {
       "path": "packages/gateway/package.json",
-      "fingerprint": "05d4a15134cb9263",
+      "fingerprint": "ebf88fc8df1de2aa",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
@@ -1791,7 +1791,7 @@
         "packages/gateway/package.json#dependency:yaml",
         "packages/gateway/package.json#dependency:zod"
       ],
-      "claims_fingerprint": "e6ffae279bd4333a",
+      "claims_fingerprint": "0c0f1c91473db266",
       "claims": [
         {
           "id": "packages/gateway/package.json#dependency:@agentclientprotocol/claude-agent-acp",
@@ -1799,7 +1799,7 @@
           "name": "@agentclientprotocol/claude-agent-acp",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "0.87.0"
           },
@@ -1813,7 +1813,7 @@
           "name": "@agentclientprotocol/codex-acp",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "2.1.1"
           },
@@ -1827,7 +1827,7 @@
           "name": "@agentclientprotocol/sdk",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^1.7.0"
           },
@@ -1841,7 +1841,7 @@
           "name": "@browserbasehq/stagehand",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "4.3.0"
           },
@@ -1855,7 +1855,7 @@
           "name": "@fastify/cookie",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^11.1.2"
           },
@@ -1869,7 +1869,7 @@
           "name": "@fastify/cors",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^11.3.0"
           },
@@ -1883,7 +1883,7 @@
           "name": "@fastify/static",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^9.3.0"
           },
@@ -1897,7 +1897,7 @@
           "name": "@fastify/websocket",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^11.3.3"
           },
@@ -1911,7 +1911,7 @@
           "name": "@jait/screen-share",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "workspace:*"
           },
@@ -1925,7 +1925,7 @@
           "name": "@jait/shared",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "workspace:*"
           },
@@ -1939,7 +1939,7 @@
           "name": "@modelcontextprotocol/sdk",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^1.32.1"
           },
@@ -1953,7 +1953,7 @@
           "name": "@openai/codex",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "0.159.2"
           },
@@ -1967,7 +1967,7 @@
           "name": "@parcel/watcher",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^2.6.0"
           },
@@ -1981,7 +1981,7 @@
           "name": "baileys",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^7.0.0-rc14"
           },
@@ -1995,7 +1995,7 @@
           "name": "bun-pty",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^0.4.11"
           },
@@ -2009,7 +2009,7 @@
           "name": "dotenv",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^16.6.1"
           },
@@ -2023,7 +2023,7 @@
           "name": "drizzle-orm",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^0.45.3"
           },
@@ -2037,7 +2037,7 @@
           "name": "fast-xml-parser",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^5.11.2"
           },
@@ -2051,7 +2051,7 @@
           "name": "fastify",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^5.12.5"
           },
@@ -2065,7 +2065,7 @@
           "name": "htmlparser2",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^12.0.0"
           },
@@ -2079,7 +2079,7 @@
           "name": "imapflow",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^2.5.2"
           },
@@ -2093,7 +2093,7 @@
           "name": "jose",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^6.2.12"
           },
@@ -2107,7 +2107,7 @@
           "name": "mailparser",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^3.9.40"
           },
@@ -2121,7 +2121,7 @@
           "name": "matrix-bot-sdk",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^0.8.0"
           },
@@ -2135,7 +2135,7 @@
           "name": "matrix-encrypt-attachment",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^1.0.3"
           },
@@ -2149,7 +2149,7 @@
           "name": "nanoid",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^5.1.16"
           },
@@ -2163,7 +2163,7 @@
           "name": "node-pty",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^1.1.0"
           },
@@ -2177,7 +2177,7 @@
           "name": "nodemailer",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^10.1.2"
           },
@@ -2191,7 +2191,7 @@
           "name": "pino",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^9.14.0"
           },
@@ -2205,7 +2205,7 @@
           "name": "playwright",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^1.64.0"
           },
@@ -2219,7 +2219,7 @@
           "name": "qrcode",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^1.5.4"
           },
@@ -2233,7 +2233,7 @@
           "name": "ws",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^8.22.0"
           },
@@ -2247,7 +2247,7 @@
           "name": "yaml",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^2.9.1"
           },
@@ -2261,7 +2261,7 @@
           "name": "zod",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^4.6.5"
           },
@@ -2275,7 +2275,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-nodejs",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "0.6.1"
           },
@@ -2289,7 +2289,7 @@
           "name": "@matrix-org/matrix-sdk-crypto-wasm",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "version": "^18.9.0"
           },
@@ -2303,7 +2303,7 @@
           "name": "jait",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "entry": "./bin/jait.mjs"
           },
@@ -2317,7 +2317,7 @@
           "name": "jait-matrix",
           "start": 0,
           "end": 2860,
-          "fingerprint": "05d4a15134cb9263",
+          "fingerprint": "ebf88fc8df1de2aa",
           "details": {
             "entry": "./bin/matrix-stack.mjs"
           },
@@ -7253,45 +7253,58 @@
       "claims": []
     },
     {
+      "path": "packages/gateway/src/http-shutdown.ts",
+      "fingerprint": "8f773c01531e74d0",
+      "migration_owner": "R01-runtime-and-shared",
+      "status": "pending",
+      "required_test_ids": [],
+      "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
+      "interface_ids": [],
+      "claims_fingerprint": "09612b07b5ecb5a5",
+      "claims": []
+    },
+    {
       "path": "packages/gateway/src/index.ts",
-      "fingerprint": "76c2d35749adef14",
+      "fingerprint": "13f8818255179145",
       "migration_owner": "R01-runtime-and-shared",
       "status": "pending",
       "required_test_ids": [],
       "gap": "Workstream owner only; individual assignee and exact behavioral Rust test IDs/branch coverage pending. Static test imports are not evidence.",
       "interface_ids": [
-        "packages/gateway/src/index.ts#bridge:11167",
-        "packages/gateway/src/index.ts#bridge:11924",
-        "packages/gateway/src/index.ts#bridge:11982",
-        "packages/gateway/src/index.ts#bridge:12042",
-        "packages/gateway/src/index.ts#bridge:14972",
-        "packages/gateway/src/index.ts#bridge:23673",
-        "packages/gateway/src/index.ts#bridge:46667",
-        "packages/gateway/src/index.ts#bridge:46734",
-        "packages/gateway/src/index.ts#bridge:46939",
-        "packages/gateway/src/index.ts#bridge:50470",
-        "packages/gateway/src/index.ts#bridge:50713",
-        "packages/gateway/src/index.ts#bridge:50744",
-        "packages/gateway/src/index.ts#config:11392",
-        "packages/gateway/src/index.ts#config:47932",
-        "packages/gateway/src/index.ts#config:49686",
-        "packages/gateway/src/index.ts#config:50106",
-        "packages/gateway/src/index.ts#config:7087",
-        "packages/gateway/src/index.ts#config:72458",
-        "packages/gateway/src/index.ts#dependency:1128",
-        "packages/gateway/src/index.ts#dependency:1867",
-        "packages/gateway/src/index.ts#dependency:1910",
-        "packages/gateway/src/index.ts#dependency:1952",
-        "packages/gateway/src/index.ts#dependency:3141"
+        "packages/gateway/src/index.ts#bridge:11221",
+        "packages/gateway/src/index.ts#bridge:11978",
+        "packages/gateway/src/index.ts#bridge:12036",
+        "packages/gateway/src/index.ts#bridge:12096",
+        "packages/gateway/src/index.ts#bridge:15026",
+        "packages/gateway/src/index.ts#bridge:23727",
+        "packages/gateway/src/index.ts#bridge:46721",
+        "packages/gateway/src/index.ts#bridge:46788",
+        "packages/gateway/src/index.ts#bridge:46993",
+        "packages/gateway/src/index.ts#bridge:50524",
+        "packages/gateway/src/index.ts#bridge:50767",
+        "packages/gateway/src/index.ts#bridge:50798",
+        "packages/gateway/src/index.ts#config:11446",
+        "packages/gateway/src/index.ts#config:47986",
+        "packages/gateway/src/index.ts#config:49740",
+        "packages/gateway/src/index.ts#config:50160",
+        "packages/gateway/src/index.ts#config:71282",
+        "packages/gateway/src/index.ts#config:7141",
+        "packages/gateway/src/index.ts#config:71905",
+        "packages/gateway/src/index.ts#config:73438",
+        "packages/gateway/src/index.ts#dependency:1182",
+        "packages/gateway/src/index.ts#dependency:1921",
+        "packages/gateway/src/index.ts#dependency:1964",
+        "packages/gateway/src/index.ts#dependency:2006",
+        "packages/gateway/src/index.ts#dependency:3195"
       ],
-      "claims_fingerprint": "c4ccc524ee3c993b",
+      "claims_fingerprint": "35936ad14dc8061f",
       "claims": [
         {
-          "id": "packages/gateway/src/index.ts#bridge:11167",
+          "id": "packages/gateway/src/index.ts#bridge:11221",
           "kind": "bridge",
           "name": "providerRegistry.register",
-          "start": 11167,
-          "end": 11222,
+          "start": 11221,
+          "end": 11276,
           "fingerprint": "f015c5b4ed171fd6",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7301,11 +7314,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:11924",
+          "id": "packages/gateway/src/index.ts#bridge:11978",
           "kind": "bridge",
           "name": "surfaceRegistry.register",
-          "start": 11924,
-          "end": 11978,
+          "start": 11978,
+          "end": 12032,
           "fingerprint": "efb79f4aa25ef25f",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7315,11 +7328,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:11982",
+          "id": "packages/gateway/src/index.ts#bridge:12036",
           "kind": "bridge",
           "name": "surfaceRegistry.register",
-          "start": 11982,
-          "end": 12038,
+          "start": 12036,
+          "end": 12092,
           "fingerprint": "0ec3b9e9f7e150f2",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7329,11 +7342,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:12042",
+          "id": "packages/gateway/src/index.ts#bridge:12096",
           "kind": "bridge",
           "name": "surfaceRegistry.register",
-          "start": 12042,
-          "end": 12095,
+          "start": 12096,
+          "end": 12149,
           "fingerprint": "e8d9e9b3927db55f",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7343,11 +7356,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:14972",
+          "id": "packages/gateway/src/index.ts#bridge:15026",
           "kind": "bridge",
           "name": "surfaceRegistry.register",
-          "start": 14972,
-          "end": 15036,
+          "start": 15026,
+          "end": 15090,
           "fingerprint": "2c76eb217931f57a",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7357,11 +7370,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:23673",
+          "id": "packages/gateway/src/index.ts#bridge:23727",
           "kind": "bridge",
           "name": "providerRegistry.register",
-          "start": 23673,
-          "end": 23712,
+          "start": 23727,
+          "end": 23766,
           "fingerprint": "d2c63f3651e93a2a",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7371,11 +7384,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:46667",
+          "id": "packages/gateway/src/index.ts#bridge:46721",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 46667,
-          "end": 46728,
+          "start": 46721,
+          "end": 46782,
           "fingerprint": "8e22ccc7aaa673e9",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7385,11 +7398,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:46734",
+          "id": "packages/gateway/src/index.ts#bridge:46788",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 46734,
-          "end": 46797,
+          "start": 46788,
+          "end": 46851,
           "fingerprint": "8ec9ed3b9d28a8b6",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7399,11 +7412,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:46939",
+          "id": "packages/gateway/src/index.ts#bridge:46993",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 46939,
-          "end": 46966,
+          "start": 46993,
+          "end": 47020,
           "fingerprint": "1f0e1016dd0e3f3e",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7413,11 +7426,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:50470",
+          "id": "packages/gateway/src/index.ts#bridge:50524",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 50470,
-          "end": 50558,
+          "start": 50524,
+          "end": 50612,
           "fingerprint": "e3aa453c9e46e3e1",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7427,11 +7440,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:50713",
+          "id": "packages/gateway/src/index.ts#bridge:50767",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 50713,
-          "end": 50740,
+          "start": 50767,
+          "end": 50794,
           "fingerprint": "1f0e1016dd0e3f3e",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7441,11 +7454,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#bridge:50744",
+          "id": "packages/gateway/src/index.ts#bridge:50798",
           "kind": "bridge",
           "name": "toolRegistry.register",
-          "start": 50744,
-          "end": 50836,
+          "start": 50798,
+          "end": 50890,
           "fingerprint": "40edbbe440d9c3a1",
           "details": {
             "registration": "dynamic activation/registration graph unresolved"
@@ -7455,11 +7468,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#config:11392",
+          "id": "packages/gateway/src/index.ts#config:11446",
           "kind": "config",
           "name": "JAIT_ACP_PROVIDERS",
-          "start": 11392,
-          "end": 11422,
+          "start": 11446,
+          "end": 11476,
           "fingerprint": "0b48e70b560eff7d",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -7469,11 +7482,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#config:47932",
+          "id": "packages/gateway/src/index.ts#config:47986",
           "kind": "config",
           "name": "OPENCLAW_EXTENSIONS_DIR",
-          "start": 47932,
-          "end": 47967,
+          "start": 47986,
+          "end": 48021,
           "fingerprint": "d67b2dd65c18cb23",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -7483,11 +7496,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#config:49686",
+          "id": "packages/gateway/src/index.ts#config:49740",
           "kind": "config",
           "name": "OPENCLAW_SKILLS_DIR",
-          "start": 49686,
-          "end": 49717,
+          "start": 49740,
+          "end": 49771,
           "fingerprint": "db1a9678236caca7",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -7497,11 +7510,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#config:50106",
+          "id": "packages/gateway/src/index.ts#config:50160",
           "kind": "config",
           "name": "CLAWHUB_REGISTRY",
-          "start": 50106,
-          "end": 50134,
+          "start": 50160,
+          "end": 50188,
           "fingerprint": "d2b0f32a9b2b6033",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -7511,11 +7524,25 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#config:7087",
+          "id": "packages/gateway/src/index.ts#config:71282",
+          "kind": "config",
+          "name": "JAIT_SHUTDOWN_TIMEOUT_MS",
+          "start": 71282,
+          "end": 71321,
+          "fingerprint": "e7c30b70f39d9907",
+          "details": {
+            "resolution": "environment key; dynamic indices pending"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/index.ts#config:7141",
           "kind": "config",
           "name": "<dynamic>",
-          "start": 7087,
-          "end": 7104,
+          "start": 7141,
+          "end": 7158,
           "fingerprint": "1c8f77673c6efd3a",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -7525,11 +7552,25 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#config:72458",
+          "id": "packages/gateway/src/index.ts#config:71905",
+          "kind": "config",
+          "name": "JAIT_DESKTOP_HOST",
+          "start": 71905,
+          "end": 71937,
+          "fingerprint": "c02dbd1f52916f21",
+          "details": {
+            "resolution": "environment key; dynamic indices pending"
+          },
+          "status": "pending",
+          "required_test_ids": [],
+          "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
+        },
+        {
+          "id": "packages/gateway/src/index.ts#config:73438",
           "kind": "config",
           "name": "__JAIT_CLI",
-          "start": 72458,
-          "end": 72483,
+          "start": 73438,
+          "end": 73463,
           "fingerprint": "81ba3594106d8270",
           "details": {
             "resolution": "environment key; dynamic indices pending"
@@ -7539,11 +7580,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#dependency:1128",
+          "id": "packages/gateway/src/index.ts#dependency:1182",
           "kind": "dependency",
           "name": "@jait/shared",
-          "start": 1128,
-          "end": 1275,
+          "start": 1182,
+          "end": 1329,
           "fingerprint": "2c14366fa5029196",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -7553,11 +7594,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#dependency:1867",
+          "id": "packages/gateway/src/index.ts#dependency:1921",
           "kind": "dependency",
           "name": "node:path",
-          "start": 1867,
-          "end": 1909,
+          "start": 1921,
+          "end": 1963,
           "fingerprint": "a292ef149690b10a",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -7567,11 +7608,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#dependency:1910",
+          "id": "packages/gateway/src/index.ts#dependency:1964",
           "kind": "dependency",
           "name": "node:url",
-          "start": 1910,
-          "end": 1951,
+          "start": 1964,
+          "end": 2005,
           "fingerprint": "8f9b60524a99a497",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -7581,11 +7622,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#dependency:1952",
+          "id": "packages/gateway/src/index.ts#dependency:2006",
           "kind": "dependency",
           "name": "node:module",
-          "start": 1952,
-          "end": 1996,
+          "start": 2006,
+          "end": 2050,
           "fingerprint": "80fe6a96f41b6e8a",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"
@@ -7595,11 +7636,11 @@
           "gap": "AST candidate only; resolve aliases, activation, payload/schema semantics and add exact Rust contract test IDs after review."
         },
         {
-          "id": "packages/gateway/src/index.ts#dependency:3141",
+          "id": "packages/gateway/src/index.ts#dependency:3195",
           "kind": "dependency",
           "name": "@jait/screen-share",
-          "start": 3141,
-          "end": 3197,
+          "start": 3195,
+          "end": 3251,
           "fingerprint": "da95682a3f391000",
           "details": {
             "resolution": "static import; runtime/optional/type-only classification pending"

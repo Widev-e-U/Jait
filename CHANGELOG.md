@@ -4,6 +4,12 @@ This changelog is generated from git history. Each "version up" must regenerate
 it (see the Release & Deployment section in `AGENTS.md`). Entries are listed
 newest-first; each release links back to the commits that shipped in it.
 
+## [v0.1.966](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.966) — 2026-11-03
+
+- fix(gateway): stop the desktop shell from reporting slow shutdowns as failures — 43d04a25
+
+Fixes a shutdown exit-code race that failed Windows gateway packaging on slow runners. The desktop shell now exits 0 when a stop overruns, a genuine hang still exits non-zero, and deadlines are strictly ordered: watchdog 15s (JAIT_SHUTDOWN_TIMEOUT_MS) < host backstop 20s < workflow 30s. HTTP close is now bounded so lingering keep-alive sockets cannot stall shutdown.
+
 ## [v0.1.965](https://github.com/Widev-e-U/Jait/releases/tag/v0.1.965) — 2026-11-03
 
 - test: cover browser history behavior — d2424b2a
