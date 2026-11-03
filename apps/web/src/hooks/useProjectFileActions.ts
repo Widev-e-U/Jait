@@ -164,9 +164,12 @@ export function useProjectFileActions({
       const response = await fetch(`${API_URL}/api/project/search?${query}`, { headers })
       if (!response.ok) return null
       const data = await response.json() as { files?: Array<{ path: string }> }
-      const hit = (data.files ?? []).map((file) => file.path.replace(/\\/g, '/'))
-        .find((path) => path === relative || path.endsWith(`/${relative}`))
-      return hit ? resolveProjectPath(hit, projectRoot) : null
+      const matches = (data.files ?? []).map((file) => file.path.replace(/\\/g, '/'))
+        .filter((path) => path === relative || path.endsWith(`/${relative}`))
+      // Search can be truncated at the requested limit. Never guess when the
+      // suffix is ambiguous or when further matches may have been omitted.
+      if ((data.files?.length ?? 0) >= 50 || matches.length !== 1) return null
+      return resolveProjectPath(matches[0]!, projectRoot)
     } catch {
       return null
     }

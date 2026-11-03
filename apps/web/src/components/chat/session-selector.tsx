@@ -689,7 +689,7 @@ export function SessionSelector({
                   return (
                     <div key={project.id} style={{ marginLeft: depth * FOLDER_INDENT_PX }}>
                     <div
-                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${offline || (!onNewChatInProject && isLatestProjectSessionActive) ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
+                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
                       // Workspaces stay draggable as a project *reference* (the
                       // existing prompt-attachment gesture). Every row is also
                       // draggable as a move within the sidebar.
@@ -760,8 +760,7 @@ export function SessionSelector({
                         if (consumedByProjectMenu()) return
                         onDismiss?.()
                         if (offline) return
-                        if (onNewChatInProject) onNewChatInProject(project.id)
-                        else if (!isLatestProjectSessionActive) onSelectProject(project.id)
+                        if (!isLatestProjectSessionActive) onSelectProject(project.id)
                       }}
                       {...projectRowMenuHandlers(project.id)}
                     >
@@ -869,6 +868,16 @@ export function SessionSelector({
                         )}
                       </div>
                       <div className="mt-0.5 flex shrink-0 items-center self-start">
+                        {onNewChatInProject && (
+                          <TooltipHint content="New chat">
+                            <Button variant="ghost" size="icon" aria-label={`New chat in ${project.title || (isFolder ? 'folder' : 'project')}`}
+                              disabled={offline} className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                              onClick={(event) => { event.stopPropagation(); onDismiss?.(); onNewChatInProject(project.id) }}
+                              onContextMenu={(event) => event.stopPropagation()}>
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipHint>
+                        )}
                         {!isFolder && showEditorModeStatus && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -924,6 +933,13 @@ export function SessionSelector({
                             </DropdownMenuTrigger>
                           )}
                           <DropdownMenuContent align="end" side="right" className="min-w-[10rem]">
+                            {onNewChatInProject && (
+                              <DropdownMenuItem className="gap-2" disabled={offline}
+                                onSelect={() => { onDismiss?.(); onNewChatInProject(project.id) }}>
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>New chat</span>
+                              </DropdownMenuItem>
+                            )}
                             {onEditProject && (
                               <DropdownMenuItem
                                 className="gap-2"

@@ -399,6 +399,7 @@ export interface LlmContextFlow {
 }
 
 export interface ChatMessage {
+  clientMessageId?: string
   persona?: ChatPersona
   id: string
   /** Stable UI identity; id remains the durable ID used by message APIs. */
@@ -446,6 +447,7 @@ export interface ChatMessage {
 }
 
 type RawSnapshotMessage = {
+  clientMessageId?: string
   persona?: ChatPersona
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -488,7 +490,7 @@ export function mapSnapshotMessages(rawMsgs: RawSnapshotMessage[], snapshotStrea
     if (m.role === 'system') {
       return { id: m.id, role: 'user', kind: 'system-notice', content: safeContent }
     }
-    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona) }
+    const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, thinking: m.thinking, persona: parseChatPersona(m.persona), ...(m.clientMessageId ? { clientMessageId: m.clientMessageId } : {}) }
     if (m.hasContextFlow) msg.hasContextFlow = true
     if (m.hasMemoryProvenance) msg.hasMemoryProvenance = true
     if (m.role === 'user' && Array.isArray(m.segments) && m.segments.length > 0) {
@@ -1808,6 +1810,7 @@ export function useChat(
       const requestBody = {
         content,
         sessionId: requestSessionId,
+        clientMessageId: userMessage.id,
         ...(options.personaAgentId ? { personaAgentId: options.personaAgentId } : {}),
         ...(options.queuedMessageId ? { queuedMessageId: options.queuedMessageId } : {}),
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),

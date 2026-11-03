@@ -194,3 +194,19 @@ describe('message render identity', () => {
       .toEqual(['local-1', 'local-2'])
   })
 })
+
+
+describe('client message identity', () => {
+  it('keeps a pending prompt when another client sends identical text', () => {
+    const current = [user('user-local-12345678', 'continue', { optimistic: true })]
+    const snapshot = [user('server-other', 'continue', { clientMessageId: 'user-other-12345678' })]
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current).map(message => message.id))
+      .toEqual(['server-other', 'user-local-12345678'])
+  })
+
+  it('reconciles the exact durable ID without relying on text', () => {
+    const current = [user('user-local-12345678', 'continue', { optimistic: true })]
+    const snapshot = [user('server-1', 'continue [attached: file]', { clientMessageId: 'user-local-12345678' })]
+    expect(mergeSnapshotMessagesWithOptimisticUsers(snapshot, current)).toEqual([{ ...snapshot[0], renderId: 'user-local-12345678' }])
+  })
+})

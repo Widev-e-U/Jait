@@ -1,0 +1,18 @@
+.project-pdf-text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+}
+.project-pdf-text-layer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+}
+.project-pdf-text-layer ::selection { background: rgb(0 90 255 / 25%); }

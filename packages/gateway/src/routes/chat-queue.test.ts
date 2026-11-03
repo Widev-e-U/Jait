@@ -207,6 +207,29 @@ describe("server-side queued chat processing", () => {
     expect(sessionState.get(session.id, ["queued_messages"])["queued_messages"]).toBeUndefined();
   });
 
+  it("persists the client message ID and rejects a duplicate", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("message-identity", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Identity" });
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const payload = { sessionId: session.id, content: "continue", clientMessageId: "user-12345678-1234" };
+    const sent = await app.inject({ method: "POST", url: "/api/chat", headers, payload });
+    expect(sent.statusCode).toBe(200);
+    const response = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+    const messages = (response.json() as { messages: Array<{ id: string; role: string; clientMessageId?: string }> }).messages;
+    expect(messages.find(message => message.role === "user")?.clientMessageId).toBe(payload.clientMessageId);
+    const duplicate = await app.inject({ method: "POST", url: "/api/chat", headers, payload });
+    expect(duplicate.statusCode).toBe(409);
+  });
+
   it("does not resend an already-drained queue id through the client fallback, including after restart", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

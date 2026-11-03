@@ -9,6 +9,7 @@ export function createOptimisticMessageId(prefix: 'user' | 'assistant'): string 
 
 export interface OptimisticUserMessageLike {
   id: string
+  clientMessageId?: string
   /** Stable UI identity across optimistic-to-persisted reconciliation. */
   renderId?: string
   role: 'user' | 'assistant'
@@ -83,6 +84,17 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
       continue
     }
 
+    // New clients use the same durable ID for their optimistic message. A
+    // different client's identical prompt must never consume this one.
+    if (message.id.startsWith('user-')) {
+      if (snapshotMessages.some(saved => saved.clientMessageId === message.id)) {
+        preserveNextOptimisticAssistant = false
+      } else {
+        unmatchedOptimisticMessages.push(message)
+        preserveNextOptimisticAssistant = true
+      }
+      continue
+    }
     const signature = getUserRenderSignature(message) ?? ''
     const matchedCount = snapshotUserCounts.get(signature) ?? 0
     if (matchedCount > 0) {
@@ -98,7 +110,7 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
   const snapshotIds = new Set(snapshotMessages.map(message => message.id))
   const pendingUsers = new Map<string, T[]>()
   for (const message of currentMessages) {
-    if (!message.optimistic || snapshotIds.has(message.id)) continue
+    if (!message.optimistic || snapshotIds.has(message.id) || message.id.startsWith('user-')) continue
     const signature = getUserRenderSignature(message)
     if (signature === null) continue
     const pending = pendingUsers.get(signature) ?? []
@@ -111,7 +123,7 @@ export function mergeSnapshotMessagesWithOptimisticUsers<T extends OptimisticUse
   const currentIndices = new Map(currentMessages.map((message, index) => [message.id, index]))
   let matchedPromptIndex: number | undefined
   const reconciled = snapshotMessages.map(message => {
-    const existing = currentById.get(message.id)
+    const existing = currentById.get(message.id) ?? (message.clientMessageId ? currentById.get(message.clientMessageId) : undefined)
     const signature = getUserRenderSignature(message)
     let matched = existing ?? (signature !== null ? pendingUsers.get(signature)?.shift() : undefined)
     // The response belongs to this same reconciled turn. Its temporary row
