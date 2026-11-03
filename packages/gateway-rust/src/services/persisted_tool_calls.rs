@@ -16,7 +16,14 @@ fn stringify(value: &Value) -> String {
         .stringify()
         .expect("JSON value is serializable")
 }
-fn compact(value: &Value, index: usize, detail: usize, text: usize, marked: bool) -> Value {
+fn compact(
+    value: &Value,
+    index: usize,
+    detail: usize,
+    text: usize,
+    marked: bool,
+    metadata_only: bool,
+) -> Value {
     let mut out = Map::new();
     let id = value["callId"]
         .as_str()
@@ -64,11 +71,13 @@ fn compact(value: &Value, index: usize, detail: usize, text: usize, marked: bool
             out.insert(key.into(), value[key].clone());
         }
     }
-    if let Some(value) = value["output"].as_str() {
-        out.insert("output".into(), json!(limit_utf8(value, text, None)));
-    }
-    if let Some(value) = value.as_object().and_then(|o| o.get("data")) {
-        out.insert("data".into(), bounded(value));
+    if !metadata_only {
+        if let Some(value) = value["output"].as_str() {
+            out.insert("output".into(), json!(limit_utf8(value, text, None)));
+        }
+        if let Some(value) = value.as_object().and_then(|o| o.get("data")) {
+            out.insert("data".into(), bounded(value));
+        }
     }
     if marked {
         out.insert("storageCompacted".into(), json!(true));
@@ -90,32 +99,40 @@ pub fn serialize_persisted_tool_calls(
     }
     let detail = options.detail_bytes.unwrap_or(32000.0).floor().max(128.0) as usize;
     let text = options.text_bytes.unwrap_or(8000.0).floor().max(128.0) as usize;
+    // Account for each encoded entry once; never serialize a growing prefix.
+    let encode = |detail, text, metadata_only| {
+        let mut parts = Vec::new();
+        let mut bytes = 2usize; // []
+        for (i, value) in parsed.iter().enumerate() {
+            let part = stringify(&compact(
+                value,
+                i,
+                detail,
+                text,
+                options.mark_compacted,
+                metadata_only,
+            ));
+            let next = bytes + usize::from(!parts.is_empty()) + part.len();
+            if next > max {
+                return if metadata_only {
+                    Some(format!("[{}]", parts.join(",")))
+                } else {
+                    None
+                };
+            }
+            parts.push(part);
+            bytes = next;
+        }
+        Some(format!("[{}]", parts.join(",")))
+    };
     for (detail, text) in [
         (detail, text),
         (detail.min(4000), text.min(2000)),
         (detail.min(512), text.min(512)),
     ] {
-        let values = parsed
-            .iter()
-            .enumerate()
-            .map(|(i, v)| compact(v, i, detail, text, options.mark_compacted))
-            .collect::<Vec<_>>();
-        let serialized = stringify(&json!(values));
-        if serialized.len() <= max {
+        if let Some(serialized) = encode(detail, text, false) {
             return Some(serialized);
         }
     }
-    let mut values = vec![];
-    for (i, value) in parsed.iter().enumerate() {
-        let mut value = compact(value, i, 128, 128, options.mark_compacted);
-        let object = value.as_object_mut().expect("compact object");
-        object.remove("data");
-        object.remove("output");
-        values.push(value);
-        if stringify(&json!(values)).len() > max {
-            values.pop();
-            break;
-        }
-    }
-    Some(stringify(&json!(values)))
+    encode(128, 128, true)
 }

@@ -284,31 +284,19 @@ fn server_error(error: &str) -> Response {
     )
 }
 fn sql_error(error: &crate::db::worker::OperationError) -> Response {
-    if let Some(rusqlite::Error::SqliteFailure(code, Some(message))) =
+    // The reference gateway reports SQLite failures as a plain 500 body. It only
+    // surfaces a driver error code for constraint-trigger failures (a RAISE(FAIL)
+    // body); ordinary driver errors such as `no such table` carry no code.
+    if let Some(rusqlite::Error::SqliteFailure(failure, Some(message))) =
         error.downcast_ref::<rusqlite::Error>()
     {
-        let code = match code.extended_code {
-            1 => "SQLITE_ERROR",
-            1811 => "SQLITE_CONSTRAINT_TRIGGER",
-            1555 => "SQLITE_CONSTRAINT_PRIMARYKEY",
-            2067 => "SQLITE_CONSTRAINT_UNIQUE",
-            1299 => "SQLITE_CONSTRAINT_NOTNULL",
-            787 => "SQLITE_CONSTRAINT_FOREIGNKEY",
-            275 => "SQLITE_CONSTRAINT_CHECK",
-            19 => "SQLITE_CONSTRAINT",
-            8 => "SQLITE_READONLY",
-            5 => "SQLITE_BUSY",
-            6 => "SQLITE_LOCKED",
-            10 => "SQLITE_IOERR",
-            11 => "SQLITE_CORRUPT",
-            13 => "SQLITE_FULL",
-            14 => "SQLITE_CANTOPEN",
-            _ => return server_error(message),
-        };
-        return response(
-            500,
-            json!({"statusCode":500,"code":code,"error":"Internal Server Error","message":message}),
-        );
+        if failure.extended_code == 1811 {
+            return response(
+                500,
+                json!({"statusCode":500,"code":"SQLITE_CONSTRAINT_TRIGGER","error":"Internal Server Error","message":message}),
+            );
+        }
+        return server_error(message);
     }
     server_error(&error.to_string())
 }

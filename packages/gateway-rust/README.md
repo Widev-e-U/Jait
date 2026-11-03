@@ -1,5 +1,24 @@
 # Native Rust gateway
 
+## Recovery and reference drift audit — 2026-11-03
+
+A recovery audit found **383 unique ledger entries matching all 383 current
+inventory paths**, with no missing original paths. The ledger currently labels
+**327/370 originals verified, 9 implemented but unverified, 17 partial and 17
+absent**; the thirteen additions are **5 verified and 8 absent**.
+
+These are recorded classifications, not a passing final-source gate. Nine
+TypeScript reference hashes have drifted since their ledger entries: eight
+classified verified and one implemented. Current compatibility for those paths
+requires review; changing their fingerprints alone would not resolve drift.
+The audit records exact paths and input SHA-256 digests in
+`.jait/artifacts/gateway-rust/recovery-ledger-audit-20261103.json`.
+It does not assess native source drift or award verification credit.
+
+Implementation remains open. No final candidate has been frozen or validated
+by this recovery audit. Native runtime composition, replacement/platform gates
+and activation remain separate; production remains TypeScript.
+
 ## Contract-evidence promotion across six component families — 2026-11-03
 
 Ninety-eight components carried fresh native contract evidence produced by six
@@ -1811,3 +1830,14 @@ ClawHub uninstall cancellation continuation (2026-11-01): the native store reche
 The opt-in ClawHub shared store now exposes a bounded-lane, point-in-time registry snapshot for discovery. The host must authorize discovery, and a snapshot is not authority for later file access. Runtime ownership, request-scoped discovery authorization, safe file reads, and supervised shutdown remain to be composed; this does not establish runtime integration or component verification.
 
 A focused `committed_uninstall_updates_later_discovery_snapshot` test confirms that a successful shared-store uninstall is visible in a subsequent discovery snapshot and that an earlier snapshot remains unchanged. This is point-in-time registry evidence only: the runtime still needs request-authorized discovery, safe file reads, and lifecycle ownership. `BlockingLane::close` rejects new work but does not wait for running closures, so shutdown must also supervise their completion before releasing dependent resources.
+
+## Release validation continuation — 2026-11-03
+
+The release audit found 12 verified ledger entries whose TypeScript reference
+fingerprints have drifted. `bun run test:gateway:rust --full-contracts` therefore
+stops before execution; fingerprints were not refreshed without parity review.
+The full contract suite is also invoked directly for diagnostic evidence. Strict
+Clippy currently fails, including unused agent-loop imports and existing style
+findings. These failures remain Rust migration work; this release keeps the
+TypeScript production gateway and claims no new native readiness or coverage.
+Release validation logs are under `.jait/artifacts/release-rust-*.log`.

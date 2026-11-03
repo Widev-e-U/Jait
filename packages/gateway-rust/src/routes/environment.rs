@@ -75,16 +75,11 @@ fn database_error(error: DatabaseError) -> Box<Response> {
                     .into_response(),
             );
         }
-        if let Some(rusqlite::Error::SqliteFailure(code, Some(message))) =
+        if let Some(rusqlite::Error::SqliteFailure(_, Some(message))) =
             error.downcast_ref::<rusqlite::Error>()
         {
-            // Bun exposes the SQLite error code on missing-table failures.
-            if code.extended_code == rusqlite::ffi::SQLITE_ERROR {
-                return Box::new(response(
-                    500,
-                    json!({"statusCode":500,"code":"SQLITE_ERROR","error":"Internal Server Error","message":message}),
-                ));
-            }
+            // The reference gateway exposes the driver message but never the
+            // SQLite error code on 500 bodies.
             return Box::new(internal(message));
         }
         return Box::new(internal(&error.to_string()));

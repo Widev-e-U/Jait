@@ -112,3 +112,18 @@ fn persisted_calls_apply_progressive_compaction_passes_and_floor_minimum_budgets
         json!({"forceCompact":true,"detailBytes":-1,"textBytes":1.5}),
     )]);
 }
+
+#[test]
+fn persisted_long_history_retains_the_same_bounded_metadata_prefix() {
+    // A small wire fixture expands into thousands of metadata records, so this
+    // exercises the long fallback without exceeding the driver's 64 KiB limit.
+    let entries = vec![json!({"data":0}); 2000];
+    let raw = serde_json::to_string(&entries).unwrap();
+    verify(vec![
+        call(json!(raw), json!({"forceCompact":true,"maxBytes":100000})),
+        call(
+            json!(raw),
+            json!({"forceCompact":true,"maxBytes":1024,"markCompacted":true}),
+        ),
+    ]);
+}

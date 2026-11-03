@@ -23,7 +23,7 @@ export async function dispatch(call:any){
  ports.fs={existsSync:(path:string)=>{
   const display=path.split('/X').at(-1)!;const exists=spawned?clock>=(call.readyAt??0):call.allOccupied===true||(call.occupied??[]).includes(display);
   effect({name:'exists',display,exists});return exists;
- }};
+ },realpathSync:(path:string)=>path};
  ports.child={spawn:(command:string,args:string[],options:any)=>{
   effect({name:'spawn',command,args,options});const proc:any=new EventEmitter(); const id=++children;
   proc.unref=()=>effect({name:'unref',id});proc.kill=()=>{effect({name:'kill',id});if((call.killFailures??[]).includes(id))throw Error('kill failed');return true;};

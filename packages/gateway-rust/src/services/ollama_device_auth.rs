@@ -345,7 +345,7 @@ impl OllamaAuthTransport for ReqwestOllamaAuthTransport {
             {
                 // Match Bun's rejected-redirect error without following the signed request.
                 return Err(OllamaAuthError::transport(
-                    "TypeError".into(),
+                    "Error".into(),
                     format!(
                         "UnexpectedRedirect fetching \"{}\". For more information, pass `verbose: true` in the second argument to fetch()",
                         request.url

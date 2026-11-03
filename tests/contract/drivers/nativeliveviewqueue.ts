@@ -3,7 +3,9 @@ import {loadLiveView} from './liveview-fixture-loader.ts';
 export async function dispatch(call:any){
  const started:string[]=[],results:Record<string,any>={},waiting=new Map<string,{resolve:(v:any)=>void,reject:(e:any)=>void}>();
  const old=process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS;let port=6100;
- const ports:any={sandbox:{
+ const ports:any={fs:{
+  existsSync:()=>true,realpathSync:(p:string)=>p,
+ },sandbox:{
   reserveLocalPort:async()=>port++,SandboxManager:class{
    async startBrowserSandbox(request:any){const id=request.projectRoot;started.push(id);return new Promise((resolve,reject)=>waiting.set(id,{resolve,reject}));}
    async stopContainer(){}
@@ -16,7 +18,7 @@ export async function dispatch(call:any){
    if('environment' in step){if(step.environment==null)delete process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS;else process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS=step.environment;}
    if(step.launch){const id=step.launch;startLiveView({projectRoot:id}).then(s=>{results[id]={ok:s.containerName};},e=>{results[id]={error:e.message};});}
    if(step.release){const w=waiting.get(step.release);if(!w)throw Error('release of non-started fixture');waiting.delete(step.release);if(step.error)w.reject(Error(step.error));else w.resolve({containerName:step.release,vncPort:5900,novncPort:6080,novncUrl:'fixture'});}
-   for(let i=0;i<40;i++)await Promise.resolve();
+   for(let i=0;i<40;i++)await new Promise(r=>setTimeout(r,1));
    phases.push({started:[...started],results:structuredClone(results)});
   }
   if(waiting.size)throw Error('fixture left active sandbox starts');return phases;

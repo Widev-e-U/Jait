@@ -724,7 +724,7 @@
     },
     {
       "reference": "packages/gateway/src/lib/persisted-tool-calls.ts",
-      "reference_sha256": "6817c212e5eeac13c5525c97f532e12026c194d4484161e0d4cb91f8da8ec1aa",
+      "reference_sha256": "70d5177b69ead00392fc01d3521adef56173e80883a3f4477ff39f95c729304a",
       "status": "verified",
       "native": [
         "packages/gateway-rust/src/services/persisted_tool_calls.rs",
@@ -737,9 +737,11 @@
       "targets": [
         "gateway_rust_persisted"
       ],
-      "review": "Exact raw JSON retention, malformed/nonarray rejection, field type/default/optional metadata rules, three compaction passes, byte limits and floored minimum budgets, Unicode byte boundaries, metadata-only fallback and prefix truncation. Focused contracts use finite-number, well-formed Unicode JSON; JS-specific nonfinite overflow and unpaired surrogate parsing remain compatibility limits.",
-      "reviewed_at": null,
-      "evidence": [],
+      "review": "Exact raw JSON retention, malformed/nonarray rejection, field type/default/optional metadata rules, three compaction passes, byte limits and floored minimum budgets, Unicode byte boundaries, metadata-only fallback and prefix truncation. Focused contracts use finite-number, well-formed Unicode JSON; JS-specific nonfinite overflow and unpaired surrogate parsing remain compatibility limits. 2026-11-03: both implementations encode entries individually with incremental byte accounting and early pass exit; metadata fallback skips discarded payloads. Stored bytes, prefix ordering, byte ceiling and recovery semantics are preserved. Nine focused Rust tests pass (five serializer contracts and four driver checks), including 2,000-entry fallback; this is component evidence, not a runtime capacity or production-readiness claim.",
+      "reviewed_at": "2026-11-03",
+      "evidence": [
+        "node tests/contract/run.mjs test --test gateway_rust_persisted -> 9 passed / 0 failed (2026-11-03)"
+      ],
       "remaining": null
     },
     {

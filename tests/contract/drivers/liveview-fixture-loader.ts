@@ -3,7 +3,7 @@
 import {plugin} from 'bun';
 import {mock} from 'bun:test';
 export async function loadLiveView(ports:Record<string,any>){
- for(const name of ['child','fs','net','sandbox'])mock.module(`jait-fixture-liveview-${name}`,()=>ports[name]??{spawn:()=>{throw Error('unexpected host spawn');},existsSync:()=>{throw Error('unexpected display check');},createServer:()=>{throw Error('unexpected host socket');}});
+ for(const name of ['child','fs','net','sandbox'])mock.module(`jait-fixture-liveview-${name}`,()=>ports[name]??{spawn:()=>{throw Error('unexpected host spawn');},existsSync:()=>{throw Error('unexpected display check');},realpathSync:()=>{throw Error('unexpected display realpath');},createServer:()=>{throw Error('unexpected host socket');}});
  const handle=plugin({name:'contract-live-view-ports',setup(build){
   build.onLoad({filter:/[/\\]services[/\\]live-view-manager\.ts$/},async args=>{
    const source=await Bun.file(args.path).text();

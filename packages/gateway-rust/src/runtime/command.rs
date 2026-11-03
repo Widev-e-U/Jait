@@ -47,7 +47,8 @@ fn inspect_argument(value: &str) -> String {
                 result.push('\\');
                 result.push(c);
             }
-            '\u{0}'..='\u{1f}' | '\u{7f}'..='\u{9f}' => {
+            '\u{0}' => result.push('\u{0}'),
+            '\u{1}'..='\u{1f}' | '\u{7f}'..='\u{9f}' => {
                 use std::fmt::Write;
                 write!(&mut result, "\\x{:02x}", c as u32).expect("string write");
             }

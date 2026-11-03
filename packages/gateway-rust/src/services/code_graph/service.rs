@@ -172,22 +172,14 @@ impl CodeGraphService {
         Ok(root)
     }
     pub fn output_directory(&self, root: &str, user: Option<&str>) -> String {
-        // Version and length-delimit both fields; an absent (or empty) owner is
-        // distinct from every nonempty owner, including the literal "system".
+        // Must match packages/gateway/src/services/code-graph/code-graphs.ts:370
+        // byte for byte: sha256(`${userId ?? "system"}\0${projectRoot}`) sliced to
+        // 24 hex chars, joined as <dataRoot>/<key>/graphify. A different scheme
+        // would strand indexes written by the TypeScript gateway.
         let mut digest = Sha256::new();
-        digest.update(b"jait-code-graph-v2\0");
-        match user.filter(|owner| !owner.is_empty()) {
-            Some(owner) => {
-                digest.update([1]);
-                digest.update((owner.len() as u64).to_be_bytes());
-                digest.update(owner.as_bytes());
-            }
-            None => digest.update([0]),
-        }
-        digest.update((root.len() as u64).to_be_bytes());
-        digest.update(root.as_bytes());
+        digest.update(format!("{}\0{}", user.unwrap_or("system"), root).as_bytes());
         let key = hex::encode(digest.finalize());
-        path_join(&[&self.data_root, "v2", &key[..24], "graphify"])
+        path_join(&[&self.data_root, &key[..24], "graphify"])
     }
     pub async fn get_index(&self, root: &str, user: Option<&str>) -> Result<Value, GraphError> {
         let root = self.normalize_project_root(root)?;

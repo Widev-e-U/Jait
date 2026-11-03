@@ -181,10 +181,13 @@ where
                     }
                     None
                 };
-                if (self.input_budget >= INPUT_BUDGET || self.stopping)
-                    && let Some(event) = poll_lifecycle(cx)
-                {
-                    return Poll::Ready(event);
+                if self.input_budget >= INPUT_BUDGET || self.stopping {
+                    if let Some(event) = poll_lifecycle(cx) {
+                        return Poll::Ready(event);
+                    }
+                    // A full input batch has given both lifecycle futures a turn.
+                    // Start a fresh batch even when they are still pending.
+                    self.input_budget = 0;
                 }
                 if !self.stopping {
                     let mut bytes = [0; READ_SIZE];
@@ -347,6 +350,31 @@ mod tests {
             owner.run().await.unwrap();
             assert!(seen.lock().unwrap().is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn input_budget_renews_after_pending_lifecycle_poll() {
+        let (mut parent, child) = tokio::io::duplex(INPUT_BUDGET * 3);
+        parent
+            .write_all(&vec![b'x'; INPUT_BUDGET * 2])
+            .await
+            .unwrap();
+        let (_, ready) = output();
+        let mut owner = DesktopParentPipe::new(
+            child,
+            1234,
+            |_| std::future::pending::<io::Result<()>>(),
+            supervisor,
+            ready,
+            Duration::from_secs(1),
+        );
+        assert!(
+            timeout(Duration::from_millis(10), owner.run())
+                .await
+                .is_err()
+        );
+        assert_eq!(owner.input_budget, 0);
+        assert_eq!(owner.line_len, 5);
     }
 
     #[tokio::test]

@@ -268,17 +268,29 @@ async fn cancellation_abort_capacity_and_descendants_are_owned() {
     let task = tokio::spawn(async move { task_pool.run(task_spec, task_cancel).await });
     let direct = pid(&ids).await;
     let descendant = pid(&grandchild).await;
-    let err = p
-        .run(
-            request(&work, argv("exit 0")),
-            ProcessCancellation::default(),
-        )
-        .await
-        .unwrap_err();
-    assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock);
+    // A shared pool enforces its parallelism by queueing, never by oversubscribing: while the
+    // single slot is occupied a second request stays pending instead of spawning a child.
+    let queued_pool = p.clone();
+    let queued_work = work.clone();
+    let mut queued = tokio::spawn(async move {
+        queued_pool
+            .run(
+                request(&queued_work, argv("printf queued")),
+                ProcessCancellation::default(),
+            )
+            .await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), &mut queued)
+            .await
+            .is_err(),
+        "a saturated pool must not run a second request concurrently"
+    );
     cancel.cancel();
     let result = task.await.unwrap().unwrap();
     assert!(result.cancelled && !result.timed_out);
+    // Cancellation releases the shared slot, so the queued request then runs to completion.
+    assert_eq!(queued.await.unwrap().unwrap().output, "queued");
     stopped(direct).await;
     stopped(descendant).await;
     fs::remove_file(&ids).unwrap();

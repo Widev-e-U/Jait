@@ -2,6 +2,9 @@
 //! Require validated policy/consent before effects; bound output and reap descendants.
 //! Generic execution does not grant assessment scope. Execution remains unported.
 
+// Candidate lifecycle only; no runtime or effect authority is registered here.
+pub(crate) mod desktop_parent_pipe;
+
 pub mod command_timeout;
 pub mod command_wait;
 pub mod completion_output;

@@ -35,7 +35,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
@@ -135,11 +135,18 @@ pub struct FunctionCall {
 }
 
 impl OpenAiToolCall {
-    pub fn new(id: impl Into<String>, name: impl Into<String>, arguments: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             type_: function_type(),
-            function: FunctionCall { name: name.into(), arguments: arguments.into() },
+            function: FunctionCall {
+                name: name.into(),
+                arguments: arguments.into(),
+            },
         }
     }
 
@@ -178,18 +185,34 @@ pub struct AgentMessage {
 
 impl AgentMessage {
     pub fn system(content: impl Into<String>) -> Self {
-        Self { role: "system".into(), content: content.into(), ..Default::default() }
+        Self {
+            role: "system".into(),
+            content: content.into(),
+            ..Default::default()
+        }
     }
 
     pub fn user(content: impl Into<String>) -> Self {
-        Self { role: "user".into(), content: content.into(), ..Default::default() }
+        Self {
+            role: "user".into(),
+            content: content.into(),
+            ..Default::default()
+        }
     }
 
     pub fn assistant(content: impl Into<String>) -> Self {
-        Self { role: "assistant".into(), content: content.into(), ..Default::default() }
+        Self {
+            role: "assistant".into(),
+            content: content.into(),
+            ..Default::default()
+        }
     }
 
-    pub fn tool(tool_call_id: impl Into<String>, name: impl Into<String>, content: impl Into<String>) -> Self {
+    pub fn tool(
+        tool_call_id: impl Into<String>,
+        name: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
         Self {
             role: "tool".into(),
             content: content.into(),
@@ -223,7 +246,11 @@ pub enum MessageSegment {
     },
     Steering {
         content: String,
-        #[serde(rename = "displayContent", skip_serializing_if = "Option::is_none", default)]
+        #[serde(
+            rename = "displayContent",
+            skip_serializing_if = "Option::is_none",
+            default
+        )]
         display_content: Option<String>,
     },
 }
@@ -261,7 +288,11 @@ impl OpenAiToolSchema {
     pub fn new(name: impl Into<String>, description: impl Into<String>, parameters: Value) -> Self {
         Self {
             type_: function_type(),
-            function: ToolSchemaFunction { name: name.into(), description: description.into(), parameters },
+            function: ToolSchemaFunction {
+                name: name.into(),
+                description: description.into(),
+                parameters,
+            },
         }
     }
 }
@@ -276,7 +307,11 @@ pub struct LlmContextFlowRound {
     pub messages: Vec<Value>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub tools: Option<Vec<OpenAiToolSchema>>,
-    #[serde(rename = "tool_choice", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "tool_choice",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub tool_choice: Option<String>,
     /// Metrics captured after the round completes.
     #[serde(skip_serializing_if = "Option::is_none", default)]
@@ -286,17 +321,37 @@ pub struct LlmContextFlowRound {
 /// Per-round accounting emitted on `onContext`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct RoundMetrics {
-    #[serde(rename = "promptTokens", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "promptTokens",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub prompt_tokens: Option<u64>,
-    #[serde(rename = "completionTokens", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "completionTokens",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub completion_tokens: Option<u64>,
-    #[serde(rename = "cacheReadTokens", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "cacheReadTokens",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub cache_read_tokens: Option<u64>,
-    #[serde(rename = "cacheWriteTokens", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "cacheWriteTokens",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub cache_write_tokens: Option<u64>,
     #[serde(rename = "costUsd", skip_serializing_if = "Option::is_none", default)]
     pub cost_usd: Option<f64>,
-    #[serde(rename = "durationMs", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "durationMs",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub duration_ms: Option<u64>,
 }
 
@@ -310,25 +365,49 @@ pub struct LlmConfig {
     pub openai_base_url: String,
     #[serde(rename = "openaiModel", default)]
     pub openai_model: String,
-    #[serde(rename = "openaiApiKey", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "openaiApiKey",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub openai_api_key: Option<String>,
     #[serde(rename = "ollamaUrl", skip_serializing_if = "Option::is_none", default)]
     pub ollama_url: Option<String>,
     #[serde(rename = "contextWindow", default = "default_context_window")]
     pub context_window: u64,
-    #[serde(rename = "tokenPrices", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "tokenPrices",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub token_prices: Option<Value>,
-    #[serde(rename = "compressionLlm", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "compressionLlm",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub compression_llm: Option<Box<LlmConfig>>,
-    #[serde(rename = "contextBudget", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "contextBudget",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub context_budget: Option<Value>,
     #[serde(rename = "sessionId", skip_serializing_if = "Option::is_none", default)]
     pub session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub temperature: Option<f64>,
-    #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "maxOutputTokens",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub max_output_tokens: Option<u64>,
-    #[serde(rename = "requireReasoning", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "requireReasoning",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub require_reasoning: Option<bool>,
     #[serde(flatten, default)]
     pub extra: Map<String, Value>,
@@ -390,11 +469,19 @@ pub struct AgentLoopResult {
     pub segments: Vec<MessageSegment>,
     #[serde(default)]
     pub rounds: u64,
-    #[serde(rename = "finishReason", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "finishReason",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub finish_reason: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub usage: Option<Value>,
-    #[serde(rename = "contextRounds", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "contextRounds",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub context_rounds: Option<Vec<LlmContextFlowRound>>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub error: Option<String>,
@@ -437,7 +524,11 @@ pub struct QueuedToolCall {
 pub struct SteeringMessageMeta {
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub source: Option<String>,
-    #[serde(rename = "displayContent", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "displayContent",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub display_content: Option<String>,
 }
 
@@ -461,7 +552,10 @@ fn parse_error_body(response_text: &str) -> (Option<String>, Option<String>) {
     match parsed.get("error") {
         Some(Value::String(text)) => (Some(text.clone()), None),
         Some(Value::Object(object)) => {
-            let message = object.get("message").and_then(|v| v.as_str()).map(str::to_string);
+            let message = object
+                .get("message")
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
             let code = object
                 .get("code")
                 .and_then(|v| v.as_str())
@@ -481,16 +575,24 @@ pub fn format_llm_error(status: u16, response_text: &str) -> String {
     let (server_msg, code) = parse_error_body(response_text);
     match status {
         401 => "Your API key is invalid or expired. Please check your settings.".to_string(),
-        403 => "Access denied by the model provider. Please check your API key permissions.".to_string(),
+        403 => "Access denied by the model provider. Please check your API key permissions."
+            .to_string(),
         429 => {
             let quota = code.as_deref() == Some("insufficient_quota")
-                || server_msg.as_deref().map(|m| m.contains("quota")).unwrap_or(false);
+                || server_msg
+                    .as_deref()
+                    .map(|m| m.contains("quota"))
+                    .unwrap_or(false);
             if quota {
-                "You've exceeded your API quota. Please check your plan and billing details.".to_string()
+                "You've exceeded your API quota. Please check your plan and billing details."
+                    .to_string()
             } else {
                 format!(
                     "Rate limited by the model provider. Please wait a moment and try again.{}",
-                    server_msg.as_deref().map(|m| format!("\n{m}")).unwrap_or_default()
+                    server_msg
+                        .as_deref()
+                        .map(|m| format!("\n{m}"))
+                        .unwrap_or_default()
                 )
             }
         }
@@ -558,7 +660,11 @@ fn parse_http_date_ms(text: &str) -> Option<i64> {
     let mut parts = text.split([' ', ',', '-']).filter(|p| !p.is_empty());
     let first = parts.next()?;
     // "Sun, 06 Nov 1994 08:49:37 GMT" -> day after weekday
-    let day: i64 = if first.chars().all(|c| c.is_ascii_digit()) { first.parse().ok()? } else { parts.next()?.parse().ok()? };
+    let day: i64 = if first.chars().all(|c| c.is_ascii_digit()) {
+        first.parse().ok()?
+    } else {
+        parts.next()?.parse().ok()?
+    };
     let month = parts.next()?;
     let year: i64 = parts.next()?.parse().ok()?;
     let month_index = [
@@ -572,7 +678,14 @@ fn parse_http_date_ms(text: &str) -> Option<i64> {
     let hour: i64 = hms.next()?.parse().ok()?;
     let minute: i64 = hms.next()?.parse().ok()?;
     let second: i64 = hms.next()?.parse().ok()?;
-    Some(civil_to_epoch_ms(year, month_index, day, hour, minute, second))
+    Some(civil_to_epoch_ms(
+        year,
+        month_index,
+        day,
+        hour,
+        minute,
+        second,
+    ))
 }
 
 /// Days-to-civil inverse (Howard Hinnant) — avoids pulling in a date crate.
@@ -612,13 +725,20 @@ pub struct TransportFailure {
 
 impl TransportFailure {
     pub fn from_code(code: &str) -> Self {
-        Self { cause_code: Some(code.to_string()), ..Default::default() }
+        Self {
+            cause_code: Some(code.to_string()),
+            ..Default::default()
+        }
     }
 }
 
 /// Turn a transport-level failure into something a user can act on, or `None`
 /// when it is not a connection-class failure (so genuine bugs keep propagating).
-pub fn format_connection_error(failure: &TransportFailure, backend: Option<&str>, openai_base_url: &str) -> Option<String> {
+pub fn format_connection_error(
+    failure: &TransportFailure,
+    backend: Option<&str>,
+    openai_base_url: &str,
+) -> Option<String> {
     let code = failure.cause_code.as_deref();
     let name = failure.name.as_deref();
     let message = failure.message.as_deref().unwrap_or("");
@@ -628,13 +748,20 @@ pub fn format_connection_error(failure: &TransportFailure, backend: Option<&str>
         || failure.cause_name.as_deref() == Some("BodyTimeoutError")
         || code == Some("UND_ERR_HEADERS_TIMEOUT")
         || code == Some("UND_ERR_BODY_TIMEOUT");
-    let is_connection_refused = matches!(code, Some("ECONNREFUSED") | Some("ECONNRESET") | Some("EHOSTUNREACH"));
+    let is_connection_refused = matches!(
+        code,
+        Some("ECONNREFUSED") | Some("ECONNRESET") | Some("EHOSTUNREACH")
+    );
     let is_dns_failure = matches!(code, Some("ENOTFOUND") | Some("EAI_AGAIN"));
     if !is_timeout && !is_connection_refused && !is_dns_failure {
         return None;
     }
 
-    let where_ = format!("{} at {}", backend.unwrap_or("the model backend"), openai_base_url);
+    let where_ = format!(
+        "{} at {}",
+        backend.unwrap_or("the model backend"),
+        openai_base_url
+    );
     let self_hosted = matches!(backend, Some("omniroute") | Some("ollama"));
     let hint = if self_hosted {
         if backend == Some("omniroute") {
@@ -659,17 +786,19 @@ pub fn format_connection_error(failure: &TransportFailure, backend: Option<&str>
 /// Deliberately excludes ECONNREFUSED/ENOTFOUND — a dead backend stays dead.
 pub fn is_transient_transport_error(failure: &TransportFailure) -> bool {
     let code = failure.cause_code.as_deref();
-    matches!(failure.cause_name.as_deref(), Some("HeadersTimeoutError") | Some("BodyTimeoutError"))
-        || matches!(
-            code,
-            Some("UND_ERR_HEADERS_TIMEOUT")
-                | Some("UND_ERR_BODY_TIMEOUT")
-                | Some("UND_ERR_SOCKET")
-                | Some("UND_ERR_CONNECT_TIMEOUT")
-                | Some("ECONNRESET")
-                | Some("EPIPE")
-                | Some("ETIMEDOUT")
-        )
+    matches!(
+        failure.cause_name.as_deref(),
+        Some("HeadersTimeoutError") | Some("BodyTimeoutError")
+    ) || matches!(
+        code,
+        Some("UND_ERR_HEADERS_TIMEOUT")
+            | Some("UND_ERR_BODY_TIMEOUT")
+            | Some("UND_ERR_SOCKET")
+            | Some("UND_ERR_CONNECT_TIMEOUT")
+            | Some("ECONNRESET")
+            | Some("EPIPE")
+            | Some("ETIMEDOUT")
+    )
 }
 
 /// Compact reason string for transport-retry logs, e.g. "headers timeout".
@@ -682,13 +811,22 @@ pub fn describe_transport_error(failure: &TransportFailure) -> String {
     if cause_name == Some("BodyTimeoutError") || code == Some("UND_ERR_BODY_TIMEOUT") {
         return "body timeout (stream stalled)".to_string();
     }
-    if matches!(code, Some("UND_ERR_SOCKET") | Some("ECONNRESET") | Some("EPIPE")) {
-        return format!("connection dropped ({})", code.unwrap_or("undici socket error"));
+    if matches!(
+        code,
+        Some("UND_ERR_SOCKET") | Some("ECONNRESET") | Some("EPIPE")
+    ) {
+        return format!(
+            "connection dropped ({})",
+            code.unwrap_or("undici socket error")
+        );
     }
     if matches!(code, Some("ETIMEDOUT") | Some("UND_ERR_CONNECT_TIMEOUT")) {
         return "timed out".to_string();
     }
-    failure.message.clone().unwrap_or_else(|| "unknown transport failure".to_string())
+    failure
+        .message
+        .clone()
+        .unwrap_or_else(|| "unknown transport failure".to_string())
 }
 
 /// Whether an LLM error response indicates context-window overflow.
@@ -735,7 +873,13 @@ struct NameMap {
 fn sanitize_openai_name(name: &str) -> String {
     let mut out: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     if out.chars().count() > OPENAI_NAME_MAX_CHARS {
         out = out.chars().take(OPENAI_NAME_MAX_CHARS).collect();
@@ -769,8 +913,14 @@ pub fn to_openai_name(name: &str) -> String {
             let stem_len = OPENAI_NAME_MAX_CHARS.saturating_sub(7);
             let stem: String = sanitized.chars().take(stem_len).collect();
             let suffixed = format!("{stem}_{}", name_suffix(name));
-            map.collisions.entry(sanitized.clone()).or_default().insert(owner);
-            map.collisions.entry(sanitized).or_default().insert(name.to_string());
+            map.collisions
+                .entry(sanitized.clone())
+                .or_default()
+                .insert(owner);
+            map.collisions
+                .entry(sanitized)
+                .or_default()
+                .insert(name.to_string());
             suffixed
         }
         _ => sanitized,
@@ -791,7 +941,10 @@ pub fn register_openai_name_mappings(names: &[String]) {
 /// Map an OpenAI-safe name back to the real tool name (identity when unknown).
 pub fn from_openai_name(name: &str) -> String {
     let map = name_map().lock().expect("tool name map poisoned");
-    map.to_tool.get(name).cloned().unwrap_or_else(|| name.to_string())
+    map.to_tool
+        .get(name)
+        .cloned()
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// Sanitised names that collapsed more than one distinct tool name. Providers
@@ -816,7 +969,12 @@ fn reset_name_map() {
 
 /// Convert tool schemas to their OpenAI-safe equivalents.
 pub fn to_tool_schemas(schemas: &[OpenAiToolSchema]) -> Vec<OpenAiToolSchema> {
-    register_openai_name_mappings(&schemas.iter().map(|s| s.function.name.clone()).collect::<Vec<_>>());
+    register_openai_name_mappings(
+        &schemas
+            .iter()
+            .map(|s| s.function.name.clone())
+            .collect::<Vec<_>>(),
+    );
     schemas
         .iter()
         .map(|schema| {
@@ -838,7 +996,11 @@ pub fn repair_tool_call_history(messages: &[AgentMessage]) -> Vec<AgentMessage> 
     while index < messages.len() {
         let message = &messages[index];
         if message.role == "assistant" {
-            if let Some(calls) = message.tool_calls.as_ref().filter(|calls| !calls.is_empty()) {
+            if let Some(calls) = message
+                .tool_calls
+                .as_ref()
+                .filter(|calls| !calls.is_empty())
+            {
                 let mut repaired = message.clone();
                 let mut calls = calls.clone();
                 calls.retain(|call| !call.id.is_empty());
@@ -859,7 +1021,9 @@ pub fn repair_tool_call_history(messages: &[AgentMessage]) -> Vec<AgentMessage> 
                     let tool_message = &messages[cursor];
                     match tool_message.tool_call_id.as_ref() {
                         Some(id) if calls.iter().any(|call| &call.id == id) => {
-                            responses.entry(id.clone()).or_insert_with(|| tool_message.clone());
+                            responses
+                                .entry(id.clone())
+                                .or_insert_with(|| tool_message.clone());
                         }
                         // Orphaned response (its call was repaired away).
                         _ => extra.push(tool_message.clone()),
@@ -877,7 +1041,8 @@ pub fn repair_tool_call_history(messages: &[AgentMessage]) -> Vec<AgentMessage> 
                         None => out.push(AgentMessage::tool(
                             call.id.clone(),
                             call.function.name.clone(),
-                            json!({ "ok": false, "message": "Tool call was not executed." }).to_string(),
+                            json!({ "ok": false, "message": "Tool call was not executed." })
+                                .to_string(),
                         )),
                     }
                 }
@@ -912,28 +1077,35 @@ pub fn serialize_messages(messages: &[AgentMessage], require_reasoning: bool) ->
         let mut object = Map::new();
         object.insert("role".into(), Value::String(message.role.clone()));
 
-        let has_calls = message.tool_calls.as_ref().map(|c| !c.is_empty()).unwrap_or(false);
-        if message.role == "assistant" && has_calls && message.content.is_empty() {
-            object.insert("content".into(), Value::Null);
-        } else {
-            object.insert("content".into(), Value::String(message.content.clone()));
-        }
+        object.insert("content".into(), Value::String(message.content.clone()));
 
-        if let Some(calls) = message.tool_calls.as_ref().filter(|c| !c.is_empty()) {
-            object.insert("tool_calls".into(), serde_json::to_value(calls).unwrap_or(Value::Null));
+        let has_calls = message
+            .tool_calls
+            .as_ref()
+            .is_some_and(|calls| !calls.is_empty());
+        if let Some(calls) = message.tool_calls.as_ref() {
+            object.insert(
+                "tool_calls".into(),
+                serde_json::to_value(calls).unwrap_or(Value::Null),
+            );
         }
-        if let Some(id) = message.tool_call_id.as_ref() {
+        if let Some(id) = message.tool_call_id.as_ref().filter(|id| !id.is_empty()) {
             object.insert("tool_call_id".into(), Value::String(id.clone()));
         }
-        if let Some(name) = message.name.as_ref() {
+        if let Some(name) = message
+            .name
+            .as_ref()
+            .filter(|name| !name.is_empty() && message.role != "tool")
+        {
             object.insert("name".into(), Value::String(name.clone()));
         }
-        if message.role == "assistant" {
-            if let Some(thinking) = message.thinking.as_ref().filter(|t| !t.is_empty()) {
-                if require_reasoning {
-                    object.insert("reasoning_content".into(), Value::String(thinking.clone()));
-                }
-            }
+        if message.role == "assistant"
+            && (require_reasoning || message.thinking.is_some() || has_calls)
+        {
+            object.insert(
+                "reasoning_content".into(),
+                Value::String(message.thinking.clone().unwrap_or_default()),
+            );
         }
         out.push(Value::Object(object));
     }
@@ -987,7 +1159,10 @@ pub struct RepetitionMatch {
 }
 
 fn char_boundary(text: &str, char_index: usize) -> usize {
-    text.char_indices().nth(char_index).map(|(offset, _)| offset).unwrap_or(text.len())
+    text.char_indices()
+        .nth(char_index)
+        .map(|(offset, _)| offset)
+        .unwrap_or(text.len())
 }
 
 /// Detect a phrase repeated back-to-back far beyond anything a model produces
@@ -1161,7 +1336,10 @@ pub fn canonicalize_tool_call_value(value: &Value) -> String {
 pub fn normalize_tool_result(raw: Value) -> Value {
     match raw {
         Value::Object(mut map) => {
-            let ok = map.get("ok").map(|v| v.as_bool() == Some(true)).unwrap_or(false);
+            let ok = map
+                .get("ok")
+                .map(|v| v.as_bool() == Some(true))
+                .unwrap_or(false);
             let message = map
                 .get("message")
                 .and_then(|v| v.as_str())
@@ -1223,9 +1401,16 @@ pub fn is_transient_failure(message: Option<&str>) -> bool {
         Some(message) if !message.is_empty() => message,
         _ => return false,
     };
-    let head: String = message.chars().take(TRANSIENT_SCAN_CHARS).collect::<String>().to_lowercase();
+    let head: String = message
+        .chars()
+        .take(TRANSIENT_SCAN_CHARS)
+        .collect::<String>()
+        .to_lowercase();
 
-    if contains_word(&head, "timeout") || contains_word(&head, "timedout") || contains_word(&head, "timedout") {
+    if contains_word(&head, "timeout")
+        || contains_word(&head, "timedout")
+        || contains_word(&head, "timedout")
+    {
         return true;
     }
     // /\btimed?\s?out\b/
@@ -1234,7 +1419,15 @@ pub fn is_transient_failure(message: Option<&str>) -> bool {
     }
     if contains_any_word(
         &head,
-        &["econnrefused", "econnreset", "econnaborted", "etimedout", "ehostunreach", "eai_again", "epipe"],
+        &[
+            "econnrefused",
+            "econnreset",
+            "econnaborted",
+            "etimedout",
+            "ehostunreach",
+            "eai_again",
+            "epipe",
+        ],
     ) {
         return true;
     }
@@ -1260,12 +1453,36 @@ pub fn is_transient_failure(message: Option<&str>) -> bool {
     }
     if let Some(position) = head.find("network") {
         let rest: String = head[position..].chars().skip(7).take(40).collect();
-        if ["error", "failure", "failed", "unreachable", "down", "timeout", "issue"].iter().any(|w| rest.contains(w)) {
+        if [
+            "error",
+            "failure",
+            "failed",
+            "unreachable",
+            "down",
+            "timeout",
+            "issue",
+        ]
+        .iter()
+        .any(|w| rest.contains(w))
+        {
             return true;
         }
     }
     if head.contains("unavailable") {
-        let subjects = ["service", "server", "host", "endpoint", "model", "resource", "services", "servers", "hosts", "endpoints", "models", "resources"];
+        let subjects = [
+            "service",
+            "server",
+            "host",
+            "endpoint",
+            "model",
+            "resource",
+            "services",
+            "servers",
+            "hosts",
+            "endpoints",
+            "models",
+            "resources",
+        ];
         if subjects.iter().any(|s| head.contains(s)) {
             return true;
         }
@@ -1273,7 +1490,10 @@ pub fn is_transient_failure(message: Option<&str>) -> bool {
     if head.contains("temporarily unavailable") || head.contains("currently unavailable") {
         return true;
     }
-    if head.contains("bad gateway") || head.contains("gateway timeout") || head.contains("gateway time-out") {
+    if head.contains("bad gateway")
+        || head.contains("gateway timeout")
+        || head.contains("gateway time-out")
+    {
         return true;
     }
     if contains_word(&head, "overloaded") {
@@ -1284,7 +1504,11 @@ pub fn is_transient_failure(message: Option<&str>) -> bool {
 
 /// Last-resort record for a tool call whose execution rejected outright. Keeps
 /// the one-tool-message-per-tool_call invariant intact.
-pub fn failed_tool_call_outcome(call: &OpenAiToolCall, reason: &str, now_ms: i64) -> (ExecutedToolCall, AgentMessage) {
+pub fn failed_tool_call_outcome(
+    call: &OpenAiToolCall,
+    reason: &str,
+    now_ms: i64,
+) -> (ExecutedToolCall, AgentMessage) {
     let args = call.parsed_arguments();
     let message = format!("TOOL ERROR: {reason}");
     (
@@ -1298,7 +1522,11 @@ pub fn failed_tool_call_outcome(call: &OpenAiToolCall, reason: &str, now_ms: i64
             completed_at: now_ms,
             retry_count: 0,
         },
-        AgentMessage::tool(call.id.clone(), call.function.name.clone(), json!({ "ok": false, "message": message }).to_string()),
+        AgentMessage::tool(
+            call.id.clone(),
+            call.function.name.clone(),
+            json!({ "ok": false, "message": message }).to_string(),
+        ),
     )
 }
 
@@ -1321,7 +1549,10 @@ struct SteeringState {
 
 impl SteeringController {
     pub fn new(timeout_ms: u64) -> Self {
-        Self { state: Mutex::new(SteeringState::default()), timeout_ms }
+        Self {
+            state: Mutex::new(SteeringState::default()),
+            timeout_ms,
+        }
     }
 
     /// Queue a steering message. Returns `false` once the turn has closed its
@@ -1344,7 +1575,11 @@ impl SteeringController {
     }
 
     pub fn pending_count(&self) -> usize {
-        self.state.lock().expect("steering state poisoned").pending.len()
+        self.state
+            .lock()
+            .expect("steering state poisoned")
+            .pending
+            .len()
     }
 
     pub fn has_pending(&self) -> bool {
@@ -1352,11 +1587,18 @@ impl SteeringController {
     }
 
     pub fn delivered_count(&self) -> usize {
-        self.state.lock().expect("steering state poisoned").delivered
+        self.state
+            .lock()
+            .expect("steering state poisoned")
+            .delivered
     }
 
     pub fn clear(&self) {
-        self.state.lock().expect("steering state poisoned").pending.clear();
+        self.state
+            .lock()
+            .expect("steering state poisoned")
+            .pending
+            .clear();
     }
 
     /// Close the channel; later pushes are rejected and nothing new is delivered.
@@ -1375,7 +1617,10 @@ impl SteeringController {
     }
 
     /// Wait (up to `timeout_ms`) for the next steering message.
-    pub fn wait_for_next<'a>(&'a self, runtime: &'a dyn AgentRuntime) -> BoxFuture<'a, Option<SteeringMessage>> {
+    pub fn wait_for_next<'a>(
+        &'a self,
+        runtime: &'a dyn AgentRuntime,
+    ) -> BoxFuture<'a, Option<SteeringMessage>> {
         Box::pin(async move {
             let deadline = runtime.now_ms() + self.timeout_ms as i64;
             loop {
@@ -1420,7 +1665,11 @@ impl ToolCallQueue {
 
     pub fn push(&self, call: OpenAiToolCall, priority: ToolCallPriority, now_ms: i64) {
         let mut entries = self.entries.lock().expect("tool queue poisoned");
-        entries.push(QueuedToolCall { tool_call: call, priority, queued_at: now_ms });
+        entries.push(QueuedToolCall {
+            tool_call: call,
+            priority,
+            queued_at: now_ms,
+        });
         let mut sequence = self.sequence.lock().expect("tool sequence poisoned");
         *sequence += 1;
     }
@@ -1517,7 +1766,12 @@ pub trait AgentRuntime: Send + Sync {
 
     /// `projectToolEvidence(result, scope, toolName)`; returns the evidence
     /// reference stored on the assistant message for later recovery.
-    fn project_tool_evidence(&self, _call_id: &str, _tool: &str, _result: &Value) -> Option<String> {
+    fn project_tool_evidence(
+        &self,
+        _call_id: &str,
+        _tool: &str,
+        _result: &Value,
+    ) -> Option<String> {
         None
     }
 
@@ -1622,7 +1876,10 @@ pub trait LlmHost: Send + Sync {
 
     /// Issue the request and return the whole body. Errors are transport-level
     /// failures; HTTP error statuses come back in `LlmHttpResponse::status`.
-    fn post_stream<'a>(&'a self, request: LlmHttpRequest) -> BoxFuture<'a, Result<LlmHttpResponse, String>>;
+    fn post_stream<'a>(
+        &'a self,
+        request: LlmHttpRequest,
+    ) -> BoxFuture<'a, Result<LlmHttpResponse, String>>;
 }
 
 /// Resolve the chat-completions URL for a backend, mirroring the TS defaulting.
@@ -1645,7 +1902,8 @@ pub fn resolve_chat_url(llm: &LlmConfig) -> String {
 /// Tool invocation boundary: registry lookup + validation + execution
 /// (`ToolExecutor` in the TS source).
 pub trait ToolExecutor: Send + Sync {
-    fn execute<'a>(&'a self, request: ToolExecutionRequest) -> BoxFuture<'a, Result<Value, String>>;
+    fn execute<'a>(&'a self, request: ToolExecutionRequest)
+    -> BoxFuture<'a, Result<Value, String>>;
 }
 
 /// Arguments handed to [`ToolExecutor::execute`].
@@ -1666,13 +1924,25 @@ pub struct ToolAuth {
     pub user_id: Option<String>,
     #[serde(rename = "apiKeys", skip_serializing_if = "Option::is_none", default)]
     pub api_keys: Option<BTreeMap<String, String>>,
-    #[serde(rename = "providerId", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "providerId",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub provider_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub model: Option<String>,
-    #[serde(rename = "jaitBackend", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "jaitBackend",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub jait_backend: Option<String>,
-    #[serde(rename = "runtimeMode", skip_serializing_if = "Option::is_none", default)]
+    #[serde(
+        rename = "runtimeMode",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub runtime_mode: Option<String>,
 }
 
@@ -1789,19 +2059,31 @@ pub fn parse_openai_stream(body: &str, sink: &mut StreamSink<'_>) -> ProviderTur
         }
         if let Some(calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
             for (position, call) in calls.iter().enumerate() {
-                let index = call.get("index").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(position);
+                let index = call
+                    .get("index")
+                    .and_then(|v| v.as_u64())
+                    .map(|v| v as usize)
+                    .unwrap_or(position);
                 let entry = builders.entry(index).or_default();
                 if let Some(id) = call.get("id").and_then(|v| v.as_str()) {
                     if !id.is_empty() {
                         entry.0 = id.to_string();
                     }
                 }
-                if let Some(name) = call.get("function").and_then(|f| f.get("name")).and_then(|v| v.as_str()) {
+                if let Some(name) = call
+                    .get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|v| v.as_str())
+                {
                     if !name.is_empty() {
                         entry.1.push_str(name);
                     }
                 }
-                if let Some(args) = call.get("function").and_then(|f| f.get("arguments")).and_then(|v| v.as_str()) {
+                if let Some(args) = call
+                    .get("function")
+                    .and_then(|f| f.get("arguments"))
+                    .and_then(|v| v.as_str())
+                {
                     entry.2.push_str(args);
                 }
             }
@@ -1816,9 +2098,20 @@ pub fn parse_openai_stream(body: &str, sink: &mut StreamSink<'_>) -> ProviderTur
             continue;
         }
         turn.tool_calls.push(OpenAiToolCall {
-            id: if id.is_empty() { format!("call_{index}") } else { id },
+            id: if id.is_empty() {
+                format!("call_{index}")
+            } else {
+                id
+            },
             type_: function_type(),
-            function: FunctionCall { name, arguments: if arguments.is_empty() { "{}".into() } else { arguments } },
+            function: FunctionCall {
+                name,
+                arguments: if arguments.is_empty() {
+                    "{}".into()
+                } else {
+                    arguments
+                },
+            },
         });
     }
     turn
@@ -1861,7 +2154,11 @@ pub fn parse_ollama_stream(body: &str, sink: &mut StreamSink<'_>) -> ProviderTur
             if let Some(calls) = message.get("tool_calls").and_then(|v| v.as_array()) {
                 for call in calls {
                     let function = call.get("function").cloned().unwrap_or(Value::Null);
-                    let name = function.get("name").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+                    let name = function
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
                     if name.is_empty() {
                         continue;
                     }
@@ -1916,7 +2213,10 @@ pub fn build_request_body(
     body.insert("messages".into(), Value::Array(messages));
     body.insert("stream".into(), Value::Bool(stream));
     if !tools.is_empty() {
-        body.insert("tools".into(), serde_json::to_value(tools).unwrap_or(Value::Null));
+        body.insert(
+            "tools".into(),
+            serde_json::to_value(tools).unwrap_or(Value::Null),
+        );
         if let Some(choice) = tool_choice {
             body.insert("tool_choice".into(), Value::String(choice.to_string()));
         }
@@ -1938,9 +2238,16 @@ pub fn build_request_body(
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProviderFailure {
     /// Non-2xx response.
-    Http { status: u16, body: String, retry_after_ms: Option<i64> },
+    Http {
+        status: u16,
+        body: String,
+        retry_after_ms: Option<i64>,
+    },
     /// Transport-level failure after exhausting inline transport retries.
-    Transport { failure: TransportFailure, message: String },
+    Transport {
+        failure: TransportFailure,
+        message: String,
+    },
     /// Caller aborted the turn.
     Aborted,
     /// No response body at all.
@@ -1953,7 +2260,9 @@ impl ProviderFailure {
             ProviderFailure::Http { status, body, .. } => format_llm_error(*status, body),
             ProviderFailure::Transport { message, .. } => message.clone(),
             ProviderFailure::Aborted => "Request aborted by user".to_string(),
-            ProviderFailure::Empty => "The model returned an empty response. Please try again.".to_string(),
+            ProviderFailure::Empty => {
+                "The model returned an empty response. Please try again.".to_string()
+            }
         }
     }
 }
@@ -1990,18 +2299,28 @@ pub fn stream_chat<'a>(
             let response = match host.post_stream(request).await {
                 Ok(response) => response,
                 Err(message) => LlmHttpResponse {
-                    transport_failure: Some(TransportFailure { message: Some(message.clone()), ..Default::default() }),
+                    transport_failure: Some(TransportFailure {
+                        message: Some(message.clone()),
+                        ..Default::default()
+                    }),
                     ..Default::default()
                 },
             };
 
             if let Some(failure) = response.transport_failure.clone() {
                 let aborted = failure.name.as_deref() == Some("AbortError")
-                    && !failure.message.as_deref().unwrap_or("").to_lowercase().contains("user");
+                    && !failure
+                        .message
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains("user");
                 if aborted && runtime.is_aborted() {
                     return Err(ProviderFailure::Aborted);
                 }
-                if is_transient_transport_error(&failure) && transport_attempt < MAX_TRANSPORT_RETRIES {
+                if is_transient_transport_error(&failure)
+                    && transport_attempt < MAX_TRANSPORT_RETRIES
+                {
                     transport_attempt += 1;
                     let delay = TRANSPORT_RETRY_BASE_DELAY_MS * (1u64 << (transport_attempt - 1));
                     runtime.log(
@@ -2014,17 +2333,15 @@ pub fn stream_chat<'a>(
                     runtime.sleep(delay).await;
                     continue;
                 }
-                let message = format_connection_error(
-                    &failure,
-                    llm.backend.as_deref(),
-                    &llm.openai_base_url,
-                )
-                .unwrap_or_else(|| describe_transport_error(&failure));
+                let message =
+                    format_connection_error(&failure, llm.backend.as_deref(), &llm.openai_base_url)
+                        .unwrap_or_else(|| describe_transport_error(&failure));
                 return Err(ProviderFailure::Transport { failure, message });
             }
 
             if !(200..300).contains(&response.status) {
-                let retry_after = parse_retry_after_ms(response.header("retry-after"), runtime.now_ms());
+                let retry_after =
+                    parse_retry_after_ms(response.header("retry-after"), runtime.now_ms());
                 return Err(ProviderFailure::Http {
                     status: response.status,
                     body: response.body,
@@ -2044,7 +2361,10 @@ pub fn stream_chat<'a>(
             let mut on_thinking = |chunk: &str| {
                 observer.on_event(json!({ "type": "thinking", "thinking": chunk }));
             };
-            let mut sink = StreamSink { on_content: &mut on_content, on_thinking: &mut on_thinking };
+            let mut sink = StreamSink {
+                on_content: &mut on_content,
+                on_thinking: &mut on_thinking,
+            };
             let turn = if llm.is_ollama() {
                 parse_ollama_stream(&response.body, &mut sink)
             } else {
@@ -2074,11 +2394,25 @@ pub fn cap_thinking(thinking: &str) -> String {
 pub fn is_timing_noise_reasoning(text: &str) -> bool {
     let lower = text.to_lowercase();
     let needles = [
-        "seconds", "wait a moment", "wait for", "sleep(", "sleep (", "one more second",
-        "a few seconds", "let me wait", "delay of", "milliseconds", "retry in",
+        "seconds",
+        "wait a moment",
+        "wait for",
+        "sleep(",
+        "sleep (",
+        "one more second",
+        "a few seconds",
+        "let me wait",
+        "delay of",
+        "milliseconds",
+        "retry in",
     ];
     needles.iter().any(|needle| lower.contains(needle))
-        && (lower.len() < 400 || needles.iter().filter(|needle| lower.contains(*needle)).count() > 1)
+        && (lower.len() < 400
+            || needles
+                .iter()
+                .filter(|needle| lower.contains(*needle))
+                .count()
+                > 1)
 }
 
 /// True when the new reasoning block repeats an already-persisted block almost
@@ -2087,7 +2421,11 @@ pub fn is_verbatim_thinking_repeat(previous: &[String], current: &str) -> bool {
     if current.chars().count() < MIN_REPEAT_THINKING_CHARS {
         return false;
     }
-    let normalise = |text: &str| text.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    let normalise = |text: &str| {
+        text.chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+    };
     let current_normalised = normalise(current);
     previous.iter().any(|earlier| {
         let earlier_normalised = normalise(earlier);
@@ -2102,7 +2440,11 @@ pub fn is_verbatim_thinking_repeat(previous: &[String], current: &str) -> bool {
 /// Build the synthetic assistant message used when the model produced neither
 /// content nor tool calls: it names the work already done so the turn ends with
 /// something actionable instead of an empty bubble.
-pub fn build_empty_response_fallback(tool_calls: &[ExecutedToolCall], rounds: u64, model: &str) -> String {
+pub fn build_empty_response_fallback(
+    tool_calls: &[ExecutedToolCall],
+    rounds: u64,
+    model: &str,
+) -> String {
     if tool_calls.is_empty() {
         return format!(
             "The model ({model}) returned no content after {rounds} round(s). Please try again, or pick a different model."
@@ -2116,7 +2458,10 @@ pub fn build_empty_response_fallback(tool_calls: &[ExecutedToolCall], rounds: u6
     for call in tool_calls.iter().take(SUMMARY_ITEM_LIMIT) {
         let status = if call.ok { "ok" } else { "failed" };
         let snippet: String = call.message.chars().take(SUMMARY_TEXT_LIMIT).collect();
-        lines.push(format!("- {}({}) → {status}: {snippet}", call.tool, call.args));
+        lines.push(format!(
+            "- {}({}) → {status}: {snippet}",
+            call.tool, call.args
+        ));
     }
     lines.join("\n")
 }
@@ -2126,12 +2471,17 @@ pub fn build_empty_response_fallback(tool_calls: &[ExecutedToolCall], rounds: u6
 /// Some models emit `<tool_name>{"arg": 1}</tool_name>` or `tool_name({"arg":1})`
 /// in plain text instead of using the tool-calling channel. Detect those calls
 /// so the loop can execute them instead of showing raw JSON to the user.
-pub fn detect_plain_text_tool_calls(text: &str, known_tools: &HashSet<String>) -> Vec<OpenAiToolCall> {
+pub fn detect_plain_text_tool_calls(
+    text: &str,
+    known_tools: &HashSet<String>,
+) -> Vec<OpenAiToolCall> {
     let mut calls = Vec::new();
     let mut search_from = 0usize;
     while let Some(open) = text[search_from..].find('<') {
         let start = search_from + open;
-        let Some(close) = text[start..].find('>') else { break };
+        let Some(close) = text[start..].find('>') else {
+            break;
+        };
         let name = text[start + 1..start + close].trim().to_string();
         if name.is_empty() || name.starts_with('/') || name.contains(' ') {
             search_from = start + 1;
@@ -2148,9 +2498,16 @@ pub fn detect_plain_text_tool_calls(text: &str, known_tools: &HashSet<String>) -
             continue;
         };
         let body = text[body_start..body_start + end].trim();
-        if serde_json::from_str::<Value>(body).map(|v| v.is_object()).unwrap_or(false) {
+        if serde_json::from_str::<Value>(body)
+            .map(|v| v.is_object())
+            .unwrap_or(false)
+        {
             let id = format!("plain_{}", calls.len());
-            calls.push(OpenAiToolCall::new(id, to_openai_name(&name), body.to_string()));
+            calls.push(OpenAiToolCall::new(
+                id,
+                to_openai_name(&name),
+                body.to_string(),
+            ));
         }
         search_from = body_start + end + terminator.len();
     }
@@ -2166,7 +2523,10 @@ pub fn detect_plain_text_tool_calls(text: &str, known_tools: &HashSet<String>) -
                 let args_start = from + found + needle.len();
                 if let Some(args_end) = balanced_object_end(&text[args_start..]) {
                     let body = &text[args_start..args_start + args_end];
-                    if serde_json::from_str::<Value>(body).map(|v| v.is_object()).unwrap_or(false) {
+                    if serde_json::from_str::<Value>(body)
+                        .map(|v| v.is_object())
+                        .unwrap_or(false)
+                    {
                         let call = OpenAiToolCall::new(
                             format!("plain_{}", calls.len()),
                             to_openai_name(name),
@@ -2231,7 +2591,18 @@ pub fn is_substantive_user_message(message: &AgentMessage) -> bool {
         return false;
     }
     let lower = trimmed.to_lowercase();
-    let acknowledgements = ["ok", "okay", "thanks", "thank you", "yes", "no", "continue", "go on", "sure", "k"];
+    let acknowledgements = [
+        "ok",
+        "okay",
+        "thanks",
+        "thank you",
+        "yes",
+        "no",
+        "continue",
+        "go on",
+        "sure",
+        "k",
+    ];
     if trimmed.chars().count() < 40 && acknowledgements.contains(&lower.as_str()) {
         return false;
     }
@@ -2266,7 +2637,11 @@ pub fn build_structured_conversation_summary(messages: &[AgentMessage]) -> Strin
         match message.role.as_str() {
             "user" => {
                 if is_substantive_user_message(message) {
-                    let text: String = message.content.split_whitespace().collect::<Vec<_>>().join(" ");
+                    let text: String = message
+                        .content
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" ");
                     user_tasks.push(text.chars().take(SUMMARY_TEXT_LIMIT).collect());
                 }
             }
@@ -2296,7 +2671,8 @@ pub fn build_structured_conversation_summary(messages: &[AgentMessage]) -> Strin
             "system" => {
                 let lower = message.content.to_lowercase();
                 if lower.contains("question") || lower.contains("ask the user") {
-                    let snippet: String = message.content.chars().take(SUMMARY_TEXT_LIMIT).collect();
+                    let snippet: String =
+                        message.content.chars().take(SUMMARY_TEXT_LIMIT).collect();
                     open_questions.push(snippet);
                 }
             }
@@ -2354,10 +2730,13 @@ pub fn previous_checkpoint_sections(summary: &str) -> HashMap<String, String> {
 /// Re-inject the earliest substantive user task when a model summary dropped it.
 /// Losing the task is the failure mode that makes compaction worse than useless.
 pub fn reinject_substantive_user_task(summary: &str, messages: &[AgentMessage]) -> String {
-    let first_task = messages.iter().find(|m| is_substantive_user_message(m)).map(|m| {
-        m.content.split_whitespace().collect::<Vec<_>>().join(" ")
-    });
-    let Some(task) = first_task else { return summary.to_string() };
+    let first_task = messages
+        .iter()
+        .find(|m| is_substantive_user_message(m))
+        .map(|m| m.content.split_whitespace().collect::<Vec<_>>().join(" "));
+    let Some(task) = first_task else {
+        return summary.to_string();
+    };
     let sections = previous_checkpoint_sections(summary);
     let has_task = sections
         .get("user task")
@@ -2367,7 +2746,12 @@ pub fn reinject_substantive_user_task(summary: &str, messages: &[AgentMessage]) 
         return summary.to_string();
     }
     let mut out = String::from("## User task\n");
-    out.push_str(&format!("- {}\n\n", task.chars().take(SUMMARY_TEXT_LIMIT * 2).collect::<String>()));
+    out.push_str(&format!(
+        "- {}\n\n",
+        task.chars()
+            .take(SUMMARY_TEXT_LIMIT * 2)
+            .collect::<String>()
+    ));
     out.push_str(summary);
     out
 }
@@ -2379,8 +2763,15 @@ pub fn serialize_conversation_for_summary(messages: &[AgentMessage]) -> String {
     for message in messages {
         match message.role.as_str() {
             "tool" => {
-                let truncated: String = message.content.chars().take(SUMMARY_TOOL_RESULT_MAX_CHARS).collect();
-                out.push_str(&format!("[tool {}] {truncated}\n", message.name.clone().unwrap_or_default()));
+                let truncated: String = message
+                    .content
+                    .chars()
+                    .take(SUMMARY_TOOL_RESULT_MAX_CHARS)
+                    .collect();
+                out.push_str(&format!(
+                    "[tool {}] {truncated}\n",
+                    message.name.clone().unwrap_or_default()
+                ));
             }
             "assistant" => {
                 if !message.content.trim().is_empty() {
@@ -2388,7 +2779,10 @@ pub fn serialize_conversation_for_summary(messages: &[AgentMessage]) -> String {
                 }
                 if let Some(calls) = message.tool_calls.as_ref() {
                     for call in calls {
-                        out.push_str(&format!("[assistant tool_call] {}\n", tool_call_signature(call)));
+                        out.push_str(&format!(
+                            "[assistant tool_call] {}\n",
+                            tool_call_signature(call)
+                        ));
                     }
                 }
             }
@@ -2401,7 +2795,10 @@ pub fn serialize_conversation_for_summary(messages: &[AgentMessage]) -> String {
 }
 
 /// Build the compaction prompt from the checkpoint system prompt + transcript.
-pub fn build_compaction_prompt(messages: &[AgentMessage], previous_summary: Option<&str>) -> (String, String) {
+pub fn build_compaction_prompt(
+    messages: &[AgentMessage],
+    previous_summary: Option<&str>,
+) -> (String, String) {
     let mut prompt = String::from(LLM_SUMMARIZATION_PROMPT);
     prompt.push_str("\n\nSections required:\n## User task\n## Work done\n## Tool findings\n## Failures\n## Open questions\n");
     if let Some(previous) = previous_summary {
@@ -2428,7 +2825,10 @@ pub fn clamp_summary(summary: &str, max_chars: usize) -> String {
 /// context windows (a 4k window cannot afford an 8k-token summary).
 pub fn checkpoint_output_tokens(context_window: u64) -> u64 {
     let proportional = context_window / 16;
-    proportional.clamp(CHECKPOINT_OUTPUT_TOKENS_FLOOR.min(context_window / 2), CHECKPOINT_OUTPUT_TOKENS)
+    proportional.clamp(
+        CHECKPOINT_OUTPUT_TOKENS_FLOOR.min(context_window / 2),
+        CHECKPOINT_OUTPUT_TOKENS,
+    )
 }
 
 // ── History pruning ─────────────────────────────────────────────────────
@@ -2439,8 +2839,15 @@ pub fn checkpoint_output_tokens(context_window: u64) -> u64 {
 /// `ACTIVE_TURN_TOOL_ROUNDS_TO_KEEP` tool rounds, and the most recent user
 /// message. Pruned tool results collapse to a stub with their evidence
 /// reference intact so they can be recovered on demand.
-pub fn prune_history(messages: &[AgentMessage], budget_tokens: u64, runtime: &dyn AgentRuntime) -> Vec<AgentMessage> {
-    let total: u64 = messages.iter().map(|m| runtime.estimate_message_tokens(m)).sum();
+pub fn prune_history(
+    messages: &[AgentMessage],
+    budget_tokens: u64,
+    runtime: &dyn AgentRuntime,
+) -> Vec<AgentMessage> {
+    let total: u64 = messages
+        .iter()
+        .map(|m| runtime.estimate_message_tokens(m))
+        .sum();
     if total <= budget_tokens || messages.is_empty() {
         return messages.to_vec();
     }
@@ -2471,7 +2878,11 @@ pub fn prune_history(messages: &[AgentMessage], budget_tokens: u64, runtime: &dy
         if running <= target {
             break;
         }
-        if pruned[index].role == "system" || Some(index) == first_task || Some(index) == last_user || index >= protected_from {
+        if pruned[index].role == "system"
+            || Some(index) == first_task
+            || Some(index) == last_user
+            || index >= protected_from
+        {
             continue;
         }
         let message = pruned[index].clone();
@@ -2483,9 +2894,15 @@ pub fn prune_history(messages: &[AgentMessage], budget_tokens: u64, runtime: &dy
                     ),
                     None => "[tool result pruned to save context]".to_string(),
                 };
-                Some(AgentMessage { content: stub, ..message.clone() })
+                Some(AgentMessage {
+                    content: stub,
+                    ..message.clone()
+                })
             }
-            "assistant" if message.thinking.is_some() => Some(AgentMessage { thinking: None, ..message.clone() }),
+            "assistant" if message.thinking.is_some() => Some(AgentMessage {
+                thinking: None,
+                ..message.clone()
+            }),
             _ => None,
         };
         if let Some(replacement) = replacement {
@@ -2497,7 +2914,6 @@ pub fn prune_history(messages: &[AgentMessage], budget_tokens: u64, runtime: &dy
     }
     pruned
 }
-
 
 // ── Loop options ────────────────────────────────────────────────────────
 
@@ -2582,7 +2998,11 @@ pub enum RetryDecision {
 /// Only *transient* failures are retried. Unknown tools and validation errors
 /// require the model to change the call, so retrying the same arguments would
 /// just burn the budget.
-pub fn retry_tool_call_decision(message: &str, attempt: usize, max_retries: usize) -> RetryDecision {
+pub fn retry_tool_call_decision(
+    message: &str,
+    attempt: usize,
+    max_retries: usize,
+) -> RetryDecision {
     if attempt >= max_retries {
         return RetryDecision::GiveUp;
     }
@@ -2590,7 +3010,9 @@ pub fn retry_tool_call_decision(message: &str, attempt: usize, max_retries: usiz
         return RetryDecision::GiveUp;
     }
     if is_transient_failure(Some(message)) {
-        return RetryDecision::Retry { delay_ms: TRANSPORT_RETRY_BASE_DELAY_MS * (1u64 << attempt) };
+        return RetryDecision::Retry {
+            delay_ms: TRANSPORT_RETRY_BASE_DELAY_MS * (1u64 << attempt),
+        };
     }
     RetryDecision::GiveUp
 }
@@ -2621,7 +3043,8 @@ pub fn execute_tool_call<'a>(
         let mut attempt = 0usize;
         loop {
             if runtime.is_aborted() {
-                let (executed, message) = failed_tool_call_outcome(call, "aborted by user", runtime.now_ms());
+                let (executed, message) =
+                    failed_tool_call_outcome(call, "aborted by user", runtime.now_ms());
                 return ToolCallOutcome { executed, message };
             }
 
@@ -2635,14 +3058,19 @@ pub fn execute_tool_call<'a>(
             match executor.execute(request).await {
                 Ok(raw) => {
                     let normalized = normalize_tool_result(raw);
-                    let ok = normalized.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let ok = normalized
+                        .get("ok")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
                     let message_text = normalized
                         .get("message")
                         .and_then(|v| v.as_str())
                         .unwrap_or_default()
                         .to_string();
                     if !ok {
-                        if let RetryDecision::Retry { delay_ms } = retry_tool_call_decision(&message_text, attempt, max_retries) {
+                        if let RetryDecision::Retry { delay_ms } =
+                            retry_tool_call_decision(&message_text, attempt, max_retries)
+                        {
                             attempt += 1;
                             runtime.log(
                                 LogLevel::Warn,
@@ -2672,7 +3100,11 @@ pub fn execute_tool_call<'a>(
                     };
                     let message = AgentMessage {
                         evidence_reference: evidence,
-                        ..AgentMessage::tool(call.id.clone(), call.function.name.clone(), model_text)
+                        ..AgentMessage::tool(
+                            call.id.clone(),
+                            call.function.name.clone(),
+                            model_text,
+                        )
                     };
                     observer.on_event(json!({
                         "type": "tool_result",
@@ -2684,7 +3116,9 @@ pub fn execute_tool_call<'a>(
                     return ToolCallOutcome { executed, message };
                 }
                 Err(message) => {
-                    if let RetryDecision::Retry { delay_ms } = retry_tool_call_decision(&message, attempt, max_retries) {
+                    if let RetryDecision::Retry { delay_ms } =
+                        retry_tool_call_decision(&message, attempt, max_retries)
+                    {
                         attempt += 1;
                         runtime.log(
                             LogLevel::Warn,
@@ -2695,7 +3129,8 @@ pub fn execute_tool_call<'a>(
                         runtime.sleep(delay_ms).await;
                         continue;
                     }
-                    let (mut executed, message) = failed_tool_call_outcome(call, &message, runtime.now_ms());
+                    let (mut executed, message) =
+                        failed_tool_call_outcome(call, &message, runtime.now_ms());
                     executed.started_at = started_at;
                     executed.completed_at = runtime.now_ms();
                     executed.retry_count = attempt;
@@ -2749,7 +3184,11 @@ pub fn run_agent_loop<'a>(
         }
 
         let schemas = to_tool_schemas(&options.tools);
-        let known_tools: HashSet<String> = options.tools.iter().map(|s| s.function.name.clone()).collect();
+        let known_tools: HashSet<String> = options
+            .tools
+            .iter()
+            .map(|s| s.function.name.clone())
+            .collect();
         let require_reasoning = options.llm.require_reasoning.unwrap_or(false);
         let llm = options.llm.clone();
         let checkpoint = options.tool_round_checkpoint();
@@ -2781,7 +3220,10 @@ pub fn run_agent_loop<'a>(
             "round": 0,
         }));
 
-        let aborted_result = |content: &str, executed: &[ExecutedToolCall], segments: &[MessageSegment], rounds: u64| {
+        let aborted_result = |content: &str,
+                              executed: &[ExecutedToolCall],
+                              segments: &[MessageSegment],
+                              rounds: u64| {
             let mut result = AgentLoopResult {
                 content: content.to_string(),
                 tool_calls: executed.to_vec(),
@@ -2812,7 +3254,11 @@ pub fn run_agent_loop<'a>(
                 if index >= MAX_REPLAY_STEERINGS {
                     break;
                 }
-                let display = message.meta.display_content.clone().unwrap_or_else(|| message.content.clone());
+                let display = message
+                    .meta
+                    .display_content
+                    .clone()
+                    .unwrap_or_else(|| message.content.clone());
                 segments.push(MessageSegment::Steering {
                     content: message.content.clone(),
                     display_content: message.meta.display_content.clone(),
@@ -2827,7 +3273,8 @@ pub fn run_agent_loop<'a>(
             // ── Tool-round checkpoint ──
             if rounds as usize >= checkpoint {
                 if rounds as usize >= ABSOLUTE_TOOL_ROUND_BUDGET {
-                    let fallback = build_empty_response_fallback(&executed, rounds, &llm.openai_model);
+                    let fallback =
+                        build_empty_response_fallback(&executed, rounds, &llm.openai_model);
                     if content.is_empty() {
                         content = fallback.clone();
                         segments.push(MessageSegment::Text { content: fallback });
@@ -2851,12 +3298,20 @@ pub fn run_agent_loop<'a>(
                         )
                     });
                 }
-                observer.on_event(json!({ "type": "nudge", "reason": "tool_round_checkpoint", "round": rounds }));
+                observer.on_event(
+                    json!({ "type": "nudge", "reason": "tool_round_checkpoint", "round": rounds }),
+                );
             }
 
             // ── Build the request ──
             let wire = serialize_messages(&messages, require_reasoning);
-            let mut body = build_request_body(&llm, wire.clone(), &schemas, options.tool_choice.as_deref(), true);
+            let mut body = build_request_body(
+                &llm,
+                wire.clone(),
+                &schemas,
+                options.tool_choice.as_deref(),
+                true,
+            );
             runtime.apply_context_caching(&mut body, &llm);
 
             let mut flow_round = LlmContextFlowRound {
@@ -2864,7 +3319,11 @@ pub fn run_agent_loop<'a>(
                 created_at: runtime.now_iso(),
                 model: llm.openai_model.clone(),
                 messages: wire,
-                tools: if schemas.is_empty() { None } else { Some(schemas.clone()) },
+                tools: if schemas.is_empty() {
+                    None
+                } else {
+                    Some(schemas.clone())
+                },
                 tool_choice: options.tool_choice.clone(),
                 metrics: None,
             };
@@ -2877,14 +3336,29 @@ pub fn run_agent_loop<'a>(
                     observer.on_event(json!({ "type": "done", "aborted": true }));
                     return aborted_result(&content, &executed, &segments, rounds);
                 }
-                match stream_chat(host, runtime, &llm, body.clone(), observer, !options.is_sub_agent).await {
+                match stream_chat(
+                    host,
+                    runtime,
+                    &llm,
+                    body.clone(),
+                    observer,
+                    !options.is_sub_agent,
+                )
+                .await
+                {
                     Ok(turn) => break turn,
                     Err(ProviderFailure::Aborted) => {
                         observer.on_event(json!({ "type": "done", "aborted": true }));
                         return aborted_result(&content, &executed, &segments, rounds);
                     }
-                    Err(ProviderFailure::Http { status, body: error_body, retry_after_ms }) => {
-                        if is_retryable_rate_limit(status, &error_body) && rate_limit_retries < MAX_RATE_LIMIT_RETRIES {
+                    Err(ProviderFailure::Http {
+                        status,
+                        body: error_body,
+                        retry_after_ms,
+                    }) => {
+                        if is_retryable_rate_limit(status, &error_body)
+                            && rate_limit_retries < MAX_RATE_LIMIT_RETRIES
+                        {
                             rate_limit_retries += 1;
                             let delay = rate_limit_backoff_ms(rate_limit_retries, retry_after_ms);
                             observer.on_event(json!({
@@ -2897,16 +3371,25 @@ pub fn run_agent_loop<'a>(
                             continue;
                         }
                         if is_context_overflow_error(status, &error_body) {
-                            observer.on_event(json!({ "type": "compaction", "reason": "context_overflow" }));
-                            let budget = (llm.context_window as f64 * CONTEXT_COMPACT_TRIGGER_RATIO) as u64;
+                            observer.on_event(
+                                json!({ "type": "compaction", "reason": "context_overflow" }),
+                            );
+                            let budget =
+                                (llm.context_window as f64 * CONTEXT_COMPACT_TRIGGER_RATIO) as u64;
                             messages = prune_history(&messages, budget, runtime);
                             messages = repair_tool_call_history(&messages);
                             continue 'rounds;
                         }
                         let message = format_llm_error(status, &error_body);
-                        observer.on_event(json!({ "type": "error", "message": message, "status": status }));
+                        observer.on_event(
+                            json!({ "type": "error", "message": message, "status": status }),
+                        );
                         return AgentLoopResult {
-                            content: if content.is_empty() { message.clone() } else { content },
+                            content: if content.is_empty() {
+                                message.clone()
+                            } else {
+                                content
+                            },
                             tool_calls: executed,
                             segments,
                             rounds,
@@ -2922,7 +3405,11 @@ pub fn run_agent_loop<'a>(
                         let message = failure.message();
                         observer.on_event(json!({ "type": "error", "message": message }));
                         return AgentLoopResult {
-                            content: if content.is_empty() { message.clone() } else { content },
+                            content: if content.is_empty() {
+                                message.clone()
+                            } else {
+                                content
+                            },
                             tool_calls: executed,
                             segments,
                             rounds,
@@ -2948,7 +3435,10 @@ pub fn run_agent_loop<'a>(
                 completion_tokens: turn
                     .usage
                     .as_ref()
-                    .and_then(|u| u.get("completion_tokens").or_else(|| u.get("output_tokens")))
+                    .and_then(|u| {
+                        u.get("completion_tokens")
+                            .or_else(|| u.get("output_tokens"))
+                    })
                     .and_then(|v| v.as_u64()),
                 cache_read_tokens: turn
                     .usage
@@ -2991,7 +3481,9 @@ pub fn run_agent_loop<'a>(
                     });
                     if !round_content.is_empty() {
                         content = round_content.clone();
-                        segments.push(MessageSegment::Text { content: round_content.clone() });
+                        segments.push(MessageSegment::Text {
+                            content: round_content.clone(),
+                        });
                     }
                     continue 'rounds;
                 }
@@ -3006,10 +3498,14 @@ pub fn run_agent_loop<'a>(
                 // ── Tool round ──
                 if !round_content.is_empty() {
                     content.push_str(&round_content);
-                    segments.push(MessageSegment::Text { content: round_content.clone() });
+                    segments.push(MessageSegment::Text {
+                        content: round_content.clone(),
+                    });
                 }
                 if !round_thinking.is_empty() {
-                    segments.push(MessageSegment::Thinking { content: cap_thinking(&round_thinking) });
+                    segments.push(MessageSegment::Thinking {
+                        content: cap_thinking(&round_thinking),
+                    });
                 }
 
                 let mut calls = turn.tool_calls.clone();
@@ -3025,7 +3521,11 @@ pub fn run_agent_loop<'a>(
                 }
 
                 messages.push(AgentMessage {
-                    thinking: if round_thinking.is_empty() { None } else { Some(cap_thinking(&round_thinking)) },
+                    thinking: if round_thinking.is_empty() {
+                        None
+                    } else {
+                        Some(cap_thinking(&round_thinking))
+                    },
                     tool_calls: Some(calls.clone()),
                     ..AgentMessage::assistant(round_content.clone())
                 });
@@ -3051,7 +3551,8 @@ pub fn run_agent_loop<'a>(
                             "Refusing to run `{}` again: identical call repeated {seen} times this turn.",
                             call.function.name
                         );
-                        let (executed_call, message) = failed_tool_call_outcome(call, &reason, runtime.now_ms());
+                        let (executed_call, message) =
+                            failed_tool_call_outcome(call, &reason, runtime.now_ms());
                         executed.push(executed_call);
                         messages.push(message);
                         observer.on_event(json!({
@@ -3073,7 +3574,8 @@ pub fn run_agent_loop<'a>(
                                 "Refusing to run `{}` again: the same call already failed {} times.",
                                 call.function.name, failures
                             );
-                            let (executed_call, message) = failed_tool_call_outcome(call, &reason, runtime.now_ms());
+                            let (executed_call, message) =
+                                failed_tool_call_outcome(call, &reason, runtime.now_ms());
                             executed.push(executed_call);
                             messages.push(message);
                             continue;
@@ -3083,13 +3585,17 @@ pub fn run_agent_loop<'a>(
                     if options.swarm_mode && is_read_like_tool(&call.function.name) {
                         undelegated_reads += 1;
                         if undelegated_reads > SWARM_MAX_UNDELEGATED_READS {
-                            observer.on_event(json!({ "type": "nudge", "reason": "swarm_delegate_reads" }));
+                            observer.on_event(
+                                json!({ "type": "nudge", "reason": "swarm_delegate_reads" }),
+                            );
                         }
                     }
                     if is_read_like_tool(&call.function.name) {
                         low_progress_read_streak += 1;
                         if low_progress_read_streak > MAX_LOW_PROGRESS_READ_STREAK {
-                            observer.on_event(json!({ "type": "nudge", "reason": "low_progress_reads" }));
+                            observer.on_event(
+                                json!({ "type": "nudge", "reason": "low_progress_reads" }),
+                            );
                             low_progress_read_streak = 0;
                         }
                     } else {
@@ -3107,7 +3613,9 @@ pub fn run_agent_loop<'a>(
 
                 if duplicate_in_round > 0 {
                     duplicate_streak += 1;
-                    if duplicate_streak >= MAX_DUPLICATE_CALL_STREAK && duplicate_interventions < MAX_DUPLICATE_CALL_INTERVENTIONS {
+                    if duplicate_streak >= MAX_DUPLICATE_CALL_STREAK
+                        && duplicate_interventions < MAX_DUPLICATE_CALL_INTERVENTIONS
+                    {
                         duplicate_interventions += 1;
                         duplicate_streak = 0;
                         messages.push(AgentMessage {
@@ -3127,7 +3635,10 @@ pub fn run_agent_loop<'a>(
                 }
 
                 // Mid-turn compaction if the transcript outgrew the window.
-                let estimated: u64 = messages.iter().map(|m| runtime.estimate_message_tokens(m)).sum();
+                let estimated: u64 = messages
+                    .iter()
+                    .map(|m| runtime.estimate_message_tokens(m))
+                    .sum();
                 let trigger = (llm.context_window as f64 * CONTEXT_COMPACT_TRIGGER_RATIO) as u64;
                 if estimated > trigger {
                     observer.on_event(json!({
@@ -3148,7 +3659,8 @@ pub fn run_agent_loop<'a>(
                     if let Ok(summary) = runtime.summarize(request).await {
                         if !summary.trim().is_empty() {
                             let summary = reinject_substantive_user_task(&summary, &messages);
-                            let max_chars = (checkpoint_output_tokens(llm.context_window) * 4) as usize;
+                            let max_chars =
+                                (checkpoint_output_tokens(llm.context_window) * 4) as usize;
                             let summary = clamp_summary(&summary, max_chars);
                             observer.on_assistant_checkpoint(&summary, None);
                             // Replace the transcript with the summary and keep the
@@ -3170,10 +3682,14 @@ pub fn run_agent_loop<'a>(
             // ── No tool calls: decide whether the turn is finished ──
             if !round_content.is_empty() {
                 content = round_content.clone();
-                segments.push(MessageSegment::Text { content: round_content.clone() });
+                segments.push(MessageSegment::Text {
+                    content: round_content.clone(),
+                });
             }
             if !round_thinking.is_empty() {
-                segments.push(MessageSegment::Thinking { content: cap_thinking(&round_thinking) });
+                segments.push(MessageSegment::Thinking {
+                    content: cap_thinking(&round_thinking),
+                });
             }
 
             if round_content.trim().is_empty() {
@@ -3203,7 +3719,9 @@ pub fn run_agent_loop<'a>(
                     empty_retries += 1;
                     messages.push(AgentMessage {
                         synthetic: Some(true),
-                        ..AgentMessage::user("Your last response was empty. Continue the task and answer the user.")
+                        ..AgentMessage::user(
+                            "Your last response was empty. Continue the task and answer the user.",
+                        )
                     });
                     observer.on_event(json!({
                         "type": "nudge",
@@ -3220,7 +3738,9 @@ pub fn run_agent_loop<'a>(
             }
 
             // Length-limited answers are continued rather than truncated.
-            if finish_reason.as_deref() == Some("length") && length_continuations < MAX_LENGTH_CONTINUATIONS {
+            if finish_reason.as_deref() == Some("length")
+                && length_continuations < MAX_LENGTH_CONTINUATIONS
+            {
                 length_continuations += 1;
                 messages.push(AgentMessage::assistant(round_content.clone()));
                 messages.push(AgentMessage {
@@ -3261,7 +3781,8 @@ pub fn run_agent_loop<'a>(
             aborted: None,
         };
         if result.content.trim().is_empty() {
-            result.content = build_empty_response_fallback(&result.tool_calls, rounds, &llm.openai_model);
+            result.content =
+                build_empty_response_fallback(&result.tool_calls, rounds, &llm.openai_model);
         }
         observer.on_event(json!({
             "type": "done",
@@ -3350,7 +3871,11 @@ mod tests {
         }
 
         fn events_containing(&self, needle: &str) -> bool {
-            self.logs.lock().unwrap().iter().any(|(_, line)| line.contains(needle))
+            self.logs
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(_, line)| line.contains(needle))
         }
     }
 
@@ -3383,7 +3908,12 @@ mod tests {
             let calls = message
                 .tool_calls
                 .as_ref()
-                .map(|calls| calls.iter().map(|c| c.function.arguments.len() / 4 + 8).sum::<usize>() as u64)
+                .map(|calls| {
+                    calls
+                        .iter()
+                        .map(|c| c.function.arguments.len() / 4 + 8)
+                        .sum::<usize>() as u64
+                })
                 .unwrap_or(0);
             (base + calls) * self.estimate_scale.load(Ordering::SeqCst) as u64
         }
@@ -3392,7 +3922,12 @@ mod tests {
             (text.chars().count() / 4) as u64
         }
 
-        fn project_tool_evidence(&self, call_id: &str, tool: &str, _result: &Value) -> Option<String> {
+        fn project_tool_evidence(
+            &self,
+            call_id: &str,
+            tool: &str,
+            _result: &Value,
+        ) -> Option<String> {
             Some(format!("evidence:{tool}:{call_id}"))
         }
 
@@ -3403,10 +3938,17 @@ mod tests {
         fn serialize_tool_result_for_model(&self, result: &Value) -> String {
             let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
             let message = result.get("message").and_then(Value::as_str).unwrap_or("");
-            crate::tools::model_result::serialize_tool_result_for_model(ok, message, result.get("data"))
+            crate::tools::model_result::serialize_tool_result_for_model(
+                ok,
+                message,
+                result.get("data"),
+            )
         }
 
-        fn summarize<'a>(&'a self, _request: SummarizeRequest) -> BoxFuture<'a, Result<String, String>> {
+        fn summarize<'a>(
+            &'a self,
+            _request: SummarizeRequest,
+        ) -> BoxFuture<'a, Result<String, String>> {
             let summary = self.summary.lock().unwrap().clone();
             Box::pin(async move { summary.ok_or_else(|| "no summariser".to_string()) })
         }
@@ -3421,7 +3963,10 @@ mod tests {
 
     impl FakeHost {
         fn new(responses: Vec<LlmHttpResponse>) -> Arc<Self> {
-            Arc::new(Self { responses: Mutex::new(responses.into()), requests: Mutex::new(Vec::new()) })
+            Arc::new(Self {
+                responses: Mutex::new(responses.into()),
+                requests: Mutex::new(Vec::new()),
+            })
         }
 
         fn call_count(&self) -> usize {
@@ -3429,16 +3974,27 @@ mod tests {
         }
 
         fn last_request(&self) -> LlmHttpRequest {
-            self.requests.lock().unwrap().last().cloned().expect("no request recorded")
+            self.requests
+                .lock()
+                .unwrap()
+                .last()
+                .cloned()
+                .expect("no request recorded")
         }
     }
 
     impl LlmHost for FakeHost {
-        fn request_headers<'a>(&'a self, _llm: &'a LlmConfig) -> BoxFuture<'a, Vec<(String, String)>> {
+        fn request_headers<'a>(
+            &'a self,
+            _llm: &'a LlmConfig,
+        ) -> BoxFuture<'a, Vec<(String, String)>> {
             Box::pin(async move { vec![("authorization".to_string(), "Bearer test".to_string())] })
         }
 
-        fn post_stream<'a>(&'a self, request: LlmHttpRequest) -> BoxFuture<'a, Result<LlmHttpResponse, String>> {
+        fn post_stream<'a>(
+            &'a self,
+            request: LlmHttpRequest,
+        ) -> BoxFuture<'a, Result<LlmHttpResponse, String>> {
             self.requests.lock().unwrap().push(request);
             let next = self.responses.lock().unwrap().pop_front();
             Box::pin(async move {
@@ -3469,19 +4025,32 @@ mod tests {
     impl FakeTools {
         fn new(results: Vec<(&str, Result<Value, String>)>) -> Arc<Self> {
             Arc::new(Self {
-                results: Mutex::new(results.into_iter().map(|(k, v)| (k.to_string(), v)).collect()),
+                results: Mutex::new(
+                    results
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect(),
+                ),
                 calls: Mutex::new(Vec::new()),
                 abort_flag: Mutex::new(None),
             })
         }
 
         fn call_names(&self) -> Vec<String> {
-            self.calls.lock().unwrap().iter().map(|c| c.name.clone()).collect()
+            self.calls
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|c| c.name.clone())
+                .collect()
         }
     }
 
     impl ToolExecutor for FakeTools {
-        fn execute<'a>(&'a self, request: ToolExecutionRequest) -> BoxFuture<'a, Result<Value, String>> {
+        fn execute<'a>(
+            &'a self,
+            request: ToolExecutionRequest,
+        ) -> BoxFuture<'a, Result<Value, String>> {
             self.calls.lock().unwrap().push(request.clone());
             if let Some(flag) = self.abort_flag.lock().unwrap().clone() {
                 // Models a tool that observes process state: an abort that lands
@@ -3492,7 +4061,9 @@ mod tests {
             Box::pin(async move {
                 match result {
                     Some(result) => result,
-                    None => Ok(json!({ "ok": false, "message": format!("unknown tool: {}", request.name) })),
+                    None => Ok(
+                        json!({ "ok": false, "message": format!("unknown tool: {}", request.name) }),
+                    ),
                 }
             })
         }
@@ -3519,7 +4090,13 @@ mod tests {
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|event| event.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string())
+                .map(|event| {
+                    event
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string()
+                })
                 .collect()
         }
 
@@ -3577,7 +4154,12 @@ mod tests {
             })
         ));
         body.push_str("data: [DONE]\n\n");
-        LlmHttpResponse { status: 200, headers: BTreeMap::new(), body, transport_failure: None }
+        LlmHttpResponse {
+            status: 200,
+            headers: BTreeMap::new(),
+            body,
+            transport_failure: None,
+        }
     }
 
     fn sse_tool_calls(calls: &[(&str, &str, &str)]) -> LlmHttpResponse {
@@ -3606,11 +4188,21 @@ mod tests {
             "data: {}\n\n",
             json!({ "choices": [{ "index": 0, "delta": {}, "finish_reason": "tool_calls" }] })
         ));
-        LlmHttpResponse { status: 200, headers: BTreeMap::new(), body, transport_failure: None }
+        LlmHttpResponse {
+            status: 200,
+            headers: BTreeMap::new(),
+            body,
+            transport_failure: None,
+        }
     }
 
     fn http_error(status: u16, body: &str) -> LlmHttpResponse {
-        LlmHttpResponse { status, headers: BTreeMap::new(), body: body.to_string(), transport_failure: None }
+        LlmHttpResponse {
+            status,
+            headers: BTreeMap::new(),
+            body: body.to_string(),
+            transport_failure: None,
+        }
     }
 
     fn base_options() -> AgentLoopOptions {
@@ -3653,7 +4245,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(result.content, "Hello world");
         assert_eq!(result.rounds, 1);
@@ -3671,7 +4270,10 @@ mod tests {
         let contexts = observer.contexts.lock().unwrap();
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0].round, 1);
-        assert_eq!(contexts[0].metrics.as_ref().unwrap().prompt_tokens, Some(11));
+        assert_eq!(
+            contexts[0].metrics.as_ref().unwrap().prompt_tokens,
+            Some(11)
+        );
     }
 
     #[test]
@@ -3691,10 +4293,20 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         // Dispatch order follows the model's call order.
-        assert_eq!(tools.call_names(), vec!["file.read".to_string(), "code.grep".to_string()]);
+        assert_eq!(
+            tools.call_names(),
+            vec!["file.read".to_string(), "code.grep".to_string()]
+        );
         let calls = tools.calls.lock().unwrap();
         assert_eq!(calls[0].call_id, "call_a");
         assert_eq!(calls[0].args["path"], json!("a.txt"));
@@ -3702,7 +4314,11 @@ mod tests {
         drop(calls);
 
         // Executed records preserve order too.
-        let ids: Vec<&str> = result.tool_calls.iter().map(|c| c.call_id.as_str()).collect();
+        let ids: Vec<&str> = result
+            .tool_calls
+            .iter()
+            .map(|c| c.call_id.as_str())
+            .collect();
         assert_eq!(ids, vec!["call_a", "call_b"]);
         assert!(result.tool_calls.iter().all(|c| c.ok));
 
@@ -3716,8 +4332,14 @@ mod tests {
             .expect("assistant tool_calls message missing");
         assert_eq!(messages[assistant_position]["content"], Value::Null);
         assert_eq!(messages[assistant_position + 1]["role"], json!("tool"));
-        assert_eq!(messages[assistant_position + 1]["tool_call_id"], json!("call_a"));
-        assert_eq!(messages[assistant_position + 2]["tool_call_id"], json!("call_b"));
+        assert_eq!(
+            messages[assistant_position + 1]["tool_call_id"],
+            json!("call_a")
+        );
+        assert_eq!(
+            messages[assistant_position + 2]["tool_call_id"],
+            json!("call_b")
+        );
 
         assert_eq!(result.rounds, 2);
         assert_eq!(result.content, "all done");
@@ -3741,29 +4363,46 @@ mod tests {
     fn failing_tool_still_produces_a_reply_message_in_order() {
         let runtime = FakeRuntime::new();
         let host = FakeHost::new(vec![
-            sse_tool_calls(&[
-                ("c1", "file_read", "{}"),
-                ("c2", "code_grep", "{}"),
-            ]),
+            sse_tool_calls(&[("c1", "file_read", "{}"), ("c2", "code_grep", "{}")]),
             sse_text(&["done"], "stop"),
         ]);
         let tools = FakeTools::new(vec![
-            ("file.read", Ok(json!({ "ok": true, "message": "ok-content" }))),
+            (
+                "file.read",
+                Ok(json!({ "ok": true, "message": "ok-content" })),
+            ),
             // Validation errors are not retried.
-            ("code.grep", Err("Input validation error: pattern is required".to_string())),
+            (
+                "code.grep",
+                Err("Input validation error: pattern is required".to_string()),
+            ),
         ]);
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(result.tool_calls.len(), 2);
         assert!(result.tool_calls[0].ok);
         assert!(!result.tool_calls[1].ok);
-        assert!(result.tool_calls[1].message.contains("Input validation error"));
+        assert!(
+            result.tool_calls[1]
+                .message
+                .contains("Input validation error")
+        );
         // A validation failure is executed exactly once.
         assert_eq!(tools.calls.lock().unwrap().len(), 2);
-        let messages = host.requests.lock().unwrap()[1].body["messages"].as_array().unwrap().clone();
+        let messages = host.requests.lock().unwrap()[1].body["messages"]
+            .as_array()
+            .unwrap()
+            .clone();
         let tool_ids: Vec<Value> = messages
             .iter()
             .filter(|m| m["role"] == json!("tool"))
@@ -3783,7 +4422,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(host.call_count(), 0);
         assert_eq!(result.aborted, Some(true));
@@ -3800,13 +4446,23 @@ mod tests {
             sse_tool_calls(&[("c1", "file_read", "{}")]),
             sse_text(&["should not be reached"], "stop"),
         ]);
-        let tools = FakeTools::new(vec![("file.read", Ok(json!({ "ok": true, "message": "data" })))]);
+        let tools = FakeTools::new(vec![(
+            "file.read",
+            Ok(json!({ "ok": true, "message": "data" })),
+        )]);
         // The user hits stop while the tool subprocess is still running.
         *tools.abort_flag.lock().unwrap() = Some(runtime.abort_flag());
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(result.tool_calls.len(), 1);
         assert_eq!(result.aborted, Some(true));
@@ -3824,7 +4480,10 @@ mod tests {
             sse_tool_calls(&[("c1", "file_read", "{}")]),
             sse_text(&["final answer"], "stop"),
         ]);
-        let tools = FakeTools::new(vec![("file.read", Ok(json!({ "ok": true, "message": "x" })))]);
+        let tools = FakeTools::new(vec![(
+            "file.read",
+            Ok(json!({ "ok": true, "message": "x" })),
+        )]);
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
         let mut options = base_options();
@@ -3837,9 +4496,10 @@ mod tests {
         // The nudge lands in the second request as a synthetic user message.
         let second = host.requests.lock().unwrap()[1].clone();
         let messages = second.body["messages"].as_array().unwrap();
-        let nudged = messages
-            .iter()
-            .any(|m| m["role"] == json!("user") && m["content"].as_str().unwrap_or("").contains("Converge now"));
+        let nudged = messages.iter().any(|m| {
+            m["role"] == json!("user")
+                && m["content"].as_str().unwrap_or("").contains("Converge now")
+        });
         assert!(nudged, "converge nudge missing from second request");
         assert!(observer.has_event("nudge", "reason", "tool_round_checkpoint"));
     }
@@ -3848,9 +4508,14 @@ mod tests {
     fn identical_tool_calls_are_hard_blocked_after_the_cap() {
         let runtime = FakeRuntime::new();
         // Always the same call, forever.
-        let responses: Vec<LlmHttpResponse> = (0..15).map(|_| sse_tool_calls(&[("dup", "file_read", "{}")])).collect();
+        let responses: Vec<LlmHttpResponse> = (0..15)
+            .map(|_| sse_tool_calls(&[("dup", "file_read", "{}")]))
+            .collect();
         let host = FakeHost::new(responses);
-        let tools = FakeTools::new(vec![("file.read", Ok(json!({ "ok": true, "message": "same" })))]);
+        let tools = FakeTools::new(vec![(
+            "file.read",
+            Ok(json!({ "ok": true, "message": "same" })),
+        )]);
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
         let mut options = base_options();
@@ -3861,11 +4526,16 @@ mod tests {
         // 6 real executions, then 4 duplicates still run (soft cap), then hard
         // blocks; execution count is capped well below the round count.
         let executed_count = tools.calls.lock().unwrap().len();
-        assert!(executed_count <= MAX_SAME_TOOL_CALLS_PER_TURN_HARD, "executed {executed_count} times");
-        assert!(result
-            .tool_calls
-            .iter()
-            .any(|call| !call.ok && call.message.contains("Refusing to run")));
+        assert!(
+            executed_count <= MAX_SAME_TOOL_CALLS_PER_TURN_HARD,
+            "executed {executed_count} times"
+        );
+        assert!(
+            result
+                .tool_calls
+                .iter()
+                .any(|call| !call.ok && call.message.contains("Refusing to run"))
+        );
         assert!(observer.has_flag("tool_result", "blocked"));
     }
 
@@ -3881,7 +4551,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(host.call_count(), 3);
         assert_eq!(result.rounds, 3);
@@ -3908,7 +4585,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(host.call_count(), 2);
         assert_eq!(result.rounds, 2);
@@ -3928,7 +4612,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert!(observer.has_event("repetition", "action", "truncate"));
         assert_eq!(result.rounds, 2);
@@ -3950,13 +4641,20 @@ mod tests {
         // Note: `known_tools` holds real names, so the schema must use the
         // already-OpenAI-safe name for detection to fire.
         let mut options = base_options();
-        options.tools = vec![OpenAiToolSchema::new("file.read", "read", json!({ "type": "object" }))];
+        options.tools = vec![OpenAiToolSchema::new(
+            "file.read",
+            "read",
+            json!({ "type": "object" }),
+        )];
 
         let result = run(options, &runtime, &host, &tools, &observer, &steering);
 
         assert!(observer.has_event("nudge", "reason", "plain_text_tool_calls"));
         assert_eq!(result.content, "the real answer");
-        assert!(tools.calls.lock().unwrap().is_empty(), "plain text must not be executed directly");
+        assert!(
+            tools.calls.lock().unwrap().is_empty(),
+            "plain text must not be executed directly"
+        );
     }
 
     #[test]
@@ -3969,7 +4667,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(host.call_count(), 2);
         assert_eq!(result.content, "recovered");
@@ -3988,7 +4693,14 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(host.call_count(), 1);
         assert_eq!(result.status, Some(429));
@@ -4004,11 +4716,24 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(result.status, Some(500));
         assert_eq!(result.finish_reason.as_deref(), Some("error"));
-        assert!(result.error.as_deref().unwrap().contains("experiencing issues (500)"));
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("experiencing issues (500)")
+        );
         let errors: Vec<Value> = observer
             .events
             .lock()
@@ -4019,11 +4744,13 @@ mod tests {
             .collect();
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].get("status").and_then(Value::as_u64), Some(500));
-        assert!(errors[0]
-            .get("message")
-            .and_then(|v| v.as_str())
-            .unwrap()
-            .contains("experiencing issues (500)"));
+        assert!(
+            errors[0]
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .contains("experiencing issues (500)")
+        );
     }
 
     #[test]
@@ -4043,10 +4770,23 @@ mod tests {
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(host.call_count(), 1, "dead backends must not be retried");
-        assert!(result.error.as_deref().unwrap().contains("Could not connect to"));
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("Could not connect to")
+        );
     }
 
     // ── Tests: steering ────────────────────────────────────────────────
@@ -4058,15 +4798,31 @@ mod tests {
         let tools = FakeTools::new(vec![]);
         let observer = RecordingObserver::new();
         let steering = SteeringController::new(1_000);
-        assert!(steering.push(SteeringMessage { content: "also mention tests".into(), ..Default::default() }));
+        assert!(steering.push(SteeringMessage {
+            content: "also mention tests".into(),
+            ..Default::default()
+        }));
         // Only the first steering per round is replayed.
-        assert!(steering.push(SteeringMessage { content: "second".into(), ..Default::default() }));
+        assert!(steering.push(SteeringMessage {
+            content: "second".into(),
+            ..Default::default()
+        }));
 
-        let result = run(base_options(), &runtime, &host, &tools, &observer, &steering);
+        let result = run(
+            base_options(),
+            &runtime,
+            &host,
+            &tools,
+            &observer,
+            &steering,
+        );
 
         assert_eq!(steering.pending_count(), 0);
         assert!(observer.has_event("steering", "content", "also mention tests"));
-        let sent = host.last_request().body["messages"].as_array().unwrap().clone();
+        let sent = host.last_request().body["messages"]
+            .as_array()
+            .unwrap()
+            .clone();
         let injected: Vec<&Value> = sent
             .iter()
             .filter(|m| m["content"] == json!("also mention tests"))
@@ -4083,9 +4839,15 @@ mod tests {
     #[test]
     fn steering_controller_rejects_pushes_after_close() {
         let steering = SteeringController::new(10);
-        assert!(steering.push(SteeringMessage { content: "a".into(), ..Default::default() }));
+        assert!(steering.push(SteeringMessage {
+            content: "a".into(),
+            ..Default::default()
+        }));
         steering.close();
-        assert!(!steering.push(SteeringMessage { content: "b".into(), ..Default::default() }));
+        assert!(!steering.push(SteeringMessage {
+            content: "b".into(),
+            ..Default::default()
+        }));
         assert_eq!(steering.pending_count(), 0);
         assert!(steering.is_closed());
     }
@@ -4103,7 +4865,10 @@ mod tests {
             "Access denied by the model provider. Please check your API key permissions."
         );
         assert_eq!(
-            format_llm_error(429, "{\"error\":{\"message\":\"slow\",\"code\":\"insufficient_quota\"}}"),
+            format_llm_error(
+                429,
+                "{\"error\":{\"message\":\"slow\",\"code\":\"insufficient_quota\"}}"
+            ),
             "You've exceeded your API quota. Please check your plan and billing details."
         );
         assert_eq!(
@@ -4115,15 +4880,30 @@ mod tests {
             format_llm_error(400, "{\"error\":\"model not found\"}"),
             "Request failed (400): model not found"
         );
-        assert_eq!(format_llm_error(400, "not json"), "Request failed with status 400. Please try again.");
-        assert_eq!(format_llm_error(503, ""), "The model provider is experiencing issues (503). Please try again later.");
+        assert_eq!(
+            format_llm_error(400, "not json"),
+            "Request failed with status 400. Please try again."
+        );
+        assert_eq!(
+            format_llm_error(503, ""),
+            "The model provider is experiencing issues (503). Please try again later."
+        );
     }
 
     #[test]
     fn retryable_rate_limit_excludes_quota_and_billing() {
-        assert!(is_retryable_rate_limit(429, "{\"error\":{\"message\":\"rate limit\"}}"));
-        assert!(!is_retryable_rate_limit(429, "{\"error\":{\"code\":\"insufficient_quota\"}}"));
-        assert!(!is_retryable_rate_limit(429, "{\"error\":{\"message\":\"billing problem\"}}"));
+        assert!(is_retryable_rate_limit(
+            429,
+            "{\"error\":{\"message\":\"rate limit\"}}"
+        ));
+        assert!(!is_retryable_rate_limit(
+            429,
+            "{\"error\":{\"code\":\"insufficient_quota\"}}"
+        ));
+        assert!(!is_retryable_rate_limit(
+            429,
+            "{\"error\":{\"message\":\"billing problem\"}}"
+        ));
         assert!(!is_retryable_rate_limit(500, "{}"));
     }
 
@@ -4143,7 +4923,10 @@ mod tests {
 
     #[test]
     fn context_overflow_detection_matches_provider_phrasings() {
-        assert!(is_context_overflow_error(400, "This model's maximum context length is 8192 tokens"));
+        assert!(is_context_overflow_error(
+            400,
+            "This model's maximum context length is 8192 tokens"
+        ));
         assert!(is_context_overflow_error(413, "prompt is too long"));
         assert!(!is_context_overflow_error(400, "invalid api key"));
         assert!(!is_context_overflow_error(500, "maximum context length"));
@@ -4194,20 +4977,76 @@ mod tests {
     }
 
     #[test]
-    fn serialize_messages_null_content_and_reasoning_replay() {
-        let messages = vec![AgentMessage {
-            tool_calls: Some(vec![OpenAiToolCall::new("a", "file_read", "{}")]),
-            thinking: Some("because reasons".into()),
-            ..AgentMessage::assistant("")
-        }];
-        let plain = serialize_messages(&messages, false);
-        assert_eq!(plain[0]["content"], Value::Null);
-        assert!(plain[0].get("reasoning_content").is_none());
-        // evidence_reference must never reach the wire.
-        assert!(plain[0].get("evidence_reference").is_none());
+    fn serialize_messages_matches_typescript_wire_contract() {
+        let calls = vec![OpenAiToolCall::new("a", "file_read", "{}")];
+        let messages = vec![
+            AgentMessage {
+                tool_calls: Some(calls.clone()),
+                ..AgentMessage::assistant("")
+            },
+            AgentMessage {
+                thinking: Some(String::new()),
+                ..AgentMessage::assistant("answer")
+            },
+            AgentMessage {
+                thinking: Some("because".into()),
+                ..AgentMessage::assistant("answer")
+            },
+            AgentMessage {
+                tool_calls: Some(vec![]),
+                ..AgentMessage::assistant("")
+            },
+            AgentMessage::assistant("plain"),
+            AgentMessage::tool("a", "file_read", "result"),
+            AgentMessage {
+                name: Some("speaker".into()),
+                ..AgentMessage::user("")
+            },
+            AgentMessage {
+                name: Some(String::new()),
+                tool_call_id: Some(String::new()),
+                ..AgentMessage::user("")
+            },
+        ];
+        let wire = serialize_messages(&messages, false);
+        assert_eq!(
+            wire[0],
+            json!({"role":"assistant", "content":"", "tool_calls": calls, "reasoning_content":""})
+        );
+        assert_eq!(
+            wire[1],
+            json!({"role":"assistant", "content":"answer", "reasoning_content":""})
+        );
+        assert_eq!(
+            wire[2],
+            json!({"role":"assistant", "content":"answer", "reasoning_content":"because"})
+        );
+        assert_eq!(
+            wire[3],
+            json!({"role":"assistant", "content":"", "tool_calls":[]})
+        );
+        assert_eq!(wire[4], json!({"role":"assistant", "content":"plain"}));
+        assert_eq!(
+            wire[5],
+            json!({"role":"tool", "content":"result", "tool_call_id":"a"})
+        );
+        assert_eq!(
+            wire[6],
+            json!({"role":"user", "content":"", "name":"speaker"})
+        );
+        assert_eq!(wire[7], json!({"role":"user", "content":""}));
 
-        let replay = serialize_messages(&messages, true);
-        assert_eq!(replay[0]["reasoning_content"], json!("because reasons"));
+        let required = serialize_messages(
+            &[AgentMessage::assistant("plain"), AgentMessage::user("hi")],
+            true,
+        );
+        assert_eq!(
+            required,
+            vec![
+                json!({"role":"assistant", "content":"plain", "reasoning_content":""}),
+                json!({"role":"user", "content":"hi"})
+            ]
+        );
     }
 
     #[test]
@@ -4222,7 +5061,10 @@ mod tests {
             "service unavailable",
             "bad gateway",
         ] {
-            assert!(is_transient_failure(Some(message)), "expected transient: {message}");
+            assert!(
+                is_transient_failure(Some(message)),
+                "expected transient: {message}"
+            );
         }
         for message in [
             "permission denied",
@@ -4230,19 +5072,28 @@ mod tests {
             "file not found: a.txt",
             "",
         ] {
-            assert!(!is_transient_failure(Some(message)), "expected permanent: {message}");
+            assert!(
+                !is_transient_failure(Some(message)),
+                "expected permanent: {message}"
+            );
         }
         assert!(!is_transient_failure(None));
     }
 
     #[test]
     fn invalid_tool_failures_are_never_retried() {
-        assert_eq!(retry_tool_call_decision("unknown tool: nope", 0, 2), RetryDecision::GiveUp);
+        assert_eq!(
+            retry_tool_call_decision("unknown tool: nope", 0, 2),
+            RetryDecision::GiveUp
+        );
         assert_eq!(
             retry_tool_call_decision("Input validation error: bad", 0, 2),
             RetryDecision::GiveUp
         );
-        assert_eq!(retry_tool_call_decision("timeout", 2, 2), RetryDecision::GiveUp);
+        assert_eq!(
+            retry_tool_call_decision("timeout", 2, 2),
+            RetryDecision::GiveUp
+        );
         assert_eq!(
             retry_tool_call_decision("timeout", 0, 2),
             RetryDecision::Retry { delay_ms: 2_000 }
@@ -4258,7 +5109,11 @@ mod tests {
         ];
         for index in 0..6 {
             messages.push(AgentMessage {
-                tool_calls: Some(vec![OpenAiToolCall::new(format!("c{index}"), "file_read", "{}")]),
+                tool_calls: Some(vec![OpenAiToolCall::new(
+                    format!("c{index}"),
+                    "file_read",
+                    "{}",
+                )]),
                 ..AgentMessage::assistant("")
             });
             messages.push(AgentMessage {
@@ -4266,14 +5121,23 @@ mod tests {
                 ..AgentMessage::tool(format!("c{index}"), "file_read", "x".repeat(2000))
             });
         }
-        let before: u64 = messages.iter().map(|m| runtime.estimate_message_tokens(m)).sum();
+        let before: u64 = messages
+            .iter()
+            .map(|m| runtime.estimate_message_tokens(m))
+            .sum();
         let pruned = prune_history(&messages, before / 4, runtime.as_ref());
-        let after: u64 = pruned.iter().map(|m| runtime.estimate_message_tokens(m)).sum();
+        let after: u64 = pruned
+            .iter()
+            .map(|m| runtime.estimate_message_tokens(m))
+            .sum();
 
         assert!(after < before, "pruning did not reduce tokens");
         // Load-bearing messages survive verbatim.
         assert_eq!(pruned[0].content, "system prompt");
-        assert_eq!(pruned[1].content, "Please refactor the widget subsystem properly.");
+        assert_eq!(
+            pruned[1].content,
+            "Please refactor the widget subsystem properly."
+        );
         // The oldest tool result is stubbed but stays recoverable.
         let first_tool = pruned.iter().find(|m| m.role == "tool").unwrap();
         assert!(first_tool.content.contains("pruned to save context"));
@@ -4291,7 +5155,11 @@ mod tests {
         assert!(matched.span_chars >= MIN_REPETITION_SPAN_CHARS);
         let (trimmed, _) = trim_degenerate_repetition(&run).unwrap();
         assert!(trimmed.chars().count() < run.chars().count());
-        assert_eq!(trimmed, run[..matched.start + matched.span.chars().count().min(trimmed.chars().count())].to_string());
+        assert_eq!(
+            trimmed,
+            run[..matched.start + matched.span.chars().count().min(trimmed.chars().count())]
+                .to_string()
+        );
     }
 
     #[test]
@@ -4309,7 +5177,10 @@ mod tests {
     #[test]
     fn stream_parsers_assemble_openai_and_ollama_shapes() {
         let openai = sse_tool_calls(&[("call_1", "file_read", "{\"path\":\"a\"}")]);
-        let mut sink = StreamSink { on_content: &mut |_| {}, on_thinking: &mut |_| {} };
+        let mut sink = StreamSink {
+            on_content: &mut |_| {},
+            on_thinking: &mut |_| {},
+        };
         let turn = parse_openai_stream(&openai.body, &mut sink);
         assert_eq!(turn.tool_calls.len(), 1);
         assert_eq!(turn.tool_calls[0].id, "call_1");
@@ -4321,7 +5192,10 @@ mod tests {
             json!({ "model": "llama", "message": { "content": "hi", "tool_calls": [{ "function": { "name": "file.read", "arguments": { "path": "a" } } }] }, "done": false }),
             json!({ "done": true, "done_reason": "stop", "prompt_eval_count": 9, "eval_count": 4 })
         );
-        let mut sink = StreamSink { on_content: &mut |_| {}, on_thinking: &mut |_| {} };
+        let mut sink = StreamSink {
+            on_content: &mut |_| {},
+            on_thinking: &mut |_| {},
+        };
         let turn = parse_ollama_stream(&ndjson, &mut sink);
         assert_eq!(turn.content, "hi");
         assert_eq!(turn.tool_calls.len(), 1);
@@ -4333,11 +5207,14 @@ mod tests {
 
     #[test]
     fn stream_events_reach_the_observer_in_order() {
-        let mut seen: Vec<String> = Vec::new();
+        let seen: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
         {
-            let mut on_content = |chunk: &str| seen.push(format!("c:{chunk}"));
-            let mut on_thinking = |chunk: &str| seen.push(format!("t:{chunk}"));
-            let mut sink = StreamSink { on_content: &mut on_content, on_thinking: &mut on_thinking };
+            let mut on_content = |chunk: &str| seen.borrow_mut().push(format!("c:{chunk}"));
+            let mut on_thinking = |chunk: &str| seen.borrow_mut().push(format!("t:{chunk}"));
+            let mut sink = StreamSink {
+                on_content: &mut on_content,
+                on_thinking: &mut on_thinking,
+            };
             let body = format!(
                 "data: {}\n\ndata: {}\n\ndata: {}\n\n",
                 json!({ "choices": [{ "delta": { "reasoning_content": "hmm" } }] }),
@@ -4348,7 +5225,7 @@ mod tests {
             assert_eq!(turn.content, "Hello");
             assert_eq!(turn.thinking, "hmm");
         }
-        assert_eq!(seen, vec!["t:hmm", "c:Hel", "c:lo"]);
+        assert_eq!(seen.into_inner(), vec!["t:hmm", "c:Hel", "c:lo"]);
     }
 
     #[test]
@@ -4375,10 +5252,18 @@ mod tests {
         let messages = vec![
             AgentMessage::user("Refactor the widget subsystem to remove the legacy shim."),
             AgentMessage {
-                tool_calls: Some(vec![OpenAiToolCall::new("c1", "file_read", "{\"path\":\"w.rs\"}")]),
+                tool_calls: Some(vec![OpenAiToolCall::new(
+                    "c1",
+                    "file_read",
+                    "{\"path\":\"w.rs\"}",
+                )]),
                 ..AgentMessage::assistant("")
             },
-            AgentMessage::tool("c1", "file_read", "{\"ok\":true,\"message\":\"read 12 lines\"}"),
+            AgentMessage::tool(
+                "c1",
+                "file_read",
+                "{\"ok\":true,\"message\":\"read 12 lines\"}",
+            ),
             AgentMessage::tool("c2", "code_grep", "{\"ok\":false,\"message\":\"timeout\"}"),
         ];
         let summary = build_structured_conversation_summary(&messages);
@@ -4394,7 +5279,10 @@ mod tests {
         assert!(repaired.contains("Refactor the widget subsystem"));
         // A summary that already has a task is untouched.
         let complete = "## User task\n- refactor widgets";
-        assert_eq!(reinject_substantive_user_task(complete, &messages), complete);
+        assert_eq!(
+            reinject_substantive_user_task(complete, &messages),
+            complete
+        );
 
         let sections = previous_checkpoint_sections("## User task\n- a\n## Failures\n- b");
         assert_eq!(sections.get("user task").unwrap(), "- a");
@@ -4413,11 +5301,26 @@ mod tests {
     #[test]
     fn queue_and_priority_ordering_is_stable() {
         let queue = ToolCallQueue::new();
-        queue.push(OpenAiToolCall::new("low", "a", "{}"), ToolCallPriority::Low, 0);
-        queue.push(OpenAiToolCall::new("crit", "b", "{}"), ToolCallPriority::Critical, 0);
-        queue.push(OpenAiToolCall::new("normal", "c", "{}"), ToolCallPriority::Normal, 0);
+        queue.push(
+            OpenAiToolCall::new("low", "a", "{}"),
+            ToolCallPriority::Low,
+            0,
+        );
+        queue.push(
+            OpenAiToolCall::new("crit", "b", "{}"),
+            ToolCallPriority::Critical,
+            0,
+        );
+        queue.push(
+            OpenAiToolCall::new("normal", "c", "{}"),
+            ToolCallPriority::Normal,
+            0,
+        );
         let drained = queue.drain_sorted();
-        let ids: Vec<&str> = drained.iter().map(|entry| entry.tool_call.id.as_str()).collect();
+        let ids: Vec<&str> = drained
+            .iter()
+            .map(|entry| entry.tool_call.id.as_str())
+            .collect();
         assert_eq!(ids, vec!["crit", "normal", "low"]);
         assert!(queue.is_empty());
     }
@@ -4425,7 +5328,11 @@ mod tests {
     #[test]
     fn tool_schemas_are_sanitised_for_the_provider() {
         reset_name_map();
-        let schemas = to_tool_schemas(&[OpenAiToolSchema::new("mcp__x.y", "d", json!({ "type": "object" }))]);
+        let schemas = to_tool_schemas(&[OpenAiToolSchema::new(
+            "mcp__x.y",
+            "d",
+            json!({ "type": "object" }),
+        )]);
         assert_eq!(schemas[0].function.name, "mcp__x_y");
         assert_eq!(schemas[0].type_, "function");
         // Round trip: the provider name maps back to the registry name.

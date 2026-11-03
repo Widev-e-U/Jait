@@ -346,13 +346,15 @@ async fn distinct_owner_and_root_pairs_do_not_share_builds() {
 }
 
 #[test]
-fn output_namespace_separates_owner_and_root_boundaries() {
+fn output_namespace_matches_typescript_owner_default_and_root_boundaries() {
     let work = workspace();
     let build: Build = Arc::new(|_| Box::pin(async { Err(GraphError::error("unused")) }));
     let service = service(&work, build);
     let directory = |root, owner| service.output_directory(root, owner);
-    assert_ne!(directory("/repo", None), directory("/repo", Some("system")));
-    assert_eq!(directory("/repo", None), directory("/repo", Some("")));
+    // `${userId ?? "system"}`: an absent owner is exactly the "system" owner,
+    // while an explicitly empty owner is a distinct (empty) owner.
+    assert_eq!(directory("/repo", None), directory("/repo", Some("system")));
+    assert_ne!(directory("/repo", None), directory("/repo", Some("")));
     assert_ne!(
         directory("/c", Some("alice:/b")),
         directory("/b:/c", Some("alice"))
@@ -361,7 +363,17 @@ fn output_namespace_separates_owner_and_root_boundaries() {
         directory("/repo", Some("alice")),
         directory("/repo", Some("bob"))
     );
-    assert!(directory("/repo", None).contains("/v2/"));
+    // The reference joins <dataRoot>/<24 hex>/graphify with no version segment.
+    let output = directory("/repo", Some("alice"));
+    assert!(!output.contains("/v2/"));
+    assert!(output.ends_with("/graphify"));
+    let key = output
+        .trim_end_matches("/graphify")
+        .rsplit('/')
+        .next()
+        .unwrap();
+    assert_eq!(key.len(), 24);
+    assert!(key.chars().all(|c| c.is_ascii_hexdigit()));
 }
 
 #[tokio::test]

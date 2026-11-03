@@ -137,13 +137,12 @@ async fn handle(State(state): State<SecurityAssessmentRoutes>, request: Request)
             return match service.history_detailed(&user.id).await {
                 Ok(history) => response(200, history),
                 Err(failure) => {
-                    let mut body = json!({"statusCode":500,"error":"Internal Server Error","message":failure.message});
-                    // Bun 1.4 exposes the SQLite code on missing-table errors;
-                    // retain the database's typed code rather than parsing text.
-                    if failure.sqlite_code == Some(rusqlite::ffi::SQLITE_ERROR) {
-                        body["code"] = json!("SQLITE_ERROR");
-                    }
-                    response(500, body)
+                    // The reference gateway never exposes the SQLite error code
+                    // on 500 bodies, only the driver message.
+                    response(
+                        500,
+                        json!({"statusCode":500,"error":"Internal Server Error","message":failure.message}),
+                    )
                 }
             };
         }
