@@ -130,6 +130,22 @@ describe("BrowserSurface idle tracking", () => {
 });
 
 describe("closed browser readiness", () => {
+  it("uses the driver for history and reports unsupported drivers", async () => {
+    const history = vi.fn().mockResolvedValue(undefined);
+    const driver = {
+      history, snapshot: vi.fn().mockResolvedValue({ url: "https://example.test/previous", title: "Previous", text: "", elements: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as BrowserDriver;
+    const surface = new BrowserSurface("history-browser", { driverFactory: async () => driver });
+    await surface.start({ sessionId: "session-1", projectRoot: "/project" });
+    expect((await surface.history("back")).url).toBe("https://example.test/previous");
+    await surface.history("forward");
+    expect(history.mock.calls.map(call => call[0])).toEqual(["back", "forward"]);
+    delete driver.history;
+    await expect(surface.history("back")).rejects.toThrow("does not support history");
+    await surface.stop();
+  });
+
   it("reports an ended driver as unavailable in state and snapshots", async () => {
     let connected = true;
     const driver = { isConnected: () => connected, close: async () => {} } as BrowserDriver;
