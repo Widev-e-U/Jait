@@ -1,5 +1,56 @@
 # Native Rust gateway
 
+## Contract-evidence promotion across six component families — 2026-11-03
+
+Ninety-eight components carried fresh native contract evidence produced by six
+independent execution workers (tools, routes, services, root, data, platform)
+plus three coordinated follow-ups. Every claimed test id was re-checked against
+the authoritative full contract run before credit was awarded:
+`cargo test` over all 234 contract targets in
+`.jait/artifacts/gateway-rust/contract-full-run3.log` reported 6225 passed and 45
+failed. Only ids that printed `ok` for an existing target file earned credit;
+worker claims naming missing targets or missing ids were rejected outright.
+
+Net movement: **241 → 332 verified, 83 → 9 implemented but unverified, 34 → 17
+partial, 25 absent** (383 entries, `inventory_total` 383, sorted, no duplicates,
+every inventoried path listed). For the 370 originals that is **236 → 327
+verified, 9 implemented, 17 partial, 17 absent**; the thirteen newer additions
+remain five verified and eight absent, unchanged. Aggregate totals are not
+original-370 completion.
+
+Credit was withheld in seven cases where evidence existed but was insufficient:
+
+- Below the three-check bar — `db/sqlite-shim.ts` (1 check), `db/schema.ts`,
+  `scripts/smoke-desktop.mjs`, `scripts/smoke-process.mjs` (2 each). Their
+  contract targets and paths are recorded, statuses stay `implemented`/`partial`.
+- Known uncovered behaviour — `tools/agent-loop.ts` keeps three
+  `serialize_messages` divergences from the TypeScript reference (tool-role
+  `name` emitted where TS omits it, differing `reasoning_content` gating, empty
+  content as `""` rather than `null`; literals in
+  `.jait/artifacts/gateway-rust/agent-loop-serialize-divergence.log`);
+  `channels/msteams/connector.ts` has activity projection, conversation id,
+  HTML stripping and service-URL admission covered but authorised send, token
+  acquisition and listener dispatch are not; `lib/network-scan.ts` has
+  `merge_entries` MAC precedence and three adjacent checks but no evidence for
+  the ARP, sweep, probe, health or topology stages.
+
+Six further components had worker-reported blockers recorded in `remaining`
+without promotion. Three previously authorised parity fixes are part of this
+evidence base and are not reverted: `network_scan.rs::merge_entries` MAC
+precedence aligned to `packages/gateway/src/lib/network-scan.ts:316`,
+`tools/mod.rs` declaring `pub mod agent_loop;` (reachability only), and
+`integrations/mod.rs` declaring `pub mod msteams;`/`msteams_auth` (enables the
+five Teams checks).
+
+Scope limits: the 45 failing contract targets in the full run are pre-existing
+porting gaps in other components — the largest is TypeScript migration 76
+(`browser_workflows`) landing ahead of its native mirror — and none are in the
+evidence files promoted here; they are recorded as blocked/in-flight rather than
+patched. This section awards focused test credit only. It is not frozen-source
+validation, not a differential or mutation campaign, and not production
+readiness: the gateway still runs TypeScript and the platform, replacement,
+activation and release gates remain open.
+
 ## Inventory growth reconciliation — 2026-11-02
 
 The inventory this ledger tracks grew after the previous reconciliation: it now
