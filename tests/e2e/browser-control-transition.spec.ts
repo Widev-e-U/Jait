@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test'
+
+async function openBrowserMenu(page: import('@playwright/test').Page) {
+  const menu = page.getByLabel('Browser menu')
+  if (!await menu.evaluate(el => (el.parentElement as HTMLDetailsElement).open)) await menu.click()
+}
 import path from 'node:path'
 
 const viewerRoot = path.resolve(__dirname, '../../apps/web/public/noVNC')
@@ -48,29 +53,39 @@ for (const width of [390, 1100]) {
     const iframe = panel.getByTitle('Agent browser')
     const frame = page.frameLocator('iframe[title="Agent browser"]')
     const remoteMode = () => frame.locator('body').evaluate(() => Reflect.get(window, 'testRfb').viewOnly)
+    await openBrowserMenu(page)
     const take = panel.getByRole('button', { name: 'Take control', exact: true })
+    await openBrowserMenu(page)
     await expect(take).toBeEnabled()
     await expect.poll(remoteMode).toBe(false)
     await expect(panel).toHaveClass(/border-blue-500/)
-    await expect(take).toHaveClass(/border-blue-500/)
+    await openBrowserMenu(page)
+    await expect(take).toHaveClass(/text-blue-500/)
+    await page.getByLabel('Browser menu').click()
     await frame.getByLabel('Remote screen').click()
     await expect.poll(() => frame.locator('body').evaluate(() => Reflect.get(window, 'remoteClicks'))).toBe(1)
     expect(shared).toBe(true)
     const originalSource = await iframe.getAttribute('src')
     await frame.getByLabel('Persistent page field').fill('Keep this page state')
 
+    await openBrowserMenu(page)
     await take.click()
+    await openBrowserMenu(page)
     await expect(take).toHaveAttribute('aria-busy', 'true')
+    await openBrowserMenu(page)
     await expect(take).toBeDisabled()
     await expect(take.locator('.animate-spin')).toBeVisible()
     await expect(panel.getByText('Connecting to browser…')).toHaveCount(0)
     await expect.poll(() => !!finishShare).toBe(true)
     finishShare!(); finishShare = undefined
+    await openBrowserMenu(page)
     const share = panel.getByRole('button', { name: 'Share with agent', exact: true })
+    await openBrowserMenu(page)
     await expect(share).toBeEnabled()
     await expect.poll(remoteMode).toBe(false)
     await expect(panel).not.toHaveClass(/border-blue-500/)
-    await expect(share).not.toHaveClass(/border-blue-500/)
+    await openBrowserMenu(page)
+    await expect(share).not.toHaveClass(/text-blue-500/)
     await expect(frame.getByRole('button', { name: 'Toggle keyboard' })).toBeVisible()
     await expect(frame.getByRole('button', { name: 'Toggle mouse mode' })).toBeVisible()
 
@@ -83,24 +98,30 @@ for (const width of [390, 1100]) {
     await expect.poll(remoteMode).toBe(false)
 
     denied = true
+    await openBrowserMenu(page)
     await share.click()
+    await openBrowserMenu(page)
     await expect(share).toHaveAttribute('aria-busy', 'true')
     await expect.poll(() => !!finishShare).toBe(true)
     finishShare!(); finishShare = undefined
     await expect(panel.getByRole('alert')).toContainText('Could not change browser control')
+    await openBrowserMenu(page)
     await expect(share).toBeEnabled()
     await expect.poll(remoteMode).toBe(false)
     await expect(panel).not.toHaveClass(/border-blue-500/)
 
     denied = false
     await frame.getByRole('button', { name: 'Toggle keyboard' }).tap()
+    await openBrowserMenu(page)
     await share.click()
     await expect.poll(() => !!finishShare).toBe(true)
     finishShare!()
+    await openBrowserMenu(page)
     await expect(take).toBeEnabled()
     await expect.poll(remoteMode).toBe(false)
     await expect(panel).toHaveClass(/border-blue-500/)
-    await expect(take).toHaveClass(/border-blue-500/)
+    await openBrowserMenu(page)
+    await expect(take).toHaveClass(/text-blue-500/)
     await expect(frame.getByRole('button', { name: 'Toggle keyboard' })).toBeVisible()
     await expect(frame.getByRole('button', { name: 'Toggle mouse mode' })).toBeVisible()
     await expect(iframe).toHaveAttribute('src', originalSource!)

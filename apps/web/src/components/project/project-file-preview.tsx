@@ -40,6 +40,104 @@ export function ProjectPdfViewer({ src, path }: { src: string; path: string }) {
   const [pageCount, setPageCount] = useState(0)
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [width, setWidth] = useState(0)
+  const [query, setQuery] = useState('')
+  const [matches, setMatches] = useState<number[]>([])
+  const [matchIndex, setMatchIndex] = useState(0)
+  const [searching, setSearching] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const pdfRef = useRef<import('pdfjs-dist').PDFDocumentProxy | null>(null)
+  const queryRef = useRef('')
+  queryRef.current = query
+
+  const highlight = (element: Element, term: string) => {
+    const layer = element.querySelector('.project-pdf-text-layer')
+    if (!layer) return
+    layer.querySelectorAll('mark[data-pdf-match]').forEach(mark => mark.replaceWith(document.createTextNode(mark.textContent ?? '')))
+    layer.querySelectorAll('span').forEach(span => span.normalize())
+    if (!term) return
+    const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT)
+    const nodes: Array<{ node: Text; start: number; end: number }> = []
+    let text = ''
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text
+      const start = text.length
+      text += node.data
+      nodes.push({ node, start, end: text.length })
+    }
+    const lower = text.toLocaleLowerCase(), needle = term.toLocaleLowerCase()
+    const hits: Array<{ start: number; end: number }> = []
+    for (let index = lower.indexOf(needle); index >= 0; index = lower.indexOf(needle, index + needle.length)) hits.push({ start: index, end: index + needle.length })
+    // Work backwards so splitting a text node does not change earlier offsets.
+    for (let hit = hits.length - 1; hit >= 0; hit--) {
+      for (const part of [...nodes].reverse()) {
+        const from = Math.max(hits[hit].start, part.start), to = Math.min(hits[hit].end, part.end)
+        if (from >= to) continue
+        const tail = part.node.splitText(to - part.start)
+        const matched = part.node.splitText(from - part.start)
+        const mark = document.createElement('mark')
+        mark.dataset.pdfMatch = String(hit)
+        mark.style.background = 'rgba(255, 210, 0, .55)'
+        mark.style.color = 'transparent'
+        matched.replaceWith(mark)
+        mark.append(matched)
+        void tail
+      }
+    }
+  }
+  const pendingReveal = useRef<number | null>(null)
+  const selectionRef = useRef({ matches, matchIndex })
+  selectionRef.current = { matches, matchIndex }
+  const revealMatch = (element: Element) => {
+    const { matches: currentMatches, matchIndex: currentIndex } = selectionRef.current
+    const page = currentMatches[currentIndex]
+    if (!page || Number((element as HTMLElement).dataset.page) !== page) return
+    const ordinal = currentMatches.slice(0, currentIndex).filter(value => value === page).length
+    const mark = element.querySelector(`[data-pdf-match="${ordinal}"]`)
+    if (mark) { pendingReveal.current = null; mark.scrollIntoView({ block: 'center', behavior: 'smooth' }) }
+    else { pendingReveal.current = page; element.scrollIntoView({ block: 'center', behavior: 'smooth' }) }
+  }
+
+  useEffect(() => {
+    const handle = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f' && scrollRef.current?.closest('[data-testid="project-pdf-viewer"]')?.contains(document.activeElement)) {
+        event.preventDefault(); setSearchOpen(true); requestAnimationFrame(() => searchRef.current?.focus())
+      }
+    }
+    window.addEventListener('keydown', handle)
+    return () => window.removeEventListener('keydown', handle)
+  }, [])
+
+  useEffect(() => {
+    const term = query.trim().toLocaleLowerCase()
+    const pdf = pdfRef.current
+    let cancelled = false
+    setMatches([]); setMatchIndex(0)
+    containerRef.current?.querySelectorAll('[data-page]').forEach(element => highlight(element, query.trim()))
+    if (!term || !pdf || state !== 'ready') { setSearching(false); return }
+    setSearching(true)
+    const timer = setTimeout(() => { void (async () => {
+      const found: number[] = []
+      try {
+        for (let pageNumber = 1; pageNumber <= pdf.numPages && !cancelled; pageNumber++) {
+          const page = await pdf.getPage(pageNumber)
+          const content = await page.getTextContent()
+          const text = content.items.map(item => 'str' in item ? item.str : '').join('').toLocaleLowerCase()
+          let offset = 0, index = text.indexOf(term)
+          while (index >= 0) { found.push(pageNumber); offset = index + term.length; index = text.indexOf(term, offset) }
+        }
+        if (!cancelled) setMatches(found)
+      } catch { if (!cancelled) setMatches([]) }
+      finally { if (!cancelled) setSearching(false) }
+    })() }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [query, state, pageCount])
+
+  useEffect(() => {
+    const page = matches[matchIndex]
+    const element = page && containerRef.current?.querySelector(`[data-page="${page}"]`)
+    if (element) revealMatch(element)
+  }, [matches, matchIndex])
 
   useEffect(() => {
     const scroll = scrollRef.current
@@ -85,6 +183,7 @@ export function ProjectPdfViewer({ src, path }: { src: string; path: string }) {
         destroy = () => { void task.destroy() }
         const pdf = await task.promise
         if (cancelled) return
+        pdfRef.current = pdf
         const first = await pdf.getPage(1)
         if (cancelled) return
         const firstSize = first.getViewport({ scale: 1 })
@@ -131,6 +230,7 @@ export function ProjectPdfViewer({ src, path }: { src: string; path: string }) {
                 item.cancelText = () => text.cancel()
                 // A text layer failure should not hide an otherwise readable page.
                 await text.render().catch(() => {})
+                if (!cancelled && active.get(element) === item) { highlight(element, queryRef.current.trim()); if (pendingReveal.current === Number(element.dataset.page)) revealMatch(element) }
               } catch {
                 if (!cancelled && active.get(element) === item) {
                   release(element)
@@ -158,6 +258,7 @@ export function ProjectPdfViewer({ src, path }: { src: string; path: string }) {
       cancelled = true
       observer?.disconnect()
       for (const element of active.keys()) release(element)
+      pdfRef.current = null
       destroy?.()
     }
   }, [src, zoomIndex, width])
@@ -168,8 +269,19 @@ export function ProjectPdfViewer({ src, path }: { src: string; path: string }) {
         <Button variant="ghost" size="sm" aria-label="Zoom out" disabled={zoomIndex === 0} onClick={() => setZoomIndex((i) => Math.max(0, i - 1))}>−</Button>
         <span>{Math.round(ZOOM_STEPS[zoomIndex] * 100)}%</span>
         <Button variant="ghost" size="sm" aria-label="Zoom in" disabled={zoomIndex === ZOOM_STEPS.length - 1} onClick={() => setZoomIndex((i) => Math.min(ZOOM_STEPS.length - 1, i + 1))}>+</Button>
+        <Button variant="ghost" size="sm" aria-label="Search PDF" onClick={() => { setSearchOpen(true); requestAnimationFrame(() => searchRef.current?.focus()) }}>Search</Button>
         {pageCount > 0 && <span className="ml-auto text-muted-foreground">{pageCount} {pageCount === 1 ? 'page' : 'pages'}</span>}
       </div>
+      {searchOpen && <div className="flex shrink-0 items-center gap-1 border-b p-2 text-xs">
+        <input ref={searchRef} aria-label="Search PDF text" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+          if (event.key === 'Escape') { setSearchOpen(false); setQuery('') }
+          if (event.key === 'Enter' && matches.length) { event.preventDefault(); setMatchIndex(index => (index + (event.shiftKey ? matches.length - 1 : 1)) % matches.length) }
+        }} className="h-8 min-w-0 flex-1 rounded border bg-background px-2 text-base sm:text-sm" placeholder="Find in PDF" />
+        <span aria-live="polite" className="whitespace-nowrap text-muted-foreground">{searching ? 'Searching…' : query.trim() ? `${matches.length ? matchIndex + 1 : 0} / ${matches.length}` : ''}</span>
+        <Button variant="ghost" size="sm" aria-label="Previous match" disabled={!matches.length} onClick={() => setMatchIndex(index => (index + matches.length - 1) % matches.length)}>↑</Button>
+        <Button variant="ghost" size="sm" aria-label="Next match" disabled={!matches.length} onClick={() => setMatchIndex(index => (index + 1) % matches.length)}>↓</Button>
+        <Button variant="ghost" size="sm" aria-label="Close PDF search" onClick={() => { setSearchOpen(false); setQuery('') }}>×</Button>
+      </div>}
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-auto bg-muted/30 p-4">
         {state === 'loading' && <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading PDF…</div>}
         {state === 'error' && <p role="alert" className="text-sm text-muted-foreground">Unable to display {path.split(/[/\\]/).pop()}.</p>}

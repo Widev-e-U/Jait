@@ -76,3 +76,17 @@ test('fullscreen includes address bar without reloading the live iframe', async 
   await page.keyboard.press('f')
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true)
 })
+
+test('mobile menu sends back and forward while preserving URL space', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const directions: string[] = []
+  await page.route('**/api/preview/history', async route => {
+    directions.push(route.request().postDataJSON().direction)
+    await route.fulfill({ json: { session: { metrics: { url: 'https://example.test' } } } })
+  })
+  await page.getByLabel('Browser menu').click()
+  await page.getByRole('button', { name: 'Back', exact: true }).click()
+  await page.getByRole('button', { name: 'Forward', exact: true }).click()
+  expect(directions).toEqual(['back', 'forward'])
+  expect((await page.getByRole('textbox', { name: 'Browser URL' }).boundingBox())!.width).toBeGreaterThan(180)
+})

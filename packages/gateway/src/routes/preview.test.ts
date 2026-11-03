@@ -30,6 +30,23 @@ describe("preview routes", () => {
     await app.close();
   });
 
+  it("restricts history navigation to the session owner and validates direction", async () => {
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const previewService = { history: vi.fn().mockResolvedValue({ sessionId: "session-1" }) };
+    const sessionService = { getById: vi.fn((id: string, userId: string) => id === "session-1" && userId === "user-1" ? { id } : null) };
+    registerPreviewRoutes(app, config, { previewService: previewService as any, sessionService: sessionService as any });
+    const payload = { sessionId: "session-1", direction: "back" };
+    expect((await app.inject({ method: "POST", url: "/api/preview/history", payload })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/api/preview/history", headers: await authHeader(config.jwtSecret, "user-2"), payload })).statusCode).toBe(404);
+    expect(previewService.history).not.toHaveBeenCalled();
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    expect((await app.inject({ method: "POST", url: "/api/preview/history", headers, payload: { ...payload, direction: "invalid" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/preview/history", headers, payload })).statusCode).toBe(200);
+    expect(previewService.history).toHaveBeenCalledWith("session-1", "back");
+    await app.close();
+  });
+
   it("restricts URL navigation to the authenticated session owner", async () => {
     const app = Fastify();
     const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };

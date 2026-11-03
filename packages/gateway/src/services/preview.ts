@@ -525,6 +525,20 @@ export class PreviewService {
     return { ...connection, browserId, revision };
   }
 
+  async history(sessionId: string, direction: "back" | "forward"): Promise<PreviewSession | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.status !== "ready" || session.terminating || !session.browserId) return null;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
+    const snapshot = await (surface as BrowserSurface).history(direction);
+    if (this.sessions.get(sessionId) !== session || session.terminating) return null;
+    session.browserUrl = snapshot.url;
+    session.updatedAt = nowIso();
+    await this.refreshSessionCapture(sessionId);
+    this.notifyChanged(session);
+    return this.toPublicSession(session);
+  }
+
   /** Refresh the current page, preserving the browser and its cookies. */
   async reload(sessionId: string): Promise<PreviewSession | null> {
     const session = this.sessions.get(sessionId);

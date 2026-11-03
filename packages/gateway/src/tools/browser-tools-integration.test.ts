@@ -84,6 +84,11 @@ describe.skipIf(process.env["JAIT_BROWSER_INTEGRATION"] !== "1").each(["in-proce
         ok: true, data: { url, title: "Tool integration fixture", textPreview: expect.stringContaining("Authorized asset inventory") },
       });
     });
+    it("navigates browser history without replacing the session", async () => {
+      await surface.navigate(`${url}second`);
+      expect((await surface.history("back")).url).toBe(url);
+      expect((await surface.history("forward")).url).toBe(`${url}second`);
+    });
     it("browser.snapshot captures real page text and controls", async () => {
       const result = await tools.execute("browser.snapshot", {}, context);
       expect(result).toMatchObject({ ok: true, data: { snapshot: expect.stringContaining("Authorized asset inventory") } });

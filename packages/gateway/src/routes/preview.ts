@@ -123,6 +123,23 @@ export function registerPreviewRoutes(
     }
   });
 
+  app.post("/api/preview/history", {
+    schema: { body: { type: "object", additionalProperties: false, required: ["sessionId", "direction"],
+      properties: { sessionId: { type: "string", minLength: 1 }, direction: { type: "string", enum: ["back", "forward"] } } } },
+  }, async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId, direction } = request.body as { sessionId: string; direction: "back" | "forward" };
+    if (!deps.sessionService?.getById(sessionId, authUser.id)) return reply.status(404).send({ error: "Session not found" });
+    try {
+      const session = await deps.previewService.history(sessionId, direction);
+      if (!session) return reply.status(404).send({ error: "Live browser not found" });
+      return { session };
+    } catch (cause) {
+      return reply.status(400).send({ error: cause instanceof Error ? cause.message : "Could not navigate history." });
+    }
+  });
+
   app.post("/api/preview/reload", {
     schema: {
       body: {

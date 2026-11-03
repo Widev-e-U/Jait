@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Bot, GripHorizontal, Hand, Loader2, Maximize2, Minimize2, Minus, RotateCcw, Settings2, Square } from 'lucide-react'
+import { Bot, GripHorizontal, Hand, Loader2, Maximize2, Minimize2, Minus, RotateCcw, Square } from 'lucide-react'
 import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { apiFetch } from '@/lib/api-fetch'
@@ -71,7 +71,6 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const [manipulating, setManipulating] = useState(false)
   const gesture = useRef<{ x: number; y: number; box: BrowserWindowBox; edge?: string } | null>(null)
   const [keyboardOpen, setKeyboardOpen] = useState(false)
-  const optionsRef = useRef<HTMLDetailsElement>(null)
   const [state, setState] = useState<BrowserState | null>(() => id && liveViewUrl(record?.previewUrl) ? {
     sessionId: id, browserId, url: liveViewUrl(record?.previewUrl), sharedWithAgent: record?.controller === 'agent', verified: false,
   } : null)
@@ -271,36 +270,21 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     setMaximized(next === 'workspace')
     setExpanded(next !== 'minimized')
   }
+  const menuControls = <>
+    <button type="button" data-browser-close-menu aria-label={controlLabel} aria-busy={busyAction === 'control'}
+      disabled={busy || !state?.verified} onClick={() => void setShared()}
+      className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-muted disabled:opacity-50 ${agentInControl ? 'text-blue-500' : ''}`}>
+      {busyAction === 'control' ? <Loader2 className="h-4 w-4 animate-spin" /> : state?.sharedWithAgent ? <Hand className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+      {controlLabel}
+    </button>
+    <div className="border-t pt-2 text-xs font-medium">Browser view</div>
+    <div ref={setControlsContainer} className="space-y-2" />
+    <button type="button" disabled={busy} onClick={() => void restartBrowser()}
+      className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-muted disabled:opacity-50">
+      <RotateCcw className="h-4 w-4" /> Restart browser
+    </button>
+  </>
   const controls = <>
-    <TooltipHint content={`${state?.sharedWithAgent ? 'Shared with agent — you can also interact' : 'You are controlling'} · ${controlLabel}`}>
-      <button type="button" aria-label={controlLabel} aria-busy={busyAction === 'control'}
-        disabled={busy || !state?.verified} onClick={() => void setShared()}
-        className={`relative flex h-8 w-8 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded border sm:w-auto sm:px-2 hover:bg-muted disabled:opacity-50 ${agentInControl ? 'border-blue-500 ring-1 ring-blue-500' : ''}`}>
-        <span className={`flex items-center justify-center ${busyAction === 'control' ? 'invisible' : ''}`}>
-          {state?.sharedWithAgent ? <Hand className="h-4 w-4 sm:hidden" /> : <Bot className="h-4 w-4 sm:hidden" />}
-          <span className="hidden sm:inline">{controlLabel}</span>
-        </span>
-        {busyAction === 'control' && <Loader2 aria-hidden="true" className="absolute h-4 w-4 animate-spin motion-reduce:animate-none" />}
-      </button>
-    </TooltipHint>
-    <details ref={optionsRef} className="relative shrink-0" onKeyDown={event => {
-      if (event.key === 'Escape' && optionsRef.current) { optionsRef.current.open = false; optionsRef.current.querySelector('summary')?.focus() }
-    }}>
-      <TooltipHint content="Browser view options">
-        <summary aria-label="Browser view options"
-          className="flex h-8 w-8 justify-center sm:w-auto cursor-pointer list-none items-center rounded border sm:px-2 hover:bg-muted [&::-webkit-details-marker]:hidden">
-          <Settings2 className="h-4 w-4" />
-        </summary>
-      </TooltipHint>
-      <div className="absolute right-0 top-10 z-50 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border bg-popover p-3 text-popover-foreground shadow-xl">
-        <div className="text-xs font-medium">Browser view</div>
-        <div ref={setControlsContainer} className="space-y-2" />
-        <button type="button" disabled={busy} onClick={() => void restartBrowser()}
-          className="flex w-full items-center gap-2 rounded border px-2 py-2 text-xs hover:bg-muted disabled:opacity-50">
-          <RotateCcw className="h-3.5 w-3.5" />Restart browser
-        </button>
-      </div>
-    </details>
     <div role="group" aria-label="Browser size" data-browser-size={size}
       className="hidden h-8 shrink-0 items-center overflow-hidden rounded border sm:flex">
       {([
@@ -344,7 +328,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
       ))}
       {manipulating && <div className="absolute inset-0 z-40" />}
       <div className={expanded ? 'min-h-0 flex-1 rounded-b-xl [&_[data-browser-layout]]:rounded-b-xl' : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
-        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, leading: (<TooltipHint content="Drag to move · Arrow keys to move">
+        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, menuControls, leading: (<TooltipHint content="Drag to move · Arrow keys to move">
           <button type="button" aria-label="Move browser"
             className="hidden h-8 shrink-0 touch-none items-center text-muted-foreground md:flex md:cursor-move"
             onPointerDown={event => beginGesture(event)} {...gestureEvents}

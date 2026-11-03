@@ -344,6 +344,13 @@ async function main() {
         return { targetId: targetInfo.targetId };
       } finally { await session.detach(); }
     },
+    history: async (params) => {
+      const page = await ensurePage();
+      if (params.direction === "back") await page.goBack({ waitUntil: "domcontentloaded", timeout: 30000 });
+      else if (params.direction === "forward") await page.goForward({ waitUntil: "domcontentloaded", timeout: 30000 });
+      else throw new Error("Invalid history direction");
+      return null;
+    },
     reload: async () => {
       await (await ensurePage()).reload({ waitUntil: "domcontentloaded", timeout: 30000 });
       return null;

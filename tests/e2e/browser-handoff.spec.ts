@@ -1,4 +1,9 @@
 import { test, expect } from '@playwright/test'
+
+async function openBrowserMenu(page: import('@playwright/test').Page) {
+  const menu = page.getByLabel('Browser menu')
+  if (!await menu.evaluate(el => (el.parentElement as HTMLDetailsElement).open)) await menu.click()
+}
 import path from 'node:path'
 
 const shots = path.resolve(__dirname, '../../.jait/shots')
@@ -50,6 +55,7 @@ for (const choice of ['Done', "I'm not able to do it", 'Another reason']) {
     await expect(prompt).toContainText('Please enter your password in the browser and sign in.')
     await expect(prompt.getByRole('textbox')).toHaveCount(0)
     await expect(panel).toHaveAttribute('data-browser-minimized', 'false')
+    await openBrowserMenu(page)
     await expect(panel.getByRole('button', { name: 'Share with agent', exact: true })).toBeVisible()
     expect(submitted).toBeNull()
     const header = page.getByRole('button', { name: 'Waiting for you in the browser', exact: true })
@@ -74,6 +80,7 @@ for (const choice of ['Done', "I'm not able to do it", 'Another reason']) {
     }
     await expect(prompt).toBeHidden()
     expect(submitted).toEqual({ answers: { browser: { selected: [choice], freeText: choice === 'Another reason' ? 'The login page never loads' : null, skipped: false } } })
+    await openBrowserMenu(page)
     await expect(panel.getByRole('button', { name: choice === 'Done' ? 'Take control' : 'Share with agent', exact: true })).toBeVisible()
     await expect(page.getByRole('textbox', { name: 'Chat draft' })).toHaveValue('Keep my draft')
   })

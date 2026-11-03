@@ -142,6 +142,7 @@ export interface BrowserDriver {
   isConnected?(): boolean;
   navigate(url: string, signal?: AbortSignal): Promise<void>;
   reload?(signal?: AbortSignal): Promise<void>;
+  history?(direction: "back" | "forward", signal?: AbortSignal): Promise<void>;
   getDevToolsConnection?(): Promise<{ endpoint: string; targetId: string } | null>;
   click(selector: string, signal?: AbortSignal): Promise<void>;
   typeText(selector: string, text: string, signal?: AbortSignal): Promise<void>;
@@ -170,6 +171,8 @@ export interface BrowserSurfaceOptions {
 type PlaywrightPage = CursorPage & {
   goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
   reload: (opts?: Record<string, unknown>) => Promise<unknown>;
+  goBack: (opts?: Record<string, unknown>) => Promise<unknown>;
+  goForward: (opts?: Record<string, unknown>) => Promise<unknown>;
   click: (selector: string) => Promise<void>;
   fill: (selector: string, text: string) => Promise<void>;
   evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
@@ -460,6 +463,19 @@ export class BrowserSurface implements Surface {
     this.captureSnapshotMeta(snap);
     this.touch();
     this.onOutput?.(`reload ${snap.url}`);
+    return snap;
+  }
+
+  async history(direction: "back" | "forward", signal?: AbortSignal): Promise<BrowserPageSnapshot> {
+    this.touch();
+    const driver = this.requireDriver();
+    if (!driver.history) throw new Error("This browser does not support history navigation.");
+    await driver.history(direction, signal);
+    this._actionCount++;
+    const snap = await driver.snapshot(signal);
+    this.captureSnapshotMeta(snap);
+    this.touch();
+    this.onOutput?.(`history ${direction} ${snap.url}`);
     return snap;
   }
 
@@ -931,6 +947,10 @@ async function createInProcessPlaywrightDriver(
     async reload(signal?: AbortSignal) {
       const page = await ensureActivePage();
       await withSignal(page.reload({ waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
+    },
+    async history(direction: "back" | "forward", signal?: AbortSignal) {
+      const page = await ensureActivePage();
+      await withSignal(direction === "back" ? page.goBack({ waitUntil: "domcontentloaded", timeout: 30_000 }) : page.goForward({ waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
     },
     async click(selector: string, signal?: AbortSignal) {
       const page = await ensureActivePage();
@@ -1618,6 +1638,9 @@ async function createNodeBridgePlaywrightDriver(
     },
     async reload(signal?: AbortSignal) {
       await sendCommand("reload", {}, signal);
+    },
+    async history(direction: "back" | "forward", signal?: AbortSignal) {
+      await sendCommand("history", { direction }, signal);
     },
     async click(selector: string, signal?: AbortSignal) {
       await sendCommand("click", { selector }, signal);
