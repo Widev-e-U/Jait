@@ -49,7 +49,13 @@ function stop() {
   stopping = true;
   // Works on Windows too; process.kill(SIGTERM) would terminate immediately.
   process.emit('SIGTERM');
-  setTimeout(() => process.exit(0), 6000).unref();
+  // Last resort only. The deadlines must stay strictly ordered: gateway watchdog
+  // (JAIT_SHUTDOWN_TIMEOUT_MS, 15s default) < this backstop (20s) < the smoke
+  // test's kill allowance (30s). They used to be 5s and 6s, so the gateway's
+  // exit(1) beat this exit(0) by a second and any shutdown slower than 5s on a
+  // loaded windows-latest VM failed the packaging smoke with "graceful shutdown"
+  // (v0.1.959/.961/.964 never produced a Release that way).
+  setTimeout(() => process.exit(0), 20_000).unref();
 }
 const control = createInterface({ input: process.stdin });
 control.on('line', line => { if (line === 'stop') stop(); });

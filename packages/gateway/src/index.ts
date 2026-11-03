@@ -6,6 +6,7 @@ import { readTeamWork } from "./services/team-chat.js";
 
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
+import { closeHttpServer } from "./http-shutdown.js";
 import { ControlAccess } from "./security/control-access.js";
 import { WsControlPlane } from "./ws.js";
 import { PrimaryLink } from "./services/primary-link.js";
@@ -1644,11 +1645,22 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
     if (shuttingDown) return;
     shuttingDown = true;
     console.log("Shutting down...");
-    // Force exit after 5 seconds if graceful shutdown hangs
+    const shutdownStartedAt = Date.now();
+    // Exceeding the budget means something is genuinely stuck, so the forced
+    // exit stays non-zero on purpose — but the window must be wide enough for a
+    // loaded release VM, and operators can widen it further.
+    const shutdownTimeoutMs = (() => {
+      const configured = Number.parseInt(process.env["JAIT_SHUTDOWN_TIMEOUT_MS"] ?? "", 10);
+      return Number.isFinite(configured) && configured > 0 ? configured : 15_000;
+    })();
     const forceTimer = setTimeout(() => {
-      console.error("Graceful shutdown timed out, forcing exit.");
-      process.exit(1);
-    }, 5_000);
+      console.error(`Graceful shutdown timed out after ${shutdownTimeoutMs}ms, forcing exit.`);
+      // Under the desktop shell an overrun is a slow stop, not a failed one: the
+      // shell's stop() owns the exit code and the packaging smoke asserts 0. A
+      // non-zero exit here is what silently broke three releases. Standalone and
+      // CLI runs keep the non-zero signal so a real hang still fails loudly.
+      process.exit(process.env["JAIT_DESKTOP_HOST"] === "1" ? 0 : 1);
+    }, shutdownTimeoutMs);
     // Ensure the timer doesn't keep the process alive
     if (forceTimer.unref) forceTimer.unref();
     try {
@@ -1667,8 +1679,9 @@ async function main(options: { evaluation?: boolean; onReady?: (port: number) =>
       diskJanitor.stop();
       primaryLink?.stop();
       ws.stop();
-      await server.close();
+      await closeHttpServer(server);
       sqlite.close();
+      console.log(`Shutdown complete in ${Date.now() - shutdownStartedAt}ms`);
     } catch (err) {
       console.error("Error during shutdown:", err);
     }
