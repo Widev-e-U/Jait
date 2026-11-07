@@ -92,6 +92,7 @@ impl RegistryOwnerHandle {
 
 /// Internal bridge only; callers must supply server-authenticated context and supervise
 /// the owner. Malformed result fields are rejected instead of granting success.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) fn consent_delegate(handle: RegistryOwnerHandle) -> ToolDelegate {
     Arc::new(move |name, input, context, permit| {
         let handle = handle.clone();
@@ -110,6 +111,7 @@ pub(crate) fn consent_delegate(handle: RegistryOwnerHandle) -> ToolDelegate {
 // values it cannot preserve rather than silently changing the returned result.
 // This is a compatibility restriction, so the bridge must remain unmounted
 // until the executor and its clients can carry the original JSON and UTF-16.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 fn convert_result(result: RegistryResult) -> Result<ToolResult, String> {
     let ok = result
         .ok

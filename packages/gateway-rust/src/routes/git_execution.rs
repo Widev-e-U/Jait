@@ -524,6 +524,7 @@ impl Command {
 }
 /// Return the authenticated owner only for a matching forge-auth grant.
 /// Credential persistence must use this identity rather than request-body data.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(super) fn forge_auth_owner() -> crate::services::git_forge::ForgeResult<String> {
     use crate::services::git_forge::ForgeError;
     let ctx = REQUEST_CONTEXT
@@ -536,6 +537,7 @@ pub(super) fn forge_auth_owner() -> crate::services::git_forge::ForgeResult<Stri
 }
 
 /// Capture the request cancellation handle for deferred credential persistence.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(super) fn forge_auth_cancellation()
 -> crate::services::git_forge::ForgeResult<ProcessCancellation> {
     use crate::services::git_forge::ForgeError;
@@ -550,6 +552,7 @@ pub(super) fn forge_auth_cancellation()
 
 /// Construct a forge-auth session exclusively from the authorized request identity.
 /// Callers cannot substitute an owner, root, authority or process pool.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(super) fn forge_auth_session(
     repository: crate::services::git_forge::ForgeRepository,
     token: String,

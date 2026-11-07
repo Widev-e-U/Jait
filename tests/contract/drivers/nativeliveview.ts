@@ -5,7 +5,8 @@ import {EventEmitter} from 'node:events';
 export async function dispatch(call:any){
  const events:any[]=[]; let clock=0,port=6100,spawned=false,reservations=0,children=0;
  const oldNow=Date.now, oldTimeout=globalThis.setTimeout, oldEnv=process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS;
- const cwd=process.cwd;
+ const cwd=process.cwd, oldExtension=process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH;
+ process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH="/fixture/stagehand-extension";
  const effect=(v:any)=>{events.push(v);if(call.debug)console.error(v);};
  const reserve=(container:boolean)=>{
   const n=++reservations,p=port++;effect({name:'reserve',container,port:p});
@@ -50,5 +51,5 @@ export async function dispatch(call:any){
    if(call.stop!==false){await stopLiveView(session);result.after=describe();}
   }catch(e:any){result={error:e.message};}
   return {result,events};
- }finally{Date.now=oldNow;globalThis.setTimeout=oldTimeout;process.cwd=cwd;if(oldEnv==null)delete process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS;else process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS=oldEnv;}
+ }finally{if(oldExtension==null)delete process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH;else process.env.STAGEHAND_EXTENSION_DIRECTORY_PATH=oldExtension;Date.now=oldNow;globalThis.setTimeout=oldTimeout;process.cwd=cwd;if(oldEnv==null)delete process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS;else process.env.JAIT_MAX_CONTAINER_LIVE_VIEW_STARTS=oldEnv;}
 }

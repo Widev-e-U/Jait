@@ -191,6 +191,7 @@ where
 /// Parse a github.com remote into a validated target. Enterprise hosts remain
 /// unsupported until credentials are stored and retrieved by host; destination
 /// authorization is still required from the request-scoped command authority.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 fn github_auth_repository(raw: &str) -> Option<crate::services::git_forge::ForgeRepository> {
     use crate::services::git_forge::ForgeRepository;
     let raw = raw.trim();
@@ -234,6 +235,7 @@ fn github_auth_repository(raw: &str) -> Option<crate::services::git_forge::Forge
 
 // Once dispatched, the database worker cannot abort a running write. The
 // cancellation check prevents a queued write from starting after cancellation.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 async fn save_github_token(
     auth: &AuthState,
     secrets: UserSecretService,
@@ -272,6 +274,7 @@ async fn save_github_token(
 
 /// Authenticate with GitHub under the current forge-auth grant and persist only
 /// a successfully validated token under the owner captured from that same grant.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 async fn github_forge_auth(
     state: &GitRoutes,
     repository: crate::services::git_forge::ForgeRepository,

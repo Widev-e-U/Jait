@@ -1796,12 +1796,12 @@ agentControl,browserWorkflows,browserWorkflowRuns"
     #[test]
     fn column_and_index_inventory_matches_source() {
         let columns = all_columns();
-        assert_eq!(columns.len(), 420);
+        assert_eq!(columns.len(), 455);
         let extra: Vec<&TableIndex> = TABLES.iter().flat_map(|table| table.extra.iter()).collect();
-        assert_eq!(extra.len(), 69);
+        assert_eq!(extra.len(), 71);
         let kind_count = |kind: IndexKind| extra.iter().filter(|entry| entry.kind == kind).count();
         assert_eq!(kind_count(IndexKind::Index), 58);
-        assert_eq!(kind_count(IndexKind::UniqueIndex), 9);
+        assert_eq!(kind_count(IndexKind::UniqueIndex), 11);
         assert_eq!(kind_count(IndexKind::PrimaryKey), 2);
         // no table repeats its own index name
         for table in TABLES {
@@ -1817,7 +1817,7 @@ agentControl,browserWorkflows,browserWorkflowRuns"
     #[test]
     fn column_modifiers_match_source() {
         let columns = all_columns();
-        assert_eq!(columns.iter().filter(|(_, c)| c.not_null).count(), 215);
+        assert_eq!(columns.iter().filter(|(_, c)| c.not_null).count(), 293);
         assert_eq!(columns.iter().filter(|(_, c)| c.unique).count(), 2);
         assert_eq!(columns.iter().filter(|(_, c)| c.doc.is_some()).count(), 91);
         assert_eq!(

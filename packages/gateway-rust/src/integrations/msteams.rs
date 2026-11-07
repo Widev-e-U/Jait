@@ -220,6 +220,7 @@ pub trait TeamsHost: Send + Sync {
 struct Reference {
     /// Port of `buildReference().activityId`; kept so outbound replies can quote
     /// the originating activity the way the TypeScript reference does.
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     activity_id: Option<Value>,
     service_url: String,
     conversation: Value,

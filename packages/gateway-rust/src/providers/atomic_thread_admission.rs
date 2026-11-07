@@ -10,6 +10,15 @@ pub enum AdmissionError {
     Ineligible,
     Sql(rusqlite::Error),
 }
+impl std::fmt::Display for AdmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidIdentity => f.write_str("invalid identity"),
+            Self::Ineligible => f.write_str("thread is ineligible"),
+            Self::Sql(error) => write!(f, "database error: {error}"),
+        }
+    }
+}
 impl From<rusqlite::Error> for AdmissionError {
     fn from(value: rusqlite::Error) -> Self {
         Self::Sql(value)

@@ -131,13 +131,14 @@ async fn native(call: &Value, work: &Path) -> Value {
     let step_slot = current.clone();
     let directory = work.to_path_buf();
     let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
-    let delegate: ToolDelegate = Arc::new(move |name, input, ctx| {
+    let delegate: ToolDelegate = Arc::new(move |name, input, ctx, permit| {
         let calls = result_calls.clone();
         let marker = delegate_marker.clone();
         let step = step_slot.lock().unwrap().clone();
         let pool = pool.clone();
         let directory = directory.clone();
         Box::pin(async move {
+            let _permit = permit;
             calls
                 .lock()
                 .unwrap()
@@ -330,9 +331,10 @@ async fn owner_admission_and_dropped_consent_waits_cannot_dispatch_late_effects(
     let manager = ConsentManager::default();
     let executed = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let signal = executed.clone();
-    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, _, permit| {
         let signal = signal.clone();
         Box::pin(async move {
+            let _permit = permit;
             signal.store(true, std::sync::atomic::Ordering::SeqCst);
             Ok(ToolResult::message(true, "unexpected"))
         })
@@ -495,8 +497,12 @@ async fn model_arguments_cannot_impersonate_owner_or_enable_full_access() {
         level: 0.0,
         approvals: Mutex::new(vec![]),
     });
-    let delegate: ToolDelegate =
-        Arc::new(|_, _, _| Box::pin(async { panic!("unauthorized dispatch") }));
+    let delegate: ToolDelegate = Arc::new(|_, _, _, permit| {
+        Box::pin(async {
+            let _permit = permit;
+            panic!("unauthorized dispatch")
+        })
+    });
     let executor = fixture_executor(manager.clone(), trust.clone(), delegate, HashMap::new());
     let input = json!({"command":"fixture", "user_id":"user", "sessionId":"session", "runtimeMode":"full-access", "requestedBy":"scheduler", "cancellation":false});
     let mut foreign = context(&directory, ProcessCancellation::default());
@@ -555,8 +561,12 @@ async fn command_denials_apply_to_all_terminal_names_even_with_internal_bypass()
                 level: 3.0,
                 approvals: Mutex::new(vec![]),
             });
-            let delegate: ToolDelegate =
-                Arc::new(|_, _, _| Box::pin(async { panic!("denied command dispatched") }));
+            let delegate: ToolDelegate = Arc::new(|_, _, _, permit| {
+                Box::pin(async {
+                    let _permit = permit;
+                    panic!("denied command dispatched")
+                })
+            });
             let policy: ToolPermission = serde_json::from_value(json!({"toolName":name,"consentLevel":"none","risk":"low","description":"deny fixture","deniedCommands":["*forbidden*"]})).unwrap();
             let executor = fixture_executor(
                 manager.clone(),
@@ -598,9 +608,10 @@ async fn admission_is_held_through_running_delegate_and_released_on_abort() {
     });
     let entered = Arc::new(tokio::sync::Notify::new());
     let entered_delegate = entered.clone();
-    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, _, permit| {
         let entered = entered_delegate.clone();
         Box::pin(async move {
+            let _permit = permit;
             entered.notify_one();
             std::future::pending::<()>().await;
             unreachable!()
@@ -678,8 +689,12 @@ async fn cancellation_interrupts_trust_lookup_before_creating_consent() {
     let directory = work();
     let manager = ConsentManager::default();
     let entered = Arc::new(tokio::sync::Notify::new());
-    let delegate: ToolDelegate =
-        Arc::new(|_, _, _| Box::pin(async { panic!("cancelled lookup dispatched") }));
+    let delegate: ToolDelegate = Arc::new(|_, _, _, permit| {
+        Box::pin(async {
+            let _permit = permit;
+            panic!("cancelled lookup dispatched")
+        })
+    });
     let executor = fixture_executor(
         manager.clone(),
         Arc::new(WaitingTrust(entered.clone())),
@@ -721,9 +736,10 @@ async fn approved_dispatch_preserves_process_deadline_and_output_bound() {
         approvals: Mutex::new(vec![]),
     });
     let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
-    let delegate: ToolDelegate = Arc::new(move |_, _, ctx| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, ctx, permit| {
         let pool = pool.clone();
         Box::pin(async move {
+            let _permit = permit;
             let result = pool
                 .run(
                     ProcessRequest {
@@ -811,7 +827,7 @@ async fn delegate_retains_authenticated_context_and_injected_durable_audit_write
         });
         let database_delegate = database.clone();
         let expected_directory = directory.clone();
-        let delegate: ToolDelegate = Arc::new(move |name, input, ctx| {
+        let delegate: ToolDelegate = Arc::new(move |name, input, ctx, permit| {
             assert_eq!(ctx.user_id, "user");
             assert_eq!(ctx.session_id, "session");
             assert_eq!(ctx.action_id, "action");
@@ -832,6 +848,7 @@ async fn delegate_retains_authenticated_context_and_injected_durable_audit_write
                 ..AuditEntry::default()
             };
             Box::pin(async move {
+                let _permit = permit;
                 tokio::task::spawn_blocking(move || {
                     AuditWriter::new(&database.lock().unwrap())
                         .write(entry)
@@ -951,8 +968,12 @@ async fn cancellation_that_races_a_ready_trust_lookup_is_rechecked_before_effect
     let directory = work();
     let manager = ConsentManager::default();
     let token = ProcessCancellation::default();
-    let delegate: ToolDelegate =
-        Arc::new(|_, _, _| Box::pin(async { panic!("cancelled effect dispatched") }));
+    let delegate: ToolDelegate = Arc::new(|_, _, _, permit| {
+        Box::pin(async {
+            let _permit = permit;
+            panic!("cancelled effect dispatched")
+        })
+    });
     let executor = fixture_executor(
         manager.clone(),
         Arc::new(CancellingTrust(token.clone())),
@@ -980,8 +1001,12 @@ async fn malformed_nonobject_arguments_are_rejected_before_trust_consent_or_effe
     let directory = work();
     let manager = ConsentManager::default();
     let trust = Arc::new(WaitingTrust(Arc::new(tokio::sync::Notify::new())));
-    let delegate: ToolDelegate =
-        Arc::new(|_, _, _| Box::pin(async { panic!("malformed arguments dispatched") }));
+    let delegate: ToolDelegate = Arc::new(|_, _, _, permit| {
+        Box::pin(async {
+            let _permit = permit;
+            panic!("malformed arguments dispatched")
+        })
+    });
     let executor = fixture_executor(manager.clone(), trust, delegate, HashMap::new());
     let mut ctx = context(&directory, ProcessCancellation::default());
     ctx.runtime_mode = RuntimeMode::FullAccess;

@@ -38,6 +38,7 @@ pub struct BrowserSandboxRequest {
     pub novnc_port: u16,
     pub vnc_port: u16,
     pub cdp_port: u16,
+    pub stagehand_extension_path: String,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +80,12 @@ impl LiveViewCommand {
     }
 }
 pub trait LiveViewHost: Send + Sync {
+    /// Supplied by trusted host composition, not by a tool argument.
+    fn stagehand_extension_path(&self) -> Result<String> {
+        Err(LiveViewError(
+            "Stagehand browser extension is not configured".into(),
+        ))
+    }
     fn cwd(&self) -> Result<String>;
     fn max_container_starts(&self) -> Option<String>;
     fn reserve_port(&self, container: bool) -> BoxFuture<'_, Result<u16>>;
@@ -260,6 +267,7 @@ impl LiveViewManager {
             novnc_port: a,
             vnc_port: b,
             cdp_port: c,
+            stagehand_extension_path: self.host.stagehand_extension_path()?,
         };
         let session = self.sandbox.start(request).await?;
         Ok(LiveViewSession {
@@ -380,14 +388,29 @@ fn js_number(n: f64) -> String {
 /// are supplied by trusted composition, never by model/tool input.
 pub struct NativeLiveViewHost {
     pub binaries: [PathBuf; 3],
+    stagehand_extension: Option<PathBuf>,
     started: Instant,
 }
 impl Default for NativeLiveViewHost {
     fn default() -> Self {
         Self {
             binaries: ["Xvfb".into(), "x11vnc".into(), "websockify".into()],
+            stagehand_extension: None,
             started: Instant::now(),
         }
+    }
+}
+impl NativeLiveViewHost {
+    /// Bind a trusted installed extension directory to this host adapter.
+    pub fn with_stagehand_extension(mut self, path: PathBuf) -> Result<Self> {
+        let path = path
+            .canonicalize()
+            .map_err(|e| LiveViewError(e.to_string()))?;
+        if !path.is_dir() || !path.join("manifest.json").is_file() {
+            return Err(LiveViewError("Invalid Stagehand browser extension".into()));
+        }
+        self.stagehand_extension = Some(path);
+        Ok(self)
     }
 }
 pub struct NativeLiveViewProcess {
@@ -432,6 +455,18 @@ impl Drop for NativeLiveViewProcess {
     }
 }
 impl LiveViewHost for NativeLiveViewHost {
+    fn stagehand_extension_path(&self) -> Result<String> {
+        let path = self
+            .stagehand_extension
+            .as_ref()
+            .ok_or_else(|| LiveViewError("Stagehand browser extension is not configured".into()))?;
+        if !path.is_dir() || !path.join("manifest.json").is_file() {
+            return Err(LiveViewError("Invalid Stagehand browser extension".into()));
+        }
+        path.to_str()
+            .map(str::to_owned)
+            .ok_or_else(|| LiveViewError("Invalid Stagehand browser extension path".into()))
+    }
     fn cwd(&self) -> Result<String> {
         std::env::current_dir()
             .map(|p| p.to_string_lossy().into_owned())

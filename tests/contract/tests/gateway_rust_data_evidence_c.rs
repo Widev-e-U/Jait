@@ -60,7 +60,7 @@ mod whatsapp {
     }
 
     #[test]
-    fn extract_text_walks_wrappers_and_bounds_size() {
+    fn extract_text_walks_wrappers_and_preserves_long_text() {
         // Plain conversation text is returned verbatim, whitespace preserved.
         assert_eq!(
             extract_text(&json!({"conversation": "  hi there \n"})),
@@ -86,14 +86,17 @@ mod whatsapp {
             ),
             "once"
         );
-        // Boundary: 65_536 bytes is accepted, one more is refused as empty.
+        // The TypeScript extractor returns long text without truncation.
         let at_limit = "a".repeat(65_536);
         let over_limit = "a".repeat(65_537);
         assert_eq!(
             extract_text(&json!({"conversation": at_limit})).len(),
             65_536
         );
-        assert_eq!(extract_text(&json!({"conversation": over_limit})), "");
+        assert_eq!(
+            extract_text(&json!({"conversation": over_limit})).len(),
+            65_537
+        );
         // Error/refusal: no known text carrier.
         assert_eq!(extract_text(&json!({"stickerMessage": {"url": "x"}})), "");
         assert_eq!(extract_text(&Value::Null), "");
@@ -370,7 +373,7 @@ mod db {
     #[test]
     fn migration_inventory_is_sequential_and_named() {
         let inventory = migration_inventory();
-        assert_eq!(inventory.len(), 75);
+        assert_eq!(inventory.len(), 77);
         let first = inventory
             .first()
             .map(|(id, name)| (*id as u64, name.to_string()));
@@ -378,13 +381,13 @@ mod db {
         let last = inventory
             .last()
             .map(|(id, name)| (*id as u64, name.to_string()));
-        assert_eq!(last, Some((75, "agent_control_hard_stop".to_owned())));
+        assert_eq!(last, Some((77, "github_intake_observation".to_owned())));
         let third = inventory
             .get(2)
             .map(|(id, name)| (*id as u64, name.to_string()));
         assert_eq!(third, Some((3, "user_settings_disabled_tools".to_owned())));
         for (index, (id, name)) in inventory.iter().enumerate() {
-            assert_eq!(*id as u64, index as u64 + 1, "ids are 1..=75 in order");
+            assert_eq!(*id as u64, index as u64 + 1, "ids are 1..=77 in order");
             assert!(!name.is_empty());
             assert!(
                 name.chars()
@@ -401,11 +404,11 @@ mod db {
         // Fresh database: nothing applied yet.
         assert_eq!(schema_version(&connection), 0);
         migrate_database(&connection).expect("migrate");
-        assert_eq!(schema_version(&connection), 75);
+        assert_eq!(schema_version(&connection), 77);
         verify_schema(&connection).expect("verify schema after full migration");
         // Idempotent: a second full migration is a no-op.
         migrate_database(&connection).expect("re-migrate");
-        assert_eq!(schema_version(&connection), 75);
+        assert_eq!(schema_version(&connection), 77);
         drop(connection);
         let _ = std::fs::remove_file(&path);
     }
@@ -418,7 +421,7 @@ mod db {
         assert_eq!(schema_version(&connection), 3);
         // Resuming finishes the remaining migrations.
         migrate_database(&connection).expect("finish migrations");
-        assert_eq!(schema_version(&connection), 75);
+        assert_eq!(schema_version(&connection), 77);
         drop(connection);
         let _ = std::fs::remove_file(&path);
     }

@@ -99,6 +99,7 @@ impl ControlAccess<'_> {
 /// Host authority whose lease serializes session ownership changes with claims.
 /// Implementations must synchronize *all* ownership revocations with the lease;
 /// a point-in-time ownership lookup does not satisfy this contract.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) trait ConsentOwnershipLease {
     type Lease<'a>
     where
@@ -111,6 +112,7 @@ pub(crate) trait ConsentOwnershipLease {
 /// until the claim is made. Sessions and agent_threads must be in this same
 /// database, and every ownership revocation must write to that database.
 /// This is not suitable for callbacks or persistence while the lease is held.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) struct SqliteConsentOwnership<'a> {
     pub(crate) db: &'a rusqlite::Connection,
 }
@@ -140,6 +142,7 @@ impl ConsentOwnershipLease for SqliteConsentOwnership<'_> {
 /// its lease. The caller must finalize the returned claim after this function
 /// returns, on a supervised blocking lane. This adapter is not an authentication
 /// mechanism and requires an actual host implementation to provide revocation.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) fn claim_owned_consent<A: ConsentOwnershipLease>(
     authority: &A,
     manager: &crate::security::consent_manager::ConsentManager,
@@ -174,6 +177,7 @@ pub(crate) fn claim_owned_consent<A: ConsentOwnershipLease>(
 
 /// Claim a bounded batch while ownership is leased. Finalize the returned
 /// claims only after this function releases the lease, on a supervised lane.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) fn claim_owned_consent_batch<A: ConsentOwnershipLease>(
     authority: &A,
     manager: &crate::security::consent_manager::ConsentManager,
@@ -279,6 +283,7 @@ mod sqlite_ownership_tests {
 /// boundary. Lane admission precedes the claim, and accepted work completes even
 /// if the awaiting caller disconnects. Callbacks never run on the database worker
 /// or while its ownership transaction is held.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) async fn supervised_sqlite_consent_decision(
     worker: crate::db::worker::DatabaseWorker,
     lane: crate::runtime::blocking::BlockingLane,

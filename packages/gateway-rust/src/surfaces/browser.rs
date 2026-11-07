@@ -187,6 +187,7 @@ fn opt_bool(value: Option<&Value>) -> Option<bool> {
     value.and_then(Value::as_bool)
 }
 
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 fn opt_f64(value: Option<&Value>) -> Option<f64> {
     value.and_then(Value::as_f64)
 }
@@ -1049,7 +1050,7 @@ pub fn append_browser_runtime_event(
     events: &mut Vec<BrowserRuntimeEvent>,
     next: BrowserRuntimeEventInput,
 ) -> BrowserRuntimeEvent {
-    let id = events.last().map(|event| event.id + 1).unwrap_or(0) + 1;
+    let id = events.last().map(|event| event.id).unwrap_or(0) + 1;
     let event = BrowserRuntimeEvent {
         id,
         timestamp: now_iso8601(),
@@ -1707,13 +1708,8 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
     fn block_on<F: Future>(future: F) -> F::Output {
-        use std::task::{Context, Poll, Wake, Waker};
-        struct NoopWaker;
-        impl Wake for NoopWaker {
-            fn wake(self: Arc<Self>) {}
-        }
-        let waker = Waker::from(Arc::new(NoopWaker));
-        let mut context = Context::from_waker(&waker);
+        use std::task::{Context, Poll, Waker};
+        let mut context = Context::from_waker(Waker::noop());
         let mut future = Box::pin(future);
         loop {
             if let Poll::Ready(value) = future.as_mut().poll(&mut context) {
@@ -1858,8 +1854,16 @@ mod tests {
     }
 
     fn surface_with(driver: Arc<MockDriver>) -> BrowserSurface {
-        let surface = BrowserSurface::with_driver("browser-1", driver);
-        block_on(surface.start(start_input("session-1"))).expect("start");
+        // Exercise post-start behavior with an injected fake; this does not grant
+        // authority to start a real driver or cover the supervised host boundary.
+        let surface = BrowserSurface::with_driver("browser-1", driver.clone());
+        {
+            let mut state = surface.state.lock().unwrap();
+            state.driver = Some(driver);
+            state.status = SurfaceState::Running;
+            state.session_id = Some("session-1".into());
+            state.started_at = Some(now_iso8601());
+        }
         surface
     }
 
@@ -1904,7 +1908,7 @@ mod tests {
             let clock = Arc::clone(&clock);
             Arc::new(move || clock.load(Ordering::SeqCst)) as FloodClock
         };
-        let mut guard = ConsoleFloodGuard::with_clock(1_000, 2, 60_000, now);
+        let mut guard = ConsoleFloodGuard::with_clock(1_000, 3, 60_000, now);
         let mut events: Vec<BrowserRuntimeEvent> = Vec::new();
 
         push_browser_runtime_event(
@@ -1986,37 +1990,21 @@ mod tests {
     }
 
     #[test]
-    fn start_moves_state_and_records_session_and_snapshot_metadata() {
-        let mock_driver = Arc::new(MockDriver::default());
-        let driver: Arc<dyn BrowserDriver> = mock_driver.clone();
-        let surface = BrowserSurface::with_driver("browser-1", Arc::clone(&driver));
-        assert_eq!(surface.state(), SurfaceState::Idle);
-
-        block_on(surface.start(start_input("session-1"))).expect("start");
-        assert_eq!(surface.state(), SurfaceState::Running);
-        assert_eq!(surface.session_id().as_deref(), Some("session-1"));
-
-        let snapshot = surface.snapshot().expect("snapshot");
-        assert_eq!(snapshot.kind, "browser");
-        assert_eq!(snapshot.session_id, "session-1");
-        assert!(snapshot.started_at.is_some());
-        assert_eq!(snapshot.metadata["currentUrl"], Value::Null);
-        assert_eq!(snapshot.metadata["title"], Value::Null);
-        assert_eq!(snapshot.metadata["actionCount"], json!(0));
-        assert_eq!(snapshot.metadata["liveViewContainerName"], Value::Null);
-
-        // Idempotent while running.
-        let navigations_before = mock_driver.navigations.load(Ordering::SeqCst);
-        block_on(surface.start(start_input("session-1"))).expect("second start");
-        assert_eq!(navigations_before, 0);
-        assert_eq!(mock_driver.navigations.load(Ordering::SeqCst), 0);
+    fn start_rejects_legacy_driver_without_supervised_authority() {
+        let driver = mock(MockDriver::default());
+        let surface = BrowserSurface::with_driver("browser-1", driver.clone());
+        let error = block_on(surface.start(start_input("session-1"))).expect_err("must reject");
+        assert!(error.contains("supervised effect authority"));
+        assert_eq!(surface.state(), SurfaceState::Error);
+        assert!(surface.driver().is_none());
+        assert_eq!(driver.navigations.load(Ordering::SeqCst), 0);
     }
 
     #[test]
     fn start_without_factory_reports_error_state() {
         let surface = BrowserSurface::new("browser-1", BrowserSurfaceOptions::default());
         let error = block_on(surface.start(start_input("session-1"))).expect_err("must fail");
-        assert!(error.contains("No browser driver factory is configured"));
+        assert!(error.contains("supervised effect authority"));
         assert_eq!(surface.state(), SurfaceState::Error);
     }
 
@@ -2238,8 +2226,9 @@ mod tests {
         let surface = factory.create("browser-9").expect("create");
         assert_eq!(surface.id(), "browser-9");
         assert_eq!(surface.kind(), "browser");
-        block_on(surface.start(start_input("session-2"))).expect("start");
-        assert_eq!(surface.state(), SurfaceState::Running);
+        let error = block_on(surface.start(start_input("session-2"))).expect_err("must reject");
+        assert!(error.contains("supervised effect authority"));
+        assert_eq!(surface.state(), SurfaceState::Error);
     }
 
     #[test]
@@ -2250,13 +2239,12 @@ mod tests {
         surface.set_state_listener(Some(Arc::new(move |state: SurfaceState| {
             sink.lock().expect("states").push(state);
         })));
-        block_on(surface.start(start_input("session-1"))).expect("start");
+        block_on(surface.start(start_input("session-1"))).expect_err("must reject");
         block_on(surface.stop()).expect("stop");
         assert_eq!(
             seen.lock().expect("states").as_slice(),
             [
-                SurfaceState::Starting,
-                SurfaceState::Running,
+                SurfaceState::Error,
                 SurfaceState::Stopping,
                 SurfaceState::Stopped
             ]

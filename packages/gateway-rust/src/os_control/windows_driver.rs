@@ -976,7 +976,7 @@ impl PtySshTransport {
                     timed_out: true,
                 };
             }
-            let wait_ms = (deadline - now).as_millis().min(50).max(1) as libc::c_int;
+            let wait_ms = (deadline - now).as_millis().clamp(1, 50) as libc::c_int;
             let mut poll_fd = libc::pollfd {
                 fd: master,
                 events: libc::POLLIN,

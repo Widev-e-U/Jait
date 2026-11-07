@@ -1,8 +1,7 @@
 #[path = "../src/providers/thread_revocation_upgrade_candidate.rs"]
 mod upgrade;
-#[path = "../src/providers/thread_turn_schema_installer.rs"]
-mod v1;
 use rusqlite::Connection;
+use upgrade::v1;
 
 fn db() -> Connection {
     let db = Connection::open_in_memory().unwrap();

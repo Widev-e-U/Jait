@@ -1,10 +1,12 @@
 //! Isolated v1-to-revocation upgrade experiment. Not wired to application startup.
 //! This coordinates the exact v1 installer with the candidate's extra head triggers;
 //! it does not establish writer authority, effect fencing, or production migration policy.
+// This isolated upgrader only uses the schema installer entry point.
+#[allow(dead_code)]
 #[path = "thread_turn_revocation_candidate.rs"]
 mod revocation;
 #[path = "thread_turn_schema_installer.rs"]
-mod v1;
+pub(crate) mod v1;
 use rusqlite::{Connection, Error, Result};
 
 type Object = (String, String, String, Option<String>);

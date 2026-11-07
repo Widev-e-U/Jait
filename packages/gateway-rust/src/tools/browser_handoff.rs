@@ -634,10 +634,6 @@ mod tests {
             }
         }
 
-        fn set_current(&self, browser: Option<BrowserPreview>) {
-            *self.current.lock().unwrap() = browser;
-        }
-
         fn shared_calls(&self) -> Vec<(String, bool)> {
             self.shared.lock().unwrap().clone()
         }

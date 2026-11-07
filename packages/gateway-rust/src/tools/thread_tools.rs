@@ -112,10 +112,12 @@ async fn accessible_thread<C: Send + Sync>(
 
 /// Add registry-backed scheduled preflight to an existing provider resolver.
 /// The identity callback must read authenticated host state, not tool input.
+type AuthenticatedUser<C> = Arc<dyn Fn(&C) -> Option<String> + Send + Sync>;
+
 pub fn with_scheduled_provider_preflight<C: Send + Sync + 'static>(
     resolver: JaitPort<C>,
     registry: crate::providers::registry::ProviderRegistry,
-    authenticated_user: Arc<dyn Fn(&C) -> Option<String> + Send + Sync>,
+    authenticated_user: AuthenticatedUser<C>,
 ) -> JaitPort<C> {
     Arc::new(move |method, args, host| {
         let resolver = resolver.clone();

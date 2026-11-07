@@ -490,12 +490,14 @@ fn json_utf16_prefix(text: &str, limit: usize) -> String {
     encoded
 }
 
+type WorkspaceResolver<'a> = &'a dyn Fn(&str, &PersonaAgentProfile) -> Option<String>;
+
 pub struct TeamChatService<'a> {
     store: &'a mut dyn TeamChatStore,
     sessions: &'a dyn SessionLookup,
     profiles: &'a dyn AgentDirectory,
     threads: &'a mut dyn ThreadWriter,
-    workspace_for_agent: Option<&'a dyn Fn(&str, &PersonaAgentProfile) -> Option<String>>,
+    workspace_for_agent: Option<WorkspaceResolver<'a>>,
     closed: bool,
 }
 

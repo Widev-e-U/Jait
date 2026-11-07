@@ -273,20 +273,17 @@ async fn handle(State(state): State<UpdateRoutes>, request: Request) -> Response
     }
 }
 
+type LatestCheck = futures_util::future::Shared<BoxFuture<'static, Result<String, UpdateError>>>;
+type CompareCache = std::collections::HashMap<(String, String), (std::time::Instant, Vec<Commit>)>;
+
 /// Read-only implementation. Activation is deliberately unavailable until a host
 /// supplies an independent controller with rollback and health verification.
 pub struct ReadOnlyUpdateBackend {
     client: reqwest::Client,
     latest_check: fn() -> BoxFuture<'static, Result<String, UpdateError>>,
-    latest: Arc<
-        tokio::sync::Mutex<
-            Option<futures_util::future::Shared<BoxFuture<'static, Result<String, UpdateError>>>>,
-        >,
-    >,
+    latest: Arc<tokio::sync::Mutex<Option<LatestCheck>>>,
     releases_cache: tokio::sync::Mutex<Option<(std::time::Instant, Vec<Release>)>>,
-    compare_cache: tokio::sync::Mutex<
-        std::collections::HashMap<(String, String), (std::time::Instant, Vec<Commit>)>,
-    >,
+    compare_cache: tokio::sync::Mutex<CompareCache>,
 }
 
 impl ReadOnlyUpdateBackend {

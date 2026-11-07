@@ -445,6 +445,7 @@ impl ForgeSession {
         })
     }
     /// Require an active Git request scope for every forge command.
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn new_scoped(
         owner: String,
         root: PathBuf,

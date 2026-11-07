@@ -3,12 +3,12 @@
 //!
 //! Reference spans (TypeScript, `ThreadStore`):
 //! - constants:        `RESTART_ERROR`, `RESTART_ACTIVITY_SUMMARY`,
-//!                     `CANCELLED_DELIVERY_ERROR`, `BLOCKED_ERROR_PREFIX`
+//!   `CANCELLED_DELIVERY_ERROR`, `BLOCKED_ERROR_PREFIX`
 //! - `queueRestartRecovery` / `listPendingRecovery` / `claimRecovery` /
-//!                     `getRecovery` / `clearRecovery`
+//!   `getRecovery` / `clearRecovery`
 //! - status transitions: `markRunning`, `markCompleted`,
-//!                     `markCompletedAndClearSession`, `clearSession`,
-//!                     `markError`, `markInterrupted`
+//!   `markCompletedAndClearSession`, `clearSession`,
+//!   `markError`, `markInterrupted`
 //!
 //! Semantics preserved from the reference:
 //! - `queue_restart_recovery` is idempotent: it re-queues rows that are still

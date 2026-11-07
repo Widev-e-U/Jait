@@ -35,7 +35,9 @@ INSERT INTO main.rust_thread_turn_schema_marker_v1(singleton, version) VALUES (1
 // Include implicit indexes and every extra object attached to our tables, as well as
 // the entire reserved name prefix. Exact sqlite_schema SQL deliberately rejects even
 // semantically equivalent DDL; compatibility must be explicitly reviewed.
-fn fingerprint(db: &Connection) -> Result<Vec<(String, String, String, Option<String>)>> {
+type SchemaObject = (String, String, String, Option<String>);
+
+fn fingerprint(db: &Connection) -> Result<Vec<SchemaObject>> {
     let mut statement = db.prepare("SELECT type, name, tbl_name, sql FROM main.sqlite_schema WHERE name GLOB 'rust_thread_turn_*' OR tbl_name IN ('rust_thread_turn_schema_marker_v1', 'rust_thread_turn_heads', 'rust_thread_turn_events') ORDER BY type, name")?;
     let rows = statement.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
     rows.collect()

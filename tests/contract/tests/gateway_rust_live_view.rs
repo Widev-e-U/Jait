@@ -62,6 +62,14 @@ impl Drop for Child {
     }
 }
 impl LiveViewHost for Fixture {
+    fn stagehand_extension_path(&self) -> Result<String> {
+        if self.call["extensionMissing"] == true {
+            return Err(LiveViewError(
+                "Stagehand browser extension is not configured".into(),
+            ));
+        }
+        Ok("/fixture/stagehand-extension".into())
+    }
     fn cwd(&self) -> Result<String> {
         Ok("/fixture/project".into())
     }
@@ -202,6 +210,25 @@ async fn compare(mut call: Value) {
     drop(kept);
 }
 #[tokio::test]
+async fn missing_extension_fails_before_starting_sandbox() {
+    let fixture = Arc::new(Fixture::new(json!({"extensionMissing": true})));
+    let manager = LiveViewManager::new(fixture.clone(), fixture.clone(), 1);
+    let error = match manager.start(LiveViewOptions::default()).await {
+        Ok(_) => panic!("missing extension must fail"),
+        Err(error) => error,
+    };
+    assert!(error.0.contains("extension is not configured"));
+    assert!(
+        !fixture
+            .events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event["name"] == "sandboxStart")
+    );
+}
+
+#[tokio::test]
 async fn default_container_and_explicit_root_derive_state_from_sandbox() {
     compare(json!({})).await;
     compare(
@@ -283,6 +310,9 @@ impl QueueFixture {
     }
 }
 impl LiveViewHost for QueueFixture {
+    fn stagehand_extension_path(&self) -> Result<String> {
+        self.host.stagehand_extension_path()
+    }
     fn cwd(&self) -> Result<String> {
         self.host.cwd()
     }

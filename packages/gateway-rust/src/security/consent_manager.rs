@@ -269,7 +269,9 @@ pub struct PendingIdentity {
 
 const MAX_SNAPSHOT_ITEMS: usize = 4096;
 // Bound the number of session entries examined while holding the ownership lease.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const MAX_LEASED_BATCH_SCAN: usize = 128;
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const MAX_LEASED_BATCH_CLAIMS: usize = 128;
 const MAX_SNAPSHOT_ID_BYTES: usize = 1024 * 1024;
 
@@ -381,7 +383,9 @@ pub(crate) struct PreparedDecisionTime {
 /// queue recovery closed; persistence and callbacks run only in `finalize`.
 pub(crate) struct DecisionClaim {
     entry: Pending,
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     decision: ConsentDecision,
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     finalization: DecisionFinalization,
     started: bool,
 }
@@ -398,6 +402,7 @@ impl Drop for DecisionClaim {
     }
 }
 impl DecisionClaim {
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn finalize(mut self) -> Result<(), String> {
         self.started = true;
         let request = {
@@ -427,6 +432,7 @@ impl DecisionClaim {
 /// returned errors identify the failed claims; recovery remains fail-closed.
 /// An observer panic is resumed after all remaining claims are attempted.
 /// Call only after releasing the host authority lease.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) fn finalize_decision_batch(
     claims: Vec<(String, DecisionClaim)>,
 ) -> Vec<(String, String)> {
@@ -889,6 +895,7 @@ impl ConsentManager {
     }
     /// Capture the exclusive sequence boundary for an operation while the caller
     /// holds its session/host authority lease. A boundary conveys no authority.
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn batch_boundary(&self) -> u64 {
         self.inner.state.lock().unwrap().pending.next
     }
@@ -896,6 +903,7 @@ impl ConsentManager {
     /// Claim one bounded, operation-owned window. The caller must authenticate
     /// and hold the same authority discipline used to capture the boundary.
     /// Cursors belong to the operation, never to a shared session.
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn claim_batch_window(
         &self,
         expected_session: &str,
@@ -904,7 +912,7 @@ impl ConsentManager {
         max_scan_entries: usize,
         reason: Option<String>,
         prepared: PreparedDecisionTime,
-    ) -> Result<(u64, usize, Vec<(String, DecisionClaim)>), String> {
+    ) -> Result<BatchWindow, String> {
         if !Arc::ptr_eq(&self.inner, &prepared.inner) {
             return Err("prepared decision belongs to another manager".into());
         }
@@ -971,6 +979,7 @@ impl ConsentManager {
     /// release it before finalizing claims. A zero limit claims nothing; oversized
     /// limits fail before any claim. A scan containing only expired entries may
     /// return a retry-required error, retaining its position for the next call.
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn claim_batch_for_session(
         &self,
         expected_session: &str,
@@ -1308,6 +1317,7 @@ impl ConsentManager {
 /// Unmounted host contract. The lease authorizes the complete binding, including
 /// notification origin or override intent, and excludes revocation until release.
 /// Authentication, intent-specific policy and actual override effects are host duties.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) trait ConsentBatchAuthority {
     type Lease<'a>
     where
@@ -1318,13 +1328,17 @@ pub(crate) trait ConsentBatchAuthority {
     ) -> Result<Option<Self::Lease<'a>>, String>;
 }
 
+type BatchWindow = (u64, usize, Vec<(String, DecisionClaim)>);
+
 /// Volatile operation coordinator. The host must execute these synchronous
 /// methods on a supervised blocking lane and never reuse operation IDs.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 pub(crate) struct ConsentBatchCoordinator {
     manager: ConsentManager,
     operations: Arc<Mutex<crate::security::consent_batch_operation::ConsentBatchOperations>>,
 }
 
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 struct InFlightBatch {
     operations: Arc<Mutex<crate::security::consent_batch_operation::ConsentBatchOperations>>,
     id: String,
@@ -1341,6 +1355,7 @@ impl Drop for InFlightBatch {
     }
 }
 impl ConsentBatchCoordinator {
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn new(manager: ConsentManager) -> Self {
         Self {
             manager,
@@ -1348,6 +1363,7 @@ impl ConsentBatchCoordinator {
         }
     }
 
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn create<A: ConsentBatchAuthority>(
         &self,
         authority: &A,
@@ -1370,6 +1386,7 @@ impl ConsentBatchCoordinator {
         result.map(|_| true)
     }
 
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     pub(crate) fn step<A: ConsentBatchAuthority>(
         &self,
         authority: &A,
@@ -2456,7 +2473,14 @@ mod clock_failure_tests {
         let second = manager.request_consent(cancellation_request()).unwrap();
         assert!(changes.try_recv().is_ok());
         assert!(manager.approve(&first.id, None, None).unwrap());
-        assert!(changes.try_recv().is_ok());
+        assert!(matches!(
+            changes.try_recv(),
+            Ok(ConsentQueueEvent::Resolved { .. })
+        ));
+        assert!(matches!(
+            changes.try_recv(),
+            Ok(ConsentQueueEvent::SnapshotRequired)
+        ));
         let claim = manager.claim_cancelled(&second.id).unwrap();
         assert!(changes.try_recv().is_ok());
         assert!(manager.try_subscribe_pending_changes().is_err());

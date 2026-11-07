@@ -208,19 +208,21 @@ pub struct StagingRequest {
 /// An error must never transfer a candidate. The implementation must not rely
 /// on the caller's task or runtime surviving to complete cleanup. No such host
 /// implementation is provided here; process groups alone do not meet this API.
+pub type StagingFuture = std::pin::Pin<
+    Box<
+        dyn std::future::Future<Output = Result<Box<dyn StagedCandidateLease>, String>>
+            + Send
+            + 'static,
+    >,
+>;
+
 pub trait SandboxSupervisor: Send + Sync + 'static {
     fn capabilities(&self) -> SandboxCapabilities;
     fn stage(
         &self,
         request: StagingRequest,
         cancel: tokio::sync::oneshot::Receiver<()>,
-    ) -> std::pin::Pin<
-        Box<
-            dyn std::future::Future<Output = Result<Box<dyn StagedCandidateLease>, String>>
-                + Send
-                + 'static,
-        >,
-    >;
+    ) -> StagingFuture;
 }
 
 struct CancelOnDrop(Option<tokio::sync::oneshot::Sender<()>>);

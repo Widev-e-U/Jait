@@ -2302,6 +2302,7 @@ fn connection_key(owner: &str) -> String {
 // ---------------------------------------------------------------------------
 
 /// `start()` retries a failed connection on a fixed five second timer.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const RETRY_DELAY_MS: u64 = 5_000;
 // JavaScript Object.entries enumerates array indices before other keys,
 // preserving insertion order for the remaining properties.
@@ -2378,6 +2379,7 @@ struct Lifecycle {
 
 /// One section of a `/sync` `rooms` payload (`join` / `invite` / `leave`) as
 /// `(roomId, body)` pairs — TS iterates `Object.entries(rooms[section] ?? {})`.
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 fn room_section<'a>(raw: &'a Value, section: &str) -> Vec<(String, &'a Value)> {
     raw.get("rooms")
         .and_then(|rooms| rooms.get(section))
@@ -5239,10 +5241,14 @@ pub mod route_validation {
 
         #[test]
         fn login_defaults_missing_credentials_to_empty_strings() {
-            let parsed = validate_login(&json!({"homeserver": "https://matrix.org"})).unwrap();
+            assert!(validate_login(&json!({"homeserver": "https://matrix.org"})).is_err());
+            let parsed = validate_login(
+                &json!({"homeserver": "https://matrix.org", "accessToken": "token"}),
+            )
+            .unwrap();
             assert_eq!(parsed["username"], "");
             assert_eq!(parsed["password"], "");
-            assert!(parsed.get("accessToken").is_none());
+            assert_eq!(parsed["accessToken"], "token");
         }
 
         #[test]

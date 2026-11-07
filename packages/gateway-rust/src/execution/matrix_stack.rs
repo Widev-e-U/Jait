@@ -258,6 +258,8 @@ pub fn render_status_cli(
 /// Every method must revalidate lease authority at its effect boundary, honor
 /// cancellation, and return only after supervised work has stopped. Output
 /// methods must flush before returning and never interpret terminal controls.
+// Staged host trait; its future bounds will be chosen with its runtime owner.
+#[allow(async_fn_in_trait)]
 pub trait StatusHost {
     type Lease;
     async fn inspect(
@@ -530,6 +532,8 @@ pub fn resolve_image_digest(output: &[u8]) -> Result<String, String> {
 /// to 64 KiB while reading, not merely truncated after allocation. Interactive
 /// data must not be captured. Cancellation must stop and reap child processes
 /// before a host future returns; dropping a future is not sufficient cleanup.
+// Staged host trait; its future bounds will be chosen with its runtime owner.
+#[allow(async_fn_in_trait)]
 pub trait InitializationHost {
     type Daemon;
     type Lease;

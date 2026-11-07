@@ -953,6 +953,7 @@ struct ClientEntry {
     outbound: mpsc::Sender<OutboundMessage>,
     _disconnect: oneshot::Sender<()>,
     dropped: u64,
+    #[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
     connected_at: Instant,
 }
 
@@ -1268,7 +1269,12 @@ impl WsHub {
     // "deny" made every scoped fan-out deliver to zero clients.
     fn authorized(&self, scope: &DeliveryScope) -> bool {
         let Some(authorizer) = self.config.authorizer.as_ref() else {
-            return true;
+            // Session binding retains the reference's optional callback behavior;
+            // resource and terminal access require an explicit authority.
+            return matches!(
+                scope,
+                DeliveryScope::Unscoped { .. } | DeliveryScope::Session { .. }
+            );
         };
         match scope {
             DeliveryScope::Unscoped { .. } => true,
@@ -2848,7 +2854,7 @@ mod tests {
         assert_eq!(denial.value["payload"]["code"], "UNAUTHORIZED");
         assert_eq!(
             denial.value["payload"]["message"],
-            "Must authenticate before subscribing"
+            "Authentication or access required"
         );
         let disposition = runtime
             .block_on(handle_message(&hub, "c", r#"{"type":"subscribe"}"#))
@@ -3056,7 +3062,7 @@ mod tests {
         assert_eq!(denial.value["payload"]["code"], "UNAUTHORIZED");
         assert_eq!(
             denial.value["payload"]["message"],
-            "Must authenticate before subscribing"
+            "Authentication or access required"
         );
 
         // Revocation is not a permanent ban: once the authority knows the user again a

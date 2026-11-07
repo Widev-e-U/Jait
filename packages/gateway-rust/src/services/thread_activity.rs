@@ -3,8 +3,8 @@
 //!
 //! Reference spans (TypeScript):
 //! - constants (L24-34):  `MAX_ACTIVITY_PAYLOAD_BYTES = 512_000`,
-//!                        `MAX_ACTIVITY_SUMMARY_BYTES = 8_000`,
-//!                        `TRANSIENT_ACTIVITY_KINDS`
+//!   `MAX_ACTIVITY_SUMMARY_BYTES = 8_000`,
+//!   `TRANSIENT_ACTIVITY_KINDS`
 //! - `isTransientActivityKind`  (L35)
 //! - `appendActivity`           (L386-402)
 //! - `updateAssistantCheckpoint`(L405-412)

@@ -1441,9 +1441,9 @@ mod tests {
     #[test]
     fn schema_config_is_the_extracted_relational_config() {
         let config = DrizzleSchemaConfig::from_schema();
-        assert_eq!(config.full_schema.len(), 48);
-        assert_eq!(config.schema.len(), 48);
-        assert_eq!(config.table_names_map.len(), 48);
+        assert_eq!(config.full_schema.len(), 52);
+        assert_eq!(config.schema.len(), 52);
+        assert_eq!(config.table_names_map.len(), 52);
         assert_eq!(
             config
                 .table("messageContextMetadata")
@@ -1480,10 +1480,10 @@ mod tests {
         assert_eq!(connection.adapter, DrizzleAdapter::BunSqlite);
         assert_eq!(connection.adapter.module(), "drizzle-orm/bun-sqlite");
         assert_eq!(connection.client_backend, Backend::BunSqlite);
-        assert_eq!(connection.config.schema.len(), 48);
+        assert_eq!(connection.config.schema.len(), 52);
         assert_eq!(
             host.drizzle_calls.lock().unwrap().clone(),
-            vec![(DrizzleAdapter::BunSqlite, 48)]
+            vec![(DrizzleAdapter::BunSqlite, 52)]
         );
     }
 
@@ -1502,7 +1502,7 @@ mod tests {
         assert_eq!(connection.client_backend, Backend::NodeSqlite);
         assert_eq!(
             host.drizzle_calls.lock().unwrap().clone(),
-            vec![(DrizzleAdapter::BetterSqlite3Session, 48)]
+            vec![(DrizzleAdapter::BetterSqlite3Session, 52)]
         );
     }
 

@@ -557,16 +557,16 @@
         "tests/contract/tests/gateway_rust_platform_evidence_c.rs"
       ],
       "targets": [
-        "evaluation::isolated_gateway_child::host::tests::",
-        "evaluation::isolated_gateway_child::database_authority::tests::",
-        "evaluation::isolated_gateway_child::private_directory_tests::",
         "gateway_rust_platform_evidence_c"
       ],
       "review": "Native port of the isolated evaluation gateway child bootstrap: ordered prepare steps, private state directory with O_NOFOLLOW/handle-held authority, listener ownership and ready publication, watch cancellation before/during/after readiness, guarded cleanup that refuses replaced directories and retains authority for retry. | Native contract target(s) gateway_rust_platform_evidence_c call jait_gateway directly through 5 focused checks in module(s) evaluation_isolated_gateway_child; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-platform.json. Worker note: Stub IsolatedChildHost records call order: validate settings -> close db -> sign jwt -> open db -> spawn -> wait ready -> cancel cleanup; non-isolated/traversing db path denied before host touched; null settings and non-string api key refused; host sign/close failures emit no READY.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         ".jait/artifacts/gateway-rust/chat-loops/continuation-20261028-clock-repair.md",
-        "cargo test --lib evaluation:: => 41 passed; 0 failed; 0 ignored; 1085 filtered out (2026-10-28)"
+        "cargo test --lib evaluation:: => 41 passed; 0 failed; 0 ignored; 1085 filtered out (2026-10-28)",
+        "Native library test filter (run by test --lib): evaluation::isolated_gateway_child::host::tests::",
+        "Native library test filter (run by test --lib): evaluation::isolated_gateway_child::database_authority::tests::",
+        "Native library test filter (run by test --lib): evaluation::isolated_gateway_child::private_directory_tests::"
       ],
       "remaining": null
     },
@@ -582,12 +582,13 @@
         "tests/contract/tests/gateway_rust_platform_evidence_b.rs"
       ],
       "targets": [
-        "evaluation::isolated_gateway::",
         "gateway_rust_platform_evidence_b"
       ],
       "review": "Native port of the isolated evaluation gateway supervisor: settings fetch, child env overrides, JAIT_EVAL_READY readiness parsing, stdout/stderr tails, watch-signal cancellation, SIGTERM->SIGKILL stop escalation with state-dir cleanup. | Native contract target(s) gateway_rust_platform_evidence_b call jait_gateway directly through 5 focused checks in module(s) evaluation_isolated_gateway; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-platform.json. Worker note: build_child_env has exactly 13 entries, only string apiKeys.jaitBackend survives, ready line wire format `JAIT_EVAL_READY {\"port\":N,\"token\":\"...\"}` + classification, tail_chars truncation.",
       "reviewed_at": "2026-11-03T07:42:02Z",
-      "evidence": [],
+      "evidence": [
+        "Native library test filter (run by test --lib): evaluation::isolated_gateway::"
+      ],
       "remaining": null
     },
     {
@@ -947,14 +948,14 @@
         "tests/contract/tests/gateway_rust_platform_evidence_c.rs"
       ],
       "targets": [
-        "integrations::os_control::index::tests",
         "gateway_rust_platform_evidence_c"
       ],
       "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified | Native contract target(s) gateway_rust_platform_evidence_c call jait_gateway directly through 3 focused checks in module(s) os_control_index; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-platform.json. Worker note: Barrel re-export reachability plus wire literals for OsDriverType/MouseButton/ScrollDirection and Default OsClickOptions; unknown enum variant refused.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         "focused cargo test --lib integrations::os_control::index:: = 2 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/integrations/os_control/index.rs: pinned=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 live=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 (superseded 2026-11-02 note: old pin 8ced33ea2b28… vs then-live 463907ee1356…; focused integrations::os_control::index::tests = 2 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/integrations/os_control/index.rs: pinned=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 live=463907ee13563601e18680b966096ce8536abbbecdf958b648030a5c77bc0379 (superseded 2026-11-02 note: old pin 8ced33ea2b28… vs then-live 463907ee1356…; focused integrations::os_control::index::tests = 2 passed / 0 failed on current source)",
+        "Native library test filter (run by test --lib): integrations::os_control::index::tests"
       ],
       "remaining": null
     },
@@ -1241,14 +1242,14 @@
         "tests/contract/tests/gateway_rust_data_evidence_b.rs"
       ],
       "targets": [
-        "providers::contracts::tests",
         "gateway_rust_data_evidence_b"
       ],
       "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified | Native contract target(s) gateway_rust_data_evidence_b call jait_gateway directly through 4 focused checks in module(s) providers_contracts; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-data.json. Worker note: ProviderEvent tagged by 'type' with camelCase sessionId; RuntimeMode kebab-case wire strings and rejection of unknown modes; absent timestamps/error omitted rather than nulled; untagged attachment forms accepted.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         "focused cargo test --lib providers::contracts:: = 5 passed / 0 failed",
-        "native file hashes re-verified on 2026-11-02 (1 file): packages/gateway-rust/src/providers/contracts.rs"
+        "native file hashes re-verified on 2026-11-02 (1 file): packages/gateway-rust/src/providers/contracts.rs",
+        "Native library test filter (run by test --lib): providers::contracts::tests"
       ],
       "remaining": null
     },
@@ -1263,14 +1264,14 @@
         "tests/contract/tests/gateway_rust_data_evidence_b.rs"
       ],
       "targets": [
-        "providers::index::tests",
         "gateway_rust_data_evidence_b"
       ],
       "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified | Native contract target(s) gateway_rust_data_evidence_b call jait_gateway directly through 3 focused checks in module(s) jait_provider, providers_contracts; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-data.json. Worker note: Barrel/re-export surface only: providers/index.rs re-exports acp_provider, jait_provider, registry, remote_cli and contracts; the listed tests pin behaviour of the items it re-exports (events, runtime modes, session entry guards). No independent runtime logic exists in index.rs. NOT claimed: worklist residue 'TS spellings for ProviderInfo and loadAcpProviderConfigs are not aliased' — native loader is acp_registry::load_acp_registry_provider_configs and that alias gap is unfixed.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         "focused cargo test --lib providers::index:: = 4 passed / 0 failed",
-        "native file hashes re-verified on 2026-11-02 (1 file): packages/gateway-rust/src/providers/index.rs"
+        "native file hashes re-verified on 2026-11-02 (1 file): packages/gateway-rust/src/providers/index.rs",
+        "Native library test filter (run by test --lib): providers::index::tests"
       ],
       "remaining": null
     },
@@ -1555,13 +1556,13 @@
         "tests/contract/tests/gateway_rust_root_evidence_e.rs"
       ],
       "targets": [
-        "pty_broker_client::",
         "gateway_rust_root_evidence_e"
       ],
       "review": "Native port of the PTY broker JSON-lines RPC protocol: id sequencing from 1, pending-call map, output/exit event dispatch, stderr readiness marker, 10s startup / 15s RPC timeouts and byte-identical error strings. | Native contract target(s) gateway_rust_root_evidence_e call jait_gateway directly through 4 focused checks in module(s) pty_broker_client_ts; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-root.json. Worker note: Client protocol pinned: ordered NDJSON with monotonic ids, ready-marker gating, stop accounting, startup/RPC timeout limits and the TS failure-message text.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
-        "cargo test --lib -j2 pty_broker_client:: -> 12 passed; 0 failed; 0 ignored; 1062 filtered out (EXIT=0)"
+        "cargo test --lib -j2 pty_broker_client:: -> 12 passed; 0 failed; 0 ignored; 1062 filtered out (EXIT=0)",
+        "Native library test filter (run by test --lib): pty_broker_client::"
       ],
       "remaining": null
     },
@@ -2820,14 +2821,14 @@
         "tests/contract/tests/gateway_rust_platform_evidence_c.rs"
       ],
       "targets": [
-        "security::index::tests",
         "gateway_rust_platform_evidence_c"
       ],
       "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified | Native contract target(s) gateway_rust_platform_evidence_c call jait_gateway directly through 3 focused checks in module(s) security_index; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-platform.json. Worker note: PathGuard default-deny matrix: in-root allow, ../ traversal, null byte and denied-dir refusal with exact messages; requires_consent matrix over profile levels incl. NaN; unknown tool default-denied as Dangerous/High via PolicySource::UnknownTool.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         "focused cargo test --lib security::index:: = 5 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/security/index.rs: pinned=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 live=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 (superseded 2026-11-02 note: old pin bf0922cfe412… vs then-live c143d80d716d…; focused security::index::tests = 5 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/security/index.rs: pinned=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 live=c143d80d716d9ca10b179a934dec8abb66603f7aa27aac011e5739bfc5df2270 (superseded 2026-11-02 note: old pin bf0922cfe412… vs then-live c143d80d716d…; focused security::index::tests = 5 passed / 0 failed on current source)",
+        "Native library test filter (run by test --lib): security::index::tests"
       ],
       "remaining": null
     },
@@ -5440,13 +5441,13 @@
         "tests/contract/tests/gateway_rust_tools_evidence_f.rs"
       ],
       "targets": [
-        "tools::agent_acp_runner::tests",
         "gateway_rust_tools_evidence_f"
       ],
       "review": "Native port of runAcpSpecialistTurn: account-scoped provider lookup and availability gating, runtime-mode resolution against the provider's advertised modes, system-prompt framing, MCP server refs, session start/stop, hard timeout, watch-channel abort, event filtering by session id, transcript segments (text/thinking/error/toolGroup with performative-tag stripping via strip_performative_tag), tool-call bookkeeping including results without a start and finalize() of unfinished calls, performative result mapping (success/refuse/failure/query) with the same placeholder messages, and best-effort approval forwarding through an injected decider. All transport concerns are behind AcpSpecialistHost/AcpSpecialistProvider. | Native contract target(s) gateway_rust_tools_evidence_f call jait_gateway directly through 6 focused checks in module(s) agent_acp_runner; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins specialist defaults (480_000ms timeout, full-access runtime mode, in-progress/no-result sentinels), run-option construction, `session_id()` on all seven ProviderEvent variants, camelCase specialist data serialisation (content/durationMs/provider/segments/subAgentId/toolCalls) with absent performative omitted, data omitted until a transcript exists, and provider info availability + mode preference order.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
-        "packages/gateway-rust/.evidence/tools-agent-acp-runner.log"
+        "packages/gateway-rust/.evidence/tools-agent-acp-runner.log",
+        "Native library test filter (run by test --lib): tools::agent_acp_runner::tests"
       ],
       "remaining": null
     },
@@ -5541,7 +5542,6 @@
         "tests/contract/tests/gateway_rust_tools_evidence_e.rs"
       ],
       "targets": [
-        "tools::agent_tools::tests::",
         "gateway_rust_tools_evidence_e"
       ],
       "review": "Native port of agent_create/agent_list/agent_send over a SubAgentHost port: dotted metadata names and descriptions, prompt/details validation errors, allowed-tools normalization against DEFAULT_SUBAGENT_TOOLS, ACP-preferred-with-loop-fallback execution, cancellation short-circuit, performative parsing/stripping mirroring agent-communication.ts (regex ^\\s*\\[(tag)\\]\\s*), parent payload key sets for success {subAgentId,content,performative,segments,rounds,toolCalls,durationMs}, abort {subAgentId,partialContent,segments,rounds,toolCalls,durationMs} and error paths, plus renderSegments/renderToolCalls projections onto MessageSegment.content and the 8-key {callId,tool,args,ok,message,data,startedAt,completedAt} tool-call shape. reconciled 2026-02-14: tools/agent-tools-metadata.json carries the revised delegation guidance (parallelize only independent bounded work, file ownership, integration owner, no guaranteed isolation) verbatim. | Native contract target(s) gateway_rust_tools_evidence_e call jait_gateway directly through 5 focused checks in module(s) agent_tools; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins `agent.spawn` only, SUBAGENT_MAX_ROUNDS==30, the 10-tool read-only default subagent toolset, `parse_allowed_tools` splitting, and render_tool_calls canonical-key preference + null projection.",
@@ -5553,7 +5553,8 @@
           "result": "16 passed; 0 failed",
           "log": ".jait/artifacts/gateway-rust/tools-port/agent-tools.log"
         },
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/agent_tools.rs: pinned=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 live=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 (superseded 2026-11-02 note: old pin 56dc7f6191ae… vs then-live e7341bc6a147…; focused tools::agent_tools::tests = 16 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/agent_tools.rs: pinned=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 live=e7341bc6a14777bca96b0e8e09af5427f94bb358554b5f511e9bea2c36607bb4 (superseded 2026-11-02 note: old pin 56dc7f6191ae… vs then-live e7341bc6a147…; focused tools::agent_tools::tests = 16 passed / 0 failed on current source)",
+        "Native library test filter (run by test --lib): tools::agent_tools::tests::"
       ],
       "remaining": null
     },
@@ -5826,14 +5827,14 @@
         "tests/contract/tests/gateway_rust_tools_evidence_c.rs"
       ],
       "targets": [
-        "tools::contracts::tests",
         "gateway_rust_tools_evidence_c"
       ],
       "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified | Native contract target(s) gateway_rust_tools_evidence_c call jait_gateway directly through 7 focused checks in module(s) contracts_barrel; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins the TS barrel contract surface: `ToolSource` string round-trip and rejection outside the union, `plugin:` prefix, re-export ordering per module, gate terms/satisfaction vocabulary, registration plan (ungated factories + gate enforcement), and the sorted unique missing-native gap list.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         "focused cargo test --lib tools::contracts:: = 16 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/contracts.rs: pinned=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 live=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 (superseded 2026-11-02 note: old pin f7d38a790271… vs then-live 9ed1797899c6…; focused tools::contracts = 16 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/contracts.rs: pinned=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 live=9ed1797899c6894a7003d4505016d061214b4aa9acc541e3d212e39d4b5928d9 (superseded 2026-11-02 note: old pin f7d38a790271… vs then-live 9ed1797899c6…; focused tools::contracts = 16 passed / 0 failed on current source)",
+        "Native library test filter (run by test --lib): tools::contracts::tests"
       ],
       "remaining": null
     },
@@ -6342,14 +6343,14 @@
         "tests/contract/tests/gateway_rust_tools_evidence_e.rs"
       ],
       "targets": [
-        "tools::mcp_bridge::tests",
         "gateway_rust_tools_evidence_e"
       ],
       "review": "self-reviewed against TS source; focused unit tests only, no differential evidence => not verified | Native contract target(s) gateway_rust_tools_evidence_e call jait_gateway directly through 6 focused checks in module(s) mcp_bridge; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins the 3-value transport union (stdio/sse/streamable-http), `validate_transport` errors (command required for stdio, url required for network transports), connection-status serialisation to TS literals, opt-in semantics (only explicit false disables), and per-server namespaced tool names/descriptions.",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [
         "focused cargo test --lib tools::mcp_bridge:: = 15 passed / 0 failed",
-        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/mcp_bridge.rs: pinned=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 live=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 (superseded 2026-11-02 note: old pin c8b6c3383608… vs then-live eb40a40d957e…; live advanced since audit eb40a40d957e… -> 0a28fba3c306…; focused tools::mcp_bridge::tests = 18 passed / 0 failed on current source)"
+        "native hash re-check on 2026-11-02 re-pinned for packages/gateway-rust/src/tools/mcp_bridge.rs: pinned=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 live=0a28fba3c30626674cfcb1e5f72a19312eb7f1d31b19eaf187511a7980a82f02 (superseded 2026-11-02 note: old pin c8b6c3383608… vs then-live eb40a40d957e…; live advanced since audit eb40a40d957e… -> 0a28fba3c306…; focused tools::mcp_bridge::tests = 18 passed / 0 failed on current source)",
+        "Native library test filter (run by test --lib): tools::mcp_bridge::tests"
       ],
       "remaining": null
     },

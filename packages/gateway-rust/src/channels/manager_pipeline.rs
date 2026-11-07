@@ -453,12 +453,14 @@ pub fn parse_consent_reply(text: &str) -> ConsentReply {
 // Pipeline
 // ---------------------------------------------------------------------------
 
+type ConversationLocks = Mutex<HashMap<(String, String), Weak<tokio::sync::Mutex<()>>>>;
+
 /// The channel manager pipeline: authorization, admission, ordering, cancellation
 /// and the single in-flight turn.
 pub struct ManagerPipeline<G: ReplyGenerator> {
     // Each caller retains its own request and cancellation token while waiting.
     // Weak entries avoid retaining idle conversations indefinitely.
-    locks: Mutex<HashMap<(String, String), Weak<tokio::sync::Mutex<()>>>>,
+    locks: ConversationLocks,
     notice_tasks: Mutex<(bool, tokio::task::JoinSet<()>)>,
     notice_shutdown: tokio::sync::Mutex<Option<tokio::task::JoinSet<()>>>,
     next_turn: AtomicU64,

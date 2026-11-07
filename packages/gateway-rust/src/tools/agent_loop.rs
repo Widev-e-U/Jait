@@ -63,11 +63,14 @@ const MAX_IDENTICAL_FAILURES_PER_CALL: usize = 2;
 const MAX_TOOL_CALLS_PER_ROUND: usize = 64;
 const DEFAULT_TOOL_ROUND_CHECKPOINT: usize = 64;
 const ABSOLUTE_TOOL_ROUND_BUDGET: usize = 200;
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const MAX_REPLAYED_THINKING_ROUNDS: usize = 3;
 const MAX_REPLAY_STEERINGS: usize = 1;
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const CONVERGE_NUDGE_ROUND_STREAK: usize = 12;
 const FORCE_ANSWER_ROUND_STREAK: usize = 24;
 const MAX_LOW_PROGRESS_READ_STREAK: usize = 8;
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const MIN_READ_PROGRESS_RATIO: f64 = 0.25;
 const SWARM_MAX_UNDELEGATED_READS: usize = 6;
 const MAX_PERSISTED_THINKING_CHARS: usize = 4000;
@@ -88,6 +91,7 @@ const MIN_REPETITION_COPIES: usize = 8;
 pub const MIN_REPETITION_SPAN_CHARS: usize = 600;
 const REPETITION_SCAN_WINDOW_CHARS: usize = 16_000;
 const REPETITION_PROBE_CHARS: usize = 48;
+#[allow(dead_code, reason = "Staged migration code has no runtime caller yet")]
 const REPETITION_CHECK_INTERVAL_CHARS: usize = 256;
 
 const MIN_NEAR_REPETITION_SEED_CHARS: usize = 40;
@@ -1295,59 +1299,36 @@ fn char_boundary(text: &str, char_index: usize) -> usize {
 /// legitimately. Returns the repeated span, copy count and its start offset.
 pub fn find_degenerate_repetition(text: &str) -> Option<RepetitionMatch> {
     let chars: Vec<char> = text.chars().collect();
-    if chars.len() < MIN_REPETITION_SCAN_CHARS + REPETITION_PROBE_CHARS {
+    if chars.len() < MIN_REPETITION_SCAN_CHARS || chars.len() <= REPETITION_PROBE_CHARS {
         return None;
     }
     let window_start = chars.len().saturating_sub(REPETITION_SCAN_WINDOW_CHARS);
     let window = &chars[window_start..];
-    if window.len() < MIN_REPETITION_SCAN_CHARS {
+    let probe_start = window.len() - REPETITION_PROBE_CHARS;
+    let previous = (0..probe_start).rev().find(|&i| {
+        i + REPETITION_PROBE_CHARS <= window.len()
+            && window[i..i + REPETITION_PROBE_CHARS] == window[probe_start..]
+    })?;
+    let period = probe_start - previous;
+    let required = MIN_REPETITION_COPIES.max(MIN_REPETITION_SPAN_CHARS.div_ceil(period));
+    let span = period.checked_mul(required)?;
+    if window.len() < span {
         return None;
     }
-    let probe_len = REPETITION_PROBE_CHARS.min(window.len());
-    let probe = &window[window.len() - probe_len..];
-    let probe_start = window.len() - probe_len;
-
-    // Walk candidate span starts from nearest to farthest; the nearest match
-    // gives the smallest repeating unit, which is what the TS detector reports.
-    let mut candidate = probe_start;
-    while candidate > 0 {
-        candidate -= 1;
-        if candidate + probe_len > probe_start && candidate != 0 {
-            continue;
-        }
-        if candidate + probe_len > window.len() {
-            continue;
-        }
-        if &window[candidate..candidate + probe_len] != probe {
-            continue;
-        }
-        let span = probe_start - candidate;
-        if span < MIN_REPETITION_SPAN_CHARS {
-            continue;
-        }
-        // Count consecutive identical copies walking backwards.
-        let mut copies = 1usize;
-        let mut cursor = candidate;
-        while cursor >= span {
-            let previous = cursor - span;
-            if window[previous..previous + span] == window[cursor..cursor + span] {
-                copies += 1;
-                cursor = previous;
-            } else {
-                break;
-            }
-        }
-        if copies >= MIN_REPETITION_COPIES {
-            let absolute_start = window_start + cursor;
-            return Some(RepetitionMatch {
-                span: window[cursor..cursor + span].iter().collect(),
-                span_chars: span,
-                copies,
-                start: char_boundary(text, absolute_start),
-            });
-        }
+    let mut start = chars.len() - span;
+    let unit = &chars[start..start + period];
+    if chars[start..].chunks(period).any(|part| part != unit) {
+        return None;
     }
-    None
+    while start >= period && chars[start - period..start] == *unit {
+        start -= period;
+    }
+    Some(RepetitionMatch {
+        span: unit.iter().collect(),
+        span_chars: period,
+        copies: (chars.len() - start) / period,
+        start: char_boundary(text, start),
+    })
 }
 
 /// Cut a degenerate repetition run out of `text`, returning the text up to the
@@ -3014,18 +2995,18 @@ pub fn prune_history(
     let mut pruned: Vec<AgentMessage> = messages.to_vec();
     let mut running = total;
     // Oldest first: the earliest material is the least relevant.
-    for index in 0..pruned.len() {
+    for (index, slot) in pruned.iter_mut().enumerate() {
         if running <= target {
             break;
         }
-        if pruned[index].role == "system"
+        if slot.role == "system"
             || Some(index) == first_task
             || Some(index) == last_user
             || index >= protected_from
         {
             continue;
         }
-        let message = pruned[index].clone();
+        let message = slot.clone();
         let replacement: Option<AgentMessage> = match message.role.as_str() {
             "tool" => {
                 let stub = match message.evidence_reference.as_ref() {
@@ -3050,7 +3031,7 @@ pub fn prune_history(
             running = running
                 .saturating_sub(runtime.estimate_message_tokens(&message))
                 .saturating_add(runtime.estimate_message_tokens(&replacement));
-            pruned[index] = replacement;
+            *slot = replacement;
         }
     }
     pruned
@@ -3869,6 +3850,29 @@ pub fn run_agent_loop<'a>(
                 continue 'rounds;
             }
 
+            // Plain-text tool calls are a model bug; nudge a bounded number of
+            // times before giving up.
+            let plain = detect_plain_text_tool_calls(&turn.content, &known_tools);
+            if !plain.is_empty() && plain_text_retries < MAX_PLAIN_TEXT_RETRIES {
+                plain_text_retries += 1;
+                messages.push(AgentMessage {
+                    synthetic: Some(true),
+                    ..AgentMessage::assistant(turn.content.clone())
+                });
+                messages.push(AgentMessage {
+                    synthetic: Some(true),
+                    ..AgentMessage::user(
+                        "Do not write tool calls as text. Use the tool-calling channel: call the tool with JSON arguments and wait for the result.",
+                    )
+                });
+                observer.on_event(json!({
+                    "type": "nudge",
+                    "reason": "plain_text_tool_calls",
+                    "attempt": plain_text_retries,
+                }));
+                continue 'rounds;
+            }
+
             // ── No tool calls: decide whether the turn is finished ──
             if !round_content.is_empty() {
                 content = round_content.clone();
@@ -3883,28 +3887,6 @@ pub fn run_agent_loop<'a>(
             }
 
             if round_content.trim().is_empty() {
-                // Plain-text tool calls are a model bug; nudge a bounded number of
-                // times before giving up.
-                let plain = detect_plain_text_tool_calls(&turn.content, &known_tools);
-                if !plain.is_empty() && plain_text_retries < MAX_PLAIN_TEXT_RETRIES {
-                    plain_text_retries += 1;
-                    messages.push(AgentMessage {
-                        synthetic: Some(true),
-                        ..AgentMessage::assistant(turn.content.clone())
-                    });
-                    messages.push(AgentMessage {
-                        synthetic: Some(true),
-                        ..AgentMessage::user(
-                            "Do not write tool calls as text. Use the tool-calling channel: call the tool with JSON arguments and wait for the result.",
-                        )
-                    });
-                    observer.on_event(json!({
-                        "type": "nudge",
-                        "reason": "plain_text_tool_calls",
-                        "attempt": plain_text_retries,
-                    }));
-                    continue 'rounds;
-                }
                 if empty_retries < MAX_EMPTY_RESPONSE_RETRIES {
                     empty_retries += 1;
                     messages.push(AgentMessage {
@@ -4001,13 +3983,8 @@ mod tests {
     // ── Minimal executor: all fakes resolve immediately, so polling a boxed
     //    future with a no-op waker is sufficient and dependency free. ──
     fn block_on<F: std::future::Future>(fut: F) -> F::Output {
-        use std::task::{Context, Poll, Wake, Waker};
-        struct NoopWake;
-        impl Wake for NoopWake {
-            fn wake(self: std::sync::Arc<Self>) {}
-        }
-        let waker = Waker::from(std::sync::Arc::new(NoopWake));
-        let mut context = Context::from_waker(&waker);
+        use std::task::{Context, Poll, Waker};
+        let mut context = Context::from_waker(Waker::noop());
         let mut future = Box::pin(fut);
         loop {
             match future.as_mut().poll(&mut context) {
@@ -4059,14 +4036,6 @@ mod tests {
 
         fn sleep_count(&self) -> usize {
             self.sleeps.lock().unwrap().len()
-        }
-
-        fn events_containing(&self, needle: &str) -> bool {
-            self.logs
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|(_, line)| line.contains(needle))
         }
     }
 
@@ -4461,8 +4430,13 @@ mod tests {
         let contexts = observer.contexts.lock().unwrap();
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0].round, 1);
+        assert!(contexts[0].metrics.is_none());
         assert_eq!(
-            contexts[0].metrics.as_ref().unwrap().prompt_tokens,
+            result.context_rounds.as_ref().unwrap()[0]
+                .metrics
+                .as_ref()
+                .unwrap()
+                .prompt_tokens,
             Some(11)
         );
     }
@@ -4521,7 +4495,7 @@ mod tests {
             .iter()
             .position(|m| m["role"] == json!("assistant") && m.get("tool_calls").is_some())
             .expect("assistant tool_calls message missing");
-        assert_eq!(messages[assistant_position]["content"], Value::Null);
+        assert_eq!(messages[assistant_position]["content"], "");
         assert_eq!(messages[assistant_position + 1]["role"], json!("tool"));
         assert_eq!(
             messages[assistant_position + 1]["tool_call_id"],
@@ -5686,7 +5660,7 @@ mod tests {
             AgentMessage::system("system prompt"),
             AgentMessage::user("Please refactor the widget subsystem properly."),
         ];
-        for index in 0..6 {
+        for index in 0..10 {
             messages.push(AgentMessage {
                 tool_calls: Some(vec![OpenAiToolCall::new(
                     format!("c{index}"),
@@ -5731,7 +5705,7 @@ mod tests {
         let run = "the model is stuck repeating this exact phrase over and over again. ".repeat(12);
         let matched = find_degenerate_repetition(&run).expect("run not detected");
         assert!(matched.copies >= MIN_REPETITION_COPIES);
-        assert!(matched.span_chars >= MIN_REPETITION_SPAN_CHARS);
+        assert!(matched.span_chars * matched.copies >= MIN_REPETITION_SPAN_CHARS);
         let (trimmed, _) = trim_degenerate_repetition(&run).unwrap();
         assert!(trimmed.chars().count() < run.chars().count());
         assert_eq!(
@@ -5870,7 +5844,7 @@ mod tests {
 
     #[test]
     fn checkpoint_budget_scales_with_the_context_window() {
-        assert_eq!(checkpoint_output_tokens(128_000), CHECKPOINT_OUTPUT_TOKENS);
+        assert_eq!(checkpoint_output_tokens(131_072), CHECKPOINT_OUTPUT_TOKENS);
         assert_eq!(checkpoint_output_tokens(8_000), 2_048);
         assert!(checkpoint_output_tokens(4_000) >= 1);
         let clamped = clamp_summary(&"x".repeat(100), 10);

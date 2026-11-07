@@ -4,11 +4,10 @@ mod admission;
 mod authority;
 #[path = "../src/providers/thread_revocation_upgrade_candidate.rs"]
 mod upgrade;
-#[path = "../src/providers/thread_turn_schema_installer.rs"]
-mod v1;
 use authority::{TrustedThreadIdentity, with_authorized_database_work};
 use rusqlite::{Connection, OpenFlags};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use upgrade::v1;
 
 fn fixture() -> (Connection, Connection) {
     static NEXT: AtomicUsize = AtomicUsize::new(0);

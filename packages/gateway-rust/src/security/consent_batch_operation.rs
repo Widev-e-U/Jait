@@ -493,10 +493,10 @@ mod tests {
             );
         }
         let mut ops = ConsentBatchOperations::default();
-        create(&mut ops, "a", 10, now);
+        create(&mut ops, "a", MAX_SCAN_ENTRIES as u64 + 1, now);
         ops.begin("a", &binding(), 0, now).unwrap();
         let expired_only = StepResult {
-            next_cursor: 5,
+            next_cursor: MAX_SCAN_ENTRIES as u64,
             scanned_entries: MAX_SCAN_ENTRIES,
             request_ids: vec![],
             complete: false,

@@ -5,6 +5,8 @@
 // Candidate lifecycle only; no runtime or effect authority is registered here.
 #[allow(dead_code)]
 pub(crate) mod desktop_host_config;
+// Candidate desktop lifecycle remains unconnected until runtime composition.
+#[allow(dead_code)]
 pub(crate) mod desktop_parent_pipe;
 
 pub mod command_timeout;

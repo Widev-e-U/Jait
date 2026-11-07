@@ -8,12 +8,14 @@ use std::{
     sync::Arc,
 };
 
+type AccessCheck = Arc<dyn Fn(&Path) -> bool + Send + Sync>;
+
 #[derive(Clone)]
 pub struct ProjectRoot {
     path: PathBuf,
     directory: Arc<File>,
     identity: (u64, u64),
-    access: Option<Arc<dyn Fn(&Path) -> bool + Send + Sync>>,
+    access: Option<AccessCheck>,
 }
 impl std::fmt::Debug for ProjectRoot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
