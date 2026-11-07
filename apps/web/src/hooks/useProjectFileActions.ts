@@ -15,7 +15,7 @@ interface UseProjectFileActionsOptions {
   activeProject: any
   activeProjectRecord: { rootPath?: string | null } | null | undefined
   activeSessionId: string | null
-  openRemoteProjectOnGateway: (dirPath: string, nodeId?: string, sessionIdOverride?: string | null) => Promise<void>
+  openRemoteProjectOnGateway: (dirPath: string, nodeId?: string, sessionIdOverride?: string | null, openPanel?: boolean, strictNode?: boolean) => Promise<void>
   projectFiles: ProjectFile[]
   projectRef: RefObject<ProjectPanelHandle | null>
   setActiveProjectFileId: (fileId: string | null | ((prev: string | null) => string | null)) => void
@@ -179,7 +179,8 @@ export function useProjectFileActions({
     try {
       // Chat messages mostly name files relative to the project (`src/a.ts`).
       const filePath = resolveProjectPath(rawPath, activeProject?.projectRoot ?? activeProjectRecord?.rootPath)
-      const targetProjectRoot = resolveKnownProjectRootForFile(filePath)
+      let targetProjectRoot = resolveKnownProjectRootForFile(filePath)
+      let openedOutsideDirectory = false
 
       if (!targetProjectRoot) {
         const existing = projectFiles.find((file) => file.path === filePath)
@@ -193,11 +194,25 @@ export function useProjectFileActions({
           showProjectEditorPanel()
           return
         }
-        toast('File is outside the active project. Open its directory explicitly to browse it.')
-        return
+        if (!isAbsoluteProjectPath(filePath) || !activeSessionId) {
+          toast('An absolute file path and an active chat are required to open this document.')
+          return
+        }
+        const normalized = filePath.replace(/\\/g, '/')
+        const slash = normalized.lastIndexOf('/')
+        const directory = slash === 0 ? '/' : slash === 2 && /^[A-Za-z]:/.test(normalized) ? normalized.slice(0, 3) : normalized.slice(0, slash)
+        if (!directory || normalized.split('/').some((part) => part === '..')) {
+          toast('Cannot open this file path.')
+          return
+        }
+        const node = activeProject?.nodeId || 'gateway'
+        if (!window.confirm(`Open ${filePath} on ${node}? This opens its directory as the project and grants access to the directory: ${directory}`)) return
+        await openRemoteProjectOnGateway(directory, node, activeSessionId, true, true)
+        targetProjectRoot = directory
+        openedOutsideDirectory = true
       }
 
-      if (/\.html?$/i.test(filePath) && line == null) {
+      if (!openedOutsideDirectory && /\.html?$/i.test(filePath) && line == null) {
         await openHtmlPresentation(filePath, async () => {
           if (!activeProject || activeProject.projectRoot !== targetProjectRoot) {
             await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
@@ -215,7 +230,7 @@ export function useProjectFileActions({
         return
       }
 
-      if (targetProjectRoot && (!activeProject || activeProject.projectRoot !== targetProjectRoot)) {
+      if (!openedOutsideDirectory && targetProjectRoot && (!activeProject || activeProject.projectRoot !== targetProjectRoot)) {
         await openRemoteProjectOnGateway(targetProjectRoot, activeProject?.nodeId, activeSessionId)
       }
 
@@ -248,6 +263,7 @@ export function useProjectFileActions({
         await new Promise<void>((resolve) => setTimeout(resolve, 150))
       }
 
+      if (openedOutsideDirectory) throw new Error('The directory opened, but the document could not be loaded. Try opening it from the project panel.')
       const existing = projectFiles.find((file) => file.path === filePath)
       if (existing) {
         mergeProjectFiles([existing])

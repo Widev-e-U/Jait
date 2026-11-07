@@ -32,6 +32,7 @@ use rusqlite::{Connection, OptionalExtension, params, params_from_iter};
 use serde_json::{Map, Value, json};
 
 use crate::routes::auth::{self, AuthState};
+use crate::services::thread_activity::ThreadText;
 
 type Res<T> = Result<T, Box<Response>>;
 
@@ -142,14 +143,35 @@ where
 // small helpers (port of thread-defaults.ts / threads.ts helpers)
 // ---------------------------------------------------------------------------
 
-/// `parseThreadListLimit` (threads.ts:859): integer >= 1, capped at 100.
-fn parse_thread_list_limit(value: Option<&str>) -> Option<i64> {
-    let raw = value?;
-    let parsed: i64 = raw.trim().parse().ok()?;
-    if parsed < 1 {
+// ECMAScript WhiteSpace and LineTerminator code points consumed by parseInt.
+fn js_parse_int(value: &str) -> Option<f64> {
+    let raw = value.trim_start_matches(|c: char| {
+        matches!(c,
+            '\u{0009}'..='\u{000d}' | '\u{0020}' | '\u{00a0}' | '\u{1680}' |
+            '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' |
+            '\u{205f}' | '\u{3000}' | '\u{feff}'
+        )
+    });
+    let (negative, raw) = if let Some(rest) = raw.strip_prefix('-') {
+        (true, rest)
+    } else {
+        (false, raw.strip_prefix('+').unwrap_or(raw))
+    };
+    let digits: String = raw.chars().take_while(char::is_ascii_digit).collect();
+    if digits.is_empty() {
         return None;
     }
-    Some(parsed.min(100))
+    let parsed: f64 = digits.parse().ok()?;
+    Some(if negative { -parsed } else { parsed })
+}
+
+/// `parseThreadListLimit`: decimal integer prefix >= 1, capped at 100.
+fn parse_thread_list_limit(value: Option<&str>) -> Option<i64> {
+    let parsed = js_parse_int(value?)?;
+    if !parsed.is_finite() || parsed < 1.0 {
+        return None;
+    }
+    Some(parsed.min(100.0) as i64)
 }
 
 fn percent_decode(input: &str) -> String {
@@ -291,47 +313,47 @@ fn normalize_reasoning_effort(value: &Value) -> Option<SqlValue> {
 
 fn thread_json(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     Ok(json!({
-        "id": row.get::<_, String>(0)?,
-        "userId": row.get::<_, Option<String>>(1)?,
-        "sessionId": row.get::<_, Option<String>>(2)?,
-        "personaAgentId": row.get::<_, Option<String>>(3)?,
-        "title": row.get::<_, Option<String>>(4)?,
-        "providerId": row.get::<_, Option<String>>(5)?,
-        "model": row.get::<_, Option<String>>(6)?,
-        "reasoningEffort": row.get::<_, Option<String>>(7)?,
-        "runtimeMode": row.get::<_, Option<String>>(8)?,
-        "kind": row.get::<_, Option<String>>(9)?,
-        "skillIds": parse_json_text(row.get::<_, Option<String>>(10)?),
-        "workingDirectory": row.get::<_, Option<String>>(11)?,
-        "branch": row.get::<_, Option<String>>(12)?,
-        "status": row.get::<_, Option<String>>(13)?,
-        "providerSessionId": row.get::<_, Option<String>>(14)?,
-        "error": row.get::<_, Option<String>>(15)?,
-        "prUrl": row.get::<_, Option<String>>(16)?,
+        "id": row.get::<_, ThreadText>(0)?.0,
+        "userId": row.get::<_, Option<ThreadText>>(1)?.map(|text| text.0),
+        "sessionId": row.get::<_, Option<ThreadText>>(2)?.map(|text| text.0),
+        "personaAgentId": row.get::<_, Option<ThreadText>>(3)?.map(|text| text.0),
+        "title": row.get::<_, Option<ThreadText>>(4)?.map(|text| text.0),
+        "providerId": row.get::<_, Option<ThreadText>>(5)?.map(|text| text.0),
+        "model": row.get::<_, Option<ThreadText>>(6)?.map(|text| text.0),
+        "reasoningEffort": row.get::<_, Option<ThreadText>>(7)?.map(|text| text.0),
+        "runtimeMode": row.get::<_, Option<ThreadText>>(8)?.map(|text| text.0),
+        "kind": row.get::<_, Option<ThreadText>>(9)?.map(|text| text.0),
+        "skillIds": parse_json_text(row.get::<_, Option<ThreadText>>(10)?.map(|text| text.0)),
+        "workingDirectory": row.get::<_, Option<ThreadText>>(11)?.map(|text| text.0),
+        "branch": row.get::<_, Option<ThreadText>>(12)?.map(|text| text.0),
+        "status": row.get::<_, Option<ThreadText>>(13)?.map(|text| text.0),
+        "providerSessionId": row.get::<_, Option<ThreadText>>(14)?.map(|text| text.0),
+        "error": row.get::<_, Option<ThreadText>>(15)?.map(|text| text.0),
+        "prUrl": row.get::<_, Option<ThreadText>>(16)?.map(|text| text.0),
         "prNumber": row.get::<_, Option<i64>>(17)?,
-        "prTitle": row.get::<_, Option<String>>(18)?,
-        "prBaseBranch": row.get::<_, Option<String>>(19)?,
-        "prState": row.get::<_, Option<String>>(20)?,
-        "executionNodeId": row.get::<_, Option<String>>(21)?,
-        "executionNodeName": row.get::<_, Option<String>>(22)?,
-        "routingPlan": parse_json_text(row.get::<_, Option<String>>(23)?),
+        "prTitle": row.get::<_, Option<ThreadText>>(18)?.map(|text| text.0),
+        "prBaseBranch": row.get::<_, Option<ThreadText>>(19)?.map(|text| text.0),
+        "prState": row.get::<_, Option<ThreadText>>(20)?.map(|text| text.0),
+        "executionNodeId": row.get::<_, Option<ThreadText>>(21)?.map(|text| text.0),
+        "executionNodeName": row.get::<_, Option<ThreadText>>(22)?.map(|text| text.0),
+        "routingPlan": parse_json_text(row.get::<_, Option<ThreadText>>(23)?.map(|text| text.0)),
         "changeFiles": row.get::<_, Option<i64>>(24)?,
         "changeInsertions": row.get::<_, Option<i64>>(25)?,
         "changeDeletions": row.get::<_, Option<i64>>(26)?,
-        "createdAt": row.get::<_, Option<String>>(27)?,
-        "updatedAt": row.get::<_, Option<String>>(28)?,
-        "completedAt": row.get::<_, Option<String>>(29)?,
+        "createdAt": row.get::<_, Option<ThreadText>>(27)?.map(|text| text.0),
+        "updatedAt": row.get::<_, Option<ThreadText>>(28)?.map(|text| text.0),
+        "completedAt": row.get::<_, Option<ThreadText>>(29)?.map(|text| text.0),
     }))
 }
 
 fn activity_json(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     Ok(json!({
-        "id": row.get::<_, String>(0)?,
-        "threadId": row.get::<_, String>(1)?,
-        "kind": row.get::<_, String>(2)?,
-        "summary": row.get::<_, String>(3)?,
-        "payload": parse_json_text(row.get::<_, Option<String>>(4)?),
-        "createdAt": row.get::<_, String>(5)?,
+        "id": row.get::<_, ThreadText>(0)?.0,
+        "threadId": row.get::<_, ThreadText>(1)?.0,
+        "kind": row.get::<_, ThreadText>(2)?.0,
+        "summary": row.get::<_, ThreadText>(3)?.0,
+        "payload": parse_json_text(row.get::<_, Option<ThreadText>>(4)?.map(|text| text.0)),
+        "createdAt": row.get::<_, ThreadText>(5)?.0,
     }))
 }
 
@@ -585,23 +607,53 @@ async fn list_threads(State(state): State<ThreadRoutes>, request: Request) -> Re
         Err(response) => return *response,
     };
     let query = parse_query(request.uri().query());
-    let limit = parse_thread_list_limit(query.get("limit").map(String::as_str));
+    // Fastify supplies repeated sessionId keys as an array. The TypeScript
+    // SQLite query cannot bind it and returns an internal error.
+    let session_values = request
+        .uri()
+        .query()
+        .unwrap_or("")
+        .split('&')
+        .filter(|pair| percent_decode(pair.split('=').next().unwrap_or("")) == "sessionId")
+        .count();
+    if session_values > 1 {
+        return error_response(500, "Internal Server Error");
+    }
+    let limit_values = request
+        .uri()
+        .query()
+        .unwrap_or("")
+        .split('&')
+        .filter(|pair| percent_decode(pair.split('=').next().unwrap_or("")) == "limit")
+        .count();
+    let limit = if limit_values == 1 {
+        parse_thread_list_limit(query.get("limit").map(String::as_str))
+    } else {
+        None
+    };
     let session_id = query
         .get("sessionId")
         .filter(|value| !value.is_empty())
         .cloned();
     let user_id = user.id.clone();
+    let filter_user_id = user_id.clone();
+    let session_filter = session_id.is_some();
+    let fetch_limit = limit.map(|value| value + 1);
 
-    let threads = match run(&state, move |conn| match session_id {
+    let mut threads = match run(&state, move |conn| match session_id {
         Some(session) => {
             let sql = format!(
                 "SELECT {} FROM agent_threads WHERE session_id = ?1 \
                      ORDER BY updated_at DESC{}",
                 THREAD_COLUMNS,
-                if limit.is_some() { " LIMIT ?2" } else { "" }
+                if fetch_limit.is_some() {
+                    " LIMIT ?2"
+                } else {
+                    ""
+                }
             );
             let mut stmt = conn.prepare(&sql)?;
-            let rows = match limit {
+            let rows = match fetch_limit {
                 Some(limit) => stmt.query_map(params![session, limit], thread_json)?,
                 None => stmt.query_map(params![session], thread_json)?,
             };
@@ -616,10 +668,14 @@ async fn list_threads(State(state): State<ThreadRoutes>, request: Request) -> Re
                 "SELECT {} FROM agent_threads WHERE user_id = ?1 \
                      ORDER BY updated_at DESC{}",
                 THREAD_COLUMNS,
-                if limit.is_some() { " LIMIT ?2" } else { "" }
+                if fetch_limit.is_some() {
+                    " LIMIT ?2"
+                } else {
+                    ""
+                }
             );
             let mut stmt = conn.prepare(&sql)?;
-            let rows = match limit {
+            let rows = match fetch_limit {
                 Some(limit) => stmt.query_map(params![user_id, limit], thread_json)?,
                 None => stmt.query_map(params![user_id], thread_json)?,
             };
@@ -636,7 +692,16 @@ async fn list_threads(State(state): State<ThreadRoutes>, request: Request) -> Re
         Err(response) => return *response,
     };
 
-    json_response(200, json!({ "threads": threads }))
+    // TypeScript applies the session query limit before filtering by owner.
+    if session_filter {
+        threads
+            .retain(|thread| thread.get("userId").and_then(Value::as_str) == Some(&filter_user_id));
+    }
+    let has_more = limit.is_some_and(|limit| threads.len() > limit as usize);
+    if let Some(limit) = limit {
+        threads.truncate(limit as usize);
+    }
+    json_response(200, json!({ "threads": threads, "hasMore": has_more }))
 }
 
 async fn get_thread(
@@ -771,9 +836,7 @@ async fn patch_thread(
             Value::String(mode) if mode == "supervised" || mode == "full-access" => {
                 assignments.push(("runtime_mode", SqlValue::Text(mode.clone())))
             }
-            Value::String(_) => return error_response(400, "Invalid runtime mode"),
-            Value::Null => assignments.push(("runtime_mode", SqlValue::Null)),
-            _ => return error_response(400, "Invalid runtime mode"),
+            _ => {}
         }
     }
 
@@ -900,19 +963,35 @@ async fn delete_thread(
     // Deferred relative to threads.ts: stopping the provider subscription and
     // removing the git worktree require services that have no native port yet.
     let removed = run(&state, move |conn| {
-        conn.execute(
-            "DELETE FROM agent_thread_activities WHERE thread_id = ?1",
-            params![id],
-        )?;
-        conn.execute("DELETE FROM agent_threads WHERE id = ?1", params![id])?;
-        Ok(())
+        conn.execute_batch("SAVEPOINT delete_owned_thread")?;
+        let result = (|| {
+            conn.execute(
+                "DELETE FROM agent_thread_activities WHERE thread_id = ?1 AND EXISTS \
+                 (SELECT 1 FROM agent_threads WHERE id = ?1 AND user_id = ?2)",
+                params![id, user_id],
+            )?;
+            conn.execute(
+                "DELETE FROM agent_threads WHERE id = ?1 AND user_id = ?2",
+                params![id, user_id],
+            )
+        })();
+        match result {
+            Ok(count) => {
+                conn.execute_batch("RELEASE delete_owned_thread")?;
+                Ok(count)
+            }
+            Err(error) => {
+                conn.execute_batch("ROLLBACK TO delete_owned_thread; RELEASE delete_owned_thread")?;
+                Err(error)
+            }
+        }
     })
     .await;
-    if let Err(response) = removed {
-        return *response;
+    match removed {
+        Ok(0) => error_response(404, "Thread not found"),
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(response) => *response,
     }
-
-    StatusCode::NO_CONTENT.into_response()
 }
 
 async fn thread_runtime(
@@ -956,12 +1035,19 @@ async fn thread_activities(
         Ok(user) => user,
         Err(response) => return *response,
     };
-    let query = parse_query(request.uri().query());
-    let limit = parse_thread_list_limit(query.get("limit").map(String::as_str));
-    let after = query
-        .get("after")
-        .filter(|value| !value.is_empty())
-        .cloned();
+    // Fastify represents repeated values as arrays. parseInt coerces that array
+    // to a comma-separated string, so the first value supplies its digit prefix.
+    let limit = request
+        .uri()
+        .query()
+        .unwrap_or("")
+        .split('&')
+        .find_map(|pair| {
+            let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+            (percent_decode(key) == "limit").then(|| percent_decode(value))
+        })
+        .and_then(|raw| js_parse_int(&raw))
+        .map(|value| value.clamp(1.0, 2000.0) as i64);
     let user_id = user.id.clone();
 
     let result = run(&state, move |conn| {
@@ -972,25 +1058,14 @@ async fn thread_activities(
             "SELECT {} FROM agent_thread_activities WHERE thread_id = ?1",
             ACTIVITY_COLUMNS
         );
-        if after.is_some() {
-            sql.push_str(" AND created_at > ?2");
-        }
         sql.push_str(" ORDER BY created_at DESC, rowid DESC");
         if limit.is_some() {
-            sql.push_str(if after.is_some() {
-                " LIMIT ?3"
-            } else {
-                " LIMIT ?2"
-            });
+            sql.push_str(" LIMIT ?2");
         }
         let mut stmt = conn.prepare(&sql)?;
-        let rows = match (after, limit) {
-            (Some(after), Some(limit)) => {
-                stmt.query_map(params![id, after, limit], activity_json)?
-            }
-            (Some(after), None) => stmt.query_map(params![id, after], activity_json)?,
-            (None, Some(limit)) => stmt.query_map(params![id, limit], activity_json)?,
-            (None, None) => stmt.query_map(params![id], activity_json)?,
+        let rows = match limit {
+            Some(limit) => stmt.query_map(params![id, limit], activity_json)?,
+            None => stmt.query_map(params![id], activity_json)?,
         };
         let mut activities = Vec::new();
         for row in rows {
@@ -1033,3 +1108,58 @@ async fn thread_activities(
 // * `DELETE /api/threads/{id}` ported the DB deletion only: stopping a live
 //   provider subscription and removing the git worktree require the unported
 //   services above.
+
+#[cfg(test)]
+mod thread_text_tests {
+    use super::*;
+
+    #[test]
+    fn thread_and_activity_reads_decode_invalid_sqlite_text() {
+        let db = Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        db.execute_batch("INSERT INTO agent_threads (id, title, provider_id, created_at, updated_at, routing_plan) VALUES ('t', CAST(x'61EDA0BD62' AS TEXT), 'p', 'now', 'now', CAST(x'7B2278223A22EDA0BD227D' AS TEXT));
+            INSERT INTO agent_thread_activities (id, thread_id, kind, summary, payload, created_at) VALUES ('a', 't', 'message', CAST(x'61EDA0BD62' AS TEXT), CAST(x'7B2278223A22EDA0BD227D' AS TEXT), 'now');").unwrap();
+        let thread = db
+            .query_row(
+                &format!("SELECT {THREAD_COLUMNS} FROM agent_threads"),
+                [],
+                thread_json,
+            )
+            .unwrap();
+        assert_eq!(thread["title"], "a\u{fffd}\u{fffd}\u{fffd}b");
+        assert_eq!(thread["routingPlan"]["x"], "\u{fffd}\u{fffd}\u{fffd}");
+        assert!(thread["error"].is_null());
+        let activity = db
+            .query_row(
+                &format!("SELECT {ACTIVITY_COLUMNS} FROM agent_thread_activities"),
+                [],
+                activity_json,
+            )
+            .unwrap();
+        assert_eq!(activity["summary"], "a\u{fffd}\u{fffd}\u{fffd}b");
+        assert_eq!(activity["payload"]["x"], "\u{fffd}\u{fffd}\u{fffd}");
+        db.execute(
+            "UPDATE agent_thread_activities SET payload = 'not json'",
+            [],
+        )
+        .unwrap();
+        let activity = db
+            .query_row(
+                &format!("SELECT {ACTIVITY_COLUMNS} FROM agent_thread_activities"),
+                [],
+                activity_json,
+            )
+            .unwrap();
+        assert!(activity["payload"].is_null());
+        db.execute("UPDATE agent_thread_activities SET summary = x'FF'", [])
+            .unwrap();
+        assert!(
+            db.query_row(
+                &format!("SELECT {ACTIVITY_COLUMNS} FROM agent_thread_activities"),
+                [],
+                activity_json
+            )
+            .is_err()
+        );
+    }
+}

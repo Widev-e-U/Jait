@@ -20,6 +20,7 @@ describe('stopped goal visibility', () => {
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('role="status"')
     expect(html).toContain('Stopped · error')
+    expect(html).toContain('Workspace is out of credits')
     expect(html).toContain('text-destructive')
   })
   it('shows the error and recovery action in the expanded goal', () => {

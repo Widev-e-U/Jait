@@ -193,6 +193,48 @@ export function isTurnEndEvent(eventType: unknown): boolean {
   return eventType === 'done' || eventType === 'error'
 }
 
+/** A message a `request` (turn-start) event should append to the transcript. */
+export type TurnStartMessage =
+  | { kind: 'user'; content: string }
+  | { kind: 'system-notice'; content: string }
+
+/**
+ * What a `request` (turn-start) event should render, if anything.
+ *
+ * Not every turn is authored by the user. A finished background command
+ * re-enters the session as a continuation turn that carries
+ * `_systemNotification` and no prompt text, so the gateway sends
+ * `content: ""` and persists its own notice row for that turn. Synthesizing a
+ * bubble from that empty string rendered as a blank user message.
+ *
+ * The turn still needs a visible line, so the gateway sends the notice text
+ * itself (`noticeText`) and it is rendered the same way history renders the
+ * persisted row: as a gray `system-notice` line sharing role `user`. That
+ * shape is what `mergeSnapshotMessagesWithOptimisticUsers` matches on, so the
+ * live line is replaced in place by the persisted notice instead of being
+ * duplicated.
+ */
+export function planTurnStartMessage(input: {
+  isReplay: boolean
+  wasLocallySent: boolean
+  startedContent: string | null
+  systemNotice?: boolean
+  noticeText?: string
+  attachmentCount?: number
+}): TurnStartMessage | null {
+  if (input.isReplay || input.wasLocallySent) return null
+  if (input.systemNotice === true) {
+    // No prompt text exists for this turn; the notice line is its content.
+    const notice = safeTrim(input.noticeText ?? '')
+    return notice ? { kind: 'system-notice', content: notice } : null
+  }
+  if (input.startedContent === null) return null
+  // A user turn always has text; an empty body is only meaningful when it
+  // carries an attachment.
+  if (input.startedContent === '' && !input.attachmentCount) return null
+  return { kind: 'user', content: input.startedContent }
+}
+
 /**
  * Extract the server-assigned queue entry from the 202 response to POST
  * /api/chat.
@@ -1097,7 +1139,34 @@ export function useChat(
           ? queueBefore.find((item) => startedTurnQueuedIdRef.current ? item.id === startedTurnQueuedIdRef.current : safeTrim(item.content) === startedContent)
           : undefined
 
-        if (!isReplay && !wasLocallySent && startedContent !== null) {
+        // Continuation turns (background command finished, loop resume) are started
+        // by the gateway with `_systemNotification` and no user prompt, so this
+        // event carries `content: ""` alongside the notice text. See
+        // `planTurnStartMessage`.
+        const turnStart = planTurnStartMessage({
+          isReplay,
+          wasLocallySent,
+          startedContent,
+          systemNotice: (data as { systemNotice?: boolean }).systemNotice,
+          noticeText: typeof data.noticeText === 'string' ? data.noticeText : undefined,
+          attachmentCount: typeof data.attachmentCount === 'number' ? data.attachmentCount : undefined,
+        })
+
+        if (turnStart?.kind === 'system-notice') {
+          // Exactly the shape `mapSnapshotMessages` builds from the persisted
+          // notice row, so history reconciliation replaces this line in place
+          // rather than appending a second copy of it.
+          const noticeLine: ChatMessage = {
+            id: createOptimisticMessageId('notice'),
+            role: 'user',
+            kind: 'system-notice',
+            content: turnStart.content,
+            optimistic: true,
+          }
+          setState(prev => ({ ...prev, messages: [...prev.messages, noticeLine] }))
+        }
+
+        if (turnStart?.kind === 'user') {
           const userBubble: ChatMessage = drainedItem
             ? {
                 id: createOptimisticMessageId('user'),

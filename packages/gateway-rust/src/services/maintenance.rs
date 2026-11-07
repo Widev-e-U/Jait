@@ -410,7 +410,7 @@ impl MaintenanceService {
             let tx=db.unchecked_transaction()?;
             let mut plan_id=None;
             if proposal_lease.is_some() {
-                let date=chrono::DateTime::parse_from_rfc3339(&completed)?.format("%Y-%m-%d").to_string();
+                let date=js_default_locale_date(&completed)?;
                 match PlanService::with_time(&tx,&completed).create(CreatePlan{repo_id:repo.id.clone(),user_id:repo.user_id.clone(),title:format!("Maintenance: {} check(s) failed — {date}",tasks.len()),tasks:Some(tasks)}) {
                     Ok(plan)=>plan_id=Some(plan.id),Err(_)=>errors.push("fix plan persistence failed".into())
                 }
@@ -522,6 +522,20 @@ fn validate_repo_path(path: &PathBuf) -> std::io::Result<()> {
         .validate_with_symlink_check(".")
         .map_err(std::io::Error::other)?;
     Ok(())
+}
+/// `new Date(value).toLocaleDateString()` as the gateway runtime renders it with no
+/// locale override: the en-US default `M/D/YYYY` with no zero padding, evaluated in the
+/// host's local time. A host that overrides `LC_ALL`/`LC_TIME`/`LANG` to a non-English
+/// locale still diverges, because the reference formatter derives its default locale from
+/// those variables and Rust has no locale database here; that residual stays recorded.
+fn js_default_locale_date(rfc3339: &str) -> Result<String, chrono::ParseError> {
+    let parsed = chrono::DateTime::parse_from_rfc3339(rfc3339)?;
+    Ok(js_locale_date(parsed.with_timezone(&chrono::Local)))
+}
+/// en-US `toLocaleDateString()` ordering for an instant already in local time.
+fn js_locale_date<Tz: chrono::TimeZone>(instant: chrono::DateTime<Tz>) -> String {
+    use chrono::Datelike;
+    format!("{}/{}/{}", instant.month(), instant.day(), instant.year())
 }
 fn fix_tasks(results: &[CheckResult]) -> Vec<Value> {
     results.iter().filter(|r|!r.passed).map(|r|json!({"id":new_task_id(),"title":format!("Fix {} failures",r.name),"description":format!("The `{}` check failed. Fix the errors below.\n\n```\n{}\n```\n\nRun the same command again after fixing to verify.",r.command,limit_utf8(&r.output,8000,Some(""))),"status":"proposed"})).collect()

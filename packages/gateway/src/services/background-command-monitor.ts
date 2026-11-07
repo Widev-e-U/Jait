@@ -175,6 +175,10 @@ class BackgroundCommandMonitor {
     while (this.history.size > 100) this.history.delete(this.history.keys().next().value!);
   }
 
+  recordCompletedExecution(sessionId: string, snapshot: TerminalExecutionSnapshot): void {
+    this.remember(sessionId, snapshot);
+  }
+
   inspectExecution(sessionId: string, terminalId: string, executionId: string): TerminalExecutionSnapshot | null {
     for (const entry of this.active) {
       if (entry.sessionId !== sessionId || entry.terminalId !== terminalId) continue;

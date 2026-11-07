@@ -24,6 +24,24 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
 
+/**
+ * Record the user's explicit provider + model for a chat, exactly as the web UI
+ * persists them on selection. Autonomous work (queued drains, crash recovery,
+ * system notices) may only run on this recorded choice: the gateway never
+ * invents a provider or model on its own.
+ */
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
+
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -90,6 +108,40 @@ describe("server-side queued chat processing", () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   });
 
+  it("returns browser control for accepted user messages", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("browser-handoff-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Browser handoff" });
+    recordSelection(sessionState, session.id);
+    const previewService = { setSharedWithAgent: vi.fn(), list: () => [] };
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService, previewService: previewService as any });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const started = new Promise<void>(resolve => { slowOllamaStarted = resolve; });
+    const active = app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "slow first" } });
+    await started;
+    expect(previewService.setSharedWithAgent).toHaveBeenCalledWith(session.id, true);
+    previewService.setSharedWithAgent.mockClear();
+    const invalid = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/steer`, headers, payload: { message: " " } });
+    expect(invalid.statusCode).toBe(400);
+    expect(previewService.setSharedWithAgent).not.toHaveBeenCalled();
+    const steer = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/steer`, headers, payload: { message: "continue" } });
+    expect(steer.statusCode).toBe(200);
+    expect(previewService.setSharedWithAgent).toHaveBeenCalledWith(session.id, true);
+    previewService.setSharedWithAgent.mockClear();
+    const queued = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "queued" } });
+    expect(queued.statusCode).toBe(202);
+    expect(previewService.setSharedWithAgent).toHaveBeenCalledWith(session.id, true);
+    releaseSlowOllama?.();
+    await active;
+  });
+
   it("stops the active turn and runs the selected queued message first, preserving attachments", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -103,6 +155,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("stop-steer-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Stop and steer" });
+    recordSelection(sessionState, session.id);
     app = await createServer(config, { db, sqlite, sessionService, sessionState, userService });
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
     const headers = { authorization: `Bearer ${token}` };
@@ -163,6 +216,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-resend-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Re-send" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -217,6 +271,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("message-identity", "password123");
     const session = sessionService.create({ userId: user.id, name: "Identity" });
+    recordSelection(sessionState, session.id);
     app = await createServer(config, { db, sqlite, sessionService, sessionState, userService });
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
     const headers = { authorization: `Bearer ${token}` };
@@ -243,6 +298,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-fallback-retry", "password123");
     const session = sessionService.create({ userId: user.id, name: "Fallback retry" });
+    recordSelection(sessionState, session.id);
     const services = { db, sqlite, sessionService, sessionState, userService };
     app = await createServer(config, services);
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
@@ -322,6 +378,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-wsdrop-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue WS Drop" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -393,6 +450,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("http-queue-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "HTTP queue" });
+    recordSelection(sessionState, session.id);
     app = await createServer(config, { db, sqlite, sessionService, sessionState, userService, audit: new AuditWriter(db) });
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
     const headers = { authorization: `Bearer ${token}` };
@@ -442,6 +500,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queued Session" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -504,6 +563,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queued Session" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -562,6 +622,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-hold-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Hold" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -633,6 +694,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-dedupe-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Dedupe" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -689,6 +751,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-race-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Race" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -769,6 +832,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-multiply-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Multiply" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -861,6 +925,7 @@ describe("server-side queued chat processing", () => {
     const userService = new UserService(db);
     const user = userService.createUser("queue-multiply-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Multiply" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,

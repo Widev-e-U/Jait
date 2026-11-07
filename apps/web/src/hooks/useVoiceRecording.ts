@@ -5,6 +5,7 @@ import {
   VOICE_LEVEL_BAR_COUNT,
   VOICE_LEVEL_FLOOR,
   createSilentVoiceLevels,
+  measureVoiceLevel,
 } from '@/lib/voice-levels'
 import { appendTranscript, normalizeTranscript } from '@/lib/transcript-merge'
 
@@ -111,24 +112,26 @@ export function useVoiceRecording({
       source.connect(analyser)
 
       const data = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount))
+      data.fill(128)
       voiceAudioContextRef.current = audioContext
       voiceAudioSourceRef.current = source
       voiceAnalyserRef.current = analyser
       voiceLevelDataRef.current = data
+
+      if (audioContext.state === 'suspended') {
+        void audioContext.resume().catch(() => {})
+      }
 
       const tick = () => {
         const analyserNode = voiceAnalyserRef.current
         const samples = voiceLevelDataRef.current
         if (!analyserNode || !samples) return
 
-        analyserNode.getByteTimeDomainData(samples)
-        let total = 0
-        for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
-          total += Math.abs((samples[sampleIndex] - 128) / 128)
-        }
-        const average = samples.length > 0 ? total / samples.length : 0
-        const boostedLevel = Math.pow(Math.min(1, average * 6.8), 0.78)
-        const targetLevel = Math.min(1, Math.max(VOICE_LEVEL_FLOOR, boostedLevel))
+        // A suspended context may leave the buffer untouched. Treat it as silence,
+        // rather than interpreting the buffer's initial zeroes as a loud signal.
+        samples.fill(128)
+        if (audioContext.state === 'running') analyserNode.getByteTimeDomainData(samples)
+        const targetLevel = measureVoiceLevel(samples)
         const previousTail = voiceLevelsRef.current[voiceLevelsRef.current.length - 1] ?? VOICE_LEVEL_FLOOR
         const nextLevel = previousTail * 0.2 + targetLevel * 0.8
         const timeline = [

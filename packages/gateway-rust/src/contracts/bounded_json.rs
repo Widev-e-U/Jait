@@ -68,10 +68,139 @@ impl JsonGraph {
         }
     }
 }
+/// A validated JSON value retained as its original encoding. Unlike `Value`,
+/// this preserves escaped lone UTF-16 surrogates in strings and object keys.
+/// Callers must still bound the enclosing event and transport buffers.
+#[derive(Clone, Debug)]
+pub struct LosslessJsonValue(Box<serde_json::value::RawValue>);
+
+impl LosslessJsonValue {
+    /// Limits include surrounding whitespace; depth counts nested arrays and
+    /// objects, with scalar values at depth zero. Invalid JSON fails closed.
+    pub fn parse(raw: &str, max_bytes: usize, max_depth: usize) -> Result<Self, &'static str> {
+        if raw.len() > max_bytes {
+            return Err("JSON value exceeds byte limit");
+        }
+        let mut depth = 0usize;
+        let mut in_string = false;
+        let mut escaped = false;
+        for byte in raw.bytes() {
+            if in_string {
+                if escaped {
+                    escaped = false;
+                } else if byte == b'\\' {
+                    escaped = true;
+                } else if byte == b'"' {
+                    in_string = false;
+                }
+            } else {
+                match byte {
+                    b'"' => in_string = true,
+                    b'[' | b'{' => {
+                        depth = depth.checked_add(1).ok_or("JSON nesting exceeds limit")?;
+                        if depth > max_depth {
+                            return Err("JSON nesting exceeds limit");
+                        }
+                    }
+                    b']' | b'}' => depth = depth.checked_sub(1).ok_or("invalid JSON value")?,
+                    _ => {}
+                }
+            }
+        }
+        let parsed: &serde_json::value::RawValue =
+            serde_json::from_str(raw).map_err(|_| "invalid JSON value")?;
+        let value = serde_json::value::RawValue::from_string(parsed.get().to_owned())
+            .map_err(|_| "invalid JSON value")?;
+        Ok(Self(value))
+    }
+
+    pub fn as_json(&self) -> &str {
+        self.0.get()
+    }
+
+    /// JavaScript truthiness of a JSON value, independent of its original bytes.
+    pub fn is_truthy(&self) -> bool {
+        match self.as_json().as_bytes()[0] {
+            b'n' | b'f' => false,
+            b't' | b'[' | b'{' => true,
+            b'"' => self.as_json() != "\"\"",
+            _ => self
+                .as_json()
+                .parse::<f64>()
+                .is_ok_and(|n| n != 0.0 && !n.is_nan()),
+        }
+    }
+}
+
+impl serde::Serialize for LosslessJsonValue {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
 /// JavaScript text can contain lone UTF-16 surrogates after slicing. Keep the
 /// code units until a transport encodes them instead of silently substituting.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Utf16Text(pub Vec<u16>);
+impl Utf16Text {
+    /// Decode a JSON string literal without discarding unpaired UTF-16 units.
+    /// The limit is in code units and is checked before each append.
+    pub fn from_json_literal(raw: &str, max_units: usize) -> Result<Self, &'static str> {
+        // Every JSON-encoded UTF-16 unit takes at most six bytes (\uXXXX).
+        if raw.len() > max_units.saturating_mul(6).saturating_add(2) {
+            return Err("JSON string exceeds UTF-16 limit");
+        }
+        let raw_value = serde_json::value::RawValue::from_string(raw.to_owned())
+            .map_err(|_| "invalid JSON string")?;
+        let literal = raw_value.get();
+        if !literal.starts_with('"') || !literal.ends_with('"') {
+            return Err("expected JSON string");
+        }
+        let mut chars = literal[1..literal.len() - 1].chars();
+        let mut units = Vec::new();
+        while let Some(ch) = chars.next() {
+            let mut encoded = [0u16; 2];
+            let chunk: &[u16] = if ch == '\\' {
+                match chars.next().ok_or("invalid JSON escape")? {
+                    'u' => {
+                        let mut unit = 0u16;
+                        for _ in 0..4 {
+                            unit = unit * 16
+                                + chars
+                                    .next()
+                                    .and_then(|c| c.to_digit(16))
+                                    .ok_or("invalid JSON escape")?
+                                    as u16;
+                        }
+                        encoded[0] = unit;
+                        &encoded[..1]
+                    }
+                    escape => {
+                        let c = match escape {
+                            '"' => '"',
+                            '\\' => '\\',
+                            '/' => '/',
+                            'b' => '\u{0008}',
+                            'f' => '\u{000c}',
+                            'n' => '\n',
+                            'r' => '\r',
+                            't' => '\t',
+                            _ => return Err("invalid JSON escape"),
+                        };
+                        c.encode_utf16(&mut encoded)
+                    }
+                }
+            } else {
+                ch.encode_utf16(&mut encoded)
+            };
+            if chunk.len() > max_units.saturating_sub(units.len()) {
+                return Err("JSON string exceeds UTF-16 limit");
+            }
+            units.extend_from_slice(chunk);
+        }
+        Ok(Self(units))
+    }
+}
 impl From<&str> for Utf16Text {
     fn from(value: &str) -> Self {
         Self(value.encode_utf16().collect())
@@ -329,5 +458,65 @@ pub fn object_spread(
             })
             .collect(),
         _ => Default::default(),
+    }
+}
+
+#[cfg(test)]
+mod utf16_literal_tests {
+    use super::Utf16Text;
+
+    #[test]
+    fn bounded_literal_roundtrip_preserves_code_units() {
+        let original = Utf16Text(vec![0xd800, 0x61, 0xdc00, 0xd83d, 0xde00, 0x0a]);
+        let json = serde_json::to_string(&original).unwrap();
+        assert_eq!(Utf16Text::from_json_literal(&json, 6).unwrap(), original);
+        assert!(Utf16Text::from_json_literal(&json, 5).is_err());
+        assert_eq!(
+            Utf16Text::from_json_literal(r#""\uD83D\uDE00\/\t""#, 4)
+                .unwrap()
+                .0,
+            vec![0xd83d, 0xde00, 0x2f, 0x09]
+        );
+        for invalid in [r#""\uD80G""#, r#""\x""#, "null", "\"unterminated"] {
+            assert!(Utf16Text::from_json_literal(invalid, 100).is_err());
+        }
+    }
+}
+
+#[cfg(test)]
+mod lossless_value_tests {
+    use super::LosslessJsonValue;
+
+    #[test]
+    fn bounded_values_preserve_raw_json_and_js_truthiness() {
+        for (raw, truthy) in [
+            ("null", false),
+            ("false", false),
+            ("true", true),
+            ("0", false),
+            ("-0.0", false),
+            ("1e-400", false),
+            ("1e400", true),
+            ("\"\"", false),
+            (r#""\u0000""#, true),
+            ("[]", true),
+            (r#"{"\ud800":["\udc00",false]}"#, true),
+        ] {
+            let value = LosslessJsonValue::parse(raw, 100, 2)
+                .unwrap_or_else(|error| panic!("{raw}: {error}"));
+            assert_eq!(value.as_json(), raw);
+            assert_eq!(serde_json::to_string(&value).unwrap(), raw);
+            assert_eq!(value.is_truthy(), truthy, "{raw}");
+        }
+    }
+
+    #[test]
+    fn bounded_values_reject_invalid_or_oversized_inputs() {
+        assert!(LosslessJsonValue::parse(" [1] ", 4, 1).is_err());
+        assert!(LosslessJsonValue::parse("[[0]]", 5, 1).is_err());
+        assert!(LosslessJsonValue::parse(r#"["[{}]"]"#, 20, 1).is_ok());
+        for raw in ["", "[", "01", r#""\uD80G""#, "true false"] {
+            assert!(LosslessJsonValue::parse(raw, 100, 10).is_err(), "{raw}");
+        }
     }
 }

@@ -1416,7 +1416,6 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   // A screen share is only shown in the chat that owns it; shares owned by other
   // conversations (or gateway-wide shares) never render here.
   const screenShare = useMemo(() => variant === 'assistant' ? findConversationScreenShare(messageEstimateInputs ?? [], sessionId) : null, [variant, messageEstimateInputs, sessionId])
-  const floatingControlInset = (showMinimap ? MINIMAP_RAIL_WIDTH_PX : 0) + FLOATING_CONTROL_GAP_PX
   const previousMessagePreview = getPreviousMessagePreview(messageContents, previousUserMessageIndex)
 
   return (
@@ -1427,7 +1426,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
       )}
       {/* The minimap and transcript share one row below the browser. Its full
           height must not consume the transcript's space in the outer column. */}
-      <div className="relative flex min-h-0 flex-1 overflow-hidden" data-conversation-viewport>
+      <div className="chat-conversation-viewport relative flex min-h-0 flex-1 overflow-hidden" data-conversation-viewport>
         {loading && !hasContent ? (
           <ConversationPositioningSkeleton label={loadingLabel} />
         ) : (
@@ -1530,8 +1529,8 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
           <TooltipHint content="Scroll to latest message">
           <ConversationScrollButton
             aria-label="Scroll to latest message"
-            className="left-auto bottom-5 translate-x-0"
-            style={{ right: floatingControlInset }}
+            className={cn('chat-scroll-latest left-auto bottom-5 translate-x-0', showMinimap && 'chat-scroll-latest-with-minimap')}
+            style={{ '--scroll-control-gap': `${FLOATING_CONTROL_GAP_PX}px`, '--minimap-rail-width': `${MINIMAP_RAIL_WIDTH_PX}px` } as CSSProperties}
             onClick={() => {
               detachedRef.current = false
               setStickToBottom(true)
@@ -1547,6 +1546,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
         )}
 
         {showMinimap && (
+          <div className="chat-conversation-minimap">
           <ConversationMinimap
             virtualizer={virtualizer}
             scrollElement={scrollElement}
@@ -1557,6 +1557,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
             textWidth={containerWidth}
             onScrub={handleMinimapScrub}
           />
+          </div>
         )}
       </div>
     </AIConversation>

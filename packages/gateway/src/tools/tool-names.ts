@@ -142,12 +142,11 @@ export type ToolNameValue = (typeof ToolName)[keyof typeof ToolName];
 /** Renaming the public family must preserve existing disable rules and policies. */
 export const BROWSER_TOOL_REPLACEMENTS: Readonly<Record<string, string>> = Object.freeze({
   "preview.open": "browser.open", "preview.stop": "browser.close", "preview.restart": "browser.restart",
-  "preview.status": "browser.status", "preview.logs": "browser.logs", "preview.inspect": "browser.inspect",
+  "preview.status": "browser.status", "preview.logs": "browser.logs", "preview.inspect": "browser.open", "browser.inspect": "browser.open",
 });
 export function toolPolicyNames(name: string): string[] {
   const canonical = BROWSER_TOOL_REPLACEMENTS[name] ?? name;
-  const legacy = Object.keys(BROWSER_TOOL_REPLACEMENTS).find(key => BROWSER_TOOL_REPLACEMENTS[key] === canonical);
-  return legacy ? [canonical, legacy] : [canonical];
+  return [canonical, ...Object.keys(BROWSER_TOOL_REPLACEMENTS).filter(key => BROWSER_TOOL_REPLACEMENTS[key] === canonical)];
 }
 export function isToolDisabled(name: string, disabled?: Set<string>): boolean {
   return !!disabled && toolPolicyNames(name).some(candidate => disabled.has(candidate));

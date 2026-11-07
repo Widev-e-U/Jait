@@ -4,7 +4,7 @@ function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
-/** Find one browser in this chat, including virtualized/collapsed rows. */
+/** Find a browser used in the current turn, including virtualized/collapsed rows. */
 export function findConversationBrowser(
   messages: readonly { toolCalls?: unknown; role?: unknown; kind?: unknown }[],
   sessionId?: string | null,
@@ -12,6 +12,9 @@ export function findConversationBrowser(
   let used = false
   let latestData: Record<string, unknown> | undefined
   for (const message of messages) {
+    // A new user turn hides the panel until another browser action occurs.
+    // Keep earlier metadata as a hint for actions that do not return it.
+    if (message.role === 'user' && message.kind !== 'system-notice') used = false
     if (!Array.isArray(message.toolCalls)) continue
     for (const value of message.toolCalls) {
       const call = record(value)

@@ -7,10 +7,10 @@ test.use({ screenshot: 'off' })
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZksAAAAASUVORK5CYII='
 
 async function mount(page: Page) {
-  const state = { user: '@alice:test', avatar: 'mxc://test/avatar-v1', unread: 2, requests: [] as string[] }
+  const state = { user: '@alice:test', avatar: 'mxc://test/avatar-v1', unread: 2, teamsInvite: false, commands: [] as any[], requests: [] as string[] }
   await page.route('**/api/messenger**', async route => {
     const url = new URL(route.request().url())
-    if (url.pathname.endsWith('/command')) return route.fulfill({ json: { ok: true } })
+    if (url.pathname.endsWith('/command')) { state.commands.push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }) }
     if (url.pathname.endsWith('/media')) {
       state.requests.push(route.request().postDataJSON().url)
       return route.fulfill({ json: { data: png } })
@@ -21,7 +21,7 @@ async function mount(page: Page) {
       selectedRoomId: url.searchParams.get('roomId'), messages: [],
       rooms: [
         { id: '!alice:test', name: 'Alice', service: 'WhatsApp', network: 'Personal', membership: 'join', encrypted: true, unread: state.unread, timestamp: 2, preview: 'Firewall ready', avatarUrl: state.avatar },
-        { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar } },
+        { id: '!bob:test', name: 'Bob', service: 'Teams', network: 'Work', membership: state.teamsInvite ? 'invite' : 'join', encrypted: true, unread: 0, timestamp: 1, preview: 'See you tomorrow', peer: { userId: '@bob:test', name: 'Bob', avatarUrl: state.avatar } },
       ],
     } } })
   })
@@ -135,4 +135,26 @@ test('large unread counts keep a centered circular badge', async ({ page }) => {
   await expect(badge).toHaveText('99+')
   const bounds = await badge.boundingBox()
   expect(bounds!.width).toBe(bounds!.height)
+})
+
+test('hidden chats stay out of the inbox and can be restored', async ({ page }) => {
+  await mount(page)
+  await page.getByRole('button', { name: 'Options for Alice' }).click()
+  await page.getByRole('menuitem', { name: 'Hide chat' }).click()
+  await expect(page.getByRole('group', { name: 'Conversation Alice' })).toHaveCount(0)
+  await page.reload()
+  await page.getByRole('button', { name: 'Hidden chats (1)' }).click()
+  await page.getByRole('button', { name: 'Options for Alice' }).click()
+  await page.getByRole('menuitem', { name: 'Unhide chat' }).click()
+  await expect(page.getByRole('group', { name: 'Conversation Alice' })).toHaveCount(0)
+  await page.getByRole('button', { name: '← All chats' }).click()
+  await expect(page.getByRole('group', { name: 'Conversation Alice' })).toBeVisible()
+})
+
+test('opening a recognized Teams invitation joins it', async ({ page }) => {
+  const state = await mount(page)
+  state.teamsInvite = true
+  await page.reload()
+  await page.getByRole('group', { name: 'Conversation Bob' }).getByRole('button').first().click()
+  await expect.poll(() => state.commands.some(command => command.action === 'join' || command.type === 'join' || command.command === 'join')).toBe(true)
 })

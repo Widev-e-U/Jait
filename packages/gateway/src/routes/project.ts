@@ -150,7 +150,7 @@ export function registerProjectRoutes(
   // This is called when a client picks a directory (e.g. Desktop native dialog)
   // so that ALL clients on the session can browse files via the gateway REST API.
   app.post("/api/project/open", async (req, reply) => {
-    const body = req.body as { path?: string; sessionId?: string; nodeId?: string; openPanel?: boolean } | null;
+    const body = req.body as { path?: string; sessionId?: string; nodeId?: string; openPanel?: boolean; strictNode?: boolean } | null;
     const projectPath = body?.path;
     const sessionId = body?.sessionId;
     let nodeId = body?.nodeId || "gateway";
@@ -162,7 +162,7 @@ export function registerProjectRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "sessionId is required" });
     }
 
-    return withProjectOpenLock(sessionId, () => doProjectOpen(reply, projectPath, sessionId, nodeId, body?.openPanel));
+    return withProjectOpenLock(sessionId, () => doProjectOpen(reply, projectPath, sessionId, nodeId, body?.openPanel, body?.strictNode));
   });
 
   async function doProjectOpen(
@@ -171,12 +171,14 @@ export function registerProjectRoutes(
     sessionId: string,
     nodeId: string,
     explicitPanelOpen?: boolean,
+    strictNode?: boolean,
   ) {
     let isRemote = ws?.isRemoteNode(nodeId) ?? false;
 
     // If the requested nodeId looks like a remote node but is no longer connected,
     // try falling back to the gateway's local filesystem instead of failing.
     if (!isRemote && nodeId !== "gateway") {
+      if (strictNode) return reply.status(400).send({ error: "NODE_OFFLINE", message: `Remote node "${nodeId}" is no longer connected` });
       const { stat: fsStat } = await import("node:fs/promises");
       try {
         const info = await fsStat(projectPath);
@@ -308,6 +310,50 @@ export function registerProjectRoutes(
       return reply.status(400).send({
         error: "LIST_FAILED",
         message: err instanceof Error ? err.message : "Failed to list directory",
+      });
+    }
+  });
+
+  // Download through an owned filesystem surface: the surface enforces path and symlink boundaries.
+  app.get("/api/project/download", async (req, reply) => {
+    if (!config || !sessionService) return reply.status(503).send({ error: "AUTHORIZATION_UNAVAILABLE" });
+    const user = await requireAuth(req, reply, config.jwtSecret);
+    if (!user) return;
+    const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
+    if (typeof filePath !== "string" || !filePath.trim() || (surfaceId !== undefined && typeof surfaceId !== "string")) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
+    }
+    const fs = surfaceId
+      ? findUserFsSurface(surfaceRegistry, sessionService, user.id, surfaceId)
+      : surfaceRegistry.listSurfaces().find((surface): surface is AnyFsSurface =>
+        (surface instanceof FileSystemSurface || surface instanceof RemoteFileSystemSurface)
+        && surface.state === "running" && surface.isPathAllowed(filePath)
+        && !!surface.snapshot().sessionId
+        && !!sessionService.getById(surface.snapshot().sessionId!, user.id));
+    if (!fs) return reply.status(404).send({ error: "NO_PROJECT", message: "Open the file's project in this chat, then retry." });
+    // Remote filesystem reads currently lack canonical/symlink boundary enforcement.
+    // Do not expose them through a new download endpoint until the node protocol can enforce it.
+    if (fs instanceof RemoteFileSystemSurface) {
+      return reply.status(501).send({ error: "REMOTE_DOWNLOAD_UNSUPPORTED", message: "Downloads currently require a file in a project on the gateway machine." });
+    }
+    if (!fs.isPathAllowed(filePath)) return reply.status(403).send({ error: "PATH_DENIED" });
+    try {
+      const info = await fs.statFile(filePath);
+      if (info.isDirectory) return reply.status(400).send({ error: "NOT_A_FILE" });
+      const limit = 50 * 1024 * 1024;
+      if (info.size > limit) return reply.status(413).send({ error: "FILE_TOO_LARGE", message: "Downloads are limited to 50 MiB." });
+      const binary = Buffer.from(await fs.readBinary(filePath));
+      if (binary.length > limit) return reply.status(413).send({ error: "FILE_TOO_LARGE" });
+      const name = filePath.replace(/\\/g, "/").split("/").pop() || "download";
+      const encodedName = encodeURIComponent(name).replace(/['()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+      return reply.header("Content-Type", "application/octet-stream")
+        .header("Content-Disposition", `attachment; filename="download"; filename*=UTF-8''${encodedName}`)
+        .header("Cache-Control", "no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .send(binary);
+    } catch (err) {
+      return reply.status(err instanceof PathTraversalError ? 403 : 400).send({
+        error: "DOWNLOAD_FAILED", message: "File unavailable or outside the project's allowed paths.",
       });
     }
   });

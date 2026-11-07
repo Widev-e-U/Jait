@@ -215,3 +215,70 @@ async fn timeout_is_failure_and_output_is_bounded() {
     service.0.db.shutdown().await.unwrap();
     fs::remove_dir_all(root).unwrap();
 }
+#[test]
+fn fix_plan_title_uses_local_day_not_the_utc_day() {
+    // `new Date(value).toLocaleDateString()` renders in local time, so an instant just
+    // after UTC midnight belongs to the previous local day west of Greenwich.
+    let instant = chrono::DateTime::parse_from_rfc3339("2026-11-05T02:30:00Z").unwrap();
+    let west = instant.with_timezone(&chrono::FixedOffset::west_opt(5 * 3600).unwrap());
+    let date = js_locale_date(west);
+    assert_eq!(date, "11/4/2026");
+    assert_eq!(
+        format!("Maintenance: {} check(s) failed — {date}", 1),
+        "Maintenance: 1 check(s) failed — 11/4/2026"
+    );
+}
+#[test]
+fn locale_date_is_unpadded_and_rolls_the_year_in_local_time() {
+    let new_year = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z").unwrap();
+    assert_eq!(js_locale_date(new_year), "1/1/2026");
+    let late = chrono::DateTime::parse_from_rfc3339("2026-12-31T23:59:59Z").unwrap();
+    let east = late.with_timezone(&chrono::FixedOffset::east_opt(9 * 3600).unwrap());
+    assert_eq!(js_locale_date(east), "1/1/2027");
+    let padded = chrono::DateTime::parse_from_rfc3339("2026-03-09T12:00:00Z").unwrap();
+    assert_eq!(js_locale_date(padded), "3/9/2026");
+}
+#[test]
+fn default_locale_date_agrees_with_measured_reference_per_time_zone() {
+    // Expected strings were measured from the reference runtime with the same TZ:
+    //   TZ=UTC              new Date("2026-11-05T02:30:00Z").toLocaleDateString() -> "11/5/2026"
+    //   TZ=America/New_York                                           -> "11/4/2026"
+    //   TZ=Asia/Tokyo                                                 -> "11/5/2026"
+    //   TZ=UTC              new Date("2026-01-01T00:00:00Z")          -> "1/1/2026"
+    //   TZ=America/New_York                                           -> "12/31/2025"
+    let expected = match std::env::var("TZ").ok().as_deref() {
+        Some("UTC") => Some(("11/5/2026", "1/1/2026")),
+        Some("America/New_York") => Some(("11/4/2026", "12/31/2025")),
+        Some("Asia/Tokyo") => Some(("11/5/2026", "1/1/2026")),
+        _ => None,
+    };
+    // Without a measured zone this test cannot check anything, and passing silently would
+    // overstate the evidence; the harness runs it once per zone.
+    let Some((late, new_year)) = expected else {
+        eprintln!("skipped: set TZ to a measured zone (UTC, America/New_York, Asia/Tokyo)");
+        return;
+    };
+    assert_eq!(
+        js_default_locale_date("2026-11-05T02:30:00Z").unwrap(),
+        late
+    );
+    assert_eq!(
+        js_default_locale_date("2026-01-01T00:00:00Z").unwrap(),
+        new_year
+    );
+}
+#[test]
+fn default_locale_date_accepts_only_rfc3339_instants() {
+    assert!(js_default_locale_date("2026-11-05T13:40:49.827Z").is_ok());
+    assert_eq!(
+        js_default_locale_date("2026-11-05T13:40:49Z").unwrap(),
+        js_locale_date(
+            chrono::DateTime::parse_from_rfc3339("2026-11-05T13:40:49Z")
+                .unwrap()
+                .with_timezone(&chrono::Local)
+        )
+    );
+    assert!(js_default_locale_date("").is_err());
+    assert!(js_default_locale_date("2026-11-05").is_err());
+    assert!(js_default_locale_date("not a date").is_err());
+}

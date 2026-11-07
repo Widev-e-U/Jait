@@ -68,6 +68,15 @@ describe("mapCodexNotification", () => {
     });
   });
 
+  it("preserves text and array result payloads from completed tools", () => {
+    for (const result of ["Fetched content", [{ type: "text", text: "Fetched content" }]]) {
+      const events = mapCodexNotification("item/mcpToolCall/completed", {
+        id: "call-1", name: "fetch", status: "completed", result,
+      }, "session-1");
+      expect(events[0]).toMatchObject({ type: "tool.result", data: result });
+    }
+  });
+
   it("maps direct MCP completion events using the original tool name", () => {
     const events = mapCodexNotification("item/mcpToolCall/completed", {
       id: "call-1",

@@ -54,10 +54,7 @@ mod terminal_tools {
         assert_eq!(truncate_middle_chars(thirty, 5), "01234");
         assert_eq!(truncate_middle_chars(thirty, 22), &thirty[..22]);
         // max = marker + 1 -> head 1 char, empty tail.
-        assert_eq!(
-            truncate_middle_chars(thirty, 23),
-            format!("0{MARKER}")
-        );
+        assert_eq!(truncate_middle_chars(thirty, 23), format!("0{MARKER}"));
     }
 
     #[test]
@@ -174,7 +171,10 @@ mod terminal_tools {
         assert_eq!(resolve_command_yield_ms(Some(&json!(0)), 10_000), 1);
         assert_eq!(resolve_command_yield_ms(Some(&json!(-3)), 10_000), 1);
         // non-numeric -> default, then clamped by a small timeout.
-        assert_eq!(resolve_command_yield_ms(Some(&json!("soon")), 10_000), 10_000);
+        assert_eq!(
+            resolve_command_yield_ms(Some(&json!("soon")), 10_000),
+            10_000
+        );
         assert_eq!(resolve_command_yield_ms(None, 500), 500);
     }
 
@@ -255,7 +255,10 @@ mod ssh_tools {
     #[test]
     fn clean_output_drops_echoed_command_marker_and_carriage_returns() {
         assert_eq!(clean_output("echo hi\nresult", "echo hi", None), "result");
-        assert_eq!(clean_output("out\r\n__DONE__\n", "run", Some("__DONE__")), "out");
+        assert_eq!(
+            clean_output("out\r\n__DONE__\n", "run", Some("__DONE__")),
+            "out"
+        );
         // empty after cleaning -> the TS sentinel, not an empty string.
         assert_eq!(clean_output("", "", None), "(no output)");
         assert_eq!(clean_output("echo hi", "echo hi", None), "(no output)");
@@ -271,7 +274,10 @@ mod ssh_tools {
         let huge = "a".repeat(200_000 + 1);
         let out = clean_output(&huge, "", None);
         assert!(out.starts_with("…(truncated)\n"));
-        assert_eq!(out.chars().count(), "…(truncated)\n".chars().count() + 200_000);
+        assert_eq!(
+            out.chars().count(),
+            "…(truncated)\n".chars().count() + 200_000
+        );
         // exactly at the limit is not truncated.
         let at_limit = "a".repeat(200_000);
         assert_eq!(clean_output(&at_limit, "", None), at_limit);
@@ -297,7 +303,10 @@ mod ssh_tools {
             "a\nb"
         );
         // nothing but the marker -> the TS sentinel.
-        assert_eq!(clean_session_command_output("__M__1", "run", "__M__"), "(no output)");
+        assert_eq!(
+            clean_session_command_output("__M__1", "run", "__M__"),
+            "(no output)"
+        );
         assert_eq!(clean_session_command_output("", "", "__M__"), "(no output)");
     }
 
@@ -397,6 +406,9 @@ mod ssh_tools {
             ssh_password_secret_key("bob", "example.com", 2222),
             "bob@example.com:2222"
         );
-        assert_eq!(ssh_password_secret_key("root", "10.0.0.5", 22), "root@10.0.0.5:22");
+        assert_eq!(
+            ssh_password_secret_key("root", "10.0.0.5", 22),
+            "root@10.0.0.5:22"
+        );
     }
 }

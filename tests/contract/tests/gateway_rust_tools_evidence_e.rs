@@ -4,7 +4,7 @@
 //! literal expectations derived from the TS source (tool names, ordering,
 //! required-argument sets, refusal messages, spawn request shapes).
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn required(tool: &Value) -> Vec<String> {
     tool["parameters"]["required"]
@@ -198,10 +198,7 @@ mod mcp_bridge {
     fn transport_strings_match_the_ts_union() {
         assert_eq!(mb::McpTransport::Stdio.as_str(), "stdio");
         assert_eq!(mb::McpTransport::Sse.as_str(), "sse");
-        assert_eq!(
-            mb::McpTransport::StreamableHttp.as_str(),
-            "streamable-http"
-        );
+        assert_eq!(mb::McpTransport::StreamableHttp.as_str(), "streamable-http");
         assert_eq!(
             mb::McpTransport::parse("stdio").unwrap(),
             mb::McpTransport::Stdio
@@ -215,7 +212,9 @@ mod mcp_bridge {
             mb::McpTransport::StreamableHttp
         );
         assert_eq!(
-            mb::McpTransport::parse("websocket").unwrap_err().to_string(),
+            mb::McpTransport::parse("websocket")
+                .unwrap_err()
+                .to_string(),
             "Unsupported MCP transport: websocket"
         );
         assert_eq!(
@@ -227,11 +226,17 @@ mod mcp_bridge {
     #[test]
     fn only_explicit_false_disables_a_server() {
         let mut config = stdio_config("s1", Some("node"));
-        assert!(config.is_enabled(), "an unset enabled flag defaults to true");
+        assert!(
+            config.is_enabled(),
+            "an unset enabled flag defaults to true"
+        );
         config.enabled = Some(true);
         assert!(config.is_enabled());
         config.enabled = Some(false);
-        assert!(!config.is_enabled(), "explicit false must disable the server");
+        assert!(
+            !config.is_enabled(),
+            "explicit false must disable the server"
+        );
     }
 
     #[test]
@@ -249,7 +254,10 @@ mod mcp_bridge {
             "MCP server 's2' (stdio) requires a 'command'",
             "an empty command string is as invalid as a missing one"
         );
-        assert_eq!(mb::validate_transport(&stdio_config("s3", Some("node"))), Ok(()));
+        assert_eq!(
+            mb::validate_transport(&stdio_config("s3", Some("node"))),
+            Ok(())
+        );
 
         let mut implicit = stdio_config("s4", Some("node"));
         implicit.transport = None;
@@ -296,10 +304,7 @@ mod mcp_bridge {
             mb::build_jait_description("github", "Create an issue"),
             "[MCP: github] Create an issue"
         );
-        assert_eq!(
-            mb::build_jait_description("github", ""),
-            "[MCP: github] "
-        );
+        assert_eq!(mb::build_jait_description("github", ""), "[MCP: github] ");
 
         let mut env = BTreeMap::new();
         env.insert("TOKEN".to_string(), "t".to_string());
@@ -322,12 +327,18 @@ mod mcp_bridge {
     #[test]
     fn connection_status_serialises_to_the_ts_literals() {
         use mb::McpConnectionStatus as S;
-        assert_eq!(serde_json::to_value(S::Connected).unwrap(), serde_json::json!("connected"));
+        assert_eq!(
+            serde_json::to_value(S::Connected).unwrap(),
+            serde_json::json!("connected")
+        );
         assert_eq!(
             serde_json::to_value(S::Disconnected).unwrap(),
             serde_json::json!("disconnected")
         );
-        assert_eq!(serde_json::to_value(S::Error).unwrap(), serde_json::json!("error"));
+        assert_eq!(
+            serde_json::to_value(S::Error).unwrap(),
+            serde_json::json!("error")
+        );
     }
 }
 
@@ -489,12 +500,14 @@ mod os_control_tools {
             } else {
                 "core"
             };
-            assert_eq!(tool["tier"], json!(expected_tier), "tier for {}", tool["name"]);
+            assert_eq!(
+                tool["tier"],
+                json!(expected_tier),
+                "tier for {}",
+                tool["name"]
+            );
         }
-        assert_eq!(
-            names_of(&md.iter().collect::<Vec<_>>()),
-            os::tool_names()
-        );
+        assert_eq!(names_of(&md.iter().collect::<Vec<_>>()), os::tool_names());
     }
 
     #[test]
@@ -520,8 +533,14 @@ mod os_control_tools {
     fn definitions_are_stable_references_and_unknown_names_panic() {
         let first = os::definition("os.exec") as *const Value;
         let second = os::definition("os.exec") as *const Value;
-        assert_eq!(first, second, "definitions are static, not rebuilt per call");
-        assert_props(os::definition("os.exec"), &["command", "containerName", "cwd", "env", "timeoutMs"]);
+        assert_eq!(
+            first, second,
+            "definitions are static, not rebuilt per call"
+        );
+        assert_props(
+            os::definition("os.exec"),
+            &["command", "containerName", "cwd", "env", "timeoutMs"],
+        );
         assert_panics_on_unknown();
     }
 }
@@ -607,7 +626,12 @@ mod agent_tools {
         let rendered = ag::render_tool_calls(&calls);
         assert_eq!(rendered.len(), 1);
         let call = &rendered[0];
-        let mut keys: Vec<&str> = call.as_object().unwrap().keys().map(String::as_str).collect();
+        let mut keys: Vec<&str> = call
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(String::as_str)
+            .collect();
         keys.sort();
         assert_eq!(
             keys,
@@ -654,7 +678,11 @@ mod agent_tools {
         assert!(rendered[1]["tool"].is_null());
         assert!(rendered[1]["args"].is_null());
 
-        assert_eq!(rendered[2], json!({}), "non-object calls render as an empty record");
+        assert_eq!(
+            rendered[2],
+            json!({}),
+            "non-object calls render as an empty record"
+        );
     }
 }
 
@@ -706,7 +734,10 @@ mod browser_tools {
         assert_eq!(all.len(), 7);
         assert_eq!(
             names_of(&all),
-            br::TOOL_NAMES.iter().map(|s| (*s).to_string()).collect::<Vec<_>>()
+            br::TOOL_NAMES
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect::<Vec<_>>()
         );
         assert_eq!(br::DEFAULT_BROWSER_ID, "browser-default");
     }
@@ -718,8 +749,16 @@ mod browser_tools {
             assert_eq!(entry["name"], json!(name));
             assert_eq!(entry["tier"], json!("standard"));
             assert_eq!(entry["source"], json!("builtin"));
-            let expected_category = if name.starts_with("web.") { "web" } else { "browser" };
-            assert_eq!(entry["category"], json!(expected_category), "category for {name}");
+            let expected_category = if name.starts_with("web.") {
+                "web"
+            } else {
+                "browser"
+            };
+            assert_eq!(
+                entry["category"],
+                json!(expected_category),
+                "category for {name}"
+            );
             assert!(!entry["description"].as_str().unwrap_or_default().is_empty());
         }
         assert!(br::metadata("browser.nope").is_none());
@@ -762,10 +801,18 @@ mod browser_tools {
         let def = br::definition("web.fetch").unwrap();
         assert_eq!(
             schema_props(def),
-            ["body", "headers", "ignoreTlsErrors", "maxBytes", "method", "timeoutMs", "url"]
-                .iter()
-                .map(|s| (*s).to_string())
-                .collect::<Vec<_>>()
+            [
+                "body",
+                "headers",
+                "ignoreTlsErrors",
+                "maxBytes",
+                "method",
+                "timeoutMs",
+                "url"
+            ]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect::<Vec<_>>()
         );
         assert_eq!(
             def["properties"]["method"]["enum"],
@@ -780,7 +827,11 @@ mod browser_tools {
         let def = br::definition("web.search").unwrap();
         assert_eq!(
             schema_props(def),
-            vec!["limit".to_string(), "provider".to_string(), "query".to_string()]
+            vec![
+                "limit".to_string(),
+                "provider".to_string(),
+                "query".to_string()
+            ]
         );
         assert_eq!(def["properties"]["query"]["type"], json!("string"));
         assert_eq!(

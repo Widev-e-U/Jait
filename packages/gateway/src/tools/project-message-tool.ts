@@ -280,6 +280,8 @@ export function createProjectMessageTool(deps: ProjectMessageToolDeps): ToolDefi
             sessionId: session.id,
             message,
             workingDirectory: project.rootPath ?? undefined,
+            ...(readString(body, "providerId") ? { providerId: readString(body, "providerId") } : {}),
+            ...(readString(body, "model") ? { model: readString(body, "model") } : {}),
             start: true,
           },
           threadContext,

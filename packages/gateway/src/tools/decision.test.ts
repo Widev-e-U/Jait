@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-vi.mock("../services/system-one.js", () => ({ evaluateDecision: vi.fn() }));
-import { evaluateDecision } from "../services/system-one.js";
+vi.mock("../services/system-one.js", async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+import { DecisionError, evaluateDecision } from "../services/system-one.js";
 import { createDecisionEvaluateTool } from "./decision.js";
 const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
 beforeEach(() => { vi.mocked(evaluateDecision).mockReset(); });
@@ -24,6 +24,18 @@ describe("decision.evaluate", () => {
     const question = { id: "ready", type: "noul" as const, instructions: "Ready?" };
     expect((await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [question, question] }, context)).ok).toBe(false);
     expect(evaluateDecision).not.toHaveBeenCalled();
+  });
+  it.each(["not_configured", "invalid_input", "cooldown", "invalid_response", "timeout", "cancelled", "unavailable"] as const)("reports %s without leaking details", async (code) => {
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    expect(result).toMatchObject({ ok: false, data: { code } });
+    expect(result.message).not.toContain("private backend details");
+  });
+  it("reports a safe upstream HTTP status", async () => {
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError("upstream_http", "secret", 401));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    expect(result).toMatchObject({ ok: false, data: { code: "upstream_http", status: 401 } });
+    expect(result.message).toContain("HTTP 401");
   });
   it("reports model failure without exposing backend details", async () => {
     vi.mocked(evaluateDecision).mockRejectedValue(new Error("backend-private-details"));

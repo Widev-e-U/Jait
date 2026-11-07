@@ -25,11 +25,21 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GitAuthorizationRequest {
     pub owner: String,
     pub operation: String,
     pub body: Map<String, Value>,
+}
+// Request bodies may contain credentials; keep them out of diagnostics even when
+// an authority logs the request with Debug.
+impl std::fmt::Debug for GitAuthorizationRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitAuthorizationRequest")
+            .field("operation", &self.operation)
+            .field("body", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }
 /// Grants must reflect consent, exact root and remote destinations, not reachability.
 pub type GitAuthority = Arc<
@@ -48,7 +58,7 @@ pub struct GitGrant {
     /// Explicit permission for the paths in this exact file-diffs request.
     pub allow_worktree_reads: bool,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GitCommandRequest {
     pub owner: String,
     pub operation: String,
@@ -57,6 +67,18 @@ pub struct GitCommandRequest {
     pub arguments: Vec<String>,
     pub environment: HashMap<String, String>,
     pub input: Option<Vec<u8>>,
+}
+// Arguments, environment and stdin can all carry credentials or private data.
+impl std::fmt::Debug for GitCommandRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GitCommandRequest")
+            .field("operation", &self.operation)
+            .field("program", &self.program)
+            .field("arguments", &"[REDACTED]")
+            .field("environment", &"[REDACTED]")
+            .field("input", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }
 /// Resolve executable and captured environment only after checking exact argv, owner,
 /// root, hooks/helpers and configured remote destinations. Denial must have no effect.
@@ -165,7 +187,14 @@ pub(super) async fn authorize(
     .await
     {
         Ok(Ok(grant)) => grant,
-        Ok(Err(error)) => return error_response(403, &error),
+        Ok(Err(error)) => {
+            // Diagnostics can contain transformed or partial credentials, so do not
+            // reflect authority errors from requests carrying a token at all.
+            if body.contains_key("token") {
+                return error_response(403, "Git authorization denied");
+            }
+            return error_response(403, &error);
+        }
         Err(_) => return error_response(504, "Git authorization timed out"),
     };
     if operation == "file-diffs" && !grant.allow_worktree_reads {
@@ -287,7 +316,67 @@ impl Command {
     }
     pub fn output(&mut self) -> io::Result<Capture> {
         let ctx = context()?;
-        let _capture = CapturePermit::acquire(&ctx)?;
+        tokio::runtime::Handle::current().block_on(self.output_scoped(&ctx))
+    }
+
+    async fn output_scoped(&self, ctx: &Context) -> io::Result<Capture> {
+        self.output_scoped_with(ctx, &ctx.operation, 512 * 1024, |_| true)
+            .await
+    }
+
+    // Forward both cancellation sources into the supervised runner. Do not race
+    // the runner future against either source: it must drain and reap its child.
+    async fn output_scoped_with_cancellation(
+        &self,
+        ctx: &Context,
+        caller_cancel: ProcessCancellation,
+        operation: &str,
+        output_limit: usize,
+        grant_allowed: impl FnOnce(&ProcessRequest) -> bool,
+    ) -> io::Result<Capture> {
+        let combined = ProcessCancellation::default();
+        if ctx.cancel.is_cancelled() || caller_cancel.is_cancelled() {
+            combined.cancel();
+        }
+        let request_cancel = ctx.cancel.clone();
+        let forwarded = combined.clone();
+        let watcher = tokio::spawn(async move {
+            tokio::select! {
+                _ = request_cancel.wait_cancelled() => {},
+                _ = caller_cancel.wait_cancelled() => {},
+            }
+            forwarded.cancel();
+        });
+        struct WatcherGuard(tokio::task::JoinHandle<()>, ProcessCancellation);
+        impl Drop for WatcherGuard {
+            fn drop(&mut self) {
+                self.1.cancel();
+                self.0.abort();
+            }
+        }
+        let _watcher = WatcherGuard(watcher, combined.clone());
+        let mut scoped = ctx.clone();
+        scoped.cancel = combined;
+        self.output_scoped_with(&scoped, operation, output_limit, grant_allowed)
+            .await
+    }
+
+    // Specialized callers must supply their exact operation and additional grant
+    // checks while sharing the request's capture, command, and output budgets.
+    async fn output_scoped_with(
+        &self,
+        ctx: &Context,
+        operation: &str,
+        output_limit: usize,
+        grant_allowed: impl FnOnce(&ProcessRequest) -> bool,
+    ) -> io::Result<Capture> {
+        if output_limit == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "zero output limit",
+            ));
+        }
+        let _capture = CapturePermit::acquire_async(ctx).await?;
         if ctx.cancel.is_cancelled() {
             return Err(io::Error::new(
                 io::ErrorKind::Interrupted,
@@ -295,7 +384,9 @@ impl Command {
             ));
         }
         if ctx.output_bytes.load(Ordering::Acquire) >= OUTPUT_BUDGET {
-            return Err(io::Error::other("Git request output budget exhausted"));
+            return Err(io::Error::other(OutputLimitError(
+                "Git request output budget exhausted",
+            )));
         }
         if ctx.commands.fetch_add(1, Ordering::AcqRel) >= 128 {
             return Err(io::Error::other("Git command budget exhausted"));
@@ -313,7 +404,7 @@ impl Command {
         }
         let request = GitCommandRequest {
             owner: ctx.owner.clone(),
-            operation: ctx.operation.clone(),
+            operation: operation.to_owned(),
             program: self.program.clone(),
             cwd: cwd.clone(),
             arguments: self.args.clone(),
@@ -330,27 +421,41 @@ impl Command {
                 "Git request deadline exhausted",
             ));
         }
-        tokio::runtime::Handle::current().block_on(async {
-            let mut authorized = tokio::time::timeout(
-                timeout,
-                (ctx.grant.command_authority)(request, ctx.cancel.clone()),
-            )
-            .await
-            .map_err(|_| {
-                io::Error::new(
-                    io::ErrorKind::TimedOut,
-                    "Git command authorization timed out",
-                )
-            })?
-            .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error))?;
+        {
+            let mut authorized = tokio::select! {
+                biased;
+                _ = ctx.cancel.wait_cancelled() => {
+                    return Err(io::Error::new(io::ErrorKind::Interrupted, "Git request cancelled"));
+                }
+                result = tokio::time::timeout(
+                    timeout,
+                    (ctx.grant.command_authority)(request, ctx.cancel.clone()),
+                ) => result
+                    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "Git command authorization timed out"))?
+                    .map_err(|error| {
+                        // Forge authority diagnostics can include credentials from the
+                        // environment or stdin, including transformed fragments.
+                        if operation.starts_with("forge.") {
+                            io::Error::new(io::ErrorKind::PermissionDenied, "Forge command authorization denied")
+                        } else {
+                            io::Error::new(io::ErrorKind::PermissionDenied, error)
+                        }
+                    })?,
+            };
             if authorized.cwd != cwd
                 || authorized.argv.is_empty()
                 || !Path::new(&authorized.argv[0]).is_absolute()
                 || authorized.argv[1..] != self.args
                 || authorized.input != self.input
+                || self
+                    .environment
+                    .iter()
+                    .any(|(key, value)| authorized.environment.get(key) != Some(value))
+                || authorized.output_limit == 0
                 || authorized.output_limit > 512 * 1024
                 || authorized.timeout > timeout
                 || authorized.timeout.is_zero()
+                || !grant_allowed(&authorized)
             {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
@@ -359,7 +464,13 @@ impl Command {
             }
             // Authorization consumes the same request budget as process execution.
             let remaining = ctx.deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() || ctx.cancel.is_cancelled() {
+            if ctx.cancel.is_cancelled() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "Git request cancelled",
+                ));
+            }
+            if remaining.is_zero() {
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
                     "Git request deadline exhausted",
@@ -372,14 +483,17 @@ impl Command {
             // The permit makes the remaining aggregate allowance stable until capture ends.
             let remaining_output =
                 OUTPUT_BUDGET.saturating_sub(ctx.output_bytes.load(Ordering::Acquire));
-            authorized.output_limit = authorized.output_limit.min(remaining_output);
+            authorized.output_limit = authorized
+                .output_limit
+                .min(remaining_output)
+                .min(output_limit);
             // The canonical runner owns process admission, drain, cancellation and descendant cleanup.
             let output = ctx
                 .pool
                 .run_captured(authorized, ctx.cancel.clone())
                 .await?;
             // Account for captured data even when the operation was interrupted.
-            let charge = charge_output(&ctx, output.stdout.len() + output.stderr.len());
+            let charge = charge_output(ctx, output.stdout.len() + output.stderr.len());
             if output.timed_out {
                 return Err(io::Error::new(
                     io::ErrorKind::TimedOut,
@@ -396,22 +510,118 @@ impl Command {
             // exceeds its individual limit and a caller attempts a fallback.
             charge?;
             if output.truncated {
-                return Err(io::Error::other("Git command output exceeds byte limit"));
+                return Err(io::Error::other(OutputLimitError(
+                    "Git command output exceeds byte limit",
+                )));
             }
             Ok(Capture {
                 status: ExitStatus(output.exit_code),
                 stdout: output.stdout,
                 stderr: output.stderr,
             })
-        })
+        }
     }
 }
-pub(super) struct Capture {
+/// Return the authenticated owner only for a matching forge-auth grant.
+/// Credential persistence must use this identity rather than request-body data.
+pub(super) fn forge_auth_owner() -> crate::services::git_forge::ForgeResult<String> {
+    use crate::services::git_forge::ForgeError;
+    let ctx = REQUEST_CONTEXT
+        .try_with(Clone::clone)
+        .map_err(|_| ForgeError::Denied)?;
+    if ctx.operation != "forge-auth" || ctx.grant.owner != ctx.owner {
+        return Err(ForgeError::Denied);
+    }
+    Ok(ctx.owner)
+}
+
+/// Capture the request cancellation handle for deferred credential persistence.
+pub(super) fn forge_auth_cancellation()
+-> crate::services::git_forge::ForgeResult<ProcessCancellation> {
+    use crate::services::git_forge::ForgeError;
+    let ctx = REQUEST_CONTEXT
+        .try_with(Clone::clone)
+        .map_err(|_| ForgeError::Denied)?;
+    if ctx.operation != "forge-auth" || ctx.grant.owner != ctx.owner {
+        return Err(ForgeError::Denied);
+    }
+    Ok(ctx.cancel)
+}
+
+/// Construct a forge-auth session exclusively from the authorized request identity.
+/// Callers cannot substitute an owner, root, authority or process pool.
+pub(super) fn forge_auth_session(
+    repository: crate::services::git_forge::ForgeRepository,
+    token: String,
+) -> crate::services::git_forge::ForgeResult<crate::services::git_forge::ForgeSession> {
+    use crate::services::git_forge::{ForgeError, ForgeSession};
+    let ctx = REQUEST_CONTEXT
+        .try_with(Clone::clone)
+        .map_err(|_| ForgeError::Denied)?;
+    if ctx.operation != "forge-auth" || ctx.grant.owner != ctx.owner {
+        return Err(ForgeError::Denied);
+    }
+    ForgeSession::new_scoped(
+        ctx.owner,
+        ctx.grant.root,
+        repository,
+        token,
+        ctx.grant.command_authority,
+        ctx.pool,
+    )
+}
+
+/// Execute a specialized command only inside the authorized async request scope.
+/// The caller supplies additional provider-specific checks on the resolved grant.
+pub(crate) async fn execute_scoped_specialized(
+    request: GitCommandRequest,
+    output_limit: usize,
+    cancel: ProcessCancellation,
+    grant_allowed: impl FnOnce(&ProcessRequest) -> bool,
+) -> io::Result<Capture> {
+    let ctx = REQUEST_CONTEXT.try_with(Clone::clone).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Git execution has no authorized request",
+        )
+    })?;
+    if request.owner != ctx.owner || request.cwd != ctx.grant.root {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Git request owner or root mismatch",
+        ));
+    }
+    let mut command = Command::new(&request.program);
+    command.current_dir(&request.cwd).args(&request.arguments);
+    for (key, value) in &request.environment {
+        command.env(key, value);
+    }
+    if let Some(input) = request.input {
+        command.input(input);
+    }
+    command
+        .output_scoped_with_cancellation(
+            &ctx,
+            cancel,
+            &request.operation,
+            output_limit,
+            grant_allowed,
+        )
+        .await
+}
+
+pub(crate) fn is_output_limit(error: &io::Error) -> bool {
+    error
+        .get_ref()
+        .is_some_and(|source| source.is::<OutputLimitError>())
+}
+
+pub(crate) struct Capture {
     pub status: ExitStatus,
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
 }
-pub(super) struct ExitStatus(Option<i32>);
+pub(crate) struct ExitStatus(Option<i32>);
 impl ExitStatus {
     pub fn success(&self) -> bool {
         self.0 == Some(0)
@@ -433,7 +643,9 @@ pub(super) fn read_worktree_file(cwd: &str, path: &str) -> io::Result<String> {
         ));
     }
     if ctx.output_bytes.load(Ordering::Acquire) >= OUTPUT_BUDGET {
-        return Err(io::Error::other("Git request output budget exhausted"));
+        return Err(io::Error::other(OutputLimitError(
+            "Git request output budget exhausted",
+        )));
     }
     if ctx.commands.fetch_add(1, Ordering::AcqRel) >= 128 {
         return Err(io::Error::other("Git command/read budget exhausted"));
@@ -479,7 +691,9 @@ pub(super) fn read_worktree_file(cwd: &str, path: &str) -> io::Result<String> {
     // Reaching the aggregate boundary cannot establish EOF without another read.
     // Fail closed, including exact-boundary files, rather than return partial data.
     if bytes.len() == remaining && remaining <= 512 * 1024 + 1 {
-        return Err(io::Error::other("Git request output budget exhausted"));
+        return Err(io::Error::other(OutputLimitError(
+            "Git request output budget exhausted",
+        )));
     }
     if bytes.len() > 512 * 1024 {
         return Err(io::Error::other("Worktree file exceeds byte limit"));
@@ -490,6 +704,36 @@ pub(super) fn read_worktree_file(cwd: &str, path: &str) -> io::Result<String> {
 // reads. Waiting is bounded by the request deadline and observes cancellation.
 struct CapturePermit(Arc<AtomicBool>);
 impl CapturePermit {
+    // Async callers share the same permit as blocking worktree reads without
+    // blocking a runtime thread while another capture owns it.
+    async fn acquire_async(ctx: &Context) -> io::Result<Self> {
+        loop {
+            if ctx.cancel.is_cancelled() {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "Git request cancelled",
+                ));
+            }
+            if Instant::now() >= ctx.deadline {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Git request deadline exhausted",
+                ));
+            }
+            if ctx
+                .capture_active
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                return Ok(Self(ctx.capture_active.clone()));
+            }
+            tokio::select! {
+                biased;
+                _ = ctx.cancel.wait_cancelled() => return Err(io::Error::new(io::ErrorKind::Interrupted, "Git request cancelled")),
+                _ = tokio::time::sleep(Duration::from_millis(5)) => {}
+            }
+        }
+    }
     fn acquire(ctx: &Context) -> io::Result<Self> {
         loop {
             if ctx.cancel.is_cancelled() {
@@ -521,6 +765,17 @@ impl Drop for CapturePermit {
     }
 }
 
+// Preserve the existing diagnostic while allowing callers to distinguish output
+// exhaustion from unrelated I/O and command-budget errors without parsing text.
+#[derive(Debug)]
+struct OutputLimitError(&'static str);
+impl std::fmt::Display for OutputLimitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+impl std::error::Error for OutputLimitError {}
+
 const OUTPUT_BUDGET: usize = 2 * 1024 * 1024;
 
 fn charge_output(ctx: &Context, bytes: usize) -> io::Result<()> {
@@ -531,7 +786,9 @@ fn charge_output(ctx: &Context, bytes: usize) -> io::Result<()> {
         })
         .expect("budget update always succeeds");
     if bytes > OUTPUT_BUDGET.saturating_sub(previous) {
-        return Err(io::Error::other("Git request output budget exhausted"));
+        return Err(io::Error::other(OutputLimitError(
+            "Git request output budget exhausted",
+        )));
     }
     Ok(())
 }
@@ -593,6 +850,39 @@ pub(super) fn lanes() -> (ProcessPool, BlockingLane) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn authorization_debug_does_not_expose_credentials() {
+        let request = super::GitAuthorizationRequest {
+            owner: "private-owner".into(),
+            operation: "forge-auth".into(),
+            body: serde_json::json!({"token":"secret-body"})
+                .as_object()
+                .unwrap()
+                .clone(),
+        };
+        let command = super::GitCommandRequest {
+            owner: "private-owner".into(),
+            operation: "token-login".into(),
+            program: "gh".into(),
+            cwd: "/private/root".into(),
+            arguments: vec!["secret-argument".into()],
+            environment: [("GH_TOKEN".into(), "secret-environment".into())].into(),
+            input: Some(b"secret-input".to_vec()),
+        };
+        let output = format!("{request:?} {command:?}");
+        for secret in [
+            "private-owner",
+            "/private/root",
+            "secret-body",
+            "secret-argument",
+            "secret-environment",
+            "secret-input",
+        ] {
+            assert!(!output.contains(secret), "debug output exposed {secret}");
+        }
+        assert!(output.contains("forge-auth"));
+        assert!(output.contains("token-login"));
+    }
     use super::*;
     use crate::security::http_auth::{AuthUser, sign_auth_token};
     use crate::services::users::UserService;
@@ -642,6 +932,26 @@ mod tests {
     }
     async fn scoped<T: Send + 'static>(ctx: Context, f: impl FnOnce() -> T + Send + 'static) -> T {
         REQUEST_CONTEXT.scope(ctx, blocking(f)).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn async_capture_permit_shares_lock_and_observes_cancellation() {
+        let fixture = Fixture::new();
+        let ctx = fixture.context(deny());
+        let held = CapturePermit::acquire_async(&ctx).await.unwrap();
+        let waiting = ctx.clone();
+        let waiter = tokio::spawn(async move { CapturePermit::acquire_async(&waiting).await });
+        tokio::task::yield_now().await;
+        assert!(!waiter.is_finished());
+        ctx.cancel.cancel();
+        let error = match waiter.await.unwrap() {
+            Ok(_) => panic!("cancelled waiter acquired permit"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+        assert!(ctx.capture_active.load(Ordering::Acquire));
+        drop(held);
+        assert!(!ctx.capture_active.load(Ordering::Acquire));
     }
 
     #[tokio::test]
@@ -760,6 +1070,979 @@ mod tests {
             )
         })
         .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn scoped_forge_session_uses_request_authority_and_fails_closed() {
+        use crate::services::git_forge::{ForgeError, ForgeRepository, ForgeSession};
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                assert_eq!(
+                    request.operation,
+                    "forge.github.login:github.com/owner/repo"
+                );
+                assert_eq!(
+                    request.environment.get("GH_TOKEN").map(String::as_str),
+                    Some("secret")
+                );
+                Ok(ProcessRequest {
+                    argv: [vec!["/usr/bin/printf".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let ctx = fixture.context(authority.clone());
+        let session = ForgeSession::new_scoped(
+            ctx.owner.clone(),
+            ctx.grant.root.clone(),
+            ForgeRepository::new("github.com", "owner", "repo").unwrap(),
+            "secret".into(),
+            authority,
+            ctx.pool.clone(),
+        )
+        .unwrap();
+        assert!(matches!(
+            session.conflict_context(),
+            Err(ForgeError::Denied)
+        ));
+        assert_eq!(
+            session
+                .gh(
+                    "login",
+                    vec!["ok".into()],
+                    None,
+                    1024,
+                    ProcessCancellation::default()
+                )
+                .await,
+            Err(ForgeError::Denied)
+        );
+        let commands = ctx.commands.clone();
+        REQUEST_CONTEXT
+            .scope(ctx, async {
+                assert_eq!(
+                    session
+                        .gh(
+                            "login",
+                            vec!["ok".into()],
+                            None,
+                            1024,
+                            ProcessCancellation::default()
+                        )
+                        .await
+                        .unwrap(),
+                    "ok"
+                );
+                assert_eq!(commands.load(Ordering::Acquire), 1);
+            })
+            .await;
+    }
+
+    #[tokio::test]
+    async fn forge_auth_session_requires_matching_request_operation() {
+        use crate::services::git_forge::{ForgeError, ForgeRepository};
+        let repository = ForgeRepository::new("github.com", "owner", "repo").unwrap();
+        assert!(matches!(
+            forge_auth_session(repository.clone(), "secret".into()),
+            Err(ForgeError::Denied)
+        ));
+        let fixture = Fixture::new();
+        let mut ctx = fixture.context(deny());
+        REQUEST_CONTEXT
+            .scope(ctx.clone(), async {
+                assert!(matches!(
+                    forge_auth_session(repository.clone(), "secret".into()),
+                    Err(ForgeError::Denied)
+                ));
+            })
+            .await;
+        ctx.operation = "forge-auth".into();
+        REQUEST_CONTEXT
+            .scope(ctx, async {
+                assert!(forge_auth_session(repository, "secret".into()).is_ok());
+            })
+            .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn github_auth_persists_only_success_for_authorized_owner() {
+        use crate::routes::auth::AuthState;
+        use crate::services::git_forge::ForgeRepository;
+        use crate::services::user_secrets::UserSecretService;
+        use std::os::unix::fs::PermissionsExt;
+
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let users = UserService::new(&db);
+        let owner = users
+            .create_user_with_hash("forge-owner", "hash")
+            .unwrap()
+            .id;
+        let other = users
+            .create_user_with_hash("forge-other", "hash")
+            .unwrap()
+            .id;
+        let auth = AuthState::new(db, "forge-auth-test-key-at-least-32-bytes".into()).unwrap();
+        let secrets = UserSecretService::new("forge-auth-test-encryption-key");
+        let state =
+            super::super::GitRoutes::new(auth.clone()).with_user_secrets(Some(secrets.clone()));
+        let fixture = Fixture::new();
+        let executable = fixture.root.join("fake-gh");
+        std::fs::write(&executable, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let authority: GitCommandAuthority = Arc::new(move |request, _| {
+            let executable = executable.clone();
+            Box::pin(async move {
+                assert_eq!(
+                    request.operation,
+                    "forge.github.token-login:github.com/owner/repo"
+                );
+                let mut argv = vec![executable.to_string_lossy().into_owned()];
+                argv.extend(request.arguments);
+                Ok(ProcessRequest {
+                    argv,
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 65536,
+                })
+            })
+        });
+        let mut ctx = fixture.context(authority);
+        ctx.operation = "forge-auth".into();
+        ctx.owner = owner.clone();
+        ctx.grant.owner = owner.clone();
+        let enterprise =
+            ForgeRepository::new("github.enterprise.example", "owner", "repo").unwrap();
+        let commands = ctx.commands.clone();
+        let rejected = REQUEST_CONTEXT
+            .scope(
+                ctx.clone(),
+                super::super::github_forge_auth(&state, enterprise, "enterprise-token".into()),
+            )
+            .await;
+        assert!(rejected.is_err());
+        assert_eq!(commands.load(Ordering::Acquire), 0);
+        let repo = ForgeRepository::new("github.com", "owner", "repo").unwrap();
+        // Cancellation of the request must prevent command admission and persistence.
+        let mut cancelled_ctx = fixture.context(deny());
+        cancelled_ctx.operation = "forge-auth".into();
+        cancelled_ctx.owner = owner.clone();
+        cancelled_ctx.grant.owner = owner.clone();
+        let cancelled_commands = cancelled_ctx.commands.clone();
+        cancelled_ctx.cancel.cancel();
+        let cancelled = REQUEST_CONTEXT
+            .scope(
+                cancelled_ctx,
+                super::super::github_forge_auth(&state, repo.clone(), "cancelled-token".into()),
+            )
+            .await;
+        assert!(cancelled.is_err());
+        assert_eq!(cancelled_commands.load(Ordering::Acquire), 0);
+        let check = secrets.clone();
+        let check_owner = owner.clone();
+        auth.with_database(move |db| {
+            assert_eq!(
+                check.get_value(db, Some(&check_owner), "forge-token", "github.com")?,
+                None
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let reject_target: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                assert_eq!(
+                    request.operation,
+                    "forge.github.token-login:github.com/owner/repo"
+                );
+                Err("destination denied".into())
+            })
+        });
+        let mut denied_ctx = fixture.context(reject_target);
+        denied_ctx.operation = "forge-auth".into();
+        denied_ctx.owner = owner.clone();
+        denied_ctx.grant.owner = owner.clone();
+        let denied = REQUEST_CONTEXT
+            .scope(
+                denied_ctx,
+                super::super::github_forge_auth(&state, repo.clone(), "denied-token".into()),
+            )
+            .await;
+        assert!(denied.is_err());
+        let check = secrets.clone();
+        let check_owner = owner.clone();
+        auth.with_database(move |db| {
+            assert_eq!(
+                check.get_value(db, Some(&check_owner), "forge-token", "github.com")?,
+                None
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+        let failed = REQUEST_CONTEXT
+            .scope(
+                ctx.clone(),
+                super::super::github_forge_auth(&state, repo.clone(), "failed-token".into()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(failed["ok"], false);
+        assert_eq!(failed["username"], serde_json::Value::Null);
+        assert!(failed["error"].is_string());
+        let check = secrets.clone();
+        let check_owner = owner.clone();
+        auth.with_database(move |db| {
+            assert_eq!(
+                check.get_value(db, Some(&check_owner), "forge-token", "github.com")?,
+                None
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+        std::fs::write(
+            fixture.root.join("fake-gh"),
+            "#!/bin/sh\nprintf '%s' '{\"login\":\"forge-user\"}'\n",
+        )
+        .unwrap();
+        let success = REQUEST_CONTEXT
+            .scope(
+                ctx,
+                super::super::github_forge_auth(&state, repo, "valid-token".into()),
+            )
+            .await
+            .unwrap();
+        assert_eq!(success["ok"], true);
+        assert!(success.get("error").is_none());
+        assert_eq!(success["username"], "forge-user");
+        auth.with_database(move |db| {
+            assert_eq!(
+                secrets
+                    .get_value(db, Some(&owner), "forge-token", "github.com")?
+                    .as_deref(),
+                Some("valid-token")
+            );
+            assert_eq!(
+                secrets.get_value(db, Some(&other), "forge-token", "github.com")?,
+                None
+            );
+            assert_eq!(
+                secrets.get_value(db, None, "forge-token", "github.com")?,
+                None
+            );
+            let stored: String =
+                db.query_row("SELECT encrypted_value FROM user_secrets", [], |row| {
+                    row.get(0)
+                })?;
+            assert!(!stored.contains("valid-token"));
+            Ok(())
+        })
+        .await
+        .unwrap();
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn github_login_cancelled_after_success_while_token_write_is_queued() {
+        use crate::routes::auth::AuthState;
+        use crate::services::git_forge::ForgeRepository;
+        use crate::services::user_secrets::UserSecretService;
+        use std::os::unix::fs::PermissionsExt;
+
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let owner = UserService::new(&db)
+            .create_user_with_hash("login-queue-owner", "hash")
+            .unwrap()
+            .id;
+        let auth = AuthState::new(db, "forge-auth-test-key-at-least-32-bytes".into()).unwrap();
+        let secrets = UserSecretService::new("forge-auth-test-encryption-key");
+        let state =
+            super::super::GitRoutes::new(auth.clone()).with_user_secrets(Some(secrets.clone()));
+        let fixture = Fixture::new();
+        let executable = fixture.root.join("fake-gh");
+        std::fs::write(
+            &executable,
+            "#!/bin/sh\nprintf '%s' '{\"login\":\"forge-user\"}'\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let authority: GitCommandAuthority = Arc::new(move |request, _| {
+            let executable = executable.clone();
+            Box::pin(async move {
+                let mut argv = vec![executable.to_string_lossy().into_owned()];
+                argv.extend(request.arguments);
+                Ok(ProcessRequest {
+                    argv,
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 65536,
+                })
+            })
+        });
+        let mut ctx = fixture.context(authority);
+        ctx.operation = "forge-auth".into();
+        ctx.owner = owner.clone();
+        ctx.grant.owner = owner.clone();
+        let cancel = ctx.cancel.clone();
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let blocked_auth = auth.clone();
+        let blocker = tokio::spawn(async move {
+            blocked_auth
+                .with_database(move |_| {
+                    let _ = entered_tx.send(());
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        });
+        entered_rx.await.unwrap();
+        let repo = ForgeRepository::new("github.com", "owner", "repo").unwrap();
+        let login = tokio::spawn(async move {
+            REQUEST_CONTEXT
+                .scope(
+                    ctx,
+                    super::super::github_forge_auth(&state, repo, "queued-token".into()),
+                )
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while auth.worker().queued_jobs() == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("successful login must queue its secret write");
+        cancel.cancel();
+        release_tx.send(()).unwrap();
+        blocker.await.unwrap();
+        assert!(login.await.unwrap().is_err());
+        auth.with_database(move |db| {
+            assert_eq!(
+                secrets.get_value(db, Some(&owner), "forge-token", "github.com")?,
+                None
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn github_token_write_cancelled_while_queued_is_not_persisted() {
+        use crate::execution::process_runner::ProcessCancellation;
+        use crate::routes::auth::AuthState;
+        use crate::services::user_secrets::UserSecretService;
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let owner = UserService::new(&db)
+            .create_user_with_hash("queued-owner", "hash")
+            .unwrap()
+            .id;
+        let auth = AuthState::new(db, "forge-auth-test-key-at-least-32-bytes".into()).unwrap();
+        let secrets = UserSecretService::new("forge-auth-test-encryption-key");
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let blocked_auth = auth.clone();
+        let blocker = tokio::spawn(async move {
+            blocked_auth
+                .with_database(move |_| {
+                    let _ = entered_tx.send(());
+                    release_rx.recv().unwrap();
+                    Ok(())
+                })
+                .await
+                .unwrap();
+        });
+        entered_rx.await.unwrap();
+        let cancellation = ProcessCancellation::default();
+        let write = super::super::save_github_token(
+            &auth,
+            secrets.clone(),
+            owner.clone(),
+            "queued-token".into(),
+            cancellation.clone(),
+        );
+        tokio::pin!(write);
+        // A single poll admits the write to the worker mailbox while it is blocked.
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(matches!(write.as_mut().poll(&mut context), Poll::Pending));
+        cancellation.cancel();
+        release_tx.send(()).unwrap();
+        blocker.await.unwrap();
+        assert!(write.await.is_err());
+        auth.with_database(move |db| {
+            assert_eq!(
+                secrets.get_value(db, Some(&owner), "forge-token", "github.com")?,
+                None
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn forge_auth_owner_rejects_unscoped_wrong_operation_and_owner() {
+        use crate::services::git_forge::ForgeError;
+        assert_eq!(forge_auth_owner(), Err(ForgeError::Denied));
+        let fixture = Fixture::new();
+        let mut ctx = fixture.context(deny());
+        REQUEST_CONTEXT
+            .scope(ctx.clone(), async {
+                assert_eq!(forge_auth_owner(), Err(ForgeError::Denied));
+            })
+            .await;
+        ctx.operation = "forge-auth".into();
+        let expected = ctx.owner.clone();
+        REQUEST_CONTEXT
+            .scope(ctx.clone(), async {
+                assert_eq!(forge_auth_owner(), Ok(expected));
+            })
+            .await;
+        ctx.grant.owner = "different-owner".into();
+        REQUEST_CONTEXT
+            .scope(ctx, async {
+                assert_eq!(forge_auth_owner(), Err(ForgeError::Denied));
+            })
+            .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn scoped_forge_maps_output_exhaustion_and_rejects_rewritten_token() {
+        use crate::services::git_forge::{ForgeError, ForgeRepository, ForgeSession};
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                Ok(ProcessRequest {
+                    argv: [vec!["/usr/bin/printf".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let ctx = fixture.context(authority.clone());
+        ctx.output_bytes
+            .store(2 * 1024 * 1024 - 1, Ordering::Release);
+        let session = ForgeSession::new_scoped(
+            ctx.owner.clone(),
+            ctx.grant.root.clone(),
+            ForgeRepository::new("github.com", "owner", "repo").unwrap(),
+            "secret".into(),
+            authority,
+            ctx.pool.clone(),
+        )
+        .unwrap();
+        REQUEST_CONTEXT
+            .scope(ctx, async {
+                assert_eq!(
+                    session
+                        .gh(
+                            "login",
+                            vec!["too long".into()],
+                            None,
+                            1024,
+                            ProcessCancellation::default()
+                        )
+                        .await,
+                    Err(ForgeError::OutputLimit)
+                );
+                assert_eq!(
+                    session
+                        .gh(
+                            "login",
+                            vec!["x".into()],
+                            None,
+                            1024,
+                            ProcessCancellation::default()
+                        )
+                        .await,
+                    Err(ForgeError::OutputLimit)
+                );
+            })
+            .await;
+
+        let rewrite: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                let mut environment = request.environment;
+                environment.insert("GH_TOKEN".into(), "different".into());
+                Ok(ProcessRequest {
+                    argv: [vec!["/usr/bin/printf".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let ctx = fixture.context(rewrite.clone());
+        let session = ForgeSession::new_scoped(
+            ctx.owner.clone(),
+            ctx.grant.root.clone(),
+            ForgeRepository::new("github.com", "owner", "repo").unwrap(),
+            "secret".into(),
+            rewrite,
+            ctx.pool.clone(),
+        )
+        .unwrap();
+        REQUEST_CONTEXT
+            .scope(ctx, async {
+                assert_eq!(
+                    session
+                        .gh(
+                            "login",
+                            vec!["ok".into()],
+                            None,
+                            1024,
+                            ProcessCancellation::default()
+                        )
+                        .await,
+                    Err(ForgeError::Denied)
+                );
+            })
+            .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn specialized_entry_requires_matching_request_scope() {
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                assert_eq!(request.operation, "forge.github.login:owner/repo");
+                Ok(ProcessRequest {
+                    argv: [vec!["/usr/bin/printf".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let ctx = fixture.context(authority);
+        let request = GitCommandRequest {
+            owner: ctx.owner.clone(),
+            operation: "forge.github.login:owner/repo".into(),
+            program: "printf".into(),
+            cwd: ctx.grant.root.clone(),
+            arguments: vec!["ok".into()],
+            environment: HashMap::new(),
+            input: None,
+        };
+        let denied = execute_scoped_specialized(
+            request.clone(),
+            1024,
+            ProcessCancellation::default(),
+            |_| true,
+        )
+        .await;
+        assert_eq!(
+            denied.err().unwrap().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        let mut wrong_owner = request.clone();
+        wrong_owner.owner = "other-owner".into();
+        let counts = ctx.commands.clone();
+        REQUEST_CONTEXT
+            .scope(ctx, async {
+                let denied = execute_scoped_specialized(
+                    wrong_owner,
+                    1024,
+                    ProcessCancellation::default(),
+                    |_| true,
+                )
+                .await;
+                assert_eq!(
+                    denied.err().unwrap().kind(),
+                    io::ErrorKind::PermissionDenied
+                );
+                assert_eq!(counts.load(Ordering::Acquire), 0);
+                let output = execute_scoped_specialized(
+                    request,
+                    1024,
+                    ProcessCancellation::default(),
+                    |_| true,
+                )
+                .await
+                .unwrap();
+                assert_eq!(output.stdout, b"ok");
+                assert_eq!(counts.load(Ordering::Acquire), 1);
+            })
+            .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn specialized_forge_execution_charges_shared_output_budget() {
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                Ok(ProcessRequest {
+                    argv: [vec!["/usr/bin/printf".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let ctx = fixture.context(authority);
+        ctx.output_bytes.store(OUTPUT_BUDGET - 4, Ordering::Release);
+        let mut command = Command::new("printf");
+        command.args(["abcdefgh"]);
+        let error = command
+            .output_scoped_with(&ctx, "forge.github.login:owner/repo", 1024, |_| true)
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("output exceeds byte limit"));
+        assert!(error.get_ref().is_some_and(|e| e.is::<OutputLimitError>()));
+        assert_eq!(ctx.output_bytes.load(Ordering::Acquire), OUTPUT_BUDGET);
+        let error = command
+            .output_scoped_with(&ctx, "forge.github.login:owner/repo", 1024, |_| true)
+            .await
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("output budget exhausted"));
+        assert!(error.get_ref().is_some_and(|e| e.is::<OutputLimitError>()));
+        assert_eq!(ctx.commands.load(Ordering::Acquire), 1);
+        ctx.output_bytes.store(0, Ordering::Release);
+        ctx.commands.store(128, Ordering::Release);
+        let error = command
+            .output_scoped_with(&ctx, "forge.github.login:owner/repo", 1024, |_| true)
+            .await
+            .err()
+            .unwrap();
+        assert!(!error.get_ref().is_some_and(|e| e.is::<OutputLimitError>()));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn specialized_scoped_grant_checks_forge_operation_and_environment() {
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                assert_eq!(request.operation, "forge.github.login:owner/repo");
+                let mut environment = request.environment;
+                environment.insert("GH_REPO".into(), "hostile/repo".into());
+                Ok(ProcessRequest {
+                    argv: [vec!["/bin/sh".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let ctx = fixture.context(authority);
+        let mut command = Command::new("sh");
+        command.args(["-c", ": > should-not-exist"]);
+        command.env("GH_TOKEN", "test-token");
+        let result = command
+            .output_scoped_with(&ctx, "forge.github.login:owner/repo", 1024, |grant| {
+                crate::services::git_forge::forge_environment_allowed(
+                    "github",
+                    "github.com",
+                    &command.environment,
+                    &grant.environment,
+                )
+            })
+            .await;
+        assert_eq!(
+            result.err().unwrap().kind(),
+            io::ErrorKind::PermissionDenied
+        );
+        assert!(!fixture.root.join("should-not-exist").exists());
+        assert_eq!(ctx.commands.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn forge_command_authority_errors_do_not_expose_credentials() {
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move { Err(format!("denied {:?}", request.environment)) })
+        });
+        let ctx = fixture.context(authority);
+        let mut command = Command::new("gh");
+        command.env("GH_TOKEN", "private-forge-token");
+        let error = command
+            .output_scoped_with(&ctx, "forge.github.login:owner/repo", 1024, |_| true)
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(error.to_string(), "Forge command authorization denied");
+        assert!(!error.to_string().contains("private-forge-token"));
+        assert_eq!(std::fs::read_dir(&fixture.root).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn scoped_command_forwards_both_cancellation_sources() {
+        for cancel_request in [false, true] {
+            let fixture = Fixture::new();
+            let started = Arc::new(AtomicBool::new(false));
+            let marker = started.clone();
+            let authority: GitCommandAuthority = Arc::new(move |_, _| {
+                let marker = marker.clone();
+                Box::pin(async move {
+                    marker.store(true, Ordering::Release);
+                    std::future::pending().await
+                })
+            });
+            let ctx = fixture.context(authority);
+            let request_cancel = ctx.cancel.clone();
+            let caller_cancel = ProcessCancellation::default();
+            let signal = caller_cancel.clone();
+            let task = tokio::spawn(async move {
+                Command::new("gh")
+                    .output_scoped_with_cancellation(
+                        &ctx,
+                        caller_cancel,
+                        "forge.github.login:owner/repo",
+                        1024,
+                        |_| true,
+                    )
+                    .await
+                    .err()
+                    .unwrap()
+            });
+            tokio::time::timeout(Duration::from_secs(2), async {
+                while !started.load(Ordering::Acquire) {
+                    tokio::task::yield_now().await;
+                }
+            })
+            .await
+            .unwrap();
+            if cancel_request {
+                request_cancel.cancel();
+            } else {
+                signal.cancel();
+            }
+            let error = tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+            assert_eq!(std::fs::read_dir(&fixture.root).unwrap().count(), 0);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn scoped_cancellation_reaps_running_process_and_releases_capture() {
+        for cancel_request in [false, true] {
+            let fixture = Fixture::new();
+            let authority: GitCommandAuthority = Arc::new(|request, _| {
+                Box::pin(async move {
+                    Ok(ProcessRequest {
+                        argv: [vec!["/bin/sh".into()], request.arguments].concat(),
+                        cwd: request.cwd,
+                        environment: request.environment,
+                        input: request.input,
+                        timeout: Duration::from_secs(2),
+                        output_limit: 1024,
+                    })
+                })
+            });
+            let ctx = fixture.context(authority);
+            let request_cancel = ctx.cancel.clone();
+            let capture_active = ctx.capture_active.clone();
+            let caller_cancel = ProcessCancellation::default();
+            let signal = caller_cancel.clone();
+            let marker = fixture.root.join("child-pid");
+            let task = tokio::spawn(async move {
+                let mut command = Command::new("sh");
+                command.args(["-c", "echo $$ > child-pid; exec /bin/sleep 20"]);
+                command
+                    .output_scoped_with_cancellation(
+                        &ctx,
+                        caller_cancel,
+                        "forge.github.login:owner/repo",
+                        1024,
+                        |_| true,
+                    )
+                    .await
+                    .err()
+                    .unwrap()
+            });
+            let pid: u32 = tokio::time::timeout(Duration::from_secs(5), async {
+                loop {
+                    if let Ok(contents) = std::fs::read_to_string(&marker)
+                        && let Ok(pid) = contents.trim().parse()
+                    {
+                        break pid;
+                    }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap();
+            if cancel_request {
+                request_cancel.cancel();
+            } else {
+                signal.cancel();
+            }
+            let error = tokio::time::timeout(Duration::from_secs(5), task)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+            assert!(
+                !std::path::Path::new(&format!("/proc/{pid}")).exists(),
+                "child was not reaped"
+            );
+            assert!(!capture_active.load(Ordering::Acquire));
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_interrupts_pending_command_authorization() {
+        let fixture = Fixture::new();
+        let started = Arc::new(AtomicBool::new(false));
+        let marker = started.clone();
+        let authority: GitCommandAuthority = Arc::new(move |_, _| {
+            let marker = marker.clone();
+            Box::pin(async move {
+                marker.store(true, Ordering::Release);
+                std::future::pending().await
+            })
+        });
+        let ctx = fixture.context(authority);
+        let cancel = ctx.cancel.clone();
+        let task = tokio::spawn(scoped(ctx, || Command::new("git").output().err().unwrap()));
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !started.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        cancel.cancel();
+        let error = tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+        assert_eq!(std::fs::read_dir(&fixture.root).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn zero_output_grant_is_rejected_before_process_start() {
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, _| {
+            Box::pin(async move {
+                Ok(ProcessRequest {
+                    argv: [vec!["/bin/sh".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 0,
+                })
+            })
+        });
+        let error = scoped(fixture.context(authority), || {
+            Command::new("sh")
+                .args(["-c", ": > should-not-exist"])
+                .output()
+                .err()
+                .unwrap()
+        })
+        .await;
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        assert!(!fixture.root.join("should-not-exist").exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn cancellation_during_authorization_reports_interrupted() {
+        let fixture = Fixture::new();
+        let authority: GitCommandAuthority = Arc::new(|request, cancel| {
+            Box::pin(async move {
+                cancel.cancel();
+                Ok(ProcessRequest {
+                    argv: [vec!["/bin/sh".into()], request.arguments].concat(),
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(1),
+                    output_limit: 1024,
+                })
+            })
+        });
+        let error = scoped(fixture.context(authority), || {
+            Command::new("sh")
+                .args(["-c", ": > should-not-exist"])
+                .output()
+                .err()
+                .unwrap()
+        })
+        .await;
+        assert_eq!(error.kind(), io::ErrorKind::Interrupted);
+        assert!(!fixture.root.join("should-not-exist").exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn command_rejects_changed_or_missing_requested_environment() {
+        for replacement in [None, Some("different")] {
+            let fixture = Fixture::new();
+            let authority: GitCommandAuthority = Arc::new(move |request, _| {
+                Box::pin(async move {
+                    let mut environment = HashMap::new();
+                    if let Some(value) = replacement {
+                        environment.insert("REQUESTED_VALUE".into(), value.into());
+                    }
+                    Ok(ProcessRequest {
+                        argv: [vec!["/bin/sh".into()], request.arguments].concat(),
+                        cwd: request.cwd,
+                        environment,
+                        input: request.input,
+                        timeout: Duration::from_secs(1),
+                        output_limit: 1024,
+                    })
+                })
+            });
+            let error = scoped(fixture.context(authority), || {
+                Command::new("sh")
+                    .args(["-c", ": > should-not-exist"])
+                    .env("REQUESTED_VALUE", "expected")
+                    .output()
+                    .err()
+                    .unwrap()
+            })
+            .await;
+            assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+            assert!(!fixture.root.join("should-not-exist").exists());
+        }
     }
 
     #[cfg(unix)]
@@ -1835,6 +3118,47 @@ exit 2
             403
         );
         assert_eq!(commands.load(Ordering::SeqCst), before);
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn authorization_denial_does_not_reflect_request_token() {
+        let fixture = Fixture::new();
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let user = UserService::new(&db)
+            .create_user_with_hash("git-redaction-owner", "test-hash")
+            .unwrap();
+        let secret = "git-route-test-secret-at-least-thirty-two-bytes";
+        let token = sign_auth_token(
+            &AuthUser {
+                id: user.id,
+                username: user.username,
+            },
+            secret,
+        )
+        .unwrap();
+        let auth = super::super::auth::AuthState::new(db, secret.into()).unwrap();
+        let authority: GitAuthority = Arc::new(|request, _| {
+            Box::pin(async move { Err(format!("denied credential {:?}", request.body["token"])) })
+        });
+        let server = server(
+            GitRoutes::new(auth.clone())
+                .with_authority(authority)
+                .router(),
+        )
+        .await;
+        let response = reqwest::Client::new()
+            .post(format!("{}/api/git/status", server.base))
+            .bearer_auth(token)
+            .json(&json!({"cwd": fixture.root, "token": "private-forge-token"}))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), 403);
+        let body = response.text().await.unwrap();
+        assert!(!body.contains("private-forge-token"));
+        assert!(body.contains("Git authorization denied"));
         auth.shutdown().await.unwrap();
     }
 

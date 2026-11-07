@@ -43,6 +43,10 @@ import type {
   UserSecretRecord,
 } from '@jait/shared'
 
+export interface GithubIntakeRule { repository: string; sender: string; event: string; action: string }
+export interface GithubIntakeDecision { id: string; event: string; action: string; repository: string; sender: string; result: string; reason: string; createdAt: string }
+export interface GithubIntakeState { mode: 'observe'; rules: GithubIntakeRule[]; decisions: GithubIntakeDecision[] }
+
 const API_URL = getApiUrl()
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -510,6 +514,17 @@ export class AgentsApi {
     return res.json() as Promise<AgentGithubAppOverview>
   }
 
+  async getGithubIntake(agentId: string): Promise<GithubIntakeState> {
+    const res = await fetch(this.githubAppPath(agentId, '/intake'), { headers: this.getHeaders() })
+    if (!res.ok) throw await this.githubAppError(res, 'Could not load GitHub event intake')
+    return res.json() as Promise<GithubIntakeState>
+  }
+
+  async saveGithubIntake(agentId: string, rules: GithubIntakeRule[]): Promise<void> {
+    const res = await fetch(this.githubAppPath(agentId, '/intake'), { method: 'PUT', headers: this.getHeaders(true), body: JSON.stringify({ rules }) })
+    if (!res.ok) throw await this.githubAppError(res, 'Could not save GitHub event rules')
+  }
+
   async getAgentGithubApp(agentId: string): Promise<AgentGithubAppState> {
     const res = await fetch(this.githubAppPath(agentId), { headers: this.getHeaders() })
     if (!res.ok) throw await this.githubAppError(res, `Failed to read the GitHub App connection: ${res.statusText}`)
@@ -712,7 +727,11 @@ export class AgentsApi {
       headers: this.getHeaders(true),
       body: JSON.stringify({ requestId, approved }),
     })
-    if (!res.ok) throw new Error(`Failed to approve: ${res.statusText}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => null) as { error?: unknown } | null
+      const detail = typeof body?.error === 'string' ? body.error : `${res.status} ${res.statusText}`.trim()
+      throw new Error(`Failed to submit approval response: ${detail}`)
+    }
   }
 
   async createPullRequest(id: string, params: CreateThreadPrRequest): Promise<CreateThreadPrResponse> {

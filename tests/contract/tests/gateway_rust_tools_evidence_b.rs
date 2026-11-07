@@ -4,7 +4,7 @@
 //! (`computer-tools.ts`, `screenshot-tools.ts`) and asserted against the native
 //! `jait_gateway` implementation as an external consumer would use it.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn v(pairs: &[(&str, Value)]) -> Value {
     let mut map = serde_json::Map::new();
@@ -205,9 +205,19 @@ mod computer_tools {
         );
 
         // Exactly one available target and no explicit nodeId -> that target.
-        assert_eq!(ct::select_target(std::slice::from_ref(&a), None).unwrap().node_id, "node-a");
+        assert_eq!(
+            ct::select_target(std::slice::from_ref(&a), None)
+                .unwrap()
+                .node_id,
+            "node-a"
+        );
         // Empty nodeId string behaves like "unspecified".
-        assert_eq!(ct::select_target(std::slice::from_ref(&a), Some("")).unwrap().node_id, "node-a");
+        assert_eq!(
+            ct::select_target(std::slice::from_ref(&a), Some(""))
+                .unwrap()
+                .node_id,
+            "node-a"
+        );
 
         // Two available targets require an explicit choice, listed in order.
         assert_eq!(
@@ -217,7 +227,7 @@ mod computer_tools {
 
         // Explicit but unknown / disconnected nodeId.
         assert_eq!(
-            ct::select_target(&[a.clone()], Some("ghost")).unwrap_err(),
+            ct::select_target(std::slice::from_ref(&a), Some("ghost")).unwrap_err(),
             "Computer target ghost is not connected"
         );
 
@@ -252,8 +262,10 @@ mod computer_tools {
         // Click count is limited to 1..=3 whole numbers.
         for bad in [json!(0), json!(4), json!(1.5)] {
             assert_eq!(
-                ct::validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": bad }))
-                    .unwrap_err(),
+                ct::validate_act_input(
+                    &json!({ "action": "click", "x": 1, "y": 2, "clicks": bad })
+                )
+                .unwrap_err(),
                 "clicks must be an integer from 1 to 3",
                 "clicks={bad} must be rejected"
             );
@@ -288,13 +300,16 @@ mod computer_tools {
             "scroll requires a direction"
         );
         assert!(
-            ct::validate_act_input(&json!({"action":"scroll","direction":"down","amount":3})).is_ok()
+            ct::validate_act_input(&json!({"action":"scroll","direction":"down","amount":3}))
+                .is_ok()
         );
 
         // scroll amount must be positive when supplied.
         assert_eq!(
-            ct::validate_act_input(&json!({ "action": "scroll", "direction": "down", "amount": 0 }))
-                .unwrap_err(),
+            ct::validate_act_input(
+                &json!({ "action": "scroll", "direction": "down", "amount": 0 })
+            )
+            .unwrap_err(),
             "amount must be a positive number"
         );
 
@@ -345,25 +360,40 @@ mod computer_tools {
     #[test]
     fn act_validation_clamps_wait_and_requires_positive_amount() {
         // `waitAfterMs` is bounded 0..=10_000 inclusive; both edges are legal.
-        assert!(ct::validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 0 })).is_ok());
-        assert!(ct::validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 10_000 })).is_ok());
+        assert!(
+            ct::validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 0 }))
+                .is_ok()
+        );
+        assert!(
+            ct::validate_act_input(
+                &json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 10_000 })
+            )
+            .is_ok()
+        );
         assert_eq!(
-            ct::validate_act_input(&json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 10_001 }))
-                .unwrap_err(),
+            ct::validate_act_input(
+                &json!({ "action": "move", "x": 1, "y": 2, "waitAfterMs": 10_001 })
+            )
+            .unwrap_err(),
             "waitAfterMs must be between 0 and 10000"
         );
         // `amount` must be strictly positive for every action that carries it.
         assert_eq!(
-            ct::validate_act_input(&json!({ "action": "scroll", "direction": "down", "amount": 0 })).unwrap_err(),
+            ct::validate_act_input(
+                &json!({ "action": "scroll", "direction": "down", "amount": 0 })
+            )
+            .unwrap_err(),
             "amount must be a positive number"
         );
         // `clicks` must be an integer in 1..=3.
         assert_eq!(
-            ct::validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 1.5 })).unwrap_err(),
+            ct::validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 1.5 }))
+                .unwrap_err(),
             "clicks must be an integer from 1 to 3"
         );
         assert_eq!(
-            ct::validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 4 })).unwrap_err(),
+            ct::validate_act_input(&json!({ "action": "click", "x": 1, "y": 2, "clicks": 4 }))
+                .unwrap_err(),
             "clicks must be an integer from 1 to 3"
         );
         // Non-finite coordinates are rejected as missing.
@@ -421,7 +451,10 @@ mod screenshot_tools {
                 "width"
             ]
         );
-        assert_eq!(st::definition("screenshot.capture")["name"], json!("screenshot.capture"));
+        assert_eq!(
+            st::definition("screenshot.capture")["name"],
+            json!("screenshot.capture")
+        );
     }
 
     #[test]
@@ -462,10 +495,15 @@ mod screenshot_tools {
             .strip_prefix("screenshot-")
             .and_then(|rest| rest.strip_suffix(".png"))
             .unwrap_or_else(|| panic!("unexpected default name {name}"));
-        assert!(all_digits(stamp), "timestamp should be numeric, got {stamp:?}");
+        assert!(
+            all_digits(stamp),
+            "timestamp should be numeric, got {stamp:?}"
+        );
         // Whitespace-only `path` is treated as omitted.
         assert_eq!(
-            st::resolve_out_path("   ", "/home/u/proj").parent().unwrap(),
+            st::resolve_out_path("   ", "/home/u/proj")
+                .parent()
+                .unwrap(),
             Path::new("/home/u/proj/.jait/shots")
         );
     }

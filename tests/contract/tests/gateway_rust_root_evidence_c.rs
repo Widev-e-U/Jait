@@ -27,7 +27,13 @@ fn valid_config() -> DoctorConfig {
     }
 }
 
-fn check(id: &str, label: &str, status: DoctorStatus, message: &str, fix: Option<&str>) -> DoctorCheck {
+fn check(
+    id: &str,
+    label: &str,
+    status: DoctorStatus,
+    message: &str,
+    fix: Option<&str>,
+) -> DoctorCheck {
     DoctorCheck {
         id: id.to_string(),
         label: label.to_string(),
@@ -103,9 +109,18 @@ mod cli_doctor_ts {
 
         // Relative host paths are refused (all three absolute roots required).
         for broken in [
-            DoctorConfig { cwd: PathBuf::from("relative/project"), ..valid_config() },
-            DoctorConfig { jait_dir: PathBuf::from("./jait"), ..valid_config() },
-            DoctorConfig { module_origin: PathBuf::from("x/jait"), ..valid_config() },
+            DoctorConfig {
+                cwd: PathBuf::from("relative/project"),
+                ..valid_config()
+            },
+            DoctorConfig {
+                jait_dir: PathBuf::from("./jait"),
+                ..valid_config()
+            },
+            DoctorConfig {
+                module_origin: PathBuf::from("x/jait"),
+                ..valid_config()
+            },
         ] {
             let issue = broken.validate().unwrap_err();
             assert_eq!(issue.code, "invalid-host-path");
@@ -120,20 +135,38 @@ mod cli_doctor_ts {
         assert_eq!(dotted.validate().unwrap_err().code, "invalid-host-path");
 
         // Over-long / control-character host values are refused.
-        let long_port = DoctorConfig { port: Some("8".repeat(129)), ..valid_config() };
-        assert_eq!(long_port.validate().unwrap_err().code, "invalid-host-configuration");
-        let control_port = DoctorConfig { port: Some("80\n00".to_string()), ..valid_config() };
-        assert_eq!(control_port.validate().unwrap_err().code, "invalid-host-configuration");
+        let long_port = DoctorConfig {
+            port: Some("8".repeat(129)),
+            ..valid_config()
+        };
+        assert_eq!(
+            long_port.validate().unwrap_err().code,
+            "invalid-host-configuration"
+        );
+        let control_port = DoctorConfig {
+            port: Some("80\n00".to_string()),
+            ..valid_config()
+        };
+        assert_eq!(
+            control_port.validate().unwrap_err().code,
+            "invalid-host-configuration"
+        );
         let long_node = DoctorConfig {
             min_node_version: "2".repeat(129),
             ..valid_config()
         };
-        assert_eq!(long_node.validate().unwrap_err().code, "invalid-host-configuration");
+        assert_eq!(
+            long_node.validate().unwrap_err().code,
+            "invalid-host-configuration"
+        );
         let bad_env = DoctorConfig {
             env_path: Some(PathBuf::from("/home/dev/\u{0}.env")),
             ..valid_config()
         };
-        assert_eq!(bad_env.validate().unwrap_err().code, "invalid-host-configuration");
+        assert_eq!(
+            bad_env.validate().unwrap_err().code,
+            "invalid-host-configuration"
+        );
 
         // Boundary values are accepted (limit is inclusive, 128/4096).
         let boundary = DoctorConfig {
@@ -204,13 +237,23 @@ mod cli_doctor_ts {
 
         // A warning-only run is still `ok` (warnings never set ok=false).
         let warned = DoctorResult {
-            checks: vec![check("bun", "Bun", DoctorStatus::Warn, "older than 1.3", None)],
+            checks: vec![check(
+                "bun",
+                "Bun",
+                DoctorStatus::Warn,
+                "older than 1.3",
+                None,
+            )],
             ok: true,
             warning_count: 1,
             failure_count: 0,
         };
         assert_eq!(warned.exit_code(), 0);
-        assert!(warned.render().contains("\n  Summary: 0 passed, 1 warnings, 0 failed\n"));
+        assert!(
+            warned
+                .render()
+                .contains("\n  Summary: 0 passed, 1 warnings, 0 failed\n")
+        );
         assert!(warned.render().ends_with("  Result:  ok\n\n"));
     }
 
@@ -245,7 +288,10 @@ mod cli_doctor_ts {
         assert_eq!(report.checks[1].status, DoctorStatus::Fail);
         // Fix hints become `details`; absent hints yield an empty list.
         assert_eq!(report.checks[0].details, Vec::<String>::new());
-        assert_eq!(report.checks[1].details, vec!["npm install -g @openai/codex".to_string()]);
+        assert_eq!(
+            report.checks[1].details,
+            vec!["npm install -g @openai/codex".to_string()]
+        );
 
         // JSON: lowercase statuses, camelCase counters, omitted `fix`,
         // and internal probe bookkeeping (observation/issue_code/remediation)
@@ -271,18 +317,32 @@ mod cli_doctor_ts {
         let entry = &json["checks"][0];
         assert_eq!(entry["id"], serde_json::json!("codex"));
         assert_eq!(entry["status"], serde_json::json!("fail"));
-        assert_eq!(entry["message"], serde_json::json!("codex not found on PATH"));
-        assert_eq!(entry["fix"], serde_json::json!("npm install -g @openai/codex"));
+        assert_eq!(
+            entry["message"],
+            serde_json::json!("codex not found on PATH")
+        );
+        assert_eq!(
+            entry["fix"],
+            serde_json::json!("npm install -g @openai/codex")
+        );
         assert!(entry.get("observation").is_none());
         assert!(entry.get("issue_code").is_none());
         assert!(entry.get("remediation").is_none());
 
         // Status serialization is the TS union `"pass" | "warn" | "fail"`.
-        assert_eq!(serde_json::to_value(DoctorStatus::Pass).unwrap(), serde_json::json!("pass"));
-        assert_eq!(serde_json::to_value(DoctorStatus::Warn).unwrap(), serde_json::json!("warn"));
+        assert_eq!(
+            serde_json::to_value(DoctorStatus::Pass).unwrap(),
+            serde_json::json!("pass")
+        );
+        assert_eq!(
+            serde_json::to_value(DoctorStatus::Warn).unwrap(),
+            serde_json::json!("warn")
+        );
 
         // `None` fix is omitted rather than serialized as null.
-        let no_fix = serde_json::to_value(check("node", "Node.js", DoctorStatus::Pass, "v22", None)).unwrap();
+        let no_fix =
+            serde_json::to_value(check("node", "Node.js", DoctorStatus::Pass, "v22", None))
+                .unwrap();
         assert!(no_fix.get("fix").is_none());
         let _ = Path::new("/");
     }

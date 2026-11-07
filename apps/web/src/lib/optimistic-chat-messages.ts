@@ -1,6 +1,6 @@
 import { userMessageTextFromSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 
-export function createOptimisticMessageId(prefix: 'user' | 'assistant'): string {
+export function createOptimisticMessageId(prefix: 'user' | 'assistant' | 'notice'): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`
   }

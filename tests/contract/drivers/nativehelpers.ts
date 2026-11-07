@@ -32,7 +32,7 @@ export async function dispatch(call:any){
    try{return buildBackgroundCommandContinuationPayload({
     sessionId:call.sessionId??'s',notification:call.notification??'Command completed',notice:call.notice,
     userId:call.userId??'u',userService:users,sessionState:call.withState===false?undefined:state,
-    sessionMetadata:call.metadata
+    sessionMetadata:call.metadata,selection:call.selection,allowProviderResolvedModel:call.allowProviderResolvedModel
    });}catch{return {error:true};}
   }finally{sqlite.close();console.log=log;}
  }

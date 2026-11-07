@@ -1076,6 +1076,545 @@ impl DoctorEffects for NativeDoctorEffects {
     }
 }
 
+// ── CLI dispatch (`packages/gateway/bin/jait.mjs`) ──────────────────────────
+//
+// `bin/jait.mjs` is two things: a process supervisor (start/stop/status/daemon,
+// pid files, systemd) and an argument router. Only the router is native
+// behaviour with no host coupling, so it is ported here as a pure function.
+// The supervisor half (`startManagedGateway`, `daemonInstall`, `healthCheck`
+// socket polling, `.env` loading, `dist/index.js` import) stays with the
+// embedding host: it spawns `node`, owns pid files and talks to systemd, none
+// of which belongs in a library module. `CliCommand` therefore returns the
+// *decision* — including the exact TypeScript ordering quirks — and the host
+// performs the effect.
+//
+// Ordering facts preserved from the module, because each one is observable:
+//   * `status`, `start`, `stop`, `update`, `reset`, `doctor` are matched on
+//     `argv[0]` only, before any global flag parsing.
+//   * `start --help` wins over every other `start` handling, then
+//     `start --foreground` re-enters the global parser with the subcommand and
+//     the `--foreground` token removed (so `jait start --foreground --bogus`
+//     reports `Unknown option`, not `Invalid start option`).
+//   * `doctor` is *deferred*: `.env` is loaded first, so the doctor command is
+//     returned after the global loop accepts the remaining arguments.
+//   * `daemon` is matched before the global loop, so `jait daemon logs --help`
+//     never prints help.
+//   * A flag only consumes its value when the next token exists and is not
+//     empty (JavaScript truthiness), otherwise it falls through to the
+//     "unknown option" branch.
+
+const CLI_HELP_HINT: &str = "Run 'jait --help' for usage information.";
+const DAEMON_COMMANDS: &str = "Available: install, uninstall, start, stop, restart, status, logs";
+
+/// Flags shared by every subcommand (`--port`, `--host`, `--env`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CliFlags {
+    pub port: Option<String>,
+    pub host: Option<String>,
+    pub env_path: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DaemonCommand {
+    Install,
+    Uninstall,
+    Start,
+    Stop,
+    Restart,
+    Status,
+    Logs,
+}
+
+impl DaemonCommand {
+    fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "install" => Self::Install,
+            "uninstall" => Self::Uninstall,
+            "start" => Self::Start,
+            "stop" => Self::Stop,
+            "restart" => Self::Restart,
+            "status" => Self::Status,
+            "logs" => Self::Logs,
+            _ => return None,
+        })
+    }
+}
+
+/// The routed request. Effects are the host's responsibility.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CliCommand {
+    /// `jait status [--port N]` — needs `.env`/`PORT` resolved by the host.
+    Status(CliFlags),
+    /// `jait start` — install/start the systemd user service (Linux only).
+    StartManaged(CliFlags),
+    /// `jait start --foreground` — serve in this process.
+    StartForeground(CliFlags),
+    /// `jait start --help` — start-specific usage, not the global help.
+    StartHelp,
+    Stop,
+    /// `jait update [version] [--port N]` — `version` defaults to `latest`.
+    Update {
+        version: String,
+        port: Option<String>,
+    },
+    /// `jait update --help`.
+    UpdateHelp,
+    Reset,
+    /// `jait doctor` — deferred until after `.env` loading.
+    Doctor(CliFlags),
+    Daemon {
+        command: DaemonCommand,
+        flags: CliFlags,
+    },
+    /// Default action: print the banner and start the gateway in-process.
+    Serve(CliFlags),
+    Help,
+    Version,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CliParseError {
+    InvalidStartOption(String),
+    UnknownUpdateOption(String),
+    UnexpectedUpdateArgument(String),
+    /// `None` means `argv[1]` was absent (`daemon` with no subcommand).
+    UnknownDaemonCommand(Option<String>),
+    UnknownOption(String),
+    UnknownCommand(String),
+}
+
+impl CliParseError {
+    /// The lines `bin/jait.mjs` writes to stderr before `process.exit(1)`.
+    pub fn message(&self) -> String {
+        match self {
+            Self::InvalidStartOption(arg) => format!("Invalid start option: {arg}"),
+            Self::UnknownUpdateOption(arg) => format!("Unknown update option: {arg}"),
+            Self::UnexpectedUpdateArgument(arg) => format!("Unexpected update argument: {arg}"),
+            Self::UnknownDaemonCommand(name) => format!(
+                "Unknown daemon command: {}\n{DAEMON_COMMANDS}",
+                name.as_deref().unwrap_or("(none)")
+            ),
+            Self::UnknownOption(arg) => format!("Unknown option: {arg}\n{CLI_HELP_HINT}"),
+            Self::UnknownCommand(arg) => format!("Unknown command: {arg}\n{CLI_HELP_HINT}"),
+        }
+    }
+
+    pub fn exit_code(&self) -> i32 {
+        1
+    }
+}
+
+/// JavaScript truthiness of a token as used by the module's `&&` guards.
+fn present(token: Option<&String>) -> bool {
+    token.is_some_and(|token| !token.is_empty())
+}
+
+fn is_help(token: &str) -> bool {
+    token == "--help" || token == "-h"
+}
+
+/// `parseSubcommandFlags`: pull `--port/--host/--env` out of a token run,
+/// silently ignoring anything else. Values that look like flags are still
+/// accepted here, exactly as in the module.
+fn parse_shared_flags(tokens: &[String]) -> CliFlags {
+    let mut flags = CliFlags::default();
+    let mut i = 0;
+    while i < tokens.len() {
+        let token = tokens[i].as_str();
+        if matches!(token, "--port" | "--host" | "--env") && present(tokens.get(i + 1)) {
+            let value = tokens[i + 1].clone();
+            match token {
+                "--port" => flags.port = Some(value),
+                "--host" => flags.host = Some(value),
+                _ => flags.env_path = Some(value),
+            }
+            i += 2;
+            continue;
+        }
+        i += 1;
+    }
+    flags
+}
+
+/// The `for (let i = 0; i < args.length; i++)` global loop.
+fn parse_global(
+    args: &[String],
+    deferred_doctor: bool,
+    mut flags: CliFlags,
+) -> Result<CliCommand, CliParseError> {
+    let mut i = 0;
+    while i < args.len() {
+        let token = args[i].as_str();
+        if is_help(token) {
+            return Ok(CliCommand::Help);
+        }
+        if token == "--version" || token == "-v" {
+            return Ok(CliCommand::Version);
+        }
+        if matches!(token, "--port" | "--host" | "--env") && present(args.get(i + 1)) {
+            let value = args[i + 1].clone();
+            match token {
+                "--port" => flags.port = Some(value),
+                "--host" => flags.host = Some(value),
+                _ => flags.env_path = Some(value),
+            }
+            i += 2;
+            continue;
+        }
+        if token.starts_with('-') {
+            return Err(CliParseError::UnknownOption(token.to_owned()));
+        }
+        // Only the leading `doctor` token is excused; anything else here is
+        // reported as an unknown command.
+        if deferred_doctor && i == 0 && token == "doctor" {
+            i += 1;
+            continue;
+        }
+        return Err(CliParseError::UnknownCommand(token.to_owned()));
+    }
+    Ok(CliCommand::Serve(flags))
+}
+
+fn parse_start(args: &[String]) -> Result<CliCommand, CliParseError> {
+    if args.iter().any(|arg| is_help(arg)) {
+        return Ok(CliCommand::StartHelp);
+    }
+    let mut i = 1;
+    while i < args.len() {
+        let token = args[i].as_str();
+        let takes_value = matches!(token, "--port" | "--host" | "--env")
+            && present(args.get(i + 1))
+            && !args[i + 1].starts_with('-');
+        if takes_value {
+            i += 2;
+            continue;
+        }
+        if token != "--foreground" {
+            return Err(CliParseError::InvalidStartOption(token.to_owned()));
+        }
+        i += 1;
+    }
+    if !args.iter().any(|arg| arg == "--foreground") {
+        return Ok(CliCommand::StartManaged(parse_shared_flags(&args[1..])));
+    }
+    // The module splices out `start` and the first `--foreground` token, then
+    // falls through to the global loop, which re-parses the rest (and now
+    // rejects e.g. `--bogus` as an unknown *option*).
+    let mut remaining = Vec::with_capacity(args.len().saturating_sub(2));
+    let mut removed = false;
+    for token in args.iter().skip(1) {
+        if !removed && token == "--foreground" {
+            removed = true;
+            continue;
+        }
+        remaining.push(token.clone());
+    }
+    match parse_global(&remaining, false, CliFlags::default())? {
+        CliCommand::Serve(flags) => Ok(CliCommand::StartForeground(flags)),
+        other => Ok(other),
+    }
+}
+
+fn parse_update(args: &[String]) -> Result<CliCommand, CliParseError> {
+    let mut version = String::from("latest");
+    let mut version_provided = false;
+    let mut port = None;
+    let mut i = 1;
+    while i < args.len() {
+        let token = args[i].as_str();
+        if is_help(token) {
+            return Ok(CliCommand::UpdateHelp);
+        }
+        if token == "--port" && present(args.get(i + 1)) {
+            port = Some(args[i + 1].clone());
+            i += 2;
+            continue;
+        }
+        if token.starts_with('-') {
+            return Err(CliParseError::UnknownUpdateOption(token.to_owned()));
+        }
+        if version_provided {
+            return Err(CliParseError::UnexpectedUpdateArgument(token.to_owned()));
+        }
+        version = token.to_owned();
+        version_provided = true;
+        i += 1;
+    }
+    Ok(CliCommand::Update { version, port })
+}
+
+fn parse_daemon(args: &[String]) -> Result<CliCommand, CliParseError> {
+    let command = args
+        .get(1)
+        .and_then(|name| DaemonCommand::parse(name))
+        .ok_or_else(|| CliParseError::UnknownDaemonCommand(args.get(1).cloned()))?;
+    // `parseSubcommandFlags(2)`: flags are collected from after the subcommand.
+    let flags = parse_shared_flags(args.get(2..).unwrap_or_default());
+    Ok(CliCommand::Daemon { command, flags })
+}
+
+/// Route `process.argv.slice(2)` exactly as `bin/jait.mjs` does.
+pub fn parse_cli(args: &[String]) -> Result<CliCommand, CliParseError> {
+    match args.first().map(String::as_str) {
+        Some("status") => Ok(CliCommand::Status(parse_shared_flags(&args[1..]))),
+        Some("start") => parse_start(args),
+        Some("stop") => Ok(CliCommand::Stop),
+        Some("update") => parse_update(args),
+        // `reset` performs no flag parsing at all: extra tokens are ignored.
+        Some("reset") => Ok(CliCommand::Reset),
+        Some("doctor") => match parse_global(args, true, CliFlags::default())? {
+            CliCommand::Serve(flags) => Ok(CliCommand::Doctor(flags)),
+            other => Ok(other),
+        },
+        Some("daemon") => parse_daemon(args),
+        _ => parse_global(args, false, CliFlags::default()),
+    }
+}
+
+#[cfg(test)]
+mod cli_dispatch_tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<CliCommand, CliParseError> {
+        parse_cli(&args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>())
+    }
+
+    fn flags(port: Option<&str>, host: Option<&str>, env: Option<&str>) -> CliFlags {
+        CliFlags {
+            port: port.map(str::to_owned),
+            host: host.map(str::to_owned),
+            env_path: env.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn cli_dispatch_routes_status_with_subcommand_flags_in_any_position() {
+        assert_eq!(
+            parse(&["status"]),
+            Ok(CliCommand::Status(CliFlags::default()))
+        );
+        assert_eq!(
+            parse(&["status", "--port", "9001", "--host", "127.0.0.1"]),
+            Ok(CliCommand::Status(flags(
+                Some("9001"),
+                Some("127.0.0.1"),
+                None
+            )))
+        );
+        // `parseSubcommandFlags` never validates, so `status` swallows junk.
+        assert_eq!(
+            parse(&["status", "junk", "--env", "/tmp/.env"]),
+            Ok(CliCommand::Status(flags(None, None, Some("/tmp/.env"))))
+        );
+        // `stop` and `reset` ignore everything after the verb.
+        assert_eq!(parse(&["stop", "--port", "1"]), Ok(CliCommand::Stop));
+        assert_eq!(parse(&["reset", "extra"]), Ok(CliCommand::Reset));
+    }
+
+    #[test]
+    fn cli_dispatch_start_help_wins_and_reports_start_usage() {
+        assert_eq!(parse(&["start", "--help"]), Ok(CliCommand::StartHelp));
+        assert_eq!(
+            parse(&["start", "--foreground", "-h"]),
+            Ok(CliCommand::StartHelp)
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_start_requires_systemd_unless_foreground_is_given() {
+        assert_eq!(
+            parse(&["start", "--port", "8123", "--env", "/etc/jait.env"]),
+            Ok(CliCommand::StartManaged(flags(
+                Some("8123"),
+                None,
+                Some("/etc/jait.env")
+            )))
+        );
+        assert_eq!(
+            parse(&["start", "--foreground"]),
+            Ok(CliCommand::StartForeground(CliFlags::default()))
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_foreground_reenters_the_global_parser() {
+        // The `start` loop (jait.mjs:956-963) rejects everything that is not
+        // `--port/--host/--env <value>` or `--foreground` *before* the splice,
+        // so even a trailing `--port` without a value is a start-option error
+        // rather than a global one.
+        assert_eq!(
+            parse(&["start", "--foreground", "--bogus"]),
+            Err(CliParseError::InvalidStartOption("--bogus".into()))
+        );
+        assert_eq!(
+            parse(&["start", "--foreground", "--port"]),
+            Err(CliParseError::InvalidStartOption("--port".into()))
+        );
+        assert_eq!(
+            parse(&["start", "--foreground", "--port", "7000", "--env", "/e"]),
+            Ok(CliCommand::StartForeground(flags(
+                Some("7000"),
+                None,
+                Some("/e")
+            )))
+        );
+        // A bare positional never reaches the global parser either: the same
+        // `start` loop rejects it, which is why `jait start --foreground extra`
+        // fails before `--foreground` is spliced out of `argv`.
+        assert_eq!(
+            parse(&["start", "--foreground", "extra"]),
+            Err(CliParseError::InvalidStartOption("extra".into()))
+        );
+        // `args[i + 1].startsWith("-")` means a flag-looking value is not taken
+        // as the option's argument.
+        assert_eq!(
+            parse(&["start", "--foreground", "--port", "-5"]),
+            Err(CliParseError::InvalidStartOption("--port".into()))
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_rejects_invalid_start_options() {
+        assert_eq!(
+            parse(&["start", "--watch"]),
+            Err(CliParseError::InvalidStartOption("--watch".into()))
+        );
+        // A flag with no value is not consumed and becomes an invalid option.
+        assert_eq!(
+            parse(&["start", "--port"]),
+            Err(CliParseError::InvalidStartOption("--port".into()))
+        );
+        // A value that itself looks like a flag is rejected the same way.
+        assert_eq!(
+            parse(&["start", "--port", "--foreground", "--foreground"]),
+            Err(CliParseError::InvalidStartOption("--port".into()))
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_update_defaults_to_latest_and_takes_one_version() {
+        assert_eq!(
+            parse(&["update"]),
+            Ok(CliCommand::Update {
+                version: "latest".into(),
+                port: None
+            })
+        );
+        assert_eq!(
+            parse(&["update", "1.2.3", "--port", "9000"]),
+            Ok(CliCommand::Update {
+                version: "1.2.3".into(),
+                port: Some("9000".into())
+            })
+        );
+        assert_eq!(parse(&["update", "-h"]), Ok(CliCommand::UpdateHelp));
+    }
+
+    #[test]
+    fn cli_dispatch_update_rejects_a_second_version_and_unknown_flags() {
+        assert_eq!(
+            parse(&["update", "1.0.0", "2.0.0"]),
+            Err(CliParseError::UnexpectedUpdateArgument("2.0.0".into()))
+        );
+        assert_eq!(
+            parse(&["update", "--force"]),
+            Err(CliParseError::UnknownUpdateOption("--force".into()))
+        );
+        assert_eq!(
+            parse(&["update", "--port"]),
+            Err(CliParseError::UnknownUpdateOption("--port".into()))
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_daemon_subcommands_are_matched_before_global_flags() {
+        assert_eq!(
+            parse(&["daemon", "install", "--port", "8080"]),
+            Ok(CliCommand::Daemon {
+                command: DaemonCommand::Install,
+                flags: flags(Some("8080"), None, None)
+            })
+        );
+        assert_eq!(
+            parse(&["daemon", "logs", "--help"]),
+            Ok(CliCommand::Daemon {
+                command: DaemonCommand::Logs,
+                flags: CliFlags::default()
+            })
+        );
+        let error = parse(&["daemon"]).expect_err("missing daemon subcommand exits 1");
+        assert_eq!(error, CliParseError::UnknownDaemonCommand(None));
+        assert_eq!(
+            error.message(),
+            format!("Unknown daemon command: (none)\n{DAEMON_COMMANDS}")
+        );
+        assert_eq!(
+            parse(&["daemon", "nope"]),
+            Err(CliParseError::UnknownDaemonCommand(Some("nope".into())))
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_defers_doctor_past_global_flag_parsing() {
+        assert_eq!(
+            parse(&["doctor"]),
+            Ok(CliCommand::Doctor(CliFlags::default()))
+        );
+        assert_eq!(
+            parse(&["doctor", "--port", "8123", "--env", "/tmp/.env"]),
+            Ok(CliCommand::Doctor(flags(
+                Some("8123"),
+                None,
+                Some("/tmp/.env")
+            )))
+        );
+        // Global options still short-circuit the deferred doctor.
+        assert_eq!(parse(&["doctor", "--help"]), Ok(CliCommand::Help));
+        assert_eq!(parse(&["doctor", "-v"]), Ok(CliCommand::Version));
+        // Only the leading `doctor` token is excused.
+        assert_eq!(
+            parse(&["doctor", "extra"]),
+            Err(CliParseError::UnknownCommand("extra".into()))
+        );
+    }
+
+    #[test]
+    fn cli_dispatch_defaults_to_serving_in_process() {
+        assert_eq!(parse(&[]), Ok(CliCommand::Serve(CliFlags::default())));
+        assert_eq!(
+            parse(&["--port", "8001", "--host", "0.0.0.0"]),
+            Ok(CliCommand::Serve(flags(
+                Some("8001"),
+                Some("0.0.0.0"),
+                None
+            )))
+        );
+        assert_eq!(parse(&["--help"]), Ok(CliCommand::Help));
+        assert_eq!(parse(&["-v"]), Ok(CliCommand::Version));
+    }
+
+    #[test]
+    fn cli_dispatch_reports_unknown_commands_and_options_with_the_help_hint() {
+        let command = parse(&["frobnicate"]).expect_err("unknown command");
+        assert_eq!(
+            command.message(),
+            format!("Unknown command: frobnicate\n{CLI_HELP_HINT}")
+        );
+        let option = parse(&["--watch"]).expect_err("unknown option");
+        assert_eq!(
+            option.message(),
+            format!("Unknown option: --watch\n{CLI_HELP_HINT}")
+        );
+        // A flag whose value is the empty string is not consumed (JS truthiness),
+        // so the flag itself is reported.
+        assert_eq!(
+            parse(&["--port", ""]),
+            Err(CliParseError::UnknownOption("--port".into()))
+        );
+        assert_eq!(option.exit_code(), 1);
+    }
+}
+
 #[cfg(test)]
 #[path = "cli_doctor_tests.rs"]
 mod tests;

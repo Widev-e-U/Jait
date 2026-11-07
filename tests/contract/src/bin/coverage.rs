@@ -417,6 +417,12 @@ fn run() -> Result<()> {
         pending.len()
     );
     println!("Report: {}", report_path.display());
+    if !require_parity && !pending.is_empty() {
+        println!(
+            "Inventory/claim validation only; full parity is incomplete. Use --require-parity to gate all {} pending requirements.",
+            pending.len()
+        );
+    }
     for error in &errors {
         eprintln!("{error}");
     }

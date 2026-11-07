@@ -95,6 +95,52 @@ pub struct RemoteCliProvider {
     info: Arc<Mutex<Value>>,
     clock: Clock,
 }
+/// Registry view of a remote provider scoped to its authenticated owner.
+pub struct OwnedRemoteProvider {
+    provider: RemoteCliProvider,
+    owner: String,
+}
+impl OwnedRemoteProvider {
+    pub fn new(provider: RemoteCliProvider, owner: String) -> Result<Self, String> {
+        if owner.trim().is_empty() {
+            return Err("Remote provider owner is required".into());
+        }
+        Ok(Self { provider, owner })
+    }
+}
+impl super::registry::ProviderAdapter for OwnedRemoteProvider {
+    fn id(&self) -> &str {
+        &self.provider.id
+    }
+    fn owner_user_id(&self) -> Option<&str> {
+        Some(&self.owner)
+    }
+    fn info(&self) -> Value {
+        self.provider.info()
+    }
+    fn check_availability(&self) -> futures_util::future::BoxFuture<'static, Result<(), String>> {
+        let provider = self.provider.clone();
+        Box::pin(async move {
+            if provider.check_availability() {
+                Ok(())
+            } else {
+                Err(provider.info()["unavailableReason"]
+                    .as_str()
+                    .unwrap_or("unknown reason")
+                    .to_string())
+            }
+        })
+    }
+    fn preflight_list_models(
+        &self,
+    ) -> Option<futures_util::future::BoxFuture<'static, Result<(), String>>> {
+        let provider = self.provider.clone();
+        Some(Box::pin(
+            async move { provider.list_models().await.map(|_| ()) },
+        ))
+    }
+}
+
 impl RemoteCliProvider {
     pub fn new(
         transport: Arc<dyn RemoteProviderTransport>,
@@ -633,4 +679,52 @@ pub fn normalize_codex_models(result: &Value) -> Value {
             })
             .collect::<Vec<_>>()
     )
+}
+
+#[cfg(test)]
+mod registry_preflight_tests {
+    use super::*;
+    use crate::providers::registry::ProviderRegistry;
+    struct Transport;
+    impl RemoteProviderTransport for Transport {
+        fn providers(&self, _: &str) -> Option<Vec<String>> {
+            Some(vec!["codex".into()])
+        }
+        fn operation<'a>(
+            &'a self,
+            _: &'a str,
+            operation: &'a str,
+            _: Value,
+            _: Duration,
+        ) -> OperationFuture<'a> {
+            Box::pin(async move {
+                assert_eq!(operation, "list-models");
+                Err("remote model discovery failed".into())
+            })
+        }
+        fn subscribe(&self, _: RemoteEventHandler) -> Unsubscribe {
+            Box::new(|| {})
+        }
+    }
+    #[tokio::test]
+    async fn remote_preflight_checks_owner_and_remote_models() {
+        let provider =
+            RemoteCliProvider::new(Arc::new(Transport), "node".into(), "codex".into(), None);
+        assert!(OwnedRemoteProvider::new(provider.clone(), " ".into()).is_err());
+        let registry = ProviderRegistry::default();
+        registry.register(Arc::new(
+            OwnedRemoteProvider::new(provider, "alice".into()).unwrap(),
+        ));
+        assert_eq!(
+            registry.scheduled_preflight("codex", "bob").await["ok"],
+            false
+        );
+        let result = registry.scheduled_preflight("codex", "alice").await;
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("remote model discovery failed")
+        );
+    }
 }

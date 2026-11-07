@@ -17,7 +17,7 @@ use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::Semaphore;
@@ -133,6 +133,7 @@ pub struct DiskJanitorPlan {
     pub now_ms: u64,
     pub entries: Vec<ReapedEntry>,
     pub errors: Vec<String>,
+    pub blocked_foreign_owned: usize,
     pub truncated: bool,
 }
 #[derive(Debug, Serialize)]
@@ -144,12 +145,57 @@ pub struct DiskJanitorReport {
     pub temp_scratch: Vec<ReapedEntry>,
     pub sandbox_storage: Vec<ReapedEntry>,
     pub bytes_reclaimed: u64,
+    pub blocked_foreign_owned: usize,
+    pub removal_failures: Vec<RemovalFailure>,
     pub errors: Vec<String>,
     pub skipped_reason: Option<String>,
     pub truncated: bool,
 }
-/// The lease must exclude all owning-thread/sandbox/scratch writers and renames
-/// through completion, including if the caller drops its future. Recheck expiry here.
+/// A failed filesystem removal retains its OS error classification for callers.
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RemovalFailure {
+    pub path: PathBuf,
+    pub kind: EntryKind,
+    pub permission_denied: bool,
+    pub raw_os_error: Option<i32>,
+    pub message: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiskJanitorWarning {
+    pub title: String,
+    pub body: String,
+}
+enum ReapError {
+    Other(String),
+    Removal(RemovalFailure),
+}
+impl From<String> for ReapError {
+    fn from(value: String) -> Self {
+        Self::Other(value)
+    }
+}
+impl From<&str> for ReapError {
+    fn from(value: &str) -> Self {
+        Self::Other(value.into())
+    }
+}
+fn removal_failure(entry: &ReapedEntry, error: io::Error) -> ReapError {
+    ReapError::Removal(RemovalFailure {
+        path: entry.path.clone(),
+        kind: entry.kind,
+        permission_denied: error.kind() == io::ErrorKind::PermissionDenied,
+        raw_os_error: error.raw_os_error(),
+        message: format!("cleanup incomplete: {error}"),
+    })
+}
+/// The lease is an external host obligation, not a kernel-enforced lock. It must
+/// exclude all writers and namespace changes to the entry, its descendants and
+/// path ancestors, including replacement of names in their parents, through all
+/// effects and cleanup even if the caller drops its future. Recheck expiry here.
+/// Do not grant a lease when any actor with such access cannot be excluded.
+/// This contract alone does not enable empty-container removal; that operation
+/// remains disabled until its parent namespace has enforceable exclusion.
 pub trait JanitorAuthority: Send + Sync {
     fn lease_entry(&self, entry: &ReapedEntry) -> Result<Arc<dyn Send + Sync>, String>;
     /// Git can affect metadata outside managed roots; authorize each exact argv/cwd.
@@ -175,6 +221,44 @@ impl Drop for RunCancellation {
             self.token.cancel();
         }
     }
+}
+enum CandidateScan {
+    Eligible(u64),
+    Recent,
+    ForeignOwned,
+}
+// The task owns both effect leases and the run permit until ProcessPool has killed
+// and reaped the direct child. Dropping the caller requests cancellation but does
+// not abort the task, so those authorities outlive asynchronous child cleanup.
+async fn run_git_supervised(
+    pool: ProcessPool,
+    request: ProcessRequest,
+    cancel: ProcessCancellation,
+    stop: ProcessCancellation,
+    entry_lease: Arc<dyn Send + Sync>,
+    git_lease: Arc<dyn Send + Sync>,
+    permit: Arc<tokio::sync::OwnedSemaphorePermit>,
+) -> io::Result<crate::execution::process_runner::ProcessResult> {
+    let mut guard = RunCancellation {
+        token: cancel.clone(),
+        finished: false,
+    };
+    let child_cancel = cancel.clone();
+    let task = tokio::spawn(async move {
+        let _authority = (entry_lease, git_lease, permit);
+        let run = pool.run(request, child_cancel.clone());
+        tokio::pin!(run);
+        tokio::select! {
+            result = &mut run => result,
+            _ = stop.wait_cancelled() => {
+                child_cancel.cancel();
+                run.await
+            }
+        }
+    });
+    let result = task.await.map_err(io::Error::other)?;
+    guard.finished = true;
+    result
 }
 struct Budget {
     remaining: usize,
@@ -307,6 +391,7 @@ pub struct DiskJanitor {
     roots: DiskJanitorRoots,
     running: Arc<Semaphore>,
     stopped: ProcessCancellation,
+    last_warning: Mutex<Option<(PathBuf, usize, usize)>>,
 }
 impl DiskJanitor {
     pub fn new(
@@ -326,10 +411,20 @@ impl DiskJanitor {
             roots,
             running: Arc::new(Semaphore::new(1)),
             stopped: ProcessCancellation::default(),
+            last_warning: Mutex::new(None),
         }
     }
     pub fn stop(&self) {
         self.stopped.cancel();
+    }
+    /// Stop future runs and wait for an admitted run's retained permit. Blocking
+    /// cleanup and the supervised direct Git child retain that permit until they
+    /// finish. The host must also stop callers of `plan` and supervise process
+    /// descendants; this method does not drain either of those independently.
+    pub async fn stop_and_drain(&self) -> Result<(), String> {
+        self.stop();
+        let _permit = self.running.acquire().await.map_err(|e| e.to_string())?;
+        Ok(())
     }
     async fn thread(&self, path: &Path) -> Result<Option<Thread>, String> {
         let text = path.to_str().ok_or("non UTF-8 worktree")?.to_owned();
@@ -376,7 +471,21 @@ impl DiskJanitor {
                                 if !outer.is_dir() {
                                     continue;
                                 }
-                                entries(&outer, &mut budget)?
+                                let children = entries(&outer, &mut budget)?;
+                                if children.is_empty()
+                                    && ![&roots.sandbox_storage, &roots.temp]
+                                        .iter()
+                                        .any(|other| other.starts_with(&outer))
+                                    && container_empty(&outer, &mut budget)?
+                                {
+                                    if raw.len() >= 1000 {
+                                        truncated = true;
+                                        return Ok(());
+                                    }
+                                    let meta = fs::symlink_metadata(&outer)?;
+                                    raw.push((root.clone(), outer.clone(), kind, stamp(&meta)?));
+                                }
+                                children
                             } else {
                                 vec![outer]
                             };
@@ -424,6 +533,7 @@ impl DiskJanitor {
             now_ms,
             entries: vec![],
             errors: vec![],
+            blocked_foreign_owned: 0,
             truncated,
         };
         let deadline = Instant::now() + Duration::from_secs(30);
@@ -436,7 +546,18 @@ impl DiskJanitor {
                 plan.truncated = true;
                 break;
             }
+            let is_container = kind == EntryKind::Worktree && path.parent() == Some(root.as_path());
             let (reason, branch) = match kind {
+                EntryKind::Worktree if is_container => {
+                    if !old(
+                        now_ms,
+                        stamp.modified_ms,
+                        self.policy.orphan_worktree_grace_ms,
+                    ) {
+                        continue;
+                    }
+                    ("empty worktree container".into(), None)
+                }
                 EntryKind::Worktree => match self.thread(&path).await {
                     Ok(t) => match decision(t.as_ref(), now_ms, stamp.modified_ms, &self.policy) {
                         Some(d) => d,
@@ -468,21 +589,42 @@ impl DiskJanitor {
                 _ => continue,
             };
             let measure = path.clone();
+            let scan_root = root.clone();
+            let expected = stamp.clone();
+            let max_age = match kind {
+                EntryKind::TempScratch => Some(self.policy.temp_scratch_max_age_ms),
+                EntryKind::SandboxStorage => Some(self.policy.sandbox_storage_max_age_ms),
+                EntryKind::Worktree => None,
+            };
             let c = cancel.clone();
             let stop = self.stopped.clone();
             let bytes = self
                 .lane
                 .run(move || {
-                    size(
-                        &measure,
-                        &mut Budget::new(100_000, Duration::from_secs(2), c, stop),
-                        0,
-                    )
+                    let mut budget = Budget::new(100_000, Duration::from_secs(2), c, stop);
+                    if is_container {
+                        return if container_empty(&measure, &mut budget)? {
+                            Ok(CandidateScan::Eligible(0))
+                        } else {
+                            Ok(CandidateScan::Recent)
+                        };
+                    }
+                    if let Some(age) = max_age
+                        && !old(now_ms, newest_mtime(&measure, &mut budget)?, age)
+                    {
+                        return Ok(CandidateScan::Recent);
+                    }
+                    if kind == EntryKind::TempScratch
+                        && sticky_foreign_owned(&scan_root, &measure, &expected, &mut budget)?
+                    {
+                        return Ok(CandidateScan::ForeignOwned);
+                    }
+                    size(&measure, &mut budget, 0).map(CandidateScan::Eligible)
                 })
                 .await
                 .map_err(|e| e.to_string())?;
             match bytes {
-                Ok(bytes) => plan.entries.push(ReapedEntry {
+                Ok(CandidateScan::Eligible(bytes)) => plan.entries.push(ReapedEntry {
                     path,
                     bytes,
                     reason,
@@ -491,7 +633,12 @@ impl DiskJanitor {
                     root,
                     stamp,
                 }),
-                Err(e) => errors.push(e.to_string()),
+                Ok(CandidateScan::ForeignOwned) => plan.blocked_foreign_owned += 1,
+                Ok(CandidateScan::Recent) => {}
+                Err(e) => {
+                    plan.truncated = true;
+                    errors.push(e.to_string());
+                }
             }
         }
         plan.errors = errors.into_iter().take(100).collect();
@@ -520,6 +667,8 @@ impl DiskJanitor {
             temp_scratch: vec![],
             sandbox_storage: vec![],
             bytes_reclaimed: 0,
+            blocked_foreign_owned: 0,
+            removal_failures: vec![],
             errors: vec![],
             skipped_reason: None,
             truncated: false,
@@ -536,6 +685,12 @@ impl DiskJanitor {
             report.skipped_reason = Some("already-running".into());
             return Ok(report);
         };
+        // `stop_and_drain` may have completed while this call was between its
+        // initial stop check and admission. Recheck before any work starts.
+        if self.stopped.is_cancelled() || cancel.is_cancelled() {
+            report.skipped_reason = Some("stopped".into());
+            return Ok(report);
+        }
         let guard = Arc::new(permit);
         let mut cancellation_guard = RunCancellation {
             token: cancel.clone(),
@@ -543,6 +698,7 @@ impl DiskJanitor {
         };
         let plan = self.plan(now_ms, cancel.clone()).await?;
         report.errors = plan.errors;
+        report.blocked_foreign_owned = plan.blocked_foreign_owned;
         report.truncated = plan.truncated;
         for entry in plan.entries {
             if cancel.is_cancelled() || self.stopped.is_cancelled() {
@@ -560,7 +716,13 @@ impl DiskJanitor {
                     )
                     .await;
                 if let Err(e) = result {
-                    report.errors.push(e);
+                    match e {
+                        ReapError::Other(message) => report.errors.push(message),
+                        ReapError::Removal(failure) => {
+                            report.errors.push(failure.message.clone());
+                            report.removal_failures.push(failure);
+                        }
+                    }
                     continue;
                 }
             }
@@ -581,16 +743,41 @@ impl DiskJanitor {
         authority: Arc<dyn JanitorAuthority>,
         cancel: ProcessCancellation,
         guard: Arc<tokio::sync::OwnedSemaphorePermit>,
-    ) -> Result<(), String> {
+    ) -> Result<(), ReapError> {
         if cancel.is_cancelled() || self.stopped.is_cancelled() {
             return Err("janitor cancelled".into());
         }
         let lease = authority.lease_entry(entry)?;
         // The external lease MUST exclude a concurrent owner activation until all effects finish.
+        let is_container =
+            entry.kind == EntryKind::Worktree && entry.path.parent() == Some(entry.root.as_path());
+        if is_container {
+            let e = entry.clone();
+            let stop = self.stopped.clone();
+            let age = self.policy.orphan_worktree_grace_ms;
+            return self
+                .lane
+                .run(move || {
+                    let _authority = (lease, guard);
+                    checked_path(&e.root, &e.path)?;
+                    let current = stamp(&fs::symlink_metadata(&e.path)?)?;
+                    if current != e.stamp || !old(now, current.modified_ms, age) {
+                        return Err(io::Error::other("worktree container changed or is recent"));
+                    }
+                    let mut budget = Budget::new(100_000, Duration::from_secs(5), cancel, stop);
+                    remove_empty_container(&e.path, &e.stamp, &mut budget)
+                })
+                .await
+                .map_err(|e| e.to_string())?
+                .map_err(|e| removal_failure(entry, e));
+        }
         if entry.kind == EntryKind::Worktree {
             let thread = self.thread(&entry.path).await?;
-            if decision(thread.as_ref(), now, entry.stamp.modified_ms, &self.policy).is_none() {
-                return Err("worktree no longer eligible".into());
+            let (_, current_branch) =
+                decision(thread.as_ref(), now, entry.stamp.modified_ms, &self.policy)
+                    .ok_or_else(|| "worktree no longer eligible".to_string())?;
+            if current_branch != entry.branch {
+                return Err("worktree branch changed since plan".into());
             }
         }
         let e = entry.clone();
@@ -629,6 +816,11 @@ impl DiskJanitor {
         let stop = self.stopped.clone();
         let lease2 = lease.clone();
         let guard2 = guard.clone();
+        let max_age = match entry.kind {
+            EntryKind::TempScratch => Some(self.policy.temp_scratch_max_age_ms),
+            EntryKind::SandboxStorage => Some(self.policy.sandbox_storage_max_age_ms),
+            EntryKind::Worktree => None,
+        };
         self.lane
             .run(move || {
                 let _lease = lease2;
@@ -637,15 +829,23 @@ impl DiskJanitor {
                 if stamp(&fs::symlink_metadata(&e.path)?)? != e.stamp {
                     return Err(io::Error::other("cleanup entry changed before delete"));
                 }
-                remove_bounded(
-                    &e.path,
-                    &mut Budget::new(100_000, Duration::from_secs(5), c, stop),
-                    Some(&e.stamp),
-                )
+                let mut budget = Budget::new(100_000, Duration::from_secs(5), c, stop);
+                if let Some(age) = max_age
+                    && !old(now, newest_mtime(&e.path, &mut budget)?, age)
+                {
+                    return Err(io::Error::other("cleanup tree has recent activity"));
+                }
+                if e.kind == EntryKind::TempScratch
+                    && sticky_foreign_owned(&e.root, &e.path, &e.stamp, &mut budget)?
+                {
+                    return Err(io::Error::other("sticky-root entry is foreign-owned"));
+                }
+                Ok(remove_bounded(&e.path, &mut budget, Some(&e.stamp)))
             })
             .await
             .map_err(|e| e.to_string())?
-            .map_err(|e| format!("cleanup incomplete: {e}"))?;
+            .map_err(|e: io::Error| e.to_string())?
+            .map_err(|e| removal_failure(entry, e))?;
         if let Some(root) = git_root {
             let mut commands = vec![vec![
                 "git".into(),
@@ -677,17 +877,23 @@ impl DiskJanitor {
                     timeout: Duration::from_secs(10),
                     output_limit: 64_000,
                 };
-                let _git_lease = authority
+                let git_lease = authority
                     .authorize_git(entry, &request)
                     .map_err(|e| format!("disk removed; git authorization denied: {e}"))?;
                 if self.stopped.is_cancelled() {
                     return Err("janitor stopped after disk removal; git metadata pending".into());
                 }
-                let result = self
-                    .processes
-                    .run(request, cancel.clone())
-                    .await
-                    .map_err(|e| format!("disk removed; git cleanup failed: {e}"))?;
+                let result = run_git_supervised(
+                    self.processes.clone(),
+                    request,
+                    cancel.clone(),
+                    self.stopped.clone(),
+                    lease.clone(),
+                    git_lease,
+                    guard.clone(),
+                )
+                .await
+                .map_err(|e| format!("disk removed; git cleanup failed: {e}"))?;
                 if result.exit_code != Some(0)
                     || result.cancelled
                     || result.timed_out
@@ -699,6 +905,57 @@ impl DiskJanitor {
         }
         Ok(())
     }
+    /// Produce at most one warning per distinct blocked condition. The host decides
+    /// whether and where to deliver it; this method has no cleanup authority.
+    pub fn warning_for_report(&self, report: &DiskJanitorReport) -> Option<DiskJanitorWarning> {
+        if report.dry_run || report.skipped_reason.is_some() {
+            return None;
+        }
+        let failures: Vec<_> = report
+            .removal_failures
+            .iter()
+            .filter(|f| f.kind == EntryKind::TempScratch && f.permission_denied)
+            .collect();
+        let foreign = report.blocked_foreign_owned;
+        if foreign == 0 && failures.is_empty() {
+            return None;
+        }
+        let signature = (self.roots.temp.clone(), foreign, failures.len());
+        let mut last = self.last_warning.lock().unwrap_or_else(|e| e.into_inner());
+        if last.as_ref() == Some(&signature) {
+            return None;
+        }
+        *last = Some(signature);
+        let body = if foreign > 0 {
+            format!(
+                "{foreign} jait-* entries in {} belong to another user and cannot be removed from the sticky directory. Review ownership and remove eligible entries with appropriate authority.",
+                self.roots.temp.display()
+            )
+        } else {
+            format!(
+                "{} jait-* entries in {} could not be removed due to permissions. Check ownership and directory permissions at {}.",
+                failures.len(),
+                self.roots.temp.display(),
+                failures[0].path.display()
+            )
+        };
+        Some(DiskJanitorWarning {
+            title: "Disk cleanup blocked".into(),
+            body,
+        })
+    }
+    async fn wait_for_scheduled_pass(
+        cancel: &ProcessCancellation,
+        stopped: &ProcessCancellation,
+        delay: impl std::future::Future<Output = ()>,
+    ) -> bool {
+        tokio::select! {
+            biased;
+            _ = cancel.wait_cancelled() => false,
+            _ = stopped.wait_cancelled() => false,
+            _ = delay => true,
+        }
+    }
     pub async fn run_scheduled(
         &self,
         authority: Arc<dyn JanitorAuthority>,
@@ -707,15 +964,60 @@ impl DiskJanitor {
     ) -> Result<(), String> {
         let mut delay = self.policy.initial_delay_ms;
         while self.policy.enabled && !self.stopped.is_cancelled() && !cancel.is_cancelled() {
-            tokio::select! {_=cancel.wait_cancelled()=>break,_=self.stopped.wait_cancelled()=>break,_=tokio::time::sleep(Duration::from_millis(delay.clamp(1,30*DAY)))=>{}}
+            if !Self::wait_for_scheduled_pass(
+                &cancel,
+                &self.stopped,
+                tokio::time::sleep(Duration::from_millis(delay.clamp(1, 30 * DAY))),
+            )
+            .await
+            {
+                break;
+            }
+            // Cancellation can arrive as the timer completes. Avoid admitting a
+            // fresh pass when it is already visible at this boundary.
+            if cancel.is_cancelled() || self.stopped.is_cancelled() {
+                break;
+            }
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis()
                 .min(u64::MAX as u128) as u64;
-            let report = self
-                .run(now, false, authority.clone(), cancel.clone())
-                .await?;
+            // A failed pass cancels its own token when the run guard unwinds.
+            // Keep that token separate from the scheduler token so a transient
+            // admission failure does not permanently stop future passes. The
+            // select drops the pass on shutdown, triggering its cancellation guard;
+            // no next pass starts until the previous future has completed. A dropped
+            // blocking operation may still run: cleanup retains its permit and lease.
+            // Hosts must use stop_and_drain and separately supervise read-only plan
+            // scans and process descendants; scheduler return is not a drain barrier.
+            let pass_cancel = ProcessCancellation::default();
+            let pass = self.run(now, false, authority.clone(), pass_cancel);
+            let result = tokio::select! {
+                biased;
+                _ = cancel.wait_cancelled() => break,
+                _ = self.stopped.wait_cancelled() => break,
+                result = pass => result,
+            };
+            let report = match result {
+                Ok(report) => report,
+                Err(error) => DiskJanitorReport {
+                    enabled: self.policy.enabled,
+                    dry_run: false,
+                    worktrees: vec![],
+                    temp_scratch: vec![],
+                    sandbox_storage: vec![],
+                    bytes_reclaimed: 0,
+                    blocked_foreign_owned: 0,
+                    removal_failures: vec![],
+                    errors: vec![format!(
+                        "janitor run failed: {}",
+                        error.chars().take(1024).collect::<String>()
+                    )],
+                    skipped_reason: None,
+                    truncated: true,
+                },
+            };
             reports.send_replace(Some(report));
             delay = self.policy.interval_ms;
         }
@@ -918,6 +1220,105 @@ mod scoped_io {
             )?,
         ))
     }
+    fn newest(parent: i32, name: &CString, budget: &mut Budget, depth: usize) -> io::Result<u64> {
+        budget.tick()?;
+        if depth > 64 {
+            return Err(io::Error::other("janitor depth limit"));
+        }
+        let stat = metadata(parent, name)?;
+        let seconds = u64::try_from(stat.st_mtime).map_err(io::Error::other)?;
+        let nanos = u64::try_from(stat.st_mtime_nsec).map_err(io::Error::other)?;
+        if nanos >= 1_000_000_000 {
+            return Err(io::Error::other("invalid modification time"));
+        }
+        let mut latest = seconds
+            .checked_mul(1000)
+            .and_then(|v| v.checked_add(nanos / 1_000_000))
+            .ok_or_else(|| io::Error::other("modification time overflow"))?;
+        if stat.st_mode & libc::S_IFMT == libc::S_IFDIR {
+            let fd = stable_open(parent, name, &stat)?;
+            for entry in child_names(&fd)? {
+                let entry = entry?;
+                latest = latest.max(newest(
+                    fd.as_raw_fd(),
+                    &cstr(&entry.file_name())?,
+                    budget,
+                    depth + 1,
+                )?);
+            }
+        }
+        Ok(latest)
+    }
+    pub(super) fn sticky_foreign_owned(
+        root: &Path,
+        path: &Path,
+        expected: &Stamp,
+        budget: &mut Budget,
+    ) -> io::Result<bool> {
+        // Match process.getuid(), which reports the real user ID.
+        sticky_foreign_owned_as(root, path, expected, budget, unsafe { libc::getuid() })
+    }
+    pub(super) fn sticky_foreign_owned_as(
+        root: &Path,
+        path: &Path,
+        expected: &Stamp,
+        budget: &mut Budget,
+        uid: libc::uid_t,
+    ) -> io::Result<bool> {
+        budget.tick()?;
+        if path.parent() != Some(root) {
+            return Err(io::Error::other(
+                "scratch entry is not a direct child of its root",
+            ));
+        }
+        let fd = directory(root)?;
+        let mut root_stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+        // SAFETY: the descriptor remains owned and fstat initializes the result.
+        if unsafe { libc::fstat(fd.as_raw_fd(), root_stat.as_mut_ptr()) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let root_stat = unsafe { root_stat.assume_init() };
+        let name = cstr(
+            path.file_name()
+                .ok_or_else(|| io::Error::other("missing scratch name"))?,
+        )?;
+        let child = metadata(fd.as_raw_fd(), &name)?;
+        if child.st_dev != expected.device || child.st_ino != expected.inode {
+            return Err(io::Error::other("scratch identity changed"));
+        }
+        Ok(sticky_owner_blocked(root_stat.st_mode, child.st_uid, uid))
+    }
+    pub(super) fn newest_mtime(path: &Path, budget: &mut Budget) -> io::Result<u64> {
+        let (fd, name) = parent(path)?;
+        newest(fd.as_raw_fd(), &name, budget, 0)
+    }
+    pub(super) fn container_empty(path: &Path, budget: &mut Budget) -> io::Result<bool> {
+        budget.tick()?;
+        let (parent, name) = parent(path)?;
+        let stat = metadata(parent.as_raw_fd(), &name)?;
+        let fd = stable_open(parent.as_raw_fd(), &name, &stat)?;
+        match child_names(&fd)?.next() {
+            Some(entry) => {
+                entry?;
+                Ok(false)
+            }
+            None => Ok(true),
+        }
+    }
+    pub(super) fn remove_empty_container(
+        _path: &Path,
+        _expected: &Stamp,
+        budget: &mut Budget,
+    ) -> io::Result<()> {
+        budget.tick()?;
+        // unlinkat(AT_REMOVEDIR) resolves a name, not the open directory. An
+        // inode check cannot prevent a replacement between that check and unlink.
+        // A host lease is only a promise and does not enforce parent exclusion.
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "empty worktree container removal requires enforceable parent namespace exclusion",
+        ))
+    }
     pub(super) fn size(path: &Path, budget: &mut Budget) -> io::Result<u64> {
         let (fd, name) = parent(path)?;
         measure(fd.as_raw_fd(), &name, budget, 0)
@@ -938,7 +1339,41 @@ mod scoped_io {
     }
 }
 #[cfg(target_os = "linux")]
-use scoped_io::remove_bounded;
+use scoped_io::{
+    container_empty, newest_mtime, remove_bounded, remove_empty_container, sticky_foreign_owned,
+};
+#[cfg(target_os = "linux")]
+fn sticky_owner_blocked(mode: libc::mode_t, owner: libc::uid_t, user: libc::uid_t) -> bool {
+    mode & libc::S_ISVTX != 0 && owner != user
+}
+#[cfg(not(target_os = "linux"))]
+fn container_empty(_: &Path, _: &mut Budget) -> io::Result<bool> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "bounded handle-relative cleanup unavailable on this host",
+    ))
+}
+#[cfg(not(target_os = "linux"))]
+fn remove_empty_container(_: &Path, _: &Stamp, _: &mut Budget) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "bounded handle-relative cleanup unavailable on this host",
+    ))
+}
+#[cfg(not(target_os = "linux"))]
+fn sticky_foreign_owned(_: &Path, _: &Path, _: &Stamp, _: &mut Budget) -> io::Result<bool> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "bounded handle-relative cleanup unavailable on this host",
+    ))
+}
+#[cfg(not(target_os = "linux"))]
+fn newest_mtime(_: &Path, _: &mut Budget) -> io::Result<u64> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "bounded handle-relative cleanup unavailable on this host",
+    ))
+}
 #[cfg(not(target_os = "linux"))]
 fn remove_bounded(_: &Path, _: &mut Budget, _: Option<&Stamp>) -> io::Result<()> {
     Err(io::Error::new(
@@ -949,3 +1384,128 @@ fn remove_bounded(_: &Path, _: &mut Budget, _: Option<&Stamp>) -> io::Result<()>
 #[cfg(test)]
 #[path = "disk_janitor_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod schedule_retry_tests {
+    use super::*;
+    use std::{collections::HashMap, num::NonZeroU16};
+
+    struct Deny;
+    impl JanitorAuthority for Deny {
+        fn lease_entry(&self, _: &ReapedEntry) -> Result<Arc<dyn Send + Sync>, String> {
+            panic!("closed lane must not reach cleanup")
+        }
+        fn authorize_git(
+            &self,
+            _: &ReapedEntry,
+            _: &ProcessRequest,
+        ) -> Result<Arc<dyn Send + Sync>, String> {
+            panic!("closed lane must not reach Git")
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_wins_when_delay_is_also_ready() {
+        let cancel = ProcessCancellation::default();
+        let stopped = ProcessCancellation::default();
+        assert!(
+            DiskJanitor::wait_for_scheduled_pass(&cancel, &stopped, std::future::ready(())).await
+        );
+        cancel.cancel();
+        assert!(
+            !DiskJanitor::wait_for_scheduled_pass(&cancel, &stopped, std::future::ready(())).await
+        );
+        let cancel = ProcessCancellation::default();
+        stopped.cancel();
+        assert!(
+            !DiskJanitor::wait_for_scheduled_pass(&cancel, &stopped, std::future::ready(())).await
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_scheduler_does_not_admit_a_pass() {
+        let db = DatabaseWorker::new(
+            rusqlite::Connection::open_in_memory().unwrap(),
+            NonZeroU16::new(1).unwrap(),
+        )
+        .unwrap();
+        let lane = BlockingLane::new(NonZeroU16::new(1).unwrap());
+        lane.close();
+        let service = DiskJanitor::new(
+            db.clone(),
+            lane,
+            ProcessPool::new(NonZeroU16::new(1).unwrap()),
+            HashMap::new(),
+            DiskJanitorPolicy {
+                initial_delay_ms: 1,
+                ..DiskJanitorPolicy::default()
+            },
+            DiskJanitorRoots {
+                worktrees: "/unused/worktrees".into(),
+                sandbox_storage: "/unused/sandbox".into(),
+                temp: "/unused/temp".into(),
+            },
+        );
+        let cancel = ProcessCancellation::default();
+        cancel.cancel();
+        let (tx, rx) = tokio::sync::watch::channel(None);
+        service
+            .run_scheduled(Arc::new(Deny), cancel, tx)
+            .await
+            .unwrap();
+        assert!(rx.borrow().is_none());
+        db.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn scheduler_reports_failed_passes_and_stops_on_cancellation() {
+        let db = DatabaseWorker::new(
+            rusqlite::Connection::open_in_memory().unwrap(),
+            NonZeroU16::new(1).unwrap(),
+        )
+        .unwrap();
+        let lane = BlockingLane::new(NonZeroU16::new(1).unwrap());
+        lane.close();
+        let service = Arc::new(DiskJanitor::new(
+            db.clone(),
+            lane,
+            ProcessPool::new(NonZeroU16::new(1).unwrap()),
+            HashMap::new(),
+            DiskJanitorPolicy {
+                initial_delay_ms: 1,
+                interval_ms: 30,
+                ..DiskJanitorPolicy::default()
+            },
+            DiskJanitorRoots {
+                worktrees: "/unused/worktrees".into(),
+                sandbox_storage: "/unused/sandbox".into(),
+                temp: "/unused/temp".into(),
+            },
+        ));
+        let cancel = ProcessCancellation::default();
+        let (tx, mut rx) = tokio::sync::watch::channel(None);
+        let worker = {
+            let service = service.clone();
+            let cancel = cancel.clone();
+            tokio::spawn(async move { service.run_scheduled(Arc::new(Deny), cancel, tx).await })
+        };
+        for _ in 0..2 {
+            tokio::time::timeout(Duration::from_secs(2), rx.changed())
+                .await
+                .unwrap()
+                .unwrap();
+            let report = rx.borrow_and_update();
+            let report = report.as_ref().unwrap();
+            assert!(report.truncated);
+            assert!(report.errors[0].contains("blocking lane is closed"));
+            assert_eq!(report.bytes_reclaimed, 0);
+        }
+        cancel.cancel();
+        tokio::time::timeout(Duration::from_secs(2), worker)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        db.shutdown().await.unwrap();
+    }
+}

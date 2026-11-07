@@ -61,6 +61,8 @@ pub mod memory_tools;
 pub mod remote_executor;
 
 pub mod registry;
+pub mod registry_authority;
+pub mod registry_owner;
 
 pub mod team_chat;
 
@@ -113,6 +115,7 @@ pub mod homeassistant_tools;
 
 pub mod computer_tools;
 
+pub mod browser_handoff;
 pub mod browser_tools;
 
 pub mod agent_acp_runner;

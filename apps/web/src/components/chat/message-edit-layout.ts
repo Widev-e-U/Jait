@@ -1,32 +1,10 @@
 import { cn } from '@/lib/utils'
 
-/**
- * The chat column.
- *
- * The transcript and the composer are laid out in one centered column that
- * owns the pane's width; the children only add their own horizontal inset.
- * That is how the VS Code Copilot chat pane works too — `.interactive-session`
- * centers once (max-width + margin auto), then `.interactive-item-container`
- * pads the messages and `.chat-input-container` pads the input box. Keeping the
- * centering in one place is what makes the message text and the text you type
- * share a left edge instead of drifting apart by the wrapper paddings.
- *
- * `floating-indicator-layout.ts` mirrors this geometry numerically
- * (`CHAT_TRANSCRIPT_COLUMN_MAX_WIDTH_PX` = 896 = `max-w-4xl`, 16/20px).
- */
+/** The transcript and composer share a centered column and outer edges. */
 export const CHAT_COLUMN_MAX_WIDTH_CLASS = 'max-w-4xl'
 
-/** Left/right inset of message text inside the chat column. */
-export const CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS = 'px-4 sm:px-5'
-
-/**
- * Left/right inset of the composer *box*. The box spans the column edge and
- * `PromptInput` supplies the inner text padding (1px border + `px-2`/`sm:px-3`
- * editor area + `px-2` editable = 17/21px), which lands the typed text on the
- * message text's left edge (16/20px). That is Copilot's arrangement too: the
- * transcript pads 16px, the input box takes its own 1px + 6px inset and the
- * two text edges end up within a pixel or two of each other.
- */
+/** Match the composer's mobile inset while keeping desktop edges flush. */
+export const CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS = 'px-2 md:px-0'
 export const CHAT_COMPOSER_COLUMN_PADDING_CLASS = 'px-0'
 
 /** Centered chat column, without a horizontal inset. */
@@ -45,7 +23,7 @@ export function getChatTranscriptBoundaryClassName(): string {
 
 /**
  * On mobile, match the header’s 8px side inset. On desktop, the composer
- * spans the column edge so its text aligns with the transcript.
+ * spans the column edge so its box aligns with the transcript.
  */
 export function getChatComposerBoundaryClassName(isMobile: boolean): string {
   return cn(

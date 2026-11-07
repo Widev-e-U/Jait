@@ -11,10 +11,13 @@ function installCursor() {
   const shadow = cursor.attachShadow({ mode: 'closed' });
   shadow.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28" viewBox="0 0 22 28"><path d="M2 2v21l5-6 5 9 4-2-5-9h9Z" fill="#2563eb" stroke="white" stroke-width="2"/></svg>';
   document.documentElement.appendChild(cursor);
-  document.addEventListener('mousemove', event => {
-    cursor.style.display = 'block';
-    cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
-  }, { passive: true });
+}
+
+function updateCursor(point) {
+  const cursor = document.getElementById('__jait_agent_cursor__');
+  if (!cursor) return;
+  cursor.style.display = 'block';
+  cursor.style.transform = `translate(${point.x}px, ${point.y}px)`;
 }
 
 async function clickWithVisibleCursor(page, selector, signal) {
@@ -38,6 +41,7 @@ async function clickWithVisibleCursor(page, selector, signal) {
         const fraction = step / 10;
         const point = { x: start.x + (end.x - start.x) * fraction, y: start.y + (end.y - start.y) * fraction };
         await page.mouse.move(point.x, point.y);
+        await page.evaluate(updateCursor, point);
         positions.set(page, point);
         await new Promise(resolve => setTimeout(resolve, 16));
       }

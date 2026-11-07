@@ -51,3 +51,18 @@ describe('browser window resize regressions', () => {
     }
   })
 })
+
+
+it('keeps movement and every resize edge to the right of the main sidebar', () => {
+  const panels = { ...frame, left: 200 }
+  const fitted = constrainBrowserWindow({ ...box, left: -900 }, panels)
+  expect(fitted.left).toBe(212)
+  for (const edge of ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw']) {
+    for (const delta of [-2000, 2000]) {
+      const result = resizeBrowserWindow(fitted, edge, delta, delta, panels)
+      expect(result.left).toBeGreaterThanOrEqual(212)
+      expect(result.left + result.width).toBeLessThanOrEqual(988)
+    }
+  }
+  expect(constrainBrowserWindow(box, { ...panels, width: 350 }).width).toBe(126)
+})

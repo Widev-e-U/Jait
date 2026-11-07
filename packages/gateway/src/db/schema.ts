@@ -855,6 +855,18 @@ export const agentGithubApps = sqliteTable("agent_github_apps", {
   updatedAt: text("updated_at").notNull(),
 }, table => [uniqueIndex("idx_agent_github_app_agent").on(table.userId, table.agentId)]);
 
+export const githubIntakePolicies = sqliteTable("github_intake_policies", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), agentId: text("agent_id").notNull(),
+  rules: text("rules").notNull(), updatedAt: text("updated_at").notNull(),
+}, table => [uniqueIndex("idx_github_intake_policy_owner").on(table.userId, table.agentId)]);
+
+export const githubIntakeDecisions = sqliteTable("github_intake_decisions", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), agentId: text("agent_id").notNull(),
+  deliveryId: text("delivery_id").notNull(), event: text("event").notNull(), action: text("action").notNull(),
+  repository: text("repository").notNull(), sender: text("sender").notNull(), result: text("result").notNull(),
+  reason: text("reason").notNull(), createdAt: text("created_at").notNull(),
+}, table => [uniqueIndex("idx_github_intake_delivery").on(table.userId, table.agentId, table.deliveryId)]);
+
 export const teamDeliveries = sqliteTable("team_room_deliveries", {
   id: text("id").primaryKey(),
   roomId: text("room_id").notNull(),

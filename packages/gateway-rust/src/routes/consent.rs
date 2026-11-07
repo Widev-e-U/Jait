@@ -5,7 +5,9 @@ use crate::{
     db::identifiers::uuidv7,
     runtime::blocking::BlockingLane,
     security::{
-        consent_manager::{ConsentManager, ConsentQueueEvent, ConsentStatus, DecisionVia},
+        consent_manager::{
+            ConsentManager, ConsentQueueEvent, ConsentStatus, DecisionVia, ReconciledConsent,
+        },
         tool_permissions::ToolPermission,
     },
 };
@@ -83,11 +85,47 @@ pub async fn refresh_owned_pending(
     .await
     .map_err(|_| "consent snapshot unavailable".to_string())?
 }
+/// Recover only IDs previously delivered to this subscriber. The caller must
+/// keep its subscription alive, serialize delivery with recovery, and recheck
+/// ownership at delivery; this adapter alone does not establish wire ordering.
+pub async fn reconcile_owned_observed(
+    manager: ConsentManager,
+    owns_session: ConsentOwnership,
+    user: String,
+    observed_ids: Vec<String>,
+    lane: BlockingLane,
+) -> Result<Vec<Value>, String> {
+    if user.trim().is_empty() {
+        return Err("authenticated user required".into());
+    }
+    lane.run(move || {
+        let mut visible = Vec::new();
+        for item in manager.reconcile_observed(&observed_ids).map_err(str::to_owned)? {
+            match item {
+                ReconciledConsent::Pending(identity) => {
+                    if owns_session(&identity.session_id, &user)? {
+                        visible.push(json!({"id": identity.id, "sessionId": identity.session_id, "status": "pending"}));
+                    }
+                }
+                ReconciledConsent::Resolved { session_id, decision } => {
+                    if owns_session(&session_id, &user)? {
+                        visible.push(json!({"type": "consent.resolved", "sessionId": session_id, "payload": &*decision}));
+                    }
+                }
+            }
+        }
+        Ok(visible)
+    }).await.map_err(|_| "consent reconciliation unavailable".to_string())?
+}
 /// Filter each live transition against current ownership before delivery.
 /// A recovery signal is an error, not a wire event: current clients do not
 /// understand it. The caller must stop delivery and reconcile missed decisions
 /// as well as pending requests; a pending-only snapshot cannot restore both.
+/// Resolved payloads are provisional until queue reconciliation confirms them.
+/// If reconciliation is in progress, the caller must retry recovery after a
+/// queue change; recovery also fails closed after an unsuccessful transition.
 pub async fn filter_owned_event(
+    manager: ConsentManager,
     event: ConsentQueueEvent,
     owns_session: ConsentOwnership,
     user: String,
@@ -102,11 +140,33 @@ pub async fn filter_owned_event(
                 if !owns_session(&request.session_id, &user)? {
                     return Ok(None);
                 }
+                let reconciled = manager.reconcile_observed(std::slice::from_ref(&request.id))
+                    .map_err(|_| "consent event recovery required".to_string())?;
+                match &reconciled[0] {
+                    ReconciledConsent::Pending(current)
+                        if current.id == request.id && current.session_id == request.session_id => {}
+                    _ => return Err("consent event recovery required".into()),
+                }
+                // An identity match alone does not authenticate the prompt body.
+                // Never forward a queued payload that differs from the current request.
+                let current = manager.get_request(&request.id)
+                    .ok_or_else(|| "consent event recovery required".to_string())?
+                    .snapshot();
+                if current != *request {
+                    return Err("consent event recovery required".into());
+                }
                 Ok(Some(json!({"type":"consent.required", "sessionId":request.session_id, "payload":&*request})))
             }
             ConsentQueueEvent::Resolved { session_id, decision } => {
                 if !owns_session(&session_id, &user)? {
                     return Ok(None);
+                }
+                let reconciled = manager.reconcile_observed(std::slice::from_ref(&decision.request_id))
+                    .map_err(|_| "consent event recovery required".to_string())?;
+                match &reconciled[0] {
+                    ReconciledConsent::Resolved { session_id: current_session, decision: current }
+                        if current_session == &session_id && **current == *decision => {}
+                    _ => return Err("consent event recovery required".into()),
                 }
                 Ok(Some(json!({"type":"consent.resolved", "sessionId":session_id, "payload":&*decision})))
             }
@@ -258,11 +318,11 @@ impl ConsentRoutes {
             }
             ["api", "consent", "pending", session, "approve-all"] => {
                 if method == Method::POST {
-                    self.manager.enable_approve_all_for_session(session);
+                    self.manager.enable_approve_all_for_session(session)?;
                     let ids = self.approve_pending(session, reason)?;
                     json!({"ok":true,"sessionId":session,"approveAllEnabled":true,"approvedCount":ids.len(),"requestIds":ids})
                 } else if method == Method::DELETE {
-                    self.manager.disable_approve_all_for_session(session);
+                    self.manager.disable_approve_all_for_session(session)?;
                     self.write_audit(
                         Some(session),
                         "consent.approve_all.clear",
@@ -414,6 +474,159 @@ mod owned_snapshot_tests {
     }
 
     #[tokio::test]
+    async fn failed_override_enable_does_not_approve_pending_requests() {
+        use crate::security::consent_manager::{
+            ConsentDecision, ConsentManagerOptions, ConsentPersistence, ConsentRequest,
+        };
+        struct FailedStore;
+        impl ConsentPersistence for FailedStore {
+            fn hydrate_session_approve_all(&self) -> Result<Vec<String>, String> {
+                Ok(vec![])
+            }
+            fn persist_session_approve_all(&self, _: &str, _: bool, _: &str) -> Result<(), String> {
+                Err("write failed".into())
+            }
+            fn persist_decision(
+                &self,
+                _: &ConsentRequest,
+                _: &ConsentDecision,
+            ) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        let manager = ConsentManager::new(ConsentManagerOptions {
+            store: Some(Arc::new(FailedStore)),
+            ..ConsentManagerOptions::default()
+        });
+        let handle = manager.request_consent(request("alice")).unwrap();
+        let audit_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = audit_count.clone();
+        let routes = ConsentRoutes {
+            auth: AuthState::new(
+                rusqlite::Connection::open_in_memory().unwrap(),
+                "consent-http-fixture".into(),
+            )
+            .unwrap(),
+            manager: manager.clone(),
+            owns_session: Arc::new(|session, user| Ok(session == user)),
+            audit: Arc::new(move |_| {
+                count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }),
+            lane: lane(),
+            active_profile_name: None,
+            permissions: vec![],
+        };
+        let parts = vec![
+            "api".into(),
+            "consent".into(),
+            "pending".into(),
+            "alice".into(),
+            "approve-all".into(),
+        ];
+        assert_eq!(
+            routes
+                .run(Method::POST, parts, "alice".into(), json!({}))
+                .unwrap_err(),
+            "write failed"
+        );
+        assert!(!manager.is_approve_all_enabled_for_session("alice"));
+        assert_eq!(
+            manager.get_request(&handle.id).unwrap().snapshot().status,
+            ConsentStatus::Pending
+        );
+        assert_eq!(audit_count.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    // Diagnostic of the current opt-in route, not an acceptance test: the
+    // callback returns its old observation after revocation has occurred.
+    #[tokio::test]
+    async fn ownership_observation_can_expire_before_route_mutation() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        for action in ["approve", "reject", "approve-all", "session-override"] {
+            let manager = ConsentManager::default();
+            let mut handle = manager.request_consent(request("alice")).unwrap();
+            let authorized = Arc::new(AtomicBool::new(true));
+            let observed = authorized.clone();
+            let routes = ConsentRoutes {
+                auth: AuthState::new(
+                    rusqlite::Connection::open_in_memory().unwrap(),
+                    "consent-http-fixture".into(),
+                )
+                .unwrap(),
+                manager: manager.clone(),
+                owns_session: Arc::new(move |_, _| Ok(observed.swap(false, Ordering::SeqCst))),
+                audit: Arc::new(|_| Ok(())),
+                lane: lane(),
+                active_profile_name: None,
+                permissions: vec![],
+            };
+            let parts = if action == "session-override" {
+                vec![
+                    "api".into(),
+                    "consent".into(),
+                    "pending".into(),
+                    "alice".into(),
+                    "approve-all".into(),
+                ]
+            } else {
+                vec![
+                    "api".into(),
+                    "consent".into(),
+                    handle.id.clone(),
+                    action.into(),
+                ]
+            };
+            let (status, _) = routes
+                .run(Method::POST, parts, "alice".into(), json!({}))
+                .unwrap();
+            assert!(!authorized.load(Ordering::SeqCst));
+            assert_eq!(status, 200, "{action}");
+            let decision = handle.wait().await.unwrap();
+            assert_eq!(decision.approved, action != "reject", "{action}");
+            if action == "session-override" {
+                assert!(manager.is_approve_all_enabled_for_session("alice"));
+            }
+        }
+    }
+
+    // Diagnostic only: clearing the persistent session override also races revocation.
+    #[test]
+    fn ownership_observation_can_expire_before_override_clear() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let manager = ConsentManager::default();
+        manager.enable_approve_all_for_session("alice").unwrap();
+        let authorized = Arc::new(AtomicBool::new(true));
+        let observed = authorized.clone();
+        let routes = ConsentRoutes {
+            auth: AuthState::new(
+                rusqlite::Connection::open_in_memory().unwrap(),
+                "consent-http-fixture".into(),
+            )
+            .unwrap(),
+            manager: manager.clone(),
+            owns_session: Arc::new(move |_, _| Ok(observed.swap(false, Ordering::SeqCst))),
+            audit: Arc::new(|_| Ok(())),
+            lane: lane(),
+            active_profile_name: None,
+            permissions: vec![],
+        };
+        let parts = vec![
+            "api".into(),
+            "consent".into(),
+            "pending".into(),
+            "alice".into(),
+            "approve-all".into(),
+        ];
+        let (status, _) = routes
+            .run(Method::DELETE, parts, "alice".into(), json!({}))
+            .unwrap();
+        assert!(!authorized.load(Ordering::SeqCst));
+        assert_eq!(status, 200);
+        assert!(!manager.is_approve_all_enabled_for_session("alice"));
+    }
+
+    #[tokio::test]
     async fn owned_snapshot_isolated_and_reconnect_observes_changes() {
         let manager = ConsentManager::default();
         let alice = manager.request_consent(request("alice")).unwrap();
@@ -473,32 +686,129 @@ mod owned_snapshot_tests {
         let manager = ConsentManager::default();
         let (_, mut changes) = manager.try_subscribe_pending_changes().unwrap();
         let handle = manager.request_consent(request("alice")).unwrap();
-        manager.approve(&handle.id, None, None).unwrap();
         let required = changes.try_recv().unwrap();
-        let resolved = changes.try_recv().unwrap();
         let owns: ConsentOwnership = Arc::new(|session, user| Ok(session == user));
-        let event = filter_owned_event(required.clone(), owns.clone(), "alice".into(), lane())
-            .await
-            .unwrap()
-            .unwrap();
+        let event = filter_owned_event(
+            manager.clone(),
+            required.clone(),
+            owns.clone(),
+            "alice".into(),
+            lane(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
         assert_eq!(event["type"], "consent.required");
         assert_eq!(event["payload"]["id"], handle.id);
+        let ConsentQueueEvent::Required(original) = &required else {
+            panic!("expected required event")
+        };
+        let mut altered = (**original).clone();
+        altered.summary = "misleading consent prompt".into();
+        let forged = ConsentQueueEvent::Required(Arc::new(altered));
         assert!(
-            filter_owned_event(required, owns, "bob".into(), lane())
+            filter_owned_event(
+                manager.clone(),
+                forged,
+                owns.clone(),
+                "alice".into(),
+                lane()
+            )
+            .await
+            .is_err()
+        );
+        manager.approve(&handle.id, None, None).unwrap();
+        let resolved = changes.try_recv().unwrap();
+        assert!(
+            filter_owned_event(
+                manager.clone(),
+                required.clone(),
+                owns.clone(),
+                "alice".into(),
+                lane()
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            filter_owned_event(manager.clone(), required, owns, "bob".into(), lane())
                 .await
                 .unwrap()
                 .is_none()
         );
         let revoked: ConsentOwnership = Arc::new(|_, _| Ok(false));
         assert!(
-            filter_owned_event(resolved.clone(), revoked, "alice".into(), lane())
-                .await
-                .unwrap()
-                .is_none()
+            filter_owned_event(
+                manager.clone(),
+                resolved.clone(),
+                revoked,
+                "alice".into(),
+                lane()
+            )
+            .await
+            .unwrap()
+            .is_none()
         );
         let failure: ConsentOwnership = Arc::new(|_, _| Err("lookup failed".into()));
         assert!(
-            filter_owned_event(resolved, failure, "alice".into(), lane())
+            filter_owned_event(manager.clone(), resolved, failure, "alice".into(), lane())
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn observed_recovery_rechecks_ownership_and_fails_closed() {
+        let manager = ConsentManager::default();
+        let alice = manager.request_consent(request("alice")).unwrap();
+        let bob = manager.request_consent(request("bob")).unwrap();
+        manager.approve(&alice.id, None, None).unwrap();
+        let owns: ConsentOwnership = Arc::new(|session, user| Ok(session == user));
+        let ids = vec![alice.id.clone(), bob.id.clone()];
+        let result = reconcile_owned_observed(
+            manager.clone(),
+            owns.clone(),
+            "alice".into(),
+            ids.clone(),
+            lane(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["type"], "consent.resolved");
+        assert_eq!(result[0]["payload"]["requestId"], alice.id);
+        let revoked: ConsentOwnership = Arc::new(|_, _| Ok(false));
+        assert!(
+            reconcile_owned_observed(
+                manager.clone(),
+                revoked,
+                "alice".into(),
+                ids.clone(),
+                lane()
+            )
+            .await
+            .unwrap()
+            .is_empty()
+        );
+        let failure: ConsentOwnership = Arc::new(|_, _| Err("lookup failed".into()));
+        assert!(
+            reconcile_owned_observed(manager.clone(), failure, "alice".into(), ids, lane())
+                .await
+                .is_err()
+        );
+        assert!(
+            reconcile_owned_observed(
+                manager.clone(),
+                owns.clone(),
+                "alice".into(),
+                vec!["unknown".into()],
+                lane()
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            reconcile_owned_observed(manager, owns, " ".into(), vec![], lane())
                 .await
                 .is_err()
         );
@@ -508,6 +818,7 @@ mod owned_snapshot_tests {
     async fn recovery_signal_is_not_sent_as_an_unknown_wire_event() {
         let owns: ConsentOwnership = Arc::new(|_, _| Ok(true));
         let result = filter_owned_event(
+            ConsentManager::default(),
             ConsentQueueEvent::SnapshotRequired,
             owns,
             "alice".into(),

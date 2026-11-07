@@ -77,13 +77,13 @@ test.describe('provider selector actions', () => {
       const sessionRestored = page.waitForResponse((response) => response.url().includes(`/api/sessions/${session.id}/state?`))
       await page.goto('/')
       await sessionRestored
-      await expect(page.getByRole('button', { name: 'Copy chat id' })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Copy chat reference' })).toBeVisible()
       await page.evaluate(() => {
         Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
           writeText: async (text: string) => { (window as unknown as { copiedChat: string }).copiedChat = text },
         } })
       })
-      await page.getByRole('button', { name: 'Copy chat id' }).click()
+      await page.getByRole('button', { name: 'Copy chat reference' }).click()
       const copied = await page.evaluate(() => (window as unknown as { copiedChat: string }).copiedChat)
       expect(copied).toBe(`[chat:${session.id}]`)
       const composer = page.locator('[data-testid="chat-composer"] [contenteditable="true"]')

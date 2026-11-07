@@ -52,6 +52,7 @@ export const ASK_MODE_TOOLS = new Set([
   "session.search",
   "web.fetch",
   "web.search",
+  "browser.open",
   "browser.navigate",
   "browser.snapshot",
   "browser.inspect",

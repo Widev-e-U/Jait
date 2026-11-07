@@ -15,6 +15,12 @@ use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::Semaphore;
 
 const OUTPUT_LIMIT: usize = 2 * 1024 * 1024;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistoryDirection {
+    Back,
+    Forward,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PreviewOperation {
     Session,
@@ -38,6 +44,9 @@ pub enum PreviewOperation {
     Navigate {
         url: String,
     },
+    History {
+        direction: HistoryDirection,
+    },
     Reload,
     Share {
         shared_with_agent: bool,
@@ -55,8 +64,14 @@ pub enum PreviewReply {
     Value(Value),
     Suppressed,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum PreviewFailure {
+    /// A history operation failed with a message approved by the host for the
+    /// authenticated owner. Never place credentials or private diagnostics here.
+    HistoryMessage(String),
+    /// Messages must be approved by the host for the authenticated owner.
+    NavigateMessage(String),
+    ReloadMessage(String),
     InvalidDestination,
     Unavailable,
     Failed,
@@ -71,8 +86,11 @@ pub type PreviewPort = Arc<
 >;
 
 /// Host effects must recheck consent, project roots, scope, resolved addresses
-/// and browser authority immediately before execution. Cancellation includes all
-/// spawned descendants. No ambient service/configuration fallback is provided.
+/// and browser authority immediately before execution. The returned future may be
+/// dropped on disconnect or timeout, and the route permit is then released. The
+/// host must independently supervise cancellation and cleanup of all spawned
+/// descendants, retaining its own capacity until cleanup is confirmed. No ambient
+/// service/configuration fallback is provided.
 #[derive(Clone)]
 pub struct PreviewRoutes {
     auth: AuthState,
@@ -100,6 +118,7 @@ impl PreviewRoutes {
             .route("/api/preview/start", post(write))
             .route("/api/preview/restart", post(write))
             .route("/api/preview/navigate", post(write))
+            .route("/api/preview/history", post(write))
             .route("/api/preview/reload", post(write))
             .route("/api/preview/share", post(write))
             .route("/api/preview/stop", post(write))
@@ -116,9 +135,9 @@ impl PreviewRoutes {
     }
     async fn invoke(&self, call: PreviewCall) -> Response {
         let missing = match call.operation {
-            PreviewOperation::Navigate { .. } | PreviewOperation::Reload => {
-                "Live browser not found"
-            }
+            PreviewOperation::Navigate { .. }
+            | PreviewOperation::History { .. }
+            | PreviewOperation::Reload => "Live browser not found",
             _ => "Preview session not found",
         };
         match self
@@ -148,6 +167,41 @@ impl PreviewRoutes {
         match result {
             Err(_) => error(504, "Preview operation timed out"),
             Ok(Err(PreviewFailure::Unavailable)) => error(503, "Preview backend unavailable"),
+            Ok(Err(PreviewFailure::HistoryMessage(message)))
+                if matches!(call.operation, PreviewOperation::History { .. }) =>
+            {
+                bounded_owner_error(message)
+            }
+            Ok(Err(PreviewFailure::NavigateMessage(message)))
+                if matches!(call.operation, PreviewOperation::Navigate { .. }) =>
+            {
+                bounded_owner_error(message)
+            }
+            Ok(Err(PreviewFailure::ReloadMessage(message)))
+                if matches!(call.operation, PreviewOperation::Reload) =>
+            {
+                bounded_owner_error(message)
+            }
+            Ok(Err(
+                PreviewFailure::HistoryMessage(_)
+                | PreviewFailure::NavigateMessage(_)
+                | PreviewFailure::ReloadMessage(_),
+            )) => error(500, "Preview operation failed"),
+            Ok(Err(PreviewFailure::InvalidDestination | PreviewFailure::Failed))
+                if matches!(call.operation, PreviewOperation::History { .. }) =>
+            {
+                error(400, "Could not navigate history.")
+            }
+            Ok(Err(PreviewFailure::InvalidDestination | PreviewFailure::Failed))
+                if matches!(call.operation, PreviewOperation::Navigate { .. }) =>
+            {
+                error(400, "Could not navigate.")
+            }
+            Ok(Err(PreviewFailure::InvalidDestination | PreviewFailure::Failed))
+                if matches!(call.operation, PreviewOperation::Reload) =>
+            {
+                error(400, "Could not refresh.")
+            }
             Ok(Err(PreviewFailure::InvalidDestination)) => error(400, "Could not navigate."),
             Ok(Err(PreviewFailure::Failed)) => error(500, "Preview operation failed"),
             Ok(Ok(PreviewReply::Suppressed))
@@ -157,9 +211,6 @@ impl PreviewRoutes {
             }
             Ok(Ok(PreviewReply::Suppressed)) => error(500, "Invalid preview response"),
             Ok(Ok(PreviewReply::Value(value))) => {
-                if serde_json::to_vec(&value).map_or(true, |bytes| bytes.len() > OUTPUT_LIMIT) {
-                    return error(502, "Preview response exceeds byte limit");
-                }
                 let body = match call.operation {
                     PreviewOperation::Session | PreviewOperation::Start { .. } => {
                         json!({"session":value})
@@ -171,10 +222,20 @@ impl PreviewRoutes {
                     _ if value.is_null() => return error(404, missing),
                     _ => json!({"session":value}),
                 };
+                if serde_json::to_vec(&body).map_or(true, |bytes| bytes.len() > OUTPUT_LIMIT) {
+                    return error(502, "Preview response exceeds byte limit");
+                }
                 auth::response(200, body)
             }
         }
     }
+}
+fn bounded_owner_error(message: String) -> Response {
+    let body = json!({"error": message});
+    if serde_json::to_vec(&body).map_or(true, |bytes| bytes.len() > OUTPUT_LIMIT) {
+        return error(502, "Preview response exceeds byte limit");
+    }
+    auth::response(400, body)
 }
 fn error(status: u16, message: &str) -> Response {
     auth::response(status, json!({"error":message}))
@@ -267,9 +328,11 @@ async fn write(State(state): State<PreviewRoutes>, request: Request) -> Response
     if session.len() > 4096 {
         return error(400, "Invalid sessionId");
     }
-    if matches!(action.as_str(), "navigate" | "reload") {
+    if matches!(action.as_str(), "navigate" | "history" | "reload") {
         let allowed = if action == "navigate" {
             &["sessionId", "url"][..]
+        } else if action == "history" {
+            &["sessionId", "direction"][..]
         } else {
             &["sessionId"][..]
         };
@@ -292,6 +355,13 @@ async fn write(State(state): State<PreviewRoutes>, request: Request) -> Response
         "navigate" => match text(&body, "url").filter(|url| !url.is_empty() && url.len() <= 8192) {
             Some(url) => PreviewOperation::Navigate { url },
             None => return error(400, "Invalid preview URL"),
+        },
+        "history" => PreviewOperation::History {
+            direction: match body.get("direction").and_then(Value::as_str) {
+                Some("back") => HistoryDirection::Back,
+                Some("forward") => HistoryDirection::Forward,
+                _ => return error(400, "Invalid preview request"),
+            },
         },
         "reload" => PreviewOperation::Reload,
         "share" => match body.get("sharedWithAgent").and_then(Value::as_bool) {

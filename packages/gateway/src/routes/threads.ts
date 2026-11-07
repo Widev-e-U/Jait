@@ -1126,9 +1126,10 @@ export function registerThreadRoutes(
     let providerId: ProviderId | undefined;
     if (body["providerId"] !== undefined) {
       const requestedProviderId = body["providerId"] as ProviderId;
-      const userSelectedProvider = deps.userService?.getSettings(authUser.id).chatProvider ?? null;
+      // No account-level default is consulted: an update either names a provider
+      // explicitly or keeps the one already recorded on the thread.
       const resolvedProvider = resolveThreadProviderId(
-        userSelectedProvider,
+        null,
         requestedProviderId,
         existing.providerId as ProviderId,
       );
@@ -2102,20 +2103,34 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, unknown>;
-    const requestId = typeof body["requestId"] === "string" ? body["requestId"] : "";
-    const approved = body["approved"] !== false;
-
     const thread = getOwnedThread(id, authUser.id);
     if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
+    const body = request.body as Record<string, unknown> | null | undefined;
+    if (!body || typeof body["requestId"] !== "string" || !body["requestId"].trim()
+      || typeof body["approved"] !== "boolean") {
+      return reply.status(400).send({ error: "A requestId and explicit approval decision are required" });
+    }
+    const requestId = body["requestId"];
+    const approved = body["approved"];
     if (!thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread has no active session" });
     }
 
-    const provider = providerRegistry.get(thread.providerId as ProviderId);
+    // Approval is not proxied to remote nodes; never fall back to a local provider.
+    if (thread.executionNodeId && thread.executionNodeId !== "gateway") {
+      return reply.status(409).send({ error: "Thread approval is not supported on remote nodes" });
+    }
+    const provider = resolveThreadStopProvider(thread, authUser.id);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
+    if (provider instanceof RemoteCliProvider || provider.id === "jait") {
+      return reply.status(409).send({ error: "Thread approval is not supported by this provider" });
+    }
 
-    await provider.respondToApproval(thread.providerSessionId, requestId, approved);
+    try {
+      await provider.respondToApproval(thread.providerSessionId, requestId, approved);
+    } catch {
+      return reply.status(409).send({ error: "Approval request is no longer available or could not be delivered" });
+    }
     threadService.addActivity(id, "tool.approval-response", approved ? "Tool approved" : "Tool denied", { requestId, approved });
     return reply.status(200).send({ ok: true });
   });

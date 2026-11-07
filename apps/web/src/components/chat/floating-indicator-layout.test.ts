@@ -18,13 +18,13 @@ describe('floating chat indicator layout', () => {
 
 describe('chat transcript column', () => {
   it('hugs the panel padding on narrow panels', () => {
-    expect(getChatTranscriptColumnLeft(500, false)).toBe(20)
-    expect(getChatTranscriptColumnLeft(500, true)).toBe(16)
+    expect(getChatTranscriptColumnLeft(500, false)).toBe(0)
+    expect(getChatTranscriptColumnLeft(500, true)).toBe(8)
   })
 
   it('centers once the panel exceeds the max-w-4xl column', () => {
-    expect(getChatTranscriptColumnLeft(896, false)).toBe(20)
-    expect(getChatTranscriptColumnLeft(1200, false)).toBe(172)
+    expect(getChatTranscriptColumnLeft(896, false)).toBe(0)
+    expect(getChatTranscriptColumnLeft(1200, false)).toBe(152)
   })
 
   it('treats unmeasured panel widths as zero', () => {

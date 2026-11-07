@@ -9,12 +9,12 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use jait_gateway::services::calendar::{Request, Response, Transport};
+use jait_gateway::services::email::connection as email_connection;
 use jait_gateway::services::email::contracts::{
     EmailAccountSettings, ListMessagesOptions, MailServerConfig,
 };
-use jait_gateway::services::email::connection as email_connection;
 use jait_gateway::services::email::{gmail::GmailClient, outlook::OutlookClient};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 type Recorder = Arc<Mutex<Vec<Request>>>;
 
@@ -98,7 +98,11 @@ fn gmail_labels() -> Value {
 mod gmail {
     use super::*;
 
-    fn options(folder: Option<&str>, query: Option<&str>, limit: Option<f64>) -> ListMessagesOptions {
+    fn options(
+        folder: Option<&str>,
+        query: Option<&str>,
+        limit: Option<f64>,
+    ) -> ListMessagesOptions {
         ListMessagesOptions {
             folder: folder.map(str::to_string),
             query: query.map(str::to_string),
@@ -111,7 +115,10 @@ mod gmail {
         let (transport, seen) = stub(vec![
             ok(json!({"messages": [{"id": "m1"}]})),
             ok(gmail_labels()),
-            ok(gmail_message("m1", json!(["INBOX", "UNREAD", "CATEGORY_PERSONAL"]))),
+            ok(gmail_message(
+                "m1",
+                json!(["INBOX", "UNREAD", "CATEGORY_PERSONAL"]),
+            )),
         ]);
         let client = GmailClient::new(transport);
 
@@ -123,9 +130,11 @@ mod gmail {
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 3, "list, labels and metadata requests");
         assert_eq!(seen[0].method, "GET");
-        assert!(seen[0]
-            .url
-            .starts_with("https://gmail.googleapis.com/gmail/v1/users/me/messages?"));
+        assert!(
+            seen[0]
+                .url
+                .starts_with("https://gmail.googleapis.com/gmail/v1/users/me/messages?")
+        );
         // TS gmail.ts: maxResults is clamped to the 50 message cap.
         assert_eq!(
             query_pairs(&seen[0].url),
@@ -135,14 +144,21 @@ mod gmail {
                 ("q".to_string(), "from%3Aann".to_string()),
             ]
         );
-        assert_eq!(header_value(&seen[0], "authorization").as_deref(), Some("Bearer tok"));
+        assert_eq!(
+            header_value(&seen[0], "authorization").as_deref(),
+            Some("Bearer tok")
+        );
 
-        assert!(seen[1]
-            .url
-            .starts_with("https://gmail.googleapis.com/gmail/v1/users/me/labels"));
-        assert!(seen[2]
-            .url
-            .starts_with("https://gmail.googleapis.com/gmail/v1/users/me/messages/m1?"));
+        assert!(
+            seen[1]
+                .url
+                .starts_with("https://gmail.googleapis.com/gmail/v1/users/me/labels")
+        );
+        assert!(
+            seen[2]
+                .url
+                .starts_with("https://gmail.googleapis.com/gmail/v1/users/me/messages/m1?")
+        );
         assert!(seen[2].url.contains("format=metadata"));
         assert!(seen[2].url.contains("metadataHeaders=Subject"));
 
@@ -157,10 +173,7 @@ mod gmail {
         assert_eq!(m.snippet, "preview text");
         assert!(m.unread);
         // CATEGORY_* labels are dropped and known ids are humanised via /labels.
-        assert_eq!(
-            m.labels,
-            vec!["Inbox".to_string(), "Unread".to_string()]
-        );
+        assert_eq!(m.labels, vec!["Inbox".to_string(), "Unread".to_string()]);
         assert!(!m.has_attachments);
     }
 
@@ -214,7 +227,11 @@ mod gmail {
 mod outlook {
     use super::*;
 
-    fn options(folder: Option<&str>, query: Option<&str>, limit: Option<f64>) -> ListMessagesOptions {
+    fn options(
+        folder: Option<&str>,
+        query: Option<&str>,
+        limit: Option<f64>,
+    ) -> ListMessagesOptions {
         ListMessagesOptions {
             folder: folder.map(str::to_string),
             query: query.map(str::to_string),
@@ -246,16 +263,21 @@ mod outlook {
         let client = OutlookClient::new(transport);
 
         let summaries = client
-            .list_messages("tok", options(Some("Sent Items"), Some("q\"uote"), Some(7.0)))
+            .list_messages(
+                "tok",
+                options(Some("Sent Items"), Some("q\"uote"), Some(7.0)),
+            )
             .await
             .expect("list_messages");
 
         let seen = seen.lock().unwrap();
         assert_eq!(seen.len(), 1);
         assert_eq!(seen[0].method, "GET");
-        assert!(seen[0].url.starts_with(
-            "https://graph.microsoft.com/v1.0/me/mailFolders/Sent%20Items/messages?"
-        ));
+        assert!(
+            seen[0].url.starts_with(
+                "https://graph.microsoft.com/v1.0/me/mailFolders/Sent%20Items/messages?"
+            )
+        );
         // `$search` quotes are stripped by TS and paging is capped at 50.
         assert_eq!(
             query_pairs(&seen[0].url),
@@ -268,8 +290,14 @@ mod outlook {
                 ("%24top".to_string(), "7".to_string()),
             ]
         );
-        assert_eq!(header_value(&seen[0], "authorization").as_deref(), Some("Bearer tok"));
-        assert_eq!(header_value(&seen[0], "consistencylevel").as_deref(), Some("eventual"));
+        assert_eq!(
+            header_value(&seen[0], "authorization").as_deref(),
+            Some("Bearer tok")
+        );
+        assert_eq!(
+            header_value(&seen[0], "consistencylevel").as_deref(),
+            Some("eventual")
+        );
 
         let m = &summaries[0];
         assert_eq!(m.id, "AAMk1");
@@ -297,11 +325,16 @@ mod outlook {
 
         let seen = seen.lock().unwrap();
         // Empty folder/query fall back to the inbox folder and the $orderby branch.
-        assert!(seen[0]
-            .url
-            .starts_with("https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?"));
+        assert!(
+            seen[0]
+                .url
+                .starts_with("https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?")
+        );
         let pairs = query_pairs(&seen[0].url);
-        assert!(pairs.contains(&("%24orderby".to_string(), "receivedDateTime+desc".to_string())));
+        assert!(pairs.contains(&(
+            "%24orderby".to_string(),
+            "receivedDateTime+desc".to_string()
+        )));
         assert!(pairs.contains(&("%24top".to_string(), "25".to_string())));
         assert!(!pairs.iter().any(|(k, _)| k == "%24search"));
     }
@@ -353,7 +386,10 @@ mod transport {
 
         let seen = seen.lock().unwrap();
         assert_eq!(header_value(&seen[0], "consistencylevel").as_deref(), None);
-        assert_eq!(header_value(&seen[0], "authorization").as_deref(), Some("Bearer tok"));
+        assert_eq!(
+            header_value(&seen[0], "authorization").as_deref(),
+            Some("Bearer tok")
+        );
     }
 
     #[tokio::test]
@@ -373,7 +409,10 @@ mod transport {
             .expect("list_messages");
 
         let seen = seen.lock().unwrap();
-        assert_eq!(header_value(&seen[0], "consistencylevel").as_deref(), Some("eventual"));
+        assert_eq!(
+            header_value(&seen[0], "consistencylevel").as_deref(),
+            Some("eventual")
+        );
         assert_eq!(seen[0].method, "GET");
         assert_eq!(seen[0].body, None);
     }
@@ -442,17 +481,20 @@ mod mailbox_validators {
 
     #[test]
     fn validate_server_trims_and_enforces_port_range() {
-        let trimmed = email_connection::validate_server(server(" imap.example.com ", 993.0, " ann ", "pw"))
-            .expect("valid server");
+        let trimmed =
+            email_connection::validate_server(server(" imap.example.com ", 993.0, " ann ", "pw"))
+                .expect("valid server");
         assert_eq!(trimmed.host, "imap.example.com");
         assert_eq!(trimmed.user, "ann");
 
         assert_eq!(
-            email_connection::validate_server(server("imap.example.com", 0.0, "ann", "pw")).unwrap_err(),
+            email_connection::validate_server(server("imap.example.com", 0.0, "ann", "pw"))
+                .unwrap_err(),
             "Invalid mail port"
         );
         assert_eq!(
-            email_connection::validate_server(server("imap.example.com", 993.5, "ann", "pw")).unwrap_err(),
+            email_connection::validate_server(server("imap.example.com", 993.5, "ann", "pw"))
+                .unwrap_err(),
             "Invalid mail port"
         );
         assert_eq!(
@@ -461,11 +503,13 @@ mod mailbox_validators {
             "Invalid mail port"
         );
         assert_eq!(
-            email_connection::validate_server(server("imap example com", 993.0, "ann", "pw")).unwrap_err(),
+            email_connection::validate_server(server("imap example com", 993.0, "ann", "pw"))
+                .unwrap_err(),
             "Enter a hostname or IP address"
         );
         assert_eq!(
-            email_connection::validate_server(server("imap.example.com", 993.0, "ann", "")).unwrap_err(),
+            email_connection::validate_server(server("imap.example.com", 993.0, "ann", ""))
+                .unwrap_err(),
             "Invalid mailbox credentials"
         );
     }
@@ -478,7 +522,8 @@ mod mailbox_validators {
             "A recipient or reply message is required"
         );
 
-        let injected = json!({"to": "ann@example.com\nBcc: eve@example.com", "subject": "Hi", "body": "text"});
+        let injected =
+            json!({"to": "ann@example.com\nBcc: eve@example.com", "subject": "Hi", "body": "text"});
         assert_eq!(
             email_connection::send_email(injected).unwrap_err(),
             "Mail headers cannot contain line breaks"
@@ -499,13 +544,17 @@ mod mailbox_validators {
     #[test]
     fn send_email_body_limit_is_two_mebibytes() {
         let body = "a".repeat(2 * 1024 * 1024);
-        email_connection::send_email(json!({"to": "ann@example.com", "subject": "Hi", "body": body}))
-            .expect("exactly 2 MiB is accepted");
+        email_connection::send_email(
+            json!({"to": "ann@example.com", "subject": "Hi", "body": body}),
+        )
+        .expect("exactly 2 MiB is accepted");
 
         let body = "a".repeat(2 * 1024 * 1024 + 1);
         assert_eq!(
-            email_connection::send_email(json!({"to": "ann@example.com", "subject": "Hi", "body": body}))
-                .unwrap_err(),
+            email_connection::send_email(
+                json!({"to": "ann@example.com", "subject": "Hi", "body": body})
+            )
+            .unwrap_err(),
             "Email body is too large"
         );
     }

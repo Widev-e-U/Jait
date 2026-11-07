@@ -11,6 +11,7 @@ import type {
 import { ProviderRegistry } from "../providers/registry.js";
 import { ProjectService } from "../services/projects.js";
 import { SessionService } from "../services/sessions.js";
+import { SessionStateService } from "../services/session-state.js";
 import { ThreadService } from "../services/threads.js";
 import { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
@@ -114,6 +115,7 @@ describe("project.message tool", () => {
           projectRoot: "/tmp/other-project",
           message: "The nightly build failed — please investigate.",
           providerId: "codex",
+          model: "gpt-5-codex",
         },
         makeContext(user.id),
       );
@@ -186,6 +188,7 @@ describe("project.message tool", () => {
           projectId: existingProject.id,
           message: "Please check the flaky test.",
           providerId: "codex",
+          model: "gpt-5-codex",
         },
         makeContext(user.id),
       );
@@ -208,7 +211,8 @@ describe("project.message tool", () => {
       const sessionService = new SessionService(db);
       const threadService = new ThreadService(db);
       const providerRegistry = new ProviderRegistry();
-      // thread.control falls back to the user's last-selected provider ("jait").
+      // thread.control resumes on the provider+model recorded on this chat,
+      // which the user picked; nothing here is chosen automatically.
       const provider = new MockThreadProvider("jait");
       providerRegistry.register(provider);
       const broadcastToUser = vi.fn();
@@ -216,6 +220,10 @@ describe("project.message tool", () => {
 
       // The chat the caller is currently in — NOT part of any project yet.
       const currentChat = sessionService.create({ userId: user.id, name: "My Chat" });
+      new SessionStateService(db).set(currentChat.id, {
+        "chat.provider": "jait",
+        "chat.cliModels": { jait: "llama3" },
+      });
 
       const existingProject = projectService.create({
         userId: user.id,
@@ -230,6 +238,7 @@ describe("project.message tool", () => {
         threadService,
         providerRegistry,
         userService,
+        sessionState: new SessionStateService(db),
         ws,
       });
 

@@ -15,7 +15,15 @@ pub fn estimate_optional_json_tokens(value: Option<&Value>) -> usize {
     value.map_or(0, estimate_json_tokens)
 }
 pub fn estimate_message_tokens(message: &Value) -> usize {
-    let mut tokens = 4 + estimate_tokens(message["content"].as_str().unwrap_or(""));
+    // TypeScript's estimateTokens reads `.length`. At runtime an array thus
+    // contributes its part count, not the text or image cost. This preserves
+    // compatibility; it is not a conservative multimodal budget.
+    let content_tokens = match &message["content"] {
+        Value::String(text) => estimate_tokens(text),
+        Value::Array(parts) => (parts.len() as f64 / 3.7).ceil() as usize,
+        _ => 0,
+    };
+    let mut tokens = 4 + content_tokens;
     for key in ["name", "tool_call_id", "thinking"] {
         if let Some(s) = message[key].as_str() {
             tokens += estimate_tokens(s);
@@ -62,4 +70,25 @@ pub fn compute_context_usage(messages: &[Value], schemas: &[Value], context_wind
         0.0
     };
     json!({"system":system,"history":history,"toolResults":results,"tools":tools,"total":total,"limit":number(context_window),"ratio":number(ratio)})
+}
+
+#[cfg(test)]
+mod multimodal_compatibility_tests {
+    use super::*;
+
+    #[test]
+    fn array_content_uses_part_count_like_typescript() {
+        let parts = json!([
+            {"type": "text", "text": "a very long text that is not counted by the reference"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,large"}},
+            {"type": "text", "text": "another part"},
+            {"type": "text", "text": "fourth"}
+        ]);
+        let message = json!({"role": "user", "content": parts, "thinking": "🦀"});
+        assert_eq!(estimate_message_tokens(&message), 7);
+        assert_eq!(estimate_history_tokens(std::slice::from_ref(&message)), 10);
+        assert_eq!(compute_context_usage(&[message], &[], 100.0)["history"], 7);
+        assert_eq!(estimate_message_tokens(&json!({"content": []})), 4);
+        assert_eq!(estimate_message_tokens(&json!({"content": "🦀"})), 5);
+    }
 }

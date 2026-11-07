@@ -44,7 +44,8 @@ export function createAgentMessageTool(): ToolDefinition<AgentMessageInput> {
       if (!roundId) {
         return {
           ok: false,
-          message: "No active swarm round — agent.message is only available to specialists running concurrently alongside siblings.",
+          message: "No active swarm round or mailbox. agent.message only works for specialists in the same concurrent swarm round. Use the available thread or team communication tool for other agents.",
+          data: { code: "no_active_swarm_round" },
         };
       }
       const from = context.swarmParticipant?.trim() || "a specialist";

@@ -3,6 +3,7 @@ import type { SteeringMessage } from "../tools/agent-loop.js";
 import { ChatLoopService, chatLoopInstructions } from "../services/chat-loops.js";
 import type { UserQuestionService } from "../services/user-questions.js";
 import { sessionWaits } from "../services/session-waits.js";
+import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import { createLoopTools } from "../tools/loop-tools.js";
 import { TurnUsageAccumulator, summarizeUsage } from "../providers/usage.js";
 import { agentHaltedBody, type AgentControlService, type AgentStopResult } from "../services/agent-control.js";
@@ -27,7 +28,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { TrajectoryStreamEvent } from "@jait/shared";
-import type { SessionStateService } from "../services/session-state.js";
+import { SessionStateService } from "../services/session-state.js";
 import type { MobilePushService } from "../services/mobile-push.js";
 import type { ProjectService } from "../services/projects.js";
 import type { ProviderRegistry } from "../providers/registry.js";
@@ -66,7 +67,7 @@ import {
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import { backgroundCommandMonitor, type BackgroundCommandResult } from "../services/background-command-monitor.js";
-import { buildBackgroundCommandContinuationPayload } from "../services/background-command-continuation.js";
+import { buildBackgroundCommandContinuationPayload, LoopSelectionRequiredError } from "../services/background-command-continuation.js";
 import { matchSkills } from "../services/thread-router.js";
 import {
   type ChatMode,
@@ -1751,7 +1752,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 }
 
 type StreamEvent =
-  | { type: "request"; turnId?: string; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
+  | { type: "request"; turnId?: string; persona?: PersonaChatSnapshot; content: string; provider: string; model?: string; mode: string; runtimeMode?: string; attachmentCount?: number; queuedMessageId?: string; systemNotice?: boolean; noticeText?: string; displaySegments?: ReturnType<typeof parseUserDisplaySegments> }
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -2666,6 +2667,7 @@ export const __chatTestUtils = {
 };
 
 export interface ChatRouteDeps {
+  previewService?: Pick<import("../services/preview.js").PreviewService, "setSharedWithAgent">;
   userQuestionService?: UserQuestionService;
   chatLoops?: ChatLoopService;
   agentControl?: AgentControlService;
@@ -2718,6 +2720,7 @@ export function registerChatRoutes(
   let agentControl: AgentControlService | undefined;
   let chatLoops: ChatLoopService | undefined;
   let userQuestionService: UserQuestionService | undefined;
+  let previewService: ChatRouteDeps["previewService"];
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -2740,10 +2743,16 @@ export function registerChatRoutes(
     agentControl = deps.agentControl;
     chatLoops = deps.chatLoops;
     userQuestionService = deps.userQuestionService;
+    previewService = deps.previewService;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
   }
+
+  // The provider and model the user picked for a chat live in session state, so
+  // this service must exist even when a caller does not inject one; otherwise
+  // autonomous turns cannot see the user's choice and would always have to ask.
+  if (!sessionStateService && db) sessionStateService = new SessionStateService(db);
 
   if (!chatLoops && sessionService && userService && sessionStateService) chatLoops = new ChatLoopService(sessionService, ws);
   if (chatLoops && toolRegistry) {
@@ -2783,16 +2792,24 @@ export function registerChatRoutes(
         sessionId, userId: user.id, userService, sessionState: sessionStateService, sessionMetadata: session.metadata,
         notification: [chatLoopInstructions(loop), `Next message to yourself: ${JSON.stringify(loop.nextMessage || "Begin working towards the goal. Check existing work first.")}`].join("\n\n"),
       });
-      const selection = parseDurableActiveTurn(sessionStateService?.get(sessionId, ["loop.turn-options"])["loop.turn-options"]);
+      // Never merge the persisted turn options into a continuation: they carry the
+      // provider/model of a previous turn (possibly from another chat), which would
+      // let saved UI state retarget the provider and model of this loop turn.
       const response = await app.inject({
         method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(config, token),
-        payload: { ...continuation, ...selection, _loopRevision: loop.revision },
+        payload: { ...continuation, _loopRevision: loop.revision },
       });
       if (response.statusCode >= 400) {
         chatLoops.finishTurn(sessionId, `Loop continuation failed (HTTP ${response.statusCode}). Resume to retry.`);
         notifyLoopAttention(sessionId, "Loop stopped", "Loop continuation failed. Open the chat to review and resume.");
       }
     } catch (error) {
+      if (error instanceof LoopSelectionRequiredError) {
+        app.log.warn({ sessionId }, "Chat loop stopped: no user-selected provider/model");
+        chatLoops.pauseForUser(sessionId, error.message);
+        notifyLoopAttention(sessionId, "Loop needs a provider and model", error.message);
+        return;
+      }
       app.log.error({ error, sessionId }, "Chat loop continuation failed");
       chatLoops.finishTurn(sessionId, "Loop continuation failed. Review the chat before resuming.");
       notifyLoopAttention(sessionId, "Loop stopped", "Loop continuation failed. Open the chat to review and resume.");
@@ -2880,9 +2897,41 @@ export function registerChatRoutes(
 
       const attempts = marker.recoveryAttempts ?? 0;
       const exhausted = attempts >= MAX_AUTOMATIC_RECOVERY_ATTEMPTS;
+      // Autonomous recovery is only allowed on the provider and model the user
+      // recorded for this chat. Build the continuation up front so the message
+      // we persist never promises an automatic continuation we will not start.
+      let continuation: ReturnType<typeof buildBackgroundCommandContinuationPayload> | null = null;
+      // A turn started for a persona runs on the provider+model the user saved
+      // on that persona, so resuming it honors the user's choice instead of
+      // inventing one. Without a persona (or without a saved model) the turn
+      // may only resume on the chat's own recorded selection.
+      const personaSelection = (() => {
+        const personaId = marker.personaAgentId;
+        if (!personaId) return undefined;
+        const profile = teamChat?.profileById(user.id, personaId);
+        if (!profile?.providerId || !profile.model) return undefined;
+        return { providerId: profile.providerId, model: profile.model };
+      })();
+      try {
+        continuation = buildBackgroundCommandContinuationPayload({
+          sessionId,
+          selection: personaSelection,
+          notification:
+            "The gateway process terminated during the previous assistant turn. Continue the user's unfinished task from the persisted conversation and current workspace state. Treat partial assistant output and completed tool calls as progress, verify side effects before repeating actions, and finish with a user-visible response.",
+          userId: user.id,
+          userService,
+          sessionState: sessionStateService,
+          sessionMetadata: session.metadata,
+        });
+      } catch (error) {
+        if (!(error instanceof LoopSelectionRequiredError)) throw error;
+        app.log.warn({ sessionId }, "Interrupted turn not resumed: no user-selected provider/model");
+      }
       const interruptionMessage = exhausted
         ? "Gateway process terminated while this chat was running. Partial progress was checkpointed, but automatic recovery stopped after repeated gateway failures. Send Continue to resume manually."
-        : "Gateway process terminated while this chat was running. Partial progress was checkpointed. Jait is automatically continuing from the saved conversation and current workspace state.";
+        : !continuation
+          ? "Gateway process terminated while this chat was running. Partial progress was checkpointed. Choose a provider and model for this chat, then send Continue to resume."
+          : "Gateway process terminated while this chat was running. Partial progress was checkpointed. Jait is automatically continuing from the saved conversation and current workspace state.";
       try {
         db.insert(messagesTable).values({
           id: `gateway-interruption-${marker.turnId}`,
@@ -2904,24 +2953,21 @@ export function registerChatRoutes(
         // Best effort: the list icon is cosmetic.
       }
 
-      if (exhausted) {
+      if (exhausted || !continuation) {
         sessionStateService.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        if (!continuation && !exhausted) {
+          notifyLoopAttention(
+            sessionId,
+            "Turn not resumed",
+            "Pick a provider and model for this chat, then send Continue. Jait will not choose one for you.",
+          );
+        }
         return;
       }
-
       sessionStateService.set(sessionId, {
         [ACTIVE_TURN_STATE_KEY]: { ...marker, recoveryAttempts: attempts + 1 },
       });
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
-      const continuation = buildBackgroundCommandContinuationPayload({
-        sessionId,
-        notification:
-          "The gateway process terminated during the previous assistant turn. Continue the user's unfinished task from the persisted conversation and current workspace state. Treat partial assistant output and completed tool calls as progress, verify side effects before repeating actions, and finish with a user-visible response.",
-        userId: user.id,
-        userService,
-        sessionState: sessionStateService,
-        sessionMetadata: session.metadata,
-      });
       const response = await app.inject({
         method: "POST",
         url: "/api/chat",
@@ -2931,9 +2977,9 @@ export function registerChatRoutes(
           mode: marker.mode,
           responseStyle: marker.responseStyle,
           ...(marker.personaAgentId !== undefined ? { personaAgentId: marker.personaAgentId } : {}),
-          ...(marker.provider ? { provider: marker.provider } : {}),
+          ...(marker.provider && !continuation.provider ? { provider: marker.provider } : {}),
           ...(marker.runtimeMode ? { runtimeMode: marker.runtimeMode } : {}),
-          ...(marker.model ? { model: marker.model } : {}),
+          ...(marker.model && !continuation.model ? { model: marker.model } : {}),
           ...(Object.prototype.hasOwnProperty.call(marker, "reasoningEffort")
             ? { reasoningEffort: marker.reasoningEffort ?? null }
             : {}),
@@ -2947,6 +2993,14 @@ export function registerChatRoutes(
         );
       }
     } catch (error) {
+      if (error instanceof LoopSelectionRequiredError) {
+        // Autonomous recovery must not pick a provider or model. Drop the
+        // marker so it is not retried, and leave the chat for the user.
+        sessionStateService?.set(sessionId, { [ACTIVE_TURN_STATE_KEY]: null });
+        app.log.warn({ sessionId }, "Interrupted turn not resumed: no user-selected provider/model");
+        notifyLoopAttention(sessionId, "Turn not resumed", error.message);
+        return;
+      }
       app.log.error({ error, sessionId }, "Interrupted chat recovery failed");
     } finally {
       recoveringInterruptedTurns.delete(sessionId);
@@ -3097,6 +3151,32 @@ export function registerChatRoutes(
         const user = userService.findById(session.userId);
         if (!user) return;
 
+        // The queued message was written by the user, but the provider and model
+        // it must run on are whatever the user selected on this chat. Resolve
+        // that recorded selection here and pass it explicitly: the drain must
+        // never let the turn resolve a provider/model of its own, and it must
+        // never fall back to an account default or a model remembered under a
+        // different provider. If the user has not chosen, stop and ask instead
+        // of running the turn on something they did not pick.
+        const selection = resolveThreadSelectionDefaults({
+          sessionId,
+          sessionState: sessionStateService,
+        });
+        const queuedProvider = nextMessage.provider ?? selection.providerId;
+        const queuedModel = nextMessage.model ?? selection.model;
+        if (!queuedProvider || !queuedModel) {
+          app.log.warn(
+            { sessionId, queuedMessageId: nextMessage.id, hasProvider: Boolean(queuedProvider), hasModel: Boolean(queuedModel) },
+            "Queued chat message needs the user to choose a provider and model",
+          );
+          notifyLoopAttention(
+            sessionId,
+            "Choose a provider and model",
+            "A queued message is waiting. Pick a provider and model to send it — the chat will not choose one for you.",
+          );
+          return;
+        }
+
         sessionStateService.set(sessionId, { queued_messages: rest.length > 0 ? rest : null });
         broadcastQueuedMessagesState(sessionId, rest.length > 0 ? rest : null);
 
@@ -3109,11 +3189,11 @@ export function registerChatRoutes(
             content: nextMessage.content,
             sessionId,
             ...(nextMessage.mode ? { mode: nextMessage.mode } : {}),
-            ...(nextMessage.provider ? { provider: nextMessage.provider } : {}),
+            provider: queuedProvider,
+            model: queuedModel,
             ...(nextMessage.personaAgentId !== undefined ? { personaAgentId: nextMessage.personaAgentId } : {}),
             ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
             ...(nextMessage.responseStyle ? { responseStyle: nextMessage.responseStyle } : {}),
-            ...(nextMessage.model ? { model: nextMessage.model } : {}),
             ...(Object.prototype.hasOwnProperty.call(nextMessage, "reasoningEffort")
               ? { reasoningEffort: nextMessage.reasoningEffort ?? null }
               : {}),
@@ -3216,6 +3296,10 @@ export function registerChatRoutes(
         }),
       });
     } catch (err) {
+      if (err instanceof LoopSelectionRequiredError) {
+        app.log.warn({ sessionId: result.sessionId }, "Background notification turn skipped: no user-selected provider/model");
+        return;
+      }
       app.log.error(err, "Failed to start background-command notification turn");
     }
   });
@@ -3235,15 +3319,34 @@ export function registerChatRoutes(
       const user = userService.findById(session.userId);
       if (!user) return;
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+      // The interrupted turn records exactly what the user ran it on. Resuming on
+      // that same selection repeats the user's choice; nothing here may resolve a
+      // default. An external CLI/ACP provider resolves its own model (the user
+      // picked it inside that provider), so a recorded CLI provider without a
+      // gateway model is still a complete user choice.
+      const recordedTurn = parseDurableActiveTurn(sessionStateService?.get(question.sessionId, ["loop.turn-options"])["loop.turn-options"]);
+      const providerOwnsModel = Boolean(
+        recordedTurn?.provider
+          && recordedTurn.provider !== "jait"
+          && (!providerRegistry || providerRegistry.getForUser(recordedTurn.provider, user.id)),
+      );
       await app.inject({
         method: "POST", url: "/api/chat", headers: getInternalChatRequestHeaders(config, token),
         payload: { ...buildBackgroundCommandContinuationPayload({
           sessionId: question.sessionId, userId: user.id, userService, sessionState: sessionStateService,
           sessionMetadata: session.metadata, notification: note,
           notice: question.status === "submitted" ? "Your answer was received. Continuing…" : "Question cancelled.",
-        }), ...parseDurableActiveTurn(sessionStateService?.get(question.sessionId, ["loop.turn-options"])["loop.turn-options"]) },
+          ...(recordedTurn?.provider ? { selection: { providerId: recordedTurn.provider, model: recordedTurn.model } } : {}),
+          ...(providerOwnsModel ? { allowProviderResolvedModel: true } : {}),
+        }), ...recordedTurn },
       });
-    })().catch(error => app.log.error(error, "Failed to resume answered question"));
+    })().catch(error => {
+      if (error instanceof LoopSelectionRequiredError) {
+        app.log.warn({ sessionId: question.sessionId }, "Answered-question turn skipped: no user-selected provider/model");
+        return;
+      }
+      app.log.error(error, "Failed to resume answered question");
+    });
   };
 
   // ── Per-session steering controllers and executed tool call tracking ──
@@ -3795,6 +3898,7 @@ export function registerChatRoutes(
         broadcastQueuedMessagesState(sessionId, nextQueue);
       }
 
+      previewService?.setSharedWithAgent(sessionId, true);
       const reqOrigin = request.headers.origin ?? "*";
       reply.raw.writeHead(202, {
         "Content-Type": "text/event-stream",
@@ -3816,6 +3920,47 @@ export function registerChatRoutes(
       return;
     }
 
+    // Turns nobody authored in this request (loop dispatches, background-command
+    // continuations, queue drains) are autonomous: they may only run on the
+    // provider and model the user chose for this chat. Refusing here is what
+    // stops them from silently inheriting the account default provider or the
+    // backend's default model.
+    const autonomousTurn = body["_loopRevision"] !== undefined
+      || systemNotification !== undefined
+      || isQueuedDrainRequest;
+    // External CLI/ACP adapters (Codex, Claude Code, …) resolve the model
+    // themselves: the user picks it inside that provider, not in Jait. Recorded
+    // provider + no gateway model therefore repeats a complete user decision
+    // rather than inventing one. The HTTP backend gets no such allowance — a
+    // missing model there means "backend default", which is the autonomy this
+    // guard exists to remove.
+    const providerResolvesOwnModel = Boolean(
+      requestProvider
+        && requestProvider !== "jait"
+        && (!providerRegistry || providerRegistry.getForUser(requestProvider, authUser.id)),
+    );
+    if (autonomousTurn && (!requestProvider || (!requestBodyModel && !providerResolvesOwnModel))) {
+      // The provider and model recorded on this chat are the user's own
+      // selection (the only writer of these values is the UI, when the user
+      // picks them). Reusing that recorded decision is the single case where an
+      // autonomous turn does not have to ask. Anything else — the account
+      // default provider, a model remembered for a different provider, or a
+      // backend default — is forbidden here, so the lookups below never touch
+      // user settings.
+      const recordedSelection = resolveThreadSelectionDefaults({
+        sessionId,
+        sessionState: sessionStateService,
+      });
+      if (!requestProvider) requestProvider = recordedSelection.providerId;
+      if (!requestBodyModel) requestBodyModel = recordedSelection.model ?? "";
+    }
+    if (autonomousTurn && (!requestProvider || (!requestBodyModel && !providerResolvesOwnModel))) {
+      return reply.status(400).send({
+        error: "SELECTION_REQUIRED",
+        details: `This turn would run on its own without a user-chosen provider and model (provider: ${requestProvider ?? "none"}, model: ${requestBodyModel || "none"}). Choose a provider and model, then retry.`,
+      });
+    }
+
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
     // When the request targets a CLI/ACP provider (Claude Code, Codex, …),
@@ -3823,7 +3968,17 @@ export function registerChatRoutes(
     // by Jait's HTTP backend. Passing it to resolveJaitLlmConfig would trip
     // the ACP_ONLY_MODEL_ALIASES guard and return an instant HTTP 400 before
     // the request ever reaches the CLI provider path.
-    const isCliProviderRequest = Boolean(requestProvider && requestProvider !== "jait");
+    // A provider id is only a CLI/ACP provider when the registry actually has it
+    // for this user. Treating every non-"jait" string as a CLI provider let an
+    // unknown or removed provider id run a turn against an empty HTTP base URL
+    // ("Failed to parse URL from /chat/completions") instead of failing loudly.
+    // An explicit provider id that the registry does not know must never be
+    // swapped for a different provider. The CLI path below reports
+    // "Unknown provider" (or "provider unavailable") and the turn fails, so the
+    // user — not the gateway — decides what runs next.
+    const isCliProviderRequest = Boolean(
+      requestProvider && requestProvider !== "jait" && (!providerRegistry || providerRegistry.getForUser(requestProvider, authUser.id)),
+    );
     // The model the user picked in the provider selector is persisted in their
     // settings. It must win over the deployment default even when the request
     // body does not repeat it, otherwise a turn silently runs — and bills — a
@@ -3845,11 +4000,16 @@ export function registerChatRoutes(
         // The pick from the provider selector wins; when nothing has been
         // picked yet the CLI adapter resolves its own default, which is what
         // the selector displays on a fresh install.
+        // An autonomous turn may not borrow the account-level remembered model
+        // here: that value belongs to whichever provider is selected globally,
+        // so passing it to a different CLI provider would hand this provider a
+        // model the user never chose for it. The adapter's own default is the
+        // user's choice inside that provider.
         return {
           backend: "openai" as const,
           openaiApiKey: "",
           openaiBaseUrl: "",
-          openaiModel: requestBodyModel || persistedModel,
+          openaiModel: requestBodyModel || (autonomousTurn ? "" : persistedModel),
           contextWindow: config.contextWindow,
         };
       })() : resolveJaitLlmConfig({
@@ -3884,6 +4044,11 @@ export function registerChatRoutes(
       // Claim synchronously before prompt ranking can yield to a competing retry.
       if (queuedMessageId) getConsumedQueueIds(sessionId).add(queuedMessageId);
       removeQueuedMessageByContent(sessionId, content, attachments, personaProfile?.id ?? null);
+    }
+
+    // A new user-authored turn returns the browser; automated continuations do not.
+    if (!systemNotification && !isQueuedDrainRequest && body["_loopRevision"] === undefined) {
+      previewService?.setSharedWithAgent(sessionId, true);
     }
 
     // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
@@ -4266,6 +4431,12 @@ export function registerChatRoutes(
       turnId: activeTurnId,
       ...(persona ? { persona } : {}),
       content,
+      // A continuation turn has no prompt of its own, so `content` is empty and
+      // the visible text is the notice line the gateway also persists. Send it
+      // on the event too, otherwise the live transcript shows nothing until the
+      // session is reloaded.
+      ...(systemNotification ? { systemNotice: true } : {}),
+      ...(systemNotice ? { noticeText: systemNotice } : {}),
       ...(queuedMessageId ? { queuedMessageId } : {}),
       ...(displaySegments.length ? { displaySegments } : {}),
       attachmentCount: attachments.length,
@@ -4387,13 +4558,16 @@ export function registerChatRoutes(
           streamAbort.signal,
         );
         if (!available) {
-          // Provider is offline or not installed — fall back to Jait
+          // Never substitute a different provider on the user's behalf. The
+          // provider was chosen explicitly, so report the failure and let the
+          // user choose again — a silent switch would change both provider and
+          // model without the user deciding either.
           const reason = cliProvider.info.unavailableReason ?? "CLI not found";
-          if (personaProfile) throw new Error(`Agent provider unavailable: ${reason}`);
-          console.log(`[chat/cli] Provider ${requestProvider} unavailable (${reason}), falling back to jait`);
-          const fallbackEvent = { type: "provider_fallback", from: requestProvider, to: "jait", reason } as unknown as StreamEvent;
-          safeWrite(`data: ${JSON.stringify(fallbackEvent)}\n\n`);
-          emitToSubscribers(sessionId, fallbackEvent);
+          throw new Error(
+            personaProfile
+              ? `Agent provider unavailable: ${reason}`
+              : `Provider ${requestProvider} is unavailable (${reason}). Choose a provider and model to continue.`,
+          );
         } else {
 
         console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.projectPath="${sessionRecord?.projectPath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
@@ -6650,6 +6824,7 @@ export function registerChatRoutes(
       queuedMessageId,
     };
     cliSessionIdle.recordUserMessage(sessionId);
+    previewService?.setSharedWithAgent(sessionId, true);
     controller.steer(message, meta);
     accumulateSteering(sessionId, message, displayContent);
     // `deferred` tells the client this is accepted-but-not-yet-injected: the

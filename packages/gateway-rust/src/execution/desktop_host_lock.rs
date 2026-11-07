@@ -19,7 +19,10 @@ pub struct DesktopHostLock {
 
 #[cfg(target_os = "linux")]
 pub fn try_acquire(directory: &std::fs::File) -> io::Result<DesktopHostLock> {
-    use std::{fs::File, os::fd::{AsRawFd, FromRawFd}};
+    use std::{
+        fs::File,
+        os::fd::{AsRawFd, FromRawFd},
+    };
 
     // The authorized parent handle pins the directory; O_NOFOLLOW rejects a
     // final symlink. O_NONBLOCK prevents a hostile FIFO from hanging the host.
@@ -36,7 +39,10 @@ pub fn try_acquire(directory: &std::fs::File) -> io::Result<DesktopHostLock> {
     }
     let file = unsafe { File::from_raw_fd(fd) };
     if !file.metadata()?.is_file() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid desktop host lock"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid desktop host lock",
+        ));
     }
     // The open file description owns the lock. Closing this guard releases it.
     if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
@@ -47,7 +53,10 @@ pub fn try_acquire(directory: &std::fs::File) -> io::Result<DesktopHostLock> {
 
 #[cfg(not(target_os = "linux"))]
 pub fn try_acquire(_directory: &std::fs::File) -> io::Result<DesktopHostLock> {
-    Err(io::Error::new(io::ErrorKind::Unsupported, "Desktop host locking is unavailable on this platform"))
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "Desktop host locking is unavailable on this platform",
+    ))
 }
 
 #[cfg(all(test, target_os = "linux"))]
@@ -64,7 +73,10 @@ mod tests {
         std::fs::create_dir(&path).unwrap();
         let directory = std::fs::File::open(&path).unwrap();
         let first = try_acquire(&directory).unwrap();
-        assert_eq!(try_acquire(&directory).err().unwrap().kind(), io::ErrorKind::WouldBlock);
+        assert_eq!(
+            try_acquire(&directory).err().unwrap().kind(),
+            io::ErrorKind::WouldBlock
+        );
         drop(first);
         let second = try_acquire(&directory).unwrap();
         drop(second);

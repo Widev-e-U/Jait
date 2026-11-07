@@ -1,7 +1,7 @@
 //! Contract evidence for migrated `tools/*` cluster components (part D).
 //! Expectations are derived from `packages/gateway/src/tools/*.ts`.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn prop_keys(tool: &Value) -> Vec<&str> {
     let mut keys: Vec<&str> = tool["parameters"]["properties"]
@@ -37,7 +37,10 @@ fn assert_panics_on_unknown(name: &str, f: fn(&str) -> &'static Value) {
         let _ = f(name);
     }));
     std::panic::set_hook(hook);
-    assert!(outcome.is_err(), "definition({name}) must refuse unknown tools");
+    assert!(
+        outcome.is_err(),
+        "definition({name}) must refuse unknown tools"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +52,10 @@ mod skill_tools {
 
     #[test]
     fn metadata_declares_skills_and_extensions_manage() {
-        assert_eq!(names(sk::metadata()), vec!["skills.manage", "extensions.manage"]);
+        assert_eq!(
+            names(sk::metadata()),
+            vec!["skills.manage", "extensions.manage"]
+        );
         let md = sk::metadata();
         assert_eq!(required(&md[0]), vec!["action"]);
         assert_eq!(required(&md[1]), vec!["action"]);
@@ -148,9 +154,15 @@ mod thread_tools {
     fn secondary_enums_match_the_ts_mode_and_git_unions() {
         let md = th::metadata();
         let props = &md["parameters"]["properties"];
-        assert_eq!(props["runtimeMode"]["enum"], json!(["full-access", "supervised"]));
+        assert_eq!(
+            props["runtimeMode"]["enum"],
+            json!(["full-access", "supervised"])
+        );
         assert_eq!(props["kind"]["enum"], json!(["delivery", "delegation"]));
-        assert_eq!(props["prState"]["enum"], json!(["creating", "open", "closed", "merged"]));
+        assert_eq!(
+            props["prState"]["enum"],
+            json!(["creating", "open", "closed", "merged"])
+        );
         assert_eq!(
             props["gitAction"]["enum"],
             json!(["commit", "commit_push", "commit_push_pr"])
@@ -215,7 +227,9 @@ mod redeploy_tools {
         assert_eq!(names(md), vec!["gateway.redeploy"]);
         assert!(required(&md[0]).is_empty());
         assert!(
-            md[0]["parameters"].get("required").map_or(true, Value::is_null),
+            md[0]["parameters"]
+                .get("required")
+                .is_none_or(Value::is_null),
             "no redeploy input is mandatory"
         );
         assert_eq!(prop_keys(&md[0]), vec!["skipCanary", "version"]);

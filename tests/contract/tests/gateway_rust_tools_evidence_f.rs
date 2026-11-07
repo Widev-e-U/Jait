@@ -11,8 +11,8 @@
 mod agent_acp_runner {
     use jait_gateway::tools::agent_acp_runner::{
         AcpApprovalRequest, AcpProviderInfo, AcpSession, AcpSpecialistData, AcpSpecialistResult,
-        AcpSpecialistRunOptions, ProviderEvent, DEFAULT_RUNTIME_MODE, DEFAULT_TIMEOUT_MS,
-        IN_PROGRESS_MESSAGE, NO_RESULT_MESSAGE,
+        AcpSpecialistRunOptions, DEFAULT_RUNTIME_MODE, DEFAULT_TIMEOUT_MS, IN_PROGRESS_MESSAGE,
+        NO_RESULT_MESSAGE, ProviderEvent,
     };
     use serde_json::json;
 
@@ -338,9 +338,9 @@ mod preview_tools {
 // ─────────────────────────────────────────────────────────────────────────
 mod project_tools {
     use jait_gateway::tools::project_tools::{
-        definition, metadata, tool_names, ProjectTools, ProjectToolsHost,
+        ProjectTools, ProjectToolsHost, definition, metadata, tool_names,
     };
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     struct DummyHost;
 
@@ -427,7 +427,10 @@ mod project_tools {
 
         // Every declared tool resolves; unknown names return None (no panic).
         for name in tool_names() {
-            assert_eq!(definition(&name).expect("definition").get("name"), Some(&json!(name)));
+            assert_eq!(
+                definition(&name).expect("definition").get("name"),
+                Some(&json!(name))
+            );
         }
         assert!(definition("project.nope").is_none());
     }
@@ -451,7 +454,11 @@ mod project_tools {
         // Missing and blank titles both refuse with the same message, proving
         // validation happens before any SQL runs (the schema does not exist).
         assert_eq!(
-            tools.execute("project.create", &json!({ "description": "notes" }), "user-1"),
+            tools.execute(
+                "project.create",
+                &json!({ "description": "notes" }),
+                "user-1"
+            ),
             json!({ "ok": false, "message": "title is required" })
         );
         assert_eq!(

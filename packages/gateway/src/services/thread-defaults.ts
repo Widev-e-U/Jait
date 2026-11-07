@@ -21,30 +21,45 @@ export function normalizeReasoningEffort(value: unknown): string | undefined {
 }
 
 interface ResolveThreadSelectionDefaultsOptions {
+  /** Unused for selection; kept so callers can pass their existing context. */
   userId?: string;
   sessionId?: string;
+  /** Unused for selection; kept so callers can pass their existing context. */
   userService?: UserService;
   sessionState?: SessionStateService;
 }
 
+/**
+ * Resolve the provider/model a chat-spawned thread must run on.
+ *
+ * Only the selection the user recorded on the *origin chat* is ever returned
+ * (`chat.provider` + `chat.cliModels[provider]`). The account-level default
+ * provider and any model remembered for another provider are deliberately not
+ * consulted: substituting them is exactly how a chat running on one provider
+ * silently handed its spawned threads to a different provider and model.
+ *
+ * A missing value is reported as missing. Callers must stop and let the user
+ * choose; they must never guess.
+ */
 export function resolveThreadSelectionDefaults(
   options: ResolveThreadSelectionDefaultsOptions,
 ): ThreadSelectionDefaults {
-  const userId = options.userId?.trim();
-  const providerId = userId && options.userService
-    ? options.userService.getSettings(userId).chatProvider
-    : undefined;
-
   const sessionId = options.sessionId?.trim();
-  if (!sessionId || !options.sessionState) {
-    return { providerId };
-  }
+  if (!sessionId || !options.sessionState) return {};
 
   const state = options.sessionState.get(sessionId, [
+    "chat.provider",
     "chat.providerRuntimeMode",
     "chat.cliModels",
     "chat.reasoningEffort",
   ]);
+
+  const sessionProvider = typeof state["chat.provider"] === "string"
+    ? state["chat.provider"].trim()
+    : "";
+  const providerId: ProviderId | undefined = sessionProvider
+    ? sessionProvider as ProviderId
+    : undefined;
   const runtimeMode = state["chat.providerRuntimeMode"] === "full-access" || state["chat.providerRuntimeMode"] === "supervised"
     ? state["chat.providerRuntimeMode"]
     : undefined;

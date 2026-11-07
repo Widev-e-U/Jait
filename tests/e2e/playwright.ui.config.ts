@@ -26,6 +26,7 @@ export default defineConfig({
     'messenger-list.spec.ts',
     'messenger-status.spec.ts',
     'agent-controls.spec.ts',
+    'automation-refresh.spec.ts',
     'voice-controls.spec.ts',
     'agent-github-connection.spec.ts',
     'agents-graph-layout.spec.ts',

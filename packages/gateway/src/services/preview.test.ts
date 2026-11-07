@@ -169,7 +169,9 @@ describe("PreviewService", () => {
     };
     const service = new PreviewService(registry as any);
     const started = await service.start({ sessionId: "sharing-session", target: "4173" });
-    expect(started.sharedWithAgent).toBe(false);
+    expect(started.sharedWithAgent).toBe(true);
+    expect(() => service.assertAgentControl(started.browserId!)).not.toThrow();
+    service.setSharedWithAgent("sharing-session", false);
     expect(() => service.assertAgentControl(started.browserId!)).toThrow(/not shared with the agent/i);
 
     const shared = service.setSharedWithAgent("sharing-session", true);

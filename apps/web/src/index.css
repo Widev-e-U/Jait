@@ -634,3 +634,12 @@ html.is-dragging-row-resize {
     background: hsl(var(--popover));
   }
 }
+
+/* Keep the minimap outside the centered 896px transcript column. */
+.chat-conversation-viewport { container-type: inline-size; }
+.chat-conversation-minimap { display: none; }
+.chat-scroll-latest { right: var(--scroll-control-gap); }
+@container (min-width: 1088px) {
+  .chat-conversation-minimap { display: block; position: absolute; inset: 0 0 0 auto; }
+  .chat-scroll-latest-with-minimap { right: calc(var(--scroll-control-gap) + var(--minimap-rail-width)); }
+}

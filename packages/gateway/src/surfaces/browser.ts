@@ -102,6 +102,56 @@ export interface BrowserRuntimeEvent {
   status?: number;
 }
 
+export interface BrowserNetworkEntry {
+  seq: number;
+  requestId: string;
+  url: string | null;
+  method: string | null;
+  resourceType: string | null;
+  status: number | null;
+  statusText: string | null;
+  mimeType: string | null;
+  failed: string | null;
+  finished: boolean;
+  startedAt: number;
+  requestHeaders: Record<string, string> | null;
+  responseHeaders: Record<string, string> | null;
+  requestBody: { text?: string; error?: string } | null;
+  responseBody: { text?: string; error?: string } | null;
+}
+
+export interface BrowserNetworkQuery {
+  limit?: number;
+  bodyLimit?: number;
+  sinceSeq?: number;
+  urlIncludes?: string;
+  urlRegex?: string;
+  method?: string;
+  statusAtLeast?: number;
+  includeHeaders?: boolean;
+  includeBodies?: boolean;
+  clear?: boolean;
+}
+
+export interface BrowserNetworkLog {
+  url: string | null;
+  nextSeq: number;
+  cleared?: boolean;
+  entries: BrowserNetworkEntry[];
+}
+
+export interface BrowserEvaluateResult {
+  ok: boolean;
+  type?: string | null;
+  subtype?: string | null;
+  value?: unknown;
+  unserializableValue?: string | null;
+  description?: string | null;
+  error?: string;
+  lineNumber?: number | null;
+  columnNumber?: number | null;
+}
+
 export interface BrowserPerformanceMetrics {
   sampledAt: string;
   url: string;
@@ -154,6 +204,12 @@ export interface BrowserDriver {
   diagnose(selector: string, signal?: AbortSignal): Promise<BrowserTargetDiagnostics>;
   getMetrics(signal?: AbortSignal): Promise<BrowserPerformanceMetrics>;
   getEvents(): BrowserRuntimeEvent[];
+  evaluate?(
+    expression: string,
+    options?: { timeoutMs?: number; returnByValue?: boolean; signal?: AbortSignal },
+  ): Promise<BrowserEvaluateResult>;
+  networkLog?(query?: BrowserNetworkQuery, signal?: AbortSignal): Promise<BrowserNetworkLog>;
+  sendCdp?(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown>;
   close(): Promise<void>;
   liveView?: {
     display: string;
@@ -583,6 +639,43 @@ export class BrowserSurface implements Surface {
   getEvents(): BrowserRuntimeEvent[] {
     this.touch();
     return this.requireDriver().getEvents();
+  }
+
+  async evaluate(
+    expression: string,
+    options?: { timeoutMs?: number; returnByValue?: boolean; signal?: AbortSignal },
+  ): Promise<BrowserEvaluateResult> {
+    const driver = this.requireDriver();
+    if (typeof driver.evaluate !== "function") {
+      throw new Error("Browser driver does not support expression evaluation");
+    }
+    this.touch();
+    this._actionCount++;
+    const result = await driver.evaluate(expression, options);
+    this.touch();
+    return result;
+  }
+
+  async networkLog(query?: BrowserNetworkQuery, signal?: AbortSignal): Promise<BrowserNetworkLog> {
+    const driver = this.requireDriver();
+    if (typeof driver.networkLog !== "function") {
+      throw new Error("Browser driver does not support network capture");
+    }
+    this.touch();
+    const result = await driver.networkLog(query, signal);
+    this.touch();
+    return result;
+  }
+
+  async sendCdp(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const driver = this.requireDriver();
+    if (typeof driver.sendCdp !== "function") {
+      throw new Error("Browser driver does not support raw CDP commands");
+    }
+    this.touch();
+    const result = await driver.sendCdp(method, params, signal);
+    this.touch();
+    return result;
   }
 
   private captureSnapshotMeta(snap: BrowserPageSnapshot): void {
@@ -1695,6 +1788,30 @@ async function createNodeBridgePlaywrightDriver(
     },
     getEvents() {
       return [...events];
+    },
+    async evaluate(
+      expression: string,
+      options?: { timeoutMs?: number; returnByValue?: boolean; signal?: AbortSignal },
+    ) {
+      const result = await sendCommand("evaluate", {
+        expression,
+        timeoutMs: options?.timeoutMs,
+        returnByValue: options?.returnByValue,
+      }, options?.signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned an invalid evaluation result.");
+      }
+      return result as BrowserEvaluateResult;
+    },
+    async networkLog(query?: BrowserNetworkQuery, signal?: AbortSignal) {
+      const result = await sendCommand("networkLog", query ? { ...query } : {}, signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned an invalid network log.");
+      }
+      return result as BrowserNetworkLog;
+    },
+    async sendCdp(method: string, params?: Record<string, unknown>, signal?: AbortSignal) {
+      return await sendCommand("cdp", { method, params: params ?? {} }, signal);
     },
     async close() {
       await closeBridge();

@@ -7,8 +7,7 @@ use jait_gateway::{
     routes::{
         auth::AuthState,
         channels::{
-            ChannelFields, ChannelHost, ChannelRecord, ChannelResult, ChannelRoutes,
-            ManagedChannel,
+            ChannelFields, ChannelHost, ChannelRecord, ChannelResult, ChannelRoutes, ManagedChannel,
         },
     },
     security::http_auth::{self, AuthUser},
@@ -107,13 +106,21 @@ mod channels {
                 Ok(self.guide.lock().unwrap().clone())
             })
         }
-        fn start(&self, id: String, options: ChannelPairOptions) -> BoxFuture<'_, ChannelResult<()>> {
+        fn start(
+            &self,
+            id: String,
+            options: ChannelPairOptions,
+        ) -> BoxFuture<'_, ChannelResult<()>> {
             Box::pin(async move { self.effect("start", json!([id, options])) })
         }
         fn stop(&self, id: String) -> BoxFuture<'_, ChannelResult<()>> {
             Box::pin(async move { self.effect("stop", json!([id])) })
         }
-        fn pair(&self, id: String, options: ChannelPairOptions) -> BoxFuture<'_, ChannelResult<()>> {
+        fn pair(
+            &self,
+            id: String,
+            options: ChannelPairOptions,
+        ) -> BoxFuture<'_, ChannelResult<()>> {
             Box::pin(async move { self.effect("pair", json!([id, options])) })
         }
     }
@@ -219,8 +226,15 @@ mod channels {
             json!({}),
         ))
         .await;
-        let (status, body) =
-            call(&client(), &harness.base, reqwest::Method::GET, "/api/channels", None, true).await;
+        let (status, body) = call(
+            &client(),
+            &harness.base,
+            reqwest::Method::GET,
+            "/api/channels",
+            None,
+            true,
+        )
+        .await;
         assert_eq!(status, 200);
         assert_eq!(
             body,
@@ -282,8 +296,7 @@ mod channels {
             (reqwest::Method::POST, "/api/channels/ghost/pair"),
             (reqwest::Method::PATCH, "/api/channels/ghost/config"),
         ] {
-            let (status, body) =
-                call(&client, &harness.base, method, path, None, true).await;
+            let (status, body) = call(&client, &harness.base, method, path, None, true).await;
             assert_eq!(status, 404, "{path}");
             assert_eq!(body, json!({"error":"Channel not found"}), "{path}");
         }
@@ -377,8 +390,15 @@ mod channels {
         ))
         .await;
         let client = client();
-        let (status, body) =
-            call(&client, &harness.base, reqwest::Method::GET, "/api/channels", None, false).await;
+        let (status, body) = call(
+            &client,
+            &harness.base,
+            reqwest::Method::GET,
+            "/api/channels",
+            None,
+            false,
+        )
+        .await;
         assert_eq!(status, 401);
         assert_eq!(body, json!({"detail":"login_required"}));
 
@@ -389,7 +409,10 @@ mod channels {
             .await
             .unwrap();
         assert_eq!(response.status().as_u16(), 401);
-        assert_eq!(response.text().await.unwrap(), r#"{"detail":"login_required"}"#);
+        assert_eq!(
+            response.text().await.unwrap(),
+            r#"{"detail":"login_required"}"#
+        );
         // Guarded requests never reach the host.
         assert!(harness.host.recorded().as_array().unwrap().is_empty());
         harness.stop().await;

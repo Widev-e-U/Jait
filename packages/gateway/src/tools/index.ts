@@ -212,7 +212,6 @@ import {
   createBrowserOpenTool,
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
-  createBrowserInspectTool,
   createBrowserIntelligenceTools,
   createBrowserInteractionTools,
   createWebFetchTool,
@@ -649,7 +648,7 @@ export function createToolRegistry(
   // Browser + web tools
   tools.register(createBrowserNavigateTool(surfaceRegistry, deps.previewService));
   tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.previewService));
-  tools.register(createBrowserInspectTool(surfaceRegistry, deps.previewService));
+  tools.registerCompatibility({ ...createBrowserOpenTool(surfaceRegistry, deps.previewService), name: "browser.inspect" });
   for (const tool of createBrowserIntelligenceTools(surfaceRegistry, deps.previewService)) tools.register(tool);
   for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.previewService, deps.ws)) {
     tools.register(tool);
@@ -658,7 +657,7 @@ export function createToolRegistry(
   tools.registerCompatibility(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
   tools.register(createBrowserOpenTool(surfaceRegistry, deps.previewService));
   // Status is a read-only compatibility endpoint, not a browser startup entry point.
-  // Discovery must lead with browser.open, whose required URL creates the live session.
+  // browser.open handles both startup and current-page inspection.
   const previewStatus = createPreviewStatusTool(deps.previewService);
   tools.registerCompatibility(previewStatus);
   tools.registerCompatibility({ ...previewStatus, name: "browser.status" });

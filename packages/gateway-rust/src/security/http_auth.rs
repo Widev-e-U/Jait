@@ -173,6 +173,20 @@ pub(crate) fn verify_hs256_claims_at(token: &str, key: &[u8], now: u64) -> Optio
 }
 
 pub fn verify_auth_token_at(token: &str, secret: &str, now: u64) -> Option<AuthUser> {
+    verify_auth_token_claims_at(token, secret, now).map(|(user, _)| user)
+}
+
+/// Verified identity plus the absolute `exp` second the token carries, if any.
+///
+/// Acceptance is identical to [`verify_auth_token_at`]. The expiry is returned so
+/// connection transports can fence an identity against the clock without parsing
+/// the token a second time. jose compares the fractional NumericDate directly, so
+/// rounding the boundary up keeps whole-second clocks on the same side of it.
+pub fn verify_auth_token_claims_at(
+    token: &str,
+    secret: &str,
+    now: u64,
+) -> Option<(AuthUser, Option<u64>)> {
     let claims = verify_hs256_claims_at(token, secret_bytes(secret).ok()?, now)?;
     let object = claims.as_object()?;
     let id = object.get("sub")?.as_str()?;
@@ -180,10 +194,17 @@ pub fn verify_auth_token_at(token: &str, secret: &str, now: u64) -> Option<AuthU
     if id.is_empty() || username.is_empty() || object.get("purpose").is_some_and(truthy) {
         return None;
     }
-    Some(AuthUser {
-        id: id.into(),
-        username: username.into(),
-    })
+    let expires_at = match object.get("exp") {
+        Some(value) => Some(value.as_f64()?.max(0.0).ceil() as u64),
+        None => None,
+    };
+    Some((
+        AuthUser {
+            id: id.into(),
+            username: username.into(),
+        },
+        expires_at,
+    ))
 }
 
 pub fn resolve_auth(

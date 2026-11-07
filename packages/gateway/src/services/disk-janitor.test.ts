@@ -8,6 +8,7 @@ import { migrateDatabase, openDatabase, type JaitDB } from "../db/index.js";
 import { ThreadService } from "./threads.js";
 import {
   DiskJanitor,
+  measureTree,
   isInside,
   loadDiskJanitorPolicy,
   type DiskJanitorPolicy,
@@ -182,6 +183,34 @@ describe("DiskJanitor", () => {
       expect(existsSync(blocked)).toBe(false);
     },
   );
+
+  it("measures nested trees, individual files, and missing paths", async () => {
+    const nested = join(root, "nested", "child");
+    mkdirSync(nested, { recursive: true });
+    const file = join(nested, "payload");
+    writeFileSync(file, "hello");
+    expect((await measureTree(join(root, "nested"))).bytes).toBe(5);
+    expect((await measureTree(file)).bytes).toBe(5);
+    expect(await measureTree(join(root, "missing"))).toEqual({ bytes: 0, newestMtimeMs: 0 });
+  });
+
+  it.skipIf(process.platform === "win32" || !process.getuid)("reports foreign-owned scratch in a sticky directory once", async () => {
+    const blocked = join(tempRoot, "jait-foreign");
+    makeAgedDir(blocked, 10 * DAY_MS);
+    chmodSync(tempRoot, 0o1777);
+    vi.spyOn(process, "getuid").mockReturnValue(process.getuid!() + 1);
+    const notify = vi.fn();
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const instance = new DiskJanitor(sqlite, policy(), logger, gitStub as never, {
+      worktrees: worktreeRoot, temp: tempRoot, sandboxStorage: sandboxRoot,
+    }, notify);
+    const first = await instance.run({ now: NOW });
+    await instance.run({ now: NOW });
+    expect(first.blockedForeignOwned).toBe(1);
+    expect(existsSync(blocked)).toBe(true);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenCalledWith("Disk cleanup blocked", expect.stringContaining("belong to another user"));
+  });
 
   it("reaps a worktree whose thread finished outside the grace period", async () => {
     const path = join(worktreeRoot, "repo", "jait-aaa");

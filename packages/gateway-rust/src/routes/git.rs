@@ -188,6 +188,137 @@ where
     }
 }
 
+/// Parse a github.com remote into a validated target. Enterprise hosts remain
+/// unsupported until credentials are stored and retrieved by host; destination
+/// authorization is still required from the request-scoped command authority.
+fn github_auth_repository(raw: &str) -> Option<crate::services::git_forge::ForgeRepository> {
+    use crate::services::git_forge::ForgeRepository;
+    let raw = raw.trim();
+    let normalized = if let Some(rest) = raw.strip_prefix("git@") {
+        let (host, path) = rest.split_once(':')?;
+        format!("ssh://git@{host}/{path}")
+    } else {
+        raw.to_owned()
+    };
+    // Inspect the original path before URL parsing can normalize dot segments or
+    // backslashes into a different repository target.
+    let (_, authority_and_path) = normalized.split_once("://")?;
+    let (_, raw_path) = authority_and_path.split_once('/')?;
+    if raw_path.contains(['\\', '%'])
+        || raw_path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return None;
+    }
+    let url = url::Url::parse(&normalized).ok()?;
+    match url.scheme() {
+        "https" if url.username().is_empty() && url.password().is_none() => {}
+        "ssh" if url.username() == "git" && url.password().is_none() => {}
+        _ => return None,
+    }
+    if url.port().is_some() || url.query().is_some() || url.fragment().is_some() {
+        return None;
+    }
+    let host = url.host_str()?;
+    if host != "github.com" {
+        return None;
+    }
+    let parts: Vec<_> = url.path_segments()?.collect();
+    if parts.len() != 2 {
+        return None;
+    }
+    let repo = parts[1].strip_suffix(".git").unwrap_or(parts[1]);
+    ForgeRepository::new(host, parts[0], repo).ok()
+}
+
+// Once dispatched, the database worker cannot abort a running write. The
+// cancellation check prevents a queued write from starting after cancellation.
+async fn save_github_token(
+    auth: &AuthState,
+    secrets: UserSecretService,
+    owner: String,
+    token: String,
+    cancellation: crate::execution::process_runner::ProcessCancellation,
+) -> HandlerResult<()> {
+    use crate::services::github_pull_requests::{
+        GITHUB_TOKEN_SECRET_KEY, GITHUB_TOKEN_SECRET_TYPE,
+    };
+    use crate::services::user_secrets::SaveSecretParams;
+    auth.with_database(move |db| {
+        if cancellation.is_cancelled() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Interrupted,
+                "Git request cancelled",
+            )
+            .into());
+        }
+        secrets
+            .save(
+                db,
+                SaveSecretParams {
+                    user_id: Some(owner),
+                    r#type: GITHUB_TOKEN_SECRET_TYPE.into(),
+                    key: GITHUB_TOKEN_SECRET_KEY.into(),
+                    label: "GitHub personal access token".into(),
+                    value: token,
+                },
+            )
+            .map(|_| ())
+    })
+    .await
+    .map_err(|_| Box::new(error_response(500, "Secret storage failed")))
+}
+
+/// Authenticate with GitHub under the current forge-auth grant and persist only
+/// a successfully validated token under the owner captured from that same grant.
+async fn github_forge_auth(
+    state: &GitRoutes,
+    repository: crate::services::git_forge::ForgeRepository,
+    token: String,
+) -> HandlerResult<Value> {
+    use crate::execution::process_runner::ProcessCancellation;
+    use crate::services::git_forge::GitHubForge;
+    // The current secret key is specific to github.com. Do not authenticate an
+    // enterprise destination until credentials can be stored and retrieved by host.
+    if repository.host() != "github.com" {
+        return Err(Box::new(error_response(
+            400,
+            "GitHub Enterprise authentication is unavailable",
+        )));
+    }
+    let secrets = state
+        .user_secrets
+        .clone()
+        .ok_or_else(|| Box::new(error_response(503, "User secret store is unavailable")))?;
+    let owner = execution::forge_auth_owner()
+        .map_err(|_| Box::new(error_response(403, "Git execution denied")))?;
+    let cancellation = execution::forge_auth_cancellation()
+        .map_err(|_| Box::new(error_response(403, "Git execution denied")))?;
+    let session = execution::forge_auth_session(repository, token.clone())
+        .map_err(|_| Box::new(error_response(403, "Git execution denied")))?;
+    let result = GitHubForge::new(session)
+        .login_with_token(ProcessCancellation::default())
+        .await
+        .map_err(|_| Box::new(error_response(500, "forge auth failed")))?;
+    if result.get("authenticated").and_then(Value::as_bool) == Some(true) {
+        save_github_token(&state.auth, secrets, owner, token, cancellation).await?;
+    }
+    let mut response = Map::new();
+    response.insert(
+        "ok".into(),
+        json!(result.get("authenticated").and_then(Value::as_bool) == Some(true)),
+    );
+    response.insert(
+        "username".into(),
+        result.get("username").cloned().unwrap_or(Value::Null),
+    );
+    if let Some(error) = result.get("error") {
+        response.insert("error".into(), error.clone());
+    }
+    Ok(Value::Object(response))
+}
+
 // ---------------------------------------------------------------------------
 // git CLI primitives (port of the `gitExec` / helper block in services/git.ts)
 // ---------------------------------------------------------------------------
@@ -1609,6 +1740,41 @@ mod gh_projection_tests {
 #[cfg(test)]
 mod remote_provider_tests {
     use super::detect_git_remote_provider;
+
+    #[test]
+    fn github_auth_remote_requires_valid_unambiguous_target() {
+        use super::github_auth_repository;
+        for remote in [
+            "https://github.com/owner/repo.git",
+            "git@github.com:owner/repo.git",
+            "ssh://git@github.com/owner/repo",
+        ] {
+            assert_eq!(
+                github_auth_repository(remote).unwrap().target(),
+                "github.com/owner/repo"
+            );
+        }
+        for remote in [
+            "https://github.com/owner",
+            "https://github.com/owner/repo/extra",
+            "https://user:password@github.com/owner/repo",
+            "https://github.com/owner/repo?x=y",
+            "https://github.com:444/owner/repo",
+            "https://gitlab.com/owner/repo",
+            "https://github.com.attacker.example/owner/repo",
+            "https://notgithub.com/owner/repo",
+            "https://github.enterprise.example/owner/repo",
+            "https://github.com/owner/%2e%2e",
+            "https://github.com/owner//repo",
+            "https://github.com/owner/repo/",
+            "https://github.com/other/../owner/repo",
+            "https://github.com/owner/%72epo",
+            "https://github.com/owner\\repo",
+            "file:///owner/repo",
+        ] {
+            assert!(github_auth_repository(remote).is_none(), "{remote}");
+        }
+    }
 
     #[test]
     fn classifies_remote_hosts_and_required_paths() {

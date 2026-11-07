@@ -16,6 +16,7 @@ import { parseInlinePathCandidate, parseProjectLinkTarget } from '@/lib/project-
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { useGatewayImage } from '@/hooks/useGatewayImage'
 import { safeNotificationLink } from '@jait/shared'
+import { parseFileDownloadLink } from '@/components/ui/file-download-link'
 import { MessageLink } from '@/components/ui/message-link'
 import { TooltipHint } from '@/components/ui/tooltip'
 
@@ -296,6 +297,7 @@ export function buildMarkdownComponents(onOpenPath?: OnOpenPath, isStreaming = f
       )
     },
     a: ({ href, ref: _ref, ...props }) => {
+      if (parseFileDownloadLink(href)) return <MessageLink href={href} {...props} />
       // Resolve Jait pages before absolute project paths. Web URLs remain web URLs,
       // even when their pathname ends in a file extension.
       const target = onOpenPath && !safeNotificationLink(href) && !/^(?:https?:)?\/\//i.test(href ?? '')

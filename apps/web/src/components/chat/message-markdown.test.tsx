@@ -29,6 +29,16 @@ describe('AssistantMarkdown', () => {
     expect(html).toContain('L3')
   })
 
+  it('offers downloads only for explicit download links', () => {
+    const html = renderToStaticMarkup(<AssistantMarkdown
+      content="[Download report.pdf](/api/project/download?path=%2Fproject%2Freport.pdf) [Source](/project/readme.md:3)"
+      onOpenPath={() => {}} />)
+    expect(html).toContain('download="report.pdf"')
+    expect(html).toContain('aria-label="Download report.pdf"')
+    expect(html).not.toContain('aria-label="Download readme.md"')
+    expect(html).toContain('L3')
+  })
+
   it('highlights completed code without a debounce delay', () => {
     expect(getCodeHighlightDelay(false)).toBe(0)
     expect(getCodeHighlightDelay(true)).toBeGreaterThan(0)

@@ -140,7 +140,14 @@ export function createEmailSendTool(email: EmailService, ws?: WsControlPlane): T
       properties: {
         to: { type: "string", description: "Recipient address(es), comma-separated." },
         subject: { type: "string", description: "Subject line (new messages)." },
-        body: { type: "string", description: "Message body." },
+        body: {
+          type: "string",
+          description:
+            "Format every email for readability; never run the greeting, message, and closing together on one line. " +
+            "Use a suitable greeting, blank lines between paragraphs, and a separate closing and sender name when appropriate. " +
+            "For plain text use newline characters; for HTML use appropriate paragraph and line-break tags. " +
+            "Avoid duplicating the account's saved signature when it is included. Respect the user's requested wording and format.",
+        },
         cc: { type: "string", description: "Cc address(es), comma-separated." },
         bcc: { type: "string", description: "Bcc address(es), comma-separated." },
         replyToMessageId: { type: "string", description: "Reply within this message's thread." },

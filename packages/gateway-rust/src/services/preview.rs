@@ -210,6 +210,41 @@ impl PreviewOwner {
         Ok(PreviewAction::Start(generation))
     }
 
+    /// Join an existing startup without allocating a waiter or granting authority.
+    /// The host must authorize each caller and supervise its own bounded waiters.
+    /// As in TypeScript, the first start determines sharing during startup.
+    pub fn join_start(&self, session_id: &str) -> Option<PreviewGeneration> {
+        self.sessions.get(session_id).and_then(|session| {
+            (session.status == PreviewStatus::Starting).then_some(session.generation)
+        })
+    }
+
+    /// Reuse a generation after the host checks matching input and live resources.
+    /// Those checks and this call must share the host's serialization boundary;
+    /// each caller still requires independent authorization. A browser handle is
+    /// necessary but is not proof that the browser is running. `None` preserves
+    /// sharing, while an explicit value updates it as in TypeScript.
+    pub fn reuse_ready(
+        &mut self,
+        session_id: &str,
+        generation: PreviewGeneration,
+        shared: Option<bool>,
+    ) -> bool {
+        let Some(session) = self.sessions.get_mut(session_id) else {
+            return false;
+        };
+        if session.generation != generation
+            || session.status != PreviewStatus::Ready
+            || session.resources.browser.is_none()
+        {
+            return false;
+        }
+        if let Some(shared) = shared {
+            session.shared_with_agent = shared;
+        }
+        true
+    }
+
     /// On cancellation or replacement the host retains ownership of late handles.
     pub fn started(
         &mut self,
@@ -359,6 +394,66 @@ mod tests {
     use super::*;
 
     #[test]
+    fn joins_only_starting_generation_and_cancellation_blocks_reuse() {
+        let mut owner = PreviewOwner::new(1);
+        let PreviewAction::Start(generation) = owner.start("one", true).unwrap() else {
+            panic!()
+        };
+        assert_eq!(owner.join_start("one"), Some(generation));
+        assert_eq!(owner.join_start("other"), None);
+        assert!(!owner.reuse_ready("one", generation, Some(false)));
+        assert!(owner.get("one").unwrap().shared_with_agent);
+        assert!(matches!(
+            owner.stop("one"),
+            PreviewAction::CancelAndCleanup { .. }
+        ));
+        assert_eq!(owner.join_start("one"), None);
+        assert!(!owner.reuse_ready("one", generation, Some(false)));
+        assert!(!owner.finish_stop("one", generation, false));
+        assert!(owner.start("one", false).is_err());
+        assert!(owner.finish_stop("one", generation, true));
+        let PreviewAction::Start(next) = owner.start("one", false).unwrap() else {
+            panic!()
+        };
+        assert_ne!(generation, next);
+        assert!(!owner.reuse_ready("one", generation, Some(true)));
+    }
+
+    #[test]
+    fn ready_reuse_requires_browser_and_current_generation_and_preserves_sharing() {
+        let mut owner = PreviewOwner::new(1);
+        let PreviewAction::Start(generation) = owner.start("one", true).unwrap() else {
+            panic!()
+        };
+        owner.started(
+            "one",
+            generation,
+            PreviewResources {
+                runner: None,
+                browser: Some("browser".into()),
+            },
+        );
+        assert_eq!(owner.join_start("one"), None);
+        assert!(owner.reuse_ready("one", generation, None));
+        assert!(owner.get("one").unwrap().shared_with_agent);
+        assert!(owner.reuse_ready("one", generation, Some(false)));
+        assert!(!owner.get("one").unwrap().shared_with_agent);
+        assert!(owner.process_exited("one", generation, "exit".into()));
+        assert!(!owner.reuse_ready("one", generation, Some(true)));
+        assert!(!owner.get("one").unwrap().shared_with_agent);
+
+        owner.stop("one");
+        assert!(owner.finish_stop("one", generation, true));
+        let PreviewAction::Start(other) = owner.start("two", false).unwrap() else {
+            panic!()
+        };
+        owner.started("two", other, PreviewResources::empty());
+        assert!(!owner.reuse_ready("two", generation, Some(true)));
+        assert!(!owner.reuse_ready("two", other, Some(true)));
+        assert!(!owner.get("two").unwrap().shared_with_agent);
+    }
+
+    #[test]
     fn cancellation_retains_capacity_and_cleans_late_results() {
         let mut owner = PreviewOwner::new(1);
         let PreviewAction::Start(generation) = owner.start("one", true).unwrap() else {
@@ -396,9 +491,14 @@ mod tests {
         let PreviewAction::Start(generation) = owner.start("one", false).unwrap() else {
             panic!()
         };
-        let resources = PreviewResources { runner: Some("runner".into()), browser: None };
-        assert!(matches!(owner.failed("one", generation, "failed".into(), resources),
-            PreviewAction::CancelAndCleanup { .. }));
+        let resources = PreviewResources {
+            runner: Some("runner".into()),
+            browser: None,
+        };
+        assert!(matches!(
+            owner.failed("one", generation, "failed".into(), resources),
+            PreviewAction::CancelAndCleanup { .. }
+        ));
         assert_eq!(owner.stop("one"), PreviewAction::None);
         assert!(!owner.finish_stop("one", generation, false));
         assert!(owner.get("one").is_some());

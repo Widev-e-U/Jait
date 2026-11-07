@@ -78,6 +78,13 @@ function mergeActivities(
   return sortActivities([...byId.values()])
 }
 
+// Keep live updates received after a snapshot request started, while allowing
+// the snapshot to replace older cached entries and remove stale history.
+function reconcileActivitySnapshot(snapshot: ThreadActivity[], baseline: ThreadActivity[], current: ThreadActivity[]): ThreadActivity[] {
+  const before = new Map(baseline.map(activity => [activity.id, activity]))
+  return mergeActivities(sortActivities(snapshot), current.filter(activity => before.get(activity.id) !== activity))
+}
+
 /** Extract the latest todo list from thread activities (find the last todo activity). */
 function extractTodosFromActivities(activities: ThreadActivity[]): TodoItem[] {
   for (let i = activities.length - 1; i >= 0; i--) {
@@ -308,7 +315,13 @@ export function useAutomation(enabled = true) {
   // ── WS-driven thread event handler ────────────────────────────
 
   const selectedThreadIdRef = useRef(selectedThreadId)
+  const activityRefreshGenerationRef = useRef(0)
+  const enabledRef = useRef(enabled)
+  if (selectedThreadIdRef.current !== selectedThreadId || enabledRef.current !== enabled) {
+    activityRefreshGenerationRef.current++
+  }
   selectedThreadIdRef.current = selectedThreadId
+  enabledRef.current = enabled
 
   const handleThreadEvent = useCallback((eventType: string, payload: Record<string, unknown>) => {
     switch (eventType) {
@@ -481,12 +494,14 @@ export function useAutomation(enabled = true) {
       setLoadingActivities(true)
     }
     let cancelled = false
+    const generation = ++activityRefreshGenerationRef.current
+    const baseline = activityCacheRef.current.get(selectedThreadId) ?? []
     const fetchActivities = async () => {
       if (!getAuthToken()) return
       try {
         const acts = await agentsApi.getActivities(selectedThreadId)
-        if (!cancelled) {
-          const sorted = sortActivities(acts)
+        if (!cancelled && activityRefreshGenerationRef.current === generation) {
+          const sorted = reconcileActivitySnapshot(acts, baseline, activityCacheRef.current.get(selectedThreadId) ?? [])
           activityCacheRef.current.set(selectedThreadId, sorted)
           setActivities(sorted)
           const todos = extractTodosFromActivities(sorted)
@@ -496,7 +511,7 @@ export function useAutomation(enabled = true) {
       } catch {
         /* ignore */
       } finally {
-        if (!cancelled) setLoadingActivities(false)
+        if (!cancelled && activityRefreshGenerationRef.current === generation) setLoadingActivities(false)
       }
     }
     void fetchActivities()
@@ -513,36 +528,52 @@ export function useAutomation(enabled = true) {
     const threadId = selectedThreadIdRef.current
     if (!enabled || !threadId) return
     if (!getAuthToken()) return
+    const generation = ++activityRefreshGenerationRef.current
+    const baseline = activityCacheRef.current.get(threadId) ?? []
     try {
       const [thread, acts] = await Promise.all([
         agentsApi.getThread(threadId).catch(() => null),
         agentsApi.getActivities(threadId),
       ])
+      // A selection change or newer refresh supersedes this entire response,
+      // including its cache writes (the user may have switched away and back).
+      if (activityRefreshGenerationRef.current !== generation) return
       if (thread) {
         setThreads(prev => prev.some(t => t.id === threadId)
           ? prev.map(t => t.id === threadId ? thread : t)
           : [thread, ...prev])
       }
-      const sorted = sortActivities(acts)
+      const sorted = reconcileActivitySnapshot(acts, baseline, activityCacheRef.current.get(threadId) ?? [])
       activityCacheRef.current.set(threadId, sorted)
-      setActivities(sorted)
       const todos = extractTodosFromActivities(sorted)
       threadTodosRef.current.set(threadId, todos)
-      setSelectedThreadTodos(todos)
+      // The user may have selected a different thread while the fetch was pending.
+      if (selectedThreadIdRef.current === threadId) {
+        setActivities(sorted)
+        setSelectedThreadTodos(todos)
+      }
     } catch {
       /* keep current state if the re-fetch fails */
     } finally {
-      setLoadingActivities(false)
+      if (activityRefreshGenerationRef.current === generation && selectedThreadIdRef.current === threadId) {
+        setLoadingActivities(false)
+      }
     }
   }, [enabled])
 
   const hydrateThreadRuntime = useCallback(async (threadId: string) => {
     if (hydratingThreadIdsRef.current.has(threadId)) return
     hydratingThreadIdsRef.current.add(threadId)
+    // A selected-thread hydration supersedes an older selection fetch. Any
+    // subsequent selection or refresh invalidates this hydration's activities.
+    const generation = threadId === selectedThreadIdRef.current
+      ? ++activityRefreshGenerationRef.current
+      : activityRefreshGenerationRef.current
+    const baseline = activityCacheRef.current.get(threadId) ?? []
     try {
       const [thread, acts] = await Promise.all([
         agentsApi.getThread(threadId).catch(() => null),
-        agentsApi.getActivities(threadId).catch(() => [] as ThreadActivity[]),
+        agentsApi.getActivities(threadId).catch(() => null),
       ])
 
       if (thread) {
@@ -554,12 +585,20 @@ export function useAutomation(enabled = true) {
         })
       }
 
-      const sorted = sortActivities(acts)
-      activityCacheRef.current.set(threadId, sorted)
-      if (threadId === selectedThreadIdRef.current) {
-        setActivities(sorted)
+      if (acts && activityRefreshGenerationRef.current === generation) {
+        const sorted = reconcileActivitySnapshot(acts, baseline, activityCacheRef.current.get(threadId) ?? [])
+        activityCacheRef.current.set(threadId, sorted)
+        const todos = extractTodosFromActivities(sorted)
+        threadTodosRef.current.set(threadId, todos)
+        if (threadId === selectedThreadIdRef.current) {
+          setActivities(sorted)
+          setSelectedThreadTodos(todos)
+        }
       }
     } finally {
+      if (activityRefreshGenerationRef.current === generation && threadId === selectedThreadIdRef.current) {
+        setLoadingActivities(false)
+      }
       hydratingThreadIdsRef.current.delete(threadId)
     }
   }, [])

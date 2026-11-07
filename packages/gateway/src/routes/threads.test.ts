@@ -103,6 +103,40 @@ class MockThreadProvider implements CliProviderAdapter {
 }
 
 describe("CLI execution safeguards", () => {
+  it("requires an explicit thread approval decision and request identity", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    const thread = threadService.create({ userId: "user-1", title: "Approval", providerId: "codex" });
+    threadService.update(thread.id, { providerSessionId: "mock-session-1" });
+    const provider = new MockThreadProvider();
+    const respond = vi.spyOn(provider, "respondToApproval");
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const, jwtSecret: "approval-secret" };
+    registerThreadRoutes(app, config, { threadService, providerRegistry: registry });
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    for (const payload of [{}, { requestId: "req" }, { requestId: "req", approved: "yes" }, { requestId: "  ", approved: true }]) {
+      const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload });
+      expect(response.statusCode).toBe(400);
+    }
+    expect(respond).not.toHaveBeenCalled();
+    const denied = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "req", approved: false } });
+    expect(denied.statusCode).toBe(200);
+    expect(respond).toHaveBeenCalledWith("mock-session-1", "req", false);
+    respond.mockRejectedValueOnce(new Error("stale"));
+    const stale = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "stale", approved: true } });
+    expect(stale.statusCode).toBe(409);
+    expect(threadService.getActivities(thread.id).filter((activity) => activity.kind === "tool.approval-response")).toHaveLength(1);
+    threadService.update(thread.id, { executionNodeId: "remote-node" });
+    const remote = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "remote", approved: true } });
+    expect(remote.statusCode).toBe(409);
+    expect(respond).toHaveBeenCalledTimes(2);
+    expect(threadService.getActivities(thread.id).filter((activity) => activity.kind === "tool.approval-response")).toHaveLength(1);
+    await app.close();
+    sqlite.close();
+  });
   it("reopens a retired session on a follow-up and replays saved thread history", async () => {
     const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
     const service = new ThreadService(db);
@@ -651,8 +685,12 @@ describe("thread routes", () => {
     const users = new UserService(db);
     const sessionState = new SessionStateService(db);
     const user = users.createUser("selected-defaults-user", "secret");
-    users.updateSettings(user.id, { chatProvider: "codex" });
+    // The account-level default points at a provider that is not even registered:
+    // it must never be what a spawned thread runs on. Only the choice made in the
+    // chat itself counts.
+    users.updateSettings(user.id, { chatProvider: "ollama" });
     sessionState.set("session-selected-defaults", {
+      "chat.provider": "codex",
       "chat.providerRuntimeMode": "supervised",
       "chat.cliModels": { codex: "gpt-5-codex" },
     });
@@ -745,8 +783,8 @@ describe("thread routes", () => {
     const users = new UserService(db);
     const sessionState = new SessionStateService(db);
     const user = users.createUser("effort-inherit-user", "secret");
-    users.updateSettings(user.id, { chatProvider: "codex" });
-    sessionState.set("session-effort", { "chat.reasoningEffort": "high" });
+    users.updateSettings(user.id, { chatProvider: "ollama" });
+    sessionState.set("session-effort", { "chat.provider": "codex", "chat.reasoningEffort": "high" });
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(new MockThreadProvider("codex"));
 

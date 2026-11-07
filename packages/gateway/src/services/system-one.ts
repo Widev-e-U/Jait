@@ -14,6 +14,11 @@ export interface DecisionAnswer {
   probabilities?: Record<string, number>;
 }
 export interface DecisionResponse { model: string; answers: Record<string, DecisionAnswer> }
+
+export type DecisionErrorCode = "not_configured" | "invalid_input" | "cooldown" | "upstream_http" | "invalid_response" | "timeout" | "cancelled" | "unavailable";
+export class DecisionError extends Error {
+  constructor(public readonly code: DecisionErrorCode, message: string, public readonly status?: number) { super(message); }
+}
 export const SYSTEM_ONE_PROMPT = `<systemOneModel>
 System One Model is configured. Use decision.evaluate for bounded choices, relevance scores, yes/no assessments, and batch classification when that avoids lengthy deliberation. Supply the necessary state and explicit alternatives or ordered score levels. Discover the tool with tools.search if needed. It returns structured decisions, not generated explanations. Treat results as advice: verify against evidence and retain all permission, safety, and completion checks. If unavailable, reason normally.
 </systemOneModel>`;
@@ -103,13 +108,13 @@ async function requestGeneric(endpoint: SystemOneEndpoint, state: string, entrie
     body,
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(endpoint.timeoutMs)]) : AbortSignal.timeout(endpoint.timeoutMs),
   });
-  if (!response.ok) throw new Error(`System One Model request failed (${response.status}).`);
+  if (!response.ok) throw new DecisionError("upstream_http", "System One request failed.", response.status);
   const payload = await response.json().catch(() => null) as { choices?: Array<{ message?: { content?: unknown } }> } | null;
   const content = payload?.choices?.[0]?.message?.content;
-  const parsed = typeof content === "string"
-    ? JSON.parse(content) as unknown
-    : content;
-  if (!parsed || typeof parsed !== "object") throw new Error("Invalid System One response.");
+  let parsed: unknown;
+  try { parsed = typeof content === "string" ? JSON.parse(content) as unknown : content; }
+  catch { throw new DecisionError("invalid_response", "Invalid System One response."); }
+  if (!parsed || typeof parsed !== "object") throw new DecisionError("invalid_response", "Invalid System One response.");
   const record = parsed as { answers?: unknown };
   return { model: endpoint.model || "system-one", answers: (record.answers ?? parsed) as Record<string, DecisionAnswer> };
 }
@@ -121,17 +126,17 @@ export async function evaluateDecision(
   signal?: AbortSignal,
 ): Promise<DecisionResponse> {
   const endpoint = resolveSystemOne(apiKeys);
-  if (!endpoint) throw new Error("System One Model is not configured in Settings.");
+  if (!endpoint) throw new DecisionError("not_configured", "System One Model is not configured in Settings.");
   const entries = Object.entries(questions);
-  if (!state.trim() || state.length > 24000 || !entries.length || entries.length > 48) throw new Error("Invalid decision size.");
+  if (!state.trim() || state.length > 24000 || !entries.length || entries.length > 48) throw new DecisionError("invalid_input", "Invalid decision size.");
   for (const [, q] of entries) {
-    if (!q || !["choice", "score", "noul"].includes(q.type) || typeof q.instructions !== "string" || !q.instructions.trim() || q.instructions.length > 2000) throw new Error("Invalid decision question.");
-    if (q.type === "choice" && (!q.criteria || Array.isArray(q.criteria) || Object.keys(q.criteria).length < 2 || Object.keys(q.criteria).length > 32 || Object.values(q.criteria).some(v => typeof v !== "string" || v.length > 2000))) throw new Error("Choice requires 2–32 named alternatives.");
-    if (q.type === "score" && (!Array.isArray(q.criteria) || q.criteria.length < 2 || q.criteria.length > 10 || q.criteria.some(v => typeof v !== "string" || v.length > 2000))) throw new Error("Score requires 2–10 ordered levels.");
+    if (!q || !["choice", "score", "noul"].includes(q.type) || typeof q.instructions !== "string" || !q.instructions.trim() || q.instructions.length > 2000) throw new DecisionError("invalid_input", "Invalid decision question.");
+    if (q.type === "choice" && (!q.criteria || Array.isArray(q.criteria) || Object.keys(q.criteria).length < 2 || Object.keys(q.criteria).length > 32 || Object.values(q.criteria).some(v => typeof v !== "string" || v.length > 2000))) throw new DecisionError("invalid_input", "Choice requires 2–32 named alternatives.");
+    if (q.type === "score" && (!Array.isArray(q.criteria) || q.criteria.length < 2 || q.criteria.length > 10 || q.criteria.some(v => typeof v !== "string" || v.length > 2000))) throw new DecisionError("invalid_input", "Score requires 2–10 ordered levels.");
   }
   const tenant = createHash("sha256").update(endpoint.key).update("\u0000").update(endpoint.baseUrl ?? DEFAULT_TYPESAFE_URL).digest("hex");
   signal?.throwIfAborted();
-  if ((failures.get(tenant) ?? 0) > Date.now()) throw new Error("System One Model is temporarily unavailable.");
+  if ((failures.get(tenant) ?? 0) > Date.now()) throw new DecisionError("cooldown", "System One Model is temporarily unavailable.");
 
   let body: string;
   if (endpoint.baseUrl) {
@@ -139,7 +144,7 @@ export async function evaluateDecision(
   } else {
     body = JSON.stringify({ model: endpoint.model || "jev-latest", state, questions });
   }
-  if (body.length > 64000) throw new Error("Decision payload is too large.");
+  if (body.length > 64000) throw new DecisionError("invalid_input", "Decision payload is too large.");
   const digest = createHash("sha256").update(tenant).update(body).digest("hex");
   const hit = cache.get(digest);
   if (hit && hit.until > Date.now()) return hit.value;
@@ -154,16 +159,17 @@ export async function evaluateDecision(
         body: JSON.stringify({ model: endpoint.model || "jev-latest", state, questions }),
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(endpoint.timeoutMs)]) : AbortSignal.timeout(endpoint.timeoutMs),
       });
-      if (!response.ok) throw new Error(`System One Model request failed (${response.status}).`);
-      result = await response.json() as DecisionResponse;
-      if (!result || typeof result.model !== "string" || !result.answers) throw new Error("Invalid System One response.");
+      if (!response.ok) throw new DecisionError("upstream_http", "System One request failed.", response.status);
+      try { result = await response.json() as DecisionResponse; }
+      catch { throw new DecisionError("invalid_response", "Invalid System One response."); }
+      if (!result || typeof result.model !== "string" || !result.answers) throw new DecisionError("invalid_response", "Invalid System One response.");
     }
     for (const [id, q] of entries) {
       const a = result.answers[id];
-      if (!a || a.type !== q.type || (a.confidence !== undefined && !unit(a.confidence))) throw new Error("Invalid decision answer.");
-      if (q.type === "noul" && !unit(a.noul)) throw new Error("Invalid probability.");
-      if (q.type === "choice" && (typeof a.choice !== "string" || !Object.hasOwn(q.criteria, a.choice))) throw new Error("Unknown decision choice.");
-      if (q.type === "score" && (typeof a.score !== "number" || !Number.isFinite(a.score) || a.score < 0 || a.score > q.criteria.length - 1)) throw new Error("Invalid decision score.");
+      if (!a || a.type !== q.type || (a.confidence !== undefined && !unit(a.confidence))) throw new DecisionError("invalid_response", "Invalid decision answer.");
+      if (q.type === "noul" && !unit(a.noul)) throw new DecisionError("invalid_response", "Invalid probability.");
+      if (q.type === "choice" && (typeof a.choice !== "string" || !Object.hasOwn(q.criteria, a.choice))) throw new DecisionError("invalid_response", "Unknown decision choice.");
+      if (q.type === "score" && (typeof a.score !== "number" || !Number.isFinite(a.score) || a.score < 0 || a.score > q.criteria.length - 1)) throw new DecisionError("invalid_response", "Invalid decision score.");
     }
     if (cache.size >= 128) cache.delete(cache.keys().next().value!);
     cache.set(digest, { until: Date.now() + 30000, value: result });
@@ -174,7 +180,10 @@ export async function evaluateDecision(
       if (failures.size >= 128) failures.delete(failures.keys().next().value!);
       failures.set(tenant, Date.now() + 15000);
     }
-    throw error;
+    if (signal?.aborted) throw new DecisionError("cancelled", "System One request cancelled.");
+    if (error instanceof DecisionError) throw error;
+    if (error instanceof Error && error.name === "TimeoutError") throw new DecisionError("timeout", "System One request timed out.");
+    throw new DecisionError("unavailable", "System One request unavailable.");
   }
 }
 

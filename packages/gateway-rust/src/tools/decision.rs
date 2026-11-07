@@ -1,11 +1,7 @@
 //! Structured advisory decisions; caller API keys/signal come from authenticated context.
-use crate::services::system_one::{Cancellation, SystemOne};
+use crate::services::system_one::{Cancellation, DecisionError, SystemOne, resolve_system_one};
 use serde_json::{Map, Value, json};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::LazyLock,
-};
-pub const FALLBACK: &str = "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning.";
+use std::{collections::HashMap, sync::LazyLock};
 pub fn metadata() -> &'static Value {
     static VALUE: LazyLock<Value> = LazyLock::new(|| {
         serde_json::from_str(include_str!("decision-metadata.json")).expect("tool metadata")
@@ -20,7 +16,28 @@ pub async fn evaluate(
 ) -> Value {
     match execute(input, keys, signal, engine).await {
         Ok(value) => value,
-        Err(_) => json!({"ok":false,"message":FALLBACK}),
+        Err(error) => {
+            // The TS tool prefers an aborted signal over the concrete error code and keeps
+            // the upstream status only for rejected HTTP responses.
+            let code = match signal {
+                Some(signal) if signal.is_aborted() => "cancelled",
+                _ => error.code,
+            };
+            let status = match error.code {
+                "upstream_http" => error.status,
+                _ => None,
+            };
+            let base = DecisionError::new(code).message();
+            let message = match status {
+                Some(status) => format!("{base} (HTTP {status})"),
+                None => base,
+            };
+            let data = match status {
+                Some(status) => json!({"code":code,"status":status}),
+                None => json!({"code":code}),
+            };
+            json!({"ok":false,"message":message,"data":data})
+        }
     }
 }
 async fn execute(
@@ -28,22 +45,47 @@ async fn execute(
     keys: Option<&HashMap<String, String>>,
     signal: Option<&Cancellation>,
     engine: &SystemOne,
-) -> Result<Value, String> {
+) -> Result<Value, DecisionError> {
+    // JavaScript property access on null throws before Array.isArray runs.
+    if input.is_null() {
+        return Err("invalid input".into());
+    }
     let items = input
         .get("questions")
         .and_then(Value::as_array)
-        .ok_or("invalid questions")?;
-    let mut ids = HashSet::new();
-    let mut questions = Map::new();
+        .ok_or_else(|| DecisionError::new("invalid_input"))?;
+    // TS maps every item to its id before checking duplicates; accessing a
+    // property of null throws, including when earlier ids were duplicates.
+    let mut ids: Vec<Option<&Value>> = Vec::with_capacity(items.len());
     for item in items {
-        let id = item
-            .get("id")
-            .and_then(Value::as_str)
-            .filter(|id| !crate::text::js_trim(id).is_empty())
-            .ok_or("invalid question id")?;
-        if !ids.insert(id.to_owned()) {
-            return Err("duplicate question id".into());
+        if item.is_null() {
+            return Err("invalid question".into());
         }
+        ids.push(item.get("id"));
+    }
+    for (index, id) in ids.iter().enumerate() {
+        // JavaScript Set compares objects by identity. Distinct JSON values
+        // represent distinct objects, even when their contents are equal.
+        if id.is_some_and(|value| value.is_object() || value.is_array()) {
+            continue;
+        }
+        if ids[..index].iter().any(|previous| previous == id) {
+            return Err(DecisionError::new("invalid_input"));
+        }
+    }
+    for id in &ids {
+        match id {
+            None | Some(Value::Null) => return Err(DecisionError::new("invalid_input")),
+            Some(Value::String(id)) if crate::text::js_trim(id).is_empty() => {
+                return Err(DecisionError::new("invalid_input"));
+            }
+            Some(Value::String(_)) => {}
+            Some(_) => return Err("invalid question id".into()),
+        }
+    }
+    let mut questions = Map::new();
+    for (item, id) in items.iter().zip(ids) {
+        let id = id.and_then(Value::as_str).expect("validated question id");
         let kind = item.get("type").cloned().unwrap_or(Value::Null);
         let instructions = item.get("instructions").cloned().unwrap_or(Value::Null);
         let mut q = json!({"type":kind,"instructions":instructions});
@@ -74,10 +116,13 @@ async fn execute(
         }
         questions.insert(id.into(), q);
     }
-    let state = input
-        .get("state")
-        .and_then(Value::as_str)
-        .ok_or("invalid state")?;
+    let state = match input.get("state").and_then(Value::as_str) {
+        Some(state) => state,
+        None if resolve_system_one(keys).is_none() => {
+            return Err(DecisionError::new("not_configured"));
+        }
+        None => return Err("invalid state".into()),
+    };
     let data = engine
         .evaluate(keys, state, &Value::Object(questions), signal)
         .await?;
@@ -166,7 +211,7 @@ mod tests {
         );
     }
     #[tokio::test(start_paused = true)]
-    async fn duplicate_and_blank_ids_return_fallback_without_using_the_backend() {
+    async fn duplicate_and_blank_ids_return_invalid_input_without_using_the_backend() {
         let peer = Arc::new(Peer {
             requests: Mutex::new(vec![]),
         });
@@ -174,7 +219,43 @@ mod tests {
         let keys = HashMap::from([("JEV_API_KEY".into(), "fixture".into())]);
         for ids in [["x", "x"], ["x", " \u{feff}"]] {
             let value=evaluate(&json!({"state":"context","questions":ids.iter().map(|id|json!({"id":id,"type":"noul","instructions":"question"})).collect::<Vec<_>>()}),Some(&keys),None,&engine).await;
-            assert_eq!(value, json!({"ok":false,"message":FALLBACK}));
+            assert_eq!(
+                value,
+                json!({
+                    "ok": false,
+                    "message": "Invalid decision input. Check the state, question IDs, and choice or score criteria.",
+                    "data": {"code": "invalid_input"},
+                })
+            );
+        }
+        assert!(peer.requests.lock().unwrap().is_empty());
+    }
+    #[tokio::test]
+    async fn malformed_inputs_match_typescript_error_precedence_and_cancellation() {
+        let peer = Arc::new(Peer {
+            requests: Mutex::new(vec![]),
+        });
+        let engine = SystemOne::new(peer.clone());
+        let valid = json!({"id":"q","type":"noul","instructions":"x"});
+        let cases = [
+            (Value::Null, "unavailable"),
+            (json!(3), "invalid_input"),
+            (json!({}), "invalid_input"),
+            (json!({"state":"x","questions":[null]}), "unavailable"),
+            (json!({"state":"x","questions":[{"id":1}]}), "unavailable"),
+            (json!({"questions":[valid.clone()]}), "not_configured"),
+            (
+                json!({"state":"x","questions":[valid.clone(),valid,null]}),
+                "unavailable",
+            ),
+        ];
+        for (input, expected) in cases {
+            let result = evaluate(&input, None, None, &engine).await;
+            assert_eq!(result["data"]["code"], expected, "{input}");
+            let cancelled = Cancellation::default();
+            cancelled.abort("test");
+            let result = evaluate(&input, None, Some(&cancelled), &engine).await;
+            assert_eq!(result["data"]["code"], "cancelled", "{input}");
         }
         assert!(peer.requests.lock().unwrap().is_empty());
     }

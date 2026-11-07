@@ -6,7 +6,7 @@ use jait_gateway::{
     scheduler::cron::is_valid_cron_expression,
     services::{
         background_command_continuation::{
-            ContinuationOptions, build_background_command_continuation_payload,
+            ContinuationOptions, RequestedSelection, build_background_command_continuation_payload,
         },
         json_state::SessionStateService,
         users::UserService,
@@ -178,10 +178,15 @@ fn continuation(mut call: Value) -> Value {
         session_id: call["sessionId"].as_str().unwrap_or("s"),
         notification: call["notification"].as_str().unwrap_or("Command completed"),
         notice: call["notice"].as_str(),
-        user_id: call["userId"].as_str().unwrap_or("u"),
-        users: &users,
         session_state: (call["withState"] != false).then_some(&state),
         session_metadata: &call["metadata"],
+        selection: call.get("selection").map(|selection| RequestedSelection {
+            provider_id: selection["providerId"].as_str(),
+            model: selection["model"].as_str(),
+        }),
+        allow_provider_resolved_model: call["allowProviderResolvedModel"]
+            .as_bool()
+            .unwrap_or(false),
     })
     .unwrap_or_else(|_| json!({"error":true}));
     assert_eq!(actual, expected);
@@ -227,6 +232,64 @@ fn continuation_database_failures_and_fallback_short_circuit_match() {
     );
     continuation(
         json!({"seed":"UPDATE user_settings SET reasoning_effort=' minimal '; DROP TABLE session_state","withState":false}),
+    );
+}
+
+#[test]
+fn continuation_selection_parity_never_borrows_account_or_cross_provider_defaults() {
+    let account_defaults = "UPDATE user_settings SET chat_provider='jait',\
+         selected_model=' deepseek-v4.1-flash:cloud ',reasoning_effort='high'";
+    let recorded_codex = json!({"chat.provider":"codex"});
+    let recorded_codex_model =
+        json!({"chat.provider":"codex","chat.cliModels":{"codex":" gpt-5 "}});
+    let cross_provider =
+        json!({"chat.provider":"codex","chat.cliModels":{"jait":"deepseek-v4.1-flash:cloud"}});
+
+    // No recorded choice: report it instead of falling back to account settings.
+    assert_eq!(
+        continuation(json!({"seed":account_defaults,"state":{}})),
+        json!({"error":true})
+    );
+    // Recorded provider without a model is still incomplete.
+    assert_eq!(
+        continuation(json!({"seed":account_defaults,"state":recorded_codex})),
+        json!({"error":true})
+    );
+    // A model recorded for another provider is never borrowed.
+    assert_eq!(
+        continuation(json!({"seed":account_defaults,"state":cross_provider})),
+        json!({"error":true})
+    );
+    // A provider that resolves its own model needs no gateway model...
+    let payload = continuation(
+        json!({"seed":account_defaults,"state":recorded_codex,"allowProviderResolvedModel":true}),
+    );
+    assert_eq!(payload["provider"], json!("codex"));
+    assert!(payload.get("model").map_or(true, Value::is_null));
+    assert_ne!(payload["model"], json!(" deepseek-v4.1-flash:cloud "));
+    // ...while the builtin HTTP backend always needs one named explicitly.
+    assert_eq!(
+        continuation(json!({
+            "seed": account_defaults,
+            "state": {"chat.provider": "jait"},
+            "allowProviderResolvedModel": true
+        })),
+        json!({"error":true})
+    );
+    // An explicit caller selection wins over whatever the session recorded.
+    let payload = continuation(json!({"seed":account_defaults,"state":recorded_codex_model,
+         "selection":{"providerId":"jait","model":"gpt-explicit"}}));
+    assert_eq!(payload["provider"], json!("jait"));
+    assert_eq!(payload["model"], json!("gpt-explicit"));
+    // Explicit external selection with a provider-resolved model is complete.
+    let payload = continuation(json!({"seed":account_defaults,"state":{},
+         "selection":{"providerId":"claude-code"},"allowProviderResolvedModel":true}));
+    assert_eq!(payload["provider"], json!("claude-code"));
+    // Explicit builtin provider without a model is not complete.
+    assert_eq!(
+        continuation(json!({"seed":account_defaults,"state":{},
+             "selection":{"providerId":"jait"},"allowProviderResolvedModel":true})),
+        json!({"error":true})
     );
 }
 

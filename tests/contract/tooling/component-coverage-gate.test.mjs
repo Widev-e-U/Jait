@@ -63,7 +63,7 @@ test('environment excludes secrets/live services/shell init and isolates persist
     assert.equal(env.JAIT_PRIMARY_GATEWAY, '');
     assert.equal(env.BASH_ENV, undefined);
     assert.ok(env.NODE_OPTIONS.includes('component-coverage-network.mjs'));
-    assert.ok(env.NODE_OPTIONS.includes('--max-old-space-size=3072'));
+    assert.ok(env.NODE_OPTIONS.includes('--max-old-space-size=5120'));
     assert.ok(!env.NODE_OPTIONS.includes('--require live'));
     assert.equal(env.__JAIT_CLI, '1');
     assert.equal(env.GIT_TERMINAL_PROMPT, '0');

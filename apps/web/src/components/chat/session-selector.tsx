@@ -108,6 +108,30 @@ interface SessionSelectorProps {
   repositories?: AutomationRepository[]
 }
 
+const SIDEBAR_ORDER_KEY = 'jait.sidebar.manualOrder.v1'
+type SidebarOrder = Record<string, string[]>
+
+export function orderSidebarItems<T extends { id: string }>(items: T[], order?: string[]): T[] {
+  if (!order?.length) return items
+  const ranks = new Map(order.map((id, index) => [id, index]))
+  return [...items].sort((a, b) => (ranks.get(a.id) ?? -1) - (ranks.get(b.id) ?? -1))
+}
+
+export function moveSidebarItem(ids: string[], source: string, target: string, after: boolean): string[] {
+  if (source === target || !ids.includes(source) || !ids.includes(target)) return ids
+  const next = ids.filter((id) => id !== source)
+  next.splice(next.indexOf(target) + (after ? 1 : 0), 0, source)
+  return next
+}
+
+function readSidebarOrder(): SidebarOrder {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(SIDEBAR_ORDER_KEY) || '{}')
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(Object.entries(value).filter(([, ids]) => Array.isArray(ids) && ids.every((id) => typeof id === 'string')))
+  } catch { return {} }
+}
+
 const RECENT_SESSIONS_LIMIT = 5
 /** Personal chats shown before "Show older" — long enough to scroll, short enough to scan. */
 const PERSONAL_SESSIONS_LIMIT = 20
@@ -244,6 +268,40 @@ export function SessionSelector({
   // Derive online node IDs from the nodes prop (already fetched by App.tsx)
   const onlineNodeIds = useMemo(() => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)), [nodes])
   const [searchQuery, setSearchQuery] = useUrlSearchState('chat', view === 'projects' ? 'projectsQ' : 'q')
+  const [manualOrder, setManualOrder] = useState<SidebarOrder>(readSidebarOrder)
+  const [orderTarget, setOrderTarget] = useState<{ kind: 'project' | 'session'; id: string; after: boolean } | null>(null)
+  const dragProjectRef = useRef<string | null>(null)
+  const saveOrder = (key: string, ids: string[], source: string, target: string, after: boolean) => {
+    setManualOrder((current) => {
+      const reordered = moveSidebarItem(ids, source, target, after)
+      const unloaded = (current[key] ?? []).filter((id) => !ids.includes(id))
+      const next = { ...current, ...readSidebarOrder(), [key]: [...reordered, ...unloaded] }
+      try { window.localStorage.setItem(SIDEBAR_ORDER_KEY, JSON.stringify(next)) } catch { /* storage unavailable */ }
+      return next
+    })
+  }
+  const sessionOrderProps = (sessionId: string, projectId: string | null, ids: string[]) => ({
+    onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
+      const source = dragSessionRef.current
+      if (normalizedSearchQuery || !source || source.sourceProjectId !== projectId || source.sessionId === sessionId) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      setOrderTarget({ kind: 'session', id: sessionId, after: e.clientY >= e.currentTarget.getBoundingClientRect().top + e.currentTarget.getBoundingClientRect().height / 2 })
+    },
+    onDragLeave: () => setOrderTarget((current) => current?.kind === 'session' && current.id === sessionId ? null : current),
+    onDrop: (e: React.DragEvent<HTMLDivElement>) => {
+      const source = dragSessionRef.current
+      if (normalizedSearchQuery || !source || source.sourceProjectId !== projectId || source.sessionId === sessionId) return
+      e.preventDefault()
+      e.stopPropagation()
+      const rect = e.currentTarget.getBoundingClientRect()
+      saveOrder(`sessions:${projectId ?? 'personal'}`, ids, source.sessionId, sessionId, e.clientY >= rect.top + rect.height / 2)
+      setOrderTarget(null)
+    },
+    style: orderTarget?.kind === 'session' && orderTarget.id === sessionId
+      ? { boxShadow: `inset 0 ${orderTarget.after ? '-2px' : '2px'} 0 hsl(var(--primary))` } : undefined,
+  })
   const [visibleSessionsByProject, setVisibleSessionsByProject] = useState<Record<string, number>>({})
   const [visiblePersonalSessions, setVisiblePersonalSessions] = useState(PERSONAL_SESSIONS_LIMIT)
   // Projects & Chats / Personal chats split. Resizable and persisted locally,
@@ -379,7 +437,8 @@ export function SessionSelector({
     if (normalizedSearchQuery) {
       return filteredProjects.map((project) => ({ project, depth: 0, hasChildren: false, }))
     }
-    const rows = flattenProjectTree(buildProjectTree(filteredProjects))
+    const orderedProjects = orderSidebarItems(filteredProjects, manualOrder.projects)
+    const rows = flattenProjectTree(buildProjectTree(orderedProjects))
     const hiddenUnder = new Set<string>()
     const out: Array<{ project: (typeof filteredProjects)[number]; depth: number; hasChildren: boolean }> = []
     for (const node of rows) {
@@ -393,7 +452,7 @@ export function SessionSelector({
       if (collapsedFolders.has(node.project.id)) hiddenUnder.add(node.project.id)
     }
     return out
-  }, [collapsedFolders, filteredProjects, normalizedSearchQuery])
+  }, [collapsedFolders, filteredProjects, normalizedSearchQuery, manualOrder.projects])
 
   /** Folders this project may legally be dropped into, per the shared rules. */
   const canDropProjectInto = useCallback((draggedId: string, targetId: string) => {
@@ -535,7 +594,7 @@ export function SessionSelector({
   }, [displayedPersonalSessions, normalizedSearchQuery, onSearch])
   const recentPersonalSessions = normalizedSearchQuery
     ? filteredPersonalSessions
-    : filteredPersonalSessions.slice(0, visiblePersonalSessions)
+    : orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).slice(0, visiblePersonalSessions)
   const hasOlderPersonalSessions = !normalizedSearchQuery
     && filteredPersonalSessions.length > recentPersonalSessions.length
 
@@ -677,10 +736,10 @@ export function SessionSelector({
                   const folderIconStyle = folderColor ? { color: folderColor } : undefined
                   const repository = getProjectRepository(project, repositories)
                   const hasUnreadSessions = project.sessions.some(session => isSessionUnread(session))
-                  const sortedSessions = [...project.sessions]
+                  const sortedSessions = orderSidebarItems([...project.sessions]
                     .sort((a, b) =>
                       Date.parse(b.lastActiveAt || b.createdAt) - Date.parse(a.lastActiveAt || a.createdAt
-                    ))
+                    )), manualOrder[`sessions:${project.id}`])
                   const visibleSessionLimit = visibleSessionsByProject[project.id] ?? RECENT_SESSIONS_LIMIT
                   const recentSessions = normalizedSearchQuery
                     ? sortedSessions
@@ -689,16 +748,14 @@ export function SessionSelector({
                   return (
                     <div key={project.id} style={{ marginLeft: depth * FOLDER_INDENT_PX }}>
                     <div
-                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
+                      style={orderTarget?.kind === 'project' && orderTarget.id === project.id ? { boxShadow: `inset 0 ${orderTarget.after ? '-2px' : '2px'} 0 hsl(var(--primary))` } : undefined}
+                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-center gap-1.5 px-1.5 py-0.5 text-sm transition-colors ${offline || isLatestProjectSessionActive ? 'cursor-default' : 'cursor-pointer'} ${isDropTarget ? 'rounded-md ring-2 ring-primary ring-inset bg-primary/10' : isActiveProject ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'}`}
                       // Workspaces stay draggable as a project *reference* (the
                       // existing prompt-attachment gesture). Every row is also
                       // draggable as a move within the sidebar.
-                      draggable={Boolean(project.rootPath) || Boolean(onMoveProject)}
+                      draggable={true}
                       onDragStart={(e) => {
-                        if (!project.rootPath && !onMoveProject) {
-                          e.preventDefault()
-                          return
-                        }
+                        dragProjectRef.current = project.id
                         e.dataTransfer.effectAllowed = 'copyMove'
                         // Project/folder rows snapshot to nothing during a
                         // native drag, so always supply an explicit ghost.
@@ -707,9 +764,7 @@ export function SessionSelector({
                           isFolder ? 'folder' : 'project',
                           project.title || (isFolder ? 'Untitled folder' : 'Untitled Project')
                         )
-                        if (onMoveProject) {
-                          e.dataTransfer.setData(JAIT_PROJECT_MOVE_MIME, project.id)
-                        }
+                        e.dataTransfer.setData(JAIT_PROJECT_MOVE_MIME, project.id)
                         if (project.rootPath) {
                           e.dataTransfer.setData(
                             JAIT_PROJECT_REF_MIME,
@@ -717,7 +772,19 @@ export function SessionSelector({
                           )
                         }
                       }}
+                      onDragEnd={() => { dragProjectRef.current = null; setOrderTarget(null) }}
                       onDragOver={(e) => {
+                        const source = projects.find((item) => item.id === dragProjectRef.current)
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const edge = (e.clientY - rect.top) / rect.height
+                        if (!normalizedSearchQuery && source && source.id !== project.id && (source.parentId ?? null) === (project.parentId ?? null) && (!isFolder || edge < 0.25 || edge > 0.75)) {
+                          e.preventDefault(); e.stopPropagation()
+                          e.dataTransfer.dropEffect = 'move'
+                          setDropTargetId(null)
+                          setOrderTarget({ kind: 'project', id: project.id, after: edge >= 0.5 })
+                          return
+                        }
+                        setOrderTarget(null)
                         const kind = getSidebarDragKind(e.dataTransfer.types)
                         if (kind === 'session') {
                           // Any project row (folder or workspace) can receive a chat.
@@ -736,9 +803,20 @@ export function SessionSelector({
                         e.dataTransfer.dropEffect = 'move'
                         setDropTargetId(project.id)
                       }}
-                      onDragLeave={() => setDropTargetId((current) => (current === project.id ? null : current))}
+                      onDragLeave={() => { setDropTargetId((current) => (current === project.id ? null : current)); setOrderTarget((current) => current?.kind === 'project' && current.id === project.id ? null : current) }}
                       onDrop={(e) => {
                         setDropTargetId(null)
+                        const source = projects.find((item) => item.id === dragProjectRef.current)
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        const edge = (e.clientY - rect.top) / rect.height
+                        if (!normalizedSearchQuery && source && source.id !== project.id && (source.parentId ?? null) === (project.parentId ?? null) && (!isFolder || edge < 0.25 || edge > 0.75)) {
+                          e.preventDefault(); e.stopPropagation()
+                          const ids = orderSidebarItems(projects, manualOrder.projects).map((item) => item.id)
+                          saveOrder('projects', ids, source.id, project.id, edge >= 0.5)
+                          setOrderTarget(null)
+                          return
+                        }
+                        setOrderTarget(null)
                         const kind = getSidebarDragKind(e.dataTransfer.types)
                         if (kind === 'session') {
                           if (!onMoveSession) return
@@ -784,8 +862,7 @@ export function SessionSelector({
                       ) : (
                         <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" style={folderIconStyle} />
                       )}
-                      <div className="min-w-0 overflow-hidden">
-                        <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                      <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap">
                           {project.sessions.some(session => approvalSessionIds?.has(session.id)) && (
                             <TooltipHint content="Chat waiting for approval">
                               <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-amber-500" aria-label="Chat waiting for approval" />
@@ -809,15 +886,11 @@ export function SessionSelector({
                             </TooltipHint>
                           )}
                           {repository && (
-                            <>
-                              <span className="shrink-0 text-2xs text-muted-foreground">·</span>
-                              <span className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
-                                <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                                <span className="truncate">{repository.name}</span>
-                              </span>
-                            </>
+                            <TooltipHint content={`Git repository: ${repository.name}`}>
+                              <GitBranch className="h-2.5 w-2.5 shrink-0 text-muted-foreground" aria-label={`Git repository: ${repository.name}`} />
+                            </TooltipHint>
                           )}
-                        </div>
+                        <span className="shrink-0 text-2xs text-muted-foreground">·</span>
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
                           {/* A folder has no path by design, so showing "No
                               folder linked" there would read as a defect. */}
@@ -833,7 +906,7 @@ export function SessionSelector({
                             {project.description}
                           </div>}
                         {offline && (
-                          <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
+                          <div className="flex shrink-0 items-center gap-1 text-2xs text-orange-500">
                             <WifiOff className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">Node offline</span>
                           </div>
@@ -841,7 +914,7 @@ export function SessionSelector({
                         {pathMissing && (
                           <TooltipHint content={project.rootPath ? `Folder not found: ${project.rootPath}` : undefined}>
                           <div
-                            className="mt-0.5 flex items-center gap-1 text-2xs text-red-500"
+                            className="flex shrink-0 items-center gap-1 text-2xs text-red-500"
                           >
                             <FolderX className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">Path not found</span>
@@ -849,7 +922,7 @@ export function SessionSelector({
                           </TooltipHint>
                         )}
                         {remoteNode && !offline && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
+                          <div className="flex min-w-0 items-center gap-1 text-2xs">
                             <span className="inline-flex max-w-full items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
                               <NodeIcon platform={remoteNode.platform} />
                               <span className="truncate max-w-[80px]">{remoteNode.name}</span>
@@ -857,7 +930,7 @@ export function SessionSelector({
                           </div>
                         )}
                         {isActiveProject && sessionInfo && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
+                          <div className="flex min-w-0 items-center gap-1 text-2xs text-blue-500">
                             <Monitor className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">
                               {sessionInfo.isRemote && sessionInfo.remoteNode
@@ -867,7 +940,7 @@ export function SessionSelector({
                           </div>
                         )}
                       </div>
-                      <div className="mt-0.5 flex shrink-0 items-center self-start">
+                      <div className="flex shrink-0 items-center">
                         {onNewChatInProject && (
                           <TooltipHint content="New chat">
                             <Button variant="ghost" size="icon" aria-label={`New chat in ${project.title || (isFolder ? 'folder' : 'project')}`}
@@ -1068,9 +1141,10 @@ export function SessionSelector({
                               isAwaitingAnswer={questionSessionIds?.has(session.id)}
                               wait={waitBySessionId?.get(session.id)}
                               dragProps={{
+                                ...sessionOrderProps(session.id, project.id, sortedSessions.map((item) => item.id)),
                                 draggable: true,
                                 onDragStart: (e) => {
-                                  e.dataTransfer.effectAllowed = onMoveSession && !isStreaming ? 'copyMove' : 'copy'
+                                  e.dataTransfer.effectAllowed = 'copyMove'
                                   if (onMoveSession && !isStreaming) e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
                                   e.dataTransfer.setData(
                                     JAIT_CHAT_REF_MIME,
@@ -1081,6 +1155,7 @@ export function SessionSelector({
                                 },
                                 onDragEnd: () => {
                                   dragSessionRef.current = null
+                                  setOrderTarget(null)
                                 },
                               }}
                               onRowClick={() => {
@@ -1255,9 +1330,10 @@ export function SessionSelector({
                       wait={waitBySessionId?.get(session.id)}
                       fallbackLabel="Personal chat"
                       dragProps={{
+                        ...sessionOrderProps(session.id, null, orderSidebarItems(filteredPersonalSessions, manualOrder['sessions:personal']).map((item) => item.id)),
                         draggable: true,
                         onDragStart: (e) => {
-                          e.dataTransfer.effectAllowed = onMoveSession && !isStreaming ? 'copyMove' : 'copy'
+                          e.dataTransfer.effectAllowed = 'copyMove'
                           if (onMoveSession && !isStreaming) e.dataTransfer.setData(JAIT_SESSION_MOVE_MIME, session.id)
                           e.dataTransfer.setData(
                             JAIT_CHAT_REF_MIME,
@@ -1268,6 +1344,7 @@ export function SessionSelector({
                         },
                         onDragEnd: () => {
                           dragSessionRef.current = null
+                                  setOrderTarget(null)
                         },
                       }}
                       onRowClick={() => {

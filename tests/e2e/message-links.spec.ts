@@ -21,7 +21,7 @@ for (const width of [1280, 390]) {
       await web.click()
       await (await popupEvent).close()
     }
-    await page.getByRole('region', { name: 'Assistant', exact: true }).getByRole('link', { name: /README.md/ }).click()
+    await page.getByRole('region', { name: 'Assistant', exact: true }).locator('a[href="/home/jakob/jait/README.md:3"]').click()
     await expect(page.getByLabel('Destination')).toHaveText('/home/jakob/jait/README.md')
     await page.screenshot({ path: path.resolve(__dirname, `../../.jait/shots/message-links-${width}.png`) })
   })
@@ -44,3 +44,30 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: path.resolve(__dirname, `../../.jait/shots/messenger-links-${width}.png`) })
   })
 }
+
+
+test('generated files and existing project links download binary files and show failures', async ({ page }) => {
+  const bytes = Buffer.from('%PDF-1.7\n\x00\xff\n%%EOF', 'latin1')
+  await page.route('**/api/project/download?**', async route => {
+    const file = new URL(route.request().url()).searchParams.get('path')
+    if (file === '/project/report #1.pdf') {
+      await route.fulfill({ status: 200, contentType: 'application/octet-stream', body: bytes })
+    } else {
+      await route.fulfill({ status: 404, json: { message: 'Open the project, then retry.' } })
+    }
+  })
+  await page.goto('/src/e2e-fixtures/index.html')
+  await page.evaluate(() => import('/src/e2e-fixtures/message-links.tsx'))
+  const downloadEvent = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Download report #1.pdf', exact: true }).click()
+  const download = await downloadEvent
+  expect(download.suggestedFilename()).toBe('report #1.pdf')
+  const output = path.resolve(__dirname, '../../.jait/artifacts/download-tests/report.pdf')
+  await download.saveAs(output)
+  const { readFile } = await import('node:fs/promises')
+  expect(await readFile(output)).toEqual(bytes)
+  await page.getByRole('link', { name: 'Download existing.pdf', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('Open the project, then retry.')
+  await expect(page.getByLabel('Destination')).toHaveText('')
+  await page.screenshot({ path: path.resolve(__dirname, '../../.jait/shots/file-downloads.png') })
+})

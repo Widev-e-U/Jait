@@ -1,6 +1,6 @@
 //! Native port of `packages/gateway/src/db/schema.ts`.
 //!
-//! The TypeScript original is a pure declaration module: it builds 48 drizzle-orm
+//! The TypeScript original is a pure declaration module: it builds 52 drizzle-orm
 //! `SQLiteTable` objects through the `sqliteTable(...)` builder chain
 //! (`text`/`integer`/`real` columns with `.primaryKey()`, `.notNull()`, `.unique()`,
 //! `.default(...)`, `.references(..., { onDelete: "cascade" })` and doc comments, plus the
@@ -161,6 +161,7 @@ impl Column {
     /// `.primaryKey()`.
     pub const fn primary_key(mut self) -> Self {
         self.primary_key = true;
+        self.not_null = true;
         self
     }
 
@@ -1511,6 +1512,83 @@ pub static AGENT_CONTROL: Table = Table {
     extra: &[],
 };
 
+/// Native declaration of `githubIntakePolicies`.
+pub static GITHUB_INTAKE_POLICIES: Table = Table {
+    var: "githubIntakePolicies",
+    name: "github_intake_policies",
+    columns: &[
+        Column::text("id", "id").primary_key(),
+        Column::text("userId", "user_id").not_null(),
+        Column::text("agentId", "agent_id").not_null(),
+        Column::text("rules", "rules").not_null(),
+        Column::text("updatedAt", "updated_at").not_null(),
+    ],
+    extra: &[TableIndex::unique(
+        "idx_github_intake_policy_owner",
+        &["userId", "agentId"],
+    )],
+};
+
+/// Native declaration of `githubIntakeDecisions`.
+pub static GITHUB_INTAKE_DECISIONS: Table = Table {
+    var: "githubIntakeDecisions",
+    name: "github_intake_decisions",
+    columns: &[
+        Column::text("id", "id").primary_key(),
+        Column::text("userId", "user_id").not_null(),
+        Column::text("agentId", "agent_id").not_null(),
+        Column::text("deliveryId", "delivery_id").not_null(),
+        Column::text("event", "event").not_null(),
+        Column::text("action", "action").not_null(),
+        Column::text("repository", "repository").not_null(),
+        Column::text("sender", "sender").not_null(),
+        Column::text("result", "result").not_null(),
+        Column::text("reason", "reason").not_null(),
+        Column::text("createdAt", "created_at").not_null(),
+    ],
+    extra: &[TableIndex::unique(
+        "idx_github_intake_delivery",
+        &["userId", "agentId", "deliveryId"],
+    )],
+};
+
+/// Native declaration of `browserWorkflows`.
+pub static BROWSER_WORKFLOWS: Table = Table {
+    var: "browserWorkflows",
+    name: "browser_workflows",
+    columns: &[
+        Column::text("id", "id").primary_key(),
+        Column::text("userId", "user_id").not_null(),
+        Column::text("projectRoot", "project_root").not_null(),
+        Column::integer("revision", "revision").not_null(),
+        Column::text("definition", "definition").not_null(),
+        Column::text("createdAt", "created_at").not_null(),
+        Column::text("updatedAt", "updated_at").not_null(),
+    ],
+    extra: &[],
+};
+
+/// Native declaration of `browserWorkflowRuns`.
+pub static BROWSER_WORKFLOW_RUNS: Table = Table {
+    var: "browserWorkflowRuns",
+    name: "browser_workflow_runs",
+    columns: &[
+        Column::text("id", "id").primary_key(),
+        Column::text("workflowId", "workflow_id").not_null(),
+        Column::text("userId", "user_id").not_null(),
+        Column::text("projectRoot", "project_root").not_null(),
+        Column::text("sessionId", "session_id").not_null(),
+        Column::integer("revision", "revision").not_null(),
+        Column::text("definition", "definition").not_null(),
+        Column::text("status", "status").not_null(),
+        Column::integer("nextStep", "next_step").not_null(),
+        Column::text("progress", "progress").not_null(),
+        Column::text("createdAt", "created_at").not_null(),
+        Column::text("updatedAt", "updated_at").not_null(),
+    ],
+    extra: &[],
+};
+
 /// Every table in `schema.ts` declaration order (`TABLES` is not sorted).
 pub static TABLES: &[&Table] = &[
     &PROJECTS,
@@ -1559,8 +1637,12 @@ pub static TABLES: &[&Table] = &[
     &TEAM_ROOMS,
     &TEAM_MESSAGES,
     &AGENT_GITHUB_APPS,
+    &GITHUB_INTAKE_POLICIES,
+    &GITHUB_INTAKE_DECISIONS,
     &TEAM_DELIVERIES,
     &AGENT_CONTROL,
+    &BROWSER_WORKFLOWS,
+    &BROWSER_WORKFLOW_RUNS,
 ];
 
 /// Look up a table by its SQL name (drizzle's `Table.Symbol.Name`).
@@ -1607,7 +1689,7 @@ pub struct TableRelationalConfig {
 /// Two branches of the TS function cannot fire for `schema.ts` and are therefore not modeled:
 ///
 /// * the `Object.keys(schema).length === 1 && "default" in schema` namespace unwrapping —
-///   the module has 48 exports and no `default` export;
+///   the module has 52 exports and no `default` export;
 /// * `relations` — every entry is `{}` because the module declares no `relations(...)`
 ///   call, so the field carries no information and is omitted instead of being faked;
 /// * `schema` — `Table.Symbol.Schema` is `undefined` for SQLite tables, so drizzle does not
@@ -1684,8 +1766,8 @@ mod tests {
     #[test]
     fn tables_are_declared_in_source_order() {
         let names: Vec<&str> = TABLES.iter().map(|table| table.name).collect();
-        assert_eq!(names.len(), 48);
-        // `grep -n "sqliteTable(" packages/gateway/src/db/schema.ts` → 48 declarations in this
+        assert_eq!(names.len(), 52);
+        // `grep -n "sqliteTable(" packages/gateway/src/db/schema.ts` → 52 declarations in this
         // exact order; the Rust table list mirrors the TypeScript declaration order verbatim.
         let vars_in_order: Vec<&str> = TABLES.iter().map(|table| table.var).collect();
         assert_eq!(
@@ -1697,18 +1779,18 @@ sessionEvents,messageContextMetadata,sessionState,projectState,architectureDiagr
 codeGraphIndexes,personaAgents,agentThreads,threadRecovery,agentThreadActivities,\
 automationRepositories,automationPlans,automationRepoProposals,networkHosts,nodes,nodePermissions,\
 scheduledJobs,scheduledJobRuns,mobilePushRegistrations,browserSessions,browserInterventions,\
-plugins,nodeCredentials,accountInvitations,teamRooms,teamMessages,agentGithubApps,teamDeliveries,\
-agentControl"
+plugins,nodeCredentials,accountInvitations,teamRooms,teamMessages,agentGithubApps,githubIntakePolicies,githubIntakeDecisions,teamDeliveries,\
+agentControl,browserWorkflows,browserWorkflowRuns"
         );
         // every export is unique, and so is every SQL name (drizzle's `tableNamesMap` keys)
         let mut vars: Vec<&str> = TABLES.iter().map(|table| table.var).collect();
         vars.sort_unstable();
         vars.dedup();
-        assert_eq!(vars.len(), 48);
+        assert_eq!(vars.len(), 52);
         let mut sql_names: Vec<&str> = names.clone();
         sql_names.sort_unstable();
         sql_names.dedup();
-        assert_eq!(sql_names.len(), 48);
+        assert_eq!(sql_names.len(), 52);
     }
 
     #[test]
@@ -1952,7 +2034,7 @@ agentControl"
     #[test]
     fn namespace_order_is_ascii_sorted() {
         let ordered = namespace_order();
-        assert_eq!(ordered.len(), 48);
+        assert_eq!(ordered.len(), 52);
         let vars: Vec<&str> = ordered.iter().map(|table| table.var).collect();
         assert_eq!(vars.first().copied(), Some("accountInvitations"));
         assert_eq!(vars.last().copied(), Some("users"));
@@ -1969,8 +2051,8 @@ agentControl"
     #[test]
     fn relational_config_matches_drizzle_extraction() {
         let config = relational_config();
-        assert_eq!(config.tables.len(), 48);
-        assert_eq!(config.table_names_map.len(), 48);
+        assert_eq!(config.tables.len(), 52);
+        assert_eq!(config.table_names_map.len(), 52);
 
         for table in TABLES {
             let entry = config.table(table.var).expect("config for export");

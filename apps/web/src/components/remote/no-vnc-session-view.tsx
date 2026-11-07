@@ -113,8 +113,8 @@ export function NoVncSessionView({
   const liveViewOnly = viewOnly ?? (tracksConnection && resolvedSource ? new URL(resolvedSource, 'http://gateway').searchParams.has('view_only') : true)
   const syncControl = useCallback(() => {
     if (!src || !tracksConnection) return
-    iframeRef.current?.contentWindow?.postMessage({ type: 'jait-vnc-control', viewOnly: liveViewOnly }, new URL(src, window.location.href).origin)
-  }, [src, tracksConnection, liveViewOnly])
+    iframeRef.current?.contentWindow?.postMessage({ type: 'jait-vnc-control', viewOnly: liveViewOnly || hideControls }, new URL(src, window.location.href).origin)
+  }, [src, tracksConnection, liveViewOnly, hideControls])
   useEffect(syncControl, [syncControl])
   const retry = useCallback(() => {
     attempts.current = 0

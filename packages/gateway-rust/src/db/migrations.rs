@@ -2,7 +2,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt,
     sync::LazyLock,
 };
@@ -10,7 +10,7 @@ use std::{
 #[derive(Deserialize)]
 struct Plan {
     migrations: Vec<Migration>,
-    repairs: BTreeMap<String, BTreeMap<String, String>>,
+    repairs: serde_json::Map<String, Value>,
 }
 #[derive(Deserialize)]
 struct Migration {
@@ -72,14 +72,23 @@ pub fn schema_version(db: &Connection) -> u32 {
     .unwrap_or(0)
 }
 pub fn apply_migrations_through(db: &Connection, through: u32) -> Result<(), MigrationError> {
+    apply_plan_through(db, through, &PLAN.migrations)
+}
+
+fn apply_plan_through(
+    db: &Connection,
+    through: u32,
+    migrations: &[Migration],
+) -> Result<(), MigrationError> {
     db.execute_batch("CREATE TABLE IF NOT EXISTS _migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)").map_err(|e| error(0,"migration_tracking",e))?;
     let applied: HashSet<u32> = db
         .prepare("SELECT id FROM _migrations")
         .and_then(|mut s| s.query_map([], |r| r.get(0))?.collect())
         .map_err(|e| error(0, "migration_tracking", e))?;
-    for migration in PLAN
-        .migrations
-        .iter()
+    let mut ordered: Vec<_> = migrations.iter().collect();
+    ordered.sort_by_key(|migration| migration.id);
+    for migration in ordered
+        .into_iter()
         .filter(|m| m.id <= through && !applied.contains(&m.id))
     {
         for operation in &migration.operations {
@@ -123,13 +132,14 @@ pub fn verify_schema(db: &Connection) -> rusqlite::Result<usize> {
             continue;
         }
         let existing = columns(db, table)?;
+        let expected = expected.as_object().expect("reviewed repair columns");
         for (column, ddl) in expected {
-            if !existing.contains(column)
-                && db
-                    .execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
-                    .is_ok()
-            {
-                repaired += 1;
+            let ddl = ddl.as_str().expect("reviewed repair definition");
+            if !existing.contains(column) {
+                match db.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN {column} {ddl}")) {
+                    Ok(()) => repaired += 1,
+                    Err(error) => eprintln!("Schema repair failed for {table}.{column}: {error}"),
+                }
             }
         }
     }
@@ -171,7 +181,7 @@ fn backfill_workspaces(db: &Connection) -> rusqlite::Result<()> {
         let name = crate::text::js_trim(name.as_deref().unwrap_or(""));
         let id = if let Some(path) = path.as_deref().filter(|p| !p.is_empty()) {
             let key = format!("{}::gateway::{path}", user.as_deref().unwrap_or(""));
-            if let Some(id) = by_root.get(&key) {
+            if let Some(id) = by_root.get(&key).filter(|id| !id.is_empty()) {
                 id.clone()
             } else {
                 let id = super::identifiers::uuidv7().to_string();
@@ -291,7 +301,7 @@ fn deduplicate_repositories(db: &Connection) -> rusqlite::Result<()> {
     let mut redirects = Vec::new();
     for (id, user, path) in rows {
         let key = format!("{}\0{path}", user.as_deref().unwrap_or(""));
-        if let Some(keeper) = keepers.get(&key) {
+        if let Some(keeper) = keepers.get(&key).filter(|id| !id.is_empty()) {
             redirects.push((id, keeper.clone()));
         } else {
             keepers.insert(key, id);
@@ -348,4 +358,209 @@ fn deduplicate_repositories(db: &Connection) -> rusqlite::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod ordering_tests {
+    use super::*;
+
+    #[test]
+    fn historical_prefix_20_upgrades_sessions_and_preserves_data() {
+        let db = Connection::open_in_memory().unwrap();
+        apply_migrations_through(&db, 20).unwrap();
+        db.execute_batch("INSERT INTO sessions (id, user_id, name, workspace_path, created_at, last_active_at) VALUES
+            ('one', 'u', 'First', '/repo', '2020', '2021'),
+            ('two', 'u', 'Second', '/repo', '2020', '2021');").unwrap();
+        super::super::migrate_database(&db).unwrap();
+        let rows: Vec<(String, String, String)> = db
+            .prepare("SELECT id, name, project_id FROM sessions ORDER BY id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            (&rows[0].0, &rows[0].1),
+            (&"one".to_owned(), &"First".to_owned())
+        );
+        assert_eq!(
+            (&rows[1].0, &rows[1].1),
+            (&"two".to_owned(), &"Second".to_owned())
+        );
+        assert!(!rows[0].2.is_empty());
+        assert_eq!(rows[0].2, rows[1].2);
+        let root: String = db
+            .query_row(
+                "SELECT root_path FROM projects WHERE id = ?",
+                [&rows[0].2],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(root, "/repo");
+        assert_eq!(schema_version(&db), 77);
+        super::super::migrate_database(&db).unwrap();
+        let count: u32 = db
+            .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn schema_repair_continues_when_column_additions_fail() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE messages (id TEXT); PRAGMA query_only = ON;")
+            .unwrap();
+        assert_eq!(verify_schema(&db).unwrap(), 0);
+        assert_eq!(
+            columns(&db, "messages").unwrap(),
+            HashSet::from(["id".to_owned()])
+        );
+    }
+
+    #[test]
+    fn schema_repair_preserves_reference_column_order() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE messages (id TEXT)").unwrap();
+        assert_eq!(verify_schema(&db).unwrap(), 2);
+        let columns: Vec<String> = db
+            .prepare("PRAGMA table_info(messages)")
+            .unwrap()
+            .query_map([], |row| row.get(1))
+            .unwrap()
+            .collect::<rusqlite::Result<_>>()
+            .unwrap();
+        assert_eq!(columns, ["id", "tool_calls", "segments"]);
+    }
+
+    #[test]
+    fn tracking_insert_failure_reports_migration_and_preserves_prior_effects() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE _migrations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL);
+            CREATE TRIGGER reject_migration BEFORE INSERT ON _migrations BEGIN SELECT RAISE(FAIL, 'tracking rejected'); END;").unwrap();
+        let migration = Migration {
+            id: 123,
+            name: "tracking_failure".into(),
+            operations: vec![Operation::Sql {
+                sql: "CREATE TABLE migration_effect (id INTEGER)".into(),
+                ignore_errors: false,
+            }],
+        };
+        let error = apply_plan_through(&db, 123, &[migration]).unwrap_err();
+        assert_eq!(error.id, 123);
+        assert_eq!(error.name, "tracking_failure");
+        assert!(error.to_string().contains("tracking rejected"));
+        assert!(table_exists(&db, "migration_effect").unwrap());
+        let applied: u32 = db
+            .query_row("SELECT COUNT(*) FROM _migrations", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(applied, 0);
+    }
+
+    #[test]
+    fn migration_62_reports_unique_index_failure_for_empty_keeper() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            "CREATE TABLE automation_repositories (id TEXT PRIMARY KEY, user_id TEXT, local_path TEXT, created_at TEXT);
+             INSERT INTO automation_repositories VALUES ('', 'u', '/repo', '1'), ('second', 'u', '/repo', '2'), ('third', 'u', '/repo', '3');"
+        ).unwrap();
+        let migration = PLAN
+            .migrations
+            .iter()
+            .find(|migration| migration.id == 62)
+            .unwrap();
+        let error = apply_plan_through(&db, 62, std::slice::from_ref(migration)).unwrap_err();
+        assert_eq!(error.id, 62);
+        assert!(matches!(error.source, rusqlite::Error::SqliteFailure(_, _)));
+        let ids: Vec<String> = db
+            .prepare("SELECT id FROM automation_repositories ORDER BY created_at")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(ids, ["", "second"]);
+        let applied: u32 = db
+            .query_row(
+                "SELECT COUNT(*) FROM _migrations WHERE id = 62",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(applied, 0);
+        let index: u32 = db.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_automation_repos_user_path'", [], |row| row.get(0)).unwrap();
+        assert_eq!(index, 0);
+    }
+
+    #[test]
+    fn deduplication_does_not_redirect_to_empty_keeper() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch(
+            r#"CREATE TABLE automation_repositories (id TEXT PRIMARY KEY, user_id TEXT, local_path TEXT, created_at TEXT);
+             CREATE TABLE automation_plans (repo_id TEXT);
+             CREATE TABLE projects (id TEXT PRIMARY KEY, metadata TEXT);
+             INSERT INTO automation_repositories VALUES ('', 'u', '/repo', '1'), ('second', 'u', '/repo', '2'), ('third', 'u', '/repo', '3');
+             INSERT INTO automation_plans VALUES ('third');
+             INSERT INTO projects VALUES ('p', '{"repoId":"third"}');"#
+        ).unwrap();
+        deduplicate_repositories(&db).unwrap();
+        let ids: Vec<String> = db
+            .prepare("SELECT id FROM automation_repositories ORDER BY created_at")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(ids, ["", "second"]);
+        let plan: String = db
+            .query_row("SELECT repo_id FROM automation_plans", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(plan, "second");
+        let metadata: String = db
+            .query_row("SELECT metadata FROM projects", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&metadata).unwrap()["repoId"],
+            "second"
+        );
+    }
+
+    #[test]
+    fn backfill_replaces_empty_existing_workspace_id() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE workspaces (id TEXT PRIMARY KEY, user_id TEXT, title TEXT, root_path TEXT, node_id TEXT, created_at TEXT, last_active_at TEXT, status TEXT, metadata TEXT); CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, workspace_path TEXT, created_at TEXT, last_active_at TEXT, workspace_id TEXT); INSERT INTO workspaces VALUES ('', 'user', 'old', '/project', 'gateway', '1', '1', 'active', NULL); INSERT INTO sessions VALUES ('s1', 'user', 'name', '/project', '1', '1', NULL), ('s2', 'user', 'name', '/project', '2', '2', NULL);").unwrap();
+        backfill_workspaces(&db).unwrap();
+        let ids: Vec<String> = db
+            .prepare("SELECT workspace_id FROM sessions ORDER BY id")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert!(!ids[0].is_empty());
+        assert_eq!(ids[0], ids[1]);
+        let count: i64 = db
+            .query_row(
+                "SELECT count(*) FROM workspaces WHERE id = ?1",
+                [&ids[0]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn migrations_run_by_id_even_when_plan_is_out_of_order() {
+        let db = Connection::open_in_memory().unwrap();
+        let migrations: Vec<Migration> = serde_json::from_str(r#"[
+            {"id":2,"name":"insert","operations":[{"kind":"sql","sql":"INSERT INTO example VALUES (42)","ignore_errors":false}]},
+            {"id":1,"name":"create","operations":[{"kind":"sql","sql":"CREATE TABLE example (value INTEGER)","ignore_errors":false}]}
+        ]"#).unwrap();
+        apply_plan_through(&db, 2, &migrations).unwrap();
+        assert_eq!(
+            db.query_row("SELECT value FROM example", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            42
+        );
+    }
 }

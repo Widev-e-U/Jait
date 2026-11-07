@@ -14,8 +14,8 @@ export function setupTouchPointer(rfb, screen, button) {
     const cursor = document.createElement('div');
     cursor.setAttribute('aria-hidden', 'true');
     cursor.dataset.touchCursor = '';
-    cursor.style.cssText = 'position:fixed;left:0;top:0;width:20px;height:26px;z-index:19;pointer-events:none;filter:drop-shadow(0 1px 2px #0008)';
-    cursor.innerHTML = '<svg viewBox="0 0 20 26" width="20" height="26"><path d="M2 2v20l5-5 4 8 4-2-4-8h7Z" fill="white" stroke="#18181b" stroke-width="2"/></svg>';
+    cursor.style.cssText = 'position:fixed;left:0;top:0;width:14px;height:18px;z-index:19;pointer-events:none;filter:drop-shadow(0 1px 2px #0008)';
+    cursor.innerHTML = '<svg viewBox="0 0 20 26" width="14" height="18"><path d="M2 2v20l5-5 4 8 4-2-4-8h7Z" fill="white" stroke="#18181b" stroke-width="2"/></svg>';
     document.body.appendChild(cursor);
     const rect = () => canvas.getBoundingClientRect();
     const show = () => {

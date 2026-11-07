@@ -73,6 +73,25 @@ pub struct TerminalRun<'a> {
     pub timeout_ms: f64,
 }
 
+/// One selectable shell reported by `GET /api/terminals/shells`.
+///
+/// Mirrors the reference `{ shell, label }` pair: `shell` is the executable to
+/// spawn and `label` is the short name shown to the user.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TerminalShell {
+    pub shell: String,
+    pub label: String,
+}
+
+impl TerminalShell {
+    pub fn new(shell: impl Into<String>, label: impl Into<String>) -> Self {
+        Self {
+            shell: shell.into(),
+            label: label.into(),
+        }
+    }
+}
+
 /// Raw result of [`TerminalRun`]; the route layer does the cleanup.
 pub struct TerminalRunOutcome {
     pub raw_output: String,
@@ -101,7 +120,7 @@ pub trait TerminalControl: Send + Sync {
     ) -> Result<Arc<dyn TerminalHandle>, String>;
     /// Return a handle only when it belongs to this exact surface instance.
     fn handle_for_surface(&self, surface: &SurfaceRef) -> Option<Arc<dyn TerminalHandle>>;
-    fn shell_list(&self) -> Vec<String> {
+    fn shell_list(&self) -> Vec<TerminalShell> {
         Vec::new()
     }
     /// Owner of a remote node, or `None` when the node is unknown.
@@ -1031,7 +1050,7 @@ mod tests {
     struct FakeControl {
         handles: Mutex<HashMap<String, (SurfaceRef, Arc<FakeHandle>)>>,
         spawn_error: Option<String>,
-        shells: Vec<String>,
+        shells: Vec<TerminalShell>,
     }
 
     impl FakeControl {
@@ -1039,7 +1058,10 @@ mod tests {
             Arc::new(Self {
                 handles: Mutex::new(HashMap::new()),
                 spawn_error: None,
-                shells: vec!["/bin/bash".to_string(), "/bin/zsh".to_string()],
+                shells: vec![
+                    TerminalShell::new("/bin/bash", "bash"),
+                    TerminalShell::new("/bin/zsh", "zsh"),
+                ],
             })
         }
 
@@ -1086,7 +1108,7 @@ mod tests {
                 .map(|(_, handle)| handle.clone() as Arc<dyn TerminalHandle>)
         }
 
-        fn shell_list(&self) -> Vec<String> {
+        fn shell_list(&self) -> Vec<TerminalShell> {
             self.shells.clone()
         }
     }
@@ -1106,6 +1128,50 @@ mod tests {
         decode(response).await
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn local_pty_control_backs_the_terminal_routes() {
+        use crate::surfaces::local_terminal::LocalTerminalControl;
+
+        let control = LocalTerminalControl::new();
+        let routes = TerminalRoutes::new(auth_state())
+            .with_control(control.clone())
+            .with_project_root("/tmp");
+        let (status, body) = create(
+            &routes,
+            "alice",
+            json!({ "shell": "/bin/sh", "cols": 100, "rows": 30 }),
+        )
+        .await;
+        assert_eq!(status, 201, "create failed: {body}");
+
+        let id = body["id"].as_str().expect("terminal id").to_string();
+        let (surface, owner) = routes
+            .registry()
+            .surface_with_owner(&id)
+            .expect("real PTY surface is registered");
+        assert_eq!(owner.as_deref(), Some("alice"));
+        assert_eq!(surface.kind(), TERMINAL_KIND);
+        let snapshot = surface.snapshot().expect("snapshot");
+        assert_eq!(snapshot.metadata["cols"], json!(100));
+        assert_eq!(snapshot.metadata["rows"], json!(30));
+
+        let handle = control
+            .handle_for_surface(&surface)
+            .expect("control resolves its own surface");
+        let outcome = handle
+            .run(TerminalRun {
+                command: "printf 'pty %s\\n' wiring",
+                marker: "__JAIT_EXIT__PTY__",
+                timeout_ms: 15_000.0,
+            })
+            .await
+            .expect("command runs");
+        assert_eq!(outcome.exit_code, Some(0), "{:?}", outcome.raw_output);
+        assert!(!outcome.timed_out);
+        assert!(outcome.raw_output.contains("pty wiring"));
+    }
+
     #[test]
     fn finish_output_strips_control_sequences_and_marker() {
         let marker = "__JAIT_EXIT__42__";
@@ -1114,6 +1180,24 @@ mod tests {
         );
         let output = finish_output(&raw, "echo hi", marker);
         assert_eq!(output, "hello\ndone");
+    }
+
+    #[tokio::test]
+    async fn shell_route_reports_labeled_shell_entries() {
+        let routes = routes_with(FakeControl::new());
+        let response = terminal_shells(
+            State(routes),
+            request("GET", "/api/terminals/shells", Some("alice"), None),
+        )
+        .await;
+        let (status, body) = decode(response).await;
+        assert_eq!(status, 200);
+        let shells = body["shells"].as_array().expect("shells array");
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells[0]["shell"], json!("/bin/bash"));
+        assert_eq!(shells[0]["label"], json!("bash"));
+        assert_eq!(shells[1]["shell"], json!("/bin/zsh"));
+        assert_eq!(shells[1]["label"], json!("zsh"));
     }
 
     #[tokio::test]

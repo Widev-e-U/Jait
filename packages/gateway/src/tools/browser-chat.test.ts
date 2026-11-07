@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBrowserInspectTool, createBrowserNavigateTool } from './browser-tools.js';
+import { createBrowserOpenTool, createBrowserInspectTool, createBrowserNavigateTool } from './browser-tools.js';
 import { createSurfacesStartTool } from './surface-tools.js';
 import { createPreviewOpenTool } from './preview-tools.js';
 import { PreviewService } from '../services/preview.js';
@@ -17,7 +17,7 @@ function fixture() {
         id, type: 'browser', state: 'running', sessionId: input.sessionId,
         snapshot: () => ({ id, type: 'browser', state: 'running', sessionId: input.sessionId, metadata: { currentUrl } }),
         navigate: vi.fn(async (url: string) => { currentUrl = url; return page(); }),
-        inspect: async () => ({ snapshot: page() }),
+        inspect: vi.fn(async () => ({ snapshot: page() })),
         getEvents: () => [], getMetrics: async () => null,
         getLiveViewInfo: () => ({ novncUrl: 'ws://localhost:6080', vncPort: 5900, websockifyPort: 6080 }),
       };
@@ -69,7 +69,7 @@ describe('chat agent browser', () => {
     service.setSharedWithAgent('agent-preview', true);
     expect(() => service.assertAgentControl(service.get('agent-preview')!.browserId!)).not.toThrow();
     const userPreview = await service.start({ sessionId: 'user-preview', target: '4173' });
-    expect(userPreview.sharedWithAgent).toBe(false);
+    expect(userPreview.sharedWithAgent).toBe(true);
   });
 
   it('exposes a live browser for each chat without starting a project server', async () => {
@@ -114,6 +114,40 @@ describe('chat agent browser', () => {
     const inspect = createBrowserInspectTool(registry as any, service);
     await expect(inspect.execute({}, context('chat-a'))).rejects.toThrow(/browser.open with a URL/);
     expect(registry.startSurface).not.toHaveBeenCalled();
+  });
+  it('opens a live browser without a URL, then inspects without losing the current page', async () => {
+    const { registry, service, context } = fixture();
+    const open = createBrowserOpenTool(registry as any, service);
+    const chat = context('unified');
+    expect(await open.execute({}, chat)).toMatchObject({ ok: true, data: { url: 'about:blank' } });
+    expect(registry.startSurface).toHaveBeenCalledWith('browser', 'browser-unified', expect.objectContaining({ requireLiveView: true }));
+    await open.execute({ url: 'https://example.com/page', selector: '#save' }, chat);
+    const browser = registry.getSurface('browser-unified');
+    expect(browser.inspect).toHaveBeenLastCalledWith('#save', undefined);
+    browser.navigate.mockClear();
+    expect(await open.execute({ selector: '#save' }, chat)).toMatchObject({ ok: true, data: { url: 'https://example.com/page' } });
+    expect(browser.navigate).not.toHaveBeenCalled();
+    expect(registry.startSurface).toHaveBeenCalledTimes(1);
+    service.setSharedWithAgent('unified', false);
+    await expect(open.execute({}, chat)).rejects.toThrow();
+  });
+  it('does not start a browser for cancelled or sessionless inspection', async () => {
+    const { registry, service, context } = fixture();
+    const open = createBrowserOpenTool(registry as any, service);
+    expect(await open.execute({}, context(''))).toMatchObject({ ok: false });
+    expect(await open.execute({}, { ...context('cancelled'), signal: AbortSignal.abort() })).toMatchObject({ ok: false, message: 'Cancelled' });
+    expect(registry.startSurface).not.toHaveBeenCalled();
+  });
+  it('suppresses unified inspection for secret-safe sessions', async () => {
+    const { registry, service, context } = fixture();
+    const open = createBrowserOpenTool(registry as any, service);
+    const chat = context('unified-secret');
+    await open.execute({ url: 'https://example.com' }, chat);
+    const browserId = service.get('unified-secret')!.browserId!;
+    vi.spyOn(service, 'getSessionByBrowserId').mockReturnValue({ ...service.getSessionByBrowserId(browserId)!, secretSafe: true } as any);
+    const result = await open.execute({}, chat);
+    expect(result).toMatchObject({ ok: true, data: { captureSuppressed: true } });
+    expect(JSON.stringify(result)).not.toContain('Hello');
   });
   it('deduplicates simultaneous browser starts', async () => {
     const { registry, tool, context } = fixture();

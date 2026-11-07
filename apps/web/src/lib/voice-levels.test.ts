@@ -3,6 +3,7 @@ import {
   VOICE_LEVEL_BAR_COUNT,
   VOICE_LEVEL_FLOOR,
   createSilentVoiceLevels,
+  measureVoiceLevel,
   summarizeForVoice,
 } from './voice-levels'
 
@@ -65,5 +66,19 @@ describe('summarizeForVoice', () => {
 
   it('respects a custom maxLength when the sentence fits', () => {
     expect(summarizeForVoice('Short. Longer sentence here.', 10)).toBe('Short.')
+  })
+})
+
+
+describe('measureVoiceLevel', () => {
+  it('tracks changing microphone amplitude and returns to silence', () => {
+    const silence = new Uint8Array(256).fill(128)
+    const quiet = new Uint8Array(256).fill(132)
+    const loud = new Uint8Array(256).fill(144)
+    expect(measureVoiceLevel(silence)).toBe(VOICE_LEVEL_FLOOR)
+    expect(measureVoiceLevel(quiet)).toBeGreaterThan(measureVoiceLevel(silence))
+    expect(measureVoiceLevel(loud)).toBeGreaterThan(measureVoiceLevel(quiet))
+    expect(measureVoiceLevel(silence)).toBeLessThan(measureVoiceLevel(loud))
+    expect(measureVoiceLevel(new Uint8Array())).toBe(VOICE_LEVEL_FLOOR)
   })
 })

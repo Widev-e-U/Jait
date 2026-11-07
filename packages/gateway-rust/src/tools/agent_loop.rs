@@ -37,7 +37,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 /// Boxed future used for every async host boundary (matches the crate style in
 /// `tools/agent_acp_runner.rs`): object-safe, no `async_trait` dependency.
@@ -158,32 +158,118 @@ impl OpenAiToolCall {
 }
 
 /// A chat message in the conversation history.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AgentMessage {
     /// Recovery handle for model-only pruning; omitted from the wire transcript.
-    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub evidence_reference: Option<String>,
     pub role: String,
-    #[serde(default)]
     pub content: String,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
+    /// OpenAI-style content parts when the message carries multimodal input.
+    /// When present, these are the authoritative wire content.
+    pub content_parts: Option<Vec<Value>>,
     pub tool_calls: Option<Vec<OpenAiToolCall>>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub tool_call_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub name: Option<String>,
     /// Hidden reasoning emitted alongside the visible content. Persisted so the
     /// model keeps reasoning continuity across tool rounds; never user-visible.
-    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub thinking: Option<String>,
     /// True for messages injected by the gateway/agent loop rather than sent by
     /// the user. Synthetic messages still reach the model but callers exclude
     /// them from user-facing history, persistence and prompt counts.
-    #[serde(skip_serializing_if = "Option::is_none", default)]
     pub synthetic: Option<bool>,
 }
 
+// Keep the public string field usable by existing callers while accepting the
+// content-part arrays sent by the TypeScript chat route on the same wire key.
+#[derive(Serialize, Deserialize)]
+struct AgentMessageWire {
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    evidence_reference: Option<String>,
+    role: String,
+    #[serde(default = "empty_message_content")]
+    content: Value,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    tool_calls: Option<Vec<OpenAiToolCall>>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    thinking: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    synthetic: Option<bool>,
+}
+
+fn empty_message_content() -> Value {
+    Value::String(String::new())
+}
+
+impl Serialize for AgentMessage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        AgentMessageWire {
+            evidence_reference: self.evidence_reference.clone(),
+            role: self.role.clone(),
+            content: self.wire_content(),
+            tool_calls: self.tool_calls.clone(),
+            tool_call_id: self.tool_call_id.clone(),
+            name: self.name.clone(),
+            thinking: self.thinking.clone(),
+            synthetic: self.synthetic,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AgentMessage {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = AgentMessageWire::deserialize(deserializer)?;
+        let (content, content_parts) = match wire.content {
+            Value::String(content) => (content, None),
+            Value::Array(parts) => (String::new(), Some(parts)),
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "message content must be a string or array",
+                ));
+            }
+        };
+        Ok(Self {
+            evidence_reference: wire.evidence_reference,
+            role: wire.role,
+            content,
+            content_parts,
+            tool_calls: wire.tool_calls,
+            tool_call_id: wire.tool_call_id,
+            name: wire.name,
+            thinking: wire.thinking,
+            synthetic: wire.synthetic,
+        })
+    }
+}
+
 impl AgentMessage {
+    fn wire_content(&self) -> Value {
+        match &self.content_parts {
+            Some(parts) => Value::Array(parts.clone()),
+            None => Value::String(self.content.clone()),
+        }
+    }
+
+    /// Project content into safe text for compaction without exposing image URLs or data.
+    pub fn conversation_content_text(&self) -> String {
+        match &self.content_parts {
+            None => self.content.clone(),
+            Some(parts) => parts
+                .iter()
+                .filter_map(|part| match part.get("type").and_then(Value::as_str) {
+                    Some("text") => part.get("text").and_then(Value::as_str),
+                    Some("image_url") => Some("[image attached]"),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+
     pub fn system(content: impl Into<String>) -> Self {
         Self {
             role: "system".into(),
@@ -492,20 +578,15 @@ pub struct AgentLoopResult {
 }
 
 /// Priority levels for queued tool calls.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub enum ToolCallPriority {
     /// Run before anything else (e.g. abort-checks, validation).
     Critical = 0,
     /// Normal tool calls from the LLM.
+    #[default]
     Normal = 1,
     /// Deferred / low-priority background work.
     Low = 2,
-}
-
-impl Default for ToolCallPriority {
-    fn default() -> Self {
-        ToolCallPriority::Normal
-    }
 }
 
 /// A queued tool call entry.
@@ -614,10 +695,10 @@ pub fn is_retryable_rate_limit(status: u16, response_text: &str) -> bool {
         return false;
     }
     let (server_msg, code) = parse_error_body(response_text);
-    if let Some(code) = code.as_deref() {
-        if code == "insufficient_quota" || code == "billing_hard_limit_reached" {
-            return false;
-        }
+    if let Some(code) = code.as_deref()
+        && (code == "insufficient_quota" || code == "billing_hard_limit_reached")
+    {
+        return false;
     }
     if let Some(message) = server_msg.as_deref() {
         let lower = message.to_lowercase();
@@ -641,15 +722,12 @@ pub fn parse_retry_after_ms(header: Option<&str>, now_ms: i64) -> Option<i64> {
     if trimmed.is_empty() {
         return None;
     }
-    if let Ok(seconds) = trimmed.parse::<f64>() {
-        if seconds.is_finite() {
-            return Some(((seconds * 1000.0) as i64).max(0));
-        }
+    if let Ok(seconds) = trimmed.parse::<f64>()
+        && seconds.is_finite()
+    {
+        return Some(((seconds * 1000.0) as i64).max(0));
     }
-    match parse_http_date_ms(trimmed) {
-        Some(as_date) => Some((as_date - now_ms).max(0)),
-        None => None,
-    }
+    parse_http_date_ms(trimmed).map(|as_date| (as_date - now_ms).max(0))
 }
 
 /// Minimal `Date.parse` for the RFC 1123 / RFC 850 / asctime forms providers use
@@ -697,7 +775,7 @@ fn civil_to_epoch_ms(year: i64, month: i64, day: i64, hour: i64, minute: i64, se
     let doy = (153 * mp + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
-    ((days * 86_400 + hour * 3_600 + minute * 60 + second) * 1000) as i64
+    (days * 86_400 + hour * 3_600 + minute * 60 + second) * 1000
 }
 
 /// Backoff before re-issuing a rate-limited round: the provider's own
@@ -1077,7 +1155,7 @@ pub fn serialize_messages(messages: &[AgentMessage], require_reasoning: bool) ->
         let mut object = Map::new();
         object.insert("role".into(), Value::String(message.role.clone()));
 
-        object.insert("content".into(), Value::String(message.content.clone()));
+        object.insert("content".into(), message.wire_content());
 
         let has_calls = message
             .tool_calls
@@ -1112,6 +1190,18 @@ pub fn serialize_messages(messages: &[AgentMessage], require_reasoning: bool) ->
     out
 }
 
+// ECMAScript String.trim removes this whitespace set (which differs slightly
+// from Rust's Unicode whitespace set, notably for BOM and NEL).
+fn trim_js_whitespace(value: &str) -> &str {
+    value.trim_matches(|c| {
+        matches!(c,
+            '\u{0009}'..='\u{000d}' | '\u{0020}' | '\u{00a0}' | '\u{1680}' |
+            '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' |
+            '\u{205f}' | '\u{3000}' | '\u{feff}'
+        )
+    })
+}
+
 /// Serialise the history for Ollama's native `/api/chat` endpoint, which takes
 /// `tool_calls[].function.arguments` as an object and names tool replies via
 /// `tool_name`.
@@ -1120,8 +1210,37 @@ pub fn serialize_messages_for_ollama(messages: &[AgentMessage]) -> Vec<Value> {
     for message in messages {
         let mut object = Map::new();
         object.insert("role".into(), Value::String(message.role.clone()));
-        object.insert("content".into(), Value::String(message.content.clone()));
-        if let Some(calls) = message.tool_calls.as_ref().filter(|c| !c.is_empty()) {
+        if let Some(parts) = &message.content_parts {
+            let mut text = Vec::new();
+            let mut images = Vec::new();
+            for part in parts {
+                match part.get("type").and_then(Value::as_str) {
+                    Some("text") => {
+                        if let Some(chunk) = part.get("text").and_then(Value::as_str) {
+                            text.push(chunk);
+                        }
+                    }
+                    Some("image_url") => {
+                        if let Some(url) = part
+                            .get("image_url")
+                            .and_then(|v| v.get("url"))
+                            .and_then(Value::as_str)
+                        {
+                            let base64 = url.find("base64,").map_or(url, |index| &url[index + 7..]);
+                            images.push(Value::String(trim_js_whitespace(base64).to_string()));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            object.insert("content".into(), Value::String(text.join("\n")));
+            if !images.is_empty() {
+                object.insert("images".into(), Value::Array(images));
+            }
+        } else {
+            object.insert("content".into(), Value::String(message.content.clone()));
+        }
+        if let Some(calls) = message.tool_calls.as_ref() {
             let calls: Vec<Value> = calls
                 .iter()
                 .map(|call| {
@@ -1135,10 +1254,17 @@ pub fn serialize_messages_for_ollama(messages: &[AgentMessage]) -> Vec<Value> {
                 .collect();
             object.insert("tool_calls".into(), Value::Array(calls));
         }
-        if message.role == "tool" {
-            if let Some(name) = message.name.as_ref() {
-                object.insert("tool_name".into(), Value::String(name.clone()));
-            }
+        if message.role == "tool"
+            && let Some(name) = message.name.as_ref().filter(|name| !name.is_empty())
+        {
+            object.insert("tool_name".into(), Value::String(name.clone()));
+        }
+        if let Some(thinking) = message
+            .thinking
+            .as_ref()
+            .filter(|thinking| !thinking.is_empty())
+        {
+            object.insert("thinking".into(), Value::String(thinking.clone()));
         }
         out.push(Value::Object(object));
     }
@@ -1204,7 +1330,7 @@ pub fn find_degenerate_repetition(text: &str) -> Option<RepetitionMatch> {
         let mut cursor = candidate;
         while cursor >= span {
             let previous = cursor - span;
-            if &window[previous..previous + span] == &window[cursor..cursor + span] {
+            if window[previous..previous + span] == window[cursor..cursor + span] {
                 copies += 1;
                 cursor = previous;
             } else {
@@ -1750,11 +1876,17 @@ pub trait AgentRuntime: Send + Sync {
     /// `console.log/warn/error` through the caller's logger.
     fn log(&self, _level: LogLevel, _message: &str) {}
 
-    /// `estimateMessageTokens` from `tools/token-estimator`.
-    fn estimate_message_tokens(&self, message: &AgentMessage) -> u64;
+    /// `estimateMessageTokens` from `tools/token-estimator`. Uses the wire
+    /// content so multimodal arrays follow the same heuristic as TypeScript.
+    fn estimate_message_tokens(&self, message: &AgentMessage) -> u64 {
+        let wire = serde_json::to_value(message).expect("agent messages serialize to JSON");
+        crate::tools::token_estimator::estimate_message_tokens(&wire) as u64
+    }
 
     /// `estimateTokens` from `tools/token-estimator`.
-    fn estimate_tokens(&self, text: &str) -> u64;
+    fn estimate_tokens(&self, text: &str) -> u64 {
+        crate::tools::token_estimator::estimate_tokens(text) as u64
+    }
 
     /// `loadContextState(scope)` from `tools/context-evidence`.
     fn load_context_state(&self, _scope: &str) -> Option<Value> {
@@ -1792,7 +1924,9 @@ pub trait AgentRuntime: Send + Sync {
     /// `serializeToolResultForModel` from `tools/model-result`
     /// (`crate::tools::model_result` in the native crate).
     fn serialize_tool_result_for_model(&self, result: &Value) -> String {
-        result.to_string()
+        let ok = result.get("ok").and_then(Value::as_bool).unwrap_or(false);
+        let message = result.get("message").and_then(Value::as_str).unwrap_or("");
+        crate::tools::model_result::serialize_tool_result_for_model(ok, message, result.get("data"))
     }
 
     /// Summarisation for mid-turn compaction; the compression LLM request is a
@@ -2040,22 +2174,22 @@ pub fn parse_openai_stream(body: &str, sink: &mut StreamSink<'_>) -> ProviderTur
             continue;
         };
         let delta = choice.get("delta").cloned().unwrap_or(Value::Null);
-        if let Some(text) = delta.get("content").and_then(|v| v.as_str()) {
-            if !text.is_empty() {
-                turn.content.push_str(text);
-                (sink.on_content)(text);
-            }
+        if let Some(text) = delta.get("content").and_then(|v| v.as_str())
+            && !text.is_empty()
+        {
+            turn.content.push_str(text);
+            (sink.on_content)(text);
         }
         // Reasoning models expose hidden thinking under either key.
         let thinking = delta
             .get("reasoning_content")
             .and_then(|v| v.as_str())
             .or_else(|| delta.get("reasoning").and_then(|v| v.as_str()));
-        if let Some(text) = thinking {
-            if !text.is_empty() {
-                turn.thinking.push_str(text);
-                (sink.on_thinking)(text);
-            }
+        if let Some(text) = thinking
+            && !text.is_empty()
+        {
+            turn.thinking.push_str(text);
+            (sink.on_thinking)(text);
         }
         if let Some(calls) = delta.get("tool_calls").and_then(|v| v.as_array()) {
             for (position, call) in calls.iter().enumerate() {
@@ -2065,19 +2199,18 @@ pub fn parse_openai_stream(body: &str, sink: &mut StreamSink<'_>) -> ProviderTur
                     .map(|v| v as usize)
                     .unwrap_or(position);
                 let entry = builders.entry(index).or_default();
-                if let Some(id) = call.get("id").and_then(|v| v.as_str()) {
-                    if !id.is_empty() {
-                        entry.0 = id.to_string();
-                    }
+                if let Some(id) = call.get("id").and_then(|v| v.as_str())
+                    && !id.is_empty()
+                {
+                    entry.0 = id.to_string();
                 }
                 if let Some(name) = call
                     .get("function")
                     .and_then(|f| f.get("name"))
                     .and_then(|v| v.as_str())
+                    && !name.is_empty()
                 {
-                    if !name.is_empty() {
-                        entry.1.push_str(name);
-                    }
+                    entry.1.push_str(name);
                 }
                 if let Some(args) = call
                     .get("function")
@@ -2139,17 +2272,17 @@ pub fn parse_ollama_stream(body: &str, sink: &mut StreamSink<'_>) -> ProviderTur
             turn.model = Some(model.to_string());
         }
         if let Some(message) = value.get("message") {
-            if let Some(text) = message.get("content").and_then(|v| v.as_str()) {
-                if !text.is_empty() {
-                    turn.content.push_str(text);
-                    (sink.on_content)(text);
-                }
+            if let Some(text) = message.get("content").and_then(|v| v.as_str())
+                && !text.is_empty()
+            {
+                turn.content.push_str(text);
+                (sink.on_content)(text);
             }
-            if let Some(text) = message.get("thinking").and_then(|v| v.as_str()) {
-                if !text.is_empty() {
-                    turn.thinking.push_str(text);
-                    (sink.on_thinking)(text);
-                }
+            if let Some(text) = message.get("thinking").and_then(|v| v.as_str())
+                && !text.is_empty()
+            {
+                turn.thinking.push_str(text);
+                (sink.on_thinking)(text);
             }
             if let Some(calls) = message.get("tool_calls").and_then(|v| v.as_array()) {
                 for call in calls {
@@ -2322,7 +2455,7 @@ pub fn stream_chat<'a>(
                     && transport_attempt < MAX_TRANSPORT_RETRIES
                 {
                     transport_attempt += 1;
-                    let delay = TRANSPORT_RETRY_BASE_DELAY_MS * (1u64 << (transport_attempt - 1));
+                    let delay = TRANSPORT_RETRY_BASE_DELAY_MS * transport_attempt as u64;
                     runtime.log(
                         LogLevel::Warn,
                         &format!(
@@ -2330,7 +2463,11 @@ pub fn stream_chat<'a>(
                             describe_transport_error(&failure)
                         ),
                     );
-                    runtime.sleep(delay).await;
+                    observer.on_event(json!({
+                        "type": "steering",
+                        "message": format!("Model connection dropped — retrying (attempt {transport_attempt}/{MAX_TRANSPORT_RETRIES})…"),
+                    }));
+                    wait_for_retry(runtime, delay).await;
                     continue;
                 }
                 let message =
@@ -2586,7 +2723,8 @@ pub fn is_substantive_user_message(message: &AgentMessage) -> bool {
     if message.role != "user" || message.is_synthetic() {
         return false;
     }
-    let trimmed = message.content.trim();
+    let content = message.conversation_content_text();
+    let trimmed = content.trim();
     if trimmed.is_empty() {
         return false;
     }
@@ -2612,13 +2750,14 @@ pub fn is_substantive_user_message(message: &AgentMessage) -> bool {
 /// One-line description of a tool message for the summary.
 pub fn summarize_tool_message(message: &AgentMessage) -> String {
     let name = message.name.clone().unwrap_or_else(|| "tool".to_string());
-    let parsed: Value = serde_json::from_str(&message.content).unwrap_or(Value::Null);
+    let content = message.conversation_content_text();
+    let parsed: Value = serde_json::from_str(&content).unwrap_or(Value::Null);
     let ok = parsed.get("ok").and_then(|v| v.as_bool()).unwrap_or(true);
     let body = parsed
         .get("message")
         .and_then(|v| v.as_str())
         .map(str::to_string)
-        .unwrap_or_else(|| message.content.clone());
+        .unwrap_or(content);
     let compact: String = body.split_whitespace().collect::<Vec<_>>().join(" ");
     let snippet: String = compact.chars().take(SUMMARY_TEXT_LIMIT).collect();
     format!("{name}: {} {snippet}", if ok { "ok" } else { "FAILED" })
@@ -2634,14 +2773,11 @@ pub fn build_structured_conversation_summary(messages: &[AgentMessage]) -> Strin
     let mut open_questions: Vec<String> = Vec::new();
 
     for message in messages {
+        let content = message.conversation_content_text();
         match message.role.as_str() {
             "user" => {
                 if is_substantive_user_message(message) {
-                    let text: String = message
-                        .content
-                        .split_whitespace()
-                        .collect::<Vec<_>>()
-                        .join(" ");
+                    let text: String = content.split_whitespace().collect::<Vec<_>>().join(" ");
                     user_tasks.push(text.chars().take(SUMMARY_TEXT_LIMIT).collect());
                 }
             }
@@ -2651,7 +2787,7 @@ pub fn build_structured_conversation_summary(messages: &[AgentMessage]) -> Strin
                         assistant_steps.push(tool_call_signature(call));
                     }
                 }
-                let trimmed = message.content.trim();
+                let trimmed = content.trim();
                 if !trimmed.is_empty() {
                     let text: String = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
                     let snippet: String = text.chars().take(SUMMARY_TEXT_LIMIT).collect();
@@ -2669,10 +2805,9 @@ pub fn build_structured_conversation_summary(messages: &[AgentMessage]) -> Strin
                 }
             }
             "system" => {
-                let lower = message.content.to_lowercase();
+                let lower = content.to_lowercase();
                 if lower.contains("question") || lower.contains("ask the user") {
-                    let snippet: String =
-                        message.content.chars().take(SUMMARY_TEXT_LIMIT).collect();
+                    let snippet: String = content.chars().take(SUMMARY_TEXT_LIMIT).collect();
                     open_questions.push(snippet);
                 }
             }
@@ -2733,7 +2868,12 @@ pub fn reinject_substantive_user_task(summary: &str, messages: &[AgentMessage]) 
     let first_task = messages
         .iter()
         .find(|m| is_substantive_user_message(m))
-        .map(|m| m.content.split_whitespace().collect::<Vec<_>>().join(" "));
+        .map(|m| {
+            m.conversation_content_text()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
     let Some(task) = first_task else {
         return summary.to_string();
     };
@@ -2761,10 +2901,10 @@ pub fn reinject_substantive_user_task(summary: &str, messages: &[AgentMessage]) 
 pub fn serialize_conversation_for_summary(messages: &[AgentMessage]) -> String {
     let mut out = String::new();
     for message in messages {
+        let content = message.conversation_content_text();
         match message.role.as_str() {
             "tool" => {
-                let truncated: String = message
-                    .content
+                let truncated: String = content
                     .chars()
                     .take(SUMMARY_TOOL_RESULT_MAX_CHARS)
                     .collect();
@@ -2774,8 +2914,8 @@ pub fn serialize_conversation_for_summary(messages: &[AgentMessage]) -> String {
                 ));
             }
             "assistant" => {
-                if !message.content.trim().is_empty() {
-                    out.push_str(&format!("[assistant] {}\n", message.content));
+                if !content.trim().is_empty() {
+                    out.push_str(&format!("[assistant] {}\n", content));
                 }
                 if let Some(calls) = message.tool_calls.as_ref() {
                     for call in calls {
@@ -2787,7 +2927,7 @@ pub fn serialize_conversation_for_summary(messages: &[AgentMessage]) -> String {
                 }
             }
             role => {
-                out.push_str(&format!("[{role}] {}\n", message.content));
+                out.push_str(&format!("[{role}] {}\n", content));
             }
         }
     }
@@ -2896,6 +3036,7 @@ pub fn prune_history(
                 };
                 Some(AgentMessage {
                     content: stub,
+                    content_parts: None,
                     ..message.clone()
                 })
             }
@@ -3011,10 +3152,20 @@ pub fn retry_tool_call_decision(
     }
     if is_transient_failure(Some(message)) {
         return RetryDecision::Retry {
-            delay_ms: TRANSPORT_RETRY_BASE_DELAY_MS * (1u64 << attempt),
+            delay_ms: 500u64.saturating_mul(1u64 << attempt.min(3)).min(4_000),
         };
     }
     RetryDecision::GiveUp
+}
+
+// Bound cancellation latency even when the injected sleep cannot be interrupted.
+async fn wait_for_retry(runtime: &dyn AgentRuntime, delay_ms: u64) {
+    let mut remaining = delay_ms;
+    while remaining > 0 && !runtime.is_aborted() {
+        let step = remaining.min(50);
+        runtime.sleep(step).await;
+        remaining -= step;
+    }
 }
 
 /// Execute one tool call with the same retry/backoff/cancellation policy as the
@@ -3040,12 +3191,36 @@ pub fn execute_tool_call<'a>(
             "args": args,
         }));
 
+        let cancelled = |attempt| {
+            let result = json!({ "ok": false, "message": "Cancelled" });
+            let executed = ExecutedToolCall {
+                call_id: call.id.clone(),
+                tool: tool.clone(),
+                args: args.clone(),
+                ok: false,
+                message: "Cancelled".to_string(),
+                started_at,
+                completed_at: runtime.now_ms(),
+                retry_count: attempt,
+            };
+            let message = AgentMessage {
+                evidence_reference: runtime.project_tool_evidence(&call.id, &tool, &result),
+                ..AgentMessage::tool(
+                    call.id.clone(),
+                    call.function.name.clone(),
+                    runtime.serialize_tool_result_for_model(&result),
+                )
+            };
+            observer.on_event(json!({
+                "type": "tool_result", "callId": call.id, "tool": tool, "ok": false,
+                "durationMs": executed.completed_at - executed.started_at,
+            }));
+            ToolCallOutcome { executed, message }
+        };
         let mut attempt = 0usize;
         loop {
             if runtime.is_aborted() {
-                let (executed, message) =
-                    failed_tool_call_outcome(call, "aborted by user", runtime.now_ms());
-                return ToolCallOutcome { executed, message };
+                return cancelled(attempt);
             }
 
             let request = ToolExecutionRequest {
@@ -3067,27 +3242,29 @@ pub fn execute_tool_call<'a>(
                         .and_then(|v| v.as_str())
                         .unwrap_or_default()
                         .to_string();
-                    if !ok {
-                        if let RetryDecision::Retry { delay_ms } =
+                    if !ok
+                        && let RetryDecision::Retry { delay_ms } =
                             retry_tool_call_decision(&message_text, attempt, max_retries)
-                        {
-                            attempt += 1;
-                            runtime.log(
+                    {
+                        attempt += 1;
+                        runtime.log(
                                 LogLevel::Warn,
                                 &format!(
                                     "[agent-loop] transient tool failure for {tool} ({message_text}), retry {attempt}/{max_retries} in {delay_ms}ms"
                                 ),
                             );
-                            runtime.sleep(delay_ms).await;
-                            continue;
+                        if runtime.is_aborted() {
+                            return cancelled(attempt);
                         }
+                        observer.on_event(json!({
+                            "type": "tool_retry", "call_id": call.id,
+                            "attempt": attempt, "maxAttempts": max_retries,
+                        }));
+                        wait_for_retry(runtime, delay_ms).await;
+                        continue;
                     }
                     let evidence = runtime.project_tool_evidence(&call.id, &tool, &normalized);
-                    let model_text = if ok {
-                        runtime.serialize_tool_result_for_model(&normalized)
-                    } else {
-                        json!({ "ok": false, "message": message_text }).to_string()
-                    };
+                    let model_text = runtime.serialize_tool_result_for_model(&normalized);
                     let executed = ExecutedToolCall {
                         call_id: call.id.clone(),
                         tool: tool.clone(),
@@ -3116,6 +3293,9 @@ pub fn execute_tool_call<'a>(
                     return ToolCallOutcome { executed, message };
                 }
                 Err(message) => {
+                    if runtime.is_aborted() {
+                        return cancelled(attempt);
+                    }
                     if let RetryDecision::Retry { delay_ms } =
                         retry_tool_call_decision(&message, attempt, max_retries)
                     {
@@ -3126,11 +3306,22 @@ pub fn execute_tool_call<'a>(
                                 "[agent-loop] transient tool error for {tool} ({message}), retry {attempt}/{max_retries} in {delay_ms}ms"
                             ),
                         );
-                        runtime.sleep(delay_ms).await;
+                        if runtime.is_aborted() {
+                            return cancelled(attempt);
+                        }
+                        observer.on_event(json!({
+                            "type": "tool_retry", "call_id": call.id,
+                            "attempt": attempt, "maxAttempts": max_retries,
+                        }));
+                        wait_for_retry(runtime, delay_ms).await;
                         continue;
                     }
-                    let (mut executed, message) =
+                    let (mut executed, mut message) =
                         failed_tool_call_outcome(call, &message, runtime.now_ms());
+                    let result = json!({ "ok": false, "message": executed.message });
+                    message.evidence_reference =
+                        runtime.project_tool_evidence(&call.id, &tool, &result);
+                    message.content = runtime.serialize_tool_result_for_model(&result);
                     executed.started_at = started_at;
                     executed.completed_at = runtime.now_ms();
                     executed.retry_count = attempt;
@@ -3361,13 +3552,13 @@ pub fn run_agent_loop<'a>(
                         {
                             rate_limit_retries += 1;
                             let delay = rate_limit_backoff_ms(rate_limit_retries, retry_after_ms);
-                            observer.on_event(json!({
-                                "type": "retry",
-                                "reason": "rate_limit",
-                                "attempt": rate_limit_retries,
-                                "delayMs": delay,
-                            }));
-                            runtime.sleep(delay).await;
+                            if rate_limit_retries > 1 {
+                                observer.on_event(json!({
+                                    "type": "steering",
+                                    "message": format!("Rate limited by the model provider — retrying in {}s (attempt {rate_limit_retries}/{MAX_RATE_LIMIT_RETRIES})…", (delay + 500) / 1000),
+                                }));
+                            }
+                            wait_for_retry(runtime, delay).await;
                             continue;
                         }
                         if is_context_overflow_error(status, &error_body) {
@@ -3463,30 +3654,30 @@ pub fn run_agent_loop<'a>(
 
             // ── Degenerate-repetition recovery on streamed content ──
             let mut round_content = turn.content.clone();
-            if let Some((trimmed, matched)) = trim_degenerate_repetition(&round_content) {
-                if repetition_recoveries < MAX_REPETITION_RECOVERIES {
-                    repetition_recoveries += 1;
-                    observer.on_event(json!({
-                        "type": "repetition",
-                        "spanChars": matched.span_chars,
-                        "copies": matched.copies,
-                        "action": "truncate",
-                    }));
-                    round_content = trimmed;
-                    messages.push(AgentMessage {
+            if let Some((trimmed, matched)) = trim_degenerate_repetition(&round_content)
+                && repetition_recoveries < MAX_REPETITION_RECOVERIES
+            {
+                repetition_recoveries += 1;
+                observer.on_event(json!({
+                    "type": "repetition",
+                    "spanChars": matched.span_chars,
+                    "copies": matched.copies,
+                    "action": "truncate",
+                }));
+                round_content = trimmed;
+                messages.push(AgentMessage {
                         synthetic: Some(true),
                         ..AgentMessage::user(
                             "Your last reply started repeating itself. Do not repeat that text. Continue from where you stopped, or answer directly if you are done.",
                         )
                     });
-                    if !round_content.is_empty() {
-                        content = round_content.clone();
-                        segments.push(MessageSegment::Text {
-                            content: round_content.clone(),
-                        });
-                    }
-                    continue 'rounds;
+                if !round_content.is_empty() {
+                    content = round_content.clone();
+                    segments.push(MessageSegment::Text {
+                        content: round_content.clone(),
+                    });
                 }
+                continue 'rounds;
             }
 
             let mut round_thinking = turn.thinking.clone();
@@ -3568,18 +3759,18 @@ pub fn run_agent_loop<'a>(
                         duplicate_in_round += 1;
                     }
 
-                    if let Some(failures) = failure_counts.get(&signature) {
-                        if *failures >= MAX_IDENTICAL_FAILURES_PER_CALL {
-                            let reason = format!(
-                                "Refusing to run `{}` again: the same call already failed {} times.",
-                                call.function.name, failures
-                            );
-                            let (executed_call, message) =
-                                failed_tool_call_outcome(call, &reason, runtime.now_ms());
-                            executed.push(executed_call);
-                            messages.push(message);
-                            continue;
-                        }
+                    if let Some(failures) = failure_counts.get(&signature)
+                        && *failures >= MAX_IDENTICAL_FAILURES_PER_CALL
+                    {
+                        let reason = format!(
+                            "Refusing to run `{}` again: the same call already failed {} times.",
+                            call.function.name, failures
+                        );
+                        let (executed_call, message) =
+                            failed_tool_call_outcome(call, &reason, runtime.now_ms());
+                        executed.push(executed_call);
+                        messages.push(message);
+                        continue;
                     }
 
                     if options.swarm_mode && is_read_like_tool(&call.function.name) {
@@ -3656,23 +3847,22 @@ pub fn run_agent_loop<'a>(
                         max_output_tokens: checkpoint_output_tokens(llm.context_window),
                         session_id: Some(options.session_id.clone()),
                     };
-                    if let Ok(summary) = runtime.summarize(request).await {
-                        if !summary.trim().is_empty() {
-                            let summary = reinject_substantive_user_task(&summary, &messages);
-                            let max_chars =
-                                (checkpoint_output_tokens(llm.context_window) * 4) as usize;
-                            let summary = clamp_summary(&summary, max_chars);
-                            observer.on_assistant_checkpoint(&summary, None);
-                            // Replace the transcript with the summary and keep the
-                            // trailing user turn for continuity.
-                            let tail_start = messages
-                                .iter()
-                                .rposition(|m| m.role == "user")
-                                .unwrap_or(messages.len().saturating_sub(1));
-                            let tail: Vec<AgentMessage> = messages[tail_start..].to_vec();
-                            messages = vec![AgentMessage::system(summary)];
-                            messages.extend(tail);
-                        }
+                    if let Ok(summary) = runtime.summarize(request).await
+                        && !summary.trim().is_empty()
+                    {
+                        let summary = reinject_substantive_user_task(&summary, &messages);
+                        let max_chars = (checkpoint_output_tokens(llm.context_window) * 4) as usize;
+                        let summary = clamp_summary(&summary, max_chars);
+                        observer.on_assistant_checkpoint(&summary, None);
+                        // Replace the transcript with the summary and keep the
+                        // trailing user turn for continuity.
+                        let tail_start = messages
+                            .iter()
+                            .rposition(|m| m.role == "user")
+                            .unwrap_or(messages.len().saturating_sub(1));
+                        let tail: Vec<AgentMessage> = messages[tail_start..].to_vec();
+                        messages = vec![AgentMessage::system(summary)];
+                        messages.extend(tail);
                     }
                 }
 
@@ -3805,6 +3995,7 @@ fn is_read_like_tool(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
 
     // ── Minimal executor: all fakes resolve immediately, so polling a boxed
@@ -4679,7 +4870,64 @@ mod tests {
         assert_eq!(host.call_count(), 2);
         assert_eq!(result.content, "recovered");
         assert_eq!(runtime.total_slept(), 3_000);
-        assert!(observer.has_event("retry", "reason", "rate_limit"));
+        assert!(
+            !observer
+                .types()
+                .iter()
+                .any(|kind| kind == "steering" || kind == "retry")
+        );
+    }
+
+    #[test]
+    fn provider_retry_observer_matches_typescript_notices() {
+        let transport = || LlmHttpResponse {
+            transport_failure: Some(TransportFailure {
+                cause_code: Some("ECONNRESET".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let cases = vec![
+            (
+                vec![
+                    http_error(429, "slow down"),
+                    http_error(429, "slow down"),
+                    sse_text(&["ok"], "stop"),
+                ],
+                vec!["Rate limited by the model provider — retrying in 4s (attempt 2/5)…"],
+            ),
+            (
+                vec![transport(), transport(), sse_text(&["ok"], "stop")],
+                vec![
+                    "Model connection dropped — retrying (attempt 1/2)…",
+                    "Model connection dropped — retrying (attempt 2/2)…",
+                ],
+            ),
+        ];
+        for (responses, expected) in cases {
+            let runtime = FakeRuntime::new();
+            let host = FakeHost::new(responses);
+            let tools = FakeTools::new(vec![]);
+            let observer = RecordingObserver::new();
+            let steering = SteeringController::new(1_000);
+            let result = run(
+                base_options(),
+                &runtime,
+                &host,
+                &tools,
+                &observer,
+                &steering,
+            );
+            assert_eq!(result.content, "ok");
+            let events = observer.events.lock().unwrap();
+            let notices: Vec<&str> = events
+                .iter()
+                .filter(|event| event["type"] == "steering")
+                .map(|event| event["message"].as_str().unwrap())
+                .collect();
+            assert_eq!(notices, expected);
+            assert!(!events.iter().any(|event| event["type"] == "retry"));
+        }
     }
 
     #[test]
@@ -5050,6 +5298,337 @@ mod tests {
     }
 
     #[test]
+    fn provider_retry_wait_stops_when_aborted() {
+        struct AbortOnSleep {
+            aborted: AtomicBool,
+            slept: AtomicUsize,
+        }
+        impl AgentRuntime for AbortOnSleep {
+            fn sleep<'a>(&'a self, ms: u64) -> BoxFuture<'a, ()> {
+                self.slept.fetch_add(ms as usize, Ordering::SeqCst);
+                self.aborted.store(true, Ordering::SeqCst);
+                Box::pin(async {})
+            }
+            fn is_aborted(&self) -> bool {
+                self.aborted.load(Ordering::SeqCst)
+            }
+        }
+        let failures = [
+            http_error(429, "{\"error\":{\"message\":\"slow down\"}}"),
+            LlmHttpResponse {
+                transport_failure: Some(TransportFailure {
+                    cause_code: Some("ECONNRESET".into()),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        ];
+        for failure in failures {
+            let runtime = AbortOnSleep {
+                aborted: AtomicBool::new(false),
+                slept: AtomicUsize::new(0),
+            };
+            let host = FakeHost::new(vec![failure, sse_text(&["unexpected"], "stop")]);
+            let tools = FakeTools::new(vec![]);
+            let observer = RecordingObserver::new();
+            let steering = SteeringController::new(1_000);
+            let result = block_on(run_agent_loop(
+                base_options(),
+                &runtime,
+                host.as_ref(),
+                tools.as_ref(),
+                observer.as_ref(),
+                &steering,
+            ));
+            assert_eq!(result.aborted, Some(true));
+            assert_eq!(host.call_count(), 1);
+            assert_eq!(runtime.slept.load(Ordering::SeqCst), 50);
+        }
+    }
+
+    #[test]
+    fn tool_retry_wait_stops_when_aborted() {
+        struct AbortOnSleep {
+            aborted: AtomicBool,
+            slept: AtomicUsize,
+        }
+        impl AgentRuntime for AbortOnSleep {
+            fn sleep<'a>(&'a self, ms: u64) -> BoxFuture<'a, ()> {
+                self.slept.fetch_add(ms as usize, Ordering::SeqCst);
+                self.aborted.store(true, Ordering::SeqCst);
+                Box::pin(async {})
+            }
+            fn is_aborted(&self) -> bool {
+                self.aborted.load(Ordering::SeqCst)
+            }
+        }
+        let runtime = AbortOnSleep {
+            aborted: AtomicBool::new(false),
+            slept: AtomicUsize::new(0),
+        };
+        let tools = FakeTools::new(vec![(
+            "file.read",
+            Ok(json!({"ok": false, "message": "timeout"})),
+        )]);
+        let call = OpenAiToolCall::new("call-1", "file.read", "{}");
+        let observer = RecordingObserver::new();
+        let options = base_options();
+        let outcome = block_on(execute_tool_call(
+            &runtime,
+            tools.as_ref(),
+            observer.as_ref(),
+            &options,
+            &call,
+        ));
+        assert_eq!(outcome.executed.message, "Cancelled");
+        let events = observer.events.lock().unwrap();
+        assert_eq!(
+            events[1],
+            json!({"type": "tool_retry", "call_id": "call-1", "attempt": 1, "maxAttempts": options.max_retries})
+        );
+        assert_eq!(events[2]["type"], "tool_result");
+        assert_eq!(runtime.slept.load(Ordering::SeqCst), 50);
+        assert_eq!(tools.call_names().len(), 1);
+        assert_eq!(
+            retry_tool_call_decision("timeout", 0, 10),
+            RetryDecision::Retry { delay_ms: 500 }
+        );
+        assert_eq!(
+            retry_tool_call_decision("timeout", 4, 10),
+            RetryDecision::Retry { delay_ms: 4_000 }
+        );
+    }
+
+    #[test]
+    fn cancellation_during_tool_error_stops_retries_and_projects_result() {
+        let runtime = FakeRuntime::new();
+        let tools = FakeTools::new(vec![("file.read", Err("timeout".to_string()))]);
+        *tools.abort_flag.lock().unwrap() = Some(runtime.abort_flag());
+        let call = OpenAiToolCall::new("call-1", "file.read", "{}");
+        let outcome = block_on(execute_tool_call(
+            runtime.as_ref(),
+            tools.as_ref(),
+            &NullObserver,
+            &base_options(),
+            &call,
+        ));
+        assert!(!outcome.executed.ok);
+        assert_eq!(outcome.executed.message, "Cancelled");
+        assert_eq!(
+            serde_json::from_str::<Value>(&outcome.message.content).unwrap(),
+            json!({"ok": false, "message": "Cancelled"})
+        );
+        assert_eq!(
+            outcome.message.evidence_reference.as_deref(),
+            Some("evidence:file.read:call-1")
+        );
+        assert_eq!(tools.call_names().len(), 1);
+        assert_eq!(runtime.sleep_count(), 0);
+    }
+
+    #[test]
+    fn thrown_tool_error_uses_model_projection_and_evidence() {
+        let runtime = FakeRuntime::new();
+        let tools = FakeTools::new(vec![("file.read", Err("denied".to_string()))]);
+        let call = OpenAiToolCall::new("call-1", "file.read", "{}");
+        let outcome = block_on(execute_tool_call(
+            runtime.as_ref(),
+            tools.as_ref(),
+            &NullObserver,
+            &base_options(),
+            &call,
+        ));
+        assert!(!outcome.executed.ok);
+        assert_eq!(
+            serde_json::from_str::<Value>(&outcome.message.content).unwrap(),
+            json!({
+                "ok": false, "message": "TOOL ERROR: denied"
+            })
+        );
+        assert_eq!(
+            outcome.message.evidence_reference.as_deref(),
+            Some("evidence:file.read:call-1")
+        );
+    }
+
+    #[test]
+    fn failed_tool_result_preserves_projected_data_in_history() {
+        let runtime = FakeRuntime::new();
+        let tools = FakeTools::new(vec![(
+            "file.read",
+            Ok(json!({
+                "ok": false, "message": "denied", "data": {
+                    "reason": "scope", "terminalOutput": "duplicate", "output": "detail"
+                }
+            })),
+        )]);
+        let call = OpenAiToolCall::new("call-1", "file.read", "{}");
+        let outcome = block_on(execute_tool_call(
+            runtime.as_ref(),
+            tools.as_ref(),
+            &NullObserver,
+            &base_options(),
+            &call,
+        ));
+        assert!(!outcome.executed.ok);
+        assert_eq!(
+            serde_json::from_str::<Value>(&outcome.message.content).unwrap(),
+            json!({
+                "ok": false, "message": "denied", "data": {"reason": "scope", "output": "detail"}
+            })
+        );
+        assert_eq!(
+            outcome.message.evidence_reference.as_deref(),
+            Some("evidence:file.read:call-1")
+        );
+    }
+
+    #[test]
+    fn agent_runtime_defaults_estimate_wire_content() {
+        struct DefaultEstimatorRuntime;
+        impl AgentRuntime for DefaultEstimatorRuntime {
+            fn sleep<'a>(&'a self, _ms: u64) -> BoxFuture<'a, ()> {
+                Box::pin(async {})
+            }
+            fn is_aborted(&self) -> bool {
+                false
+            }
+        }
+
+        let runtime = DefaultEstimatorRuntime;
+        let text: AgentMessage = serde_json::from_value(json!({
+            "role": "user", "content": "abcdefgh"
+        }))
+        .unwrap();
+        let multimodal: AgentMessage = serde_json::from_value(json!({
+            "role": "user", "content": [
+                {"type": "text", "text": "abcdefgh"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,SECRET"}}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(runtime.estimate_tokens("abcdefgh"), 3);
+        assert_eq!(runtime.estimate_message_tokens(&text), 7);
+        // The reference heuristic counts array entries, not image size.
+        assert_eq!(runtime.estimate_message_tokens(&multimodal), 5);
+        let serialized = runtime.serialize_tool_result_for_model(&json!({
+            "ok": true, "message": "done", "data": {
+                "output": "visible", "terminalOutput": "duplicate", "terminalOutputAnsi": "ansi"
+            }, "unexpected": "not model output"
+        }));
+        assert_eq!(
+            serde_json::from_str::<Value>(&serialized).unwrap(),
+            json!({
+                "ok": true, "message": "done", "data": {"output": "visible"}
+            })
+        );
+        let large = runtime.serialize_tool_result_for_model(&json!({
+            "ok": false, "message": "failed", "data": {"output": "x".repeat(40_000)}
+        }));
+        assert!(large.encode_utf16().count() <= crate::tools::model_result::MODEL_RESULT_MAX_CHARS);
+        assert_eq!(
+            serde_json::from_str::<Value>(&large).unwrap()["truncated"],
+            true
+        );
+    }
+
+    #[test]
+    fn agent_loop_multimodal_compaction_preserves_text_without_image_data() {
+        let message: AgentMessage = serde_json::from_value(json!({
+            "role": "user", "content": [
+                {"type": "text", "text": "Inspect this diagram"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,SECRET"}},
+                {"type": "text", "text": "Find the fault"},
+                {"type": "unknown", "text": "ignore"}
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            message.conversation_content_text(),
+            "Inspect this diagram\n[image attached]\nFind the fault"
+        );
+        assert!(is_substantive_user_message(&message));
+        let messages = [message];
+        for summary in [
+            build_structured_conversation_summary(&messages),
+            serialize_conversation_for_summary(&messages),
+            reinject_substantive_user_task("## Progress\n- working", &messages),
+        ] {
+            assert!(summary.contains("Inspect this diagram"));
+            assert!(summary.contains("[image attached]"));
+            assert!(!summary.contains("SECRET"));
+        }
+    }
+
+    #[test]
+    fn agent_loop_multimodal_content_wire_and_ollama_regression() {
+        let parts = json!([
+            {"type":"text", "text":"first"},
+            {"type":"image_url", "image_url":{"url":"data:image/png;base64, YWJj  "}},
+            {"type":"text", "text":"second"},
+            {"type":"image_url", "image_url":{"url":" https://example.test/image "}},
+            {"type":"image_url", "image_url":{"url":42}},
+            {"type":"unknown"}, null
+        ]);
+        let input = json!({"role":"user", "content":parts});
+        let message: AgentMessage = serde_json::from_value(input.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&message).unwrap(), input);
+        assert_eq!(
+            serialize_messages(std::slice::from_ref(&message), false),
+            vec![input]
+        );
+        assert_eq!(
+            serialize_messages_for_ollama(&[message]),
+            vec![json!({
+                "role":"user", "content":"first\nsecond", "images":["YWJj", "https://example.test/image"]
+            })]
+        );
+
+        let empty: AgentMessage =
+            serde_json::from_value(json!({"role":"user", "content":[]})).unwrap();
+        assert_eq!(
+            serialize_messages_for_ollama(&[empty]),
+            vec![json!({"role":"user", "content":""})]
+        );
+        let plain = AgentMessage::user("text");
+        assert_eq!(
+            serde_json::to_value(&plain).unwrap(),
+            json!({"role":"user", "content":"text"})
+        );
+        assert!(
+            serde_json::from_value::<AgentMessage>(json!({"role":"user", "content":null})).is_err()
+        );
+    }
+
+    #[test]
+    fn serialize_ollama_preserves_calls_and_nonempty_reasoning() {
+        let messages = vec![
+            AgentMessage {
+                tool_calls: Some(vec![]),
+                thinking: Some("reason".into()),
+                ..AgentMessage::assistant("")
+            },
+            AgentMessage {
+                name: Some(String::new()),
+                thinking: Some(String::new()),
+                ..AgentMessage::tool("id", "ignored", "ok")
+            },
+            AgentMessage {
+                tool_calls: Some(vec![OpenAiToolCall::new("id", "read", "invalid")]),
+                ..AgentMessage::assistant("")
+            },
+        ];
+        assert_eq!(
+            serialize_messages_for_ollama(&messages),
+            vec![
+                json!({"role":"assistant", "content":"", "tool_calls":[], "thinking":"reason"}),
+                json!({"role":"tool", "content":"ok"}),
+                json!({"role":"assistant", "content":"", "tool_calls":[{"function":{"name":"read", "arguments":{}}}]}),
+            ]
+        );
+    }
+
+    #[test]
     fn transient_failure_classification_table() {
         for message in [
             "connection timeout",
@@ -5096,7 +5675,7 @@ mod tests {
         );
         assert_eq!(
             retry_tool_call_decision("timeout", 0, 2),
-            RetryDecision::Retry { delay_ms: 2_000 }
+            RetryDecision::Retry { delay_ms: 500 }
         );
     }
 

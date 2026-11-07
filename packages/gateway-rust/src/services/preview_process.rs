@@ -202,6 +202,7 @@ impl LocalPreviewRunner {
             url: url.to_string(),
             cancel: owned_cancel,
             task: Some(task),
+            cleanup_error: None,
         };
         let ready = async {
             loop {
@@ -241,6 +242,7 @@ pub struct PreviewProcess {
     pub url: String,
     cancel: ProcessCancellation,
     task: Option<JoinHandle<Result<ProcessResult, String>>>,
+    cleanup_error: Option<String>,
 }
 impl PreviewProcess {
     #[cfg(test)]
@@ -252,6 +254,7 @@ impl PreviewProcess {
             url: String::new(),
             cancel: ProcessCancellation::default(),
             task: Some(task),
+            cleanup_error: None,
         }
     }
     pub fn is_finished(&self) -> bool {
@@ -260,13 +263,16 @@ impl PreviewProcess {
     pub async fn stop(&mut self) -> Result<Option<ProcessResult>, String> {
         self.cancel.cancel();
         let Some(task) = self.task.as_mut() else {
-            return Ok(None);
+            return match &self.cleanup_error {
+                Some(error) => Err(error.clone()),
+                None => Ok(None),
+            };
         };
         let result = tokio::time::timeout(Duration::from_secs(5), task).await;
         // Keep ownership in self across the await: cancelling this future must
         // leave Drop able to abort the process task.
         let task = self.task.take().expect("process task retained during stop");
-        match result {
+        let result = match result {
             Ok(Ok(result)) => result.map(Some),
             Ok(Err(_)) => Err("Preview process owner failed".into()),
             Err(_) => {
@@ -274,7 +280,11 @@ impl PreviewProcess {
                 let _ = task.await;
                 Err("Preview process cleanup timed out".into())
             }
+        };
+        if let Err(error) = &result {
+            self.cleanup_error = Some(error.clone());
         }
+        result
     }
 }
 impl Drop for PreviewProcess {
@@ -302,6 +312,95 @@ mod tests {
             applications: vec![],
         }
     }
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn stop_reaps_real_process_before_releasing_pool_capacity() {
+        use std::collections::HashMap;
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .find(|path| path.join("packages/gateway-rust/Cargo.toml").is_file())
+            .unwrap()
+            .to_path_buf();
+        let dir = root.join(".jait/artifacts/gateway-rust/preview-stop-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let marker = dir.join(format!("child-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+        let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
+        let cancel = ProcessCancellation::default();
+        let request = ProcessRequest {
+            argv: vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                format!(
+                    "printf '%s' \"$$\" > '{}'; exec /bin/sleep 30",
+                    marker.display()
+                ),
+            ],
+            cwd: root.clone(),
+            environment: HashMap::new(),
+            input: None,
+            timeout: Duration::from_secs(40),
+            output_limit: 1024,
+        };
+        let task = tokio::spawn({
+            let pool = pool.clone();
+            let cancel = cancel.clone();
+            async move { pool.run(request, cancel).await.map_err(|e| e.to_string()) }
+        });
+        let mut process = PreviewProcess {
+            port: 1,
+            command: String::new(),
+            url: String::new(),
+            cancel,
+            task: Some(task),
+            cleanup_error: None,
+        };
+        let pid: u32 = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                if let Some(pid) = std::fs::read_to_string(&marker)
+                    .ok()
+                    .and_then(|text| text.parse().ok())
+                {
+                    break pid;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("child did not start");
+        let result = process.stop().await.unwrap().unwrap();
+        assert!(result.cancelled);
+        assert!(
+            !PathBuf::from(format!("/proc/{pid}")).exists(),
+            "child was not reaped"
+        );
+        let follow_up = ProcessRequest {
+            argv: vec!["/bin/true".into()],
+            cwd: root,
+            environment: HashMap::new(),
+            input: None,
+            timeout: Duration::from_secs(2),
+            output_limit: 1024,
+        };
+        let result = tokio::time::timeout(
+            Duration::from_secs(3),
+            pool.run(follow_up, ProcessCancellation::default()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result.exit_code, Some(0));
+        let _ = std::fs::remove_file(marker);
+    }
+
+    #[tokio::test]
+    async fn failed_stop_remains_unconfirmed_on_retry() {
+        let task = tokio::spawn(async { Err("cleanup failed".to_owned()) });
+        let mut process = PreviewProcess::for_test(task);
+        assert!(matches!(process.stop().await, Err(error) if error == "cleanup failed"));
+        assert!(matches!(process.stop().await, Err(error) if error == "cleanup failed"));
+    }
+
     #[tokio::test]
     async fn cancellation_never_requests_launch_authority() {
         let calls = Arc::new(AtomicUsize::new(0));

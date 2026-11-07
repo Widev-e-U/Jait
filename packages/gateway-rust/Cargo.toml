@@ -38,6 +38,8 @@ rustls-native-certs = "0.8.5"
 rusqlite = { version = "0.40.2", features = ["bundled", "backup", "hooks"] }
 uuid = { version = "1.0", features = ["v4"] }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value", "preserve_order", "float_roundtrip"] }
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "process", "io-util", "fs"] }
@@ -59,3 +61,4 @@ panic = "unwind"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["test-util"] }
+tower = { version = "0.5", features = ["util"] }

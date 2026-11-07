@@ -12,8 +12,8 @@ use std::sync::{Arc, Mutex};
 
 use jait_gateway::services::code_graph::engine::{ExecOutput, ExecRequest, Executor, GraphError};
 use jait_gateway::services::code_graph::runtime::{
-    includes_expected_version, runtime_paths, supports_python, GraphifyRuntime, RuntimeStatus,
-    MIN_PYTHON_VERSION, PACKAGE_NAME, PACKAGE_VERSION,
+    GraphifyRuntime, MIN_PYTHON_VERSION, PACKAGE_NAME, PACKAGE_VERSION, RuntimeStatus,
+    includes_expected_version, runtime_paths, supports_python,
 };
 
 type Reply = Result<(&'static str, &'static str), &'static str>;
@@ -26,9 +26,11 @@ fn runtime(
 ) -> GraphifyRuntime {
     let table: Arc<Vec<(String, Reply)>> = Arc::new(replies);
     let execute: Executor = Arc::new(move |request: ExecRequest| {
-        seen.lock()
-            .unwrap()
-            .push(format!("{} {}", request.command, request.args.join(" ")).trim().to_string());
+        seen.lock().unwrap().push(
+            format!("{} {}", request.command, request.args.join(" "))
+                .trim()
+                .to_string(),
+        );
         let key = request.command.clone();
         let reply = table
             .iter()
@@ -76,13 +78,28 @@ fn managed_paths_and_package_pins_match_the_installer() {
     let posix = runtime_paths("/srv/jait-state", false);
     assert_eq!(posix.runtime_dir, "/srv/jait-state/runtime/graphify");
     assert_eq!(posix.venv_dir, "/srv/jait-state/runtime/graphify/venv");
-    assert_eq!(posix.python_path, "/srv/jait-state/runtime/graphify/venv/bin/python");
-    assert_eq!(posix.command_path, "/srv/jait-state/runtime/graphify/venv/bin/graphify");
-    assert_eq!(posix.metadata_path, "/srv/jait-state/runtime/graphify/runtime.json");
+    assert_eq!(
+        posix.python_path,
+        "/srv/jait-state/runtime/graphify/venv/bin/python"
+    );
+    assert_eq!(
+        posix.command_path,
+        "/srv/jait-state/runtime/graphify/venv/bin/graphify"
+    );
+    assert_eq!(
+        posix.metadata_path,
+        "/srv/jait-state/runtime/graphify/runtime.json"
+    );
 
     let windows = runtime_paths("/srv/jait-state", true);
-    assert_eq!(windows.python_path, "/srv/jait-state/runtime/graphify/venv/Scripts/python.exe");
-    assert_eq!(windows.command_path, "/srv/jait-state/runtime/graphify/venv/Scripts/graphify.exe");
+    assert_eq!(
+        windows.python_path,
+        "/srv/jait-state/runtime/graphify/venv/Scripts/python.exe"
+    );
+    assert_eq!(
+        windows.command_path,
+        "/srv/jait-state/runtime/graphify/venv/Scripts/graphify.exe"
+    );
 
     // The default command is the managed path when nothing overrides it.
     let status_free = GraphifyRuntime::new(
@@ -124,41 +141,62 @@ async fn inspect_enforces_the_pin_only_for_the_managed_runtime() {
     let good = runtime(
         "/srv/jait-state",
         &[],
-        vec![("/srv/jait-state/runtime/graphify/venv/bin/graphify".to_string(), Ok(("graphify 0.9.30\n", "")))],
+        vec![(
+            "/srv/jait-state/runtime/graphify/venv/bin/graphify".to_string(),
+            Ok(("graphify 0.9.30\n", "")),
+        )],
         seen.clone(),
     );
     let status: RuntimeStatus = good.inspect().await;
     assert!(status.ready);
     assert!(status.managed);
-    assert_eq!(status.command, "/srv/jait-state/runtime/graphify/venv/bin/graphify");
+    assert_eq!(
+        status.command,
+        "/srv/jait-state/runtime/graphify/venv/bin/graphify"
+    );
     assert_eq!(status.version.as_deref(), Some("graphify 0.9.30"));
     assert_eq!(status.expected_version, "0.9.30");
     assert_eq!(status.error, None);
-    assert_eq!(*seen.lock().unwrap(), vec!["/srv/jait-state/runtime/graphify/venv/bin/graphify --version"]);
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec!["/srv/jait-state/runtime/graphify/venv/bin/graphify --version"]
+    );
 
     let stale = runtime(
         "/srv/jait-state",
         &[],
-        vec![("/srv/jait-state/runtime/graphify/venv/bin/graphify".to_string(), Ok(("0.9.29", "")))],
+        vec![(
+            "/srv/jait-state/runtime/graphify/venv/bin/graphify".to_string(),
+            Ok(("0.9.29", "")),
+        )],
         Arc::new(Mutex::new(Vec::new())),
     )
     .inspect()
     .await;
     assert!(!stale.ready);
     assert_eq!(stale.version.as_deref(), Some("0.9.29"));
-    assert_eq!(stale.error.as_deref(), Some("Expected Graphify 0.9.30, found 0.9.29"));
+    assert_eq!(
+        stale.error.as_deref(),
+        Some("Expected Graphify 0.9.30, found 0.9.29")
+    );
 
     let silent = runtime(
         "/srv/jait-state",
         &[],
-        vec![("/srv/jait-state/runtime/graphify/venv/bin/graphify".to_string(), Ok(("  ", " \n")))],
+        vec![(
+            "/srv/jait-state/runtime/graphify/venv/bin/graphify".to_string(),
+            Ok(("  ", " \n")),
+        )],
         Arc::new(Mutex::new(Vec::new())),
     )
     .inspect()
     .await;
     assert!(!silent.ready);
     assert_eq!(silent.version, None);
-    assert_eq!(silent.error.as_deref(), Some("Graphify returned no version information"));
+    assert_eq!(
+        silent.error.as_deref(),
+        Some("Graphify returned no version information")
+    );
 
     // Unmanaged command: any reported version is accepted, probe errors surface.
     let unmanaged = runtime(
@@ -244,6 +282,9 @@ async fn provision_reports_python_candidates_in_reference_order() {
         error.message,
         "JAIT_GRAPHIFY_COMMAND points to an unusable Graphify executable (/opt/graphify): spawn ENOENT"
     );
-    assert_eq!(*seen.lock().unwrap(), vec!["/opt/graphify --version".to_string()]);
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec!["/opt/graphify --version".to_string()]
+    );
     let _ = std::fs::remove_dir_all(&state);
 }

@@ -43,7 +43,11 @@ export function AgentControlButton({ state, runningCount, avatars = [], pending,
                 className={cn('w-full gap-2 rounded-lg px-2', compactSidebar ? 'h-auto min-h-20 justify-center px-0 py-2' : collapsed ? 'h-10 justify-center px-0' : 'h-11 justify-start', state.halted && 'bg-amber-500/5 text-amber-700 dark:text-amber-300')}
               >
                 <span className={cn('inline-flex shrink-0 items-center gap-0.5', compactSidebar && 'justify-center')} aria-hidden="true">
-                  <TeamAvatar members={members} layout="stack" size={header ? 24 : 32} className={cn('agent-control-avatars', compactSidebar && 'agent-control-avatars-vertical')} />
+                  {header && avatars.length === 0 ? (
+                    <span data-agent-avatar-skeleton className="h-6 w-10 rounded-full bg-muted motion-safe:animate-pulse" />
+                  ) : (
+                    <TeamAvatar members={members} layout="stack" size={header ? 24 : 32} className={cn('agent-control-avatars', compactSidebar && 'agent-control-avatars-vertical')} />
+                  )}
                   {/* No resting status dot: halted/ready is already carried by the button tint, the tooltip and the live sr-only status. Only an in-flight action shows a spinner. */}
                   {pending && <span className="flex h-2 w-1.5 shrink-0 items-center justify-center">
                     <Loader2 className="h-1.5 w-1.5 animate-spin" />

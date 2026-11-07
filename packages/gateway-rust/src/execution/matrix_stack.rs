@@ -78,11 +78,32 @@ fn err(message: &'static str) -> String {
 /// Derive the reference container/network name from the data directory string.
 /// Inputs must already be normalized and backed by a separately authorized scope.
 pub fn runtime_name(data_dir: &str) -> Result<String, String> {
-    validate_data_dir(data_dir)?;
+    let canonical = canonical_data_dir(data_dir)?;
     Ok(format!(
         "jait-matrix-{}",
-        &hex::encode(Sha256::digest(data_dir.as_bytes()))[..10]
+        &hex::encode(Sha256::digest(canonical.as_bytes()))[..10]
     ))
+}
+
+/// Canonical spelling of the mount source: `/` plus each normal segment.
+///
+/// The reference implementation hashes the resolved directory, so `/data/`
+/// and `/data/./matrix` must name the same runtime as `/data` and
+/// `/data/matrix`. Hashing the raw string would give one directory several
+/// container names, and therefore several containers mounting it at once.
+fn canonical_data_dir(data_dir: &str) -> Result<String, String> {
+    validate_data_dir(data_dir)?;
+    let mut canonical = String::new();
+    for part in Path::new(data_dir).components() {
+        if let Component::Normal(segment) = part {
+            canonical.push('/');
+            canonical.push_str(&segment.to_string_lossy());
+        }
+    }
+    if canonical.is_empty() {
+        canonical.push('/');
+    }
+    Ok(canonical)
 }
 
 fn validate_data_dir(data_dir: &str) -> Result<(), String> {

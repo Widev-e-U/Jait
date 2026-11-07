@@ -1196,7 +1196,7 @@ impl GitHubPullRequestService {
         if cancel.is_cancelled() {
             return Err(ForgeError::Cancelled.into());
         }
-        let (owner, session_root, authority, pool) = self.session.conflict_context();
+        let (owner, session_root, authority, pool) = self.session.conflict_context()?;
         let root = lease.root();
         if lease.owner() != owner
             || !root.is_absolute()

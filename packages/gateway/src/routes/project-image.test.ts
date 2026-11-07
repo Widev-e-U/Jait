@@ -11,9 +11,9 @@ import { ProjectStateService } from "../services/project-state.js";
 import { SurfaceRegistry, FileSystemSurfaceFactory } from "../surfaces/index.js";
 import { WsControlPlane } from "../ws.js";
 import { UserService } from "../services/users.js";
-import { join } from "node:path";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { mkdtemp, mkdir, writeFile, rm, symlink, truncate } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 describe("project image previews", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
@@ -83,7 +83,9 @@ describe("project image previews", () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(tmpdir(), "jait-reveal-route-"));
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", import.meta.url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     nestedFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(nestedFile, "before", "utf-8");
@@ -135,4 +137,46 @@ describe("project image previews", () => {
     const response = await fetch(`${address}/api/project/read?format=image&surfaceId=${surfaceId}&path=${encodeURIComponent(nestedFile)}`);
     expect(response.status).toBe(401);
   });
+
+  it("downloads exact PDF bytes and preserves Unicode and reserved filename characters", async () => {
+    const file = join(writableTestRoot, "résumé #1 & notes.pdf");
+    const bytes = Buffer.from("%PDF-1.7\n\x00\xffbinary\n%%EOF", "latin1");
+    await writeFile(file, bytes);
+    const response = await authedFetch(`${address}/api/project/download?path=${encodeURIComponent(file)}`);
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+    expect(response.headers.get("content-type")).toBe("application/octet-stream");
+    expect(response.headers.get("content-disposition")).toContain("attachment;");
+    expect(response.headers.get("content-disposition")).toContain(encodeURIComponent("résumé #1 & notes.pdf"));
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("requires authentication and denies another user's downloads with or without a surface ID", async () => {
+    const url = `${address}/api/project/download?path=${encodeURIComponent(nestedFile)}`;
+    expect((await fetch(url)).status).toBe(401);
+    for (const suffix of ["", `&surfaceId=${surfaceId}`]) {
+      expect((await fetch(url + suffix, { headers: { Authorization: "Bearer " + foreignToken } })).status).toBe(404);
+    }
+  });
+
+  it("rejects missing files, directories, traversal and symlink escapes", async () => {
+    const escaped = join(writableTestRoot, "escape");
+    await symlink(fileURLToPath(new URL("./project.ts", import.meta.url)), escaped);
+    for (const file of [join(writableTestRoot, "missing.pdf"), writableTestRoot,
+      resolve(writableTestRoot, "../outside.pdf"), escaped]) {
+      const response = await authedFetch(`${address}/api/project/download?surfaceId=${surfaceId}&path=${encodeURIComponent(file)}`);
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.headers.get("content-disposition")).toBeNull();
+    }
+  });
+
+  it("rejects downloads larger than 50 MiB and malformed requests", async () => {
+    const file = join(writableTestRoot, "large.zip");
+    await writeFile(file, "");
+    await truncate(file, 50 * 1024 * 1024 + 1);
+    expect((await authedFetch(`${address}/api/project/download?surfaceId=${surfaceId}&path=${encodeURIComponent(file)}`)).status).toBe(413);
+    expect((await authedFetch(`${address}/api/project/download`)).status).toBe(400);
+  });
+
 });

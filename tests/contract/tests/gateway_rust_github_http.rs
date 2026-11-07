@@ -131,6 +131,7 @@ async fn observed_options(steps: Value, no_checker: bool, no_sink: bool) -> (Val
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let app = GithubAppRoutes {
+        intake: None,
         auth: auth.clone(),
         port: manager,
         agent_exists: (!no_checker).then(|| {

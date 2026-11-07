@@ -298,17 +298,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
   const createManagedDeliveryWorktree = (thread: ThreadRow) => prepareDeliveryWorktree(thread, deps.threadService, gitService);
 
+  // Provider and model are deliberately absent here. Autonomous work must
+  // never inherit or resolve them: the user's explicit choice is the only
+  // source, and a thread without one is refused instead of started.
   const resolveSelectedThreadDefaults = (context: ToolContext) => {
-    const defaults = resolveThreadSelectionDefaults({
-      userId: context.userId,
-      sessionId: context.sessionId,
-      userService: deps.userService,
-      sessionState: deps.sessionState,
-    });
-    const contextProviderId = normalizeThreadProviderId(context.providerId);
+    const defaults = recordedSessionSelection(context);
     return {
-      providerId: contextProviderId ?? (defaults.providerId ? normalizeThreadProviderId(defaults.providerId) : null),
-      model: (typeof context.model === "string" && context.model.trim() ? context.model.trim() : undefined) ?? defaults.model,
       reasoningEffort: defaults.reasoningEffort,
       runtimeMode:
         (context.runtimeMode === "full-access" || context.runtimeMode === "supervised" ? context.runtimeMode : undefined)
@@ -316,9 +311,24 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     };
   };
 
+  // The provider and model the user already picked on this chat, if any.
+  // Account-level settings are never consulted: a missing recorded choice
+  // stays missing and the caller has to ask the user.
+  const recordedSessionSelection = (context: ToolContext, sessionIdOverride?: string) =>
+    resolveThreadSelectionDefaults({
+      userId: context.userId,
+      sessionId: sessionIdOverride?.trim() || context.sessionId,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
+    });
+
+  // A thread's provider comes only from an explicit request or from the
+  // selection already recorded on this chat — never from the surrounding
+  // chat's live runtime.
   const resolveProviderId = (
     context: ToolContext,
     requestedProviderId?: unknown,
+    sessionIdOverride?: string,
   ): ProviderResolution => {
     const resolveRegisteredProvider = (providerId: ProviderId, label: string): ProviderResolution =>
       deps.providerRegistry.get(providerId)
@@ -328,15 +338,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     if (requestedProvider) {
       return resolveRegisteredProvider(requestedProvider, "The requested provider");
     }
-    const selectedProvider = resolveSelectedThreadDefaults(context).providerId;
-
-    if (!selectedProvider) {
-      return {
-        error: "No provider could be resolved for this thread. A selected user provider must be configured and supported.",
-      };
+    const recordedProvider = normalizeThreadProviderId(recordedSessionSelection(context, sessionIdOverride).providerId);
+    if (recordedProvider) {
+      return resolveRegisteredProvider(recordedProvider, "The provider recorded on this chat");
     }
-
-    return resolveRegisteredProvider(selectedProvider, "The selected user provider");
+    return {
+      error:
+        "No provider was supplied for this thread. Autonomous work never picks a provider: ask the user which provider and model to use, then pass them explicitly.",
+    };
   };
 
   const preflightScheduledProvider = async (providerId: ProviderId): Promise<{ ok: true } | { ok: false; message: string }> => {
@@ -506,12 +515,17 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
     }
     const effectiveProviderId = resolvedProvider.providerId;
-    // Only inherit the caller's model when the caller runs on the same
-    // provider as the thread; otherwise a cross-provider start would leak an
-    // incompatible model id into the thread's provider.
-    const callerProviderId = normalizeThreadProviderId(context.providerId);
-    const inheritedModel = callerProviderId === effectiveProviderId ? context.model : undefined;
     const effectiveThread = thread;
+    // The model is whatever the user chose for this thread. It is never
+    // inherited from the calling chat and never defaulted by the provider.
+    const threadModel = typeof effectiveThread.model === "string" ? effectiveThread.model.trim() : "";
+    if (!threadModel) {
+      return {
+        ok: false,
+        message:
+          "This thread has no model. Autonomous work never picks one: ask the user which provider and model to use, set it on the thread, then start it.",
+      };
+    }
     const autoFinishAfterFirstTurn =
       effectiveThread.kind === "delegation" ||
       options.autoStopAfterTurn === true ||
@@ -546,7 +560,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         threadId: effectiveThread.id,
         workingDirectory: effectiveThread.workingDirectory ?? process.cwd(),
         mode: (effectiveThread.runtimeMode as "full-access" | "supervised") ?? "full-access",
-        model: effectiveThread.model ?? inheritedModel ?? undefined,
+        model: threadModel,
         reasoningEffort: effectiveThread.reasoningEffort ?? undefined,
         mcpServers,
       });
@@ -947,7 +961,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!prompt) {
               return { ok: false, message: "create requires non-empty `prompt`." };
             }
-            const resolvedProvider = resolveProviderId(context, input.providerId);
+            const targetSessionId = typeof input.sessionId === "string" ? input.sessionId : undefined;
+            const resolvedProvider = resolveProviderId(context, input.providerId, targetSessionId);
             if (!resolvedProvider.providerId) {
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
             }
@@ -956,6 +971,15 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: false, message: "Agent profile not found." };
             }
             const selectedDefaults = resolveSelectedThreadDefaults(context);
+            const requestedModel = typeof input.model === "string" ? input.model.trim() : "";
+            const selectedModel = requestedModel || (recordedSessionSelection(context, targetSessionId).model ?? "");
+            if (input.start && !selectedModel) {
+              return {
+                ok: false,
+                message:
+                  "`model` is required to start a thread. Autonomous work never picks a model: ask the user which provider and model to use, then pass both explicitly.",
+              };
+            }
             if (context.requestedBy === "scheduler") {
               const preflight = await preflightScheduledProvider(selectedProviderId);
               if (!preflight.ok) return preflight;
@@ -966,7 +990,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               sessionId: input.sessionId,
               title: input.title?.trim() || normalizeGeneratedThreadTitle(prompt, "New Thread"),
               providerId: selectedProviderId,
-              model: input.model ?? selectedDefaults.model,
+              model: selectedModel || undefined,
               reasoningEffort: selectedDefaults.reasoningEffort,
               runtimeMode: input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
               kind: input.kind === "delivery" ? "delivery" : "delegation",
@@ -1037,10 +1061,21 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (missingPrompt) {
               return { ok: false, message: `create_many requires non-empty prompt for thread '${missingPrompt.title}'.` };
             }
+            const missingModel = input.threads.find((spec) => {
+              const model = spec.model ?? input.model;
+              return typeof model !== "string" || !model.trim();
+            });
+            if (missingModel) {
+              return {
+                ok: false,
+                message:
+                  `create_many requires an explicit model for thread '${missingModel.title}'. Autonomous work never picks a provider or model: ask the user which provider and model to use, then pass both explicitly.`,
+              };
+            }
 
             const validatedSpecs = input.threads.map((spec) => ({
               spec,
-              resolvedProvider: resolveProviderId(context, spec.providerId ?? input.providerId),
+              resolvedProvider: resolveProviderId(context, spec.providerId ?? input.providerId, spec.sessionId ?? input.sessionId),
             }));
             const firstResolutionError = validatedSpecs.find(({ resolvedProvider }) => !resolvedProvider.providerId);
             if (firstResolutionError) {
@@ -1065,7 +1100,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
                 providerId: selectedProviderId,
-                model: spec.model ?? input.model ?? selectedDefaults.model,
+                model: spec.model ?? input.model,
                 reasoningEffort: selectedDefaults.reasoningEffort,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
@@ -1252,7 +1287,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!prompt) return { ok: false, message: "start requires non-empty `prompt`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            const started = await startThread(context, thread, {
+            const requestedModel = typeof input.model === "string" ? input.model.trim() : "";
+            const effectiveThread = requestedModel && requestedModel !== thread.model
+              ? (deps.threadService.update(thread.id, { model: requestedModel }) ?? thread)
+              : thread;
+            if (effectiveThread !== thread) {
+              broadcastThreadEvent(effectiveThread.id, "updated", { thread: effectiveThread });
+            }
+            const started = await startThread(context, effectiveThread, {
               message: prompt,
               attachments: input.attachments,
               detach: input.detach,

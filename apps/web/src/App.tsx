@@ -2662,13 +2662,14 @@ function App() {
     dirPath: string,
     nodeId?: string,
     sessionIdOverride?: string | null,
-    openPanel?: boolean
+    openPanel?: boolean,
+    strictNode?: boolean,
   ) => {
     const sessionId = sessionIdOverride ?? activeSessionId
     const res = await fetch(`${API_URL}/api/project/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel, }),
+      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway', openPanel, strictNode, }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))

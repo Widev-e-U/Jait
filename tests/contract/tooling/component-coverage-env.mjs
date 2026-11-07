@@ -22,7 +22,7 @@ export function isolatedEnvironment(out, inherited = process.env) {
     CODEX_HOME: join(home, '.codex'), CLAUDE_CONFIG_DIR: join(home, '.claude'),
     TMPDIR: join(out, 'tmp'), TMP: join(out, 'tmp'), TEMP: join(out, 'tmp'),
     // Existing production switch prevents CWD and repository .env loading.
-    NODE_OPTIONS: `--max-old-space-size=3072 --import=${new URL('./component-coverage-network.mjs', import.meta.url).href}`,
+    NODE_OPTIONS: `--max-old-space-size=5120 --import=${new URL('./component-coverage-network.mjs', import.meta.url).href}`,
     __JAIT_CLI: '1', NODE_ENV: 'test', TZ: 'UTC', LANG: 'C.UTF-8',
     GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '/bin/false', SSH_ASKPASS: '/bin/false',
     GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_ALLOW_PROTOCOL: 'file',

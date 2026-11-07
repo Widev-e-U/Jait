@@ -19,6 +19,8 @@ pub mod thread_defaults;
 
 pub mod thread_history;
 
+pub mod thread_recovery;
+
 pub mod device_registry;
 pub mod llm_headers;
 pub mod persisted_tool_calls;
@@ -102,6 +104,7 @@ pub mod thread_review_sync;
 pub mod provider_updates;
 
 pub mod agent_github_port;
+pub mod github_intake;
 
 pub mod agent_github_apps;
 
@@ -110,6 +113,7 @@ pub mod agent_github_challenge;
 pub mod opencode_go_fetch;
 
 pub mod screen_share;
+pub mod screen_share_control;
 pub mod screen_share_signaling;
 
 pub mod live_view_manager;
@@ -147,3 +151,11 @@ pub mod git_forge;
 pub mod git_forge_http;
 
 pub mod github_pull_requests;
+
+pub mod messenger_matrix_runtime;
+
+pub mod team_chat;
+
+pub mod thread_activity;
+pub mod thread_lifecycle;
+pub mod thread_provider_events;

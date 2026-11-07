@@ -68,11 +68,7 @@ mod thread_router {
         let matched = match_skills("/b-two deploy kubernetes clusters", &skills);
         assert_eq!(
             matched,
-            vec![
-                "b-two".to_string(),
-                "s-hi".to_string(),
-                "s-mid".to_string()
-            ],
+            vec!["b-two".to_string(), "s-hi".to_string(), "s-mid".to_string()],
             "explicit id first, then auto matches ordered by score"
         );
     }
@@ -134,7 +130,13 @@ mod thread_router {
     fn route_thread_delegates_three_item_lists_for_coding() {
         let skills: Vec<RoutingSkill> = vec![];
         let message = "write the parser\n- tokenize input\n- build the AST\n- emit code";
-        let plan = route_thread(message, &skills, &[], false, "2024-05-01T10:00:00.000Z".to_string());
+        let plan = route_thread(
+            message,
+            &skills,
+            &[],
+            false,
+            "2024-05-01T10:00:00.000Z".to_string(),
+        );
         assert_eq!(plan.intent, "coding");
         assert_eq!(plan.topology, "delegated");
         assert_eq!(
@@ -210,7 +212,10 @@ mod preview_runner {
         ProjectSnapshot {
             root: PathBuf::from(root),
             package,
-            files: files.iter().map(|f| (*f).to_string()).collect::<HashSet<_>>(),
+            files: files
+                .iter()
+                .map(|f| (*f).to_string())
+                .collect::<HashSet<_>>(),
             ancestor_locks: vec![],
             applications: vec![],
         }
@@ -225,7 +230,11 @@ mod preview_runner {
             PackageManager::Bun
         );
         assert_eq!(
-            detect_package_manager(&snapshot("/a", None, &["package-lock.json", "pnpm-lock.yaml"])),
+            detect_package_manager(&snapshot(
+                "/a",
+                None,
+                &["package-lock.json", "pnpm-lock.yaml"]
+            )),
             PackageManager::Pnpm
         );
         assert_eq!(
@@ -396,7 +405,9 @@ mod preview_runner {
             "http://127.0.0.1:5173/"
         );
         assert_eq!(
-            normalize_target_url("localhost:5173", 4000).unwrap().as_str(),
+            normalize_target_url("localhost:5173", 4000)
+                .unwrap()
+                .as_str(),
             "http://localhost:5173/"
         );
         assert_eq!(
@@ -416,7 +427,9 @@ mod preview_runner {
             "Invalid preview URL"
         );
         assert_eq!(
-            normalize_target_url("127.0.0.1:5173/app", 4000).unwrap().as_str(),
+            normalize_target_url("127.0.0.1:5173/app", 4000)
+                .unwrap()
+                .as_str(),
             "http://127.0.0.1:5173/app"
         );
     }
@@ -462,10 +475,22 @@ mod database_retention {
 
         let mut env = BTreeMap::new();
         env.insert("JAIT_RETENTION_ENABLED".to_string(), "off".to_string());
-        env.insert("JAIT_SEARCH_INDEX_CLEANUP_ENABLED".to_string(), "yes".to_string());
-        env.insert("JAIT_RETENTION_CONTEXT_FLOW_DAYS".to_string(), "45".to_string());
-        env.insert("JAIT_RETENTION_TRANSIENT_ACTIVITY_DAYS".to_string(), "0".to_string());
-        env.insert("JAIT_RETENTION_AUDIT_ROW_DAYS".to_string(), "365".to_string());
+        env.insert(
+            "JAIT_SEARCH_INDEX_CLEANUP_ENABLED".to_string(),
+            "yes".to_string(),
+        );
+        env.insert(
+            "JAIT_RETENTION_CONTEXT_FLOW_DAYS".to_string(),
+            "45".to_string(),
+        );
+        env.insert(
+            "JAIT_RETENTION_TRANSIENT_ACTIVITY_DAYS".to_string(),
+            "0".to_string(),
+        );
+        env.insert(
+            "JAIT_RETENTION_AUDIT_ROW_DAYS".to_string(),
+            "365".to_string(),
+        );
         env.insert("JAIT_RETENTION_BATCH_SIZE".to_string(), "0".to_string());
         let custom = DatabaseRetentionPolicy::from_env(&env);
         assert!(!custom.enabled, "off disables retention");
@@ -515,7 +540,9 @@ mod database_retention {
     fn plan_orders_steps_and_reserves_batches_for_search_cleanup() {
         let mut policy = DatabaseRetentionPolicy::default();
         policy.max_batches_per_run = 3;
-        let plan = service(policy.clone()).plan(at("2024-04-01T12:00:00Z"), None).unwrap();
+        let plan = service(policy.clone())
+            .plan(at("2024-04-01T12:00:00Z"), None)
+            .unwrap();
         assert_eq!(plan.steps[0].candidate, "unsearchableFtsRows");
         assert_eq!(
             plan.steps[0].max_batches, 1,
@@ -525,7 +552,10 @@ mod database_retention {
         // Oversized-payload compaction probes one row at a time, bounded to two
         // batches so a huge payload cannot monopolise the run.
         assert_eq!(plan.steps[1].candidate, "oversizedContextFlows");
-        assert_eq!((plan.steps[1].batch_size, plan.steps[1].max_batches), (1, 2));
+        assert_eq!(
+            (plan.steps[1].batch_size, plan.steps[1].max_batches),
+            (1, 2)
+        );
         assert_eq!(plan.steps[2].candidate, "agedContextFlows");
         assert_eq!(
             (plan.steps[2].batch_size, plan.steps[2].max_batches),
@@ -551,7 +581,10 @@ mod database_retention {
                 "staleSessions"
             ]
         );
-        assert_eq!(plan.steps[0].batch_size, 100, "search sweep honours batch size");
+        assert_eq!(
+            plan.steps[0].batch_size, 100,
+            "search sweep honours batch size"
+        );
     }
 
     // A disabled policy keeps only the (still enabled) search-index sweep, and
@@ -561,7 +594,9 @@ mod database_retention {
         let mut policy = DatabaseRetentionPolicy::default();
         policy.enabled = false;
         policy.batch_size = 5_000;
-        let plan = service(policy.clone()).plan(at("2024-04-01T12:00:00Z"), None).unwrap();
+        let plan = service(policy.clone())
+            .plan(at("2024-04-01T12:00:00Z"), None)
+            .unwrap();
         assert_eq!(plan.steps.len(), 1);
         assert_eq!(plan.steps[0].candidate, "unsearchableFtsRows");
         assert_eq!(plan.max_batches, 20);
@@ -572,7 +607,9 @@ mod database_retention {
         assert_eq!(plan.steps[0].batch_size, 1_000, "batch size clamps to 1000");
 
         policy.search_index_cleanup_enabled = false;
-        let empty = service(policy).plan(at("2024-04-01T12:00:00Z"), None).unwrap();
+        let empty = service(policy)
+            .plan(at("2024-04-01T12:00:00Z"), None)
+            .unwrap();
         assert!(empty.steps.is_empty());
     }
 }
@@ -588,8 +625,14 @@ mod primary_link {
     // are stripped and a truthy token is appended percent-encoded.
     #[test]
     fn to_ws_url_rewrites_schemes_and_appends_encoded_token() {
-        assert_eq!(to_ws_url("https://gw.example.com/", None), "wss://gw.example.com");
-        assert_eq!(to_ws_url(" HTTP://gw.local:8787/// ", None), "ws://gw.local:8787");
+        assert_eq!(
+            to_ws_url("https://gw.example.com/", None),
+            "wss://gw.example.com"
+        );
+        assert_eq!(
+            to_ws_url(" HTTP://gw.local:8787/// ", None),
+            "ws://gw.local:8787"
+        );
         assert_eq!(to_ws_url("gw.local:8787", None), "ws://gw.local:8787");
         assert_eq!(to_ws_url("wss://gw/edge/", None), "wss://gw/edge");
         assert_eq!(
@@ -799,4 +842,3 @@ mod mobile_push {
         assert!(FirebaseServiceAccount::from_environment_value(Some("not json")).is_none());
     }
 }
-

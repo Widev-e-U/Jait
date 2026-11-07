@@ -1,6 +1,7 @@
 //! Voice state and transcription request construction. Network authority belongs
 //! to the injected scoped HTTP host; this module grants no private-network access.
 pub mod http;
+pub mod wake_candidate;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

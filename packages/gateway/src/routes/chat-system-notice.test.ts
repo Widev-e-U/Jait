@@ -4,6 +4,7 @@ import { formatBackgroundCommandNotification } from "./chat.js";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
+import { SessionStateService } from "../services/session-state.js";
 import { UserService } from "../services/users.js";
 import { signAuthToken } from "../security/http-auth.js";
 import {
@@ -80,9 +81,12 @@ describe("background-command system notice", () => {
     };
 
     const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
     const userService = new UserService(db);
     const user = userService.createUser("sys-notice-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Sys Notice" });
+    // Autonomous turns run only on the provider+model the user picked for this chat.
+    sessionState.set(session.id, { "chat.provider": "jait", "chat.cliModels": { jait: "llama3" } });
 
     app = await createServer(config, {
       db,
@@ -113,6 +117,16 @@ describe("background-command system notice", () => {
       },
     });
     expect(response.statusCode).toBe(200);
+
+    // A continuation turn has no prompt text, so the browser cannot build a user
+    // bubble from `content`. It renders the gray notice line instead and reads
+    // its text from this event, so live view and reload agree.
+    const requestEvent = response.body
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice("data: ".length)) as { type?: string; systemNotice?: boolean; noticeText?: string })
+      .find((event) => event.type === "request");
+    expect(requestEvent).toMatchObject({ systemNotice: true, noticeText: notice });
 
     const modelMessages = receivedBodies.at(-1)?.["messages"] as Array<{ role: string; content: string }>;
     expect(modelMessages.at(-1)).toMatchObject({
@@ -155,9 +169,11 @@ describe("background-command system notice", () => {
     };
 
     const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
     const userService = new UserService(db);
     const user = userService.createUser("sys-notice-user-2", "password123");
     const session = sessionService.create({ userId: user.id, name: "Sys Notice 2" });
+    sessionState.set(session.id, { "chat.provider": "jait", "chat.cliModels": { jait: "llama3" } });
 
     app = await createServer(config, {
       db,

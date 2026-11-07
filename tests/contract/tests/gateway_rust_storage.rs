@@ -65,12 +65,12 @@ fn schema(db: &rusqlite::Connection) -> Value {
     )
 }
 #[test]
-fn all_76_current_definition_prefixes_match_typescript_schema_and_preserve_data() {
+fn all_78_current_definition_prefixes_match_typescript_schema_and_preserve_data() {
     let id = uuid::Uuid::new_v4().to_string();
-    let versions = (0..=75u32).collect::<Vec<_>>();
+    let versions = (0..=77u32).collect::<Vec<_>>();
     let mut fixtures = Vec::with_capacity(versions.len());
     // Bound file-backed reference generation per driver call. A single call
-    // for all 76 prefixes can exceed the unchanged ten-second driver deadline.
+    // for all 78 prefixes can exceed the unchanged ten-second driver deadline.
     for batch in versions.chunks(8) {
         let calls = observe(json!([{"op":"nativestorage.prefixes","id":id,"versions":batch}]));
         let returned = calls[0].as_array().unwrap();
@@ -95,7 +95,7 @@ fn all_76_current_definition_prefixes_match_typescript_schema_and_preserve_data(
         let reference =
             db::open_database(Path::new(fixture["reference"].as_str().unwrap())).unwrap();
         db::migrate_database(&native).unwrap();
-        assert_eq!(db::schema_version(&native), 75, "prefix {version}");
+        assert_eq!(db::schema_version(&native), 77, "prefix {version}");
         let native_schema = schema(&native);
         let reference_schema = schema(&reference);
         assert_eq!(
@@ -246,7 +246,7 @@ fn migration_failure_is_not_recorded_and_schema_repairs_are_idempotent() {
     assert_eq!(db::verify_schema(&db).unwrap(), 2);
     assert_eq!(db::verify_schema(&db).unwrap(), 0);
     db::migrate_database(&db).unwrap();
-    assert_eq!(db::schema_version(&db), 75);
+    assert_eq!(db::schema_version(&db), 77);
 }
 #[test]
 fn native_wal_transactions_backup_and_typescript_reopen_preserve_committed_state() {
@@ -274,7 +274,7 @@ fn native_wal_transactions_backup_and_typescript_reopen_preserve_committed_state
     let id = dir.file_name().unwrap().to_str().unwrap();
     let result =
         observe(json!([{"op":"nativestorage.reopen","id":id,"file":path.to_str().unwrap()}]));
-    assert_eq!(result[0]["version"], 75);
+    assert_eq!(result[0]["version"], 77);
     assert_eq!(
         result[0]["sessions"],
         json!([{"id":"kept","name":"保持 🦀"}])

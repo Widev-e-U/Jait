@@ -117,6 +117,12 @@ impl AuthState {
     pub(crate) fn resolve_user(&self, headers: &HeaderMap) -> Option<AuthUser> {
         auth_user(headers, &self.secret)
     }
+
+    /// The token signing secret, so connection transports admit exactly the tokens
+    /// these routes mint instead of depending on an embedder-supplied token table.
+    pub(crate) fn signing_secret(&self) -> Arc<String> {
+        self.secret.clone()
+    }
     pub(crate) fn origin_allowed(&self, headers: &HeaderMap) -> bool {
         request_origin::is_allowed_request_origin(
             headers.get(header::ORIGIN).and_then(|v| v.to_str().ok()),
@@ -137,6 +143,11 @@ impl AuthState {
             .run(operation)
             .await
             .map_err(|error| Box::new(error) as Error)
+    }
+    /// The shared lane, so an opt-in transport issues bounded reads against the
+    /// same connection and observes this state's supervisor shutdown.
+    pub(crate) fn worker(&self) -> DatabaseWorker {
+        self.db.clone()
     }
     pub async fn shutdown(&self) -> Result<(), DatabaseError> {
         self.passwords.close();

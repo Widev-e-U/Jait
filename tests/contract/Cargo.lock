@@ -1243,6 +1243,8 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "hex",
+ "hyper",
+ "hyper-util",
  "icu_collator",
  "jiff",
  "jsonwebtoken",

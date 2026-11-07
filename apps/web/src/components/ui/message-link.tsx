@@ -2,9 +2,11 @@ import type { ComponentProps } from 'react'
 import { safeNotificationLink } from '@jait/shared'
 import { openNotification } from '@/lib/notification-navigation'
 import { cn } from '@/lib/utils'
+import { FileDownloadLink, parseFileDownloadLink } from './file-download-link'
 
 /** Shared navigation for message links, including messages inside clickable bubbles. */
 export function MessageLink({ href, children, className, onClick, ...props }: ComponentProps<'a'>) {
+  if (parseFileDownloadLink(href)) return <FileDownloadLink href={href!}>{children}</FileDownloadLink>
   // ReactMarkdown sanitizes URLs too; keep this safe for direct callers.
   // eslint-disable-next-line no-control-regex -- Block URL whitespace and control-character scheme obfuscation.
   const safeHref = href && !/[\u0000-\u0020\u007f]/.test(href)

@@ -6,7 +6,7 @@ import { resolve, win32 } from "node:path";
 import type { WsControlPlane } from "../ws.js";
 import { parseJaitBackendInstances, type JaitBackend } from "@jait/shared";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
+import { BrowserSurface, type BrowserNetworkQuery, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 // PreviewService provides the sharing boundary for managed browser sessions.
@@ -40,6 +40,30 @@ interface BrowserNavigateInput {
 
 interface BrowserSnapshotInput {
   browserId?: string;
+}
+
+interface BrowserEvalInput {
+  expression: string;
+  timeoutMs?: number;
+  browserId?: string;
+}
+
+interface BrowserNetworkInput {
+  limit?: number;
+  bodyLimit?: number;
+  sinceSeq?: number;
+  urlIncludes?: string;
+  urlRegex?: string;
+  method?: string;
+  statusAtLeast?: number;
+  includeHeaders?: boolean;
+  includeBodies?: boolean;
+  clear?: boolean;
+  browserId?: string;
+}
+
+interface BrowserOpenInput extends BrowserInspectInput {
+  url?: string;
 }
 
 interface BrowserInspectInput {
@@ -302,20 +326,33 @@ export function createBrowserNavigateTool(
 export function createBrowserOpenTool(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
-): ToolDefinition<BrowserNavigateInput> {
-  const tool = createBrowserNavigateTool(registry, collaboration, true);
+): ToolDefinition<BrowserOpenInput> {
+  const navigate = createBrowserNavigateTool(registry, collaboration, true);
+  const inspect = createBrowserInspectTool(registry, collaboration, true);
   return {
-    ...tool,
+    ...inspect,
     name: "browser.open",
-    description: "Start a live browser session for this chat and open the required HTTP/HTTPS URL immediately. Automatically creates the browser and live view on first use; reuses the same session afterward. For project previews, start the project server before opening its URL.",
+    description: "Open or inspect the live browser for this chat. With a URL, navigate to that HTTP/HTTPS page and return its summary. Without a URL, inspect the current page without navigating; automatically starts a live browser if none exists. Optionally diagnose a CSS selector. Reuses the chat's visible browser. For project previews, start the project server before opening its URL.",
+    parameters: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Optional HTTP/HTTPS URL to open. Omit to inspect the current page without navigating." },
+        selector: { type: "string", description: "Optional CSS selector to diagnose on the current or newly opened page" },
+        browserId: { type: "string", description: "Optional browser surface ID" },
+      },
+    },
     discovery: {
-      aliases: ["browser", "preview", "browser startup", "start browser session", "initial browser URL"],
-      capabilities: ["open URL", "initialize browser session", "live browser", "web browsing", "project preview"],
+      aliases: ["browser", "preview", "browser inspect", "inspect page", "browser startup", "start browser session", "initial browser URL"],
+      capabilities: ["open URL", "inspect page", "diagnose selector", "initialize browser session", "live browser", "web browsing", "project preview"],
       priority: 12,
     },
     async execute(input, context) {
       if (!context.sessionId?.trim()) return { ok: false, message: "A valid chat session is required to open a browser." };
-      return tool.execute(input, context);
+      if (input.url !== undefined) {
+        const result = await navigate.execute({ url: input.url, browserId: input.browserId }, context);
+        if (!result.ok || !input.selector) return result;
+      }
+      return inspect.execute(input, context);
     },
   };
 }
@@ -364,6 +401,7 @@ export function createBrowserSnapshotTool(
 export function createBrowserInspectTool(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
+  allowStart = false,
 ): ToolDefinition<BrowserInspectInput> {
   return {
     name: "browser.inspect",
@@ -383,7 +421,7 @@ export function createBrowserInspectTool(
       const previewSession = resolveActivePreviewSession(collaboration, context);
       assertPreviewBrowserSelection(previewSession, input.browserId);
       collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration, allowStart, allowStart);
       const inspection = await surface.inspect(input.selector, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
@@ -526,6 +564,90 @@ export function createBrowserInteractionTools(
         return { selector: input.selector, timeoutMs: input.timeoutMs ?? 10000 };
       },
     ),
+    {
+      name: "browser.eval",
+      description: "Evaluate a JavaScript expression in the current page and return its value. Full DevTools-level access: reads globals, localStorage/sessionStorage, fetch() results, DOM state. Runs with userGesture and awaitPromise, so async expressions are awaited.",
+      tier: "standard",
+      category: "browser",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          expression: { type: "string", description: "JavaScript expression or IIFE body to evaluate in the page" },
+          timeoutMs: { type: "number", description: "Evaluation timeout in milliseconds (default 30000, max 300000)" },
+          browserId: { type: "string", description: "Optional browser surface ID. Auto-resolves to the preview browser when omitted." },
+        },
+        required: ["expression"],
+      },
+      async execute(input: BrowserEvalInput, context: ToolContext): Promise<ToolResult> {
+        if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+        const browserId = input.browserId?.trim() || undefined;
+        const previewSession = resolveActivePreviewSession(collaboration, context);
+        assertPreviewBrowserSelection(previewSession, browserId);
+        collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
+        const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
+        const result = await surface.evaluate(input.expression, {
+          timeoutMs: input.timeoutMs,
+          signal: context.signal,
+        });
+        return {
+          ok: result.ok,
+          message: result.ok
+            ? "browser.eval executed"
+            : `browser.eval failed: ${result.error ?? "unknown error"}`,
+          data: { browserId: surface.id, result },
+        };
+      },
+    },
+    {
+      name: "browser.network",
+      description: "Read the page's live network log captured over Chrome DevTools Protocol (Network domain): every request/response with method, URL, status, headers, request POST payload and response body. Filter by URL/method/status, page through with sinceSeq, clear when done. Full DevTools access, including OAuth token requests.",
+      tier: "standard",
+      category: "browser",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          limit: { type: "number", description: "Max entries to return (default 50, max 1000)" },
+          bodyLimit: { type: "number", description: "Max characters per captured body (default 20000, max 200000)" },
+          sinceSeq: { type: "number", description: "Only return entries with seq greater than this value" },
+          urlIncludes: { type: "string", description: "Case-insensitive substring filter on the request URL" },
+          urlRegex: { type: "string", description: "Regular expression filter on the request URL" },
+          method: { type: "string", description: "HTTP method filter, e.g. POST" },
+          statusAtLeast: { type: "number", description: "Only entries with status >= this value" },
+          includeHeaders: { type: "boolean", description: "Include request/response headers (default false)" },
+          includeBodies: { type: "boolean", description: "Include request/response bodies (default true)" },
+          clear: { type: "boolean", description: "Clear the captured buffer before returning" },
+          browserId: { type: "string", description: "Optional browser surface ID. Auto-resolves to the preview browser when omitted." },
+        },
+      },
+      async execute(input: BrowserNetworkInput, context: ToolContext): Promise<ToolResult> {
+        if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+        const browserId = input.browserId?.trim() || undefined;
+        const previewSession = resolveActivePreviewSession(collaboration, context);
+        assertPreviewBrowserSelection(previewSession, browserId);
+        collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
+        const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
+        const query: BrowserNetworkQuery = {
+          limit: input.limit,
+          bodyLimit: input.bodyLimit,
+          sinceSeq: input.sinceSeq,
+          urlIncludes: input.urlIncludes,
+          urlRegex: input.urlRegex,
+          method: input.method,
+          statusAtLeast: input.statusAtLeast,
+          includeHeaders: input.includeHeaders,
+          includeBodies: input.includeBodies,
+          clear: input.clear,
+        };
+        const log = await surface.networkLog(query, context.signal);
+        return {
+          ok: true,
+          message: `${log.entries.length} network request(s) captured (nextSeq=${log.nextSeq})`,
+          data: { browserId: surface.id, ...log },
+        };
+      },
+    },
     {
       name: "browser.screenshot",
       description: "Capture a browser screenshot and display it inline in chat. Do not call image.view afterward or display the same image again.",
@@ -711,6 +833,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing BRAVE_API_KEY, falling back to openai web_search",
+            "brave",
           );
         }
         return searchBrave(guard, input.query, limit, apiKey);
@@ -726,6 +849,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing PERPLEXITY_API_KEY/OPENROUTER_API_KEY, falling back to openai web_search",
+            "perplexity",
           );
         }
         return searchPerplexity(guard, input.query, limit, { perplexityKey, openRouterKey });
@@ -740,6 +864,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing XAI_API_KEY, falling back to openai web_search",
+            "grok",
           );
         }
         return searchGrok(guard, input.query, limit, apiKey);
@@ -754,6 +879,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing GEMINI_API_KEY, falling back to openai web_search",
+            "gemini",
           );
         }
         return searchGemini(guard, input.query, limit, apiKey);
@@ -768,6 +894,7 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
             limit,
             openaiOptions,
             "Missing MOONSHOT_API_KEY, falling back to openai web_search",
+            "kimi",
           );
         }
         return searchKimi(guard, input.query, limit, apiKey);
@@ -847,13 +974,15 @@ async function searchOpenAI(
     model?: string;
   },
   prefixMessage?: string,
+  requestedProvider?: string,
 ): Promise<ToolResult> {
+  const fallback = requestedProvider ? { requestedProvider, fallbackReason: "missing_provider_key" } : {};
   const apiKey = normalizeApiKey(options.apiKey);
   if (!apiKey) {
     return {
       ok: false,
       message: `${prefixMessage ? `${prefixMessage}. ` : ""}Missing OPENAI_API_KEY`,
-      data: { provider: "openai", query, results: [] },
+      data: { provider: "openai", ...fallback, code: "missing_api_key", query, results: [] },
     };
   }
   const baseUrl = options.baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL;
@@ -874,16 +1003,15 @@ async function searchOpenAI(
         input: `Provide up to ${limit} web search results for: ${query}`,
       }),
     });
-    const data = await response.json() as OpenAIWebSearchResponse;
     if (!response.ok) {
-      const detail = data.error?.message || `HTTP ${response.status}`;
       return {
         ok: false,
-        message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed (${response.status}): ${detail}`,
-        data: { provider: "openai", query, results: [] },
+        message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed (HTTP ${response.status}). Check provider credentials, model and endpoint settings.`,
+        data: { provider: "openai", ...fallback, code: "upstream_http", status: response.status, query, results: [] },
       };
     }
 
+    const data = await response.json() as OpenAIWebSearchResponse;
     const { results, summary } = extractOpenAIWebSearchResults(data, query, limit);
     return {
       ok: true,
@@ -892,17 +1020,18 @@ async function searchOpenAI(
         : "Search results (openai)",
       data: {
         provider: "openai",
+        ...fallback,
         model,
         query,
         results,
         summary,
       },
     };
-  } catch (err) {
+  } catch {
     return {
       ok: false,
-      message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed: ${extractErrorMessage(err)}`,
-      data: { provider: "openai", query, results: [] },
+      message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed. Check the endpoint, network connection and provider response.`,
+      data: { provider: "openai", ...fallback, code: "unavailable", query, results: [] },
     };
   }
 }

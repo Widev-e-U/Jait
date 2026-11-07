@@ -8607,35 +8607,50 @@
           {
             "result": {
               "ok": false,
-              "message": "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning."
+              "message": "Invalid decision input. Check the state, question IDs, and choice or score criteria.",
+              "data": {
+                "code": "invalid_input"
+              }
             },
             "calls": []
           },
           {
             "result": {
               "ok": false,
-              "message": "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning."
+              "message": "Invalid decision input. Check the state, question IDs, and choice or score criteria.",
+              "data": {
+                "code": "invalid_input"
+              }
             },
             "calls": []
           },
           {
             "result": {
               "ok": false,
-              "message": "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning."
+              "message": "Invalid decision input. Check the state, question IDs, and choice or score criteria.",
+              "data": {
+                "code": "invalid_input"
+              }
             },
             "calls": []
           },
           {
             "result": {
               "ok": false,
-              "message": "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning."
+              "message": "Invalid decision input. Check the state, question IDs, and choice or score criteria.",
+              "data": {
+                "code": "invalid_input"
+              }
             },
             "calls": []
           },
           {
             "result": {
               "ok": false,
-              "message": "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning."
+              "message": "Invalid decision input. Check the state, question IDs, and choice or score criteria.",
+              "data": {
+                "code": "invalid_input"
+              }
             },
             "calls": []
           }
@@ -8694,7 +8709,10 @@
           {
             "result": {
               "ok": false,
-              "message": "System One decision unavailable or input invalid. Check System One Model in Settings and question criteria; continue with normal reasoning."
+              "message": "System One is unavailable. Check its endpoint and connection in Settings.",
+              "data": {
+                "code": "unavailable"
+              }
             },
             "calls": [
               {

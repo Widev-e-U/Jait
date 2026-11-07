@@ -21,7 +21,10 @@ pub fn open_database(path: &Path) -> Result<Connection, Box<dyn std::error::Erro
     Ok(connection)
 }
 pub fn migrate_database(connection: &Connection) -> Result<(), MigrationError> {
-    apply_migrations_through(connection, migration_inventory().last().map_or(0, |m| m.0))?;
+    apply_migrations_through(
+        connection,
+        migration_inventory().iter().map(|m| m.0).max().unwrap_or(0),
+    )?;
     verify_schema(connection).map_err(|source| MigrationError {
         id: 0,
         name: "verify_schema".into(),

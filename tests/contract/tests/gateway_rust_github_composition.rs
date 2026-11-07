@@ -211,6 +211,7 @@ async fn native_composition(steps: Value, init_error: bool, observe: bool) -> Va
     db::migrate_database(&auth_db).unwrap();
     auth_db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('u','alice','fixture','old','old'),('other','bob','fixture','old','old')").unwrap();
     let app = GithubAppRoutes {
+        intake: None,
         auth: AuthState::new(auth_db, "github-route-fixture".into()).unwrap(),
         port,
         agent_exists: Some(Arc::new(|u, a| u == "u" && a == "a")),

@@ -576,14 +576,27 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
         }
     }
 
+    // Object.entries visits array-index keys in numeric order before other keys.
+    fn js_object_entries<T>(entries: &[(String, T)]) -> Vec<&(String, T)> {
+        let mut ordered: Vec<_> = entries.iter().collect();
+        ordered.sort_by_key(|(key, _)| {
+            let index = key
+                .parse::<u32>()
+                .ok()
+                .filter(|number| *number != u32::MAX && number.to_string() == *key);
+            (index.is_none(), index.unwrap_or(0))
+        });
+        ordered
+    }
+
     let mut furthest_read: Vec<(String, FurthestRead)> = Vec::new();
     if let Some(room) = room {
-        for (event_id, users) in &room.receipts {
+        for (event_id, users) in js_object_entries(&room.receipts) {
             let index = match receipt_index.get(event_id.as_str()) {
                 Some(index) => *index,
                 None => continue,
             };
-            for (user_id, receipt) in users {
+            for (user_id, receipt) in js_object_entries(users) {
                 if Some(user_id.as_str()) == session_user {
                     continue;
                 }
@@ -614,9 +627,18 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
     let reader_name = |user_id: &str| -> String {
         let display = room
             .and_then(|room| room.member(user_id))
-            .and_then(|member| text_at(&member.content, &["displayname"]))
+            .and_then(|member| member.content.get("displayname"))
+            .filter(|value| !value.is_null())
+            .map(js_string)
             .unwrap_or_else(|| user_id.to_string());
-        truncate_name(&display)
+        let mut units = 0;
+        display
+            .chars()
+            .take_while(|ch| {
+                units += ch.len_utf16();
+                units <= 512
+            })
+            .collect()
     };
 
     active
@@ -691,7 +713,11 @@ pub fn derive_messages(room: Option<&Room>, session_user: Option<&str>) -> Vec<M
                         );
                     Some(MessageAttachment {
                         url: url.to_string(),
-                        name: text_at(content, &["body"])
+                        name: content
+                            .get("filename")
+                            .and_then(Value::as_str)
+                            .map(str::to_owned)
+                            .or_else(|| text_at(content, &["body"]))
                             .unwrap_or_else(|| "Attachment".to_string()),
                         mime: mime.clone(),
                         image,
@@ -761,6 +787,26 @@ struct ConnectionState {
     presence_probes: BTreeMap<String, f64>,
     direct: BTreeMap<String, String>,
     assistant_access: bool,
+}
+
+// Keep the retained cache bounded if an in-flight sync future is dropped.
+// Successful batches still trim only after all redactions have been applied.
+struct SyncRetentionGuard<'a> {
+    inner: &'a Mutex<ConnectionState>,
+    room_id: &'a str,
+}
+
+impl Drop for SyncRetentionGuard<'_> {
+    fn drop(&mut self) {
+        let mut state = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if let Some((_, room)) = state.rooms.iter_mut().find(|(id, _)| id == self.room_id) {
+            let excess = room.events.len().saturating_sub(MAX_EVENTS);
+            room.events.drain(..excess);
+        }
+    }
 }
 
 /// One owner's Matrix connection.
@@ -2257,8 +2303,53 @@ fn connection_key(owner: &str) -> String {
 
 /// `start()` retries a failed connection on a fixed five second timer.
 const RETRY_DELAY_MS: u64 = 5_000;
-/// One minute cap for the sync loop's exponential backoff.
-const MAX_RETRY_DELAY_MS: u64 = 60_000;
+// JavaScript Object.entries enumerates array indices before other keys,
+// preserving insertion order for the remaining properties.
+fn sort_js_entries<T>(entries: &mut [(String, T)]) {
+    entries.sort_by_key(|(key, _)| {
+        let index = key
+            .parse::<u32>()
+            .ok()
+            .filter(|number| *number != u32::MAX && number.to_string() == *key);
+        (index.is_none(), index.unwrap_or(0))
+    });
+}
+
+// Values of string entries need only preserve their primitive shape here: room
+// processing reads properties, while each JavaScript string index is one UTF-16 unit.
+fn sync_object_entries(value: &Value) -> Result<Vec<(String, Value)>, ()> {
+    let mut entries: Vec<_> = match value {
+        Value::Null => return Err(()),
+        Value::Object(object) => object
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect(),
+        Value::Array(array) => array
+            .iter()
+            .enumerate()
+            .map(|(index, value)| (index.to_string(), value.clone()))
+            .collect(),
+        Value::String(string) => string
+            .encode_utf16()
+            .enumerate()
+            .map(|(index, _)| (index.to_string(), Value::String("x".into())))
+            .collect(),
+        _ => Vec::new(),
+    };
+    sort_js_entries(&mut entries);
+    Ok(entries)
+}
+
+// matrix-bot-sdk retries failed sync requests and callbacks after 5 to 15 seconds.
+fn sync_retry_delay() -> std::time::Duration {
+    let mut entropy = [0u8; 8];
+    if getrandom::fill(&mut entropy).is_err() {
+        return std::time::Duration::from_secs(5);
+    }
+    let fraction = (u64::from_le_bytes(entropy) >> 11) as f64 / ((1u64 << 53) as f64);
+    std::time::Duration::from_secs_f64(5.0 + fraction * 10.0)
+}
+
 /// Long-poll window of `GET /sync`.
 const SYNC_TIMEOUT_MS: u64 = 30_000;
 const SYNC_ENDPOINT: &str = "/_matrix/client/v3/sync";
@@ -2279,21 +2370,10 @@ struct Lifecycle {
     generation: u64,
     /// In-memory `next_batch`. TS never persists it, so a restart re-syncs.
     sync_token: Option<String>,
-    /// Consecutive sync failures — input of `retry_delay_ms`.
-    failures: u32,
     /// TS `this.retryTimer !== null`.
     retry_pending: bool,
     /// TS `this.controller` — the `AbortSignal` source.
     abort: Cancellation,
-}
-
-/// Backoff between sync attempts. The first failure retries after the fixed
-/// five seconds `start()` uses, then the delay doubles up to one minute.
-pub fn retry_delay_ms(failures: u32) -> u64 {
-    let shift = failures.saturating_sub(1).min(4);
-    RETRY_DELAY_MS
-        .saturating_mul(1u64 << shift)
-        .min(MAX_RETRY_DELAY_MS)
 }
 
 /// One section of a `/sync` `rooms` payload (`join` / `invite` / `leave`) as
@@ -2393,7 +2473,6 @@ impl<C> Connection<C> {
             life.closed = false;
             life.retry_pending = false;
             life.sync_token = None;
-            life.failures = 0;
             life.abort.abort(ERR_CLIENT_STOPPED);
             life.abort = Cancellation::default();
             life.generation = life.generation.wrapping_add(1);
@@ -2480,13 +2559,27 @@ impl<C> Connection<C> {
             }
             match outcome {
                 Ok(raw) => {
-                    self.apply_sync(&raw, ctx).await;
+                    if let Some(token) = raw.get("next_batch").and_then(Value::as_str) {
+                        self.life().sync_token = Some(token.to_string());
+                    }
+                    let applied = tokio::select! {
+                        biased;
+                        _ = abort.cancelled() => return,
+                        result = self.apply_sync(&raw, ctx) => result,
+                    };
+                    if applied.is_err() {
+                        tokio::select! {
+                            biased;
+                            _ = abort.cancelled() => return,
+                            _ = tokio::time::sleep(sync_retry_delay()) => {}
+                        }
+                        continue;
+                    }
                     if !self.is_current(generation) {
                         return;
                     }
                     {
                         let mut life = self.life();
-                        life.failures = 0;
                         if let Some(token) = raw.get("next_batch").and_then(Value::as_str) {
                             life.sync_token = Some(token.to_string());
                         }
@@ -2494,16 +2587,11 @@ impl<C> Connection<C> {
                     self.set_status(MessengerStatus::Ready, None);
                 }
                 Err(_) => {
-                    let failures = {
-                        let mut life = self.life();
-                        life.failures = life.failures.saturating_add(1);
-                        life.failures
-                    };
                     self.set_status(
                         MessengerStatus::Reconnecting,
                         Some(ERR_CONNECTION_INTERRUPTED.to_string()),
                     );
-                    let delay = std::time::Duration::from_millis(retry_delay_ms(failures));
+                    let delay = sync_retry_delay();
                     tokio::select! {
                         biased;
                         _ = abort.cancelled() => return,
@@ -2524,75 +2612,588 @@ impl<C> Connection<C> {
     }
 
     /// TS `sync(raw)`. The order is load-bearing: presence, then `m.direct`
-    /// account data, then joined rooms, invites, and finally leaves.
-    async fn apply_sync(&self, raw: &Value, ctx: &C) {
+    /// account data, then room sections in JavaScript property order.
+    async fn apply_sync(&self, raw: &Value, ctx: &C) -> Result<(), ()> {
         self.track_presence(&raw["presence"]);
 
-        if let Some(events) = raw["account_data"]["events"].as_array() {
+        let account_events = &raw["account_data"]["events"];
+        // JavaScript's for-of accepts strings as well as arrays; string characters
+        // cannot be m.direct events. Other non-null values are not iterable.
+        if !account_events.is_null() && !account_events.is_array() && !account_events.is_string() {
+            return Err(());
+        }
+        if let Some(events) = account_events.as_array() {
             for event in events {
-                if event["type"].as_str() == Some("m.direct") {
-                    self.reset_sync_state();
+                if event["type"].as_str() != Some("m.direct") {
+                    continue;
                 }
+                let content = &event["content"];
+                if !content.is_object() && !content.is_array() {
+                    continue;
+                }
+                let entries = sync_object_entries(content)?;
+                let mut direct = BTreeMap::new();
+                for (user_id, rooms) in entries {
+                    if let Some(rooms) = rooms.as_array() {
+                        for room_id in rooms.iter().filter_map(Value::as_str) {
+                            direct.insert(room_id.to_string(), user_id.clone());
+                        }
+                    }
+                }
+                self.lock().direct = direct;
             }
         }
 
-        for (room_id, joined) in room_section(raw, "join") {
-            self.apply_joined_room(&room_id, joined, ctx).await;
+        let rooms_value = &raw["rooms"];
+        if !rooms_value.is_null() {
+            for (section, rooms) in sync_object_entries(rooms_value)? {
+                for (room_id, data) in sync_object_entries(&rooms)? {
+                    let membership = match section.as_str() {
+                        "join" => "join",
+                        "invite" => "invite",
+                        _ => "leave",
+                    };
+                    if section == "leave" && !self.lock().rooms.iter().any(|(id, _)| id == &room_id)
+                    {
+                        continue;
+                    }
+                    if data.is_null() {
+                        let mut state = self.lock();
+                        if let Some((_, room)) =
+                            state.rooms.iter_mut().find(|(id, _)| id == &room_id)
+                            && let Some(summary) = room.summary.as_object_mut()
+                        {
+                            summary.insert("membership".into(), json!(membership));
+                        }
+                        return Err(());
+                    }
+                    self.apply_room_sync(&room_id, &data, membership, ctx)
+                        .await?;
+                }
+            }
         }
-        for (room_id, invited) in room_section(raw, "invite") {
-            self.apply_invited_room(&room_id, invited, ctx).await;
-        }
-        // Left rooms are dropped, exactly as TS drops ids it cannot rebuild.
-        for (room_id, _) in room_section(raw, "leave") {
-            self.remove_room(&room_id);
-        }
+        Ok(())
     }
 
-    async fn apply_joined_room(&self, room_id: &str, joined: &Value, ctx: &C) {
-        let previous = joined.get("prev_batch").and_then(Value::as_str);
-        self.update_room(room_id, |_| ());
+    async fn apply_room_sync(
+        &self,
+        room_id: &str,
+        joined: &Value,
+        membership: &str,
+        ctx: &C,
+    ) -> Result<(), ()> {
+        let previous = joined["timeline"]["prev_batch"].as_str();
+        let state_events = if joined["state"]["events"].is_null() {
+            &joined["invite_state"]["events"]
+        } else {
+            &joined["state"]["events"]
+        };
+        let timeline_events = &joined["timeline"]["events"];
+        // The reference spreads state events and calls filter on the timeline
+        // before applying any state events. Existing room membership is already
+        // updated at that point; a new room has not yet been inserted.
+        let invalid_state =
+            !state_events.is_null() && !state_events.is_array() && !state_events.is_string();
+        let invalid_timeline = !timeline_events.is_null()
+            && (!timeline_events.is_array()
+                || timeline_events
+                    .as_array()
+                    .is_some_and(|events| events.iter().any(Value::is_null)));
+        if invalid_state || invalid_timeline {
+            let mut state = self.lock();
+            if let Some((_, room)) = state.rooms.iter_mut().find(|(id, _)| id == room_id)
+                && let Some(summary) = room.summary.as_object_mut()
+            {
+                summary.insert("membership".into(), json!(membership));
+            }
+            return Err(());
+        }
+        {
+            let mut state = self.lock();
+            let is_new_room = !state.rooms.iter().any(|(id, _)| id == room_id);
+            let index = match state.rooms.iter().position(|(id, _)| id == room_id) {
+                Some(index) => index,
+                None => {
+                    state.rooms.push((room_id.to_string(), Room {
+                        summary: json!({"id": room_id, "name": room_id, "service": "Matrix", "network": "", "unread": 0, "membership": "join", "encrypted": false, "timestamp": 0, "preview": ""}),
+                        ..Default::default()
+                    }));
+                    state.rooms.len() - 1
+                }
+            };
+            let session_user = state
+                .session
+                .as_ref()
+                .map(|session| session.user_id.clone());
+            let counterpart = state.direct.get(room_id).cloned();
+            let room = &mut state.rooms[index].1;
+            if let Some(summary) = room.summary.as_object_mut() {
+                summary.insert("membership".into(), json!(membership));
+            }
+            let state_events = state_events.as_array().into_iter().flatten();
+            let timeline_states = joined["timeline"]["events"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter(|event| event.get("state_key").is_some());
+            for raw_event in state_events.chain(timeline_states) {
+                let Ok(event) = serde_json::from_value::<Event>(raw_event.clone()) else {
+                    continue;
+                };
+                if let Some(index) = room
+                    .states
+                    .iter()
+                    .position(|old| old.kind == event.kind && old.state_key == event.state_key)
+                {
+                    room.states[index] = event;
+                } else {
+                    room.states.push(event);
+                }
+            }
+            // The reference dereferences content.name/displayname without optional
+            // chaining. A nullish content fails after state insertion but before
+            // assigning the summary name; new rooms have not been published yet.
+            let name_event = room.states.iter().find(|event| event.kind == "m.room.name");
+            let missing_name_content = name_event.is_some_and(|event| event.content.is_null());
+            let needs_member = name_event
+                .and_then(|event| event.content.get("name"))
+                .is_none_or(Value::is_null);
+            let missing_member_content = needs_member
+                && room
+                    .states
+                    .iter()
+                    .find(|event| {
+                        event.kind == "m.room.member"
+                            && event.state_key.as_deref() != session_user.as_deref()
+                    })
+                    .is_some_and(|event| event.content.is_null());
+            if missing_name_content || missing_member_content {
+                if is_new_room {
+                    state.rooms.remove(index);
+                }
+                return Err(());
+            }
+            let name_value = room
+                .states
+                .iter()
+                .find(|event| event.kind == "m.room.name")
+                .and_then(|event| event.content.get("name"))
+                .filter(|value| !value.is_null())
+                .or_else(|| {
+                    room.states
+                        .iter()
+                        .find(|event| {
+                            event.kind == "m.room.member"
+                                && event.state_key.as_deref() != session_user.as_deref()
+                        })
+                        .and_then(|event| event.content.get("displayname"))
+                        .filter(|value| !value.is_null())
+                });
+            let name = name_value
+                .map(js_string)
+                .unwrap_or_else(|| room_id.to_string());
+            let mut units = 0;
+            let name: String = name
+                .chars()
+                .take_while(|ch| {
+                    units += ch.len_utf16();
+                    units <= 512
+                })
+                .collect();
+            let others: Vec<_> = room
+                .states
+                .iter()
+                .filter(|event| {
+                    event.kind == "m.room.member"
+                        && event.state_key.as_deref().is_some_and(|key| {
+                            !key.is_empty() && Some(key) != session_user.as_deref()
+                        })
+                        && matches!(
+                            event.content.get("membership").and_then(Value::as_str),
+                            Some("join" | "invite")
+                        )
+                })
+                .collect();
+            let selected = match counterpart.as_deref().filter(|id| !id.is_empty()) {
+                Some(id) => others
+                    .iter()
+                    .copied()
+                    .find(|event| event.state_key.as_deref() == Some(id)),
+                None if others.len() == 1 => Some(others[0]),
+                None => None,
+            };
+            room.peer = selected.map(|event| {
+                let user_id = event.state_key.as_deref().unwrap_or_default();
+                let name = event
+                    .content
+                    .get("displayname")
+                    .filter(|value| !value.is_null())
+                    .map(js_string)
+                    .unwrap_or_else(|| user_id.to_string());
+                let mut units = 0;
+                let name = name
+                    .chars()
+                    .take_while(|ch| {
+                        units += ch.len_utf16();
+                        units <= 512
+                    })
+                    .collect();
+                let avatar_url = event
+                    .content
+                    .get("avatar_url")
+                    .and_then(Value::as_str)
+                    .filter(|url| url.starts_with("mxc://"))
+                    .map(str::to_owned);
+                Peer {
+                    user_id: user_id.to_string(),
+                    name: Some(name),
+                    avatar_url,
+                }
+            });
+            let avatar = room
+                .peer
+                .as_ref()
+                .and_then(|peer| peer.avatar_url.clone())
+                .or_else(|| {
+                    room.states
+                        .iter()
+                        .find(|event| event.kind == "m.room.avatar")
+                        .and_then(|event| event.content.get("url"))
+                        .and_then(Value::as_str)
+                        .filter(|url| url.starts_with("mxc://"))
+                        .map(str::to_owned)
+                });
+            let bridge = room
+                .states
+                .iter()
+                .find(|event| matches!(event.kind.as_str(), "m.bridge" | "uk.half-shot.bridge"));
+            let protocol = bridge.and_then(|event| event.content.get("protocol"));
+            let protocol_id = protocol
+                .and_then(|value| value.get("id"))
+                .map(js_string)
+                .unwrap_or_else(|| "undefined".into())
+                .to_lowercase();
+            let service = match protocol_id.as_str() {
+                "whatsapp" => "WhatsApp".to_string(),
+                "telegram" => "Telegram".to_string(),
+                "signal" => "Signal".to_string(),
+                "discord" => "Discord".to_string(),
+                "slack" => "Slack".to_string(),
+                "msteams" | "teams" | "microsoft-teams" | "go.mau.fi/mautrix-teams" => {
+                    "Teams".to_string()
+                }
+                _ => protocol
+                    .and_then(|value| value.get("displayname"))
+                    .filter(|value| !value.is_null())
+                    .map(js_string)
+                    .unwrap_or_else(|| "Matrix".into()),
+            };
+            let network = bridge
+                .and_then(|event| event.content.get("network"))
+                .and_then(|value| value.get("displayname"))
+                .filter(|value| !value.is_null())
+                .map(js_string)
+                .unwrap_or_default();
+            let truncate = |value: String, limit: usize| {
+                let mut units = 0;
+                value
+                    .chars()
+                    .take_while(|ch| {
+                        units += ch.len_utf16();
+                        units <= limit
+                    })
+                    .collect::<String>()
+            };
+            let service = truncate(service, 80);
+            let network = truncate(network, 120);
+            let encrypted = room
+                .states
+                .iter()
+                .any(|event| event.kind == "m.room.encryption");
+            let topic = room
+                .states
+                .iter()
+                .find(|event| event.kind == "m.room.topic")
+                .and_then(|event| event.content.get("topic"))
+                .and_then(Value::as_str);
+            if let Some(summary) = room.summary.as_object_mut() {
+                if let Some(avatar) = avatar {
+                    summary.insert("avatarUrl".into(), json!(avatar));
+                } else {
+                    summary.remove("avatarUrl");
+                }
+                summary.insert("service".into(), json!(service));
+                summary.insert("network".into(), json!(network));
+                summary.insert("name".into(), json!(name));
+                summary.insert("encrypted".into(), json!(encrypted));
+                if let Some(topic) = topic {
+                    // Rust strings cannot represent a lone UTF-16 surrogate. If
+                    // the boundary splits a pair, retain only whole characters.
+                    let mut units = 0;
+                    let topic: String = topic
+                        .chars()
+                        .take_while(|ch| {
+                            units += ch.len_utf16();
+                            units <= 512
+                        })
+                        .collect();
+                    summary.insert("topic".into(), json!(topic));
+                } else {
+                    summary.remove("topic");
+                }
+                let is_status = summary
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| name.to_lowercase().contains("status broadcast"))
+                    || summary
+                        .get("topic")
+                        .and_then(Value::as_str)
+                        .is_some_and(|topic| {
+                            topic
+                                .to_lowercase()
+                                .contains("status updates from your contacts")
+                        });
+                if is_status {
+                    summary.insert("status".into(), json!(true));
+                    summary.insert("kind".into(), json!("status"));
+                } else {
+                    summary.remove("status");
+                    if summary.get("kind").and_then(Value::as_str) == Some("status") {
+                        summary.remove("kind");
+                    }
+                }
+            }
+            if let Some(summary) = room.summary.as_object_mut() {
+                let notifications = &joined["unread_notifications"];
+                if json_truthy(notifications) {
+                    let count = &notifications["notification_count"];
+                    summary.insert(
+                        "unread".into(),
+                        if count.is_null() {
+                            json!(0)
+                        } else {
+                            count.clone()
+                        },
+                    );
+                }
+                let events = &joined["account_data"]["events"];
+                if !events.is_null() && !events.is_array() && !events.is_string() {
+                    if is_new_room {
+                        state.rooms.remove(index);
+                    }
+                    return Err(());
+                }
+                if let Some(events) = events.as_array() {
+                    for event in events {
+                        if event.is_null()
+                            || (event["type"].as_str() == Some("m.marked_unread")
+                                && event["content"].is_null())
+                        {
+                            if is_new_room {
+                                state.rooms.remove(index);
+                            }
+                            return Err(());
+                        }
+                        if event["type"].as_str() == Some("m.marked_unread") {
+                            summary.insert(
+                                "markedUnread".into(),
+                                json!(json_truthy(&event["content"]["unread"])),
+                            );
+                        }
+                    }
+                }
+            }
+            let ephemeral_events = &joined["ephemeral"]["events"];
+            if !ephemeral_events.is_null()
+                && !ephemeral_events.is_array()
+                && !ephemeral_events.is_string()
+            {
+                if is_new_room {
+                    state.rooms.remove(index);
+                }
+                return Err(());
+            }
+            if let Some(events) = ephemeral_events.as_array() {
+                for event in events {
+                    if event.is_null() {
+                        if is_new_room {
+                            state.rooms.remove(index);
+                        }
+                        return Err(());
+                    }
+                    if event["type"].as_str() != Some("m.receipt") {
+                        continue;
+                    }
+                    if event["content"].is_null() {
+                        if is_new_room {
+                            state.rooms.remove(index);
+                        }
+                        return Err(());
+                    }
+                    let receipts: Vec<(String, &Value)> = match &event["content"] {
+                        Value::Object(receipts) => receipts
+                            .iter()
+                            .map(|(id, types)| (id.clone(), types))
+                            .collect(),
+                        Value::Array(receipts) => receipts
+                            .iter()
+                            .enumerate()
+                            .map(|(index, types)| (index.to_string(), types))
+                            .collect(),
+                        // Each UTF-16 unit is a string primitive with no m.read property.
+                        Value::String(receipts) => (0..receipts.encode_utf16().count())
+                            .map(|index| (index.to_string(), &Value::Bool(false)))
+                            .collect(),
+                        _ => Vec::new(),
+                    };
+                    let mut receipts = receipts;
+                    sort_js_entries(&mut receipts);
+                    for (event_id, types) in receipts {
+                        if types.is_null() {
+                            if is_new_room {
+                                state.rooms.remove(index);
+                            }
+                            return Err(());
+                        }
+                        let users = room.receipt_mut(&event_id);
+                        let readers = &types["m.read"];
+                        let entries: Vec<(String, &Value)> = match readers {
+                            Value::Object(readers) => readers
+                                .iter()
+                                .map(|(id, value)| (id.clone(), value))
+                                .collect(),
+                            Value::Array(readers) => readers
+                                .iter()
+                                .enumerate()
+                                .map(|(index, value)| (index.to_string(), value))
+                                .collect(),
+                            _ => Vec::new(),
+                        };
+                        let mut entries = entries;
+                        sort_js_entries(&mut entries);
+                        let string_indices = readers
+                            .as_str()
+                            .into_iter()
+                            .flat_map(|text| 0..text.encode_utf16().count())
+                            .map(|index| (index.to_string(), &Value::Null));
+                        for (user_id, value) in entries.into_iter().chain(string_indices) {
+                            let receipt = Receipt {
+                                ts: value["ts"].as_f64(),
+                            };
+                            if let Some((_, current)) =
+                                users.iter_mut().find(|(id, _)| id == &user_id)
+                            {
+                                *current = receipt;
+                            } else {
+                                users.push((user_id, receipt));
+                            }
+                        }
+                    }
+                }
+            }
+            if room.previous.is_none() {
+                room.previous = previous.map(str::to_owned);
+            }
+        }
 
+        let _retention_guard = SyncRetentionGuard {
+            inner: &self.inner,
+            room_id,
+        };
         if let Some(events) = joined["timeline"]["events"].as_array() {
             for raw_event in events {
-                if raw_event
-                    .get("unsigned")
-                    .and_then(|u| u.get("redacted_because"))
-                    .is_some()
-                {
-                    continue;
-                }
                 // Sync payloads are raw JSON; the cache retains typed `Event`s.
                 let Ok(parsed) = serde_json::from_value::<Event>(raw_event.clone()) else {
                     continue;
                 };
+                if parsed.event_id.as_deref().is_none_or(str::is_empty) {
+                    continue;
+                }
+                // The original sync selects and redacts using the incoming event,
+                // while storing the result of decryption.
+                let incoming_id = parsed.event_id.clone();
+                let redacts = if parsed.kind == "m.room.redaction" {
+                    parsed.redaction_target().map(str::to_owned)
+                } else {
+                    None
+                };
                 let event = self.decrypt_event(room_id, parsed, ctx).await;
                 self.update_room(room_id, move |room| {
                     if let Some(room) = room {
-                        room.push_event(event);
+                        if let Some(index) = room
+                            .events
+                            .iter()
+                            .position(|old| old.event_id == incoming_id)
+                        {
+                            room.events[index] = event;
+                        } else {
+                            room.events.push(event);
+                        }
+                        if let Some(redacts) = redacts {
+                            room.events
+                                .retain(|old| old.event_id.as_deref() != Some(redacts.as_str()));
+                        }
                     }
                 });
             }
         }
-        if let Some(previous) = previous {
-            self.update_room(room_id, |_| ());
-            let _ = previous;
-        }
+        let latest = self.messages(room_id).into_iter().last();
+        self.update_room(room_id, |room| {
+            let Some(summary) = room.and_then(|room| room.summary.as_object_mut()) else {
+                return;
+            };
+            summary.insert(
+                "timestamp".into(),
+                json!(latest.as_ref().map_or(0.0, |message| message.timestamp)),
+            );
+            summary.insert(
+                "preview".into(),
+                json!(
+                    latest
+                        .as_ref()
+                        .map(|message| message.body.as_str())
+                        .unwrap_or(if membership == "invite" {
+                            "Invitation"
+                        } else {
+                            "No messages yet"
+                        })
+                ),
+            );
+        });
+        Ok(())
     }
+}
 
-    async fn apply_invited_room(&self, room_id: &str, invited: &Value, ctx: &C) {
-        if let Some(events) = invited["invite_state"]["events"].as_array() {
-            for raw_event in events {
-                let Ok(event) = serde_json::from_value::<Event>(raw_event.clone()) else {
-                    continue;
-                };
-                self.update_room(room_id, move |room| {
-                    if let Some(room) = room {
-                        room.push_event(event);
-                    }
-                });
-            }
-        }
-        let _ = ctx;
+// String conversion for JSON values used by Matrix summary fields.
+fn js_string(value: &Value) -> String {
+    match value {
+        Value::Null => "null".into(),
+        Value::Bool(value) => value.to_string(),
+        Value::Number(value) => value.to_string(),
+        Value::String(value) => value.clone(),
+        Value::Object(_) => "[object Object]".into(),
+        Value::Array(values) => values
+            .iter()
+            .map(|value| {
+                if value.is_null() {
+                    String::new()
+                } else {
+                    js_string(value)
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(","),
+    }
+}
+
+// JavaScript's Boolean conversion treats arrays and objects as truthy, including empty ones.
+fn json_truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(value) => *value,
+        Value::Number(value) => value.as_f64().is_some_and(|number| number != 0.0),
+        Value::String(value) => !value.is_empty(),
+        Value::Array(_) | Value::Object(_) => true,
     }
 }
 
@@ -2604,6 +3205,1208 @@ mod tests {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../.jait/artifacts/gateway-rust/parallel-implementation/messenger-tests")
             .join(name)
+    }
+
+    #[tokio::test]
+    async fn sync_status_room_classification_follows_name_and_topic() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-status"), None);
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.name","state_key":"","content":{"name":"My STATUS BROADCAST"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["status"], true);
+        assert_eq!(connection.lock().rooms[0].1.summary["kind"], "status");
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.room.name","state_key":"","content":{"name":"Ordinary"}},
+            {"type":"m.room.topic","state_key":"","content":{"topic":"Status Updates From Your Contacts"}}
+        ]}}}}}), &()).await.unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["status"], true);
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.topic","state_key":"","content":{"topic":"Ordinary"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        {
+            let mut state = connection.lock();
+            let summary = state.rooms[0].1.summary.as_object_mut().unwrap();
+            assert!(!summary.contains_key("status"));
+            assert!(!summary.contains_key("kind"));
+            summary.insert("kind".into(), json!("channel"));
+        }
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!room":{}}}}), &())
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["kind"], "channel");
+    }
+
+    #[tokio::test]
+    async fn sync_bridge_labels_follow_retained_state() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-bridge"), None);
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.bridge","state_key":"","content":{"protocol":{"id":"WhAtSaPp","displayname":"Ignored"},"network":{"displayname":"Home"}}}
+        ]}}}}}), &()).await.unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["service"], "WhatsApp");
+        assert_eq!(connection.lock().rooms[0].1.summary["network"], "Home");
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.bridge","state_key":"","content":{"protocol":{"id":"custom","displayname":42},"network":{"displayname":["a",null,"b"]}}}
+        ]}}}}}), &()).await.unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["service"], "42");
+        assert_eq!(connection.lock().rooms[0].1.summary["network"], "a,,b");
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.bridge","state_key":"","content":{}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["service"], "Matrix");
+        assert_eq!(connection.lock().rooms[0].1.summary["network"], "");
+    }
+
+    #[tokio::test]
+    async fn sync_peer_and_avatar_follow_active_membership() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-peer-avatar"), None);
+        connection.set_session(Some(MessengerSession {
+            user_id: "@self".into(),
+            ..Default::default()
+        }));
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.room.member","state_key":"@alice","content":{"membership":"join","displayname":"Alice","avatar_url":"mxc://alice"}},
+            {"type":"m.room.avatar","state_key":"","content":{"url":"mxc://room"}}
+        ]}}}}}), &()).await.unwrap();
+        {
+            let state = connection.lock();
+            let room = &state.rooms[0].1;
+            assert_eq!(room.peer.as_ref().unwrap().user_id, "@alice");
+            assert_eq!(room.summary["avatarUrl"], "mxc://alice");
+        }
+        connection.apply_sync(&json!({"account_data":{"events":[{"type":"m.direct","content":{"@bob":["!room"]}}]},"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.room.member","state_key":"@bob","content":{"membership":"invite","avatar_url":"https://invalid"}}
+        ]}}}}}), &()).await.unwrap();
+        {
+            let state = connection.lock();
+            let room = &state.rooms[0].1;
+            assert_eq!(room.peer.as_ref().unwrap().user_id, "@bob");
+            assert_eq!(room.peer.as_ref().unwrap().name.as_deref(), Some("@bob"));
+            assert_eq!(room.summary["avatarUrl"], "mxc://room");
+        }
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.member","state_key":"@bob","content":{"membership":"leave"}},
+                    {"type":"m.room.avatar","state_key":"","content":{"url":"https://invalid"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        let state = connection.lock();
+        let room = &state.rooms[0].1;
+        assert!(room.peer.is_none());
+        assert!(room.summary.get("avatarUrl").is_none());
+    }
+
+    #[tokio::test]
+    async fn sync_summary_name_uses_state_and_nullish_fallbacks() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-name"), None);
+        connection.set_session(Some(MessengerSession {
+            user_id: "@self".into(),
+            ..Default::default()
+        }));
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.member","state_key":"@self","content":{"displayname":"Self"}},
+                    {"type":"m.room.member","state_key":"@other","content":{"displayname":"Alice"}},
+                    {"type":"m.room.name","state_key":"","content":{"name":"Team"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["name"], "Team");
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.name","state_key":"","content":{"name":null}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["name"], "Alice");
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.name","state_key":"","content":{"name":""}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["name"], "");
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"state":{"events":[
+                    {"type":"m.room.name","state_key":"","content":{"name":[1,null,"x"]}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["name"], "1,,x");
+    }
+
+    #[tokio::test]
+    async fn sync_receipt_reader_names_use_js_conversion_and_utf16_length() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("receipt-reader-name"), None);
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{
+            "state":{"events":[{"type":"m.room.member","state_key":"@alice","content":{"displayname":["A","B"]}}]},
+            "timeline":{"events":[{"event_id":"$one","type":"m.room.message","sender":"@self","content":{"msgtype":"m.text","body":"hello"}}]},
+            "ephemeral":{"events":[{"type":"m.receipt","content":{"$one":{"m.read":{"@alice":{"ts":1}}}}}]}
+        }}}}), &()).await.unwrap();
+        {
+            let state = connection.lock();
+            let messages = derive_messages(Some(&state.rooms[0].1), Some("@self"));
+            assert_eq!(messages[0].read_by[0].name, "A,B");
+        }
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.room.member","state_key":"@alice","content":{"displayname":"😀".repeat(300)}}
+        ]}}}}}), &()).await.unwrap();
+        let state = connection.lock();
+        let messages = derive_messages(Some(&state.rooms[0].1), Some("@self"));
+        assert_eq!(messages[0].read_by[0].name, "😀".repeat(256));
+    }
+
+    #[tokio::test]
+    async fn sync_string_receipts_spread_utf16_indices() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-string-receipts"), None);
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":{"$one":{"m.read":{"@alice":{"ts":1},"1":{"ts":9}}}}},
+            {"type":"m.receipt","content":{"$one":{"m.read":"A😀"}}}
+        ]}}}}}), &()).await.unwrap();
+        let state = connection.lock();
+        let readers = &state.rooms[0].1.receipts[0].1;
+        for id in ["0", "1", "2"] {
+            assert_eq!(
+                readers.iter().find(|(key, _)| key == id).unwrap().1.ts,
+                None
+            );
+        }
+        assert_eq!(
+            readers
+                .iter()
+                .find(|(key, _)| key == "@alice")
+                .unwrap()
+                .1
+                .ts,
+            Some(1.0)
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_string_receipt_content_uses_utf16_event_indices() {
+        let connection: Connection<()> = Connection::new(
+            "owner",
+            lifecycle_directory("sync-string-receipt-content"),
+            None,
+        );
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+                    {"type":"m.receipt","content":{"1":{"m.read":{"@alice":{"ts":7}}}}},
+                    {"type":"m.receipt","content":"A😀"}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        let state = connection.lock();
+        let receipts = &state.rooms[0].1.receipts;
+        assert_eq!(
+            receipts
+                .iter()
+                .map(|(id, _)| id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["1", "0", "2"]
+        );
+        assert_eq!(receipts[0].1[0].1.ts, Some(7.0));
+        assert!(receipts[1].1.is_empty());
+        assert!(receipts[2].1.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_array_receipt_content_uses_event_indices() {
+        let connection: Connection<()> = Connection::new(
+            "owner",
+            lifecycle_directory("sync-array-receipt-content"),
+            None,
+        );
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":[{"m.read":{"@alice":{"ts":1}}},{"m.read":{"@bob":{"ts":2}}}]},
+            {"type":"m.receipt","content":{"0":{"m.read":{"@carol":{"ts":3}}}}}
+        ]}}}}}), &()).await.unwrap();
+        let state = connection.lock();
+        let receipts = &state.rooms[0].1.receipts;
+        assert_eq!(
+            receipts
+                .iter()
+                .map(|(id, _)| id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["0", "1"]
+        );
+        assert_eq!(
+            receipts[0]
+                .1
+                .iter()
+                .map(|(id, r)| (id.as_str(), r.ts))
+                .collect::<Vec<_>>(),
+            vec![("@alice", Some(1.0)), ("@carol", Some(3.0))]
+        );
+        assert_eq!(receipts[1].1[0].1.ts, Some(2.0));
+    }
+
+    #[tokio::test]
+    async fn sync_null_receipt_stops_processing_and_discards_new_room() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-null-receipt"), None);
+        let malformed = json!({"rooms":{"join":{"!new":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":null}
+        ]}},"!later":{}}}});
+        assert!(connection.apply_sync(&malformed, &()).await.is_err());
+        assert!(connection.lock().rooms.is_empty());
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!existing":{}}}}), &())
+            .await
+            .unwrap();
+        let malformed = json!({"rooms":{"join":{"!existing":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":{"$ok":{"m.read":{"@a":{"ts":7}}},"$bad":null}}
+        ]}}}}});
+        assert!(connection.apply_sync(&malformed, &()).await.is_err());
+        let state = connection.lock();
+        let receipts = &state.rooms[0].1.receipts;
+        assert_eq!(receipts.len(), 1);
+        assert_eq!(receipts[0].0, "$ok");
+        assert_eq!(receipts[0].1[0].1.ts, Some(7.0));
+    }
+
+    #[tokio::test]
+    async fn sync_receipt_input_obeys_js_key_order_before_error() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-receipt-key-order"), None);
+        // Preserve wire insertion order: JS still visits numeric keys first.
+        let raw: Value = serde_json::from_str(r#"{"rooms":{"join":{"!room":{"ephemeral":{"events":[{"type":"m.receipt","content":{"z":null,"10":{"m.read":{"10":{"ts":10},"2":{"ts":2},"a":{"ts":3}}},"2":{"m.read":{"@a":{"ts":1}}}}}]}}}}}"#).unwrap();
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!room":{}}}}), &())
+            .await
+            .unwrap();
+        assert!(connection.apply_sync(&raw, &()).await.is_err());
+        let state = connection.lock();
+        let receipts = &state.rooms[0].1.receipts;
+        assert_eq!(
+            receipts
+                .iter()
+                .map(|(id, _)| id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["2", "10"]
+        );
+        assert_eq!(
+            receipts[1]
+                .1
+                .iter()
+                .map(|(id, _)| id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["2", "10", "a"]
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_null_receipt_preserves_prior_summary_but_not_pagination() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-null-summary"), None);
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!existing":{}}}}), &())
+            .await
+            .unwrap();
+        let malformed = json!({"rooms":{"join":{"!existing":{
+            "state":{"events":[{"type":"m.room.name","state_key":"","content":{"name":"Updated"}}]},
+            "unread_notifications":{"notification_count":4},
+            "account_data":{"events":[{"type":"m.marked_unread","content":{"unread":true}}]},
+            "timeline":{"prev_batch":"should-not-commit"},
+            "ephemeral":{"events":[{"type":"m.receipt","content":null}]}
+        }}}});
+        assert!(connection.apply_sync(&malformed, &()).await.is_err());
+        let state = connection.lock();
+        let room = &state.rooms[0].1;
+        assert_eq!(room.summary["name"], "Updated");
+        assert_eq!(room.summary["unread"], 4);
+        assert_eq!(room.summary["markedUnread"], true);
+        assert!(room.previous.is_none());
+    }
+
+    #[tokio::test]
+    async fn sync_array_receipts_spread_indices_and_merge_updates() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-array-receipts"), None);
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":{"$one":{"m.read":{"@alice":{"ts":1},"0":{"ts":2}}}}}
+        ]}}}}}), &()).await.unwrap();
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+                    {"type":"m.receipt","content":{"$one":{"m.read":[{"ts":7},{"ts":8}]}}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        let state = connection.lock();
+        let readers = &state.rooms[0].1.receipts[0].1;
+        assert_eq!(
+            readers.iter().find(|(id, _)| id == "0").unwrap().1.ts,
+            Some(7.0)
+        );
+        assert_eq!(
+            readers.iter().find(|(id, _)| id == "1").unwrap().1.ts,
+            Some(8.0)
+        );
+        assert_eq!(
+            readers.iter().find(|(id, _)| id == "@alice").unwrap().1.ts,
+            Some(1.0)
+        );
+    }
+
+    #[tokio::test]
+    async fn sync_receipts_merge_readers_and_replace_updates() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-receipts"), None);
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":{"$one":{"m.read":{"@alice":{"ts":10},"@bob":{"ts":20}}}}}
+        ]}}}}}), &()).await.unwrap();
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"ephemeral":{"events":[
+            {"type":"m.receipt","content":{"$one":{"m.read":{"@alice":{"ts":30},"@carol":{"ts":40}}},"$two":{"m.read":{"@bob":{"ts":50}}}}}
+        ]}}}}}), &()).await.unwrap();
+        let state = connection.lock();
+        let receipts = &state.rooms[0].1.receipts;
+        assert_eq!(receipts.len(), 2);
+        assert_eq!(receipts[0].0, "$one");
+        assert_eq!(
+            receipts[0]
+                .1
+                .iter()
+                .map(|(id, r)| (id.as_str(), r.ts))
+                .collect::<Vec<_>>(),
+            vec![
+                ("@alice", Some(30.0)),
+                ("@bob", Some(20.0)),
+                ("@carol", Some(40.0))
+            ]
+        );
+        assert_eq!(receipts[1].1[0].1.ts, Some(50.0));
+    }
+
+    #[tokio::test]
+    async fn sync_summary_detects_retained_encryption_state() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-encryption"), None);
+        connection.apply_sync(&json!({"rooms":{"join":{"!room":{"state":{"events":[
+            {"type":"m.room.encryption","state_key":"","content":{"algorithm":"m.megolm.v1.aes-sha2"}}
+        ]}}}}}), &()).await.unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["encrypted"], true);
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!room":{}}}}), &())
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[0].1.summary["encrypted"], true);
+        connection
+            .apply_sync(&json!({"rooms":{"invite":{"!other":{}}}}), &())
+            .await
+            .unwrap();
+        assert_eq!(connection.lock().rooms[1].1.summary["encrypted"], false);
+    }
+
+    #[tokio::test]
+    async fn sync_room_preview_tracks_messages_and_invites() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-preview"), None);
+        connection.apply_sync(&json!({"rooms":{"invite":{"!invite":{}},"join":{"!empty":{},"!message":{"timeline":{"events":[
+            {"event_id":"$one","type":"m.room.message","sender":"@alice","origin_server_ts":42,"content":{"msgtype":"m.text","body":"Hello"}}
+        ]}}}}}), &()).await.unwrap();
+        connection.with_room("!invite", |room| {
+            assert_eq!(room.unwrap().summary["preview"], "Invitation")
+        });
+        connection.with_room("!empty", |room| {
+            assert_eq!(room.unwrap().summary["preview"], "No messages yet")
+        });
+        connection.with_room("!message", |room| {
+            let summary = &room.unwrap().summary;
+            assert_eq!(summary["preview"], "Hello");
+            assert_eq!(summary["timestamp"], 42.0);
+        });
+    }
+
+    #[tokio::test]
+    async fn sync_direct_and_rooms_obey_js_key_order() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-key-order"), None);
+        let raw = json!({
+            "account_data": {"events": [{"type": "m.direct", "content": {
+                "10": ["!shared"], "2": ["!shared"]
+            }}]},
+            "rooms": {"join": {
+                "10": {"ephemeral": {"events": [{"type": "m.receipt", "content": null}]}},
+                "2": {"timeline": {"events": []}}
+            }}
+        });
+        assert!(connection.apply_sync(&raw, &()).await.is_err());
+        assert_eq!(
+            connection.lock().direct.get("!shared").map(String::as_str),
+            Some("10")
+        );
+        connection.with_room("2", |room| assert!(room.is_some()));
+        connection.with_room("10", |room| assert!(room.is_none()));
+    }
+
+    #[tokio::test]
+    async fn sync_sections_obey_js_key_order_before_failure() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-section-order"), None);
+        let raw = json!({"rooms": {
+            "10": {"!bad": {"ephemeral": {"events": [{"type": "m.receipt", "content": null}]}}},
+            "2": {"!first": {}}
+        }});
+        assert!(connection.apply_sync(&raw, &()).await.is_err());
+        connection.with_room("!first", |room| {
+            assert_eq!(room.unwrap().summary["membership"], "leave")
+        });
+        connection.with_room("!bad", |room| assert!(room.is_none()));
+    }
+
+    #[tokio::test]
+    async fn sync_room_event_collections_fail_before_state_updates() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-room-collections"), None);
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!existing":{}}}}), &())
+            .await
+            .unwrap();
+        for data in [
+            json!({"state":{"events":{}}}),
+            json!({"state":{"events":[{"type":"m.room.topic","state_key":"","content":{"topic":"lost"}}]},"timeline":{"events":"bad"}}),
+            json!({"timeline":{"events":[null]}}),
+        ] {
+            assert!(
+                connection
+                    .apply_sync(&json!({"rooms":{"invite":{"!existing":data.clone()}}}), &())
+                    .await
+                    .is_err()
+            );
+            connection.with_room("!existing", |room| {
+                let room = room.unwrap();
+                assert_eq!(room.summary["membership"], "invite");
+                assert!(room.states.is_empty());
+            });
+            assert!(
+                connection
+                    .apply_sync(&json!({"rooms":{"join":{"!new":data}}}), &())
+                    .await
+                    .is_err()
+            );
+            connection.with_room("!new", |room| assert!(room.is_none()));
+        }
+        connection.apply_sync(&json!({"rooms":{"join":{"!fallback":{"state":{"events":""},"invite_state":{"events":[{"type":"m.room.topic","state_key":"","content":{"topic":"wrong"}}]}}}}}), &()).await.unwrap();
+        connection.with_room("!fallback", |room| assert!(room.unwrap().states.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn sync_room_account_and_ephemeral_fail_in_order() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-room-iterable"), None);
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!existing":{}}}}), &())
+            .await
+            .unwrap();
+        for invalid in [json!({}), json!(false), json!(42), json!([null])] {
+            let data = json!({"unread_notifications":{"notification_count":7},"account_data":{"events":invalid}});
+            assert!(
+                connection
+                    .apply_sync(&json!({"rooms":{"invite":{"!existing":data.clone()}}}), &())
+                    .await
+                    .is_err()
+            );
+            connection.with_room("!existing", |room| {
+                let room = room.unwrap();
+                assert_eq!(room.summary["membership"], "invite");
+                assert_eq!(room.summary["unread"], 7);
+            });
+            assert!(
+                connection
+                    .apply_sync(&json!({"rooms":{"join":{"!new":data}}}), &())
+                    .await
+                    .is_err()
+            );
+            connection.with_room("!new", |room| assert!(room.is_none()));
+        }
+        let data = json!({"account_data":{"events":[{"type":"m.marked_unread","content":{"unread":true}}]},"ephemeral":{"events":[null]}});
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"join":{"!existing":data}}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!existing", |room| {
+            assert_eq!(room.unwrap().summary["markedUnread"], true)
+        });
+        for valid in [json!(null), json!("text"), json!([])] {
+            connection.apply_sync(&json!({"rooms":{"join":{"!allowed":{"account_data":{"events":valid.clone()},"ephemeral":{"events":valid}}}}}), &()).await.unwrap();
+        }
+        assert!(connection.apply_sync(&json!({"rooms":{"join":{"!existing":{"account_data":{"events":[{"type":"m.marked_unread","content":null}]}}}}}), &()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn sync_null_name_or_member_content_retains_prior_state() {
+        let connection: Connection<()> = Connection::new(
+            "owner",
+            lifecycle_directory("sync-null-state-content"),
+            None,
+        );
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!existing":{}}}}), &())
+            .await
+            .unwrap();
+        let data =
+            json!({"state":{"events":[{"type":"m.room.name","state_key":"","content":null}]}});
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"invite":{"!existing":data.clone()}}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!existing", |room| {
+            let room = room.unwrap();
+            assert_eq!(room.summary["membership"], "invite");
+            assert_eq!(room.summary["name"], "!existing");
+            assert_eq!(room.states.len(), 1);
+            assert!(room.states[0].content.is_null());
+        });
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"join":{"!new":data}}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!new", |room| assert!(room.is_none()));
+        let member = json!({"state":{"events":[{"type":"m.room.member","state_key":"@other"}]}});
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"join":{"!member":member}}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!member", |room| assert!(room.is_none()));
+        let valid = json!({"state":{"events":[{"type":"m.room.name","state_key":"","content":{"name":"Named"}},{"type":"m.room.member","state_key":"@other","content":null}]}});
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!named":valid}}}), &())
+            .await
+            .unwrap();
+        connection.with_room("!named", |room| {
+            assert_eq!(room.unwrap().summary["name"], "Named")
+        });
+    }
+
+    #[tokio::test]
+    async fn sync_account_events_require_js_iterable() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-account-iterable"), None);
+        for invalid in [json!({}), json!(false), json!(17)] {
+            let raw = json!({"account_data":{"events":invalid},"rooms":{"join":{"!blocked":{}}}});
+            assert!(connection.apply_sync(&raw, &()).await.is_err());
+            connection.with_room("!blocked", |room| assert!(room.is_none()));
+        }
+        for valid in [json!(null), json!("😀"), json!([])] {
+            let raw = json!({"account_data":{"events":valid},"rooms":{"join":{"!allowed":{}}}});
+            connection.apply_sync(&raw, &()).await.unwrap();
+            connection.with_room("!allowed", |room| assert!(room.is_some()));
+        }
+    }
+
+    #[tokio::test]
+    async fn sync_non_object_entries_follow_js_semantics() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-non-object"), None);
+        connection
+            .apply_sync(
+                &json!({"account_data":{"events":[{"type":"m.direct","content":{"@a":["!r"]}}]}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection
+            .apply_sync(
+                &json!({"account_data":{"events":[{"type":"m.direct","content":false}]}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            connection.lock().direct.get("!r").map(String::as_str),
+            Some("@a")
+        );
+        connection
+            .apply_sync(
+                &json!({"account_data":{"events":[{"type":"m.direct","content":null}]}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            connection.lock().direct.get("!r").map(String::as_str),
+            Some("@a")
+        );
+        connection
+            .apply_sync(&json!({"rooms":{"join":[{}, "😀"]}}), &())
+            .await
+            .unwrap();
+        connection.with_room("0", |room| assert!(room.is_some()));
+        connection.with_room("1", |room| assert!(room.is_some()));
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"join":{"!before":{}},"invite":null}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!before", |room| assert!(room.is_some()));
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"join":{"!bad":null}}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!bad", |room| assert!(room.is_none()));
+        assert!(
+            connection
+                .apply_sync(&json!({"rooms":{"invite":{"!before":null}}}), &())
+                .await
+                .is_err()
+        );
+        connection.with_room("!before", |room| {
+            assert_eq!(room.unwrap().summary["membership"], "invite")
+        });
+        connection
+            .apply_sync(&json!({"rooms":{"leave":{"!unknown":null}}}), &())
+            .await
+            .unwrap();
+        connection
+            .apply_sync(&json!({"rooms":"😀"}), &())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sync_callback_error_retries_with_token_and_can_cancel() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let count = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let calls = count.clone();
+        let queries = seen.clone();
+        let port: JaitPort<()> = Arc::new(move |_, args, _| {
+            let call = calls.fetch_add(1, Ordering::SeqCst);
+            queries.lock().unwrap().push(args[2].clone());
+            if call == 0 {
+                Box::pin(async {
+                    Ok(Some(
+                        json!({"next_batch":"next", "rooms":{"join":{"!r":{"ephemeral":{"events":[{"type":"m.receipt","content":null}]}}}}}),
+                    ))
+                })
+            } else {
+                Box::pin(std::future::pending())
+            }
+        });
+        let connection =
+            Connection::new("owner", lifecycle_directory("callback-retry"), Some(port));
+        let control = async {
+            tokio::task::yield_now().await;
+            assert_eq!(count.load(Ordering::SeqCst), 1);
+            assert_eq!(connection.life().sync_token.as_deref(), Some("next"));
+            tokio::time::advance(std::time::Duration::from_millis(4999)).await;
+            assert_eq!(count.load(Ordering::SeqCst), 1);
+            tokio::time::advance(std::time::Duration::from_secs(11)).await;
+            tokio::task::yield_now().await;
+            assert_eq!(count.load(Ordering::SeqCst), 2);
+            assert_eq!(seen.lock().unwrap()[1]["since"], "next");
+            connection.abort_requests();
+        };
+        tokio::join!(connection.sync_loop(&()), control);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sync_network_errors_retry_without_exponential_backoff() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let count = Arc::new(AtomicUsize::new(0));
+        let calls = count.clone();
+        let port: JaitPort<()> = Arc::new(move |_, _, _| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err(crate::tools::core_io::HostError::Error("offline".into())) })
+        });
+        let connection = Connection::new("owner", lifecycle_directory("network-retry"), Some(port));
+        let control = async {
+            tokio::task::yield_now().await;
+            assert_eq!(count.load(Ordering::SeqCst), 1);
+            assert_eq!(connection.status(), MessengerStatus::Reconnecting);
+            for expected in 2..=5 {
+                tokio::time::advance(std::time::Duration::from_millis(4999)).await;
+                assert_eq!(count.load(Ordering::SeqCst), expected - 1);
+                tokio::time::advance(std::time::Duration::from_secs(11)).await;
+                tokio::task::yield_now().await;
+                assert_eq!(count.load(Ordering::SeqCst), expected);
+            }
+            connection.abort_requests();
+        };
+        tokio::join!(connection.sync_loop(&()), control);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn sync_callback_backoff_is_cancellable() {
+        let port: JaitPort<()> = Arc::new(|_, _, _| {
+            Box::pin(async {
+                Ok(Some(
+                    json!({"next_batch":"next", "rooms":{"join":{"!r":{"ephemeral":{"events":[{"type":"m.receipt","content":null}]}}}}}),
+                ))
+            })
+        });
+        let connection =
+            Connection::new("owner", lifecycle_directory("callback-abort"), Some(port));
+        let control = async {
+            tokio::task::yield_now().await;
+            assert_eq!(connection.life().sync_token.as_deref(), Some("next"));
+            connection.abort_requests();
+        };
+        tokio::join!(connection.sync_loop(&()), control);
+        assert!(connection.life().sync_token.is_none());
+    }
+
+    #[tokio::test]
+    async fn abort_during_leave_decryption_stops_remaining_batch() {
+        let started = Arc::new(tokio::sync::Notify::new());
+        let signal = started.clone();
+        let port: JaitPort<()> = Arc::new(move |action, _, _| {
+            let signal = signal.clone();
+            if action == "messenger.request" {
+                Box::pin(async {
+                    Ok(Some(
+                        json!({"next_batch":"new","rooms":{"leave":{"!r":{"timeline":{"events":[
+                            {"event_id":"$before","type":"m.room.message","content":{}},
+                            {"event_id":"$pending","type":"m.room.encrypted","content":{}},
+                            {"event_id":"$later","type":"m.room.message","content":{}}
+                        ]}}}}}),
+                    ))
+                })
+            } else {
+                Box::pin(async move {
+                    signal.notify_one();
+                    std::future::pending().await
+                })
+            }
+        });
+        let connection =
+            Connection::new("owner", lifecycle_directory("sync-abort-leave"), Some(port));
+        connection
+            .apply_sync(&json!({"rooms":{"join":{"!r":{}}}}), &())
+            .await
+            .unwrap();
+        let cancel = async {
+            started.notified().await;
+            connection.abort_requests();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            tokio::join!(connection.sync_loop(&()), cancel);
+        })
+        .await
+        .expect("sync loop should stop after abort");
+        connection.with_room("!r", |room| {
+            let room = room.unwrap();
+            assert_eq!(room.membership().as_deref(), Some("leave"));
+            assert_eq!(room.events.len(), 1);
+            assert_eq!(room.events[0].event_id.as_deref(), Some("$before"));
+        });
+        assert!(connection.life().sync_token.is_none());
+    }
+
+    #[tokio::test]
+    async fn sync_membership_preserves_section_order_and_known_leaves() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-membership"), None);
+        let raw: Value = serde_json::from_str(r#"{"rooms":{"invite":{"!a":{"invite_state":{"events":[{"type":"m.room.topic","state_key":"","content":{"topic":"invited"}}]}}},"join":{"!a":{}},"leave":{"!a":{"state":{"events":[{"type":"m.room.topic","state_key":"","content":{"topic":"left"}}]}},"!unknown":{}}}}"#).unwrap();
+        connection.apply_sync(&raw, &()).await.unwrap();
+        {
+            let state = connection.lock();
+            assert_eq!(state.rooms.len(), 1);
+            let room = &state.rooms[0].1;
+            assert_eq!(room.membership().as_deref(), Some("leave"));
+            assert_eq!(room.summary["topic"], "left");
+        }
+        let reverse: Value = serde_json::from_str(r#"{"rooms":{"join":{"!b":{}},"invite":{"!b":{"invite_state":{"events":[{"type":"m.room.topic","state_key":"","content":{"topic":"invite"}}]}}}}}"#).unwrap();
+        connection.apply_sync(&reverse, &()).await.unwrap();
+        let state = connection.lock();
+        let room = &state.rooms.iter().find(|(id, _)| id == "!b").unwrap().1;
+        assert_eq!(room.membership().as_deref(), Some("invite"));
+        assert_eq!(room.summary["topic"], "invite");
+    }
+
+    #[tokio::test]
+    async fn sync_direct_replaces_mapping_without_clearing_presence() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-direct"), None);
+        connection.apply_sync(&json!({
+            "presence":{"events":[{"type":"m.presence","sender":"@alice","content":{"presence":"online"}}]},
+            "account_data":{"events":[{"type":"m.direct","content":{"@alice":["!one", 4],"@bob":["!two"]}}]}
+        }), &()).await.unwrap();
+        {
+            let state = connection.lock();
+            assert_eq!(state.direct.get("!one").map(String::as_str), Some("@alice"));
+            assert_eq!(state.direct.get("!two").map(String::as_str), Some("@bob"));
+            assert_eq!(state.presence.get("@alice").unwrap().presence, "online");
+        }
+        connection
+            .apply_sync(
+                &json!({"account_data":{"events":[
+                    {"type":"m.direct","content":null},
+                    {"type":"m.direct","content":{"@carol":["!three"]}}
+                ]}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        {
+            let state = connection.lock();
+            assert_eq!(state.direct.len(), 1);
+            assert_eq!(
+                state.direct.get("!three").map(String::as_str),
+                Some("@carol")
+            );
+            assert!(state.presence.contains_key("@alice"));
+        }
+        connection
+            .apply_sync(
+                &json!({"account_data":{"events":[{"type":"m.direct","content":false}]}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            connection.lock().direct.get("!three").map(String::as_str),
+            Some("@carol")
+        );
+    }
+
+    #[tokio::test]
+    async fn joined_sync_updates_unread_summary_with_js_semantics() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-unread"), None);
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!r":{
+                    "unread_notifications":{"notification_count":5},
+                    "account_data":{"events":[{"type":"m.marked_unread","content":{"unread":[]}}]}
+                }}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            let summary = &room.unwrap().summary;
+            assert_eq!(summary["unread"], 5);
+            assert_eq!(summary["markedUnread"], true);
+        });
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!r":{
+                    "unread_notifications":{"notification_count":null},
+                    "account_data":{"events":[{"type":"m.marked_unread","content":{"unread":""}}]}
+                }}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            let summary = &room.unwrap().summary;
+            assert_eq!(summary["unread"], 0);
+            assert_eq!(summary["markedUnread"], false);
+        });
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!r":{"unread_notifications":false}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            let summary = &room.unwrap().summary;
+            assert_eq!(summary["unread"], 0);
+            assert_eq!(summary["markedUnread"], false);
+        });
+    }
+
+    #[tokio::test]
+    async fn joined_sync_uses_incoming_identity_and_redaction_before_decryption() {
+        let port: JaitPort<()> = Arc::new(|_, _, _| {
+            Box::pin(async {
+                Ok(Some(
+                    json!({"event_id":"$changed", "type":"m.room.redaction", "redacts":"$target", "content":{}}),
+                ))
+            })
+        });
+        let connection = Connection::new(
+            "owner",
+            lifecycle_directory("sync-raw-identity"),
+            Some(port),
+        );
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!r":{"timeline":{"events":[
+                    {"event_id":"$original", "type":"m.room.message", "content":{"body":"old"}},
+                    {"event_id":"$target", "type":"m.room.message", "content":{"body":"keep"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection
+            .apply_sync(
+                &json!({"rooms":{"join":{"!r":{"timeline":{"events":[
+                    {"event_id":"$original", "type":"m.room.encrypted", "content":{}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            let events = &room.unwrap().events;
+            assert_eq!(events.len(), 2);
+            assert_eq!(events[0].event_id.as_deref(), Some("$changed"));
+            assert_eq!(events[1].event_id.as_deref(), Some("$target"));
+        });
+    }
+
+    #[tokio::test]
+    async fn abort_during_sync_decryption_stops_remaining_batch() {
+        let started = Arc::new(tokio::sync::Notify::new());
+        let signal = started.clone();
+        let port: JaitPort<()> = Arc::new(move |action, _, _| {
+            let signal = signal.clone();
+            if action == "messenger.request" {
+                Box::pin(async {
+                    Ok(Some(json!({"rooms":{"join":{"!r":{"timeline":{"events":[
+                        {"event_id":"$pending", "type":"m.room.encrypted", "content":{}},
+                        {"event_id":"$later", "type":"m.room.message", "content":{}}
+                    ]}}}}})))
+                })
+            } else {
+                Box::pin(async move {
+                    signal.notify_one();
+                    std::future::pending().await
+                })
+            }
+        });
+        let connection =
+            Connection::new("owner", lifecycle_directory("sync-abort-batch"), Some(port));
+        let cancel = async {
+            started.notified().await;
+            connection.abort_requests();
+        };
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            tokio::join!(connection.sync_loop(&()), cancel);
+        })
+        .await
+        .expect("sync loop should stop after abort");
+        connection.with_room("!r", |room| assert!(room.unwrap().events.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn cancelled_joined_sync_trims_partial_batch() {
+        let port: JaitPort<()> = Arc::new(|_, _, _| Box::pin(std::future::pending()));
+        let connection = Connection::new(
+            "owner",
+            lifecycle_directory("sync-cancel-retention"),
+            Some(port),
+        );
+        connection
+            .apply_sync(&json!({"rooms": {"join": {"!r": {}}}}), &())
+            .await
+            .unwrap();
+        connection.update_room("!r", |room| {
+            room.unwrap().events = (0..MAX_EVENTS)
+                .map(|i| Event {
+                    event_id: Some(format!("${i}")),
+                    kind: "m.room.message".into(),
+                    content: json!({"body":"message"}),
+                    ..Default::default()
+                })
+                .collect();
+        });
+        let payload = json!({"rooms": {"join": {"!r": {"timeline": {"events": [
+            {"event_id":"$new", "type":"m.room.message", "content":{"body":"new"}},
+            {"event_id":"$pending", "type":"m.room.encrypted", "content":{}}
+        ]}}}}});
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(30),
+                connection.apply_sync(&payload, &())
+            )
+            .await
+            .is_err()
+        );
+        connection.with_room("!r", |room| {
+            let events = &room.unwrap().events;
+            assert_eq!(events.len(), MAX_EVENTS);
+            assert_eq!(events[0].event_id.as_deref(), Some("$1"));
+            assert_eq!(events.last().unwrap().event_id.as_deref(), Some("$new"));
+        });
+    }
+
+    #[tokio::test]
+    async fn joined_sync_trims_after_redaction_and_keeps_redacted_events() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-retention"), None);
+        connection
+            .apply_sync(&json!({"rooms": {"join": {"!r": {}}}}), &())
+            .await
+            .unwrap();
+        connection.update_room("!r", |room| {
+            room.unwrap().events = (0..MAX_EVENTS)
+                .map(|i| Event {
+                    event_id: Some(format!("${i}")),
+                    kind: "m.room.message".into(),
+                    content: json!({"body":"message"}),
+                    ..Default::default()
+                })
+                .collect();
+        });
+        connection.apply_sync(&json!({"rooms": {"join": {"!r": {"timeline": {"events": [
+            {"event_id":"$redacted", "type":"m.room.message", "content":{"body":"hidden"}, "unsigned":{"redacted_because":{"event_id":"$cause"}}},
+            {"event_id":"$r", "type":"m.room.redaction", "redacts":"$9999"},
+            {"event_id":"$r2", "type":"m.room.redaction", "redacts":"$9998"}
+        ]}}}}}), &()).await.unwrap();
+        connection.with_room("!r", |room| {
+            let room = room.unwrap();
+            assert_eq!(room.events.len(), MAX_EVENTS);
+            assert_eq!(room.events[0].event_id.as_deref(), Some("$1"));
+            assert!(
+                room.events
+                    .iter()
+                    .any(|event| event.event_id.as_deref() == Some("$redacted"))
+            );
+            assert!(
+                !derive_messages(Some(room), None)
+                    .iter()
+                    .any(|message| message.id == "$redacted")
+            );
+        });
+    }
+
+    #[tokio::test]
+    async fn joined_sync_upserts_identified_events_and_applies_redactions() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-events"), None);
+        connection
+            .apply_sync(
+                &json!({"rooms": {"join": {"!r": {"timeline": {"events": [
+                    {"type":"m.room.message", "content":{"body":"missing"}},
+                    {"event_id":"", "type":"m.room.message", "content":{"body":"empty"}},
+                    {"event_id":"$a", "type":"m.room.message", "content":{"body":"old"}},
+                    {"event_id":"$b", "type":"m.room.message", "content":{"body":"keep"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection
+            .apply_sync(
+                &json!({"rooms": {"join": {"!r": {"timeline": {"events": [
+                    {"event_id":"$a", "type":"m.room.message", "content":{"body":"new"}},
+                    {"event_id":"$r", "type":"m.room.redaction", "content":{"redacts":"$b"}}
+                ]}}}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            let events = &room.unwrap().events;
+            assert_eq!(events.len(), 2);
+            assert_eq!(events[0].event_id.as_deref(), Some("$a"));
+            assert_eq!(events[0].content["body"], "new");
+            assert_eq!(events[1].event_id.as_deref(), Some("$r"));
+        });
+    }
+
+    #[tokio::test]
+    async fn joined_sync_preserves_initial_history_token() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-previous"), None);
+        connection
+            .apply_sync(
+                &json!({"rooms": {"join": {"!r": {
+                    "prev_batch": "wrong-level", "timeline": {"prev_batch": "first"}
+                }}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            assert_eq!(room.unwrap().previous.as_deref(), Some("first"))
+        });
+        connection
+            .apply_sync(
+                &json!({"rooms": {"join": {"!r": {
+                    "timeline": {"prev_batch": "second"}
+                }}}}),
+                &(),
+            )
+            .await
+            .unwrap();
+        connection.with_room("!r", |room| {
+            assert_eq!(room.unwrap().previous.as_deref(), Some("first"))
+        });
+    }
+
+    #[tokio::test]
+    async fn joined_sync_creates_room_and_updates_topic_from_state() {
+        let connection: Connection<()> =
+            Connection::new("owner", lifecycle_directory("sync-topic"), None);
+        connection.apply_sync(&json!({"rooms": {"join": {"!r": {
+            "state": {"events": [{"type":"m.room.topic", "state_key":"", "content":{"topic":"old"}}]},
+            "timeline": {"events": [{"type":"m.room.topic", "state_key":"", "content":{"topic":"new"}}]}
+        }}}}), &()).await.unwrap();
+        connection.with_room("!r", |room| {
+            let room = room.unwrap();
+            assert_eq!(room.summary["membership"], "join");
+            assert_eq!(room.summary["topic"], "new");
+            assert_eq!(room.states.len(), 1);
+        });
+        connection.apply_sync(&json!({"rooms": {"join": {"!r": {
+            "state": {"events": [{"type":"m.room.topic", "state_key":"", "content":{"topic":7}}]}
+        }}}}), &()).await.unwrap();
+        connection.with_room("!r", |room| {
+            assert!(room.unwrap().summary.get("topic").is_none())
+        });
     }
 
     #[tokio::test]
@@ -2766,6 +4569,47 @@ mod tests {
     }
 
     #[test]
+    fn receipt_projection_uses_js_property_order_at_both_levels() {
+        let mut room = room_with(vec![
+            text("10", "@self", "first", 1.0),
+            text("2", "@self", "second", 2.0),
+        ]);
+        let receipt = || Receipt { ts: Some(1.0) };
+        room.receipts = vec![
+            ("10".into(), vec![("@first".into(), receipt())]),
+            (
+                "2".into(),
+                vec![
+                    ("10".into(), receipt()),
+                    ("@last".into(), receipt()),
+                    ("2".into(), receipt()),
+                    ("01".into(), receipt()),
+                    ("4294967295".into(), receipt()),
+                    ("4294967294".into(), receipt()),
+                ],
+            ),
+        ];
+        let messages = derive_messages(Some(&room), Some("@self"));
+        let readers: Vec<_> = messages[0]
+            .read_by
+            .iter()
+            .map(|reader| reader.user_id.as_str())
+            .collect();
+        assert_eq!(
+            readers,
+            vec![
+                "2",
+                "10",
+                "4294967294",
+                "@last",
+                "01",
+                "4294967295",
+                "@first"
+            ]
+        );
+    }
+
+    #[test]
     fn messages_collapse_edits_reactions_and_receipts() {
         let mut room = room_with(vec![
             member("@peer:example.org", "Peer", "join"),
@@ -2850,6 +4694,33 @@ mod tests {
         assert!(messages[1].own);
         assert_eq!(messages[1].read_by.len(), 1);
         assert!(messages[1].read_by[0].exact);
+    }
+
+    #[test]
+    fn attachment_filename_takes_precedence_over_message_body() {
+        let events = vec![
+            json!({"filename": "photo.png", "body": "caption", "url": "mxc://example/a"}),
+            json!({"filename": "", "body": "caption", "url": "mxc://example/b"}),
+            json!({"filename": 3, "body": "fallback", "url": "mxc://example/c"}),
+            json!({"filename": null, "url": "mxc://example/d"}),
+        ];
+        let room = room_with(
+            events
+                .into_iter()
+                .enumerate()
+                .map(|(i, content)| Event {
+                    event_id: Some(format!("${i}")),
+                    kind: "m.room.message".to_string(),
+                    content,
+                    ..Default::default()
+                })
+                .collect(),
+        );
+        let names: Vec<_> = derive_messages(Some(&room), None)
+            .into_iter()
+            .map(|message| message.attachment.unwrap().name)
+            .collect();
+        assert_eq!(names, ["photo.png", "", "fallback", "Attachment"]);
     }
 
     #[test]
@@ -3007,5 +4878,683 @@ mod tests {
             service.owners(),
             vec!["alice".to_string(), "bob".to_string()]
         );
+    }
+}
+
+/// Route-level request validation, ported from the zod schemas in
+/// `packages/gateway/src/routes/messenger.ts`.
+///
+/// The TypeScript routes validate with zod before calling into
+/// `MessengerService`; the service only ever receives already-parsed data.
+/// The native port keeps that split: [`crate::services::messenger_service`]
+/// stays schema-agnostic and this module owns the pure `safeParse` equivalent,
+/// returning the *normalised* (trimmed / defaulted) value the service expects
+/// plus the exact error strings the route replies with.
+pub mod route_validation {
+    use serde_json::{Map, Value};
+
+    /// `GET /api/messenger` — bad `?roomId=`.
+    pub const INVALID_ROOM_ID: &str = "Invalid room ID.";
+    /// `POST /api/messenger` — schema failure.
+    pub const INVALID_LOGIN: &str = "A valid homeserver and Matrix credentials are required.";
+    /// `POST /api/messenger` — `connect()` threw.
+    pub const LOGIN_FAILED: &str =
+        "Matrix sign-in failed. Check credentials and homeserver availability.";
+    /// `GET /api/messenger/search` — schema failure.
+    pub const SEARCH_REQUIRED: &str = "Search text is required.";
+    /// `POST /api/messenger/keys` — schema failure.
+    pub const RECOVERY_KEY_REQUIRED: &str = "A Matrix backup recovery key is required.";
+    /// `POST /api/messenger/keys` — `restoreKeys()` threw.
+    pub const RECOVERY_FAILED: &str =
+        "Could not restore encrypted history. Check the recovery key and server backup.";
+    /// `POST /api/messenger/media` — schema failure.
+    pub const INVALID_ATTACHMENT: &str = "Invalid Matrix attachment.";
+    /// `POST /api/messenger/media` — `media()` threw.
+    pub const ATTACHMENT_FAILED: &str = "Could not load or decrypt Matrix attachment.";
+    /// `POST /api/messenger/command` — schema failure.
+    pub const INVALID_ACTION: &str = "Invalid Messenger action.";
+    /// `POST /api/messenger/command` — `command()` threw.
+    pub const COMMAND_FAILED: &str =
+        "Matrix request failed. Check the connection and conversation before retrying.";
+
+    /// Fastify `bodyLimit` for `/api/messenger/command` (attachments ride along).
+    pub const COMMAND_BODY_LIMIT: usize = 29_000_000;
+    /// Upper bound for `attachment.data` before base64 validation.
+    pub const MAX_ATTACHMENT_DATA: usize = 28_000_000;
+
+    const COMMAND_ACTIONS: &[&str] = &[
+        "edit",
+        "react",
+        "assistantAccess",
+        "send",
+        "open",
+        "join",
+        "leave",
+        "earlier",
+        "unread",
+        "remove",
+        "read",
+        "attachment",
+    ];
+
+    /// `roomId = z.string().min(3).max(512).startsWith('!')`.
+    pub fn valid_room_id(value: &str) -> bool {
+        value.len() >= 3 && value.len() <= 512 && value.starts_with('!')
+    }
+
+    /// `/^@[^:\s]+:[^\s]+$/` — a Matrix user id.
+    pub fn valid_matrix_user_id(value: &str) -> bool {
+        let Some(rest) = value.strip_prefix('@') else {
+            return false;
+        };
+        let Some((localpart, server)) = rest.split_once(':') else {
+            return false;
+        };
+        !localpart.is_empty()
+            && !server.is_empty()
+            && !localpart.chars().any(|c| c == ':' || c.is_whitespace())
+            && !server.chars().any(char::is_whitespace)
+    }
+
+    /// `/^[A-Za-z0-9+/]*={0,2}$/` — padded standard base64.
+    pub fn valid_base64(value: &str) -> bool {
+        let body = value.trim_end_matches('=');
+        let padding = value.len() - body.len();
+        padding <= 2
+            && body
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/')
+    }
+
+    fn object<'a>(
+        value: &'a Value,
+        required: &[&str],
+        optional: &[&str],
+    ) -> Option<&'a Map<String, Value>> {
+        let map = value.as_object()?;
+        if required.iter().any(|key| !map.contains_key(*key)) {
+            return None;
+        }
+        if map
+            .keys()
+            .any(|key| !required.contains(&key.as_str()) && !optional.contains(&key.as_str()))
+        {
+            return None;
+        }
+        Some(map)
+    }
+
+    fn string<'a>(map: &'a Map<String, Value>, key: &str) -> Option<&'a str> {
+        map.get(key)?.as_str()
+    }
+
+    /// `z.string().trim().min(1).max(max)`.
+    fn trimmed(map: &Map<String, Value>, key: &str, max: usize) -> Option<String> {
+        let value = string(map, key)?.trim();
+        if value.is_empty() || value.chars().count() > max {
+            return None;
+        }
+        Some(value.to_string())
+    }
+
+    /// `z.string().min(1).max(max)` (no trimming).
+    fn bounded(map: &Map<String, Value>, key: &str, max: usize) -> Option<String> {
+        let value = string(map, key)?;
+        if value.is_empty() || value.chars().count() > max {
+            return None;
+        }
+        Some(value.to_string())
+    }
+
+    /// `z.string().max(max)` (may be empty).
+    fn capped(map: &Map<String, Value>, key: &str, max: usize) -> Option<String> {
+        let value = string(map, key)?;
+        if value.chars().count() > max {
+            return None;
+        }
+        Some(value.to_string())
+    }
+
+    /// `login = z.object({...}).strict().refine(...)`.
+    ///
+    /// Returns the parsed body with `homeserver` normalised by
+    /// [`super::messenger_homeserver`] and the optional strings defaulted to
+    /// `""`. A homeserver rejected by the transform fails validation (the zod
+    /// version surfaces that as an `addIssue`, so the route still answers 400).
+    pub fn validate_login(body: &Value) -> Result<Value, &'static str> {
+        let map = object(
+            body,
+            &["homeserver"],
+            &["username", "password", "accessToken"],
+        )
+        .ok_or(INVALID_LOGIN)?;
+        let homeserver = capped(map, "homeserver", 2048).ok_or(INVALID_LOGIN)?;
+        let homeserver = super::messenger_homeserver(&homeserver).map_err(|_| INVALID_LOGIN)?;
+        let username = match map.get("username") {
+            Some(_) => capped(map, "username", 512).ok_or(INVALID_LOGIN)?,
+            None => String::new(),
+        };
+        let password = match map.get("password") {
+            Some(_) => capped(map, "password", 4096).ok_or(INVALID_LOGIN)?,
+            None => String::new(),
+        };
+        let access_token = match map.get("accessToken") {
+            Some(_) => Some(bounded(map, "accessToken", 4096).ok_or(INVALID_LOGIN)?),
+            None => None,
+        };
+        if access_token.is_none() && (username.is_empty() || password.is_empty()) {
+            return Err(INVALID_LOGIN);
+        }
+        let mut out = Map::new();
+        out.insert("homeserver".into(), Value::String(homeserver));
+        out.insert("username".into(), Value::String(username));
+        out.insert("password".into(), Value::String(password));
+        if let Some(token) = access_token {
+            out.insert("accessToken".into(), Value::String(token));
+        }
+        Ok(Value::Object(out))
+    }
+
+    /// `z.discriminatedUnion('action', [...])` — returns the body with
+    /// `text`/`key` trimmed, exactly as zod's `.trim()` would.
+    pub fn validate_command(body: &Value) -> Result<Value, &'static str> {
+        let action = body
+            .as_object()
+            .and_then(|map| map.get("action")?.as_str())
+            .ok_or(INVALID_ACTION)?;
+        if !COMMAND_ACTIONS.contains(&action) {
+            return Err(INVALID_ACTION);
+        }
+        // Every branch that carries a `roomId` shares this schema.
+        let with_room_id = |required: &[&str], optional: &[&str]| -> Result<Value, &'static str> {
+            let map = object(body, required, optional).ok_or(INVALID_ACTION)?;
+            let room_id = string(map, "roomId").ok_or(INVALID_ACTION)?;
+            if !valid_room_id(room_id) {
+                return Err(INVALID_ACTION);
+            }
+            Ok(Value::Object(map.clone()))
+        };
+        match action {
+            "edit" => {
+                let parsed = with_room_id(&["action", "roomId", "eventId", "text"], &[])?;
+                let mut map = parsed.as_object().cloned().unwrap();
+                let event_id = bounded(&map, "eventId", 512).ok_or(INVALID_ACTION)?;
+                let text = trimmed(&map, "text", 10_000).ok_or(INVALID_ACTION)?;
+                map.insert("eventId".into(), Value::String(event_id));
+                map.insert("text".into(), Value::String(text));
+                Ok(Value::Object(map))
+            }
+            "react" => {
+                let parsed = with_room_id(&["action", "roomId", "eventId", "key"], &[])?;
+                let mut map = parsed.as_object().cloned().unwrap();
+                let event_id = bounded(&map, "eventId", 512).ok_or(INVALID_ACTION)?;
+                let key = trimmed(&map, "key", 64).ok_or(INVALID_ACTION)?;
+                map.insert("eventId".into(), Value::String(event_id));
+                map.insert("key".into(), Value::String(key));
+                Ok(Value::Object(map))
+            }
+            "assistantAccess" => {
+                let map = object(body, &["action", "enabled"], &[]).ok_or(INVALID_ACTION)?;
+                if !map.get("enabled").is_some_and(Value::is_boolean) {
+                    return Err(INVALID_ACTION);
+                }
+                Ok(Value::Object(map.clone()))
+            }
+            "send" => {
+                let parsed = with_room_id(&["action", "roomId", "text"], &[])?;
+                let mut map = parsed.as_object().cloned().unwrap();
+                let text = trimmed(&map, "text", 10_000).ok_or(INVALID_ACTION)?;
+                map.insert("text".into(), Value::String(text));
+                Ok(Value::Object(map))
+            }
+            "open" => {
+                let map = object(body, &["action", "userId"], &[]).ok_or(INVALID_ACTION)?;
+                let user_id = capped(map, "userId", 512).ok_or(INVALID_ACTION)?;
+                if !valid_matrix_user_id(&user_id) {
+                    return Err(INVALID_ACTION);
+                }
+                Ok(Value::Object(map.clone()))
+            }
+            "join" | "leave" | "earlier" | "unread" | "remove" => {
+                with_room_id(&["action", "roomId"], &[])
+            }
+            "read" => with_room_id(&["action", "roomId"], &["eventId"]).and_then(|parsed| {
+                let mut map = parsed.as_object().cloned().unwrap();
+                if map.contains_key("eventId") {
+                    let event_id = bounded(&map, "eventId", 512).ok_or(INVALID_ACTION)?;
+                    map.insert("eventId".into(), Value::String(event_id));
+                }
+                Ok(Value::Object(map))
+            }),
+            "attachment" => {
+                let parsed = with_room_id(&["action", "roomId", "name", "mime", "data"], &[])?;
+                let mut map = parsed.as_object().cloned().unwrap();
+                let name = bounded(&map, "name", 512).ok_or(INVALID_ACTION)?;
+                let mime = capped(&map, "mime", 200).ok_or(INVALID_ACTION)?;
+                let data = string(&map, "data").ok_or(INVALID_ACTION)?;
+                if data.len() > MAX_ATTACHMENT_DATA || !valid_base64(data) {
+                    return Err(INVALID_ACTION);
+                }
+                map.insert("name".into(), Value::String(name));
+                map.insert("mime".into(), Value::String(mime));
+                Ok(Value::Object(map))
+            }
+            _ => Err(INVALID_ACTION),
+        }
+    }
+
+    /// `z.object({ query: z.string().trim().min(1).max(200) }).strict()`.
+    pub fn validate_search_query(query: &Value) -> Result<String, &'static str> {
+        let map = object(query, &["query"], &[]).ok_or(SEARCH_REQUIRED)?;
+        trimmed(map, "query", 200).ok_or(SEARCH_REQUIRED)
+    }
+
+    /// `z.object({ recoveryKey: z.string().min(1).max(200) }).strict()`.
+    pub fn validate_recovery_key(body: &Value) -> Result<String, &'static str> {
+        let map = object(body, &["recoveryKey"], &[]).ok_or(RECOVERY_KEY_REQUIRED)?;
+        bounded(map, "recoveryKey", 200).ok_or(RECOVERY_KEY_REQUIRED)
+    }
+
+    /// `z.object({ url: z.string().max(2048).startsWith('mxc://'),
+    /// file: z.record(z.string(), z.unknown()).optional() }).strict()`.
+    ///
+    /// Returns `(url, file)`.
+    pub fn validate_media_request(body: &Value) -> Result<(String, Option<Value>), &'static str> {
+        let map = object(body, &["url"], &["file"]).ok_or(INVALID_ATTACHMENT)?;
+        let url = capped(map, "url", 2048).ok_or(INVALID_ATTACHMENT)?;
+        if !url.starts_with("mxc://") {
+            return Err(INVALID_ATTACHMENT);
+        }
+        let file = match map.get("file") {
+            Some(value) if value.is_object() => Some(value.clone()),
+            Some(_) => return Err(INVALID_ATTACHMENT),
+            None => None,
+        };
+        Ok((url, file))
+    }
+
+    /// `{ ok: true, ...result }` — note the spread can overwrite `ok`.
+    pub fn command_success_envelope(result: Value) -> Value {
+        let mut map = Map::new();
+        map.insert("ok".into(), Value::Bool(true));
+        if let Value::Object(inner) = result {
+            for (key, value) in inner {
+                map.insert(key, value);
+            }
+        }
+        Value::Object(map)
+    }
+
+    /// `{ snapshot }` — the body every non-command handler returns.
+    pub fn snapshot_envelope(snapshot: Value) -> Value {
+        let mut map = Map::new();
+        map.insert("snapshot".into(), snapshot);
+        Value::Object(map)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use serde_json::json;
+
+        #[test]
+        fn room_id_requires_bang_prefix_and_three_to_512_chars() {
+            assert!(valid_room_id("!a:b"));
+            assert!(!valid_room_id("!a"));
+            assert!(!valid_room_id("#a:b"));
+            assert!(!valid_room_id("!"));
+            assert!(valid_room_id(&format!("!{}:b", "a".repeat(509))));
+            assert!(!valid_room_id(&format!("!{}:b", "a".repeat(510))));
+        }
+
+        #[test]
+        fn matrix_user_id_requires_sigil_localpart_and_server() {
+            assert!(valid_matrix_user_id("@alice:example.org"));
+            assert!(valid_matrix_user_id("@a:b"));
+            assert!(!valid_matrix_user_id("alice:example.org"));
+            assert!(!valid_matrix_user_id("@alice"));
+            assert!(!valid_matrix_user_id("@:example.org"));
+            assert!(!valid_matrix_user_id("@alice:"));
+            assert!(!valid_matrix_user_id("@al ice:example.org"));
+            assert!(!valid_matrix_user_id("@alice:exa mple"));
+            // `/^@[^:\s]+:[^\s]+$/` only forbids a colon in the **localpart**;
+            // the server part may contain more colons (`@a:b:c` matches zod).
+            assert!(valid_matrix_user_id("@a:b:c"));
+            assert!(!valid_matrix_user_id("@a:b c"));
+        }
+
+        #[test]
+        fn base64_accepts_padding_only_at_the_end_and_at_most_two() {
+            assert!(valid_base64(""));
+            assert!(valid_base64("TWFu"));
+            assert!(valid_base64("TQ=="));
+            assert!(valid_base64("TWE="));
+            assert!(valid_base64("a+b/c="));
+            assert!(!valid_base64("TQ==="));
+            assert!(!valid_base64("TW=u"));
+            assert!(!valid_base64("TWFu\n"));
+            assert!(!valid_base64("TWF u"));
+            assert!(!valid_base64("TWFu-"));
+        }
+
+        #[test]
+        fn login_defaults_missing_credentials_to_empty_strings() {
+            let parsed = validate_login(&json!({"homeserver": "https://matrix.org"})).unwrap();
+            assert_eq!(parsed["username"], "");
+            assert_eq!(parsed["password"], "");
+            assert!(parsed.get("accessToken").is_none());
+        }
+
+        #[test]
+        fn login_normalises_homeserver_and_requires_a_complete_credential_set() {
+            let parsed = validate_login(
+                &json!({"homeserver": "https://matrix.org", "username": "a", "password": "b"}),
+            )
+            .unwrap();
+            assert_eq!(parsed["homeserver"], "https://matrix.org");
+            // `new URL('matrix.org')` throws, so a scheme-less host is rejected.
+            assert!(
+                validate_login(
+                    &json!({"homeserver": "matrix.org", "username": "a", "password": "b"})
+                )
+                .is_err()
+            );
+            assert_eq!(
+                validate_login(
+                    &json!({"homeserver": "https://matrix.org/", "username": "a", "password": "b"})
+                )
+                .unwrap()["homeserver"],
+                "https://matrix.org"
+            );
+            assert!(
+                validate_login(&json!({"homeserver": "https://matrix.org", "username": "a"}))
+                    .is_err()
+            );
+            assert!(
+                validate_login(&json!({"homeserver": "https://matrix.org", "password": "b"}))
+                    .is_err()
+            );
+            assert!(
+                validate_login(
+                    &json!({"homeserver": "https://matrix.org", "username": "a", "password": ""})
+                )
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn login_accepts_an_access_token_without_username_or_password() {
+            let parsed =
+                validate_login(&json!({"homeserver": "https://matrix.org", "accessToken": "t"}))
+                    .unwrap();
+            assert_eq!(parsed["accessToken"], "t");
+            assert_eq!(parsed["username"], "");
+            assert!(
+                validate_login(&json!({"homeserver": "https://matrix.org", "accessToken": ""}))
+                    .is_err()
+            );
+        }
+
+        #[test]
+        fn login_rejects_unknown_keys_and_missing_homeserver() {
+            assert!(
+                validate_login(&json!({"homeserver": "https://matrix.org", "extra": 1})).is_err()
+            );
+            assert!(validate_login(&json!({"username": "a", "password": "b"})).is_err());
+            assert!(validate_login(&json!({})).is_err());
+            assert!(validate_login(&json!("matrix.org")).is_err());
+        }
+
+        #[test]
+        fn login_rejects_oversized_fields_and_blocked_homeservers() {
+            assert!(validate_login(&json!({"homeserver": "a".repeat(2049)})).is_err());
+            let long = "a".repeat(513);
+            assert!(
+                validate_login(
+                    &json!({"homeserver": "https://matrix.org", "username": long, "password": "b"})
+                )
+                .is_err()
+            );
+            let long = "a".repeat(4097);
+            assert!(
+                validate_login(
+                    &json!({"homeserver": "https://matrix.org", "password": long, "username": "a"})
+                )
+                .is_err()
+            );
+            let long = "a".repeat(4097);
+            assert!(
+                validate_login(&json!({"homeserver": "https://matrix.org", "accessToken": long}))
+                    .is_err()
+            );
+            assert!(
+                validate_login(
+                    &json!({"homeserver": "localhost:8008", "username": "a", "password": "b"})
+                )
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn command_rejects_unknown_or_missing_actions() {
+            assert_eq!(validate_command(&json!({})), Err(INVALID_ACTION));
+            assert_eq!(
+                validate_command(&json!({"action": "nope"})),
+                Err(INVALID_ACTION)
+            );
+            assert_eq!(validate_command(&json!("edit")), Err(INVALID_ACTION));
+            assert_eq!(validate_command(&json!({"action": 1})), Err(INVALID_ACTION));
+        }
+
+        #[test]
+        fn command_edit_and_send_trim_text_and_enforce_limits() {
+            let parsed = validate_command(&json!({
+                "action": "send", "roomId": "!a:b", "text": "  hi  "
+            }))
+            .unwrap();
+            assert_eq!(parsed["text"], "hi");
+            let parsed = validate_command(&json!({
+                "action": "edit", "roomId": "!a:b", "eventId": "$e", "text": " x "
+            }))
+            .unwrap();
+            assert_eq!(parsed["text"], "x");
+            assert_eq!(parsed["eventId"], "$e");
+            assert!(
+                validate_command(&json!({"action": "send", "roomId": "!a:b", "text": "   "}))
+                    .is_err()
+            );
+            let long = "a".repeat(10_001);
+            assert!(
+                validate_command(&json!({"action": "send", "roomId": "!a:b", "text": long}))
+                    .is_err()
+            );
+        }
+
+        #[test]
+        fn command_react_trims_key_and_caps_it_at_64_chars() {
+            let parsed = validate_command(&json!({
+                "action": "react", "roomId": "!a:b", "eventId": "$e", "key": " 👍 "
+            }))
+            .unwrap();
+            assert_eq!(parsed["key"], "👍");
+            let long = "a".repeat(65);
+            assert!(
+                validate_command(
+                    &json!({"action": "react", "roomId": "!a:b", "eventId": "$e", "key": long})
+                )
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn command_room_scoped_actions_share_the_room_id_schema() {
+            for action in ["join", "leave", "earlier", "unread", "remove"] {
+                assert!(validate_command(&json!({"action": action, "roomId": "!a:b"})).is_ok());
+                assert_eq!(
+                    validate_command(&json!({"action": action, "roomId": "!a"})),
+                    Err(INVALID_ACTION)
+                );
+                assert_eq!(
+                    validate_command(&json!({"action": action})),
+                    Err(INVALID_ACTION)
+                );
+            }
+        }
+
+        #[test]
+        fn command_read_allows_an_optional_event_id() {
+            assert!(validate_command(&json!({"action": "read", "roomId": "!a:b"})).is_ok());
+            let parsed = validate_command(&json!({
+                "action": "read", "roomId": "!a:b", "eventId": "$e"
+            }))
+            .unwrap();
+            assert_eq!(parsed["eventId"], "$e");
+            assert_eq!(
+                validate_command(&json!({"action": "read", "roomId": "!a:b", "eventId": ""})),
+                Err(INVALID_ACTION)
+            );
+        }
+
+        #[test]
+        fn command_assistant_access_requires_a_boolean() {
+            assert!(
+                validate_command(&json!({"action": "assistantAccess", "enabled": true})).is_ok()
+            );
+            assert!(
+                validate_command(&json!({"action": "assistantAccess", "enabled": false})).is_ok()
+            );
+            assert!(
+                validate_command(&json!({"action": "assistantAccess", "enabled": "true"})).is_err()
+            );
+            assert!(validate_command(&json!({"action": "assistantAccess"})).is_err());
+        }
+
+        #[test]
+        fn command_open_requires_a_matrix_user_id() {
+            assert!(validate_command(&json!({"action": "open", "userId": "@a:b"})).is_ok());
+            assert!(validate_command(&json!({"action": "open", "userId": "a:b"})).is_err());
+            assert!(validate_command(&json!({"action": "open"})).is_err());
+        }
+
+        #[test]
+        fn command_attachment_validates_metadata_and_base64_payload() {
+            assert!(validate_command(&json!({
+                "action": "attachment", "roomId": "!a:b", "name": "a.txt", "mime": "", "data": "TWFu"
+            })).is_ok());
+            assert!(validate_command(&json!({
+                "action": "attachment", "roomId": "!a:b", "name": "", "mime": "text/plain", "data": "TWFu"
+            })).is_err());
+            assert!(validate_command(&json!({
+                "action": "attachment", "roomId": "!a:b", "name": "a", "mime": "text/plain", "data": "TWF u"
+            })).is_err());
+            assert!(
+                validate_command(&json!({
+                    "action": "attachment", "roomId": "!a:b", "name": "a", "mime": "text/plain"
+                }))
+                .is_err()
+            );
+            let mime = "a".repeat(201);
+            assert!(
+                validate_command(&json!({
+                    "action": "attachment", "roomId": "!a:b", "name": "a", "mime": mime, "data": ""
+                }))
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn command_rejects_extra_fields_for_every_branch() {
+            assert!(
+                validate_command(&json!({
+                    "action": "send", "roomId": "!a:b", "text": "hi", "extra": 1
+                }))
+                .is_err()
+            );
+            assert!(
+                validate_command(&json!({
+                    "action": "join", "roomId": "!a:b", "extra": 1
+                }))
+                .is_err()
+            );
+            assert!(
+                validate_command(&json!({
+                    "action": "assistantAccess", "enabled": true, "extra": 1
+                }))
+                .is_err()
+            );
+        }
+
+        #[test]
+        fn search_query_is_trimmed_and_bounded_to_200_chars() {
+            assert_eq!(
+                validate_search_query(&json!({"query": "  hi  "})),
+                Ok("hi".to_string())
+            );
+            assert_eq!(
+                validate_search_query(&json!({"query": "   "})),
+                Err(SEARCH_REQUIRED)
+            );
+            assert_eq!(validate_search_query(&json!({})), Err(SEARCH_REQUIRED));
+            assert_eq!(
+                validate_search_query(&json!({"query": "hi", "extra": 1})),
+                Err(SEARCH_REQUIRED)
+            );
+            let long = "a".repeat(201);
+            assert_eq!(
+                validate_search_query(&json!({"query": long})),
+                Err(SEARCH_REQUIRED)
+            );
+        }
+
+        #[test]
+        fn recovery_key_is_required_non_blank_and_at_most_200_chars() {
+            assert_eq!(
+                validate_recovery_key(&json!({"recoveryKey": " k "})),
+                Ok(" k ".to_string())
+            );
+            assert_eq!(
+                validate_recovery_key(&json!({"recoveryKey": ""})),
+                Err(RECOVERY_KEY_REQUIRED)
+            );
+            assert_eq!(
+                validate_recovery_key(&json!({})),
+                Err(RECOVERY_KEY_REQUIRED)
+            );
+            let long = "a".repeat(201);
+            assert_eq!(
+                validate_recovery_key(&json!({"recoveryKey": long})),
+                Err(RECOVERY_KEY_REQUIRED)
+            );
+        }
+
+        #[test]
+        fn media_request_requires_an_mxc_url_and_optional_object_file() {
+            let (url, file) = validate_media_request(&json!({"url": "mxc://a/b"})).unwrap();
+            assert_eq!(url, "mxc://a/b");
+            assert!(file.is_none());
+            let (_, file) =
+                validate_media_request(&json!({"url": "mxc://a/b", "file": {"k": 1}})).unwrap();
+            assert_eq!(file.unwrap()["k"], 1);
+            assert!(validate_media_request(&json!({"url": "https://a/b"})).is_err());
+            assert!(validate_media_request(&json!({"url": "mxc://a/b", "file": "x"})).is_err());
+            assert!(validate_media_request(&json!({})).is_err());
+            assert!(validate_media_request(&json!({"url": "mxc://a/b", "extra": 1})).is_err());
+        }
+
+        #[test]
+        fn command_envelope_spreads_result_over_the_ok_flag() {
+            let envelope = command_success_envelope(json!({"sent": true}));
+            assert_eq!(envelope["ok"], true);
+            assert_eq!(envelope["sent"], true);
+            let overridden = command_success_envelope(json!({"ok": false}));
+            assert_eq!(overridden["ok"], false);
+            assert_eq!(command_success_envelope(Value::Null)["ok"], true);
+        }
+
+        #[test]
+        fn snapshot_envelope_wraps_the_snapshot() {
+            let envelope = snapshot_envelope(json!({"rooms": []}));
+            assert_eq!(envelope["snapshot"]["rooms"], json!([]));
+        }
     }
 }

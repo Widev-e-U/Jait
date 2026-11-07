@@ -70,6 +70,7 @@ pub type ToolDelegate = Arc<
             &'a str,
             &'a Value,
             &'a ToolExecutionContext,
+            Arc<OwnedSemaphorePermit>,
         ) -> BoxFuture<'a, Result<ToolResult, String>>
         + Send
         + Sync,
@@ -222,7 +223,9 @@ impl ConsentAwareExecutor {
             || (irreversible.is_none()
                 && (approve_all || context.origin == ExecutionOrigin::Scheduler))
         {
-            let result = self.run_tool(name, input, context).await?;
+            let result = self
+                .run_tool(name, input, context, Arc::new(permit))
+                .await?;
             if result.ok {
                 self.trust.record_approval(name).await?;
             }
@@ -284,7 +287,10 @@ impl ConsentAwareExecutor {
                 data: Some(json!({"consentRejected":true,"decidedVia":decision.decided_via})),
             });
         }
-        let result = self.run_tool(name, input, context).await?;
+        let permit = pending.permit.take().expect("consent admission permit");
+        let result = self
+            .run_tool(name, input, context, Arc::new(permit))
+            .await?;
         if result.ok {
             self.trust.record_approval(name).await?;
             if permission.permission.consent_level == ConsentLevel::Once {
@@ -298,11 +304,12 @@ impl ConsentAwareExecutor {
         name: &str,
         input: &Value,
         context: &ToolExecutionContext,
+        permit: Arc<OwnedSemaphorePermit>,
     ) -> Result<ToolResult, String> {
         if context.cancellation.is_cancelled() {
             return Ok(cancelled());
         }
-        (self.delegate)(name, input, context).await
+        (self.delegate)(name, input, context, permit.clone()).await
     }
 }
 struct PendingConsent {

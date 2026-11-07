@@ -9,7 +9,7 @@ import { signAuthToken } from "../security/http-auth.js";
  * 4. WS clients receive project.open UI command
  * 5. Stopping and replacing surfaces works
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { createServer } from "../server.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
@@ -23,7 +23,7 @@ import { UserService } from "../services/users.js";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 
 
 describe("POST /api/project/open", () => {
@@ -43,6 +43,7 @@ describe("POST /api/project/open", () => {
   let projects: ProjectService;
   let projectState: ProjectStateService;
   let users: UserService;
+  let ws: WsControlPlane;
   let writableTestRoot: string;
   let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
   let writableTestFile: string;
@@ -66,11 +67,13 @@ describe("POST /api/project/open", () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(tmpdir(), "jait-project-route-"));
+    const artifactRoot = resolve(import.meta.dirname, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -120,6 +123,19 @@ describe("POST /api/project/open", () => {
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
+  });
+
+  it("does not fall back to the gateway when strict node selection is requested", async () => {
+    const access = vi.spyOn(ws, "canAccessNode").mockReturnValue(true);
+    const res = await authedFetch(`${address}/api/project/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId, nodeId: "offline-node", strictNode: true }),
+    });
+    access.mockRestore();
+    expect(res.status).toBe(400);
+    expect((await res.json() as { error: string }).error).toBe("NODE_OFFLINE");
+    expect(surfaceRegistry.getBySession(sessionId).filter((s) => s.state === "running")).toHaveLength(0);
   });
 
   it("should create a filesystem surface and return surfaceId", async () => {
@@ -481,8 +497,8 @@ describe("POST /api/project/open", () => {
   });
 
   it("should read from the surface that allows the path when the requested surface is stale", async () => {
-    const firstRoot = await mkdtemp(join(tmpdir(), "jait-project-first-"));
-    const secondRoot = await mkdtemp(join(tmpdir(), "jait-project-second-"));
+    const firstRoot = await mkdtemp(join(resolve(import.meta.dirname, "../../../../.jait/artifacts"), "jait-project-first-"));
+    const secondRoot = await mkdtemp(join(resolve(import.meta.dirname, "../../../../.jait/artifacts"), "jait-project-second-"));
     const secondFile = join(secondRoot, "AGENTS.md");
     await writeFile(secondFile, "project instructions", "utf-8");
 

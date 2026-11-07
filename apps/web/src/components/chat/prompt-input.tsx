@@ -2107,12 +2107,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     if (!el) return
     const structured = variant === 'messenger' ? [] : parseUserMessageClipboardPayload(e.clipboardData.getData(JAIT_REF_MIME))
     const pastedText = e.clipboardData.getData('text/plain')
-    if (variant === 'assistant' && structured.length === 0 && isLongPaste(pastedText)) {
+    // Text-only clipboard payloads still need plain-text handling, including UUID lookup.
+    const hasStructuredReferences = structured.some(segment => segment.type !== 'text')
+    if (variant === 'assistant' && !hasStructuredReferences && isLongPaste(pastedText)) {
       e.preventDefault()
       setAttachments(previous => [...previous, createPastedTextAttachment(pastedText, previous)])
       return
     }
-    const markdownSegments = variant === 'messenger' ? [] : structured.length > 0 ? structured : parseUserMessageMarkdown(pastedText)
+    const markdownSegments = variant === 'messenger' ? [] : hasStructuredReferences ? structured : parseUserMessageMarkdown(pastedText)
     if (markdownSegments.length > 0) {
       e.preventDefault()
       pushUndoSnapshot(true)
@@ -2505,10 +2507,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             {projectDisplayName}
           </span>
           {chatId && (
-            <TooltipHint side="bottom" content={`Copy chat id: ${chatId}`}>
+            <TooltipHint side="bottom" content={`Copy chat reference: [chat:${chatId}]`}>
             <button
               type="button"
-              aria-label="Copy chat id"
+              aria-label="Copy chat reference"
               // The box hugs the icon exactly — no padding or extra hit ring. The
               // global `button[aria-label] { min-width: 2.5rem }` mobile rule would
               // blow this tiny inline icon up to 40px wide, so override min-width
@@ -2517,7 +2519,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               onClick={async (e) => {
                 e.preventDefault()
                 try {
-                  await navigator.clipboard.writeText(chatId)
+                  await navigator.clipboard.writeText(serializeUserMessageSegmentsToMarkdown([{ type: 'chat', sessionId: chatId, name: chatId }]))
                   setChatIdCopied(true)
                   setTimeout(() => setChatIdCopied(false), 1200)
                 } catch {

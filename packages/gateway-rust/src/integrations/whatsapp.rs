@@ -146,11 +146,13 @@ pub fn bare_jid(jid: Option<&str>) -> &str {
         .next()
         .unwrap_or("")
 }
-/// Bounded wrapper traversal; protocol messages are untrusted. Normal text is
-/// returned verbatim, preserving leading/trailing whitespace as the source does.
+/// Wrapper traversal mirrors the source exactly: `extractText` recurses through
+/// `ephemeralMessage`/`viewOnceMessage` without a depth cap, so this port walks
+/// iteratively (no stack growth) and also without a cap. Normal text is returned
+/// verbatim, preserving leading/trailing whitespace as the source does.
 pub fn extract_text(message: &Value) -> String {
     let mut current = message;
-    for _ in 0..32 {
+    loop {
         for path in [
             &["conversation"][..],
             &["extendedTextMessage", "text"][..],
@@ -161,12 +163,9 @@ pub fn extract_text(message: &Value) -> String {
             for key in path {
                 v = v.get(*key).unwrap_or(&Value::Null);
             }
+            // JS truthiness: an empty string falls through to the next branch.
             if let Some(text) = v.as_str().filter(|s| !s.is_empty()) {
-                return if text.len() <= MAX_TEXT {
-                    text.into()
-                } else {
-                    String::new()
-                };
+                return text.into();
             }
         }
         match current
@@ -793,12 +792,16 @@ mod tests {
             extract_text(&json!({"videoMessage":{"caption":"video"}})),
             "video"
         );
-        assert!(extract_text(&json!({"conversation":"x".repeat(MAX_TEXT+1)})).is_empty());
+        // No length cap in the source: long text passes through verbatim.
+        assert_eq!(
+            extract_text(&json!({"conversation":"x".repeat(MAX_TEXT+1)})).len(),
+            MAX_TEXT + 1
+        );
         let mut deep = json!({"conversation":"hidden"});
         for _ in 0..40 {
             deep = json!({"ephemeralMessage":{"message":deep}});
         }
-        assert!(extract_text(&deep).is_empty());
+        assert_eq!(extract_text(&deep), "hidden");
     }
     #[test]
     fn message_conversion_matches_alias_sender_and_timestamp_rules() {
@@ -977,5 +980,164 @@ mod tests {
         })
         .await;
         until(|| engine.senders.lock().unwrap()[0].is_closed()).await;
+    }
+
+    fn nested_ephemeral(depth: usize, text: &str) -> Value {
+        let mut value = json!({ "conversation": text });
+        for _ in 0..depth {
+            value = json!({ "ephemeralMessage": { "message": value } });
+        }
+        value
+    }
+
+    #[test]
+    fn bare_jid_strips_device_suffix_and_server_domain() {
+        assert_eq!(bare_jid(Some("15551234567@s.whatsapp.net")), "15551234567");
+        assert_eq!(bare_jid(Some("999:5@lid")), "999");
+        assert_eq!(bare_jid(Some("group-1@g.us")), "group-1");
+        assert_eq!(bare_jid(None), "");
+        assert_eq!(bare_jid(Some("")), "");
+    }
+
+    #[test]
+    fn extract_text_prefers_conversation_then_extended_text_then_captions() {
+        assert_eq!(extract_text(&json!({"conversation": "plain"})), "plain");
+        assert_eq!(
+            extract_text(&json!({
+                "conversation": "plain",
+                "extendedTextMessage": {"text": "extended"}
+            })),
+            "plain"
+        );
+        assert_eq!(
+            extract_text(&json!({"extendedTextMessage": {"text": "extended"}})),
+            "extended"
+        );
+        assert_eq!(
+            extract_text(&json!({"imageMessage": {"caption": "image caption"}})),
+            "image caption"
+        );
+        assert_eq!(
+            extract_text(&json!({"videoMessage": {"caption": "video caption"}})),
+            "video caption"
+        );
+        // Empty captures are skipped rather than returned.
+        assert_eq!(
+            extract_text(&json!({
+                "conversation": "",
+                "imageMessage": {"caption": "after empty"}
+            })),
+            "after empty"
+        );
+        assert_eq!(extract_text(&json!({"stickerMessage": {}})), "");
+    }
+
+    #[test]
+    fn extract_text_preserves_surrounding_whitespace_verbatim() {
+        assert_eq!(extract_text(&json!({"conversation": "  hi  "})), "  hi  ");
+    }
+
+    #[test]
+    fn extract_text_unwraps_ephemeral_and_view_once_envelopes() {
+        assert_eq!(
+            extract_text(&json!({
+                "ephemeralMessage": {"message": {"conversation": "burn after reading"}}
+            })),
+            "burn after reading"
+        );
+        assert_eq!(
+            extract_text(&json!({
+                "viewOnceMessage": {"message": {"imageMessage": {"caption": "once"}}}
+            })),
+            "once"
+        );
+        assert_eq!(
+            extract_text(&json!({
+                "ephemeralMessage": {"message": {
+                    "viewOnceMessage": {"message": {"conversation": "both"}}
+                }}
+            })),
+            "both"
+        );
+        assert_eq!(extract_text(&nested_ephemeral(5, "deep")), "deep");
+    }
+
+    #[test]
+    fn extract_text_unwraps_arbitrarily_deep_nesting_like_the_unbounded_source_recursion() {
+        // The source recurses without a depth cap, so deep nesting must still resolve.
+        assert_eq!(
+            extract_text(&nested_ephemeral(31, "reachable")),
+            "reachable"
+        );
+        assert_eq!(
+            extract_text(&nested_ephemeral(200, "still reachable")),
+            "still reachable"
+        );
+    }
+
+    #[test]
+    fn message_to_inbound_rejects_blank_text_and_unusable_conversations() {
+        let self_bares = HashSet::new();
+        let blank = message("15551234567@s.whatsapp.net", "   ");
+        assert!(message_to_inbound(&blank, &self_bares, 0).is_none());
+
+        let mut no_chat = message("15551234567@s.whatsapp.net", "hi");
+        no_chat.key.remote_jid = None;
+        assert!(message_to_inbound(&no_chat, &self_bares, 0).is_none());
+
+        let broadcast = message("status@broadcast", "hi");
+        assert!(message_to_inbound(&broadcast, &self_bares, 0).is_none());
+
+        let mut long_jid = message("15551234567@s.whatsapp.net", "hi");
+        long_jid.key.remote_jid = Some("a".repeat(1025));
+        assert!(message_to_inbound(&long_jid, &self_bares, 0).is_none());
+
+        let mut long_participant = message("15551234567@s.whatsapp.net", "hi");
+        long_participant.key.participant = Some("b".repeat(1025));
+        assert!(message_to_inbound(&long_participant, &self_bares, 0).is_none());
+    }
+
+    #[test]
+    fn message_to_inbound_rejects_oversized_protocol_payload() {
+        let self_bares = HashSet::new();
+        let mut huge = message("15551234567@s.whatsapp.net", "hi");
+        huge.message = json!({ "conversation": "x".repeat(262_144) });
+        assert!(message_to_inbound(&huge, &self_bares, 0).is_none());
+
+        let mut long_push_name = message("15551234567@s.whatsapp.net", "hi");
+        long_push_name.push_name = Some("n".repeat(1025));
+        assert!(message_to_inbound(&long_push_name, &self_bares, 0).is_none());
+    }
+
+    #[test]
+    fn message_to_inbound_marks_self_chat_from_bare_device_jid() {
+        let mut self_bares = HashSet::new();
+        self_bares.insert("999".to_string());
+        let mut inbound = message("999:5@lid", "note to self");
+        inbound.key.from_me = true;
+
+        let inbound = message_to_inbound(&inbound, &self_bares, 0).expect("inbound");
+        assert_eq!(inbound.channel_id, "whatsapp");
+        assert_eq!(inbound.conversation_id, "999:5@lid");
+        // No participant on a direct chat: the conversation is the sender.
+        assert_eq!(inbound.sender_id, "999:5@lid");
+        assert!(inbound.is_self_chat);
+        assert!(inbound.from_me);
+        assert_eq!(inbound.timestamp, 123_000.0);
+    }
+
+    #[test]
+    fn message_to_inbound_prefers_group_participant_and_falls_back_to_clock() {
+        let self_bares = HashSet::new();
+        let mut group = message("120363@g.us", "hello group");
+        group.key.participant = Some("15551234567@s.whatsapp.net".into());
+        group.push_name = Some("Alice".into());
+        group.timestamp_seconds = None;
+
+        let inbound = message_to_inbound(&group, &self_bares, 1_700_000_000_000).expect("inbound");
+        assert_eq!(inbound.sender_id, "15551234567@s.whatsapp.net");
+        assert_eq!(inbound.sender_name.as_deref(), Some("Alice"));
+        assert!(!inbound.is_self_chat);
+        assert_eq!(inbound.timestamp, 1_700_000_000_000.0);
     }
 }

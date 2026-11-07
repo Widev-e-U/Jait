@@ -20,6 +20,7 @@ function Harness() {
     <section aria-label="Assistant"><AssistantMarkdown content={content} onOpenPath={path => setDestination(path)} /></section>
     <section aria-label="User" className="whitespace-pre-wrap" onClick={() => setEdited(true)}><MessageText>{content}</MessageText></section>
     <section aria-label="Response"><MessageResponse>{content}</MessageResponse></section>
+    <section aria-label="Downloads"><AssistantMarkdown content="[Download report.pdf](/api/project/download?path=%2Fproject%2Freport%20%231.pdf) [Existing PDF](/project/existing.pdf)" onOpenPath={path => setDestination(path)} /></section>
     <output aria-label="Destination">{destination}</output>
     <output aria-label="Navigation count">{navigationCount}</output>
     <output aria-label="Edited">{String(edited)}</output>

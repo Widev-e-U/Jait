@@ -101,6 +101,7 @@ export function LoopGoalCard({ loop, sessionId, onControl, mobile = false }: {
             {compact && failed ? 'Stopped · error' : loop.status}
           </span>}
         </button>
+        {collapsed && !running && !completed && loop.summary && <p className="mt-1 max-w-64 truncate text-muted-foreground">{loop.summary}</p>}
         <div id={contentId} hidden={collapsed && closingWidth === null} inert={collapsed} aria-hidden={collapsed || undefined}
           className={closingWidth !== null && collapsed ? 'pointer-events-none absolute left-3 top-[1.625rem] mt-2 opacity-0 transition-opacity duration-[180ms] motion-reduce:transition-none' : 'mt-2 opacity-100 transition-opacity duration-[180ms] motion-reduce:transition-none'}
           style={closingWidth !== null && collapsed ? { width: Math.max(0, closingWidth - 24) } : undefined}>

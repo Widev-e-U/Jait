@@ -44,6 +44,19 @@ pub fn normalize_conversation_id(value: &str) -> &str {
     value.split(';').next().unwrap_or(value)
 }
 
+/// Port of `tokenFromAuthorization`: matches `/^Bearer\s+(.+)$/i` against the
+/// trimmed header. A blank token yields `None`, which the caller treats the
+/// same way TypeScript treats its empty-string return (unauthorized).
+pub fn bearer_token(authorization: &str) -> Option<&str> {
+    let trimmed = authorization.trim();
+    let (scheme, rest) = trimmed.split_once(|c: char| c.is_whitespace())?;
+    if !scheme.eq_ignore_ascii_case("Bearer") {
+        return None;
+    }
+    let token = rest.trim();
+    if token.is_empty() { None } else { Some(token) }
+}
+
 pub fn html_to_text(value: &str) -> String {
     let mention = Regex::new(r"(?i)<at[^>]*>.*?</at>").unwrap();
     let tags = Regex::new(r"<[^>]*>").unwrap();
@@ -205,6 +218,9 @@ pub trait TeamsHost: Send + Sync {
 
 #[derive(Clone, Debug)]
 struct Reference {
+    /// Port of `buildReference().activityId`; kept so outbound replies can quote
+    /// the originating activity the way the TypeScript reference does.
+    activity_id: Option<Value>,
     service_url: String,
     conversation: Value,
     user: Option<Value>,
@@ -272,7 +288,7 @@ impl TeamsConnector {
         if body.len() > MAX_BODY {
             return Err("Payload too large".into());
         }
-        if authorization.len() > MAX_AUTHORIZATION || !authorization.starts_with("Bearer ") {
+        if authorization.len() > MAX_AUTHORIZATION || bearer_token(authorization).is_none() {
             return Err("Unauthorized".into());
         }
         let activity: Value =
@@ -282,39 +298,40 @@ impl TeamsConnector {
             .map_err(|_| "Microsoft Teams authentication timed out".to_string())??;
         let conversation = activity.get("conversation").unwrap_or(&Value::Null);
         let id = normalize_conversation_id(string(conversation, "id").unwrap_or_default());
-        if !id.is_empty() {
-            if let Some(service_url) = string(&activity, "serviceUrl") {
-                if !is_allowed_service_url(service_url) {
-                    return Err("Blocked Microsoft Teams serviceUrl host".into());
-                }
-                if !self.references.contains_key(id) && self.references.len() >= MAX_REFERENCES {
-                    return Err("Microsoft Teams reference limit reached".into());
-                }
-                let tenant = activity
-                    .pointer("/channelData/tenant/id")
-                    .and_then(Value::as_str)
-                    .or_else(|| string(conversation, "tenantId"))
-                    .map(str::to_owned);
-                let mut normalized = serde_json::Map::new();
-                normalized.insert("id".into(), Value::String(id.into()));
-                if let Some(v) = conversation.get("conversationType") {
-                    normalized.insert("conversationType".into(), v.clone());
-                }
-                if let Some(ref v) = tenant {
-                    normalized.insert("tenantId".into(), Value::String(v.clone()));
-                }
-                self.references.insert(
-                    id.into(),
-                    Reference {
-                        service_url: service_url.trim().trim_end_matches('/').into(),
-                        conversation: Value::Object(normalized),
-                        user: activity.get("from").cloned(),
-                        bot: activity.get("recipient").cloned(),
-                        tenant_id: tenant,
-                        locale: activity.get("locale").cloned(),
-                    },
-                );
+        if !id.is_empty()
+            && let Some(service_url) = string(&activity, "serviceUrl")
+        {
+            if !is_allowed_service_url(service_url) {
+                return Err("Blocked Microsoft Teams serviceUrl host".into());
             }
+            if !self.references.contains_key(id) && self.references.len() >= MAX_REFERENCES {
+                return Err("Microsoft Teams reference limit reached".into());
+            }
+            let tenant = activity
+                .pointer("/channelData/tenant/id")
+                .and_then(Value::as_str)
+                .or_else(|| string(conversation, "tenantId"))
+                .map(str::to_owned);
+            let mut normalized = serde_json::Map::new();
+            normalized.insert("id".into(), Value::String(id.into()));
+            if let Some(v) = conversation.get("conversationType") {
+                normalized.insert("conversationType".into(), v.clone());
+            }
+            if let Some(ref v) = tenant {
+                normalized.insert("tenantId".into(), Value::String(v.clone()));
+            }
+            self.references.insert(
+                id.into(),
+                Reference {
+                    activity_id: activity.get("id").cloned(),
+                    service_url: service_url.trim().trim_end_matches('/').into(),
+                    conversation: Value::Object(normalized),
+                    user: activity.get("from").cloned(),
+                    bot: activity.get("recipient").cloned(),
+                    tenant_id: tenant,
+                    locale: activity.get("locale").cloned(),
+                },
+            );
         }
         Ok(activity_to_inbound(&activity, now_ms))
     }
@@ -1168,6 +1185,35 @@ mod lifecycle_tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[test]
+    fn bearer_token_accepts_any_case_and_surrounding_whitespace() {
+        assert_eq!(bearer_token("Bearer abc"), Some("abc"));
+        assert_eq!(bearer_token("bearer abc"), Some("abc"));
+        assert_eq!(bearer_token("BEARER abc"), Some("abc"));
+        assert_eq!(bearer_token("  Bearer   abc  "), Some("abc"));
+        assert_eq!(bearer_token("Bearer\tabc"), Some("abc"));
+        assert_eq!(bearer_token("Bearer a.b.c"), Some("a.b.c"));
+    }
+
+    #[test]
+    fn bearer_token_rejects_missing_scheme_and_blank_tokens() {
+        assert_eq!(bearer_token(""), None);
+        assert_eq!(bearer_token("   "), None);
+        assert_eq!(bearer_token("abc"), None);
+        assert_eq!(bearer_token("Token abc"), None);
+        assert_eq!(bearer_token("Basic abc"), None);
+        assert_eq!(bearer_token("Bearer"), None);
+        assert_eq!(bearer_token("Bearer   "), None);
+    }
+
+    #[test]
+    fn bearer_gate_admits_lowercase_scheme_that_typescript_accepts() {
+        // Parity check: TS `/^Bearer\s+(.+)$/i` is case-insensitive, so a
+        // lowercase header must clear the gate rather than be rejected early.
+        assert!(bearer_token("bearer token").is_some());
+        assert!(bearer_token("BEARER token").is_some());
     }
 }
 

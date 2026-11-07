@@ -323,7 +323,7 @@ function QueueItem({
                 type="button"
                 data-no-drag="true"
                 className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
-                onClick={() => { anchorToggle(); setEditing(true) }} aria-label="Edit message"
+                onClick={() => { anchorToggle('bottom'); setEditing(true) }} aria-label="Edit message"
               >
                 <Pencil className="h-3 w-3" />
               </button>

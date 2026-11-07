@@ -271,30 +271,47 @@ fn remove_destination_link(path: &Path, meta: &fs::Metadata) -> Result<(), CopyE
 }
 
 #[cfg(unix)]
+fn lexical_absolute(path: &Path) -> Result<PathBuf, CopyError> {
+    let absolute = std::path::absolute(path).map_err(|e| failure("resolve link", path, e))?;
+    let mut result = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::RootDir => result.push(component.as_os_str()),
+            std::path::Component::Normal(part) => result.push(part),
+            std::path::Component::ParentDir => {
+                result.pop();
+            }
+            std::path::Component::CurDir => {}
+            std::path::Component::Prefix(_) => unreachable!("Unix absolute path"),
+        }
+    }
+    Ok(result)
+}
+
+#[cfg(unix)]
 fn copy_symlink(source: &Path, destination: &Path) -> Result<(), CopyError> {
     use std::os::unix::fs::symlink;
     let link = fs::read_link(source).map_err(|e| failure("read link", source, e))?;
-    // Node's default cpSync resolves a relative link against its source parent.
+    // cpSync preserves absolute link text. Only relative targets go through
+    // path.resolve, whose lexical normalization does not follow symlinks.
     let resolved = if link.is_absolute() {
         link
     } else {
         let path = source.parent().unwrap_or(Path::new("")).join(link);
         let absolute = std::path::absolute(&path).map_err(|e| failure("resolve link", &path, e))?;
-        // Node's path.resolve removes dot segments lexically, without resolving
-        // filesystem symlinks. Preserve that observable link text.
-        let mut normalized = PathBuf::new();
+        let mut resolved = PathBuf::new();
         for component in absolute.components() {
             match component {
-                std::path::Component::RootDir => normalized.push(component.as_os_str()),
-                std::path::Component::Normal(part) => normalized.push(part),
+                std::path::Component::RootDir => resolved.push(component.as_os_str()),
+                std::path::Component::Normal(part) => resolved.push(part),
                 std::path::Component::ParentDir => {
-                    normalized.pop();
+                    resolved.pop();
                 }
                 std::path::Component::CurDir => {}
                 std::path::Component::Prefix(_) => unreachable!("Unix absolute path"),
             }
         }
-        normalized
+        resolved
     };
     match fs::symlink_metadata(destination) {
         Ok(meta) if meta.file_type().is_symlink() && fs::metadata(destination).is_ok() => {
@@ -306,6 +323,31 @@ fn copy_symlink(source: &Path, destination: &Path) -> Result<(), CopyError> {
                         io::ErrorKind::InvalidInput,
                         "source and destination refer to the same file",
                     ),
+                ));
+            }
+            // Node compares path.resolve() results lexically before unlinking.
+            let dest_link =
+                fs::read_link(destination).map_err(|e| failure("read link", destination, e))?;
+            let dest_target = if dest_link.is_absolute() {
+                dest_link
+            } else {
+                destination
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .join(dest_link)
+            };
+            let src_path = lexical_absolute(&resolved)?;
+            let dest_path = lexical_absolute(&dest_target)?;
+            if dest_path.starts_with(&src_path)
+                || (fs::metadata(destination)
+                    .map_err(|e| failure("stat", destination, e))?
+                    .is_dir()
+                    && src_path.starts_with(&dest_path))
+            {
+                return Err(failure(
+                    "copy link",
+                    destination,
+                    io::Error::new(io::ErrorKind::InvalidInput, "link target is a subdirectory"),
                 ));
             }
             fs::remove_file(destination)
@@ -399,6 +441,42 @@ mod tests {
         fs::create_dir_all(&destination).unwrap();
         let error = copy_tree(&source, &destination).unwrap_err();
         assert_eq!(error.source.kind(), io::ErrorKind::InvalidInput);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sibling_link_targets_can_replace_destination() {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new();
+        fs::create_dir_all(f.0.join("parent/first")).unwrap();
+        fs::create_dir_all(f.0.join("parent/second")).unwrap();
+        let source = f.0.join("source-link");
+        let destination = f.0.join("destination-link");
+        let target = f.0.join("parent/first");
+        symlink(&target, &source).unwrap();
+        symlink(f.0.join("parent/second"), &destination).unwrap();
+        copy_symlink(&source, &destination).unwrap();
+        assert_eq!(fs::read_link(destination).unwrap(), target);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn link_target_subdirectories_preserve_destination() {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new();
+        fs::create_dir_all(f.0.join("parent/child")).unwrap();
+        for (src, dst) in [("parent", "parent/child"), ("parent/child", "parent")] {
+            let source = f.0.join("source-link");
+            let destination = f.0.join("destination-link");
+            symlink(f.0.join(src), &source).unwrap();
+            symlink(f.0.join(dst), &destination).unwrap();
+            let original = fs::read_link(&destination).unwrap();
+            let err = copy_symlink(&source, &destination).unwrap_err();
+            assert_eq!(err.source.kind(), io::ErrorKind::InvalidInput);
+            assert_eq!(fs::read_link(&destination).unwrap(), original);
+            fs::remove_file(source).unwrap();
+            fs::remove_file(destination).unwrap();
+        }
     }
 
     #[cfg(unix)]
@@ -692,6 +770,21 @@ mod tests {
             f.0.join("target")
         );
         assert_eq!(fs::read(f.0.join("destination-link")).unwrap(), b"data");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn absolute_link_dot_segments_are_preserved() {
+        use std::os::unix::fs::symlink;
+        let f = Fixture::new();
+        f.write("target", b"data");
+        fs::create_dir(f.0.join("child")).unwrap();
+        symlink(f.0.join("child/../target"), f.0.join("source-link")).unwrap();
+        copy_symlink(&f.0.join("source-link"), &f.0.join("destination-link")).unwrap();
+        assert_eq!(
+            fs::read_link(f.0.join("destination-link")).unwrap(),
+            f.0.join("child/../target")
+        );
     }
 
     #[cfg(unix)]

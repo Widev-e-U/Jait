@@ -15,7 +15,7 @@ use super::{
 };
 use crate::services::calendar::js_text;
 use serde_json::{Map, Value, json};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 pub fn metadata() -> &'static Value {
     static DATA: LazyLock<Value> =
@@ -42,17 +42,17 @@ fn str_of(value: &Value) -> String {
     js_text(value).trim().to_string()
 }
 
-/// `normalizePrompt(message, prompt)` — first non-empty candidate wins.
+/// `normalizePrompt(message, prompt)` prefers a non-empty prompt.
 fn normalize_prompt(message: &Value, prompt: &Value) -> Option<String> {
-    let message = str_of(message);
-    if !message.is_empty() {
-        return Some(message);
-    }
-    let prompt = str_of(prompt);
-    if prompt.is_empty() {
+    let value = prompt
+        .as_str()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| message.as_str())?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
         None
     } else {
-        Some(prompt)
+        Some(trimmed.to_string())
     }
 }
 
@@ -110,6 +110,40 @@ async fn accessible_thread<C: Send + Sync>(
     }
 }
 
+/// Add registry-backed scheduled preflight to an existing provider resolver.
+/// The identity callback must read authenticated host state, not tool input.
+pub fn with_scheduled_provider_preflight<C: Send + Sync + 'static>(
+    resolver: JaitPort<C>,
+    registry: crate::providers::registry::ProviderRegistry,
+    authenticated_user: Arc<dyn Fn(&C) -> Option<String> + Send + Sync>,
+) -> JaitPort<C> {
+    Arc::new(move |method, args, host| {
+        let resolver = resolver.clone();
+        let registry = registry.clone();
+        let authenticated_user = authenticated_user.clone();
+        Box::pin(async move {
+            if method != "preflightScheduled" {
+                return resolver(method, args, host).await;
+            }
+            let Some(user) = authenticated_user(host).filter(|id| !id.trim().is_empty()) else {
+                return Ok(Some(fail(
+                    "Scheduled provider preflight requires an authenticated user.",
+                )));
+            };
+            let Some(id) = args
+                .first()
+                .and_then(|arg| arg["providerId"].as_str())
+                .filter(|id| !id.is_empty())
+            else {
+                return Ok(Some(fail(
+                    "Scheduled provider preflight requires a provider.",
+                )));
+            };
+            Ok(Some(registry.scheduled_preflight(id, &user).await))
+        })
+    })
+}
+
 pub struct ThreadTools<C> {
     /// `deps.threadService`
     pub threads: JaitPort<C>,
@@ -152,7 +186,12 @@ impl<C: Send + Sync> ThreadTools<C> {
     }
 
     async fn dispatch(&self, input: &Value, context: &Value, host: &C) -> Result<Value, HostError> {
-        let user_id = str_of(&context["userId"]);
+        let user_id = context["userId"]
+            .as_str()
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .unwrap_or("system")
+            .to_string();
         let action = str_of(&input["action"]);
 
         // Creating or driving threads is refused while agents are halted.
@@ -176,14 +215,17 @@ impl<C: Send + Sync> ThreadTools<C> {
 
         // Saved-team agents may not open relay/helper threads of their own.
         if matches!(action.as_str(), "create" | "create_many") {
-            let caller_id = {
-                let thread_id = str_of(&context["threadId"]);
-                if thread_id.is_empty() {
-                    str_of(&context["sessionId"])
-                } else {
-                    thread_id
-                }
-            };
+            let caller_id = context["threadId"]
+                .as_str()
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+                .or_else(|| {
+                    context["sessionId"]
+                        .as_str()
+                        .map(str::trim)
+                        .filter(|id| !id.is_empty())
+                })
+                .unwrap_or_default();
             if !caller_id.is_empty() {
                 let caller = (*self.threads)("getById", vec![json!(caller_id)], host)
                     .await?
@@ -289,18 +331,29 @@ impl<C: Send + Sync> ThreadTools<C> {
         &self,
         context: &Value,
         provider_id: &Value,
+        session_id: &Value,
         host: &C,
     ) -> Result<Result<String, Value>, HostError> {
+        let mut selection_context = context.clone();
+        if let Some(session) = session_id.as_str().map(str::trim).filter(|s| !s.is_empty())
+            && let Some(object) = selection_context.as_object_mut()
+        {
+            object.insert("sessionId".to_string(), json!(session));
+        }
         let resolved = self
             .optional_call(
                 &self.providers,
                 "resolve",
-                vec![json!({"providerId": provider_id, "context": context})],
+                vec![json!({"providerId": provider_id, "context": selection_context})],
                 host,
             )
             .await?
             .unwrap_or(Value::Null);
-        let resolved_id = str_of(&resolved["providerId"]);
+        let resolved_id = resolved["providerId"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
         if resolved_id.is_empty() {
             let message = match resolved["error"].as_str() {
                 Some(error) if !error.is_empty() => error.to_string(),
@@ -309,6 +362,46 @@ impl<C: Send + Sync> ThreadTools<C> {
             return Ok(Err(fail(message)));
         }
         Ok(Ok(resolved_id))
+    }
+
+    // The provider host must check registration, availability and, when supported,
+    // model listing. Missing or malformed host responses fail closed.
+    async fn preflight_scheduled_providers(
+        &self,
+        context: &Value,
+        provider_ids: &[String],
+        host: &C,
+    ) -> Result<Option<Value>, HostError> {
+        if context["requestedBy"] != "scheduler" {
+            return Ok(None);
+        }
+        let mut checked = std::collections::HashSet::new();
+        for provider_id in provider_ids {
+            if !checked.insert(provider_id) {
+                continue;
+            }
+            let result = self
+                .optional_call(
+                    &self.providers,
+                    "preflightScheduled",
+                    vec![json!({"providerId": provider_id, "context": context})],
+                    host,
+                )
+                .await?;
+            match result {
+                Some(result) if result["ok"] == true => {}
+                Some(result) if result["ok"] == false && result["message"].is_string() => {
+                    return Ok(Some(result));
+                }
+                _ => {
+                    return Ok(Some(fail(format!(
+                        "Provider '{}' scheduled job preflight is unavailable.",
+                        provider_id
+                    ))));
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// Fields shared by `create` and every `create_many` spec.
@@ -325,7 +418,12 @@ impl<C: Send + Sync> ThreadTools<C> {
             .call(&self.threads, "defaults", vec![json!(context)], host)
             .await?
             .unwrap_or(Value::Null);
-        let title = match str_of(&spec["title"]) {
+        let title = match spec["title"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+        {
             title if !title.is_empty() => title,
             _ => {
                 let generated = self
@@ -337,15 +435,19 @@ impl<C: Send + Sync> ThreadTools<C> {
                     )
                     .await?
                     .unwrap_or(Value::Null);
-                match str_of(&generated) {
+                match generated.as_str().unwrap_or_default().trim().to_string() {
                     generated if !generated.is_empty() => generated,
                     _ => "New Thread".to_string(),
                 }
             }
         };
-        let runtime_mode = match str_of(&spec["runtimeMode"]) {
+        let runtime_mode = match spec["runtimeMode"].as_str().unwrap_or_default().to_string() {
             mode if !mode.is_empty() => mode,
-            _ => match str_of(&defaults["runtimeMode"]) {
+            _ => match defaults["runtimeMode"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string()
+            {
                 mode if !mode.is_empty() => mode,
                 _ => "full-access".to_string(),
             },
@@ -391,13 +493,13 @@ impl<C: Send + Sync> ThreadTools<C> {
             return Ok(fail("create requires non-empty `prompt`."));
         };
         let provider_id = match self
-            .resolve_provider(context, &input["providerId"], host)
+            .resolve_provider(context, &input["providerId"], &input["sessionId"], host)
             .await?
         {
             Ok(provider_id) => provider_id,
             Err(error) => return Ok(error),
         };
-        let persona_agent_id = str_of(&input["personaAgentId"]);
+        let persona_agent_id = input["personaAgentId"].as_str().unwrap_or_default();
         if !persona_agent_id.is_empty() {
             let agent = self
                 .call(
@@ -410,6 +512,12 @@ impl<C: Send + Sync> ThreadTools<C> {
             if agent.is_none_or(|agent| agent.is_null()) {
                 return Ok(fail("Agent profile not found."));
             }
+        }
+        if let Some(error) = self
+            .preflight_scheduled_providers(context, std::slice::from_ref(&provider_id), host)
+            .await?
+        {
+            return Ok(error);
         }
         let thread = self
             .create_one(context, user_id, input, &prompt, &provider_id, host)
@@ -473,29 +581,70 @@ impl<C: Send + Sync> ThreadTools<C> {
             return Ok(fail("create_many requires non-empty `threads`."));
         }
 
-        let mut created: Vec<Value> = Vec::new();
-        let failures: Vec<Value> = Vec::new();
+        // Validate the entire batch before creating any thread. A later invalid
+        // spec must not leave earlier threads behind.
+        let mut validated = Vec::with_capacity(specs.len());
         for spec in &specs {
-            let Some(prompt) = normalize_prompt(&spec["message"], &spec["prompt"]) else {
+            let prompt = normalize_prompt(&spec["message"], &spec["prompt"])
+                .or_else(|| normalize_prompt(&input["message"], &input["prompt"]));
+            let Some(prompt) = prompt else {
                 return Ok(fail(format!(
                     "create_many requires non-empty prompt for thread '{}'.",
                     str_of(&spec["title"])
                 )));
             };
+            validated.push((spec.clone(), prompt));
+        }
+        for (spec, _) in &validated {
+            let model = if spec["model"].is_null() {
+                &input["model"]
+            } else {
+                &spec["model"]
+            };
+            if model.as_str().is_none_or(|model| model.trim().is_empty()) {
+                return Ok(fail(format!(
+                    "create_many requires an explicit model for thread '{}'. Autonomous work never picks a provider or model: ask the user which provider and model to use, then pass both explicitly.",
+                    str_of(&spec["title"])
+                )));
+            }
+        }
+        let mut resolved = Vec::with_capacity(validated.len());
+        for (mut spec, prompt) in validated {
+            // Batch-level fields provide defaults for each thread.
+            for field in [
+                "model",
+                "providerId",
+                "sessionId",
+                "runtimeMode",
+                "kind",
+                "workingDirectory",
+                "branch",
+            ] {
+                if spec[field].is_null() && !input[field].is_null() {
+                    spec[field] = input[field].clone();
+                }
+            }
             let provider_id = match self
-                .resolve_provider(context, &spec["providerId"], host)
+                .resolve_provider(context, &spec["providerId"], &spec["sessionId"], host)
                 .await?
             {
                 Ok(provider_id) => provider_id,
-                Err(_) => {
-                    return Ok(fail(format!(
-                        "Unable to resolve a provider for thread '{}'.",
-                        str_of(&spec["title"])
-                    )));
-                }
+                Err(error) => return Ok(error),
             };
+            resolved.push((spec, prompt, provider_id));
+        }
+        let provider_ids: Vec<String> = resolved.iter().map(|(_, _, id)| id.clone()).collect();
+        if let Some(error) = self
+            .preflight_scheduled_providers(context, &provider_ids, host)
+            .await?
+        {
+            return Ok(error);
+        }
+        let mut created: Vec<Value> = Vec::new();
+        let failures: Vec<Value> = Vec::new();
+        for (spec, prompt, provider_id) in resolved {
             let thread = self
-                .create_one(context, user_id, spec, &prompt, &provider_id, host)
+                .create_one(context, user_id, &spec, &prompt, &provider_id, host)
                 .await?;
             created.push(json!({"thread": thread, "spec": spec, "prompt": prompt}));
         }
@@ -1237,4 +1386,391 @@ fn completed_ok(finished: &Value) -> bool {
         str_of(&finished["status"]).as_str(),
         "completed" | "complete"
     )
+}
+
+#[cfg(test)]
+mod batch_validation_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Default)]
+    struct Host {
+        calls: Mutex<Vec<String>>,
+    }
+
+    fn tools() -> ThreadTools<Host> {
+        let threads: JaitPort<Host> = Arc::new(|method, _, host| {
+            Box::pin(async move {
+                host.calls.lock().unwrap().push(format!("threads.{method}"));
+                Ok(Some(json!({"id":"created"})))
+            })
+        });
+        let providers: JaitPort<Host> = Arc::new(|method, args, host| {
+            Box::pin(async move {
+                host.calls
+                    .lock()
+                    .unwrap()
+                    .push(format!("providers.{method}"));
+                let id = &args[0]["providerId"];
+                Ok(Some(if id == "bad" {
+                    json!({"error":"provider unavailable"})
+                } else {
+                    json!({"providerId": id})
+                }))
+            })
+        });
+        ThreadTools {
+            threads,
+            providers: Some(providers),
+            agent_control: None,
+            runner: None,
+            git: None,
+            agent_github: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn registry_preflight_bridge_uses_host_identity() {
+        use crate::providers::registry::{ProviderAdapter, ProviderRegistry};
+        use futures_util::future::BoxFuture;
+        struct Provider;
+        impl ProviderAdapter for Provider {
+            fn id(&self) -> &str {
+                "p"
+            }
+            fn owner_user_id(&self) -> Option<&str> {
+                Some("alice")
+            }
+            fn info(&self) -> Value {
+                json!({})
+            }
+            fn check_availability(&self) -> BoxFuture<'static, Result<(), String>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+        let registry = ProviderRegistry::default();
+        registry.register(Arc::new(Provider));
+        let host = Host::default();
+        let resolver: JaitPort<Host> =
+            Arc::new(|_, _, _| Box::pin(async { Ok(Some(json!({"providerId":"p"}))) }));
+        let port = with_scheduled_provider_preflight(
+            resolver.clone(),
+            registry.clone(),
+            Arc::new(|_| Some("bob".into())),
+        );
+        let result = port(
+            "preflightScheduled",
+            vec![json!({"providerId":"p", "context":{"userId":"alice"}})],
+            &host,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(result["ok"], false);
+        let port = with_scheduled_provider_preflight(
+            resolver,
+            registry,
+            Arc::new(|_| Some("alice".into())),
+        );
+        assert_eq!(
+            port("preflightScheduled", vec![json!({"providerId":"p"})], &host)
+                .await
+                .unwrap()
+                .unwrap()["ok"],
+            true
+        );
+        assert_eq!(
+            port("resolve", vec![], &host).await.unwrap().unwrap()["providerId"],
+            "p"
+        );
+    }
+
+    #[tokio::test]
+    async fn scheduled_batch_preflights_distinct_providers_before_creation() {
+        let host = Host::default();
+        let mut tools = tools();
+        tools.providers = Some(Arc::new(|method, args, host: &Host| {
+            Box::pin(async move {
+                let id = args[0]["providerId"].as_str().unwrap();
+                host.calls.lock().unwrap().push(format!("{method}:{id}"));
+                Ok(Some(if method == "resolve" {
+                    json!({"providerId":id})
+                } else if id == "bad" {
+                    json!({"ok":false,"message":"preflight failed"})
+                } else {
+                    json!({"ok":true})
+                }))
+            })
+        }));
+        let input = json!({"threads":[
+            {"prompt":"a","model":"m","providerId":"p"},
+            {"prompt":"b","model":"m","providerId":"p"},
+            {"prompt":"c","model":"m","providerId":"bad"}
+        ]});
+        let result = tools
+            .create_many(&input, &json!({"requestedBy":"scheduler"}), "u", &host)
+            .await
+            .unwrap();
+        assert_eq!(result["message"], "preflight failed");
+        let calls = host.calls.lock().unwrap();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|c| *c == "preflightScheduled:p")
+                .count(),
+            1
+        );
+        assert!(!calls.iter().any(|c| c.starts_with("threads.")));
+    }
+
+    #[tokio::test]
+    async fn scheduled_create_fails_closed_on_missing_preflight_response() {
+        let host = Host::default();
+        let result = tools()
+            .create(
+                &json!({"prompt":"work","providerId":"p"}),
+                &json!({"requestedBy":"scheduler"}),
+                "u",
+                &host,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result["ok"], false);
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("preflight is unavailable")
+        );
+        assert!(
+            !host
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|c| c.starts_with("threads."))
+        );
+    }
+
+    #[tokio::test]
+    async fn saved_team_caller_uses_session_id_when_thread_id_is_absent() {
+        let host = Host::default();
+        let mut tools = tools();
+        tools.threads = Arc::new(|method, args, host: &Host| {
+            Box::pin(async move {
+                host.calls
+                    .lock()
+                    .unwrap()
+                    .push(format!("{method}:{}", args.first().unwrap_or(&Value::Null)));
+                if method == "getById" && args.first().and_then(Value::as_str) == Some("session") {
+                    Ok(Some(json!({"userId":"alice", "personaAgentId":"agent"})))
+                } else {
+                    Ok(Some(json!({})))
+                }
+            })
+        });
+        let result = tools
+            .dispatch(
+                &json!({"action":"create", "prompt":"work", "providerId":"p"}),
+                &json!({"userId":"alice", "sessionId":"session"}),
+                &host,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result["ok"], false);
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("Saved-team agents")
+        );
+        assert!(
+            !host
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|call| call.starts_with("create:"))
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_user_id_defaults_to_system() {
+        let host = Host::default();
+        let mut tools = tools();
+        tools.threads = Arc::new(|method, args, host: &Host| {
+            Box::pin(async move {
+                if method == "create" {
+                    host.calls
+                        .lock()
+                        .unwrap()
+                        .push(args[0]["userId"].as_str().unwrap().to_string());
+                }
+                Ok(Some(json!({"id":"created"})))
+            })
+        });
+        tools
+            .dispatch(
+                &json!({"action":"create", "prompt":"work", "providerId":"p"}),
+                &json!({}),
+                &host,
+            )
+            .await
+            .unwrap();
+        assert!(
+            host.calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|call| call == "system")
+        );
+    }
+
+    #[tokio::test]
+    async fn absent_title_and_runtime_use_creation_defaults() {
+        let host = Host::default();
+        let mut tools = tools();
+        tools.threads = Arc::new(|method, args, host: &Host| {
+            Box::pin(async move {
+                match method {
+                    "defaults" => Ok(Some(json!({}))),
+                    "generateTitle" => Ok(Some(json!("Generated"))),
+                    "create" => {
+                        host.calls.lock().unwrap().push(args[0].to_string());
+                        Ok(Some(json!({"id":"created"})))
+                    }
+                    _ => Ok(Some(json!({}))),
+                }
+            })
+        });
+        tools
+            .create(
+                &json!({"prompt":"work", "providerId":"p"}),
+                &json!({}),
+                "u",
+                &host,
+            )
+            .await
+            .unwrap();
+        let calls = host.calls.lock().unwrap();
+        let created: Value =
+            serde_json::from_str(calls.iter().find(|s| s.starts_with('{')).unwrap()).unwrap();
+        assert_eq!(created["title"], "Generated");
+        assert_eq!(created["runtimeMode"], "full-access");
+    }
+
+    #[tokio::test]
+    async fn create_without_persona_does_not_query_persona() {
+        let host = Host::default();
+        let input = json!({"prompt":"work", "providerId":"p"});
+        let result = tools()
+            .create(&input, &json!({}), "u", &host)
+            .await
+            .unwrap();
+        assert_eq!(result["ok"], true);
+        assert!(
+            !host
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|call| call == "threads.getPersonaAgent")
+        );
+    }
+
+    #[tokio::test]
+    async fn provider_resolution_uses_selected_session_override() {
+        let host = Host::default();
+        let mut tools = tools();
+        tools.providers = Some(Arc::new(|_, args, host: &Host| {
+            Box::pin(async move {
+                host.calls.lock().unwrap().push(
+                    args[0]["context"]["sessionId"]
+                        .as_str()
+                        .unwrap()
+                        .to_string(),
+                );
+                Ok(Some(json!({"providerId":"p"})))
+            })
+        }));
+        let result = tools
+            .resolve_provider(
+                &json!({"sessionId":"original"}),
+                &Value::Null,
+                &json!(" chosen "),
+                &host,
+            )
+            .await
+            .unwrap();
+        assert_eq!(result.unwrap(), "p");
+        assert_eq!(*host.calls.lock().unwrap(), vec!["chosen"]);
+    }
+
+    #[tokio::test]
+    async fn missing_later_prompt_does_not_create_or_resolve() {
+        let host = Host::default();
+        let input = json!({"threads":[
+            {"title":"first", "prompt":"one", "model":"m"},
+            {"title":"second", "model":"m"}
+        ]});
+        let result = tools()
+            .create_many(&input, &json!({}), "u", &host)
+            .await
+            .unwrap();
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("non-empty prompt for thread 'second'")
+        );
+        assert!(host.calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn prompt_normalization_prefers_prompt_and_rejects_non_strings() {
+        assert_eq!(
+            normalize_prompt(&json!("message"), &json!(" prompt ")),
+            Some("prompt".to_string())
+        );
+        assert_eq!(normalize_prompt(&Value::Null, &json!(42)), None);
+    }
+
+    #[tokio::test]
+    async fn invalid_later_model_does_not_create_or_resolve() {
+        let host = Host::default();
+        let input = json!({"threads":[
+            {"title":"first", "prompt":"one", "model":"m", "providerId":"p"},
+            {"title":"second", "prompt":"two", "model":"  ", "providerId":"p"}
+        ]});
+        let result = tools()
+            .create_many(&input, &json!({}), "u", &host)
+            .await
+            .unwrap();
+        assert_eq!(result["ok"], false);
+        assert!(
+            result["message"]
+                .as_str()
+                .unwrap()
+                .contains("explicit model for thread 'second'")
+        );
+        assert!(host.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn later_provider_failure_does_not_create_threads() {
+        let host = Host::default();
+        let input = json!({"model":"m", "prompt":"shared", "threads":[
+            {"title":"first", "providerId":"p"},
+            {"title":"second", "providerId":"bad"}
+        ]});
+        let result = tools()
+            .create_many(&input, &json!({}), "u", &host)
+            .await
+            .unwrap();
+        assert_eq!(result["message"], "provider unavailable");
+        assert_eq!(
+            *host.calls.lock().unwrap(),
+            vec!["providers.resolve", "providers.resolve"]
+        );
+    }
 }

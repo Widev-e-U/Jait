@@ -51,10 +51,10 @@ mod smoke_process_ts {
     /// does not, and normal, non-zero and signal exits all do.
     #[tokio::test]
     async fn has_exited_contract_for_absent_live_and_signalled_children() {
-        assert_eq!(has_exited(None).expect("absent child"), true);
+        assert!(has_exited(None).expect("absent child"));
 
         let mut live = spawn("sleep 30");
-        assert_eq!(has_exited(Some(&mut live)).unwrap(), false);
+        assert!(!has_exited(Some(&mut live)).unwrap());
 
         // Signal exit: Node reports `exitCode === null`, the port reports exited.
         let pid = live.id().expect("child pid");
@@ -68,15 +68,18 @@ mod smoke_process_ts {
         let reaped = live.wait().await.expect("reap killed child");
         assert_eq!(reaped.code(), None);
         assert!(reaped.signal().is_some());
-        assert_eq!(has_exited(Some(&mut live)).unwrap(), true);
+        assert!(has_exited(Some(&mut live)).unwrap());
 
         // Non-zero normal exit also counts.
         let mut failing = spawn("exit 3");
-        assert_eq!(failing.wait().await.expect("reap failing child").code(), Some(3));
-        assert_eq!(has_exited(Some(&mut failing)).unwrap(), true);
+        assert_eq!(
+            failing.wait().await.expect("reap failing child").code(),
+            Some(3)
+        );
+        assert!(has_exited(Some(&mut failing)).unwrap());
 
         // An absent child is checked repeatedly with the same answer.
-        assert_eq!(has_exited(None).unwrap(), true);
+        assert!(has_exited(None).unwrap());
     }
 
     /// `smoke-desktop.mjs` EOF path: close stdin, require a zero exit, then
@@ -84,12 +87,12 @@ mod smoke_process_ts {
     #[tokio::test]
     async fn desktop_eof_stop_requires_exit_code_zero() {
         let mut child = spawn("cat > /dev/null; exit 0");
-        assert_eq!(has_exited(Some(&mut child)).unwrap(), false);
+        assert!(!has_exited(Some(&mut child)).unwrap());
 
         graceful_stop(&mut child, true)
             .await
             .expect("EOF shutdown is graceful");
-        assert_eq!(has_exited(Some(&mut child)).unwrap(), true);
+        assert!(has_exited(Some(&mut child)).unwrap());
     }
 
     /// `smoke-desktop.mjs` `stop` path: the literal `stop\n` command is sent and
@@ -100,7 +103,7 @@ mod smoke_process_ts {
         graceful_stop(&mut happy, false)
             .await
             .expect("stop command is graceful");
-        assert_eq!(has_exited(Some(&mut happy)).unwrap(), true);
+        assert!(has_exited(Some(&mut happy)).unwrap());
 
         // A child that dies instead of shutting down cleanly is an error.
         let mut stubborn = spawn("exit 7");
@@ -108,7 +111,10 @@ mod smoke_process_ts {
             .await
             .expect_err("non-zero exit must be reported");
         assert_eq!(error.kind(), std::io::ErrorKind::Other);
-        assert_eq!(error.to_string(), "graceful shutdown failed: exit status: 7");
+        assert_eq!(
+            error.to_string(),
+            "graceful shutdown failed: exit status: 7"
+        );
 
         // stdin is required for the handshake; without a pipe the stop fails.
         let mut no_stdin = Command::new("/bin/sh")

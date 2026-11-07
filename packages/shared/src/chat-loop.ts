@@ -12,6 +12,14 @@ export const ChatLoopSchema = z.object({
   summary: z.string().max(8000),
   nextMessage: z.string().max(8000),
   evidence: z.array(z.string().max(2000)).max(20),
+  executionCriteria: z.array(z.number().int().nonnegative().max(19)).max(20).optional(),
+  executionEvidence: z.array(z.object({
+    criterion: z.number().int().nonnegative().max(19),
+    terminalId: z.string().min(1).max(200),
+    executionId: z.string().min(1).max(200),
+    status: z.enum(["completed", "failed", "timed_out", "cancelled", "running"]),
+    exitCode: z.number().int().nullable(),
+  })).max(20).optional(),
   // Optional for persisted loops and clients predating gateway monitoring.
   budgetStartIteration: z.number().int().nonnegative().optional(),
   stalledChecks: z.number().int().nonnegative().optional(),

@@ -85,6 +85,12 @@ impl Gateway {
         self.router = self.router.merge(sessions.router());
         self
     }
+    /// Explicit opt-in for the currently implemented thread routes. Execution,
+    /// streaming and the remaining thread endpoints are not provided by this mount.
+    pub fn with_threads(mut self, threads: routes::threads::ThreadRoutes) -> Self {
+        self.router = self.router.merge(threads.router());
+        self
+    }
     /// Explicit filesystem control-plane and environment; no default mount.
     pub fn with_filesystem(mut self, routes: routes::filesystem::FilesystemRoutes) -> Self {
         self.router = self.router.merge(routes.router());
@@ -99,6 +105,21 @@ impl Gateway {
     pub(crate) fn mount_store(&mut self, routes: routes::store::StoreRoutes) {
         self.router = std::mem::take(&mut self.router).merge(routes.router());
     }
+    /// Mount the opt-in WebSocket transport at the path configured on its hub.
+    /// The caller retains the handle so it can close and drain accepted sockets
+    /// before shutting down the workers the hub reads from.
+    /// Mount the opt-in WebSocket transport at the path configured on its hub.
+    /// The caller retains the handle so it can close and drain accepted sockets
+    /// before shutting down the workers the hub reads from.
+    pub fn mount_websocket(&mut self, transport: crate::runtime::ws_transport::WsTransport) {
+        self.router = std::mem::take(&mut self.router).merge(transport.router());
+    }
+
+    pub fn with_websocket(mut self, transport: crate::runtime::ws_transport::WsTransport) -> Self {
+        self.router = self.router.merge(transport.router());
+        self
+    }
+
     /// Supervision only; command execution remains a separately authorized host port.
     pub fn with_maintenance(mut self, routes: routes::maintenance::MaintenanceRoutes) -> Self {
         self.router = self.router.merge(routes.router());
@@ -274,6 +295,35 @@ mod tests {
         Arc,
         atomic::{AtomicUsize, Ordering},
     };
+
+    #[tokio::test]
+    async fn opt_in_thread_routes_preserve_authentication() {
+        use tower::ServiceExt;
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let auth = routes::auth::AuthState::new(db, "thread-mount-test".into()).unwrap();
+        let gateway = Gateway::bind_router(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+            },
+            Router::new(),
+        )
+        .await
+        .unwrap()
+        .with_threads(routes::threads::ThreadRoutes::new(auth.clone()));
+        let response = gateway
+            .router
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/api/threads")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), axum::http::StatusCode::UNAUTHORIZED);
+        auth.shutdown().await.unwrap();
+    }
 
     #[cfg(unix)]
     #[tokio::test]

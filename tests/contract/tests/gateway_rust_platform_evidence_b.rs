@@ -8,8 +8,8 @@ use std::path::Path;
 mod evaluation_isolated_gateway {
     use super::Path;
     use jait_gateway::evaluation::isolated_gateway::{
-        backend_from_settings, build_child_env, parse_ready_line, ready_line, tail_chars,
-        validate_isolation, ReadyLine, DB_RELATIVE_PATH, DEFAULT_LLM_PROVIDER, READY_PREFIX,
+        DB_RELATIVE_PATH, DEFAULT_LLM_PROVIDER, READY_PREFIX, ReadyLine, backend_from_settings,
+        build_child_env, parse_ready_line, ready_line, tail_chars, validate_isolation,
     };
     use serde_json::json;
 
@@ -42,7 +42,10 @@ mod evaluation_isolated_gateway {
         assert_eq!(env_get(&env, "JAIT_NODE_ONLY").as_deref(), Some("false"));
         assert_eq!(env_get(&env, "JAIT_PRIMARY_GATEWAY").as_deref(), Some(""));
         assert_eq!(env_get(&env, "JAIT_PRIMARY_TOKEN").as_deref(), Some(""));
-        assert_eq!(env_get(&env, "JAIT_STATE_DIR").as_deref(), Some("/tmp/eval-state"));
+        assert_eq!(
+            env_get(&env, "JAIT_STATE_DIR").as_deref(),
+            Some("/tmp/eval-state")
+        );
         assert_eq!(
             env_get(&env, "JAIT_DB_PATH").as_deref(),
             Some("/tmp/eval-state/data/jait.db")
@@ -63,7 +66,10 @@ mod evaluation_isolated_gateway {
         );
         // Non-string (and null) settings fall back to the default provider.
         assert_eq!(backend_from_settings(&json!({"jait_backend": 5})), "openai");
-        assert_eq!(backend_from_settings(&json!({"jait_backend": null})), "openai");
+        assert_eq!(
+            backend_from_settings(&json!({"jait_backend": null})),
+            "openai"
+        );
         assert_eq!(
             backend_from_settings(&json!({"jaitBackend": "anthropic"})),
             "openai"
@@ -100,7 +106,10 @@ mod evaluation_isolated_gateway {
             ReadyLine::Invalid
         );
         // Missing / bogus token or port is a handshake failure, never a silent default.
-        assert_eq!(parse_ready_line("JAIT_EVAL_READY {\"port\":80}"), ReadyLine::Invalid);
+        assert_eq!(
+            parse_ready_line("JAIT_EVAL_READY {\"port\":80}"),
+            ReadyLine::Invalid
+        );
         assert_eq!(
             parse_ready_line("JAIT_EVAL_READY {\"port\":80,\"token\":7}"),
             ReadyLine::Invalid
@@ -118,7 +127,10 @@ mod evaluation_isolated_gateway {
             ReadyLine::Invalid
         );
         // A prefixed line without a JSON object is invalid, not "keep reading".
-        assert_eq!(parse_ready_line("JAIT_EVAL_READY \"x\""), ReadyLine::Invalid);
+        assert_eq!(
+            parse_ready_line("JAIT_EVAL_READY \"x\""),
+            ReadyLine::Invalid
+        );
     }
 
     #[test]
@@ -162,9 +174,10 @@ mod evaluation_isolated_gateway {
 
 mod lib_security_protocols {
     use jait_gateway::security::protocols::{
-        evaluate_http_response, evaluate_ssh_identification, hsts_enabled, parse_ssh_identification,
-        parse_ssh_identification_line, AdapterResult, HttpObservation, Severity, SshIdentification,
-        GAP_GATEWAY_OBSERVATION, GAP_HTTP_REDIRECT, GAP_HTTP_SCOPE, GAP_SSH_SCOPE,
+        AdapterResult, GAP_GATEWAY_OBSERVATION, GAP_HTTP_REDIRECT, GAP_HTTP_SCOPE, GAP_SSH_SCOPE,
+        HttpObservation, Severity, SshIdentification, evaluate_http_response,
+        evaluate_ssh_identification, hsts_enabled, parse_ssh_identification,
+        parse_ssh_identification_line,
     };
 
     fn http(status_code: u16, secure: bool) -> HttpObservation<'static> {
@@ -216,7 +229,10 @@ mod lib_security_protocols {
         assert_eq!(evidence.facts["transport"], serde_json::json!("https"));
         assert_eq!(evidence.facts["hstsEnabled"], serde_json::json!(false));
         assert_eq!(evidence.facts["noSniff"], serde_json::json!(true));
-        assert_eq!(evidence.facts["framingPolicyPresent"], serde_json::json!(true));
+        assert_eq!(
+            evidence.facts["framingPolicyPresent"],
+            serde_json::json!(true)
+        );
         // The response body is never retained.
         assert_eq!(evidence.facts["bodyRetained"], serde_json::json!(false));
 
@@ -229,7 +245,10 @@ mod lib_security_protocols {
         // Documented scope gaps only: gateway observation + GET-only HTTP scope, no redirect gap.
         assert_eq!(
             result.coverage_gaps,
-            vec![GAP_GATEWAY_OBSERVATION.to_owned(), GAP_HTTP_SCOPE.to_owned()]
+            vec![
+                GAP_GATEWAY_OBSERVATION.to_owned(),
+                GAP_HTTP_SCOPE.to_owned()
+            ]
         );
 
         // With HSTS present and other headers sane, no rule fires.
@@ -261,7 +280,10 @@ mod lib_security_protocols {
         // A non-2xx answer keeps the two scope gaps but never claims the redirect gap.
         assert_eq!(
             failure.coverage_gaps,
-            vec![GAP_GATEWAY_OBSERVATION.to_owned(), GAP_HTTP_SCOPE.to_owned()]
+            vec![
+                GAP_GATEWAY_OBSERVATION.to_owned(),
+                GAP_HTTP_SCOPE.to_owned()
+            ]
         );
 
         let redirect = evaluate_http_response("example.test", 80, &http(302, false));
@@ -322,7 +344,10 @@ mod lib_security_protocols {
                 software_identifier: "OpenSSH_3.9".to_string(),
             },
         );
-        assert_eq!(rule_ids(&legacy), vec!["ssh.legacy-identification".to_string()]);
+        assert_eq!(
+            rule_ids(&legacy),
+            vec!["ssh.legacy-identification".to_string()]
+        );
         assert_eq!(legacy.rules[0].severity, Severity::Medium);
         assert_eq!(legacy.rules[0].evidence_index, 0);
     }
@@ -353,8 +378,8 @@ mod lib_security_protocols {
 mod skills_index {
     use jait_gateway::execution::process_runner::ProcessCancellation;
     use jait_gateway::integrations::skills::{
-        format_skills_for_prompt, parse_frontmatter, scan_skill_dir, user_skills_dir, Skill,
-        SkillSource, MAX_SKILL_BYTES,
+        MAX_SKILL_BYTES, Skill, SkillSource, format_skills_for_prompt, parse_frontmatter,
+        scan_skill_dir, user_skills_dir,
     };
     use std::path::{Path, PathBuf};
 
@@ -378,7 +403,8 @@ mod skills_index {
             Path::new("/home/ada/.jait/skills").to_path_buf()
         );
         assert_eq!(
-            user_skills_dir(Path::new("/home/ada"), Some("   ")).expect("blank override falls back"),
+            user_skills_dir(Path::new("/home/ada"), Some("   "))
+                .expect("blank override falls back"),
             Path::new("/home/ada/.jait/skills").to_path_buf()
         );
         assert_eq!(
@@ -433,9 +459,8 @@ mod skills_index {
         assert_eq!(aliased.description.as_deref(), Some("*a"));
 
         // Malformed YAML still yields the scalar fields via the fallback scanner.
-        let broken =
-            parse_frontmatter("---\nname: Plain\ndescription: A skill\n  : broken\n---\n")
-                .expect("fallback");
+        let broken = parse_frontmatter("---\nname: Plain\ndescription: A skill\n  : broken\n---\n")
+            .expect("fallback");
         assert_eq!(broken.name.as_deref(), Some("Plain"));
         assert_eq!(broken.description.as_deref(), Some("A skill"));
         assert_eq!(broken.homepage, None);
@@ -490,7 +515,10 @@ mod skills_index {
         std::fs::create_dir_all(root.join("huge")).unwrap();
         std::fs::write(
             root.join("huge/SKILL.md"),
-            format!("---\nname: Huge\ndescription: {}", "x".repeat(MAX_SKILL_BYTES)),
+            format!(
+                "---\nname: Huge\ndescription: {}",
+                "x".repeat(MAX_SKILL_BYTES)
+            ),
         )
         .unwrap();
 
@@ -529,7 +557,7 @@ mod skills_install {
         render_skill_markdown, slugify_skill_id, tool_install_request,
     };
     use jait_gateway::integrations::skills::{
-        parse_frontmatter, Skill, SkillInstallSpec, SkillSource, MAX_SKILL_BYTES,
+        MAX_SKILL_BYTES, Skill, SkillInstallSpec, SkillSource, parse_frontmatter,
     };
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -620,8 +648,12 @@ mod skills_install {
 
         // Unknown install id: refuse, never fall back to another spec.
         assert_eq!(
-            tool_install_request(&skill_with(Some(vec![spec.clone()])), Some("other"), host_npm())
-                .unwrap_err(),
+            tool_install_request(
+                &skill_with(Some(vec![spec.clone()])),
+                Some("other"),
+                host_npm()
+            )
+            .unwrap_err(),
             "No matching install option for this skill"
         );
         // No install options at all.
@@ -637,7 +669,10 @@ mod skills_install {
         };
         let err = tool_install_request(&skill_with(Some(vec![brew])), Some("cli"), host_npm())
             .unwrap_err();
-        assert!(err.starts_with("Unsupported install kind \"brew\"."), "{err}");
+        assert!(
+            err.starts_with("Unsupported install kind \"brew\"."),
+            "{err}"
+        );
         assert!(err.contains("cli"), "missing-bin hint preserved: {err}");
     }
 
@@ -688,22 +723,34 @@ mod skills_install {
         let mut relative = host_npm();
         relative.argv = vec!["npm".into()];
         assert_eq!(
-            tool_install_request(&skill_with(Some(vec![make("@example/cli")])), None, relative)
-                .unwrap_err(),
+            tool_install_request(
+                &skill_with(Some(vec![make("@example/cli")])),
+                None,
+                relative
+            )
+            .unwrap_err(),
             "Host must supply an absolute npm executable/cwd and no stdin"
         );
         let mut extra_arg = host_npm();
         extra_arg.argv.push("--registry".into());
         assert_eq!(
-            tool_install_request(&skill_with(Some(vec![make("@example/cli")])), None, extra_arg)
-                .unwrap_err(),
+            tool_install_request(
+                &skill_with(Some(vec![make("@example/cli")])),
+                None,
+                extra_arg
+            )
+            .unwrap_err(),
             "Host must supply an absolute npm executable/cwd and no stdin"
         );
         let mut with_stdin = host_npm();
         with_stdin.input = Some(b"payload".to_vec());
         assert_eq!(
-            tool_install_request(&skill_with(Some(vec![make("@example/cli")])), None, with_stdin)
-                .unwrap_err(),
+            tool_install_request(
+                &skill_with(Some(vec![make("@example/cli")])),
+                None,
+                with_stdin
+            )
+            .unwrap_err(),
             "Host must supply an absolute npm executable/cwd and no stdin"
         );
         let mut relative_cwd = host_npm();
@@ -723,12 +770,12 @@ mod skills_install {
 mod voice_assistant_tools {
     use jait_gateway::voice::VoiceFuture;
     use jait_gateway::voice_assistant::tools::{
-        execute_registry, schemas, BackgroundTask, BackgroundTasks, CancelTask, ConsentExecutor,
-        RegistryTool, TaskStatus, ToolContext, ToolResult, ToolSchema,
+        BackgroundTask, BackgroundTasks, CancelTask, ConsentExecutor, RegistryTool, TaskStatus,
+        ToolContext, ToolResult, ToolSchema, execute_registry, schemas,
     };
-    use serde_json::{json, Value};
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use serde_json::{Value, json};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn schema(name: &str) -> ToolSchema {
         ToolSchema {
@@ -843,7 +890,10 @@ mod voice_assistant_tools {
 
         // A late provider completion is dropped instead of overwriting the cancel.
         assert_eq!(tasks.finish("a", Ok("late".into())), Ok(false));
-        assert_eq!(tasks.get("a").expect("present").status, TaskStatus::Cancelled);
+        assert_eq!(
+            tasks.get("a").expect("present").status,
+            TaskStatus::Cancelled
+        );
         assert!(tasks.get("a").expect("present").result.is_none());
         assert_eq!(tasks.finish("missing", Ok("x".into())), Ok(false));
 
@@ -865,7 +915,10 @@ mod voice_assistant_tools {
         tasks.register(task("c"), None).expect("register c");
         assert_eq!(tasks.finish("c", Err("boom".into())), Ok(true));
         assert_eq!(tasks.get("c").expect("present").status, TaskStatus::Error);
-        assert_eq!(tasks.get("c").expect("present").error.as_deref(), Some("boom"));
+        assert_eq!(
+            tasks.get("c").expect("present").error.as_deref(),
+            Some("boom")
+        );
     }
 
     #[test]
@@ -873,13 +926,20 @@ mod voice_assistant_tools {
         let mut tasks = BackgroundTasks::new(4);
         tasks.register(task("big"), None).expect("register");
         assert_eq!(
-            tasks.finish("big", Ok("r".repeat(256 * 1024 + 1))).unwrap_err(),
+            tasks
+                .finish("big", Ok("r".repeat(256 * 1024 + 1)))
+                .unwrap_err(),
             "Background result too large"
         );
         // Rejected completion leaves the task running.
-        assert_eq!(tasks.get("big").expect("present").status, TaskStatus::Running);
         assert_eq!(
-            tasks.finish("big", Err("e".repeat(256 * 1024 + 1))).unwrap_err(),
+            tasks.get("big").expect("present").status,
+            TaskStatus::Running
+        );
+        assert_eq!(
+            tasks
+                .finish("big", Err("e".repeat(256 * 1024 + 1)))
+                .unwrap_err(),
             "Background result too large"
         );
         // Exactly at the budget is allowed.
@@ -906,7 +966,11 @@ mod voice_assistant_tools {
         ordered.remove("1");
         assert!(ordered.get("1").is_none());
         assert_eq!(
-            ordered.list().iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ordered
+                .list()
+                .iter()
+                .map(|t| t.id.as_str())
+                .collect::<Vec<_>>(),
             vec!["2"]
         );
     }
@@ -940,10 +1004,12 @@ mod voice_assistant_tools {
             jait_gateway::voice_assistant::Effect::Provider(json!({"type":"response.cancel"}))
         );
         // Late audio for the cancelled response produces no client audio.
-        assert!(session
-            .provider(&json!({"type":"response.audio.delta","delta":"BB=="}))
-            .expect("late delta")
-            .is_empty());
+        assert!(
+            session
+                .provider(&json!({"type":"response.audio.delta","delta":"BB=="}))
+                .expect("late delta")
+                .is_empty()
+        );
         // Transcript normalisation applies to user speech ("jade" -> "Jait").
         assert_eq!(
             session
@@ -968,7 +1034,8 @@ mod voice_assistant_tools {
             context: ToolContext,
         ) -> VoiceFuture<'a, ToolResult> {
             Box::pin(async move {
-                *self.seen_name.lock().unwrap() = format!("{name}:{}:{}", arguments, context.user_id);
+                *self.seen_name.lock().unwrap() =
+                    format!("{name}:{}:{}", arguments, context.user_id);
                 let (ok, message, data) = self.result.lock().unwrap().clone().expect("stub result");
                 Ok(ToolResult { ok, message, data })
             })
@@ -1049,10 +1116,10 @@ mod os_control_resolver {
         OsScrollOptions, OsTypeOptions, SandboxRunResult,
     };
     use jait_gateway::integrations::os_control::resolver::{
-        OsControlResolver, OsSandboxConnection, OsSandboxInfo, OsSandboxSource, OsDriverFactory,
+        OsControlResolver, OsDriverFactory, OsSandboxConnection, OsSandboxInfo, OsSandboxSource,
         ResolverError, WindowsSshConfig,
     };
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::sync::{Arc, Mutex};
 
     struct FakeDriver;
@@ -1064,22 +1131,39 @@ mod os_control_resolver {
         fn screenshot(&self) -> BoxFuture<'_, Result<OsScreenshot, String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
-        fn click(&self, _: f64, _: f64, _: Option<OsClickOptions>) -> BoxFuture<'_, Result<(), String>> {
+        fn click(
+            &self,
+            _: f64,
+            _: f64,
+            _: Option<OsClickOptions>,
+        ) -> BoxFuture<'_, Result<(), String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
         fn mouse_move(&self, _: f64, _: f64) -> BoxFuture<'_, Result<(), String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
-        fn r#type<'a>(&'a self, _: &'a str, _: Option<OsTypeOptions>) -> BoxFuture<'a, Result<(), String>> {
+        fn r#type<'a>(
+            &'a self,
+            _: &'a str,
+            _: Option<OsTypeOptions>,
+        ) -> BoxFuture<'a, Result<(), String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
-        fn key<'a>(&'a self, _: &'a str, _: Option<OsKeyOptions>) -> BoxFuture<'a, Result<(), String>> {
+        fn key<'a>(
+            &'a self,
+            _: &'a str,
+            _: Option<OsKeyOptions>,
+        ) -> BoxFuture<'a, Result<(), String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
         fn scroll(&self, _: Option<OsScrollOptions>) -> BoxFuture<'_, Result<(), String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
-        fn exec<'a>(&'a self, _: &'a str, _: Option<OsExecOptions>) -> BoxFuture<'a, Result<SandboxRunResult, String>> {
+        fn exec<'a>(
+            &'a self,
+            _: &'a str,
+            _: Option<OsExecOptions>,
+        ) -> BoxFuture<'a, Result<SandboxRunResult, String>> {
             Box::pin(async { Err("no os control in contract tests".into()) })
         }
     }
@@ -1117,10 +1201,10 @@ mod os_control_resolver {
             username: &str,
             password: Option<&str>,
         ) -> Result<FakeDriver, ResolverError> {
-            self.calls
-                .lock()
-                .unwrap()
-                .push(format!("windows:{name}:{username}:{}", password.unwrap_or("-")));
+            self.calls.lock().unwrap().push(format!(
+                "windows:{name}:{username}:{}",
+                password.unwrap_or("-")
+            ));
             match self.fail {
                 Some(message) => Err(ResolverError::Message(message.into())),
                 None => Ok(FakeDriver),
@@ -1178,7 +1262,10 @@ mod os_control_resolver {
             WindowsSshConfig::default(),
         );
 
-        let binding = r.resolve(Some("desk")).await.expect("known running sandbox");
+        let binding = r
+            .resolve(Some("desk"))
+            .await
+            .expect("known running sandbox");
         assert_eq!(binding.container_name, "desk");
         assert_eq!(binding.r#type, OsDriverType::LinuxDesktop);
         assert_eq!(*factory.calls.lock().unwrap(), vec!["linux:desk"]);
@@ -1199,7 +1286,10 @@ mod os_control_resolver {
             "OS sandbox \"stopped\" is not running. Start it first."
         );
         // Refusals never reach the driver factory.
-        assert_eq!(*factory.calls.lock().unwrap(), vec!["linux:desk", "linux:desk"]);
+        assert_eq!(
+            *factory.calls.lock().unwrap(),
+            vec!["linux:desk", "linux:desk"]
+        );
     }
 
     #[tokio::test]
@@ -1222,7 +1312,10 @@ mod os_control_resolver {
         assert_eq!(binding.r#type, OsDriverType::Windows);
         assert_eq!(*factory.calls.lock().unwrap(), vec!["windows:c:admin:pw"]);
         // Blank names are treated as "no name given".
-        assert_eq!(r.resolve(Some("   ")).await.expect("blank").container_name, "c");
+        assert_eq!(
+            r.resolve(Some("   ")).await.expect("blank").container_name,
+            "c"
+        );
 
         let (empty, empty_factory) = resolver(
             vec![info("idle", OsDriverType::LinuxDesktop, false)],
@@ -1240,7 +1333,10 @@ mod os_control_resolver {
             WindowsSshConfig::default(),
         );
         win.resolve(Some("vm")).await.expect("windows sandbox");
-        assert_eq!(*win_factory.calls.lock().unwrap(), vec!["windows:vm:docker:-"]);
+        assert_eq!(
+            *win_factory.calls.lock().unwrap(),
+            vec!["windows:vm:docker:-"]
+        );
     }
 
     #[tokio::test]
@@ -1266,7 +1362,11 @@ mod os_control_resolver {
             &listed[0],
             OsSandboxConnection::LinuxDesktop { display, .. } if *display == ":99"
         ));
-        let values: Vec<Value> = serde_json::to_value(&listed).unwrap().as_array().unwrap().clone();
+        let values: Vec<Value> = serde_json::to_value(&listed)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .clone();
         assert_eq!(values.len(), 2);
     }
 
@@ -1298,7 +1398,7 @@ mod os_control_linux_desktop_driver {
         OsTypeOptions, SandboxRunResult, ScrollDirection,
     };
     use jait_gateway::integrations::os_control::linux_desktop::{
-        build_xdotool_keys, decode_base64, png_size, LinuxDesktopOsControlDriver, LinuxDesktopShell,
+        LinuxDesktopOsControlDriver, LinuxDesktopShell, build_xdotool_keys, decode_base64, png_size,
     };
     use std::collections::BTreeMap;
     use std::sync::{Arc, Mutex};
@@ -1320,7 +1420,11 @@ mod os_control_linux_desktop_driver {
         }
         fn only_command(&self) -> (String, u64) {
             let all = self.take();
-            assert_eq!(all.len(), 1, "exactly one shell command expected, got {all:?}");
+            assert_eq!(
+                all.len(),
+                1,
+                "exactly one shell command expected, got {all:?}"
+            );
             all.into_iter().next().unwrap()
         }
     }
@@ -1364,7 +1468,10 @@ mod os_control_linux_desktop_driver {
         d.click(10.4, 20.4, None).await.expect("click");
         assert_eq!(
             shell.only_command(),
-            ("DISPLAY=:99 xdotool mousemove 10 20 click --repeat 1 1".to_string(), 15_000)
+            (
+                "DISPLAY=:99 xdotool mousemove 10 20 click --repeat 1 1".to_string(),
+                15_000
+            )
         );
 
         d.click(
@@ -1379,7 +1486,10 @@ mod os_control_linux_desktop_driver {
         .expect("right click");
         assert_eq!(
             shell.only_command(),
-            ("DISPLAY=:99 xdotool mousemove 0 0 click --repeat 3 3".to_string(), 15_000)
+            (
+                "DISPLAY=:99 xdotool mousemove 0 0 click --repeat 3 3".to_string(),
+                15_000
+            )
         );
 
         // Sub-1 click counts clamp up to a single click instead of vanishing.
@@ -1395,7 +1505,10 @@ mod os_control_linux_desktop_driver {
         .expect("middle click");
         assert_eq!(
             shell.only_command(),
-            ("DISPLAY=:99 xdotool mousemove 1 1 click --repeat 1 2".to_string(), 15_000)
+            (
+                "DISPLAY=:99 xdotool mousemove 1 1 click --repeat 1 2".to_string(),
+                15_000
+            )
         );
 
         d.mouse_move(-5.5, 7.4).await.expect("move");
@@ -1420,7 +1533,10 @@ mod os_control_linux_desktop_driver {
         .expect("scroll up at point");
         assert_eq!(
             shell.only_command(),
-            ("DISPLAY=:99 xdotool mousemove 4 10 click --repeat 3 4".to_string(), 15_000)
+            (
+                "DISPLAY=:99 xdotool mousemove 4 10 click --repeat 3 4".to_string(),
+                15_000
+            )
         );
 
         // A half-specified position must not emit a mousemove.
@@ -1457,29 +1573,54 @@ mod os_control_linux_desktop_driver {
         let custom = LinuxDesktopOsControlDriver::new(shell.clone(), "box").with_display(":1");
         assert_eq!(custom.display(), ":1");
         custom
-            .r#type("ok", Some(OsTypeOptions { delay_ms: Some(-40.0) }))
+            .r#type(
+                "ok",
+                Some(OsTypeOptions {
+                    delay_ms: Some(-40.0),
+                }),
+            )
             .await
             .expect("negative delay clamps to zero");
         assert_eq!(
             shell.only_command(),
-            ("DISPLAY=:1 xdotool type --delay 0 \"ok\"".to_string(), 15_000)
+            (
+                "DISPLAY=:1 xdotool type --delay 0 \"ok\"".to_string(),
+                15_000
+            )
         );
 
         custom
-            .r#type("x", Some(OsTypeOptions { delay_ms: Some(25.6) }))
+            .r#type(
+                "x",
+                Some(OsTypeOptions {
+                    delay_ms: Some(25.6),
+                }),
+            )
             .await
             .expect("rounded delay");
         assert_eq!(
             shell.only_command(),
-            ("DISPLAY=:1 xdotool type --delay 26 \"x\"".to_string(), 15_000)
+            (
+                "DISPLAY=:1 xdotool type --delay 26 \"x\"".to_string(),
+                15_000
+            )
         );
     }
 
     #[tokio::test]
     async fn key_combos_map_to_xdotool_keysyms_and_reject_empty_combos() {
-        assert_eq!(build_xdotool_keys("Ctrl + Shift + T "), vec!["ctrl", "shift", "t"]);
-        assert_eq!(build_xdotool_keys("Meta+PageDown"), vec!["super", "Page_Down"]);
-        assert_eq!(build_xdotool_keys("control + alt + enter"), vec!["ctrl", "alt", "Return"]);
+        assert_eq!(
+            build_xdotool_keys("Ctrl + Shift + T "),
+            vec!["ctrl", "shift", "t"]
+        );
+        assert_eq!(
+            build_xdotool_keys("Meta+PageDown"),
+            vec!["super", "Page_Down"]
+        );
+        assert_eq!(
+            build_xdotool_keys("control + alt + enter"),
+            vec!["ctrl", "alt", "Return"]
+        );
         assert_eq!(build_xdotool_keys("ctrl++a"), vec!["ctrl", "a"]);
         // Unknown key names fall through lowercased (TS `toLowerCase` on every token).
         assert_eq!(build_xdotool_keys("F5"), vec!["f5"]);
@@ -1493,9 +1634,14 @@ mod os_control_linux_desktop_driver {
             ("DISPLAY=:99 xdotool key ctrl shift t".to_string(), 15_000)
         );
 
-        d.key("enter", Some(OsKeyOptions { hold_ms: Some(500.0) }))
-            .await
-            .expect("held key");
+        d.key(
+            "enter",
+            Some(OsKeyOptions {
+                hold_ms: Some(500.0),
+            }),
+        )
+        .await
+        .expect("held key");
         assert_eq!(
             shell.only_command(),
             (
@@ -1579,7 +1725,10 @@ mod os_control_linux_desktop_driver {
 
         let broken = RecordingShell::new(false, "bash: xdotool: not found\n", Some(127.0));
         assert_eq!(
-            driver(&broken).preflight().await.expect_err("probe failure"),
+            driver(&broken)
+                .preflight()
+                .await
+                .expect_err("probe failure"),
             "Failed to probe container tools: bash: xdotool: not found\n"
         );
 
@@ -1616,7 +1765,10 @@ mod os_control_linux_desktop_driver {
 
         let no_exit = RecordingShell::new(false, "", None);
         assert_eq!(
-            driver(&no_exit).screenshot().await.expect_err("no exit code"),
+            driver(&no_exit)
+                .screenshot()
+                .await
+                .expect_err("no exit code"),
             "os.screenshot failed inside the sandbox (exit undefined): no image produced"
         );
     }

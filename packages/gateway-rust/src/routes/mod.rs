@@ -80,3 +80,7 @@ pub mod mobile;
 pub mod providers;
 pub mod terminals;
 pub mod voice;
+
+pub mod team_chat;
+
+pub mod update;

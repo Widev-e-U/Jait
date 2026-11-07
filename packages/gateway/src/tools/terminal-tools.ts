@@ -1642,6 +1642,13 @@ export function createTerminalRunTool(
           };
         }
 
+        // Preserve foreground results in the same session-scoped history as yielded commands.
+        backgroundCommandMonitor.recordCompletedExecution(context.sessionId, {
+          terminalId, executionId: context.actionId,
+          status: result.timedOut ? "timed_out" : result.exitCode === 0 && !result.interactionRequired ? "completed" : "failed",
+          exitCode: result.exitCode, output: result.output.slice(-16_000), durationMs: Date.now() - startedAt,
+        });
+
         // 3. Build response
         // Mark as failed if exit code != 0 or timed out.
         // Also detect likely-failed commands that exit 0 but have short output
@@ -1711,6 +1718,7 @@ export function createTerminalRunTool(
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             terminalId,
+            executionId: context.actionId,
             outputOffset,
             outputEndOffset,
             needsInteraction,

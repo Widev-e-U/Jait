@@ -24,11 +24,45 @@ use tokio::{
     time::Instant,
 };
 
+/// Admission keys identify the durable history, not a replaceable provider session.
+/// All writers for a history must use the same manager and canonical key.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum TurnStoreKey {
+    Chat(String),
+    Thread(String),
+}
+
+/// An authenticated, owned handle to one durable history. Implementations must
+/// revalidate authority on every storage operation and choose the same key for
+/// all handles that write the same history. Never derive identity from model input.
+/// The owned handle must preserve identity and share the same underlying history.
+pub trait SessionTurnStore: TurnPersistence + Send + Sync + 'static {
+    fn identity(&self) -> (&str, &str);
+    fn admission_key(&self) -> TurnStoreKey;
+    fn owned_handle(&self) -> Arc<dyn SessionTurnStore>;
+    fn load(&self) -> BoxFuture<'_, Result<Vec<TurnEvent>, String>>;
+}
+
+impl SessionTurnStore for SqliteTurnStore {
+    fn identity(&self) -> (&str, &str) {
+        SqliteTurnStore::identity(self)
+    }
+    fn admission_key(&self) -> TurnStoreKey {
+        TurnStoreKey::Chat(SqliteTurnStore::identity(self).1.to_owned())
+    }
+    fn owned_handle(&self) -> Arc<dyn SessionTurnStore> {
+        Arc::new(self.clone())
+    }
+    fn load(&self) -> BoxFuture<'_, Result<Vec<TurnEvent>, String>> {
+        Box::pin(SqliteTurnStore::load(self))
+    }
+}
+
 pub struct SessionTurn<'a> {
     pub config: TurnConfig,
     pub provider: &'a dyn TurnProvider,
     pub tools: &'a dyn TurnTools,
-    pub store: &'a SqliteTurnStore,
+    pub store: &'a dyn SessionTurnStore,
     pub context: &'a ToolExecutionContext,
     pub user_content: String,
     pub sink: EventSink,
@@ -42,8 +76,9 @@ pub enum SessionTurnError {
     Turn(TurnError),
 }
 struct Admission {
-    sessions: Mutex<HashSet<String>>,
+    sessions: Mutex<HashSet<TurnStoreKey>>,
     permits: Arc<Semaphore>,
+    drained: tokio::sync::Notify,
 }
 #[derive(Clone)]
 pub struct SessionTurnManager(Arc<Admission>);
@@ -52,20 +87,36 @@ impl SessionTurnManager {
         Self(Arc::new(Admission {
             sessions: Mutex::new(HashSet::new()),
             permits: Arc::new(Semaphore::new(usize::from(max_in_flight.get()))),
+            drained: tokio::sync::Notify::new(),
         }))
+    }
+    /// Wait for all admitted work, including detached storage tasks, to finish.
+    /// The caller must first prevent new admissions; otherwise an empty snapshot
+    /// cannot establish that the manager will remain drained.
+    pub async fn wait_drained(&self) {
+        loop {
+            let notified = self.0.drained.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
+            if self.0.sessions.lock().unwrap().is_empty() {
+                return;
+            }
+            notified.await;
+        }
     }
     /// The lease covers storage load, generation, tools and every durable write.
     /// Dropping the caller retains admission until any dispatched store operation finishes.
     /// It never retries model tool ids.
     pub async fn run(&self, mut request: SessionTurn<'_>) -> Result<TurnOutcome, SessionTurnError> {
-        let (owner, session) = request.store.identity();
+        let handle = request.store.owned_handle();
+        let (owner, session) = handle.identity();
         if owner != request.context.user_id || session != request.context.session_id {
             return Err(SessionTurnError::ContextMismatch);
         }
         request.config.validate().map_err(SessionTurnError::Turn)?;
-        let lease = Arc::new(self.acquire(session)?);
+        let lease = Arc::new(self.acquire_key(handle.admission_key())?);
         let store = LeasedStore {
-            store: request.store.clone(),
+            store: handle,
             lease,
             serial: Arc::new(tokio::sync::Mutex::new(())),
             failed: Arc::new(AtomicBool::new(false)),
@@ -107,9 +158,13 @@ impl SessionTurnManager {
         result
     }
 
+    #[cfg(test)]
     fn acquire(&self, session: &str) -> Result<SessionLease, SessionTurnError> {
+        self.acquire_key(TurnStoreKey::Chat(session.to_owned()))
+    }
+    fn acquire_key(&self, session: TurnStoreKey) -> Result<SessionLease, SessionTurnError> {
         let mut sessions = self.0.sessions.lock().unwrap();
-        if sessions.contains(session) {
+        if sessions.contains(&session) {
             return Err(SessionTurnError::SessionBusy);
         }
         let permit = self
@@ -118,10 +173,10 @@ impl SessionTurnManager {
             .clone()
             .try_acquire_owned()
             .map_err(|_| SessionTurnError::Capacity)?;
-        sessions.insert(session.to_owned());
+        sessions.insert(session.clone());
         Ok(SessionLease {
             admission: self.0.clone(),
-            session: session.to_owned(),
+            session,
             _permit: permit,
         })
     }
@@ -129,7 +184,7 @@ impl SessionTurnManager {
 // Detached store tasks keep admission until the worker replies, even if the turn
 // times out or its caller is dropped. A stuck database consumes bounded capacity.
 struct LeasedStore {
-    store: SqliteTurnStore,
+    store: Arc<dyn SessionTurnStore>,
     lease: Arc<SessionLease>,
     serial: Arc<tokio::sync::Mutex<()>>,
     failed: Arc<AtomicBool>,
@@ -184,6 +239,10 @@ impl TurnPersistence for LeasedStore {
             ),
         )
     }
+    fn check_authority(&self) -> BoxFuture<'_, Result<(), String>> {
+        let store = self.store.clone();
+        Box::pin(self.supervised(async move { store.check_authority().await }))
+    }
     fn append(&self, event: TurnEvent) -> BoxFuture<'_, Result<(), String>> {
         let store = self.store.clone();
         Box::pin(self.supervised(async move { store.append(event).await }))
@@ -191,7 +250,7 @@ impl TurnPersistence for LeasedStore {
 }
 struct SessionLease {
     admission: Arc<Admission>,
-    session: String,
+    session: TurnStoreKey,
     _permit: OwnedSemaphorePermit,
 }
 impl Drop for SessionLease {
@@ -201,6 +260,7 @@ impl Drop for SessionLease {
             .lock()
             .unwrap()
             .remove(&self.session);
+        self.admission.drained.notify_waiters();
     }
 }
 
@@ -380,7 +440,7 @@ mod tests {
         let (auth, store, _) = fixture();
         let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
         let leased = LeasedStore {
-            store,
+            store: Arc::new(store),
             lease: Arc::new(manager.acquire("session").unwrap()),
             serial: Arc::new(tokio::sync::Mutex::new(())),
             failed: Arc::new(AtomicBool::new(false)),
@@ -437,7 +497,7 @@ mod tests {
         .unwrap();
         let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
         let leased = LeasedStore {
-            store: store.clone(),
+            store: Arc::new(store.clone()),
             lease: Arc::new(manager.acquire("session").unwrap()),
             serial: Arc::new(tokio::sync::Mutex::new(())),
             failed: Arc::new(AtomicBool::new(false)),
@@ -487,5 +547,137 @@ mod tests {
         ));
         drop(lease);
         assert!(manager.acquire("two").is_ok());
+    }
+    #[derive(Clone)]
+    struct FocusedThreadStore {
+        owner: String,
+        session: String,
+        thread: String,
+        load_error: bool,
+        authority_error: bool,
+    }
+    impl TurnPersistence for FocusedThreadStore {
+        fn check_capacity(
+            &self,
+            _: usize,
+            _: usize,
+            _: usize,
+        ) -> BoxFuture<'_, Result<(), String>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn append(&self, _: TurnEvent) -> BoxFuture<'_, Result<(), String>> {
+            Box::pin(async { Ok(()) })
+        }
+        fn check_authority(&self) -> BoxFuture<'_, Result<(), String>> {
+            Box::pin(async move {
+                if self.authority_error {
+                    Err("revoked".into())
+                } else {
+                    Ok(())
+                }
+            })
+        }
+    }
+    impl SessionTurnStore for FocusedThreadStore {
+        fn identity(&self) -> (&str, &str) {
+            (&self.owner, &self.session)
+        }
+        fn admission_key(&self) -> TurnStoreKey {
+            TurnStoreKey::Thread(self.thread.clone())
+        }
+        fn owned_handle(&self) -> Arc<dyn SessionTurnStore> {
+            Arc::new(self.clone())
+        }
+        fn load(&self) -> BoxFuture<'_, Result<Vec<TurnEvent>, String>> {
+            Box::pin(async move {
+                if self.load_error {
+                    Err("fixture load failed".into())
+                } else {
+                    Ok(vec![])
+                }
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn focused_store_domains_exclude_same_history_and_share_capacity() {
+        let (auth, chat, context) = fixture();
+        let manager = SessionTurnManager::new(NonZeroU16::new(2).unwrap());
+        let thread = FocusedThreadStore {
+            owner: "owner".into(),
+            session: "session".into(),
+            thread: "session".into(),
+            load_error: false,
+            authority_error: false,
+        };
+        let chat_lease = manager.acquire_key(chat.admission_key()).unwrap();
+        let thread_lease = manager.acquire_key(thread.admission_key()).unwrap();
+        let mut replacement = thread.clone();
+        replacement.session = "replacement".into();
+        assert!(matches!(
+            manager.acquire_key(replacement.admission_key()),
+            Err(SessionTurnError::SessionBusy)
+        ));
+        assert!(matches!(
+            manager.acquire_key(TurnStoreKey::Thread("other".into())),
+            Err(SessionTurnError::Capacity)
+        ));
+        drop(thread_lease);
+        drop(chat_lease);
+        let mut req = request(&chat, &context, &FinishProvider);
+        req.store = &thread;
+        assert!(manager.run(req).await.is_ok());
+        auth.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn focused_store_context_and_load_failure_are_enforced() {
+        let (auth, chat, context) = fixture();
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let mut thread = FocusedThreadStore {
+            owner: "other".into(),
+            session: "session".into(),
+            thread: "thread".into(),
+            load_error: true,
+            authority_error: false,
+        };
+        let mut req = request(&chat, &context, &FinishProvider);
+        req.store = &thread;
+        assert!(matches!(
+            manager.run(req).await,
+            Err(SessionTurnError::ContextMismatch)
+        ));
+        thread.owner = "owner".into();
+        let mut req = request(&chat, &context, &FinishProvider);
+        req.store = &thread;
+        assert!(matches!(
+            manager.run(req).await,
+            Err(SessionTurnError::Storage(_))
+        ));
+        assert!(manager.acquire_key(thread.admission_key()).is_ok());
+        auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn focused_store_authority_override_is_supervised() {
+        let manager = SessionTurnManager::new(NonZeroU16::new(1).unwrap());
+        let thread = FocusedThreadStore {
+            owner: "owner".into(),
+            session: "session".into(),
+            thread: "thread".into(),
+            load_error: false,
+            authority_error: true,
+        };
+        let leased = LeasedStore {
+            store: Arc::new(thread),
+            lease: Arc::new(
+                manager
+                    .acquire_key(TurnStoreKey::Thread("thread".into()))
+                    .unwrap(),
+            ),
+            serial: Arc::new(tokio::sync::Mutex::new(())),
+            failed: Arc::new(AtomicBool::new(false)),
+        };
+        assert_eq!(leased.check_authority().await.unwrap_err(), "revoked");
+        assert!(leased.failed.load(Ordering::Acquire));
     }
 }

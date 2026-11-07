@@ -25,3 +25,8 @@ pub mod chat_events;
 
 #[cfg(test)]
 mod chat_application_tests;
+
+pub mod api_contracts;
+
+/// Inactive WebSocket transport; callers must supply trusted authority and supervise shutdown.
+pub mod ws_transport;

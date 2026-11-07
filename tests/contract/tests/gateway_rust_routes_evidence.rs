@@ -4,13 +4,15 @@
 //! HTTP to it, so routing, method dispatch, auth gating, status codes and body
 //! shapes are all exercised through the public `jait_gateway` API only.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub const SECRET: &str = "contract-test-secret-0123456789abcdef0123456789";
 pub const OWNER: &str = "u-owner";
 
 /// Auth state backed by a freshly migrated in-memory database.
-pub fn auth_seeded(seed: impl FnOnce(&rusqlite::Connection)) -> jait_gateway::routes::auth::AuthState {
+pub fn auth_seeded(
+    seed: impl FnOnce(&rusqlite::Connection),
+) -> jait_gateway::routes::auth::AuthState {
     let db = rusqlite::Connection::open_in_memory().unwrap();
     jait_gateway::db::migrate_database(&db).unwrap();
     db.execute(
@@ -63,7 +65,13 @@ impl Api {
         }
     }
 
-    pub async fn send(&self, method: &str, path: &str, bearer: Option<&str>, body: Option<Value>) -> (u16, Value) {
+    pub async fn send(
+        &self,
+        method: &str,
+        path: &str,
+        bearer: Option<&str>,
+        body: Option<Value>,
+    ) -> (u16, Value) {
         let mut req = self
             .client
             .request(method.parse().unwrap(), format!("{}{}", self.base, path));
@@ -86,7 +94,8 @@ impl Api {
     }
 
     pub async fn with(&self, method: &str, path: &str, body: Value) -> (u16, Value) {
-        self.send(method, path, Some(&self.bearer), Some(body)).await
+        self.send(method, path, Some(&self.bearer), Some(body))
+            .await
     }
 
     /// Authenticated request carrying extra headers (used for Origin checks).
@@ -145,7 +154,9 @@ mod plans {
     #[tokio::test]
     async fn unauthenticated_list_is_rejected() {
         let server = api().await;
-        let (status, body) = server.send("GET", "/api/repos/repo-1/plans", None, None).await;
+        let (status, body) = server
+            .send("GET", "/api/repos/repo-1/plans", None, None)
+            .await;
         assert_eq!(status, 401);
         assert_eq!(body, json!({"detail": "login_required"}));
         server.stop().await;
@@ -154,7 +165,9 @@ mod plans {
     #[tokio::test]
     async fn create_defaults_title_and_status() {
         let server = api().await;
-        let (status, body) = server.with("POST", "/api/repos/repo-1/plans", json!({})).await;
+        let (status, body) = server
+            .with("POST", "/api/repos/repo-1/plans", json!({}))
+            .await;
         assert_eq!(status, 201);
         let plan = &body["plan"];
         assert_eq!(plan["title"], json!("New Plan"));
@@ -170,7 +183,11 @@ mod plans {
     async fn created_plan_is_readable_and_listed() {
         let server = api().await;
         let (_, created) = server
-            .with("POST", "/api/repos/repo-1/plans", json!({"title": "Ship it"}))
+            .with(
+                "POST",
+                "/api/repos/repo-1/plans",
+                json!({"title": "Ship it"}),
+            )
             .await;
         let id = created["plan"]["id"].as_str().unwrap().to_string();
 
@@ -208,11 +225,17 @@ mod plans {
     #[tokio::test]
     async fn patch_ignores_unknown_status_and_delete_removes() {
         let server = api().await;
-        let (_, created) = server.with("POST", "/api/repos/repo-1/plans", json!({})).await;
+        let (_, created) = server
+            .with("POST", "/api/repos/repo-1/plans", json!({}))
+            .await;
         let id = created["plan"]["id"].as_str().unwrap().to_string();
 
         let (status, body) = server
-            .with("PATCH", &format!("/api/plans/{id}"), json!({"status": "bogus", "title": "Renamed"}))
+            .with(
+                "PATCH",
+                &format!("/api/plans/{id}"),
+                json!({"status": "bogus", "title": "Renamed"}),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(body["plan"]["title"], json!("Renamed"));
@@ -228,7 +251,6 @@ mod plans {
         server.stop().await;
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // routes/preview.ts -> packages/gateway-rust/src/routes/preview.rs
@@ -270,7 +292,12 @@ mod preview {
             assert_eq!(body, json!({"detail": "login_required"}), "path {path}");
         }
         let (status, body) = server
-            .send("POST", "/api/preview/start", None, Some(json!({"sessionId": "s"})))
+            .send(
+                "POST",
+                "/api/preview/start",
+                None,
+                Some(json!({"sessionId": "s"})),
+            )
             .await;
         assert_eq!(status, 401);
         assert_eq!(body, json!({"detail": "login_required"}));
@@ -315,12 +342,20 @@ mod preview {
 
         // sessionId is capped at 4096 chars.
         let (status, body) = server
-            .with("POST", "/api/preview/start", json!({"sessionId": "x".repeat(4097)}))
+            .with(
+                "POST",
+                "/api/preview/start",
+                json!({"sessionId": "x".repeat(4097)}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("Invalid sessionId"));
         let (status, _) = server
-            .with("POST", "/api/preview/start", json!({"sessionId": "x".repeat(4096)}))
+            .with(
+                "POST",
+                "/api/preview/start",
+                json!({"sessionId": "x".repeat(4096)}),
+            )
             .await;
         assert_ne!(status, 400, "4096-char sessionId must pass validation");
 
@@ -489,7 +524,10 @@ mod projects {
             .await;
         assert_eq!(status, 409);
         assert_eq!(body["error"], json!("ROOT_PATH_IN_USE"));
-        assert_eq!(body["details"], json!("\"Alpha\" already uses that folder."));
+        assert_eq!(
+            body["details"],
+            json!("\"Alpha\" already uses that folder.")
+        );
 
         // A different root is accepted.
         let (status, _) = server
@@ -549,13 +587,17 @@ mod projects {
         assert_eq!(status, 200);
         assert_eq!(body["id"], json!(id));
 
-        let (status, body) = server.ok("GET", &format!("/api/projects/{id}/subtree")).await;
+        let (status, body) = server
+            .ok("GET", &format!("/api/projects/{id}/subtree"))
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["projectId"], json!(id));
         assert_eq!(body["descendantIds"], json!([]));
         assert_eq!(body["descendantCount"], json!(0));
 
-        let (status, body) = server.ok("GET", &format!("/api/projects/{id}/sessions")).await;
+        let (status, body) = server
+            .ok("GET", &format!("/api/projects/{id}/sessions"))
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["sessions"], json!([]));
 
@@ -582,10 +624,8 @@ mod project {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "jait-project-{tag}-{}-{nanos}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("jait-project-{tag}-{}-{nanos}", std::process::id()));
         std::fs::create_dir_all(&path).unwrap();
         path.to_string_lossy().into_owned()
     }
@@ -830,7 +870,9 @@ mod project {
         assert_eq!(matches[0]["content"], json!("hello needle"));
 
         // Case-insensitive filename search finds the nested file, not a.txt.
-        let (status, body) = server.ok("GET", "/api/project/search?query=B.TXT&mode=files").await;
+        let (status, body) = server
+            .ok("GET", "/api/project/search?query=B.TXT&mode=files")
+            .await;
         assert_eq!(status, 200, "file search body: {body}");
         assert_eq!(body["mode"], json!("files"));
         let files = body["files"].as_array().expect("files");
@@ -862,7 +904,12 @@ mod repositories {
         assert_eq!(body, json!({"detail": "login_required"}));
 
         let (status, body) = server
-            .send("POST", "/api/repos", None, Some(json!({"name": "x", "localPath": "/tmp/x"})))
+            .send(
+                "POST",
+                "/api/repos",
+                None,
+                Some(json!({"name": "x", "localPath": "/tmp/x"})),
+            )
             .await;
         assert_eq!(status, 401);
         assert_eq!(body, json!({"detail": "login_required"}));
@@ -876,7 +923,9 @@ mod repositories {
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("name and localPath are required"));
 
-        let (status, body) = server.with("POST", "/api/repos", json!({"name": "Alpha"})).await;
+        let (status, body) = server
+            .with("POST", "/api/repos", json!({"name": "Alpha"}))
+            .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("name and localPath are required"));
 
@@ -892,7 +941,11 @@ mod repositories {
     async fn created_repository_is_listed_once_after_reposting_same_local_path() {
         let server = server().await;
         let (status, body) = server
-            .with("POST", "/api/repos", json!({"name": "Alpha", "localPath": "/tmp/alpha"}))
+            .with(
+                "POST",
+                "/api/repos",
+                json!({"name": "Alpha", "localPath": "/tmp/alpha"}),
+            )
             .await;
         assert_eq!(status, 200, "create body: {body}");
         let repo = body["repo"].clone();
@@ -904,7 +957,11 @@ mod repositories {
         // Re-posting the same local path reuses the existing row (same id, original name)
         // instead of duplicating it.
         let (status, body) = server
-            .with("POST", "/api/repos", json!({"name": "Alpha Renamed", "localPath": "/tmp/alpha"}))
+            .with(
+                "POST",
+                "/api/repos",
+                json!({"name": "Alpha Renamed", "localPath": "/tmp/alpha"}),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(body["repo"]["id"], json!(id));
@@ -930,7 +987,10 @@ mod repositories {
             .with("PATCH", "/api/repos/missing", json!({"name": "Beta"}))
             .await;
         assert_eq!(status, 404);
-        assert_eq!(body["error"], json!({"error": "Repository not found"})["error"]);
+        assert_eq!(
+            body["error"],
+            json!({"error": "Repository not found"})["error"]
+        );
 
         let (status, body) = server.ok("DELETE", "/api/repos/missing").await;
         assert_eq!(status, 404);
@@ -954,7 +1014,11 @@ mod repo_proposals {
             .merge(RepoProposalRoutes::new(state.clone()).router());
         let server = Api::start(router, state).await;
         let (status, body) = server
-            .with("POST", "/api/repos", json!({"name": "Alpha", "localPath": "/tmp/alpha"}))
+            .with(
+                "POST",
+                "/api/repos",
+                json!({"name": "Alpha", "localPath": "/tmp/alpha"}),
+            )
             .await;
         assert_eq!(status, 200, "repo create: {body}");
         let id = body["repo"]["id"].as_str().unwrap().to_string();
@@ -964,7 +1028,9 @@ mod repo_proposals {
     #[tokio::test]
     async fn empty_collection_and_required_message() {
         let (server, id) = server().await;
-        let (status, body) = server.ok("GET", &format!("/api/repos/{id}/proposals")).await;
+        let (status, body) = server
+            .ok("GET", &format!("/api/repos/{id}/proposals"))
+            .await;
         assert_eq!(status, 200, "list body: {body}");
         assert_eq!(body["proposals"], json!([]));
 
@@ -975,7 +1041,11 @@ mod repo_proposals {
         assert_eq!(body["error"], json!("message is required"));
 
         let (status, body) = server
-            .with("POST", &format!("/api/repos/{id}/proposals"), json!({"message": "   "}))
+            .with(
+                "POST",
+                &format!("/api/repos/{id}/proposals"),
+                json!({"message": "   "}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("message is required"));
@@ -998,7 +1068,9 @@ mod repo_proposals {
         assert_eq!(proposal["priority"], json!("high"));
         assert_eq!(proposal["repoId"], json!(id));
 
-        let (status, body) = server.ok("GET", &format!("/api/repos/{id}/proposals")).await;
+        let (status, body) = server
+            .ok("GET", &format!("/api/repos/{id}/proposals"))
+            .await;
         assert_eq!(status, 200);
         let list = body["proposals"].as_array().expect("proposals");
         assert_eq!(list.len(), 1);
@@ -1019,13 +1091,21 @@ mod repo_proposals {
         let pid = created["proposal"]["id"].as_str().unwrap().to_string();
 
         let (status, body) = server
-            .with("PATCH", &format!("/api/repo-proposals/{pid}"), json!({"priority": "urgent"}))
+            .with(
+                "PATCH",
+                &format!("/api/repo-proposals/{pid}"),
+                json!({"priority": "urgent"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("invalid priority"));
 
         let (status, body) = server
-            .with("PATCH", &format!("/api/repo-proposals/{pid}"), json!({"status": "bogus"}))
+            .with(
+                "PATCH",
+                &format!("/api/repo-proposals/{pid}"),
+                json!({"status": "bogus"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("invalid status"));
@@ -1057,7 +1137,11 @@ mod repo_proposals {
         assert_eq!(body, json!({"ok": true}));
 
         let (status, body) = server
-            .with("PATCH", &format!("/api/repo-proposals/{pid}"), json!({"status": "open"}))
+            .with(
+                "PATCH",
+                &format!("/api/repo-proposals/{pid}"),
+                json!({"status": "open"}),
+            )
             .await;
         assert_eq!(status, 404);
         assert_eq!(body["error"], json!("Todo not found"));
@@ -1143,13 +1227,21 @@ mod threads {
     async fn patch_validates_enums_then_updates_and_delete_removes() {
         let server = server().await;
         let (status, body) = server
-            .with("PATCH", "/api/threads/t-new", json!({"runtimeMode": "root"}))
+            .with(
+                "PATCH",
+                "/api/threads/t-new",
+                json!({"runtimeMode": "root"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("Invalid runtime mode"));
 
         let (status, body) = server
-            .with("PATCH", "/api/threads/t-new", json!({"personaAgentId": "missing"}))
+            .with(
+                "PATCH",
+                "/api/threads/t-new",
+                json!({"personaAgentId": "missing"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body["error"], json!("Agent profile not found"));
@@ -1187,8 +1279,8 @@ mod threads {
 // ---------------------------------------------------------------------------
 mod mcp_server {
     use super::*;
+    use jait_gateway::routes::mcp_server::{McpToolContext, handle_request, parse_tool_set};
     use std::collections::HashMap;
-    use jait_gateway::routes::mcp_server::{handle_request, parse_tool_set, McpToolContext};
 
     fn tool_set() -> jait_gateway::routes::mcp_server::ToolSet {
         parse_tool_set(&HashMap::new())
@@ -1208,13 +1300,22 @@ mod mcp_server {
         assert_eq!(result["jsonrpc"], json!("2.0"));
         assert_eq!(result["id"], json!(7));
         assert_eq!(result["result"]["protocolVersion"], json!("2025-06-18"));
-        assert_eq!(result["result"]["serverInfo"]["name"], json!("jait-gateway"));
-        assert_eq!(result["result"]["capabilities"]["tools"], json!({"listChanged": false}));
+        assert_eq!(
+            result["result"]["serverInfo"]["name"],
+            json!("jait-gateway")
+        );
+        assert_eq!(
+            result["result"]["capabilities"]["tools"],
+            json!({"listChanged": false})
+        );
         assert_eq!(
             result["result"]["capabilities"]["resources"],
             json!({"subscribe": false, "listChanged": false})
         );
-        assert_eq!(result["result"]["capabilities"]["prompts"], json!({"listChanged": false}));
+        assert_eq!(
+            result["result"]["capabilities"]["prompts"],
+            json!({"listChanged": false})
+        );
     }
 
     #[tokio::test]
@@ -1259,7 +1360,10 @@ mod mcp_server {
         .await;
         assert_eq!(result["id"], json!("a1"));
         assert_eq!(result["error"]["code"], json!(-32601));
-        assert_eq!(result["error"]["message"], json!("Method not found: does/not/exist"));
+        assert_eq!(
+            result["error"]["message"],
+            json!("Method not found: does/not/exist")
+        );
     }
 
     #[tokio::test]
@@ -1282,7 +1386,10 @@ mod mcp_server {
             tool_set(),
         )
         .await;
-        assert_eq!(initialized, json!({"jsonrpc": "2.0", "id": 4, "result": {}}));
+        assert_eq!(
+            initialized,
+            json!({"jsonrpc": "2.0", "id": 4, "result": {}})
+        );
     }
 
     #[tokio::test]
@@ -1325,7 +1432,9 @@ mod pull_requests {
     #[tokio::test]
     async fn list_requires_login() {
         let server = api(seeded()).await;
-        let (status, body) = server.send("GET", "/api/repos/repo-1/pull-requests", None, None).await;
+        let (status, body) = server
+            .send("GET", "/api/repos/repo-1/pull-requests", None, None)
+            .await;
         assert_eq!(status, 401, "body={body}");
         assert_eq!(body, json!({"detail": "login_required"}));
         server.stop().await;
@@ -1344,12 +1453,22 @@ mod pull_requests {
         let server = api(seeded()).await;
         let (status, body) = server.ok("GET", "/api/repos/repo-1/pull-requests").await;
         assert_eq!(status, 503, "body={body}");
-        assert_eq!(body, json!({"error": "GitHub pull request service is unavailable"}));
+        assert_eq!(
+            body,
+            json!({"error": "GitHub pull request service is unavailable"})
+        );
         let (patch_status, patch_body) = server
-            .with("PATCH", "/api/repos/repo-1/pull-requests/7", json!({"title": "x"}))
+            .with(
+                "PATCH",
+                "/api/repos/repo-1/pull-requests/7",
+                json!({"title": "x"}),
+            )
             .await;
         assert_eq!(patch_status, 503, "body={patch_body}");
-        assert_eq!(patch_body, json!({"error": "GitHub pull request service is unavailable"}));
+        assert_eq!(
+            patch_body,
+            json!({"error": "GitHub pull request service is unavailable"})
+        );
         server.stop().await;
     }
 }
@@ -1365,7 +1484,10 @@ mod voice {
 
     fn json_headers() -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(axum::http::header::CONTENT_TYPE, "application/json".parse().unwrap());
+        headers.insert(
+            axum::http::header::CONTENT_TYPE,
+            "application/json".parse().unwrap(),
+        );
         headers
     }
 
@@ -1375,17 +1497,26 @@ mod voice {
 
     async fn read(response: axum::response::Response) -> (u16, Value) {
         let status = response.status().as_u16();
-        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+            .await
+            .unwrap();
         if bytes.is_empty() {
             return (status, Value::Null);
         }
-        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
     }
 
     #[tokio::test]
     async fn transcribe_without_input_is_a_validation_error() {
-        let (status, body) =
-            read(routes().post_transcribe(json_headers(), Body::from("{}")).await).await;
+        let (status, body) = read(
+            routes()
+                .post_transcribe(json_headers(), Body::from("{}"))
+                .await,
+        )
+        .await;
         assert_eq!(status, 400, "body={body}");
         assert_eq!(
             body,
@@ -1398,21 +1529,34 @@ mod voice {
         let (status, body) =
             read(routes().post_speak(json_headers(), Body::from("{}")).await).await;
         assert_eq!(status, 400, "body={body}");
-        assert_eq!(body, json!({"error": "VALIDATION_ERROR", "details": "text is required"}));
+        assert_eq!(
+            body,
+            json!({"error": "VALIDATION_ERROR", "details": "text is required"})
+        );
         let (blank_status, blank_body) = read(
             routes()
-                .post_speak(json_headers(), Body::from(json!({"text": "   "}).to_string()))
+                .post_speak(
+                    json_headers(),
+                    Body::from(json!({"text": "   "}).to_string()),
+                )
                 .await,
         )
         .await;
         assert_eq!(blank_status, 400, "body={blank_body}");
-        assert_eq!(blank_body, json!({"error": "VALIDATION_ERROR", "details": "text is required"}));
+        assert_eq!(
+            blank_body,
+            json!({"error": "VALIDATION_ERROR", "details": "text is required"})
+        );
     }
 
     #[tokio::test]
     async fn missing_json_content_type_is_rejected_as_415() {
-        let (status, body) =
-            read(routes().post_speak(HeaderMap::new(), Body::from("{}")).await).await;
+        let (status, body) = read(
+            routes()
+                .post_speak(HeaderMap::new(), Body::from("{}"))
+                .await,
+        )
+        .await;
         assert_eq!(status, 415, "body={body}");
         assert_eq!(
             body,
@@ -1427,8 +1571,12 @@ mod voice {
 
     #[tokio::test]
     async fn audio_transcription_without_providers_is_501() {
-        let (status, body) =
-            read(routes().post_transcribe_audio(json_headers(), Body::from("{}")).await).await;
+        let (status, body) = read(
+            routes()
+                .post_transcribe_audio(json_headers(), Body::from("{}"))
+                .await,
+        )
+        .await;
         assert_eq!(status, 501, "body={body}");
         assert_eq!(
             body,
@@ -1446,24 +1594,31 @@ mod browser_devtools {
     use axum::extract::State;
     use axum::http::HeaderMap;
     use jait_gateway::routes::browser_devtools::{
-        valid_endpoint, valid_target_id, validate_asset, BrowserDevToolsState,
+        BrowserDevToolsState, valid_endpoint, valid_target_id, validate_asset,
     };
     use jait_gateway::security::http_auth::AuthUser;
 
     async fn read(response: axum::response::Response) -> (u16, Value) {
         let status = response.status().as_u16();
-        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+            .await
+            .unwrap();
         if bytes.is_empty() {
             return (status, Value::Null);
         }
-        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
     }
 
     #[tokio::test]
     async fn create_requires_login() {
         let state = BrowserDevToolsState::new(auth(), SECRET);
-        let (status, body) =
-            read(BrowserDevToolsState::create(State(state), HeaderMap::new(), Body::from("{}")).await).await;
+        let (status, body) = read(
+            BrowserDevToolsState::create(State(state), HeaderMap::new(), Body::from("{}")).await,
+        )
+        .await;
         assert_eq!(status, 401, "body={body}");
         assert_eq!(body, json!({"detail": "login_required"}));
     }
@@ -1471,7 +1626,10 @@ mod browser_devtools {
     #[tokio::test]
     async fn revoking_unknown_grant_is_not_found() {
         let state = BrowserDevToolsState::new(auth(), SECRET);
-        let user = AuthUser { id: OWNER.to_string(), username: "owner".to_string() };
+        let user = AuthUser {
+            id: OWNER.to_string(),
+            username: "owner".to_string(),
+        };
         let (status, body) = read(state.revoke_for(&user, "grant-missing")).await;
         assert_eq!(status, 404, "body={body}");
         assert_eq!(body, json!({"error": "DevTools panel not found"}));
@@ -1500,16 +1658,18 @@ mod providers {
     use super::*;
     use axum::response::Response;
     use jait_gateway::routes::providers::{
-        account_node, is_secret_key, parse_fresh, parse_refresh_mode, provider_entry, redact_text,
-        redact_value, valid_account_create, valid_account_label, valid_code_input,
-        valid_ollama_api_key, valid_ollama_session, validate_base_url, RefreshMode,
-        GATEWAY_NODE_NAME, MAX_CREDENTIAL_INPUT, ROUTE_TABLE,
+        GATEWAY_NODE_NAME, MAX_CREDENTIAL_INPUT, ROUTE_TABLE, RefreshMode, account_node,
+        is_secret_key, parse_fresh, parse_refresh_mode, provider_entry, redact_text, redact_value,
+        valid_account_create, valid_account_label, valid_code_input, valid_ollama_api_key,
+        valid_ollama_session, validate_base_url,
     };
 
     async fn error_of(result: Result<impl std::fmt::Debug, Response>) -> (u16, Value) {
         let response = result.expect_err("expected a refusal");
         let status = response.status().as_u16();
-        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+            .await
+            .unwrap();
         (status, serde_json::from_slice(&bytes).unwrap())
     }
 
@@ -1548,7 +1708,10 @@ mod providers {
 
     #[tokio::test]
     async fn code_and_label_validators_trim_and_reject() {
-        assert_eq!(valid_code_input(Some(&json!("  ab-12  "))).unwrap(), "ab-12");
+        assert_eq!(
+            valid_code_input(Some(&json!("  ab-12  "))).unwrap(),
+            "ab-12"
+        );
         assert_eq!(
             error_of(valid_code_input(Some(&json!("   ")))).await,
             (400, json!({"error": "Missing or empty code"}))
@@ -1563,7 +1726,10 @@ mod providers {
             (400, json!({"error": "Code is too long"}))
         );
 
-        assert_eq!(valid_account_label(Some(&json!(" My work "))).unwrap(), "My work");
+        assert_eq!(
+            valid_account_label(Some(&json!(" My work "))).unwrap(),
+            "My work"
+        );
         assert_eq!(
             error_of(valid_account_label(Some(&json!("")))).await,
             (400, json!({"error": "Missing or empty label"}))
@@ -1577,7 +1743,10 @@ mod providers {
 
     #[tokio::test]
     async fn ollama_credential_validators() {
-        assert_eq!(valid_ollama_api_key(Some(&json!("  key-1 "))).unwrap(), "key-1");
+        assert_eq!(
+            valid_ollama_api_key(Some(&json!("  key-1 "))).unwrap(),
+            "key-1"
+        );
         assert_eq!(
             error_of(valid_ollama_api_key(Some(&json!("  ")))).await,
             (400, json!({"error": "Enter an Ollama Cloud API key."}))
@@ -1619,25 +1788,29 @@ mod providers {
         );
         assert_eq!(
             error_of(validate_base_url("http://user:pw@example.com")).await,
-            (400, json!({"error": "Base URL must not contain credentials"}))
+            (
+                400,
+                json!({"error": "Base URL must not contain credentials"})
+            )
         );
     }
 
     #[tokio::test]
-    async fn account_creation_and_provider_entries_are_shaped_and_redacted() -> Result<(), Response> {
+    async fn account_creation_and_provider_entries_are_shaped_and_redacted() -> Result<(), Response>
+    {
         let body = json!({"providerType": " anthropic ", "label": null});
         let (provider_type, label) = valid_account_create(body.as_object().unwrap())?;
         assert_eq!(provider_type, "anthropic");
         assert_eq!(label, "");
 
         let missing = json!({"label": "x"});
-        let (status, payload) =
-            error_of(valid_account_create(missing.as_object().unwrap())).await;
+        let (status, payload) = error_of(valid_account_create(missing.as_object().unwrap())).await;
         assert_eq!(status, 400);
         assert_eq!(payload, json!({"error": "Missing provider type"}));
 
         let bad_label = json!({"providerType": "ollama", "label": 5});
-        let (status, payload) = error_of(valid_account_create(bad_label.as_object().unwrap())).await;
+        let (status, payload) =
+            error_of(valid_account_create(bad_label.as_object().unwrap())).await;
         assert_eq!(status, 400);
         assert_eq!(payload, json!({"error": "Invalid label"}));
 
@@ -1695,10 +1868,10 @@ mod providers {
 mod mobile {
     use super::*;
     use jait_gateway::routes::mobile::{
-        ConsentStore, ControlAccessView, DeviceRegistration, DeviceStore, MobileRoutes,
-        PushDevices, RoutineStore, SessionList, DEFAULT_TEST_MESSAGE, DEVICE_NOT_FOUND,
-        INVALID_PAYLOAD, INVALID_ROUTINE_KIND, INVALID_TIME, PUSH_DEVICE_NOT_FOUND,
-        PUSH_UNAVAILABLE, SCHEDULER_UNAVAILABLE,
+        ConsentStore, ControlAccessView, DEFAULT_TEST_MESSAGE, DEVICE_NOT_FOUND,
+        DeviceRegistration, DeviceStore, INVALID_PAYLOAD, INVALID_ROUTINE_KIND, INVALID_TIME,
+        MobileRoutes, PUSH_DEVICE_NOT_FOUND, PUSH_UNAVAILABLE, PushDevices, RoutineStore,
+        SCHEDULER_UNAVAILABLE, SessionList,
     };
     use std::sync::{Arc, Mutex};
 
@@ -1855,7 +2028,12 @@ mod mobile {
         assert_eq!(body["name"], "jait-gateway");
         // The host header is reduced to its hostname (port and brackets removed),
         // exactly like the TypeScript `host.split(':')[0]` derivation.
-        let host = api.base.trim_start_matches("http://").split(':').next().unwrap();
+        let host = api
+            .base
+            .trim_start_matches("http://")
+            .split(':')
+            .next()
+            .unwrap();
         assert_eq!(body["baseUrl"], json!(format!("http://{host}")));
         assert_eq!(body["wsUrl"], json!(format!("ws://{host}/ws")));
         assert!(body["discoveredAt"].as_str().unwrap().ends_with('Z'));
@@ -1866,7 +2044,12 @@ mod mobile {
     async fn device_registration_validates_then_serves_heartbeats() {
         let api = bare().await;
         let (status, body) = api
-            .send("POST", "/api/mobile/devices/register", None, Some(json!({"name": "Phone"})))
+            .send(
+                "POST",
+                "/api/mobile/devices/register",
+                None,
+                Some(json!({"name": "Phone"})),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": INVALID_PAYLOAD}));
@@ -1895,12 +2078,16 @@ mod mobile {
         assert_eq!(status, 200);
         assert_eq!(body["devices"].as_array().unwrap().len(), 1);
 
-        let (status, body) = api.send("POST", "/api/mobile/devices/d1/heartbeat", None, None).await;
+        let (status, body) = api
+            .send("POST", "/api/mobile/devices/d1/heartbeat", None, None)
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["ok"], true);
         assert_eq!(body["device"]["id"], "d1");
 
-        let (status, body) = api.send("POST", "/api/mobile/devices/nope/heartbeat", None, None).await;
+        let (status, body) = api
+            .send("POST", "/api/mobile/devices/nope/heartbeat", None, None)
+            .await;
         assert_eq!(status, 404);
         assert_eq!(body, json!({"error": DEVICE_NOT_FOUND}));
         api.stop().await;
@@ -1921,13 +2108,23 @@ mod mobile {
 
         let payload = json!({"id": "d2", "name": "P", "platform": "mobile", "pushToken": "tok"});
         let (status, body) = api
-            .send("POST", "/api/mobile/devices/register", None, Some(payload.clone()))
+            .send(
+                "POST",
+                "/api/mobile/devices/register",
+                None,
+                Some(payload.clone()),
+            )
             .await;
         assert_eq!(status, 401);
         assert_eq!(body, json!({"detail": "login_required"}));
 
         let (status, _) = api
-            .send("POST", "/api/mobile/devices/register", Some(&token()), Some(payload))
+            .send(
+                "POST",
+                "/api/mobile/devices/register",
+                Some(&token()),
+                Some(payload),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(push.list(OWNER), vec!["d2".to_string()]);
@@ -1951,9 +2148,14 @@ mod mobile {
         .with_push(push.clone());
         let api = serve(routes, auth).await;
 
-        let (status, body) = api.with("POST", "/api/mobile/push-devices/test", json!({})).await;
+        let (status, body) = api
+            .with("POST", "/api/mobile/push-devices/test", json!({}))
+            .await;
         assert_eq!(status, 404);
-        assert_eq!(body, json!({"error": "No push devices registered for this user"}));
+        assert_eq!(
+            body,
+            json!({"error": "No push devices registered for this user"})
+        );
 
         let (status, _) = api
             .send(
@@ -1966,7 +2168,11 @@ mod mobile {
         assert_eq!(status, 200);
 
         let (status, body) = api
-            .with("POST", "/api/mobile/push-devices/test", json!({"message": "  hi  "}))
+            .with(
+                "POST",
+                "/api/mobile/push-devices/test",
+                json!({"message": "  hi  "}),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(body, json!({"ok": true, "devices": 1}));
@@ -1991,7 +2197,9 @@ mod mobile {
     #[tokio::test]
     async fn push_endpoints_fail_closed_without_a_push_service() {
         let api = bare().await;
-        let (status, _body) = api.send("POST", "/api/mobile/push-devices/test", None, None).await;
+        let (status, _body) = api
+            .send("POST", "/api/mobile/push-devices/test", None, None)
+            .await;
         assert_eq!(status, 401);
 
         let (status, body) = api.ok("POST", "/api/mobile/push-devices/test").await;
@@ -2022,26 +2230,40 @@ mod mobile {
         .with_sessions(Arc::new(NoSessions));
         let api = serve(routes, auth).await;
 
-        let (status, _) = api.send("PUT", "/api/mobile/routines/morning", None, Some(json!({}))).await;
+        let (status, _) = api
+            .send("PUT", "/api/mobile/routines/morning", None, Some(json!({})))
+            .await;
         assert_eq!(status, 401);
 
-        let (status, body) = api.with("PUT", "/api/mobile/routines/noon", json!({})).await;
+        let (status, body) = api
+            .with("PUT", "/api/mobile/routines/noon", json!({}))
+            .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": INVALID_ROUTINE_KIND}));
 
         let (status, body) = api
-            .with("PUT", "/api/mobile/routines/morning", json!({"time": "7:00"}))
+            .with(
+                "PUT",
+                "/api/mobile/routines/morning",
+                json!({"time": "7:00"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": INVALID_TIME}));
 
         let (status, body) = api
-            .with("PUT", "/api/mobile/routines/morning", json!({"timeZone": "Mars/Base"}))
+            .with(
+                "PUT",
+                "/api/mobile/routines/morning",
+                json!({"timeZone": "Mars/Base"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": "Invalid timeZone"}));
 
-        let (status, body) = api.with("PUT", "/api/mobile/routines/morning", json!({})).await;
+        let (status, body) = api
+            .with("PUT", "/api/mobile/routines/morning", json!({}))
+            .await;
         assert_eq!(status, 200);
         let routine = &body["routine"];
         assert_eq!(routine["id"], "job-1");
@@ -2053,10 +2275,12 @@ mod mobile {
         assert_eq!(routine["sessionId"], "default");
         assert_eq!(routine["input"]["action"], "create");
         assert_eq!(routine["input"]["__jaitJobMeta"]["routineKind"], "morning");
-        assert!(routine["input"]["prompt"]
-            .as_str()
-            .unwrap()
-            .starts_with("Prepare my morning briefing"));
+        assert!(
+            routine["input"]["prompt"]
+                .as_str()
+                .unwrap()
+                .starts_with("Prepare my morning briefing")
+        );
 
         let (status, body) = api
             .with(
@@ -2160,7 +2384,11 @@ mod network {
     }
 
     async fn api() -> Api {
-        api_with(Arc::new(Inventory(json!({"status": "ok"}))), local(snapshot())).await
+        api_with(
+            Arc::new(Inventory(json!({"status": "ok"}))),
+            local(snapshot()),
+        )
+        .await
     }
 
     #[tokio::test]
@@ -2222,7 +2450,9 @@ mod network {
             assert_eq!(payload, json!({"error": "scopeId required"}));
         }
         // Wrong method on a known path is a method mismatch, not a route scan.
-        let (status, _) = api.send("GET", "/api/network/scan", Some(&token()), None).await;
+        let (status, _) = api
+            .send("GET", "/api/network/scan", Some(&token()), None)
+            .await;
         assert_eq!(status, 405);
         api.stop().await;
     }
@@ -2242,13 +2472,18 @@ mod network {
     #[tokio::test]
     async fn topology_marks_inventory_state_and_excludes_the_gateway_node() {
         let api = api_with(
-            Arc::new(Inventory(json!({"status": "ok", "truncated": true, "resources": []}))),
+            Arc::new(Inventory(
+                json!({"status": "ok", "truncated": true, "resources": []}),
+            )),
             local(snapshot()),
         )
         .await;
         let (status, body) = api.ok("GET", "/api/network/topology").await;
         assert_eq!(status, 200);
-        assert_eq!(body["gateway"], json!({"id": "gateway", "name": "gateway-host"}));
+        assert_eq!(
+            body["gateway"],
+            json!({"id": "gateway", "name": "gateway-host"})
+        );
         assert_eq!(
             body["devices"],
             json!([{"id": "device-laptop", "type": "device", "online": true, "providers": [],
@@ -2256,7 +2491,10 @@ mod network {
         );
         assert_eq!(body["hosts"], json!([]));
         assert_eq!(body["meshNodes"], json!([]));
-        assert_eq!(body["inventory"], json!({"status": "ok", "truncated": true}));
+        assert_eq!(
+            body["inventory"],
+            json!({"status": "ok", "truncated": true})
+        );
         assert_eq!(body["routerIp"], Value::Null);
         assert_eq!(body["scannedAt"], Value::Null);
         api.stop().await;
@@ -2276,21 +2514,34 @@ mod network {
 
         let mut oversized = snapshot();
         oversized.companion_devices = (0..4097).map(|i| json!({"id": i})).collect();
-        let api = api_with(Arc::new(Inventory(json!({"status": "ok"}))), local(oversized)).await;
+        let api = api_with(
+            Arc::new(Inventory(json!({"status": "ok"}))),
+            local(oversized),
+        )
+        .await;
         let (status, body) = api.ok("GET", "/api/network/devices").await;
         assert_eq!(status, 503);
-        assert_eq!(body, json!({"error": "Local network snapshot exceeds item limit"}));
+        assert_eq!(
+            body,
+            json!({"error": "Local network snapshot exceeds item limit"})
+        );
         api.stop().await;
     }
 
     #[tokio::test]
     async fn node_registration_validates_then_lists_unverified_announcements() {
         let api = api().await;
-        let (status, body) = api.with("POST", "/api/network/nodes/register", json!({"id": "n1"})).await;
+        let (status, body) = api
+            .with("POST", "/api/network/nodes/register", json!({"id": "n1"}))
+            .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": "id and ip are required"}));
         let (status, body) = api
-            .with("POST", "/api/network/nodes/register", json!({"id": "bad\nid", "ip": "192.0.2.9"}))
+            .with(
+                "POST",
+                "/api/network/nodes/register",
+                json!({"id": "bad\nid", "ip": "192.0.2.9"}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": "Invalid node id or address"}));
@@ -2334,7 +2585,11 @@ mod network {
         assert_eq!(body["nodes"][0]["id"], " n1 ");
         // A whitespace-only id is still a truthy string, so it is accepted too.
         let (status, body) = api
-            .with("POST", "/api/network/nodes/register", json!({"id": "  ", "ip": "192.0.2.10"}))
+            .with(
+                "POST",
+                "/api/network/nodes/register",
+                json!({"id": "  ", "ip": "192.0.2.10"}),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(body["node"]["id"], "  ");
@@ -2345,10 +2600,21 @@ mod network {
     #[tokio::test]
     async fn ssh_enable_returns_instruction_data_for_each_platform() {
         let api = api().await;
-        let (status, body) = api.with("POST", "/api/network/ssh/enable", json!({"platform": " WINDOWS "})).await;
+        let (status, body) = api
+            .with(
+                "POST",
+                "/api/network/ssh/enable",
+                json!({"platform": " WINDOWS "}),
+            )
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["platform"], "windows");
-        assert!(body["command"].as_str().unwrap().contains("Add-WindowsCapability"));
+        assert!(
+            body["command"]
+                .as_str()
+                .unwrap()
+                .contains("Add-WindowsCapability")
+        );
         let (status, body) = api.with("POST", "/api/network/ssh/enable", json!({})).await;
         assert_eq!(status, 200);
         assert_eq!(body["platform"], "linux");
@@ -2356,7 +2622,9 @@ mod network {
             body["command"],
             "sudo apt-get install -y openssh-server && sudo systemctl enable --now sshd"
         );
-        let (status, _) = api.send("GET", "/api/network/ssh/enable", Some(&token()), None).await;
+        let (status, _) = api
+            .send("GET", "/api/network/ssh/enable", Some(&token()), None)
+            .await;
         assert_eq!(status, 405);
         api.stop().await;
     }
@@ -2418,7 +2686,11 @@ mod terminals {
         assert_eq!(body, json!({"error": "Session not found"}));
 
         let (status, body) = api
-            .with("POST", "/api/terminals", json!({"sessionId": "default", "nodeId": "node-9"}))
+            .with(
+                "POST",
+                "/api/terminals",
+                json!({"sessionId": "default", "nodeId": "node-9"}),
+            )
             .await;
         assert_eq!(status, 404);
         assert_eq!(body, json!({"error": "Node not found"}));
@@ -2464,12 +2736,23 @@ mod terminals {
         }
         // `execute` validates the command before it resolves the terminal.
         let (status, body) = api
-            .with("POST", "/api/terminals/term-missing/execute", json!({"command": "echo hi"}))
+            .with(
+                "POST",
+                "/api/terminals/term-missing/execute",
+                json!({"command": "echo hi"}),
+            )
             .await;
         assert_eq!(status, 404);
-        assert_eq!(body, json!({"error": "NOT_FOUND", "details": "Terminal not found"}));
+        assert_eq!(
+            body,
+            json!({"error": "NOT_FOUND", "details": "Terminal not found"})
+        );
         let (status, body) = api
-            .with("POST", "/api/terminals/term-missing/execute", json!({"command": "   "}))
+            .with(
+                "POST",
+                "/api/terminals/term-missing/execute",
+                json!({"command": "   "}),
+            )
             .await;
         assert_eq!(status, 400);
         assert_eq!(
@@ -2477,7 +2760,9 @@ mod terminals {
             json!({"error": "VALIDATION_ERROR", "details": "command is required"})
         );
         // Wrong method on a known path is a method mismatch, not a missing terminal.
-        let (status, _) = api.send("PUT", "/api/terminals/term-missing", Some(&token()), None).await;
+        let (status, _) = api
+            .send("PUT", "/api/terminals/term-missing", Some(&token()), None)
+            .await;
         assert_eq!(status, 405);
         api.stop().await;
     }
@@ -2491,7 +2776,6 @@ mod terminals {
         api.stop().await;
     }
 }
-
 
 mod git {
     use super::*;
@@ -2511,8 +2795,8 @@ mod git {
         Arc::new(move |request: GitAuthorizationRequest, _cancel| {
             let root = root.clone();
             Box::pin(async move {
-                let command_authority: GitCommandAuthority = Arc::new(
-                    |request: GitCommandRequest, _cancel: ProcessCancellation| {
+                let command_authority: GitCommandAuthority =
+                    Arc::new(|request: GitCommandRequest, _cancel: ProcessCancellation| {
                         let mut argv = vec![resolve_program(&request.program)];
                         argv.extend(request.arguments);
                         Box::pin(async move {
@@ -2526,8 +2810,7 @@ mod git {
                                 output_limit: 256 * 1024,
                             })
                         })
-                    },
-                );
+                    });
                 Ok(GitGrant {
                     owner: owner.map(str::to_string).unwrap_or(request.owner),
                     root: root.as_ref().clone(),
@@ -2587,7 +2870,9 @@ mod git {
             );
         }
         // Authorization is resolved before the user check fails closed too.
-        let (status, _) = api.send("POST", "/api/git/status", None, Some(json!({}))).await;
+        let (status, _) = api
+            .send("POST", "/api/git/status", None, Some(json!({})))
+            .await;
         assert_eq!(status, 401);
         api.stop().await;
     }
@@ -2603,7 +2888,12 @@ mod git {
             "/api/git/init",
         ] {
             let (status, body) = api
-                .send("POST", path, None, Some(json!({"cwd": root.to_str().unwrap()})))
+                .send(
+                    "POST",
+                    path,
+                    None,
+                    Some(json!({"cwd": root.to_str().unwrap()})),
+                )
                 .await;
             assert_eq!(status, 401, "{path}");
             assert_eq!(body, json!({"detail": "login_required"}), "{path}");
@@ -2629,9 +2919,14 @@ mod git {
             assert_eq!(body, json!({"error": "Missing cwd"}), "{path}");
         }
         // Relative cwd is refused by the gate, not by the handler.
-        let (status, body) = api.with("POST", "/api/git/status", json!({"cwd": "relative/dir"})).await;
+        let (status, body) = api
+            .with("POST", "/api/git/status", json!({"cwd": "relative/dir"}))
+            .await;
         assert_eq!(status, 400);
-        assert_eq!(body, json!({"error": "cwd must be an absolute authorized root"}));
+        assert_eq!(
+            body,
+            json!({"error": "cwd must be an absolute authorized root"})
+        );
         // A selected node cannot silently fall back to a local checkout.
         let (status, body) = api
             .with(
@@ -2641,29 +2936,52 @@ mod git {
             )
             .await;
         assert_eq!(status, 503);
-        assert_eq!(body, json!({"error": "Remote Git execution is unavailable"}));
+        assert_eq!(
+            body,
+            json!({"error": "Remote Git execution is unavailable"})
+        );
         // Requesting a root other than the authorized one is a 403.
         let other = temp_dir("gate-other");
         let (status, body) = api
-            .with("POST", "/api/git/status", json!({"cwd": other.to_str().unwrap()}))
+            .with(
+                "POST",
+                "/api/git/status",
+                json!({"cwd": other.to_str().unwrap()}),
+            )
             .await;
         assert_eq!(status, 403);
-        assert_eq!(body, json!({"error": "Git root is outside the authorized request"}));
+        assert_eq!(
+            body,
+            json!({"error": "Git root is outside the authorized request"})
+        );
         // Missing directories cannot be canonicalized.
         let (status, body) = api
-            .with("POST", "/api/git/status", json!({"cwd": "/tmp/jait-git-does-not-exist-xyz"}))
+            .with(
+                "POST",
+                "/api/git/status",
+                json!({"cwd": "/tmp/jait-git-does-not-exist-xyz"}),
+            )
             .await;
         assert_eq!(status, 403);
         assert_eq!(body, json!({"error": "Git root is unavailable"}));
         // Malformed bodies are refused with the shared envelope.
-        let (status, body) = api.send("POST", "/api/git/status", Some(&token()), Some(json!([1]))).await;
+        let (status, body) = api
+            .send("POST", "/api/git/status", Some(&token()), Some(json!([1])))
+            .await;
         assert_eq!(status, 400);
         assert_eq!(body, json!({"error": "Invalid JSON body"}));
         let (status, body) = api
-            .with("POST", "/api/git/create-worktree", json!({"cwd": root.to_str().unwrap(), "baseBranch": "main"}))
+            .with(
+                "POST",
+                "/api/git/create-worktree",
+                json!({"cwd": root.to_str().unwrap(), "baseBranch": "main"}),
+            )
             .await;
         assert_eq!(status, 400);
-        assert_eq!(body, json!({"error": "Missing cwd, baseBranch, or newBranch"}));
+        assert_eq!(
+            body,
+            json!({"error": "Missing cwd, baseBranch, or newBranch"})
+        );
         api.stop().await;
     }
 
@@ -2672,7 +2990,11 @@ mod git {
         let root = temp_dir("plain");
         let api = api_for(&root).await;
         let (status, body) = api
-            .with("POST", "/api/git/status", json!({"cwd": root.to_str().unwrap()}))
+            .with(
+                "POST",
+                "/api/git/status",
+                json!({"cwd": root.to_str().unwrap()}),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(
@@ -2693,7 +3015,11 @@ mod git {
         );
         // git.ts reports `isRepo: true` even when no branches exist.
         let (status, body) = api
-            .with("POST", "/api/git/branches", json!({"cwd": root.to_str().unwrap()}))
+            .with(
+                "POST",
+                "/api/git/branches",
+                json!({"cwd": root.to_str().unwrap()}),
+            )
             .await;
         assert_eq!(status, 200);
         assert_eq!(body, json!({"branches": [], "isRepo": true}));
@@ -2709,7 +3035,9 @@ mod git {
         assert_eq!(status, 200, "{body}");
         assert_eq!(body, json!({"ok": true}));
 
-        let (status, body) = api.with("POST", "/api/git/status", json!({"cwd": cwd})).await;
+        let (status, body) = api
+            .with("POST", "/api/git/status", json!({"cwd": cwd}))
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["hasWorkingTreeChanges"], json!(false));
         assert_eq!(body["pr"], json!(null));
@@ -2717,7 +3045,9 @@ mod git {
         assert_eq!(body["workingTree"]["files"], json!([]));
 
         std::fs::write(root.join("a.txt"), "hello\n").unwrap();
-        let (status, body) = api.with("POST", "/api/git/status", json!({"cwd": cwd})).await;
+        let (status, body) = api
+            .with("POST", "/api/git/status", json!({"cwd": cwd}))
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["hasWorkingTreeChanges"], json!(true));
         assert_eq!(body["workingTree"]["files"][0]["path"], json!("a.txt"));
@@ -2725,10 +3055,14 @@ mod git {
         assert_eq!(body["workingTree"]["files"][0]["insertions"], json!(0));
 
         // No `paths` means stage everything.
-        let (status, body) = api.with("POST", "/api/git/stage", json!({"cwd": cwd})).await;
+        let (status, body) = api
+            .with("POST", "/api/git/stage", json!({"cwd": cwd}))
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body, json!({"ok": true}));
-        let (status, body) = api.with("POST", "/api/git/status", json!({"cwd": cwd})).await;
+        let (status, body) = api
+            .with("POST", "/api/git/status", json!({"cwd": cwd}))
+            .await;
         assert_eq!(status, 200);
         assert_eq!(body["index"]["files"][0]["path"], json!("a.txt"));
         assert_eq!(body["index"]["files"][0]["status"], json!("A"));
@@ -2749,7 +3083,11 @@ mod git {
         )
         .await;
         let (status, body) = api
-            .with("POST", "/api/git/status", json!({"cwd": root.to_str().unwrap()}))
+            .with(
+                "POST",
+                "/api/git/status",
+                json!({"cwd": root.to_str().unwrap()}),
+            )
             .await;
         assert_eq!(status, 403);
         assert_eq!(body, json!({"error": "Fixture authorization denied"}));
@@ -2765,7 +3103,11 @@ mod git {
         )
         .await;
         let (status, body) = api
-            .with("POST", "/api/git/status", json!({"cwd": root.to_str().unwrap()}))
+            .with(
+                "POST",
+                "/api/git/status",
+                json!({"cwd": root.to_str().unwrap()}),
+            )
             .await;
         assert_eq!(status, 403, "{body}");
         assert_eq!(body, json!({"error": "Git authority owner/root mismatch"}));
@@ -2778,7 +3120,12 @@ mod git {
         let api = api_for(&root).await;
         for path in ["/api/git/status", "/api/git/branches", "/api/git/stage"] {
             let (status, _) = api
-                .send("GET", path, Some(&token()), Some(json!({"cwd": root.to_str().unwrap()})))
+                .send(
+                    "GET",
+                    path,
+                    Some(&token()),
+                    Some(json!({"cwd": root.to_str().unwrap()})),
+                )
                 .await;
             assert_eq!(status, 405, "{path}");
         }
@@ -2870,7 +3217,10 @@ mod chat {
                 )
                 .await;
             assert_eq!(status, 400, "{option}: {body}");
-            assert_eq!(body, json!({"error": "UNSUPPORTED_CHAT_OPTION", "option": option}));
+            assert_eq!(
+                body,
+                json!({"error": "UNSUPPORTED_CHAT_OPTION", "option": option})
+            );
         }
         server.stop().await;
     }
@@ -2899,7 +3249,11 @@ mod chat {
         // ChatLimits::default().body_bytes is 64 KiB.
         let oversized = "x".repeat(70 * 1024);
         let (status, body) = server
-            .with("POST", "/api/chat", json!({"sessionId": "sess-1", "content": oversized}))
+            .with(
+                "POST",
+                "/api/chat",
+                json!({"sessionId": "sess-1", "content": oversized}),
+            )
             .await;
         assert_eq!(status, 413, "{body}");
         assert_eq!(body, json!({"error": "BODY_TOO_LARGE"}));
@@ -2911,7 +3265,11 @@ mod chat {
         let server = api().await;
         for session in ["sess-missing", "sess-other", "sess-closed"] {
             let (status, body) = server
-                .with("POST", "/api/chat", json!({"sessionId": session, "content": "hi"}))
+                .with(
+                    "POST",
+                    "/api/chat",
+                    json!({"sessionId": session, "content": "hi"}),
+                )
                 .await;
             assert_eq!(status, 404, "{session}: {body}");
             assert_eq!(body, json!({"error": "SESSION_NOT_FOUND"}));
@@ -2923,7 +3281,11 @@ mod chat {
     async fn an_owned_session_without_a_provider_is_configuration_unavailable() {
         let server = api().await;
         let (status, body) = server
-            .with("POST", "/api/chat", json!({"sessionId": "sess-1", "content": "hi"}))
+            .with(
+                "POST",
+                "/api/chat",
+                json!({"sessionId": "sess-1", "content": "hi"}),
+            )
             .await;
         assert_eq!(status, 503, "{body}");
         assert_eq!(body, json!({"error": "CHAT_CONFIGURATION_UNAVAILABLE"}));
@@ -2933,7 +3295,9 @@ mod chat {
     #[tokio::test]
     async fn cancel_without_an_active_turn_reports_false() {
         let server = api().await;
-        let (status, body) = server.send("POST", "/api/sessions/sess-1/cancel", Some(&token()), None).await;
+        let (status, body) = server
+            .send("POST", "/api/sessions/sess-1/cancel", Some(&token()), None)
+            .await;
         assert_eq!(status, 200, "{body}");
         assert_eq!(body, json!({"ok": true, "cancelled": false}));
 
@@ -2945,13 +3309,19 @@ mod chat {
 
         // A path session plus a non-empty body is ambiguous and refused.
         let (status, body) = server
-            .with("POST", "/api/sessions/sess-1/cancel", json!({"sessionId": "sess-1"}))
+            .with(
+                "POST",
+                "/api/sessions/sess-1/cancel",
+                json!({"sessionId": "sess-1"}),
+            )
             .await;
         assert_eq!(status, 400, "{body}");
         assert_eq!(body, json!({"error": "INVALID_CANCEL_REQUEST"}));
 
         for payload in [json!({"sessionId": ""}), json!({}), json!({"sessionId": 7})] {
-            let (status, body) = server.with("POST", "/api/chat/cancel", payload.clone()).await;
+            let (status, body) = server
+                .with("POST", "/api/chat/cancel", payload.clone())
+                .await;
             assert_eq!(status, 400, "{payload}: {body}");
             assert_eq!(body, json!({"error": "INVALID_CANCEL_REQUEST"}));
         }
@@ -2970,7 +3340,9 @@ mod chat {
     #[tokio::test]
     async fn messages_of_an_empty_session_report_the_pagination_envelope() {
         let server = api().await;
-        let (status, body) = server.send("GET", "/api/sessions/sess-1/messages", Some(&token()), None).await;
+        let (status, body) = server
+            .send("GET", "/api/sessions/sess-1/messages", Some(&token()), None)
+            .await;
         assert_eq!(status, 200, "{body}");
         assert_eq!(
             body,
@@ -2986,16 +3358,33 @@ mod chat {
             })
         );
 
-        for query in ["limit=0", "limit=101", "limit=abc", "before=abc", "before=", "unknown=1"] {
+        for query in [
+            "limit=0",
+            "limit=101",
+            "limit=abc",
+            "before=abc",
+            "before=",
+            "unknown=1",
+        ] {
             let (status, payload) = server
-                .send("GET", &format!("/api/sessions/sess-1/messages?{query}"), Some(&token()), None)
+                .send(
+                    "GET",
+                    &format!("/api/sessions/sess-1/messages?{query}"),
+                    Some(&token()),
+                    None,
+                )
                 .await;
             assert_eq!(status, 400, "{query}: {payload}");
             assert_eq!(payload, json!({"error": "INVALID_QUERY"}));
         }
 
         let (status, payload) = server
-            .send("GET", "/api/sessions/sess-other/messages", Some(&token()), None)
+            .send(
+                "GET",
+                "/api/sessions/sess-other/messages",
+                Some(&token()),
+                None,
+            )
             .await;
         assert_eq!(status, 404, "{payload}");
         assert_eq!(payload, json!({"error": "SESSION_NOT_FOUND"}));
@@ -3104,7 +3493,9 @@ mod email {
             assert_eq!(body, json!({"detail": "login_required"}));
         }
         // The browser callback is reached by the provider, not by a session.
-        let (status, body) = server.send("GET", "/api/email/oauth/callback", None, None).await;
+        let (status, body) = server
+            .send("GET", "/api/email/oauth/callback", None, None)
+            .await;
         assert_eq!(status, 200, "{body}");
         let html = body.as_str().expect("callback renders html");
         assert!(html.contains("Missing authorization code."), "{html}");
@@ -3116,7 +3507,10 @@ mod email {
         let server = api().await;
         let (status, body) = server.ok("GET", "/api/email/config").await;
         assert_eq!(status, 200, "{body}");
-        assert_eq!(body, json!({"providers": {"gmail": false, "outlook": false}}));
+        assert_eq!(
+            body,
+            json!({"providers": {"gmail": false, "outlook": false}})
+        );
         server.stop().await;
     }
 
@@ -3124,20 +3518,35 @@ mod email {
     async fn oauth_app_credentials_require_both_halves_and_a_known_provider() {
         let server = api().await;
         let (status, body) = server
-            .with("POST", "/api/email/config/yahoo", json!({"clientId": "a", "clientSecret": "b"}))
+            .with(
+                "POST",
+                "/api/email/config/yahoo",
+                json!({"clientId": "a", "clientSecret": "b"}),
+            )
             .await;
         assert_eq!(status, 400, "{body}");
         assert_eq!(body, json!({"error": "Unknown provider"}));
 
         let (status, body) = server
-            .with("POST", "/api/email/config/gmail", json!({"clientId": "only-id"}))
+            .with(
+                "POST",
+                "/api/email/config/gmail",
+                json!({"clientId": "only-id"}),
+            )
             .await;
         assert_eq!(status, 400, "{body}");
-        assert_eq!(body, json!({"error": "clientId and clientSecret are required"}));
+        assert_eq!(
+            body,
+            json!({"error": "clientId and clientSecret are required"})
+        );
 
         // Both halves whitespace-only is the "clear the credentials" request.
         let (status, body) = server
-            .with("POST", "/api/email/config/gmail", json!({"clientId": " ", "clientSecret": " "}))
+            .with(
+                "POST",
+                "/api/email/config/gmail",
+                json!({"clientId": " ", "clientSecret": " "}),
+            )
             .await;
         assert_eq!(status, 200, "{body}");
         assert_eq!(body, json!({"ok": true}));
@@ -3172,7 +3581,11 @@ mod email {
 
         for method in ["DELETE", "PATCH"] {
             let (status, body) = server
-                .with(method, "/api/email/accounts/missing", json!({"imapHost": "imap.example.com"}))
+                .with(
+                    method,
+                    "/api/email/accounts/missing",
+                    json!({"imapHost": "imap.example.com"}),
+                )
                 .await;
             assert_eq!(status, 404, "{method}: {body}");
             assert_eq!(body, json!({"error": "Account not found"}));
@@ -3184,9 +3597,14 @@ mod email {
     async fn non_object_bodies_are_read_as_missing_fields() {
         let server = api().await;
         for body in [json!([1, 2, 3]), json!("just a string"), json!(null)] {
-            let (status, payload) = server.with("POST", "/api/email/config/gmail", body.clone()).await;
+            let (status, payload) = server
+                .with("POST", "/api/email/config/gmail", body.clone())
+                .await;
             assert_eq!(status, 400, "{body}: {payload}");
-            assert_eq!(payload, json!({"error": "clientId and clientSecret are required"}));
+            assert_eq!(
+                payload,
+                json!({"error": "clientId and clientSecret are required"})
+            );
         }
 
         let (status, payload) = server.with("POST", "/api/email/send", json!({})).await;
@@ -3208,7 +3626,10 @@ mod email {
             .await;
         assert_eq!(status, 200, "{body}");
         let html = body.as_str().expect("callback renders html");
-        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"), "{html}");
+        assert!(
+            html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"),
+            "{html}"
+        );
         assert!(html.contains("<h2>Connection failed</h2>"), "{html}");
         assert!(!html.contains("<script>alert(1)"), "{html}");
         assert!(html.contains("ok:false"), "{html}");

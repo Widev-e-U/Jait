@@ -60,14 +60,14 @@ test('capture showcase screenshots', async ({ page }) => {
   await expect(page.locator('[data-day-divider]')).toHaveCount(2)
   await page.screenshot({ path: shot('showcase-transcript-1280') })
 
-  // 3. Hover raises the WhatsApp-Web-style quick-reaction row.
+  // 3. Right-click opens the quick-reaction row.
   const own = page.locator('[data-message-id="$two"]')
-  await own.hover()
-  await expect(own.locator('[data-reaction-bar]')).toHaveCSS('opacity', '1')
+  await own.locator('p').last().click({ button: 'right' })
+  await expect(page.locator('[data-reaction-bar]')).toBeVisible()
   await page.screenshot({ path: shot('showcase-reactions-hover-1280') })
 
   // 4. Search button opens the full searchable emoji panel.
-  await own.getByRole('button', { name: 'React to message' }).click()
+  await page.locator('[data-reaction-bar]').getByRole('button', { name: 'React to message' }).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.screenshot({ path: shot('showcase-emoji-picker-1280') })
   await page.getByRole('dialog').getByRole('textbox', { name: 'Search emoji' }).fill('heart')
@@ -80,7 +80,7 @@ test('capture showcase screenshots', async ({ page }) => {
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.locator('[data-day-divider]')).toHaveCount(2)
   const incoming = page.locator('[data-message-id="$one"]')
-  await incoming.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true })
-  await expect(incoming.locator('[data-reaction-bar]')).toHaveAttribute('data-open', 'true')
+  await incoming.locator('p').last().dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, clientX: 150, clientY: 200 })
+  await expect(page.locator('[data-reaction-bar]')).toBeVisible()
   await page.screenshot({ path: shot('showcase-reactions-longpress-390') })
 })

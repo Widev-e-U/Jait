@@ -33,7 +33,10 @@ struct ScriptedIo {
 
 impl ScriptedIo {
     fn push_reply(&self, line: &str) {
-        self.replies.lock().unwrap().push_back(Some(line.to_string()));
+        self.replies
+            .lock()
+            .unwrap()
+            .push_back(Some(line.to_string()));
     }
 
     fn push_silence(&self) {
@@ -52,10 +55,10 @@ impl BrokerIo for ScriptedIo {
         }
         self.writes.lock().unwrap().push(payload.to_string());
         let reply = self.replies.lock().unwrap().pop_front().flatten();
-        if let Some(line) = reply {
-            if let Some(client) = self.client.lock().unwrap().upgrade() {
-                client.handle_line(&line);
-            }
+        if let Some(line) = reply
+            && let Some(client) = self.client.lock().unwrap().upgrade()
+        {
+            client.handle_line(&line);
         }
         Ok(())
     }
@@ -87,9 +90,8 @@ mod pty_broker_client_ts {
         assert_eq!(RPC_TIMEOUT, Duration::from_secs(15));
 
         let io = Arc::new(ScriptedIo::default());
-        let client = Arc::new(
-            PtyBrokerClient::new(io.clone()).with_rpc_timeout(Duration::from_millis(20)),
-        );
+        let client =
+            Arc::new(PtyBrokerClient::new(io.clone()).with_rpc_timeout(Duration::from_millis(20)));
         *io.client.lock().unwrap() = Arc::downgrade(&client);
 
         io.push_silence();
@@ -106,12 +108,14 @@ mod pty_broker_client_ts {
 
         // The client remains usable after a timeout; ids keep incrementing.
         io.push_reply(r#"{"id":2,"ok":true}"#);
-        client.resize("pty-0", 80, 24).await.expect("post-timeout call");
+        client
+            .resize("pty-0", 80, 24)
+            .await
+            .expect("post-timeout call");
         assert_eq!(
             io.writes(),
             vec![
-                "{\"id\":1,\"cmd\":\"write\",\"ptyId\":\"pty-0\",\"data\":\"x\"}\n"
-                    .to_string(),
+                "{\"id\":1,\"cmd\":\"write\",\"ptyId\":\"pty-0\",\"data\":\"x\"}\n".to_string(),
                 "{\"id\":2,\"cmd\":\"resize\",\"ptyId\":\"pty-0\",\"cols\":80,\"rows\":24}\n"
                     .to_string(),
             ]
@@ -163,7 +167,11 @@ mod pty_broker_client_ts {
         // NDJSON framing: exactly one trailing newline, none embedded.
         for payload in io.writes() {
             assert!(payload.ends_with('\n'));
-            assert_eq!(payload.matches('\n').count(), 1, "one record per line: {payload}");
+            assert_eq!(
+                payload.matches('\n').count(),
+                1,
+                "one record per line: {payload}"
+            );
         }
     }
 

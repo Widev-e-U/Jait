@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Bot, GripHorizontal, Hand, Loader2, Maximize2, Minimize2, Minus, RotateCcw, Square } from 'lucide-react'
+import { Bot, GripHorizontal, Hand, Loader2, Maximize2, PictureInPicture2, RotateCcw, Square } from 'lucide-react'
 import { BrowserViewLayout } from '@/components/remote/browser-view-layout'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { apiFetch } from '@/lib/api-fetch'
@@ -19,13 +19,14 @@ interface BrowserState { sessionId: string; browserId?: string; url: string | nu
 const PANEL_TRANSITION = 'transition-[left,top,width,height,border-radius,box-shadow] [transition-duration:180ms] [transition-timing-function:cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none'
 const PANEL_INSET = 12
 const PANEL_COLLAPSED = { width: 160, height: 90 }
+const MINIMIZED_TOP_GAP = 36
 
 // Measurement is cosmetic, so it must not warn when rendered on the server.
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 // The panel floats above the transcript, so its frame follows the conversation column.
 function panelBox(expanded: boolean, frame: { width: number; height: number; top: number }, keyboardOpen = false) {
-  if (!expanded) return { left: PANEL_INSET, top: frame.top, ...PANEL_COLLAPSED }
+  if (!expanded) return { left: PANEL_INSET, top: Math.min(frame.top + MINIMIZED_TOP_GAP, Math.max(frame.top, frame.height - PANEL_COLLAPSED.height - PANEL_INSET)), ...PANEL_COLLAPSED }
   const width = Math.min(768, Math.max(PANEL_COLLAPSED.width, frame.width - PANEL_INSET * 2))
   const availableHeight = frame.height - frame.top - PANEL_INSET
   const desiredHeight = keyboardOpen && frame.width < 768 ? availableHeight : Math.min(Math.round(frame.height * 0.55), availableHeight)
@@ -48,14 +49,12 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const record = (data?.browserSession ?? (liveViewUrl(data?.url) ? { ...data, previewUrl: data?.url, controller: data?.sharedWithAgent ? 'agent' : 'user' } : undefined)) as Record<string, unknown> | undefined
   const id = sessionId ?? (typeof record?.sessionId === 'string' ? record.sessionId : undefined)
   const browserId = typeof data?.browserId === 'string' ? data.browserId : undefined
-  const [expanded, setExpandedState] = useState(() => {
-    // Remembered per chat: leaving a chat collapsed and coming back must not
-    // re-expand it. The panel unmounts both on chat switches and when the user
-    // sends their next message, so a fresh mount is the normal case.
-    const collapsed = readBrowserCollapsed(id)
-    return collapsed === undefined ? autoOpen : !collapsed
-  })
+  const initialLayoutResolved = useRef(false)
+  const [expanded, setExpandedState] = useState(() =>
+    autoOpen && !(readBrowserCollapsed(id) ?? (record?.controller !== 'agent')))
   const setExpanded = useCallback((next: boolean) => {
+    // A size chosen while the first status request is pending takes precedence.
+    initialLayoutResolved.current = true
     setExpandedState(next)
     rememberBrowserCollapsed(id, !next)
   }, [id])
@@ -179,6 +178,13 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
           })
           if (recovered.ok) ({ session } = await recovered.json())
         }
+        if (!cancelled && session?.status === 'ready' && !initialLayoutResolved.current) {
+          initialLayoutResolved.current = true
+          // Persisted tool evidence may describe an old controller. On chat entry,
+          // use live control state unless the user chose a size for this chat.
+          setMaximized(false)
+          setExpandedState(autoOpen && !(readBrowserCollapsed(id) ?? (session.sharedWithAgent !== true)))
+        }
         if (!cancelled) setState(session?.status === 'ready' ? {
           sessionId: id, browserId: session.browserId, url: liveViewUrl(session.url), sharedWithAgent: session.sharedWithAgent === true, verified: true, currentUrl: session.metrics?.url ?? session.target,
         } : null)
@@ -198,7 +204,7 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
       cancelled = true; clearTimeout(timer); controller.abort()
       window.removeEventListener('jait-browser-handoff', handoff)
     }
-  }, [id, authToken, setExpanded])
+  }, [id, authToken, autoOpen, setExpanded])
 
   const setShared = async () => {
     if (!state?.verified || busy) return
@@ -235,7 +241,8 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
   const initialBox = panelBox(true, defaultFrame, keyboardOpen)
   const defaultBox = { ...initialBox, left: initialBox.left + (workspace ? sidebarInset : 0) }
   const minimizedBox = { ...panelBox(false, defaultFrame), left: PANEL_INSET + (workspace ? sidebarInset : 0) }
-  const floatingBox = constrainBrowserWindow(windowBox ?? defaultBox, frame)
+  const windowFrame = { ...frame, left: workspace ? mainSidebarInset : 0 }
+  const floatingBox = constrainBrowserWindow(windowBox ?? defaultBox, windowFrame)
   const beginGesture = (event: ReactPointerEvent<HTMLElement>, edge?: string) => {
     if (event.button !== 0 || maximized || fullscreen || !window.matchMedia('(min-width: 768px) and (pointer: fine)').matches) return
     event.preventDefault()
@@ -249,8 +256,8 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     setWindowBox(start.edge
-      ? resizeBrowserWindow(start.box, start.edge, dx, dy, frame)
-      : constrainBrowserWindow({ ...start.box, left: start.box.left + dx, top: start.box.top + dy }, frame))
+      ? resizeBrowserWindow(start.box, start.edge, dx, dy, windowFrame)
+      : constrainBrowserWindow({ ...start.box, left: start.box.left + dx, top: start.box.top + dy }, windowFrame))
   }
   const endGesture = () => { gesture.current = null; setManipulating(false) }
   const gestureEvents = { onPointerMove: moveGesture, onPointerUp: endGesture, onPointerCancel: endGesture, onLostPointerCapture: endGesture }
@@ -270,13 +277,14 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     setMaximized(next === 'workspace')
     setExpanded(next !== 'minimized')
   }
-  const menuControls = <>
-    <button type="button" data-browser-close-menu aria-label={controlLabel} aria-busy={busyAction === 'control'}
+  const overflowControl = <button type="button" data-browser-close-menu aria-label={controlLabel} aria-busy={busyAction === 'control'}
       disabled={busy || !state?.verified} onClick={() => void setShared()}
       className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-muted disabled:opacity-50 ${agentInControl ? 'text-blue-500' : ''}`}>
       {busyAction === 'control' ? <Loader2 className="h-4 w-4 animate-spin" /> : state?.sharedWithAgent ? <Hand className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       {controlLabel}
     </button>
+  const primaryControl = <TooltipHint content={controlLabel}><button type="button" aria-label={controlLabel} aria-busy={busyAction === 'control'} disabled={busy || !state?.verified} onClick={() => void setShared()} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border hover:bg-muted disabled:opacity-50 ${agentInControl ? 'text-blue-500' : ''}`}>{busyAction === 'control' ? <Loader2 className="h-4 w-4 animate-spin" /> : state?.sharedWithAgent ? <Hand className="h-4 w-4" /> : <Bot className="h-4 w-4" />}</button></TooltipHint>
+  const menuControls = <>
     <div className="border-t pt-2 text-xs font-medium">Browser view</div>
     <div ref={setControlsContainer} className="space-y-2" />
     <button type="button" disabled={busy} onClick={() => void restartBrowser()}
@@ -285,28 +293,22 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
     </button>
   </>
   const controls = <>
-    <div role="group" aria-label="Browser size" data-browser-size={size}
-      className="hidden h-8 shrink-0 items-center overflow-hidden rounded border sm:flex">
-      {([
-        ['minimized', Minus, 'Minimize browser'],
+    <div role="group" aria-label="Browser size" data-browser-size={size} className="flex h-8 shrink-0 items-center overflow-hidden rounded border">
+      {(size === 'workspace' ? [
+        ['minimized', PictureInPicture2, 'Minimize browser'],
         ['windowed', Square, 'Windowed browser'],
+      ] as const : [
+        ['minimized', PictureInPicture2, 'Minimize browser'],
         ['workspace', Maximize2, 'Fill workspace'],
       ] as const).map(([value, Icon, label]) => (
         <TooltipHint key={value} content={label}>
-          <button type="button" aria-label={label} aria-pressed={size === value} onClick={() => setSize(value)}
-            className={`flex h-full w-7 items-center justify-center border-l first:border-l-0 hover:bg-muted ${size === value ? 'bg-muted text-foreground' : 'text-muted-foreground'}`}>
-            <Icon className="h-3.5 w-3.5" />
+          <button type="button" aria-label={label} onClick={() => setSize(value)}
+            className="flex h-full w-7 items-center justify-center border-l first:border-l-0 text-muted-foreground hover:bg-muted">
+            <Icon className={`h-3.5 w-3.5 ${value === 'minimized' ? 'rotate-180' : ''}`} />
           </button>
         </TooltipHint>
       ))}
     </div>
-    <TooltipHint content={`Browser size: ${size}`}>
-      <button type="button" aria-label={size === 'workspace' ? 'Minimize browser' : size === 'windowed' ? 'Fill workspace' : 'Windowed browser'}
-        onClick={() => setSize(size === 'workspace' ? 'minimized' : size === 'windowed' ? 'workspace' : 'windowed')}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded border hover:bg-muted sm:hidden">
-        {size === 'workspace' ? <Minimize2 className="h-4 w-4" /> : size === 'windowed' ? <Maximize2 className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-      </button>
-    </TooltipHint>
   </>
   const panel = (
     <section ref={panelRef} aria-label="Chat browser" data-browser-panel data-browser-controller={agentInControl ? 'agent' : 'user'} data-browser-minimized={!expanded} data-browser-keyboard-open={expanded && keyboardOpen}
@@ -315,20 +317,20 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
         ? { left: workspace ? mainSidebarInset : 0, top: Math.max(0, frame.top - PANEL_INSET), width: frame.width - (workspace ? mainSidebarInset : 0), height: frame.height - Math.max(0, frame.top - PANEL_INSET) }
         : floatingBox}
       className={`absolute z-30 pointer-events-auto border ${agentInControl ? 'border-blue-500' : 'border-border'} bg-background text-xs shadow-lg ${manipulating ? 'transition-none select-none' : PANEL_TRANSITION} ${expanded
-        ? 'flex flex-col rounded-xl [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none'
+        ? `flex flex-col ${maximized || fullscreen ? 'rounded-none' : 'rounded-xl'} [&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:m-0 [&:fullscreen]:h-screen [&:fullscreen]:w-screen [&:fullscreen]:rounded-none`
         : 'overflow-hidden rounded-lg'}`}>
       <div aria-hidden="true" data-browser-border className={`pointer-events-none absolute inset-0 z-50 rounded-[inherit] ${agentInControl ? 'border-2 border-blue-500' : 'border border-border'}`} />
       {expanded && !maximized && !fullscreen && ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(edge => (
         <div key={edge} data-browser-resize={edge} aria-hidden="true"
-          className="absolute z-50 hidden touch-none md:block" style={{
+          className={`absolute ${edge.includes('n') ? 'z-[70]' : 'z-50'} hidden touch-none md:block`} style={{
             cursor: `${edge}-resize`,
             ...(edge.includes('n') ? { top: 0, height: 8 } : edge.includes('s') ? { bottom: 0, height: 8 } : { top: 8, bottom: 8 }),
             ...(edge.includes('w') ? { left: 0, width: 8 } : edge.includes('e') ? { right: 0, width: 8 } : { left: 8, right: 8 }),
           }} onPointerDown={event => beginGesture(event, edge)} {...gestureEvents} />
       ))}
       {manipulating && <div className="absolute inset-0 z-40" />}
-      <div className={expanded ? 'min-h-0 flex-1 rounded-b-xl [&_[data-browser-layout]]:rounded-b-xl' : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
-        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, menuControls, leading: (<TooltipHint content="Drag to move · Arrow keys to move">
+      <div className={expanded ? `min-h-0 flex-1 ${maximized || fullscreen ? '' : 'rounded-xl [&_[data-browser-layout]]:rounded-xl'}` : 'h-full w-full pointer-events-none'} inert={!expanded ? true : undefined}>
+        <BrowserViewLayout compact={!expanded} addressBar={{ sessionId: id, authToken, currentUrl: state?.currentUrl, sharedWithAgent: state?.sharedWithAgent === true, disabled: busy || !state?.verified, controls, menuControls, primaryControl, overflowControl, leading: !maximized && !fullscreen ? (<TooltipHint content="Drag to move · Arrow keys to move">
           <button type="button" aria-label="Move browser"
             className="hidden h-8 shrink-0 touch-none items-center text-muted-foreground md:flex md:cursor-move"
             onPointerDown={event => beginGesture(event)} {...gestureEvents}
@@ -340,20 +342,26 @@ export function ChatBrowserView({ data, sessionId, authToken, autoOpen }: {
               setWindowBox(constrainBrowserWindow({ ...floatingBox,
                 left: floatingBox.left + (event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0),
                 top: floatingBox.top + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0),
-              }, frame))
+              }, windowFrame))
             }}><GripHorizontal className="hidden h-4 w-4 md:block" /></button>
-        </TooltipHint>) }}>
-          <div className="h-full overflow-hidden rounded-b-xl">{state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
-            hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={busy || !state.verified} className={`h-full w-full border-0 bg-white ${expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
+        </TooltipHint>) : undefined }}>
+          <div className={`h-full overflow-hidden ${maximized || fullscreen ? '' : 'rounded-b-xl'}`}>{state?.url ? <NoVncSessionView source={state.url} title="Agent browser" controlsContainer={controlsContainer}
+            hideControls={!expanded} onKeyboardOpenChange={setKeyboardOpen} viewOnly={busy || !state.verified} className={`h-full w-full border-0 bg-white ${maximized || fullscreen ? '' : expanded ? 'rounded-b-xl' : 'rounded-lg'}`} />
             : <p className="p-3 text-muted-foreground">No live browser is available for this chat.</p>}</div>
         </BrowserViewLayout>
       </div>
-      {expanded && error && <p role="alert" className="absolute bottom-0 inset-x-0 rounded-b-xl bg-background/95 px-3 py-2 text-destructive">{error}</p>}
-      {!expanded && <button type="button" aria-label="Expand browser" aria-expanded={false} onClick={() => setExpanded(true)} className="absolute inset-0 z-50 cursor-pointer rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" />}
+      {expanded && error && <p role="alert" className={`absolute bottom-0 inset-x-0 ${maximized || fullscreen ? '' : 'rounded-b-xl'} bg-background/95 px-3 py-2 text-destructive`}>{error}</p>}
+      {!expanded && <>
+        <button type="button" aria-label="Expand browser" aria-expanded={false} onClick={() => setSize('windowed')} className="absolute inset-0 z-50 cursor-pointer rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" />
+        <div role="group" aria-label="Browser size" className="absolute right-1 top-1 z-[60] flex rounded border bg-background">
+          <TooltipHint content="Windowed browser"><button type="button" aria-label="Windowed browser" onClick={() => setSize('windowed')} className="flex h-7 w-7 items-center justify-center hover:bg-muted"><Square className="h-3.5 w-3.5" /></button></TooltipHint>
+          <TooltipHint content="Fill workspace"><button type="button" aria-label="Fill workspace" onClick={() => setSize('workspace')} className="flex h-7 w-7 items-center justify-center border-l hover:bg-muted"><Maximize2 className="h-3.5 w-3.5" /></button></TooltipHint>
+        </div>
+      </>}
     </section>
   )
   return workspace ? createPortal(
-    <div data-browser-workspace-overlay className="pointer-events-none absolute inset-0 z-40">{panel}</div>,
+    <div data-browser-workspace-overlay className="pointer-events-none absolute inset-0 z-[60]">{panel}</div>,
     workspace,
   ) : panel
 }

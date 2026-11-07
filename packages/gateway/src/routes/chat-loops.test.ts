@@ -29,6 +29,8 @@ describe("chat loop automatic continuation", () => {
   let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
   let publish: ReturnType<typeof vi.spyOn>;
   let readMessages: () => Array<{ role: string; content: string }>;
+  let sessions: SessionService;
+  let userId: string;
 
   beforeEach(async () => {
     calls = [];
@@ -59,9 +61,10 @@ describe("chat loop automatic continuation", () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -69,6 +72,12 @@ describe("chat loop automatic continuation", () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
@@ -109,9 +118,10 @@ describe("chat loop automatic continuation", () => {
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("preserves model selection without allowing saved UI state to retarget a continuation", async () => {
+  it("uses the chat's selected model and never lets saved UI state retarget a continuation", async () => {
     state.set(sessionId, { "loop.turn-options": {
-      turnId: "previous", startedAt: new Date().toISOString(), mode: "agent", responseStyle: "normal", model: "fixture-model",
+      turnId: "previous", startedAt: new Date().toISOString(), mode: "agent", responseStyle: "normal", model: "stale-marker-model",
+      provider: "stale-marker-provider",
       sessionId: "another-chat", _systemNotification: "Wrong hidden task",
     } });
     onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
@@ -226,5 +236,16 @@ describe("chat loop automatic continuation", () => {
     expect(calls).toHaveLength(1);
     expect(publish.mock.calls[0]?.[1]).toMatchObject({ kind: "attention", title: "Loop needs your answer" });
     expect(loops.get(sessionId)?.status).toBe("waiting");
+  });
+
+  it("stops and asks the user instead of choosing a provider and model by itself", async () => {
+    const unselected = sessions.create({ userId, name: "No chosen model" }).id;
+    loops.goal(unselected, "Do the autonomous work", ["Check passes"]);
+    await vi.waitFor(() => expect(publish).toHaveBeenCalled(), { timeout: 10000 });
+    expect(publish.mock.calls[0]?.[1]).toMatchObject({ kind: "attention", title: "Loop needs a provider and model" });
+    expect(loops.get(unselected)?.status).toBe("paused");
+    // No provider was ever contacted: the loop did not pick one on its own.
+    expect(calls).toHaveLength(0);
+    sessionWaits.clearSession(unselected);
   });
 });

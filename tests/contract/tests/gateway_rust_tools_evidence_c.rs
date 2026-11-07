@@ -43,24 +43,33 @@ fn assert_definition_panics_on_unknown(name: &str, f: fn(&str) -> &'static Value
         let _ = f(name);
     }));
     std::panic::set_hook(before);
-    assert!(outcome.is_err(), "definition({name}) must panic on unknown tool");
+    assert!(
+        outcome.is_err(),
+        "definition({name}) must panic on unknown tool"
+    );
 }
 
 // ---------------------------------------------------------------------------
 // contracts (packages/gateway/src/tools/contracts.ts, registry.ts barrel)
 // ---------------------------------------------------------------------------
 mod contracts_barrel {
-    use jait_gateway::tools::contracts::barrel;
     use jait_gateway::tools::contracts::ToolSource;
+    use jait_gateway::tools::contracts::barrel;
 
     #[test]
     fn tool_source_roundtrips_exact_ts_strings() {
         assert_eq!(ToolSource::PLUGIN_PREFIX, "plugin:");
         assert_eq!(ToolSource::Builtin.as_source_str(), "builtin");
         assert_eq!(ToolSource::Mcp.as_source_str(), "mcp");
-        assert_eq!(ToolSource::Plugin("demo".into()).as_source_str(), "plugin:demo");
+        assert_eq!(
+            ToolSource::Plugin("demo".into()).as_source_str(),
+            "plugin:demo"
+        );
 
-        assert_eq!(ToolSource::from_source_str("builtin"), Some(ToolSource::Builtin));
+        assert_eq!(
+            ToolSource::from_source_str("builtin"),
+            Some(ToolSource::Builtin)
+        );
         assert_eq!(ToolSource::from_source_str("mcp"), Some(ToolSource::Mcp));
         assert_eq!(
             ToolSource::from_source_str("plugin:demo"),
@@ -75,8 +84,20 @@ mod contracts_barrel {
 
     #[test]
     fn from_source_str_refuses_values_outside_the_ts_union() {
-        for bad in ["", "Builtin", "builtin ", " plugins:x", "plugins:x", "plugin", "mcp:"] {
-            assert_eq!(ToolSource::from_source_str(bad), None, "must reject {bad:?}");
+        for bad in [
+            "",
+            "Builtin",
+            "builtin ",
+            " plugins:x",
+            "plugins:x",
+            "plugin",
+            "mcp:",
+        ] {
+            assert_eq!(
+                ToolSource::from_source_str(bad),
+                None,
+                "must reject {bad:?}"
+            );
         }
     }
 
@@ -105,7 +126,11 @@ mod contracts_barrel {
     #[test]
     fn registration_plan_lists_ungated_factories_and_respects_gates() {
         let ungated = barrel::registration_plan(&[]);
-        assert_eq!(ungated.len(), 57, "57 factories declare no service dependency");
+        assert_eq!(
+            ungated.len(),
+            57,
+            "57 factories declare no service dependency"
+        );
         for reg in &ungated {
             assert_eq!(reg.gate, "", "{} must be ungated", reg.factory);
         }
@@ -113,7 +138,9 @@ mod contracts_barrel {
         let with_redeploy = barrel::registration_plan(&["deps.config", "deps.shutdown"]);
         assert!(with_redeploy.len() >= ungated.len());
         assert!(
-            with_redeploy.iter().any(|r| r.factory == "createRedeployTool"),
+            with_redeploy
+                .iter()
+                .any(|r| r.factory == "createRedeployTool"),
             "createRedeployTool requires deps.config && deps.shutdown"
         );
         for reg in &with_redeploy {
@@ -134,23 +161,40 @@ mod contracts_barrel {
         for reg in barrel::registration_plan(&["deps.config", "deps.shutdown"]) {
             if let Some(native) = reg.native {
                 let path = root.join(format!("{native}.rs"));
-                assert!(path.is_file(), "{} -> missing native module {path:?}", reg.factory);
+                assert!(
+                    path.is_file(),
+                    "{} -> missing native module {path:?}",
+                    reg.factory
+                );
                 checked += 1;
             }
-            assert!(reg.ts_module.ends_with(".ts"), "{} has bogus ts_module", reg.factory);
+            assert!(
+                reg.ts_module.ends_with(".ts"),
+                "{} has bogus ts_module",
+                reg.factory
+            );
         }
-        assert!(checked >= 40, "expected >=40 native-backed factories, saw {checked}");
+        assert!(
+            checked >= 40,
+            "expected >=40 native-backed factories, saw {checked}"
+        );
     }
 
     #[test]
     fn missing_native_is_sorted_unique_gap_list() {
         let missing = barrel::missing_native();
-        assert!(!missing.is_empty(), "TS gap list must be explicit, not empty");
+        assert!(
+            !missing.is_empty(),
+            "TS gap list must be explicit, not empty"
+        );
         let mut sorted = missing.clone();
         sorted.sort_unstable();
         sorted.dedup();
         assert_eq!(missing, sorted, "gap list must be sorted and de-duplicated");
-        assert!(missing.contains(&"createReadTool"), "core/index.ts read tool is not ported");
+        assert!(
+            missing.contains(&"createReadTool"),
+            "core/index.ts read tool is not ported"
+        );
         assert!(
             !missing.contains(&"createContextReadTool"),
             "createContextReadTool has a native port and must not be listed"
@@ -170,7 +214,11 @@ mod contracts_barrel {
         );
         assert!(barrel::reexports_for_module("no-such-module.ts").is_empty());
         let gap = barrel::reexports_without_native();
-        assert_eq!(gap.len(), 13, "13 re-exported symbols still lack a native port");
+        assert_eq!(
+            gap.len(),
+            13,
+            "13 re-exported symbols still lack a native port"
+        );
         assert!(!gap.iter().any(|s| s.is_empty()));
     }
 }
@@ -339,9 +387,15 @@ mod screen_share_tools {
             serde_json::json!("string")
         );
         for tool in [&md[1], &md[2]] {
-            assert!(prop_keys(tool).is_empty(), "{} takes no parameters", tool["name"]);
             assert!(
-                tool["parameters"].get("required").map_or(true, Value::is_null),
+                prop_keys(tool).is_empty(),
+                "{} takes no parameters",
+                tool["name"]
+            );
+            assert!(
+                tool["parameters"]
+                    .get("required")
+                    .is_none_or(Value::is_null),
                 "{} must not declare required args",
                 tool["name"]
             );
@@ -365,7 +419,10 @@ mod channel_tools {
 
     #[test]
     fn metadata_declares_send_and_remind() {
-        assert_eq!(names(ch::metadata()), vec!["channel.send", "channel.remind"]);
+        assert_eq!(
+            names(ch::metadata()),
+            vec!["channel.send", "channel.remind"]
+        );
     }
 
     #[test]
@@ -378,7 +435,10 @@ mod channel_tools {
                 tool["name"]
             );
         }
-        assert_eq!(prop_keys(&md[0]), vec!["channelId", "conversationId", "prompt", "text"]);
+        assert_eq!(
+            prop_keys(&md[0]),
+            vec!["channelId", "conversationId", "prompt", "text"]
+        );
         assert_eq!(
             prop_keys(&md[1]),
             vec![
@@ -410,7 +470,10 @@ mod channel_tools {
         for tool in ch::metadata().as_array().unwrap() {
             for (key, prop) in tool["parameters"]["properties"].as_object().unwrap() {
                 assert!(prop["type"].is_string(), "{key} lacks a type");
-                assert!(prop["description"].as_str().is_some(), "{key} lacks a description");
+                assert!(
+                    prop["description"].as_str().is_some(),
+                    "{key} lacks a description"
+                );
             }
         }
     }
@@ -455,7 +518,9 @@ mod homeassistant_tools {
         let sd = &md[1]["parameters"]["properties"]["service_data"];
         assert_eq!(sd["type"], serde_json::json!("object"));
         assert!(
-            sd["properties"].as_object().map_or(true, serde_json::Map::is_empty),
+            sd["properties"]
+                .as_object()
+                .is_none_or(serde_json::Map::is_empty),
             "service_data must stay free-form (no fixed properties)"
         );
     }

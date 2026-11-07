@@ -13,6 +13,7 @@ pub struct ProjectRoot {
     path: PathBuf,
     directory: Arc<File>,
     identity: (u64, u64),
+    access: Option<Arc<dyn Fn(&Path) -> bool + Send + Sync>>,
 }
 impl std::fmt::Debug for ProjectRoot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -50,12 +51,26 @@ impl ProjectRoot {
             path: normalized,
             directory: Arc::new(directory),
             identity,
+            access: None,
         })
+    }
+    /// Narrow an already pinned root with the concrete surface policy. This never
+    /// replaces descriptor-relative I/O or grants access outside the root.
+    pub(crate) fn with_access(mut self, access: Arc<dyn Fn(&Path) -> bool + Send + Sync>) -> Self {
+        self.access = Some(access);
+        self
+    }
+    fn permitted(&self, path: &Path) -> Result<()> {
+        if self.access.as_ref().is_some_and(|allowed| !allowed(path)) {
+            return Err(Error::Excluded);
+        }
+        Ok(())
     }
     pub fn path(&self) -> &Path {
         &self.path
     }
     pub(crate) fn check_identity(&self) -> Result<()> {
+        self.permitted(&self.path)?;
         let current = open_absolute_directory(&self.path)?;
         if identity(&current.metadata()?) != self.identity {
             return Err(Error::RootChanged);
@@ -77,10 +92,13 @@ impl ProjectRoot {
         for component in relative.split('/') {
             guard.validate(component).map_err(|_| Error::Excluded)?;
         }
-        guard.validate(relative).map_err(|_| Error::Excluded)
+        let path = guard.validate(relative).map_err(|_| Error::Excluded)?;
+        self.permitted(&path)?;
+        Ok(path)
     }
     pub(crate) fn open_directory(&self, relative: &str) -> Result<File> {
         if relative.is_empty() {
+            self.permitted(&self.path)?;
             #[cfg(unix)]
             {
                 use std::os::fd::{AsRawFd, FromRawFd};

@@ -59,6 +59,92 @@ const CONSOLE_FLOOD_WINDOW_MS = 2000;
 const CONSOLE_FLOOD_THRESHOLD = 60;
 const CONSOLE_FLOOD_COOLDOWN_MS = 30000;
 
+const NETWORK_LOG_LIMIT = 3000;
+const NETWORK_BODY_LIMIT = 20000;
+
+function clampBody(text, limit = NETWORK_BODY_LIMIT) {
+  const value = typeof text === "string" ? text : String(text ?? "");
+  if (value.length <= limit) return value;
+  return `${value.slice(0, limit)}…[truncated ${value.length - limit} chars]`;
+}
+
+/**
+ * Ring buffer over the CDP Network domain for one page.
+ * Always on: request/response headers and bodies (including POST payloads)
+ * stay inspectable without an opt-in toggle.
+ */
+function createNetworkRecorder(limit = NETWORK_LOG_LIMIT) {
+  const entries = [];
+  const byRequestId = new Map();
+  let seq = 0;
+
+  const trim = () => {
+    while (entries.length > limit) {
+      const dropped = entries.shift();
+      if (dropped?.requestId) byRequestId.delete(dropped.requestId);
+    }
+  };
+
+  const patch = (requestId, updates) => {
+    const entry = byRequestId.get(requestId);
+    if (!entry) return null;
+    Object.assign(entry, updates);
+    return entry;
+  };
+
+  return {
+    entries: () => entries,
+    find: (requestId) => byRequestId.get(requestId) ?? null,
+    clear() {
+      entries.length = 0;
+      byRequestId.clear();
+    },
+    request(p) {
+      if (!p || !p.requestId) return null;
+      seq += 1;
+      const entry = {
+        seq,
+        requestId: p.requestId,
+        url: p.request?.url ?? null,
+        method: p.request?.method ?? null,
+        resourceType: p.type ?? null,
+        documentUrl: p.documentURL ?? null,
+        requestHeaders: p.request?.headers ?? null,
+        requestBody: typeof p.request?.postData === "string"
+          ? { text: clampBody(p.request.postData) }
+          : null,
+        hasPostData: p.request?.hasPostData === true,
+        status: null,
+        statusText: null,
+        mimeType: null,
+        responseHeaders: null,
+        responseBody: null,
+        finished: false,
+        failed: null,
+        startedAt: Date.now(),
+      };
+      entries.push(entry);
+      byRequestId.set(entry.requestId, entry);
+      trim();
+      return entry;
+    },
+    response(p) {
+      return patch(p?.requestId, {
+        status: p?.response?.status ?? null,
+        statusText: p?.response?.statusText ?? null,
+        mimeType: p?.response?.mimeType ?? null,
+        responseHeaders: p?.response?.headers ?? null,
+      });
+    },
+    finished(p) {
+      patch(p?.requestId, { finished: true });
+    },
+    failed(p) {
+      patch(p?.requestId, { finished: true, failed: p?.errorText ?? "failed" });
+    },
+  };
+}
+
 /**
  * Flood guard mirroring the gateway-side guard in browser.ts.
  * Pauses console capture for a cooldown timeout when the page emits a burst
@@ -243,9 +329,47 @@ async function main() {
   const consoleGuard = createConsoleFloodGuard(process.env);
 
   const instrumentedPages = new WeakSet();
+  // Every page gets a CDP session with the Network domain enabled, so request
+  // and response bodies (POST payloads, OAuth token responses, ...) are always
+  // available to browser.network / browser.eval without a separate opt-in.
+  const cdpByPage = new Map();
+  const cdpForPage = (targetPage) => {
+    const existing = cdpByPage.get(targetPage);
+    if (existing) return existing;
+    const pending = (async () => {
+      const session = await context.newCDPSession(targetPage);
+      const binding = { session, recorder: createNetworkRecorder() };
+      session.on("Network.requestWillBeSent", (p) => binding.recorder.request(p));
+      session.on("Network.responseReceived", (p) => binding.recorder.response(p));
+      session.on("Network.loadingFinished", (p) => binding.recorder.finished(p));
+      session.on("Network.loadingFailed", (p) => binding.recorder.failed(p));
+      session.on("detach", () => {
+        if (cdpByPage.get(targetPage) === pending) cdpByPage.delete(targetPage);
+      });
+      await session.send("Network.enable", {
+        maxTotalBufferSize: 104857600,
+        maxResourceBufferSize: 20971520,
+        maxPostDataSize: 65536,
+      }).catch(() => undefined);
+      await session.send("Runtime.enable").catch(() => undefined);
+      return binding;
+    })().catch((err) => {
+      cdpByPage.delete(targetPage);
+      throw err;
+    });
+    cdpByPage.set(targetPage, pending);
+    return pending;
+  };
+  const activeCdpBindings = async () => {
+    const pending = [...cdpByPage.values()];
+    const resolved = await Promise.all(pending.map((p) => Promise.resolve(p).catch(() => null)));
+    return resolved.filter(Boolean);
+  };
+
   const attachPageEvents = (targetPage) => {
     if (!targetPage || instrumentedPages.has(targetPage)) return;
     instrumentedPages.add(targetPage);
+    void cdpForPage(targetPage).catch(() => undefined);
     targetPage.on?.("console", (msg) => {
       const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
       const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
@@ -703,6 +827,137 @@ async function main() {
           : null,
       };
     }, String(params.selector || "")),
+    evaluate: async (params) => {
+      const targetPage = await ensurePage();
+      const expression = String(params?.expression ?? "");
+      if (!expression.trim()) throw new Error("Expression is required");
+      const timeoutMs = Math.max(1000, Math.min(300000, Number(params?.timeoutMs ?? 30000) || 30000));
+      const binding = await cdpForPage(targetPage);
+      const run = (returnByValue) => binding.session.send("Runtime.evaluate", {
+        expression,
+        awaitPromise: true,
+        returnByValue,
+        userGesture: true,
+        includeCommandLineAPI: true,
+        timeout: timeoutMs,
+      });
+      let result;
+      try {
+        result = await run(params?.returnByValue !== false);
+      } catch (err) {
+        result = await run(false);
+      }
+      if (result?.exceptionDetails) {
+        const details = result.exceptionDetails;
+        return {
+          ok: false,
+          error: normalizeText(details.exception?.description ?? details.text ?? "Evaluation failed").slice(0, 4000),
+          lineNumber: details.lineNumber ?? null,
+          columnNumber: details.columnNumber ?? null,
+        };
+      }
+      const remote = result?.result ?? {};
+      return {
+        ok: true,
+        type: remote.type ?? null,
+        subtype: remote.subtype ?? null,
+        value: remote.value === undefined ? null : remote.value,
+        unserializableValue: remote.unserializableValue ?? null,
+        description: remote.description ? normalizeText(remote.description).slice(0, 4000) : null,
+      };
+    },
+    networkLog: async (params) => {
+      const p = params ?? {};
+      const targetPage = await ensurePage();
+      await cdpForPage(targetPage).catch(() => null);
+      const bindings = await activeCdpBindings();
+      if (p.clear === true) {
+        for (const binding of bindings) binding.recorder.clear();
+        return { entries: [], nextSeq: 0, cleared: true };
+      }
+      const limit = Math.max(1, Math.min(1000, Number(p.limit ?? 50) || 50));
+      const bodyLimit = Math.max(0, Math.min(200000, Number(p.bodyLimit ?? 20000) || 20000));
+      const urlIncludes = typeof p.urlIncludes === "string" && p.urlIncludes ? p.urlIncludes : null;
+      let urlRegex = null;
+      if (typeof p.urlRegex === "string" && p.urlRegex) urlRegex = new RegExp(p.urlRegex);
+      const methodFilter = typeof p.method === "string" && p.method ? p.method.toUpperCase() : null;
+      const statusAtLeast = Number.isFinite(Number(p.statusAtLeast)) ? Number(p.statusAtLeast) : null;
+      const sinceSeq = Number.isFinite(Number(p.sinceSeq)) ? Number(p.sinceSeq) : null;
+      const wantBodies = p.includeBodies !== false && bodyLimit > 0;
+
+      const collected = [];
+      for (const binding of bindings) {
+        for (const entry of binding.recorder.entries()) {
+          if (sinceSeq !== null && entry.seq <= sinceSeq) continue;
+          if (methodFilter && String(entry.method ?? "").toUpperCase() !== methodFilter) continue;
+          if (statusAtLeast !== null && !(Number(entry.status ?? 0) >= statusAtLeast)) continue;
+          if (urlIncludes && !String(entry.url ?? "").includes(urlIncludes)) continue;
+          if (urlRegex && !urlRegex.test(String(entry.url ?? ""))) continue;
+          collected.push({ binding, entry });
+        }
+      }
+      collected.sort((a, b) => (a.entry.startedAt - b.entry.startedAt) || (a.entry.seq - b.entry.seq));
+      const selected = collected.slice(-limit);
+
+      for (const { binding, entry } of selected) {
+        if (!wantBodies) {
+          entry.requestBody = entry.requestBody ? { text: clampBody(entry.requestBody.text, bodyLimit) } : null;
+          entry.responseBody = null;
+          continue;
+        }
+        if (entry.hasPostData && !entry.requestBody?.text) {
+          try {
+            const body = await binding.session.send("Network.getRequestPostData", { requestId: entry.requestId });
+            if (body?.postData) entry.requestBody = { text: clampBody(body.postData, bodyLimit) };
+          } catch {
+            // Request body no longer retained by the browser.
+          }
+        } else if (entry.requestBody?.text) {
+          entry.requestBody = { text: clampBody(entry.requestBody.text, bodyLimit) };
+        }
+        if (!entry.responseBody && entry.status) {
+          try {
+            const body = await binding.session.send("Network.getResponseBody", { requestId: entry.requestId });
+            const text = body?.base64Encoded
+              ? Buffer.from(String(body.body ?? ""), "base64").toString("utf8")
+              : String(body?.body ?? "");
+            entry.responseBody = { text: clampBody(text, bodyLimit) };
+          } catch (err) {
+            entry.responseBody = { error: normalizeText(String(err?.message ?? err)).slice(0, 300) };
+          }
+        }
+      }
+
+      const includeHeaders = p.includeHeaders === true;
+      return {
+        url: typeof targetPage.url === "function" ? targetPage.url() : null,
+        nextSeq: selected.length ? selected[selected.length - 1].entry.seq : (sinceSeq ?? 0),
+        entries: selected.map(({ entry }) => ({
+          seq: entry.seq,
+          requestId: entry.requestId,
+          url: entry.url,
+          method: entry.method,
+          resourceType: entry.resourceType,
+          status: entry.status,
+          statusText: entry.statusText,
+          mimeType: entry.mimeType,
+          failed: entry.failed,
+          finished: entry.finished === true,
+          startedAt: entry.startedAt,
+          requestHeaders: includeHeaders ? entry.requestHeaders : null,
+          responseHeaders: includeHeaders ? entry.responseHeaders : null,
+          requestBody: entry.requestBody ?? null,
+          responseBody: entry.responseBody ?? null,
+        })),
+      };
+    },
+    cdp: async (params) => {
+      const method = String(params?.method ?? "").trim();
+      if (!method) throw new Error("CDP method is required");
+      const binding = await cdpForPage(await ensurePage());
+      const cdpParams = params?.params && typeof params.params === "object" ? params.params : {};
+      return await binding.session.send(method, cdpParams);
+    },
     close: async () => {
       await context.close();
       await browser.close();

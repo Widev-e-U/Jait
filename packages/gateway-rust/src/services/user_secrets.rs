@@ -29,13 +29,26 @@ pub struct UserSecretRecord {
     pub last_used_at: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SaveSecretParams {
     pub user_id: Option<String>,
     pub r#type: String,
     pub key: String,
     pub label: String,
     pub value: String,
+}
+
+// Callers may include these parameters in diagnostics; never format the secret.
+impl std::fmt::Debug for SaveSecretParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SaveSecretParams")
+            .field("user_id", &self.user_id)
+            .field("type", &self.r#type)
+            .field("key", &self.key)
+            .field("label", &self.label)
+            .field("value", &"[REDACTED]")
+            .finish()
+    }
 }
 
 fn normalize(value: &str) -> String {
@@ -332,4 +345,86 @@ fn row_user_secret(row: &rusqlite::Row<'_>) -> rusqlite::Result<UserSecretRecord
         updated_at: row.get(6)?,
         last_used_at: row.get(7)?,
     })
+}
+
+#[cfg(test)]
+mod secret_debug_tests {
+    use super::SaveSecretParams;
+
+    #[tokio::test]
+    async fn database_worker_keeps_forge_tokens_owner_scoped_and_encrypted() {
+        use super::UserSecretService;
+        use crate::routes::auth::AuthState;
+        use crate::services::users::UserService;
+
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let users = UserService::new(&db);
+        let alice = users
+            .create_user_with_hash("secret-alice", "hash")
+            .unwrap()
+            .id;
+        let bob = users
+            .create_user_with_hash("secret-bob", "hash")
+            .unwrap()
+            .id;
+        let auth = AuthState::new(db, "secret-storage-test-key-at-least-32-bytes".into()).unwrap();
+        let secrets = UserSecretService::new("encryption-key");
+        let owner = alice.clone();
+        let writer = secrets.clone();
+        auth.with_database(move |db| {
+            writer.save(
+                db,
+                SaveSecretParams {
+                    user_id: Some(owner),
+                    r#type: "forge-token".into(),
+                    key: "github.com".into(),
+                    label: "GitHub personal access token".into(),
+                    value: "alice-private-token".into(),
+                },
+            )?;
+            let stored: String =
+                db.query_row("SELECT encrypted_value FROM user_secrets", [], |row| {
+                    row.get(0)
+                })?;
+            assert!(!stored.contains("alice-private-token"));
+            Ok(())
+        })
+        .await
+        .unwrap();
+        auth.with_database(move |db| {
+            assert_eq!(
+                secrets
+                    .get_value(db, Some(&alice), "forge-token", "github.com")?
+                    .as_deref(),
+                Some("alice-private-token")
+            );
+            assert_eq!(
+                secrets.get_value(db, Some(&bob), "forge-token", "github.com")?,
+                None
+            );
+            assert_eq!(
+                secrets.get_value(db, None, "forge-token", "github.com")?,
+                None
+            );
+            Ok(())
+        })
+        .await
+        .unwrap();
+        auth.shutdown().await.unwrap();
+    }
+
+    #[test]
+    fn save_secret_debug_redacts_plaintext() {
+        let params = SaveSecretParams {
+            user_id: Some("owner".into()),
+            r#type: "forge-token".into(),
+            key: "github.com".into(),
+            label: "GitHub token".into(),
+            value: "sensitive-token-value".into(),
+        };
+        let output = format!("{params:?}");
+        assert!(!output.contains(&params.value));
+        assert!(output.contains("[REDACTED]"));
+    }
 }

@@ -983,3 +983,59 @@ fn monitor_redaction_preserves_ecmascript_whitespace_boundaries_and_overlapping_
     call["monitor"]["keys"]["SHORT_KEY"] = json!("key-");
     compare(call);
 }
+
+#[test]
+fn active_instructions_and_progress_review_match_live_typescript() {
+    let result = monitor_reference(
+        vec![
+            goal(),
+            json!({"op":"instructions","user":"owner"}),
+            monitor_check(1, "continue"),
+        ],
+        vec![monitor_verdict(true, true)],
+    );
+    let instructions = &result["results"][1]["value"];
+    let text =
+        String::from_utf16(&serde_json::from_value::<Vec<u16>>(instructions.clone()).unwrap())
+            .unwrap();
+    assert!(text.contains("an unchanged overall completion count does not mean no progress"));
+    assert!(text.contains("Distinguish provider or capacity failures from unresolved work"));
+    let choices = &result["reviews"][0]["questions"]["progress"]["criteria"];
+    assert_eq!(
+        choices["progress"],
+        "Concrete new progress, including integrated code, a passing focused regression, or a resolved blocker even when the overall completion count is unchanged"
+    );
+    assert_eq!(
+        choices["stalled"],
+        "No demonstrated new progress; repeated plans or claims alone do not count"
+    );
+}
+
+#[test]
+fn finish_turn_limit_reasons_preserve_checkpoint_utf16_and_error_precedence() {
+    let unchecked_prefix = "Loop paused after three turns without a checkpoint. Review progress and explicitly resume. Last checkpoint: ";
+    let budget_prefix = "Loop paused after 50 turns since the last resume. Review progress and explicitly resume to renew the budget. Last checkpoint: ";
+    for (iteration, checked, unchecked, error, cancelled, prefix) in [
+        (2, 1, 2, None, false, unchecked_prefix),
+        (49, 49, 0, None, false, budget_prefix),
+        (49, 48, 2, None, true, unchecked_prefix),
+        (49, 48, 2, Some("provider failed"), true, unchecked_prefix),
+    ] {
+        let summary = format!("{}😀tail", "x".repeat(7999 - prefix.len()));
+        let metadata = json!({"loop":{"id":"saved","goal":"goal","criteria":["criterion"],"status":"running","iteration":iteration,"revision":2,"checkedIteration":checked,"summary":summary,"nextMessage":"next","evidence":[],"updatedAt":"now","uncheckedTurns":unchecked}}).to_string();
+        let result = compare_native(
+            json!({"sessions":[{"id":"chat","userId":"owner","metadata":metadata}],"steps":[{"op":"finish","error":error,"cancelled":cancelled}]}),
+        );
+        let state = checkpoint(&result, 0);
+        if error.is_some() {
+            assert_eq!(state["status"], units("error"));
+            assert_eq!(state["summary"], units("provider failed"));
+        } else {
+            assert_eq!(state["status"], units("paused"));
+            let actual = serde_json::from_value::<Vec<u16>>(state["summary"].clone()).unwrap();
+            assert_eq!(actual.len(), 8000);
+            assert!(actual.starts_with(&prefix.encode_utf16().collect::<Vec<_>>()));
+            assert_eq!(actual[7999], 0xd83d);
+        }
+    }
+}

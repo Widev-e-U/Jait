@@ -25,6 +25,13 @@ function makeNotifications() {
 }
 
 describe("ProviderUsageService", () => {
+  it("removes absent quotas when a fresh balance replaces previous limits", () => {
+    const service = new ProviderUsageService(db);
+    service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.5, models: [] }, weekly: { usage: 0.8, models: [] } } });
+    service.recordOllamaUsage("ollama", { source: "balance", limits: { monthly: { usage: 0.2, models: [] } } } as any);
+    expect(service.listForUser(["ollama"]).map((row) => row.rateLimitType)).toEqual(["monthly"]);
+  });
+
   it("stores Go windows and provider-reported Ollama resets", () => {
     const service = new ProviderUsageService(db);
     const window = { status: "ok" as const, percent: 20, resetsAt: "2026-10-09T12:00:00Z" };

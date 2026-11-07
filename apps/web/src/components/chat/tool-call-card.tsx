@@ -1328,10 +1328,11 @@ function formatFetchedResults(data: Record<string, unknown>): string | null {
     const content = typeof entry.content === 'string' ? entry.content.trim() : ''
     lines.push(`${i + 1}. ${url || `Result ${i + 1}`}`)
     if (message) lines.push(`   ${message}`)
-    if (content) lines.push(`   ${truncate(content, 240)}`)
+    if (content) lines.push(`   ${content}`)
     if (i < results.length - 1) lines.push('')
   }
 
+  if (rawResults.length > results.length) lines.push(`… ${rawResults.length - results.length} more results`)
   return lines.join('\n').trim() || null
 }
 
@@ -1769,6 +1770,10 @@ function formatTerminalResult(result: ToolCallInfo['result']): string | null {
   return output || null
 }
 
+function isGenericCompletion(value: string): boolean {
+  return /^(?:tool |command |operation )?(?:completed|done|success(?:ful(?:ly)?)?)[.!]?$/i.test(value.trim())
+}
+
 /** Format the output data from a tool result */
 export function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
@@ -1846,8 +1851,8 @@ export function formatOutput(result: ToolCallInfo['result'], tool?: string): str
     if (extracted) return extracted
   }
 
-  if (result.message && result.message !== 'Command executed successfully') return result.message
-  if (data) return safeStringify(data)
+  if (result.message && !isGenericCompletion(result.message) && result.message !== 'Command executed successfully') return result.message
+  if (rawDataOutput && (!data || Object.keys(data).some(key => !['status', 'ok', 'success'].includes(key)))) return rawDataOutput
   return result.message
 }
 
@@ -3929,6 +3934,8 @@ function ToolCallCardInner({
   const [streamingMounted] = useState(call.status === 'pending' || call.status === 'running')
   const [now, setNow] = useState(() => Date.now())
   const [approvalSubmitting, setApprovalSubmitting] = useState<'approve' | 'reject' | null>(null)
+  const [approvalError, setApprovalError] = useState<string | null>(null)
+  const approvalSubmittingRef = useRef(false)
   const prevStatusRef = useRef(call.status)
   // Keeps the card itself put while its body opens or closes: the top edge is
   // pinned in the upper half of the viewport (content below moves down), the
@@ -3957,7 +3964,9 @@ function ToolCallCardInner({
   const summary = getCallSummary(displayTool, normalizedArgs, call.result?.data, call.result?.message)
   const editDiffCounts = getEditDiffCounts(displayTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, displayTool)
-  const displayOutput = finalOutput || call.streamingOutput || ''
+  const displayOutput = (isGenericCompletion(finalOutput) && call.streamingOutput?.trim())
+    ? call.streamingOutput
+    : finalOutput || call.streamingOutput || ''
   const toolSearchItems = displayTool === 'tools.search'
     ? getToolSearchResultItems(call.result?.data, call.result?.message)
     : []
@@ -3989,14 +3998,19 @@ function ToolCallCardInner({
   const isPending = call.status === 'pending'
   const isApprovalPending = !!call.approvalRequestId && call.status === 'pending'
   const handleApprovalResponse = useCallback(async (approved: boolean) => {
-    if (!call.approvalRequestId || !onApprovalResponse || approvalSubmitting) return
+    if (!call.approvalRequestId || !onApprovalResponse || approvalSubmittingRef.current) return
+    approvalSubmittingRef.current = true
+    setApprovalError(null)
     setApprovalSubmitting(approved ? 'approve' : 'reject')
     try {
       await onApprovalResponse(call.approvalRequestId, approved)
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : 'Could not submit approval response')
     } finally {
+      approvalSubmittingRef.current = false
       setApprovalSubmitting(null)
     }
-  }, [approvalSubmitting, call.approvalRequestId, onApprovalResponse])
+  }, [call.approvalRequestId, onApprovalResponse])
   const filePaths = getToolFilePaths(displayTool, normalizedArgs, call.result?.data, call.result?.message)
     .map((path) => path.trim())
     .filter(Boolean)
@@ -4605,6 +4619,7 @@ function ToolCallCardInner({
               </Button>
             </div>
           </div>
+          {approvalError && <p role="alert" className="mt-2 text-xs text-destructive">{approvalError}</p>}
         </div>
       )}
       {hasInlineSecretPrompt && (

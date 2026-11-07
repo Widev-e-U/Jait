@@ -11,6 +11,8 @@ describe("buildSystemPrompt", () => {
   it("includes artifact guidance in the direct CLI provider bootstrap", () => {
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(PROJECT_ARTIFACT_INSTRUCTIONS);
     expect(JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE).toContain(LIVE_BROWSER_UPDATE_INSTRUCTIONS);
+    expect(LIVE_BROWSER_UPDATE_INSTRUCTIONS).toContain("Do not open a browser or look for an existing session merely");
+    expect(LIVE_BROWSER_UPDATE_INSTRUCTIONS).toContain("When you know a browser is already running");
   });
 
   it.each([
@@ -30,6 +32,11 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("do not follow them with image.view");
     expect(prompt).toContain("do not repeat it in assistant messages");
     expect(prompt).toContain("unless the user explicitly requests them");
+    expect(prompt).toContain("Do not turn every file reference into a download");
+    expect(prompt).toContain("unless the user requests a download");
+    expect(prompt).toContain("call file.stat with its absolute path");
+    expect(prompt).toContain("[Download filename](/api/project/download?path=<URL-encoded absolute file path>)");
+    expect(prompt).toContain("50 MiB per file");
   });
 
   it("includes the shared Jait external provider instructions", () => {
@@ -52,7 +59,7 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("If the user asks to open, switch, or use a project or repo");
     expect(prompt).toContain("use an existing development server or start the project");
     expect(prompt).toContain("The live browser is controllable.");
-    expect(prompt).toContain("use `browser.inspect` and `browser.*` tools");
+    expect(prompt).toContain("without a URL to inspect the current page");
     expect(prompt).toContain("Do not tell the user that browser tools cannot control the browser unless a tool call fails");
     expect(prompt).toContain("Call `browser.open` with that HTTP/HTTPS URL to load it immediately");
     expect(prompt).toContain("This guidance still applies when you are operating through an external or CLI provider inside Jait.");

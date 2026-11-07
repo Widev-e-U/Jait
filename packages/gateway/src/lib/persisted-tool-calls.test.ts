@@ -175,4 +175,10 @@ describe("serializePersistedToolCalls", () => {
     expect(result.every((entry: Record<string, unknown>) => !("data" in entry) && !("output" in entry))).toBe(true);
   });
 
+  it("assigns safe defaults to malformed entries during compaction", () => {
+    const result = JSON.parse(serializePersistedToolCalls(JSON.stringify([null, 1, {}]), { forceCompact: true, markCompacted: true })!);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toMatchObject({ callId: "truncated-0", tool: "unknown", args: {}, ok: false, storageCompacted: true });
+  });
+
 });

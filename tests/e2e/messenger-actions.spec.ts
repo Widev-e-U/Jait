@@ -64,9 +64,8 @@ for (const width of [1280, 390, 320]) {
 test('React, remove reaction, and edit own message', async ({ page }) => {
   const calls = await mount(page)
   const own = page.locator('[data-message-id="$two"]')
-  // Desktop shows the quick-reaction row on hover, like WhatsApp Web.
-  await own.hover()
-  await own.getByRole('button', { name: 'React to message' }).click()
+  await own.locator('p').last().click({ button: 'right' })
+  await page.getByRole('toolbar', { name: 'Message reactions' }).getByRole('button', { name: 'React to message' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'React with 👍' }).click()
   const reaction = own.locator('[data-reaction-pills]').getByRole('button', { name: '👍 reaction by You', exact: true })
   await expect(reaction).toHaveAttribute('aria-pressed', 'true')
@@ -93,26 +92,33 @@ test('Day dividers label today and yesterday', async ({ page }) => {
   await expect(page.locator('[data-message-id="$image"] [data-day-divider]')).toHaveCount(0)
 })
 
-test('Reaction row appears on hover and on a finger hold', async ({ page }) => {
+test('Reaction row opens at the pointer and on a stationary finger hold', async ({ page }) => {
   await mount(page)
   const own = page.locator('[data-message-id="$two"]')
-  const bar = own.locator('[data-reaction-bar]')
-  await expect(bar).toHaveCSS('opacity', '0')
+  const bar = page.getByRole('toolbar', { name: 'Message reactions' })
   await own.hover()
-  await expect(bar).toHaveCSS('opacity', '1')
+  await expect(bar).toHaveCount(0)
+  const body = own.locator('p').last()
+  const box = (await body.boundingBox())!
+  await body.click({ button: 'right', position: { x: 5, y: 5 } })
+  await expect(bar).toBeVisible()
+  const barBox = (await bar.boundingBox())!
+  expect(Math.abs(barBox.x - Math.max(4, Math.min(box.x + 5, (page.viewportSize()?.width ?? 1280) - 242)))).toBeLessThan(3)
+  expect(Math.abs(barBox.y - (box.y + 5))).toBeLessThan(3)
   await expect(bar.getByRole('button')).toHaveCount(7)
-  await expect(bar.getByRole('button', { name: 'React with ❤️' })).toBeVisible()
-  await expect(bar.getByRole('button', { name: 'React to message' })).toBeVisible()
-
-  const incoming = page.locator('[data-message-id="$one"]')
-  const incomingBar = incoming.locator('[data-reaction-bar]')
-  await page.mouse.move(0, 0)
-  await expect(incomingBar).toHaveAttribute('data-open', 'false')
-  // Phones cannot hover, so holding a message opens the same row.
-  await incoming.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true })
-  await expect(incomingBar).toHaveAttribute('data-open', 'true')
   await page.keyboard.press('Escape')
-  await expect(incomingBar).toHaveAttribute('data-open', 'false')
+  await expect(bar).toHaveCount(0)
+
+  const incoming = page.locator('[data-message-id="$one"] p').last()
+  await incoming.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, clientX: 100, clientY: 100 })
+  await incoming.dispatchEvent('pointermove', { pointerType: 'touch', clientX: 100, clientY: 120 })
+  await page.waitForTimeout(500)
+  await expect(bar).toHaveCount(0)
+  await incoming.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, clientX: 100, clientY: 100 })
+  await expect(bar).toBeVisible()
+  await incoming.dispatchEvent('pointerup', { pointerType: 'touch' })
+  await page.keyboard.press('Escape')
+  await expect(bar).toHaveCount(0)
 })
 
 test('Chat options remove conversation with clear confirmation', async ({ page }) => {

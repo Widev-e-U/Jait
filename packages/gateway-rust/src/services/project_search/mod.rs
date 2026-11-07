@@ -5,6 +5,7 @@ pub(crate) mod ignore;
 pub mod primary_bridge;
 pub mod ranking;
 mod ripgrep;
+pub mod scoped;
 mod walk;
 use crate::{runtime::blocking::BlockingLane, services::projects::ProjectService};
 pub use filesystem::ProjectRoot;

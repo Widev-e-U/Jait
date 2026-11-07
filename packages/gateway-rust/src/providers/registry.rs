@@ -17,6 +17,10 @@ pub trait ProviderAdapter: Send + Sync {
     }
     fn info(&self) -> Value;
     fn check_availability(&self) -> BoxFuture<'static, Result<(), String>>;
+    /// Optional model discovery used by scheduled-job preflight.
+    fn preflight_list_models(&self) -> Option<BoxFuture<'static, Result<(), String>>> {
+        None
+    }
     fn dispose(&self) -> BoxFuture<'static, Result<(), String>> {
         Box::pin(async { Ok(()) })
     }
@@ -51,6 +55,21 @@ impl ProviderRegistry {
     }
     pub fn is_visible_to(&self, id: &str, user: &str) -> bool {
         self.get_for_user(id, user).is_some()
+    }
+    /// Check an accessible provider before any scheduled threads are created.
+    pub async fn scheduled_preflight(&self, id: &str, user: &str) -> Value {
+        let Some(provider) = self.get_for_user(id, user) else {
+            return json!({"ok": false, "message": format!("Provider '{id}' is not registered on this gateway.")});
+        };
+        if let Err(reason) = provider.check_availability().await {
+            return json!({"ok": false, "message": format!("Provider '{id}' is not available: {reason}")});
+        }
+        if let Some(list_models) = provider.preflight_list_models()
+            && let Err(reason) = list_models.await
+        {
+            return json!({"ok": false, "message": format!("Provider '{id}' did not pass scheduled job preflight before thread creation: {reason}")});
+        }
+        json!({"ok": true})
     }
     pub fn get_or_throw(&self, id: &str) -> Result<Arc<dyn ProviderAdapter>, String> {
         self.get(id)
@@ -184,4 +203,86 @@ pub fn build_jait_mcp_server_refs(
         refs.push(r);
     }
     Ok(refs)
+}
+
+#[cfg(test)]
+mod scheduled_preflight_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Adapter {
+        owner: Option<&'static str>,
+        available: bool,
+        list_ok: Option<bool>,
+        calls: Arc<AtomicUsize>,
+    }
+    impl ProviderAdapter for Adapter {
+        fn id(&self) -> &str {
+            "p"
+        }
+        fn owner_user_id(&self) -> Option<&str> {
+            self.owner
+        }
+        fn info(&self) -> Value {
+            json!({})
+        }
+        fn check_availability(&self) -> BoxFuture<'static, Result<(), String>> {
+            let available = self.available;
+            Box::pin(async move {
+                if available {
+                    Ok(())
+                } else {
+                    Err("offline".into())
+                }
+            })
+        }
+        fn preflight_list_models(&self) -> Option<BoxFuture<'static, Result<(), String>>> {
+            let result = self.list_ok?;
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Some(Box::pin(async move {
+                if result {
+                    Ok(())
+                } else {
+                    Err("models failed".into())
+                }
+            }))
+        }
+    }
+    #[tokio::test]
+    async fn ownership_availability_and_model_listing_are_enforced() {
+        let registry = ProviderRegistry::default();
+        let calls = Arc::new(AtomicUsize::new(0));
+        registry.register(Arc::new(Adapter {
+            owner: Some("alice"),
+            available: false,
+            list_ok: Some(true),
+            calls: calls.clone(),
+        }));
+        assert_eq!(registry.scheduled_preflight("p", "bob").await["ok"], false);
+        assert_eq!(
+            registry.scheduled_preflight("p", "alice").await["ok"],
+            false
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        registry.register(Arc::new(Adapter {
+            owner: Some("alice"),
+            available: true,
+            list_ok: Some(false),
+            calls: calls.clone(),
+        }));
+        assert!(
+            registry.scheduled_preflight("p", "alice").await["message"]
+                .as_str()
+                .unwrap()
+                .contains("models failed")
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        registry.register(Arc::new(Adapter {
+            owner: None,
+            available: true,
+            list_ok: None,
+            calls,
+        }));
+        assert_eq!(registry.scheduled_preflight("p", "alice").await["ok"], true);
+    }
 }

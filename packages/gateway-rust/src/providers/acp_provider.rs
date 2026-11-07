@@ -39,9 +39,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::{Child, Command},
-    sync::{Notify, mpsc, oneshot},
+    sync::{Notify, mpsc, oneshot, watch},
 };
 
 use crate::{providers::codex_event_mapper::ProviderEvent, text::js_trim};
@@ -892,6 +892,7 @@ pub fn find_reasoning_effort_config(config_options: &Value) -> Option<String> {
 #[derive(Debug, Default)]
 pub struct SessionUpdateMapper {
     tool_calls: HashMap<String, Value>,
+    provider_type: String,
     /// Mirrors `contextControls`: used tokens, context window, commands.
     pub used_tokens: Option<Value>,
     pub context_window: Option<Value>,
@@ -903,6 +904,13 @@ pub struct SessionUpdateMapper {
 impl SessionUpdateMapper {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn for_provider(provider_type: &str) -> Self {
+        Self {
+            provider_type: provider_type.to_string(),
+            ..Self::default()
+        }
     }
 
     /// Port of `mergeToolCall`: fold a `tool_call_update` into the stored
@@ -928,6 +936,48 @@ impl SessionUpdateMapper {
         let merged = Value::Object(merged);
         self.tool_calls.insert(call_id.to_string(), merged.clone());
         merged
+    }
+
+    /// Validate the agent session before applying an update to this owner's state.
+    /// The returned events use the gateway session identity, never the agent's.
+    pub fn map_notification(
+        &mut self,
+        gateway_session_id: &str,
+        acp_session_id: &str,
+        params: &Value,
+    ) -> Result<Vec<AcpEvent>, &'static str> {
+        if gateway_session_id.is_empty()
+            || acp_session_id.is_empty()
+            || params.get("sessionId").and_then(Value::as_str) != Some(acp_session_id)
+        {
+            return Err("ACP update session mismatch");
+        }
+        let update = params
+            .get("update")
+            .filter(|value| value.is_object())
+            .ok_or("Invalid ACP session update")?;
+        Ok(self.map(gateway_session_id, update))
+    }
+
+    /// Route the transport's raw update envelope through session validation.
+    /// Other transport events pass through unchanged. The session owner must
+    /// serialize calls with prompt settlement and discard this mapper on teardown.
+    pub fn route_transport_event(
+        &mut self,
+        gateway_session_id: &str,
+        acp_session_id: &str,
+        event: AcpEvent,
+    ) -> Result<Vec<AcpEvent>, &'static str> {
+        match event {
+            AcpEvent::Provider(ProviderEvent::Activity {
+                ref kind,
+                ref payload,
+                ..
+            }) if kind == "session/update" => {
+                self.map_notification(gateway_session_id, acp_session_id, payload)
+            }
+            other => Ok(vec![other]),
+        }
     }
 
     /// Port of `handleSessionUpdate`.
@@ -964,7 +1014,10 @@ impl SessionUpdateMapper {
                         .get("messageId")
                         .map(|id| !id.is_null())
                         .unwrap_or(false);
-                    if js_trim(&text) == CODEX_CAPACITY_ERROR && !has_message_id {
+                    if self.provider_type == "codex"
+                        && js_trim(&text) == CODEX_CAPACITY_ERROR
+                        && !has_message_id
+                    {
                         self.turn_error = Some(text.clone());
                         events.push(AcpEvent::Provider(ProviderEvent::SessionError {
                             session_id: session_id.to_string(),
@@ -1232,6 +1285,8 @@ pub enum TransportError {
     Rpc(AcpRpcError),
     /// The child could not be spawned.
     Spawn(String),
+    /// The agent did not offer a one-time option for this decision.
+    UnsupportedPermissionDecision,
     /// Framing/IO failure.
     Io(String),
 }
@@ -1244,6 +1299,9 @@ impl std::fmt::Display for TransportError {
             TransportError::Exited(message) => write!(f, "{message}"),
             TransportError::Rpc(error) => write!(f, "{error}"),
             TransportError::Spawn(message) => write!(f, "ACP spawn failed: {message}"),
+            TransportError::UnsupportedPermissionDecision => {
+                write!(f, "ACP agent did not offer a one-time permission option")
+            }
             TransportError::Io(message) => write!(f, "ACP transport error: {message}"),
         }
     }
@@ -1283,19 +1341,472 @@ pub struct StartSessionOptions {
     pub env: Vec<(String, String)>,
 }
 
-type Pending = Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value, AcpRpcError>>>>>;
+#[derive(Default)]
+struct PendingState {
+    closed: bool,
+    waiters: HashMap<RpcId, oneshot::Sender<Result<Value, AcpRpcError>>>,
+}
+type Pending = Arc<Mutex<PendingState>>;
+
+// A request can be dropped at any await, including while writing to stdin.
+// The reader removes completed waiters; this guard handles every other exit.
+struct PendingRequest {
+    pending: Pending,
+    key: RpcId,
+}
+
+impl Drop for PendingRequest {
+    fn drop(&mut self) {
+        let waiter = self
+            .pending
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .waiters
+            .remove(&self.key);
+        drop(waiter);
+    }
+}
+
+// A cancelled or failed write may have emitted only part of a JSON frame.
+// Permanently close admission so that a later frame cannot extend it.
+struct FrameWriteGuard {
+    pending: Pending,
+    closed: watch::Sender<bool>,
+    complete: bool,
+}
+
+impl Drop for FrameWriteGuard {
+    fn drop(&mut self) {
+        if !self.complete {
+            let waiters = {
+                let mut state = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+                state.closed = true;
+                std::mem::take(&mut state.waiters)
+            };
+            self.closed.send_replace(true);
+            drop(waiters);
+        }
+    }
+}
+
+// Independently cloneable so agent callbacks can reply while the original
+// request awaits its response. The mutex keeps complete frames serialized.
+#[derive(Clone)]
+struct AcpWriter {
+    stdin: Arc<tokio::sync::Mutex<tokio::process::ChildStdin>>,
+    pending: Pending,
+    closed: watch::Sender<bool>,
+    cancel: CancelToken,
+}
+
+impl AcpWriter {
+    async fn write(&self, message: &Value) -> Result<(), TransportError> {
+        let mut closed = self.closed.subscribe();
+        let cancel = self.cancel.clone();
+        let mut stdin = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Err(TransportError::Cancelled),
+            _ = closed.wait_for(|is_closed| *is_closed) => return Err(TransportError::Io(
+                "ACP connection closed before the response arrived".into(),
+            )),
+            stdin = self.stdin.lock() => stdin,
+        };
+        if *closed.borrow()
+            || self
+                .pending
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .closed
+        {
+            return Err(TransportError::Io(
+                "ACP connection closed before the response arrived".into(),
+            ));
+        }
+        // Install only after acquiring the mutex: cancellation while waiting for
+        // another frame cannot have emitted a partial frame of its own.
+        let mut guard = FrameWriteGuard {
+            pending: Arc::clone(&self.pending),
+            closed: self.closed.clone(),
+            complete: false,
+        };
+        let line = encode_message(message);
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Err(TransportError::Cancelled),
+            _ = closed.wait_for(|is_closed| *is_closed) => Err(TransportError::Io(
+                "ACP connection closed before the response arrived".into(),
+            )),
+            result = async {
+                stdin.write_all(line.as_bytes()).await?;
+                stdin.flush().await
+            } => {
+                result.map_err(|error| TransportError::Io(error.to_string()))?;
+                guard.complete = true;
+                Ok(())
+            }
+        }
+    }
+}
+
+/// A control path that remains usable while the transport awaits a prompt.
+/// The session owner must authenticate and match the session before using it.
+#[derive(Clone)]
+pub struct AcpControlHandle {
+    writer: AcpWriter,
+}
+
+impl AcpControlHandle {
+    /// Ask the agent to interrupt its current turn; settlement is still required.
+    pub async fn interrupt(&self, acp_session_id: &str) -> Result<(), TransportError> {
+        if acp_session_id.is_empty() {
+            return Err(TransportError::Io("ACP session id is empty".into()));
+        }
+        self.writer
+            .write(&json!({
+                "jsonrpc": "2.0", "method": "session/cancel",
+                "params": { "sessionId": acp_session_id },
+            }))
+            .await
+    }
+}
+
+/// An agent-originated request. The session owner must authorize any effect
+/// before replying; receiving a callback does not itself grant permission.
+pub struct AcpCallback {
+    pub id: RpcId,
+    pub method: String,
+    pub params: Value,
+    writer: AcpWriter,
+    replied: bool,
+}
+
+/// A permission request validated against the ACP session owned by the caller.
+#[derive(Debug, PartialEq)]
+pub struct AcpPermissionRequest {
+    pub tool_call: Value,
+    pub options: Vec<(String, String)>,
+}
+
+/// Parse only the permission callback for this session. This performs no
+/// authorization: callers must obtain an explicit decision through the owner.
+pub fn parse_permission_callback(
+    method: &str,
+    params: &Value,
+    expected_session_id: &str,
+) -> Result<AcpPermissionRequest, AcpRpcError> {
+    let error = |code, message: &str| AcpRpcError {
+        code,
+        message: message.into(),
+        data: None,
+    };
+    if method != "session/request_permission" {
+        return Err(error(-32601, "Unsupported ACP callback method"));
+    }
+    if expected_session_id.is_empty()
+        || params.get("sessionId").and_then(Value::as_str) != Some(expected_session_id)
+    {
+        return Err(error(-32602, "ACP callback session mismatch"));
+    }
+    let tool_call = params
+        .get("toolCall")
+        .filter(|value| value.is_object())
+        .cloned()
+        .ok_or_else(|| error(-32602, "Invalid ACP tool call"))?;
+    let values = params
+        .get("options")
+        .and_then(Value::as_array)
+        .filter(|values| !values.is_empty())
+        .ok_or_else(|| error(-32602, "Invalid ACP permission options"))?;
+    let mut options = Vec::with_capacity(values.len());
+    for value in values {
+        let id = value
+            .get("optionId")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| error(-32602, "Invalid ACP permission option"))?;
+        let kind = value
+            .get("kind")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| error(-32602, "Invalid ACP permission option"))?;
+        if options.iter().any(|(existing, _)| existing == id) {
+            return Err(error(-32602, "Duplicate ACP permission option"));
+        }
+        options.push((id.to_owned(), kind.to_owned()));
+    }
+    Ok(AcpPermissionRequest { tool_call, options })
+}
+
+impl AcpCallback {
+    /// Consume the callback so a response can be sent at most once.
+    pub async fn respond(
+        mut self,
+        result: Result<Value, AcpRpcError>,
+    ) -> Result<(), TransportError> {
+        let message = match result {
+            Ok(value) => json!({"jsonrpc": "2.0", "id": self.id, "result": value}),
+            Err(error) => json!({"jsonrpc": "2.0", "id": self.id, "error": error}),
+        };
+        self.writer.write(&message).await?;
+        self.replied = true;
+        Ok(())
+    }
+}
+
+// A callback may be dropped even before it acquires the writer lock. The agent
+// is waiting for its reply, so closing the transport is the only safe recovery.
+impl Drop for AcpCallback {
+    fn drop(&mut self) {
+        if !self.replied {
+            drop(FrameWriteGuard {
+                pending: Arc::clone(&self.writer.pending),
+                closed: self.writer.closed.clone(),
+                complete: false,
+            });
+        }
+    }
+}
+
+/// Owns pending permission callbacks for one gateway and ACP session pair.
+/// The surrounding session must serialize access and cancel these on teardown.
+pub struct AcpApprovalOwner {
+    gateway_session_id: String,
+    acp_session_id: String,
+    pending: HashMap<String, (AcpCallback, AcpPermissionRequest)>,
+}
+
+impl AcpApprovalOwner {
+    pub fn new(gateway_session_id: String, acp_session_id: String) -> Result<Self, &'static str> {
+        if gateway_session_id.is_empty() || acp_session_id.is_empty() {
+            return Err("Session identities must be nonempty");
+        }
+        Ok(Self {
+            gateway_session_id,
+            acp_session_id,
+            pending: HashMap::new(),
+        })
+    }
+
+    /// Admit one callback and create an event for the existing approval path.
+    /// Invalid and overloaded callbacks receive errors and never enter the map.
+    pub async fn admit(
+        &mut self,
+        callback: AcpCallback,
+    ) -> Result<Option<crate::providers::contracts::ProviderEvent>, TransportError> {
+        let parsed =
+            parse_permission_callback(&callback.method, &callback.params, &self.acp_session_id);
+        let request = match parsed {
+            Ok(request) if self.pending.len() < 32 => request,
+            Ok(_) => {
+                callback
+                    .respond(Err(AcpRpcError {
+                        code: -32000,
+                        message: "ACP approval capacity exceeded".into(),
+                        data: None,
+                    }))
+                    .await?;
+                return Ok(None);
+            }
+            Err(error) => {
+                callback.respond(Err(error)).await?;
+                return Ok(None);
+            }
+        };
+        let request_id = uuid::Uuid::new_v4().to_string();
+        let tool = request
+            .tool_call
+            .get("title")
+            .and_then(Value::as_str)
+            .or_else(|| request.tool_call.get("toolCallId").and_then(Value::as_str))
+            .unwrap_or("ACP tool")
+            .to_string();
+        let args = request
+            .tool_call
+            .get("rawInput")
+            .cloned()
+            .unwrap_or(Value::Null);
+        self.pending.insert(request_id.clone(), (callback, request));
+        Ok(Some(
+            crate::providers::contracts::ProviderEvent::ToolApprovalRequired {
+                session_id: self.gateway_session_id.clone(),
+                tool,
+                args,
+                request_id,
+            },
+        ))
+    }
+
+    /// Resolve only an approval addressed to this gateway session and request.
+    /// A missing corresponding option cancels rather than selecting another.
+    pub async fn resolve(
+        &mut self,
+        session_id: &str,
+        request_id: &str,
+        approved: bool,
+    ) -> Result<bool, TransportError> {
+        if session_id != self.gateway_session_id {
+            return Ok(false);
+        }
+        let Some((callback, request)) = self.pending.remove(request_id) else {
+            return Ok(false);
+        };
+        let outcome = one_time_permission_outcome(&request, approved);
+        let cancelled = outcome["outcome"] == "cancelled";
+        callback.respond(Ok(json!({"outcome":outcome}))).await?;
+        if cancelled {
+            return Err(TransportError::UnsupportedPermissionDecision);
+        }
+        Ok(true)
+    }
+
+    /// Cancel outstanding approvals before ending the owning session.
+    pub async fn cancel_all(&mut self) -> Result<(), TransportError> {
+        let pending = std::mem::take(&mut self.pending);
+        for (_, (callback, _)) in pending {
+            callback
+                .respond(Ok(json!({"outcome":{"outcome":"cancelled"}})))
+                .await?;
+        }
+        Ok(())
+    }
+}
+
+// Dropping an owner with unanswered callbacks must not strand the agent or
+// the gateway request waiting for it. Closing admission wakes all waiters.
+impl Drop for AcpApprovalOwner {
+    fn drop(&mut self) {
+        if let Some((callback, _)) = self.pending.values().next() {
+            drop(FrameWriteGuard {
+                pending: Arc::clone(&callback.writer.pending),
+                closed: callback.writer.closed.clone(),
+                complete: false,
+            });
+        }
+    }
+}
+
+// A boolean approval carries no authority to grant future requests. If the
+// agent offers only persistent choices, cancel instead of widening consent.
+fn one_time_permission_outcome(request: &AcpPermissionRequest, approved: bool) -> Value {
+    let kind = if approved {
+        "allow_once"
+    } else {
+        "reject_once"
+    };
+    match request
+        .options
+        .iter()
+        .find(|(_, candidate)| candidate == kind)
+    {
+        Some((id, _)) => json!({"outcome":"selected", "optionId":id}),
+        None => json!({"outcome":"cancelled"}),
+    }
+}
 
 /// A live ACP child process plus its request plumbing.
 pub struct AcpTransport {
+    provider_type: String,
     child: Child,
-    stdin: tokio::process::ChildStdin,
+    writer: AcpWriter,
     pending: Pending,
+    closed: watch::Sender<bool>,
     next_id: i64,
     cancel: CancelToken,
-    events: mpsc::UnboundedSender<AcpEvent>,
-    /// Retained so the process is reaped even if the caller drops us abruptly.
+    events: mpsc::Sender<AcpEvent>,
+    callbacks: Option<mpsc::Receiver<AcpCallback>>,
+    /// Aborted on drop so inherited pipe handles cannot leave detached readers.
     _reader: tokio::task::JoinHandle<()>,
     _stderr: tokio::task::JoinHandle<()>,
+}
+
+impl Drop for AcpTransport {
+    fn drop(&mut self) {
+        self._reader.abort();
+        self._stderr.abort();
+        // The reader no longer runs its normal EOF cleanup after abort. Close
+        // admission here too, including for independently cloned writers.
+        let waiters = {
+            let mut state = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+            state.closed = true;
+            std::mem::take(&mut state.waiters)
+        };
+        self.closed.send_replace(true);
+        drop(waiters);
+    }
+}
+
+// Bound each inbound JSON frame before allocating or decoding it. A frame larger
+// than this is a terminal protocol error; the connection cannot safely resync.
+const ACP_MAX_FRAME_BYTES: u64 = 4 * 1024 * 1024;
+
+async fn read_acp_frame<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+) -> std::io::Result<Option<String>> {
+    let mut bytes = Vec::new();
+    let count = reader
+        .take(ACP_MAX_FRAME_BYTES + 1)
+        .read_until(b'\n', &mut bytes)
+        .await?;
+    if count as u64 > ACP_MAX_FRAME_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "ACP stdout frame exceeds 4 MiB",
+        ));
+    }
+    if count == 0 {
+        return Ok(None);
+    }
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+    }
+    if bytes.last() == Some(&b'\r') {
+        bytes.pop();
+    }
+    String::from_utf8(bytes)
+        .map(Some)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+}
+
+// Retain only a prefix of each diagnostic line while draining the rest, so a
+// child cannot exhaust memory or block forever on an oversized stderr write.
+const ACP_MAX_STDERR_LINE_BYTES: usize = 16 * 1024;
+
+async fn read_stderr_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+) -> std::io::Result<Option<String>> {
+    let mut bytes = Vec::new();
+    let mut truncated = false;
+    let mut saw_input = false;
+    loop {
+        let chunk = reader.fill_buf().await?;
+        if chunk.is_empty() {
+            break;
+        }
+        saw_input = true;
+        let end = chunk.iter().position(|byte| *byte == b'\n');
+        let payload_len = end.unwrap_or(chunk.len());
+        let retained = payload_len.min(ACP_MAX_STDERR_LINE_BYTES.saturating_sub(bytes.len()));
+        bytes.extend_from_slice(&chunk[..retained]);
+        truncated |= retained < payload_len;
+        let consumed = payload_len + usize::from(end.is_some());
+        reader.consume(consumed);
+        if end.is_some() {
+            break;
+        }
+    }
+    if !saw_input {
+        return Ok(None);
+    }
+    if !truncated && bytes.last() == Some(&b'\r') {
+        bytes.pop();
+    }
+    // Diagnostics are untrusted bytes; replacement decoding keeps draining
+    // subsequent lines even when an agent emits invalid UTF-8.
+    let mut line = String::from_utf8_lossy(&bytes).into_owned();
+    if truncated {
+        line.push_str(" [stderr line truncated]");
+    }
+    Ok(Some(line))
 }
 
 impl AcpTransport {
@@ -1307,7 +1818,7 @@ impl AcpTransport {
         config: &AcpProviderConfig,
         cwd: &str,
         env: &BTreeMap<String, String>,
-    ) -> Result<(Self, mpsc::UnboundedReceiver<AcpEvent>, CancelToken), TransportError> {
+    ) -> Result<(Self, mpsc::Receiver<AcpEvent>, CancelToken), TransportError> {
         let mut command = Command::new(&config.command);
         command
             .args(&config.args)
@@ -1336,23 +1847,45 @@ impl AcpTransport {
             .take()
             .ok_or_else(|| TransportError::Spawn("ACP child has no stderr".to_string()))?;
 
-        let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
-        let (event_tx, event_rx) = mpsc::unbounded_channel();
+        let pending: Pending = Arc::new(Mutex::new(PendingState::default()));
+        let (closed, _) = watch::channel(false);
+        // One extra slot is reserved for an explicit terminal overload event.
+        // Protocol events never wait here: the reader must keep processing
+        // responses and callbacks, or fail the connection visibly.
+        let (event_tx, event_rx) = mpsc::channel(65);
+        let mut overload_slot = Some(
+            event_tx
+                .clone()
+                .try_reserve_owned()
+                .expect("empty ACP event queue"),
+        );
         let cancel = CancelToken::new();
+        let writer = AcpWriter {
+            stdin: Arc::new(tokio::sync::Mutex::new(stdin)),
+            pending: Arc::clone(&pending),
+            closed: closed.clone(),
+            cancel: cancel.clone(),
+        };
+        let reader_writer = writer.clone();
+        // Never await a full callback queue in the stdout reader: that would
+        // prevent it from processing replies and deadlock in-flight requests.
+        let (callback_tx, callback_rx) = mpsc::channel(32);
 
         let reader_pending = Arc::clone(&pending);
+        let reader_closed = closed.clone();
         let reader_events = event_tx.clone();
         let reader_cancel = cancel.clone();
         let reader = tokio::spawn(async move {
-            let mut lines = BufReader::new(stdout).lines();
+            let mut reader = BufReader::new(stdout);
             loop {
-                match lines.next_line().await {
+                match read_acp_frame(&mut reader).await {
                     Ok(Some(line)) => match decode_message(&line) {
                         Ok(Some(AcpInbound::Response { id, result })) => {
                             let waiter = reader_pending
                                 .lock()
                                 .expect("pending map poisoned")
-                                .remove(&id.key());
+                                .waiters
+                                .remove(&id);
                             if let Some(waiter) = waiter {
                                 let _ = waiter.send(result);
                             }
@@ -1361,8 +1894,8 @@ impl AcpTransport {
                             if method == "session/update" {
                                 // Routed by the provider layer, which owns the
                                 // per-session mapper.
-                                let _ = reader_events.send(AcpEvent::Provider(
-                                    ProviderEvent::Activity {
+                                if reader_events
+                                    .try_send(AcpEvent::Provider(ProviderEvent::Activity {
                                         session_id: params
                                             .get("sessionId")
                                             .and_then(Value::as_str)
@@ -1371,66 +1904,129 @@ impl AcpTransport {
                                         kind: "session/update".to_string(),
                                         summary: "session/update".to_string(),
                                         payload: params,
-                                    },
-                                ));
+                                    }))
+                                    .is_err()
+                                {
+                                    if let Some(slot) = overload_slot.take() {
+                                        slot.send(AcpEvent::Provider(ProviderEvent::SessionError {
+                                            session_id: String::new(),
+                                            error: "ACP event receiver unavailable or capacity exceeded".into(),
+                                        }));
+                                    }
+                                    break;
+                                }
                             }
                         }
-                        Ok(Some(AcpInbound::Request { id, method, .. })) => {
-                            // Agent→client callbacks. The reference routes these
-                            // through `JaitAcpClient`; see the module report for
-                            // what is approximated here.
-                            let _ = (&id, &method);
+                        Ok(Some(AcpInbound::Request { id, method, params })) => {
+                            let callback = AcpCallback {
+                                id,
+                                method,
+                                params,
+                                writer: reader_writer.clone(),
+                                replied: false,
+                            };
+                            if callback_tx.try_send(callback).is_err() {
+                                // Overload or a lost owner makes further progress
+                                // impossible; closing wakes every pending request.
+                                if let Some(slot) = overload_slot.take() {
+                                    slot.send(AcpEvent::Provider(ProviderEvent::SessionError {
+                                        session_id: String::new(),
+                                        error: "ACP callback receiver unavailable or full".into(),
+                                    }));
+                                }
+                                break;
+                            }
                         }
                         Ok(None) => {}
                         Err(error) => {
-                            let _ = reader_events.send(AcpEvent::Provider(
-                                ProviderEvent::SessionError {
+                            if reader_events
+                                .try_send(AcpEvent::Provider(ProviderEvent::SessionError {
                                     session_id: String::new(),
                                     error,
-                                },
-                            ));
+                                }))
+                                .is_err()
+                            {
+                                if let Some(slot) = overload_slot.take() {
+                                    slot.send(AcpEvent::Provider(ProviderEvent::SessionError {
+                                        session_id: String::new(),
+                                        error:
+                                            "ACP event receiver unavailable or capacity exceeded"
+                                                .into(),
+                                    }));
+                                }
+                                break;
+                            }
                         }
                     },
                     Ok(None) => break,
                     Err(error) => {
-                        if !reader_cancel.is_cancelled() {
-                            let _ = reader_events.send(AcpEvent::Provider(
-                                ProviderEvent::SessionError {
-                                    session_id: String::new(),
-                                    error: format!("ACP stdout read failed: {error}"),
-                                },
-                            ));
+                        if !reader_cancel.is_cancelled()
+                            && let Some(slot) = overload_slot.take()
+                        {
+                            slot.send(AcpEvent::Provider(ProviderEvent::SessionError {
+                                session_id: String::new(),
+                                error: format!("ACP stdout read failed: {error}"),
+                            }));
                         }
                         break;
                     }
                 }
             }
+            // Close admission and detach all waiters under one lock. Dropping the
+            // senders wakes requests already waiting for a response.
+            let waiters = {
+                let mut state = reader_pending.lock().unwrap_or_else(|e| e.into_inner());
+                state.closed = true;
+                std::mem::take(&mut state.waiters)
+            };
+            reader_closed.send_replace(true);
+            drop(waiters);
         });
 
         let stderr_events = event_tx.clone();
+        let stderr_cancel = cancel.clone();
+        let mut stderr_closed = closed.subscribe();
         let stderr_task = tokio::spawn(async move {
-            let mut lines = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
+            let mut reader = BufReader::new(stderr);
+            loop {
+                let line = tokio::select! {
+                    biased;
+                    _ = stderr_cancel.cancelled() => break,
+                    _ = stderr_closed.wait_for(|closed| *closed) => break,
+                    result = read_stderr_line(&mut reader) => match result {
+                        Ok(Some(line)) => line,
+                        _ => break,
+                    },
+                };
                 // stderr chunks surface as `activity` events, trimmed.
                 if let Some(summary) = stderr_activity(&line) {
-                    let _ = stderr_events.send(AcpEvent::Provider(ProviderEvent::Activity {
+                    let event = AcpEvent::Provider(ProviderEvent::Activity {
                         session_id: String::new(),
                         kind: "stderr".to_string(),
                         summary,
                         payload: Value::Null,
-                    }));
+                    });
+                    tokio::select! {
+                        biased;
+                        _ = stderr_cancel.cancelled() => break,
+                        _ = stderr_closed.wait_for(|closed| *closed) => break,
+                        result = stderr_events.send(event) => if result.is_err() { break; },
+                    }
                 }
             }
         });
 
         Ok((
             Self {
+                provider_type: config.provider_type.clone(),
                 child,
-                stdin,
+                writer,
                 pending,
+                closed,
                 next_id: 0,
                 cancel: cancel.clone(),
                 events: event_tx,
+                callbacks: Some(callback_rx),
                 _reader: reader,
                 _stderr: stderr_task,
             },
@@ -1439,8 +2035,21 @@ impl AcpTransport {
         ))
     }
 
-    pub fn event_sender(&self) -> mpsc::UnboundedSender<AcpEvent> {
+    /// Take the single callback receiver before starting an in-flight request.
+    /// The session owner is responsible for routing and resolving callbacks.
+    pub fn take_callbacks(&mut self) -> Option<mpsc::Receiver<AcpCallback>> {
+        self.callbacks.take()
+    }
+
+    pub fn event_sender(&self) -> mpsc::Sender<AcpEvent> {
         self.events.clone()
+    }
+
+    /// Obtain a separate control path before borrowing the transport for a turn.
+    pub fn control_handle(&self) -> AcpControlHandle {
+        AcpControlHandle {
+            writer: self.writer.clone(),
+        }
     }
 
     pub fn cancel_token(&self) -> CancelToken {
@@ -1448,16 +2057,8 @@ impl AcpTransport {
     }
 
     /// Write one frame and flush. Framing is one JSON object per line.
-    async fn write(&mut self, message: &Value) -> Result<(), TransportError> {
-        let line = encode_message(message);
-        self.stdin
-            .write_all(line.as_bytes())
-            .await
-            .map_err(|error| TransportError::Io(error.to_string()))?;
-        self.stdin
-            .flush()
-            .await
-            .map_err(|error| TransportError::Io(error.to_string()))
+    async fn write(&self, message: &Value) -> Result<(), TransportError> {
+        self.writer.write(message).await
     }
 
     /// Send a request and await its response, aborting on cancellation.
@@ -1465,10 +2066,19 @@ impl AcpTransport {
         self.next_id += 1;
         let id = RpcId::Num(self.next_id);
         let (tx, rx) = oneshot::channel();
-        self.pending
-            .lock()
-            .expect("pending map poisoned")
-            .insert(id.key(), tx);
+        {
+            let mut state = self.pending.lock().expect("pending map poisoned");
+            if state.closed {
+                return Err(TransportError::Io(
+                    "ACP connection closed before the response arrived".to_string(),
+                ));
+            }
+            state.waiters.insert(id.clone(), tx);
+        }
+        let _pending_request = PendingRequest {
+            pending: Arc::clone(&self.pending),
+            key: id.clone(),
+        };
 
         self.write(&json!({
             "jsonrpc": "2.0",
@@ -1482,10 +2092,6 @@ impl AcpTransport {
         tokio::select! {
             biased;
             _ = cancel.cancelled() => {
-                self.pending
-                    .lock()
-                    .expect("pending map poisoned")
-                    .remove(&id.key());
                 Err(TransportError::Cancelled)
             }
             response = rx => match response {
@@ -1536,6 +2142,18 @@ impl AcpTransport {
             let _ = self.child.wait().await;
         })
         .await;
+        // Descendants can inherit the pipes after the direct child exits. Do not
+        // leave their readers running after explicit shutdown, and wake anyone
+        // observing the connection's closed state.
+        self._reader.abort();
+        self._stderr.abort();
+        let waiters = {
+            let mut state = self.pending.lock().unwrap_or_else(|e| e.into_inner());
+            state.closed = true;
+            std::mem::take(&mut state.waiters)
+        };
+        self.closed.send_replace(true);
+        drop(waiters);
     }
 
     /// Await exit and produce the terminal event.
@@ -1557,6 +2175,222 @@ impl AcpTransport {
             session_id: session_id.to_string(),
             error: session_exit_error(status.code(), None),
         }))
+    }
+}
+
+/// A single prompt owned together with its transport, callbacks and cleanup.
+/// The caller must authenticate the session pair before constructing this owner.
+/// A fresh owner is required for each turn: ACP updates have no turn identifier.
+pub struct AcpSessionOwner {
+    controls: mpsc::Sender<OwnerControl>,
+    stop: CancelToken,
+    task: Option<tokio::task::JoinHandle<AcpTurnSettlement>>,
+}
+
+/// Completion is returned only after callback and child teardown has finished.
+#[derive(Debug)]
+pub struct AcpTurnSettlement {
+    pub turn_id: String,
+    pub result: Result<Value, String>,
+}
+
+#[derive(Debug)]
+pub struct AcpOwnedEvent {
+    pub turn_id: String,
+    pub event: AcpOwnerEvent,
+}
+
+#[derive(Debug)]
+pub enum AcpOwnerEvent {
+    Update(AcpEvent),
+    Approval(crate::providers::contracts::ProviderEvent),
+}
+
+enum OwnerControl {
+    Interrupt(oneshot::Sender<Result<(), String>>),
+    Approval {
+        session_id: String,
+        request_id: String,
+        approved: bool,
+        reply: oneshot::Sender<Result<bool, String>>,
+    },
+}
+
+impl AcpSessionOwner {
+    /// Start one prompt on an initialized transport and established ACP session.
+    /// Event consumers must keep up; overflow terminates the turn and child.
+    pub fn start(
+        mut transport: AcpTransport,
+        mut transport_events: mpsc::Receiver<AcpEvent>,
+        gateway_session_id: String,
+        acp_session_id: String,
+        turn_id: String,
+        prompt: Value,
+    ) -> Result<(Self, mpsc::Receiver<AcpOwnedEvent>), &'static str> {
+        if turn_id.is_empty() {
+            return Err("Turn identity must be nonempty");
+        }
+        let mut approvals =
+            AcpApprovalOwner::new(gateway_session_id.clone(), acp_session_id.clone())?;
+        let mut callbacks = transport
+            .take_callbacks()
+            .ok_or("ACP callback receiver already taken")?;
+        let control = transport.control_handle();
+        let (controls, mut control_rx) = mpsc::channel(32);
+        let (event_tx, event_rx) = mpsc::channel(64);
+        let stop = CancelToken::new();
+        let task_stop = stop.clone();
+        let task = tokio::spawn(async move {
+            let mut mapper = SessionUpdateMapper::for_provider(&transport.provider_type);
+            let result = {
+                let prompt_request = transport.request(
+                    "session/prompt",
+                    json!({
+                        "sessionId": acp_session_id, "prompt": prompt,
+                    }),
+                );
+                tokio::pin!(prompt_request);
+                loop {
+                    tokio::select! {
+                        _ = task_stop.cancelled() => break Err("ACP owner stopped".to_string()),
+                        event = transport_events.recv() => {
+                            let Some(event) = event else { break Err("ACP event stream closed".into()); };
+                            match mapper.route_transport_event(&gateway_session_id, &acp_session_id, event) {
+                                Ok(events) => {
+                                    let mut overflow = false;
+                                    for event in events {
+                                        if event_tx.try_send(AcpOwnedEvent { turn_id: turn_id.clone(), event: AcpOwnerEvent::Update(event) }).is_err() {
+                                            overflow = true;
+                                            break;
+                                        }
+                                    }
+                                    if overflow {
+                                        break Err("ACP owner event capacity exceeded or receiver closed".into());
+                                    }
+                                }
+                                Err(error) => break Err(error.into()),
+                            }
+                        }
+                        callback = callbacks.recv() => {
+                            let Some(callback) = callback else { break Err("ACP callback stream closed".into()); };
+                            match tokio::time::timeout(Duration::from_secs(1), approvals.admit(callback)).await {
+                                Ok(Ok(Some(event))) => {
+                                    if event_tx.try_send(AcpOwnedEvent { turn_id: turn_id.clone(), event: AcpOwnerEvent::Approval(event) }).is_err() {
+                                        break Err("ACP owner event capacity exceeded or receiver closed".into());
+                                    }
+                                }
+                                Ok(Ok(None)) => {}
+                                Ok(Err(error)) => break Err(error.to_string()),
+                                Err(_) => break Err("ACP callback reply timed out".into()),
+                            }
+                        }
+                        command = control_rx.recv() => {
+                            let Some(command) = command else { break Err("ACP owner controls closed".into()); };
+                            match command {
+                                OwnerControl::Interrupt(reply) => {
+                                    let result = tokio::time::timeout(Duration::from_secs(1), control.interrupt(&acp_session_id)).await
+                                        .map_err(|_| "ACP interrupt timed out".to_string())
+                                        .and_then(|result| result.map_err(|error| error.to_string()));
+                                    let failed = result.is_err();
+                                    let _ = reply.send(result);
+                                    if failed { break Err("ACP interrupt failed".into()); }
+                                }
+                                OwnerControl::Approval { session_id, request_id, approved, reply } => {
+                                    let result = tokio::time::timeout(Duration::from_secs(1), approvals.resolve(&session_id, &request_id, approved)).await
+                                        .map_err(|_| "ACP approval reply timed out".to_string())
+                                        .and_then(|result| result.map_err(|error| error.to_string()));
+                                    let failed = result.is_err();
+                                    let _ = reply.send(result);
+                                    if failed { break Err("ACP approval reply failed".into()); }
+                                }
+                            }
+                        }
+                        result = &mut prompt_request => {
+                            // The reader queues notifications before delivering a later
+                            // response. Drain that queue before publishing settlement.
+                            let mut failure = None;
+                            let mut drained = 0;
+                            while let Ok(event) = transport_events.try_recv() {
+                                drained += 1;
+                                if drained > 64 {
+                                    failure = Some("ACP owner settlement event limit exceeded".to_string());
+                                    break;
+                                }
+                                match mapper.route_transport_event(&gateway_session_id, &acp_session_id, event) {
+                                    Ok(events) => for event in events {
+                                        if event_tx.try_send(AcpOwnedEvent { turn_id: turn_id.clone(), event: AcpOwnerEvent::Update(event) }).is_err() {
+                                            failure = Some("ACP owner event capacity exceeded or receiver closed".to_string());
+                                            break;
+                                        }
+                                    },
+                                    Err(error) => failure = Some(error.to_string()),
+                                }
+                                if failure.is_some() { break; }
+                            }
+                            break match failure { Some(error) => Err(error), None => result.map_err(|error| error.to_string()) };
+                        }
+                    }
+                }
+            };
+            // A timeout or dropped reply closes the writer through callback guards.
+            let _ = tokio::time::timeout(Duration::from_secs(1), approvals.cancel_all()).await;
+            drop(approvals);
+            transport.shutdown().await;
+            AcpTurnSettlement { turn_id, result }
+        });
+        Ok((
+            Self {
+                controls,
+                stop,
+                task: Some(task),
+            },
+            event_rx,
+        ))
+    }
+
+    pub async fn interrupt(&self) -> Result<(), String> {
+        let (reply, result) = oneshot::channel();
+        self.controls
+            .try_send(OwnerControl::Interrupt(reply))
+            .map_err(|_| "ACP owner control queue unavailable".to_string())?;
+        result.await.map_err(|_| "ACP owner stopped".to_string())?
+    }
+
+    pub async fn resolve_approval(
+        &self,
+        session_id: String,
+        request_id: String,
+        approved: bool,
+    ) -> Result<bool, String> {
+        let (reply, result) = oneshot::channel();
+        self.controls
+            .try_send(OwnerControl::Approval {
+                session_id,
+                request_id,
+                approved,
+                reply,
+            })
+            .map_err(|_| "ACP owner control queue unavailable".to_string())?;
+        result.await.map_err(|_| "ACP owner stopped".to_string())?
+    }
+
+    /// Cancellation bypasses the control queue. Await settlement to observe cleanup.
+    pub fn cancel(&self) {
+        self.stop.cancel();
+    }
+
+    pub async fn settle(mut self) -> Result<AcpTurnSettlement, String> {
+        self.task
+            .take()
+            .expect("owner task exists")
+            .await
+            .map_err(|error| error.to_string())
+    }
+}
+
+impl Drop for AcpSessionOwner {
+    fn drop(&mut self) {
+        self.stop.cancel();
     }
 }
 
@@ -1609,6 +2443,999 @@ impl AcpProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn supervised_owner_routes_approval_and_interrupt_during_prompt() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r prompt; printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{"title":"Run"},"options":[{"optionId":"yes","kind":"allow_once"}]}}'; IFS= read -r approval; IFS= read -r interrupt; printf '{"jsonrpc":"2.0","id":1,"result":{"approval":%s,"interrupt":%s}}\n' "$approval" "$interrupt"; IFS= read -r keep_open"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (transport, events, _) = AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let (owner, mut events) = AcpSessionOwner::start(
+            transport,
+            events,
+            "gateway".into(),
+            "agent".into(),
+            "turn-1".into(),
+            json!([]),
+        )
+        .unwrap();
+        let event = tokio::time::timeout(Duration::from_secs(3), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(event.turn_id, "turn-1");
+        let AcpOwnerEvent::Approval(
+            crate::providers::contracts::ProviderEvent::ToolApprovalRequired { request_id, .. },
+        ) = event.event
+        else {
+            panic!("expected approval")
+        };
+        assert!(
+            !owner
+                .resolve_approval("other".into(), request_id.clone(), true)
+                .await
+                .unwrap()
+        );
+        assert!(
+            owner
+                .resolve_approval("gateway".into(), request_id, true)
+                .await
+                .unwrap()
+        );
+        owner.interrupt().await.unwrap();
+        let settled = tokio::time::timeout(Duration::from_secs(3), owner.settle())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(settled.turn_id, "turn-1");
+        let result = settled.result.unwrap();
+        assert_eq!(result["approval"]["result"]["outcome"]["optionId"], "yes");
+        assert_eq!(result["interrupt"]["method"], "session/cancel");
+    }
+
+    #[tokio::test]
+    async fn supervised_owner_rejects_mismatched_update_and_cleans_up() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r prompt; printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"other","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"wrong"}}}}'; IFS= read -r keep_open"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (transport, events, _) = AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let (owner, mut events) = AcpSessionOwner::start(
+            transport,
+            events,
+            "gateway".into(),
+            "agent".into(),
+            "turn-2".into(),
+            json!([]),
+        )
+        .unwrap();
+        let settled = tokio::time::timeout(Duration::from_secs(3), owner.settle())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(settled.result.unwrap_err(), "ACP update session mismatch");
+        assert!(events.recv().await.is_none());
+    }
+
+    #[test]
+    fn notification_checks_session_before_mutating_mapper() {
+        let mut mapper = SessionUpdateMapper::new();
+        let params = json!({"sessionId":"other", "update":{
+            "sessionUpdate":"usage_update", "used":123, "size":456
+        }});
+        assert!(
+            mapper
+                .map_notification("gateway", "agent", &params)
+                .is_err()
+        );
+        assert!(mapper.used_tokens.is_none());
+        assert!(mapper.map_notification("gateway", "", &params).is_err());
+        assert!(
+            mapper
+                .map_notification("gateway", "agent", &json!({"sessionId":"agent"}))
+                .is_err()
+        );
+        let valid = json!({"sessionId":"agent", "update":{
+            "sessionUpdate":"agent_message_chunk", "content":{"type":"text", "text":"hello"}
+        }});
+        let events = mapper.map_notification("gateway", "agent", &valid).unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|event| event.to_value()["sessionId"] == "gateway")
+        );
+    }
+
+    #[tokio::test]
+    async fn transport_updates_are_validated_before_mapping() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"other","update":{"sessionUpdate":"usage_update","used":123,"size":456}}}' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"agent","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"}}}}' '{"jsonrpc":"2.0","id":1,"result":{}}'; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, mut events, _) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let task = tokio::spawn(async move {
+            let result = transport
+                .request("session/prompt", json!({"sessionId":"agent"}))
+                .await;
+            transport.shutdown().await;
+            result
+        });
+        let mut mapper = SessionUpdateMapper::new();
+        let first = tokio::time::timeout(Duration::from_secs(2), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            mapper
+                .route_transport_event("gateway", "agent", first)
+                .is_err()
+        );
+        assert!(mapper.used_tokens.is_none());
+        let second = tokio::time::timeout(Duration::from_secs(2), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let mapped = mapper
+            .route_transport_event("gateway", "agent", second)
+            .unwrap();
+        assert!(
+            mapped
+                .iter()
+                .any(|event| event.to_value()["sessionId"] == "gateway")
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn permission_callback_requires_matching_session_and_valid_options() {
+        let params = json!({"sessionId":"agent-session", "toolCall":{"toolCallId":"t"},
+            "options":[{"optionId":"yes","kind":"allow_once"},{"optionId":"no","kind":"reject_once"}]});
+        let request =
+            parse_permission_callback("session/request_permission", &params, "agent-session")
+                .unwrap();
+        assert_eq!(request.options.len(), 2);
+        assert!(parse_permission_callback("session/request_permission", &params, "other").is_err());
+        assert!(parse_permission_callback("session/request_permission", &params, "").is_err());
+        assert_eq!(
+            parse_permission_callback("terminal/create", &params, "agent-session")
+                .unwrap_err()
+                .code,
+            -32601
+        );
+        let mut invalid = params.clone();
+        invalid["options"][1]["optionId"] = json!("yes");
+        assert!(
+            parse_permission_callback("session/request_permission", &invalid, "agent-session")
+                .is_err()
+        );
+        invalid["options"] = json!([]);
+        assert!(
+            parse_permission_callback("session/request_permission", &invalid, "agent-session")
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_stdout_frame_closes_pending_requests() {
+        let script = "read request; head -c 4194305 /dev/zero | tr '\\0' x; sleep 2";
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, mut events, _) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let result =
+            tokio::time::timeout(Duration::from_secs(5), transport.request("test", json!({})))
+                .await
+                .expect("oversized frame left request pending");
+        assert!(matches!(result, Err(TransportError::Io(_))));
+        assert!(
+            matches!(events.recv().await, Some(AcpEvent::Provider(ProviderEvent::SessionError { error, .. })) if error.contains("frame exceeds 4 MiB"))
+        );
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn raw_event_pressure_fails_connection_with_terminal_error() {
+        let script = r#"read request; i=0; while [ "$i" -lt 65 ]; do printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s"}}'; i=$((i+1)); done; sleep 5"#;
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, mut events, _) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let result =
+            tokio::time::timeout(Duration::from_secs(3), transport.request("test", json!({})))
+                .await
+                .expect("request hung under pressure");
+        assert!(matches!(result, Err(TransportError::Io(_))));
+        for _ in 0..64 {
+            assert!(matches!(
+                events.recv().await,
+                Some(AcpEvent::Provider(ProviderEvent::Activity { .. }))
+            ));
+        }
+        assert!(
+            matches!(events.recv().await, Some(AcpEvent::Provider(ProviderEvent::SessionError { error, .. })) if error.contains("capacity exceeded"))
+        );
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn raw_event_pressure_preserves_callback_and_response_before_limit() {
+        let script = r#"read request; i=0; while [ "$i" -lt 63 ]; do printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s"}}'; i=$((i+1)); done; printf '%s\n' '{"jsonrpc":"2.0","id":"approval","method":"session/request_permission","params":{}}'; read reply; printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"ok":true}}'; sleep 1"#;
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let mut callbacks = transport.take_callbacks().unwrap();
+        let task = tokio::spawn(async move {
+            let result = transport.request("test", json!({})).await;
+            transport.shutdown().await;
+            result
+        });
+        let callback = tokio::time::timeout(Duration::from_secs(3), callbacks.recv())
+            .await
+            .expect("callback blocked by events")
+            .unwrap();
+        callback.respond(Ok(json!({}))).await.unwrap();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(3), task)
+                .await
+                .unwrap()
+                .unwrap()
+                .unwrap(),
+            json!({"ok":true})
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_stderr_is_drained_and_following_line_is_delivered() {
+        let script =
+            r#"head -c 1048576 /dev/zero | tr '\0' x >&2; printf '\nafter\n' >&2; exec sleep 5"#;
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, mut events, _) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let first = tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .expect("oversized stderr blocked")
+            .unwrap();
+        assert!(
+            matches!(first, AcpEvent::Provider(ProviderEvent::Activity { summary, .. }) if summary.len() == ACP_MAX_STDERR_LINE_BYTES + " [stderr line truncated]".len() && summary.ends_with(" [stderr line truncated]"))
+        );
+        let second = tokio::time::timeout(Duration::from_secs(5), events.recv())
+            .await
+            .expect("following stderr line blocked")
+            .unwrap();
+        assert!(
+            matches!(second, AcpEvent::Provider(ProviderEvent::Activity { summary, .. }) if summary == "after")
+        );
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn invalid_utf8_stderr_does_not_stop_following_diagnostics() {
+        let input = &b"bad\xff\nafter\n"[..];
+        let mut reader = BufReader::new(input);
+        assert_eq!(
+            read_stderr_line(&mut reader).await.unwrap().as_deref(),
+            Some("bad\u{fffd}")
+        );
+        assert_eq!(
+            read_stderr_line(&mut reader).await.unwrap().as_deref(),
+            Some("after")
+        );
+        assert!(read_stderr_line(&mut reader).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn cancellation_interrupts_unterminated_stderr_read() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), "printf partial >&2; exec sleep 5".into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        cancel.cancel();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !transport._stderr.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("stderr read ignored cancellation");
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn raw_event_pressure_cancellation_releases_blocked_stderr() {
+        let script = r#"while :; do printf '%s\n' diagnostic >&2; done"#;
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), script.into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while transport.events.capacity() != 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("stderr queue did not fill");
+        cancel.cancel();
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !transport._stderr.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("blocked stderr sender ignored cancellation");
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_aborts_pipe_readers_and_closes_admission() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/cat".into(),
+            args: vec![],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        transport.shutdown().await;
+        tokio::task::yield_now().await;
+        assert!(transport._reader.is_finished());
+        assert!(transport._stderr.is_finished());
+        assert!(transport.pending.lock().unwrap().closed);
+        assert!(*transport.closed.borrow());
+        assert!(
+            transport
+                .request("after-shutdown", json!({}))
+                .await
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn boolean_approval_never_selects_persistent_permission() {
+        let mut request = AcpPermissionRequest {
+            tool_call: json!({}),
+            options: vec![
+                ("always".into(), "allow_always".into()),
+                ("deny-always".into(), "reject_always".into()),
+            ],
+        };
+        assert_eq!(
+            one_time_permission_outcome(&request, true),
+            json!({"outcome":"cancelled"})
+        );
+        assert_eq!(
+            one_time_permission_outcome(&request, false),
+            json!({"outcome":"cancelled"})
+        );
+        request.options.push(("once".into(), "allow_once".into()));
+        request
+            .options
+            .push(("deny-once".into(), "reject_once".into()));
+        assert_eq!(
+            one_time_permission_outcome(&request, true)["optionId"],
+            "once"
+        );
+        assert_eq!(
+            one_time_permission_outcome(&request, false)["optionId"],
+            "deny-once"
+        );
+    }
+
+    #[tokio::test]
+    async fn approval_owner_binds_session_and_resolves_once() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{"title":"Run"},"options":[{"optionId":"yes","kind":"allow_once"},{"optionId":"no","kind":"reject_once"}]}}'; IFS= read -r reply; printf '{"jsonrpc":"2.0","id":1,"result":%s}\n' "$reply"; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let mut callbacks = transport.take_callbacks().unwrap();
+        let handler = tokio::spawn(async move {
+            let mut owner = AcpApprovalOwner::new("gateway".into(), "agent".into()).unwrap();
+            let event = owner
+                .admit(callbacks.recv().await.unwrap())
+                .await
+                .unwrap()
+                .unwrap();
+            let crate::providers::contracts::ProviderEvent::ToolApprovalRequired {
+                request_id,
+                session_id,
+                ..
+            } = event
+            else {
+                panic!("wrong event")
+            };
+            assert_eq!(session_id, "gateway");
+            assert!(!owner.resolve("other", &request_id, true).await.unwrap());
+            assert!(owner.resolve("gateway", &request_id, false).await.unwrap());
+            assert!(!owner.resolve("gateway", &request_id, true).await.unwrap());
+        });
+        let reply = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("prompt", json!({})),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        handler.await.unwrap();
+        assert_eq!(reply["result"]["outcome"]["optionId"], "no");
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn persistent_only_approval_cancels_and_reports_failure() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{},"options":[{"optionId":"always","kind":"allow_always"}]}}'; IFS= read -r reply; printf '{"jsonrpc":"2.0","id":1,"result":%s}\n' "$reply"; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let mut callbacks = transport.take_callbacks().unwrap();
+        let handler = tokio::spawn(async move {
+            let mut owner = AcpApprovalOwner::new("gateway".into(), "agent".into()).unwrap();
+            let event = owner
+                .admit(callbacks.recv().await.unwrap())
+                .await
+                .unwrap()
+                .unwrap();
+            let crate::providers::contracts::ProviderEvent::ToolApprovalRequired {
+                request_id, ..
+            } = event
+            else {
+                panic!("wrong event")
+            };
+            assert_eq!(
+                owner.resolve("gateway", &request_id, true).await,
+                Err(TransportError::UnsupportedPermissionDecision)
+            );
+            assert!(!owner.resolve("gateway", &request_id, true).await.unwrap());
+        });
+        let reply = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("prompt", json!({})),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        handler.await.unwrap();
+        assert_eq!(reply["result"]["outcome"]["outcome"], "cancelled");
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn dropping_approval_owner_wakes_inflight_request() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","id":"a","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{},"options":[{"optionId":"yes","kind":"allow_once"}]}}'; sleep 5"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let mut callbacks = transport.take_callbacks().unwrap();
+        let handler = tokio::spawn(async move {
+            let mut owner = AcpApprovalOwner::new("gateway".into(), "agent".into()).unwrap();
+            assert!(
+                owner
+                    .admit(callbacks.recv().await.unwrap())
+                    .await
+                    .unwrap()
+                    .is_some()
+            );
+            drop(owner);
+        });
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("prompt", json!({})),
+        )
+        .await
+        .expect("owner drop stranded request");
+        assert!(result.is_err());
+        handler.await.unwrap();
+        assert!(transport.pending.lock().unwrap().waiters.is_empty());
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn cancelled_approval_reply_waiting_for_writer_wakes_request() {
+        for cancel_all in [false, true] {
+            let config = AcpProviderConfig {
+                id: "test".into(),
+                command: "/bin/cat".into(),
+                args: vec![],
+                provider_type: "test".into(),
+                execution_node_id: None,
+            };
+            let (mut transport, _events, _cancel) =
+                AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+            let writer = transport.writer.clone();
+            let (tx, rx) = oneshot::channel();
+            transport
+                .pending
+                .lock()
+                .unwrap()
+                .waiters
+                .insert(RpcId::Num(99), tx);
+            let callback = AcpCallback {
+                id: RpcId::Num(1),
+                method: "session/request_permission".into(),
+                params: json!({"sessionId":"agent","toolCall":{},"options":[{"optionId":"yes","kind":"allow_once"}]}),
+                writer: writer.clone(),
+                replied: false,
+            };
+            let mut owner = AcpApprovalOwner::new("gateway".into(), "agent".into()).unwrap();
+            let event = owner.admit(callback).await.unwrap().unwrap();
+            let crate::providers::contracts::ProviderEvent::ToolApprovalRequired {
+                request_id, ..
+            } = event
+            else {
+                panic!("wrong event")
+            };
+            let lock = writer.stdin.lock().await;
+            {
+                let future: std::pin::Pin<
+                    Box<dyn std::future::Future<Output = Result<(), TransportError>> + '_>,
+                > = if cancel_all {
+                    Box::pin(owner.cancel_all())
+                } else {
+                    Box::pin(async {
+                        owner
+                            .resolve("gateway", &request_id, true)
+                            .await
+                            .map(|_| ())
+                    })
+                };
+                let mut future = future;
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(20), &mut future)
+                        .await
+                        .is_err()
+                );
+            }
+            assert!(
+                tokio::time::timeout(Duration::from_secs(1), rx)
+                    .await
+                    .unwrap()
+                    .is_err()
+            );
+            assert!(*writer.closed.borrow());
+            drop(lock);
+            transport.shutdown().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn approval_owner_teardown_cancels_all_pending_callbacks() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","id":"a","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{},"options":[{"optionId":"yes","kind":"allow_once"}]}}' '{"jsonrpc":"2.0","id":"b","method":"session/request_permission","params":{"sessionId":"agent","toolCall":{},"options":[{"optionId":"yes","kind":"allow_once"}]}}'; IFS= read -r first; IFS= read -r second; printf '{"jsonrpc":"2.0","id":1,"result":[%s,%s]}\n' "$first" "$second"; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let mut callbacks = transport.take_callbacks().unwrap();
+        let handler = tokio::spawn(async move {
+            let mut owner = AcpApprovalOwner::new("gateway".into(), "agent".into()).unwrap();
+            for _ in 0..2 {
+                assert!(
+                    owner
+                        .admit(callbacks.recv().await.unwrap())
+                        .await
+                        .unwrap()
+                        .is_some()
+                );
+            }
+            owner.cancel_all().await.unwrap();
+            assert!(owner.pending.is_empty());
+            owner.cancel_all().await.unwrap();
+        });
+        let replies = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("prompt", json!({})),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        handler.await.unwrap();
+        for reply in replies.as_array().unwrap() {
+            assert_eq!(reply["result"]["outcome"]["outcome"], "cancelled");
+        }
+        assert_eq!(replies.as_array().unwrap().len(), 2);
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn interrupt_control_remains_responsive_during_request() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; IFS= read -r cancel; printf '{"jsonrpc":"2.0","id":1,"result":%s}\n' "$cancel"; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let control = transport.control_handle();
+        assert!(control.interrupt("").await.is_err());
+        let (result, interrupted) = tokio::join!(
+            transport.request("session/prompt", json!({"sessionId":"agent"})),
+            async {
+                tokio::task::yield_now().await;
+                control.interrupt("agent").await
+            }
+        );
+        interrupted.unwrap();
+        let notification = result.unwrap();
+        assert_eq!(notification["method"], "session/cancel");
+        assert_eq!(notification["params"]["sessionId"], "agent");
+        assert!(notification.get("id").is_none());
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn callback_reply_unblocks_inflight_request() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{"sessionId":"s"}}'; IFS= read -r reply; printf '{"jsonrpc":"2.0","id":1,"result":%s}\n' "$reply"; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let mut callbacks = transport.take_callbacks().unwrap();
+        assert!(transport.take_callbacks().is_none());
+        let handler = tokio::spawn(async move {
+            let callback = callbacks.recv().await.unwrap();
+            assert_eq!(callback.method, "session/request_permission");
+            assert_eq!(callback.params["sessionId"], "s");
+            callback
+                .respond(Ok(json!({"outcome": "cancelled"})))
+                .await
+                .unwrap();
+        });
+        let reply = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("prompt", json!({})),
+        )
+        .await
+        .expect("callback deadlocked")
+        .unwrap();
+        handler.await.unwrap();
+        assert_eq!(reply["id"], "cb");
+        assert_eq!(reply["result"]["outcome"], "cancelled");
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn callback_receiver_loss_or_overload_wakes_inflight_request() {
+        for receiver_lost in [true, false] {
+            let config = AcpProviderConfig {
+                id: "test".into(), command: "/bin/sh".into(),
+                args: vec!["-c".into(), r#"IFS= read -r request; i=0; while [ "$i" -lt 33 ]; do printf '%s\n' '{"jsonrpc":"2.0","id":"cb","method":"session/request_permission","params":{}}'; i=$((i+1)); done; sleep 2"#.into()],
+                provider_type: "test".into(), execution_node_id: None,
+            };
+            let (mut transport, _events, _cancel) =
+                AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+            let callbacks = transport.take_callbacks().unwrap();
+            let retained_callbacks = if receiver_lost {
+                drop(callbacks);
+                None
+            } else {
+                Some(callbacks)
+            };
+            let result = tokio::time::timeout(
+                Duration::from_secs(1),
+                transport.request("prompt", json!({})),
+            )
+            .await
+            .expect("in-flight request was not woken");
+            assert!(result.is_err());
+            assert!(*transport.closed.borrow());
+            assert!(transport.pending.lock().unwrap().waiters.is_empty());
+            drop(retained_callbacks);
+            transport.shutdown().await;
+        }
+    }
+
+    #[tokio::test]
+    async fn dropping_transport_closes_cloned_writer_and_wakes_waiters() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/cat".into(),
+            args: vec![],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let writer = transport.writer.clone();
+        let (tx, rx) = oneshot::channel();
+        transport
+            .pending
+            .lock()
+            .unwrap()
+            .waiters
+            .insert(RpcId::Num(99), tx);
+        drop(transport);
+        assert!(rx.await.is_err());
+        assert!(matches!(
+            writer.write(&json!({"method": "test"})).await,
+            Err(TransportError::Io(_))
+        ));
+        let state = writer.pending.lock().unwrap();
+        assert!(state.closed && state.waiters.is_empty());
+    }
+
+    #[tokio::test]
+    async fn response_id_preserves_number_and_string_identity() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r request; printf '%s\n' '{"jsonrpc":"2.0","id":"1","result":"wrong"}' '{"jsonrpc":"2.0","id":1,"result":"right"}'; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let result =
+            tokio::time::timeout(Duration::from_secs(2), transport.request("test", json!({})))
+                .await
+                .expect("request timed out")
+                .unwrap();
+        assert_eq!(result, json!("right"));
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn independent_writer_unblocks_inflight_request() {
+        let config = AcpProviderConfig {
+            id: "test".into(), command: "/bin/sh".into(),
+            args: vec!["-c".into(), r#"IFS= read -r first; printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s"}}'; IFS= read -r second; printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"ok":true}}'; sleep 1"#.into()],
+            provider_type: "test".into(), execution_node_id: None,
+        };
+        let (mut transport, mut events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let writer = transport.writer.clone();
+        let task = tokio::spawn(async move { transport.request("test", json!({})).await });
+        tokio::time::timeout(Duration::from_secs(2), events.recv())
+            .await
+            .expect("agent did not receive request")
+            .expect("event channel closed");
+        writer
+            .write(&json!({"jsonrpc":"2.0", "id": "callback", "result": {}}))
+            .await
+            .expect("callback reply write failed");
+        let result = tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .expect("request remained blocked")
+            .unwrap()
+            .unwrap();
+        assert_eq!(result, json!({"ok": true}));
+    }
+
+    #[tokio::test]
+    async fn cancelling_writer_waiting_for_lock_keeps_transport_open() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/cat".into(),
+            args: vec![],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let writer = transport.writer.clone();
+        let lock = writer.stdin.lock().await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), writer.write(&json!({"id": 1})))
+                .await
+                .is_err()
+        );
+        assert!(!transport.pending.lock().unwrap().closed);
+        drop(lock);
+        transport.notify("after-cancel", json!({})).await.unwrap();
+        transport.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn dropping_transport_aborts_pipe_readers() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/cat".into(),
+            args: vec![],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let reader = transport._reader.abort_handle();
+        let stderr = transport._stderr.abort_handle();
+        drop(transport);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !reader.is_finished() || !stderr.is_finished() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("transport pipe readers remained detached");
+    }
+
+    #[tokio::test]
+    async fn aborted_transport_request_releases_its_pending_waiter() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/cat".into(),
+            args: vec![],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let pending = Arc::clone(&transport.pending);
+        let task = tokio::spawn(async move { transport.request("test", json!({})).await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if !pending.lock().unwrap().waiters.is_empty() {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("request was not registered");
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(pending.lock().unwrap().waiters.is_empty());
+    }
+
+    #[tokio::test]
+    async fn stdout_closure_releases_waiters_and_rejects_later_requests() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec!["-c".into(), "read line; exec 1>&-; sleep 5".into()],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let first =
+            tokio::time::timeout(Duration::from_secs(2), transport.request("test", json!({})))
+                .await
+                .expect("pending request hung after stdout closed");
+        assert!(matches!(first, Err(TransportError::Io(_))));
+        let second = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("again", json!({})),
+        )
+        .await
+        .expect("request admitted after stdout closed");
+        assert!(matches!(second, Err(TransportError::Io(_))));
+        let state = transport.pending.lock().unwrap();
+        assert!(state.closed && state.waiters.is_empty());
+    }
+
+    #[tokio::test]
+    async fn stdout_closure_interrupts_a_blocked_request_write() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec![
+                "-c".into(),
+                "dd bs=1 count=1 of=/dev/null 2>/dev/null; exec 1>&-; sleep 5".into(),
+            ],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            transport.request("test", json!({"data": "x".repeat(2_000_000)})),
+        )
+        .await
+        .expect("request write hung after stdout closed");
+        assert!(matches!(result, Err(TransportError::Io(_))));
+    }
+
+    #[tokio::test]
+    async fn dropped_blocked_write_closes_transport_before_reuse() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec![
+                "-c".into(),
+                "dd bs=1 count=1 of=/dev/null 2>/dev/null; sleep 5".into(),
+            ],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(200),
+                transport.request("test", json!({"data": "x".repeat(2_000_000)})),
+            )
+            .await
+            .is_err()
+        );
+        assert!(matches!(
+            transport.request("again", json!({})).await,
+            Err(TransportError::Io(_))
+        ));
+        let state = transport.pending.lock().unwrap();
+        assert!(state.closed && state.waiters.is_empty());
+    }
+
+    #[tokio::test]
+    async fn dropped_blocked_notification_closes_transport_before_reuse() {
+        let config = AcpProviderConfig {
+            id: "test".into(),
+            command: "/bin/sh".into(),
+            args: vec![
+                "-c".into(),
+                "dd bs=1 count=1 of=/dev/null 2>/dev/null; sleep 5".into(),
+            ],
+            provider_type: "test".into(),
+            execution_node_id: None,
+        };
+        let (mut transport, _events, _cancel) =
+            AcpTransport::spawn(&config, ".", &BTreeMap::new()).unwrap();
+        assert!(
+            tokio::time::timeout(
+                Duration::from_millis(200),
+                transport.notify("test", json!({"data": "x".repeat(2_000_000)})),
+            )
+            .await
+            .is_err()
+        );
+        assert!(matches!(
+            transport.request("again", json!({})).await,
+            Err(TransportError::Io(_))
+        ));
+        let state = transport.pending.lock().unwrap();
+        assert!(state.closed && state.waiters.is_empty());
+    }
 
     // -- framing ------------------------------------------------------------
 
@@ -1989,7 +3816,7 @@ mod tests {
 
     #[test]
     fn capacity_text_without_message_id_becomes_turn_error() {
-        let mut mapper = SessionUpdateMapper::new();
+        let mut mapper = SessionUpdateMapper::for_provider("codex");
         let events = mapper.map(
             "s1",
             &json!({
@@ -2003,12 +3830,30 @@ mod tests {
         ));
         assert_eq!(mapper.turn_error.as_deref(), Some(CODEX_CAPACITY_ERROR));
 
+        let mut other = SessionUpdateMapper::for_provider("claude-code");
+        let events = other.map(
+            "s1",
+            &json!({
+                "sessionUpdate": "agent_message_chunk",
+                "content": { "type": "text", "text": CODEX_CAPACITY_ERROR },
+            }),
+        );
+        assert!(matches!(
+            events.as_slice(),
+            [AcpEvent::Provider(ProviderEvent::Token { .. })]
+        ));
+        assert!(other.turn_error.is_none());
+
         // A real delta carries a messageId and must stay a token.
-        let events = map_one(json!({
-            "sessionUpdate": "agent_message_chunk",
-            "messageId": "m1",
-            "content": { "type": "text", "text": CODEX_CAPACITY_ERROR },
-        }));
+        let mut codex_delta = SessionUpdateMapper::for_provider("codex");
+        let events = codex_delta.map(
+            "s1",
+            &json!({
+                "sessionUpdate": "agent_message_chunk",
+                "messageId": "m1",
+                "content": { "type": "text", "text": CODEX_CAPACITY_ERROR },
+            }),
+        );
         assert!(matches!(
             events.as_slice(),
             [AcpEvent::Provider(ProviderEvent::Token { .. })]

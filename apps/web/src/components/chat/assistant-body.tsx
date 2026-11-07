@@ -66,7 +66,6 @@ export interface AssistantBodyProps {
    * like a user message. Off by default so nested/sub-agent rendering is
    * unaffected.
    */
-  capNonSteeringWidth?: boolean
   /**
    * Enables a retry action on the final error segment of a failed turn.
    */
@@ -101,7 +100,6 @@ export function AssistantBody({
   compact,
   preferLlmUi,
   onOpenPath,
-  capNonSteeringWidth,
   onTryContinue,
   isContinuing = false,
   className,
@@ -210,20 +208,15 @@ export function AssistantBody({
 
         if (node === null) return null
 
-        // Cap only the assistant side so steered bubbles can sit flush right.
-        const content = capNonSteeringWidth && seg.type !== 'steering'
-          ? <div className="max-w-[85%]">{node}</div>
-          : node
-
         // Thinking and tool groups own their reveal because their collapsible
         // content must animate as a single measured unit.
         if (seg.type === 'thinking' || seg.type === 'toolGroup') {
-          return <Fragment key={`part-${i}`}>{content}</Fragment>
+          return <Fragment key={`part-${i}`}>{node}</Fragment>
         }
 
         return (
           <div key={`part-${i}`} className="chat-message-part-reveal">
-            <div className="chat-message-part-reveal-inner">{content}</div>
+            <div className="chat-message-part-reveal-inner">{node}</div>
           </div>
         )
       })}

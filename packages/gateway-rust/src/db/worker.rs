@@ -149,6 +149,13 @@ impl DatabaseWorker {
             .map_err(|_| DatabaseError::WorkerUnavailable)?
     }
 
+    #[cfg(test)]
+    pub(crate) fn queued_jobs(&self) -> usize {
+        let sender = self.inner.sender.lock().unwrap();
+        let sender = sender.as_ref().unwrap();
+        sender.max_capacity() - sender.capacity()
+    }
+
     /// Stop admission, drain accepted jobs, close SQLite, and join the worker.
     /// Concurrent shutdown callers all observe the same completed database close.
     pub async fn shutdown(&self) -> Result<(), DatabaseError> {

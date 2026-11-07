@@ -9,7 +9,7 @@
 //! (`jait_gateway::<module>::<fn>`), not through the module-private test hooks.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use jait_gateway::app_config::{self, AppConfig, LlmProvider};
@@ -240,7 +240,10 @@ mod config_ts {
 
         // `|| fallback` fields: zero and NaN fall back, negatives too.
         assert_eq!(config_with(&[("JAIT_MAX_ROUNDS", "7")]).agent_max_rounds, 7);
-        assert_eq!(config_with(&[("JAIT_MAX_ROUNDS", "1e3")]).agent_max_rounds, 1);
+        assert_eq!(
+            config_with(&[("JAIT_MAX_ROUNDS", "1e3")]).agent_max_rounds,
+            1
+        );
         assert_eq!(config_with(&[("JAIT_MAX_ROUNDS", "0")]).agent_max_rounds, 0);
         assert_eq!(config_with(&[("JAIT_MAX_ROUNDS", "x")]).agent_max_rounds, 0);
         assert_eq!(
@@ -283,7 +286,10 @@ mod config_ts {
         let c = config_with(&[("JAIT_PRIMARY_GATEWAY", "  http://p:1  ")]);
         assert_eq!(c.primary_gateway, "http://p:1");
         let c = config_with(&[("JAIT_STT_PROMPT", "   ")]);
-        assert_eq!(c.stt_prompt, "", "whitespace trims to empty, default unused");
+        assert_eq!(
+            c.stt_prompt, "",
+            "whitespace trims to empty, default unused"
+        );
 
         // `?.trim() ||` (trim, blank falls back).
         let c = config_with(&[("OPENAI_REALTIME_MODEL", "   ")]);
@@ -304,7 +310,11 @@ mod config_ts {
         assert_ne!(a.jwt_secret, a.hook_secret);
         for secret in [&a.jwt_secret, &a.hook_secret] {
             assert_eq!(secret.len(), 64, "randomBytes(32).toString('hex')");
-            assert!(secret.chars().all(|ch| ch.is_ascii_hexdigit() && !ch.is_uppercase()));
+            assert!(
+                secret
+                    .chars()
+                    .all(|ch| ch.is_ascii_hexdigit() && !ch.is_uppercase())
+            );
         }
 
         // An explicit secret is trimmed and used verbatim instead.

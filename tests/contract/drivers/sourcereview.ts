@@ -1016,7 +1016,9 @@ else{let secrets;try{secrets=JSON.parse(fs.readFileSync(path.join(state,'host-se
   }
   if (call.op === 'sourcereview.decisionTool') {
     const {mock}=await import('bun:test');const calls:unknown[]=[];const signal=new AbortController().signal;
-    mock.module(new URL('packages/gateway/src/services/system-one.ts',new URL('../../../', import.meta.url)).pathname,()=>({
+    const systemOneUrl=new URL('packages/gateway/src/services/system-one.ts',new URL('../../../', import.meta.url)).pathname;
+    const actualSystemOne=await import(systemOneUrl);
+    mock.module(systemOneUrl,()=>({...actualSystemOne,
       async evaluateDecision(keys:unknown,state:unknown,questions:unknown,received:unknown){calls.push({keys,state,questions,sameSignal:received===signal});if(call.fail)throw new Error('decision failed');return call.response;}
     }));
     try{const subject=await import(specifier);return {result:await subject.createDecisionEvaluateTool().execute(call.input,{apiKeys:{fixture:'key'},signal}),calls};}finally{mock.restore();}

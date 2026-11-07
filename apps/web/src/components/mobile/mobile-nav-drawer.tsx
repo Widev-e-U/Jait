@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useMessengerBadge } from '@/components/messenger/messenger-provider'
 import type { AppView } from '@/lib/app-view'
 
 interface NavItem {
@@ -58,6 +59,7 @@ export function MobileNavDrawer({
   onNavigate,
   sessionSelector,
 }: MobileNavDrawerProps) {
+  const { count: messengerCount } = useMessengerBadge()
   const managerMode = currentView === 'threads' || currentView === 'agents'
   return (
     <>
@@ -104,7 +106,7 @@ export function MobileNavDrawer({
                   aria-label={label}
                   aria-current={currentView === view ? 'page' : undefined}
                 >
-                  <Icon className="h-4 w-4" />
+                  <span className="relative"><Icon className="h-4 w-4" />{view === 'messenger' && messengerCount > 0 && <span className="absolute -right-2 -top-1.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none text-primary-foreground">{messengerCount > 99 ? '99+' : messengerCount}</span>}</span>
                   <span>{label}</span>
                 </button>
               ))}

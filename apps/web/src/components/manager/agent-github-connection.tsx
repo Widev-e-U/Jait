@@ -3,6 +3,7 @@ import { CheckCircle2, CircleAlert, ExternalLink, GitBranch, Loader2, RefreshCw,
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { GithubIntake } from './github-intake'
 import {
   agentsApi,
   type AgentGithubAppConnection,
@@ -191,6 +192,7 @@ export function AgentGithubConnection({ agentId, agentName }: { agentId: string;
       <Button size="sm" variant="ghost" onClick={() => setShowManual((value) => !value)}>{showManual ? 'Hide manual setup' : 'Use an existing GitHub App'}</Button>
     </div>
 
+    {connection && <GithubIntake agentId={agentId} />}
     {connection && connection.status !== 'connected' && <div className="mt-3 flex flex-wrap items-end gap-2 rounded-md border p-3">
       <label className="text-sm">Installation id<input aria-label="GitHub App installation id" value={installationId} onChange={(event) => setInstallationId(event.target.value)} placeholder="12345678" className="mt-1 w-40 rounded-md border bg-background px-3 py-2 text-sm" /></label>
       <Button size="sm" disabled={busy !== null || !installationId.trim()} onClick={() => void bindInstallation()}>{busy === 'installation' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Bind installation</Button>

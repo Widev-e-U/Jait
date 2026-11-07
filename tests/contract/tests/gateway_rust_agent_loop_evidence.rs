@@ -6,8 +6,8 @@
 //! `rateLimitBackoffMs`, `toOpenAIName`, `serializeMessages`) rather than read
 //! back out of the native implementation.
 use jait_gateway::tools::agent_loop::{
-    format_llm_error, is_retryable_rate_limit, parse_retry_after_ms, rate_limit_backoff_ms,
-    serialize_messages, to_openai_name, AgentMessage, OpenAiToolCall,
+    AgentMessage, OpenAiToolCall, format_llm_error, is_retryable_rate_limit, parse_retry_after_ms,
+    rate_limit_backoff_ms, serialize_messages, to_openai_name,
 };
 use serde_json::json;
 
@@ -29,7 +29,9 @@ fn format_llm_error_matches_reference_status_switch() {
     for status in [500_u16, 502, 503] {
         assert_eq!(
             format_llm_error(status, ""),
-            format!("The model provider is experiencing issues ({status}). Please try again later.")
+            format!(
+                "The model provider is experiencing issues ({status}). Please try again later."
+            )
         );
     }
     // 504 is deliberately *not* an outage message in the reference, and unknown
@@ -49,7 +51,10 @@ fn format_llm_error_matches_reference_status_switch() {
         "You've exceeded your API quota. Please check your plan and billing details."
     );
     assert_eq!(
-        format_llm_error(429, r#"{"error":{"message":"You exceeded your current quota"}}"#),
+        format_llm_error(
+            429,
+            r#"{"error":{"message":"You exceeded your current quota"}}"#
+        ),
         "You've exceeded your API quota. Please check your plan and billing details."
     );
 }
@@ -58,7 +63,10 @@ fn format_llm_error_matches_reference_status_switch() {
 fn format_llm_error_surfaces_sanitized_provider_detail() {
     // OpenAI-shaped `{"error":{"message":...}}`.
     assert_eq!(
-        format_llm_error(400, r#"{"error":{"message":"model does not support images"}}"#),
+        format_llm_error(
+            400,
+            r#"{"error":{"message":"model does not support images"}}"#
+        ),
         "Request failed (400): model does not support images"
     );
     // Ollama-shaped `{"error":"..."}`.
@@ -157,7 +165,10 @@ fn rate_limit_backoff_doubles_then_clamps() {
 fn openai_tool_names_round_trip_through_underscores() {
     // The provider-safe form replaces every dot with an underscore.
     assert_eq!(to_openai_name("file.write"), "file_write");
-    assert_eq!(to_openai_name("browser.sandbox.start"), "browser_sandbox_start");
+    assert_eq!(
+        to_openai_name("browser.sandbox.start"),
+        "browser_sandbox_start"
+    );
     assert_eq!(to_openai_name("a.b.c"), "a_b_c");
     assert_eq!(to_openai_name("noDots"), "noDots");
 }
@@ -190,12 +201,15 @@ fn serialized_messages_match_the_wire_contract() {
         }])
     );
 
-    // Hidden reasoning is replayed as `reasoning_content` only when the caller
-    // asks for it (assistant role only).
+    // Assistant reasoning is replayed whenever it is present, including when
+    // the caller does not require reasoning.
     let mut thinking = AgentMessage::assistant("answer");
     thinking.thinking = Some("because".into());
     let plain = serialize_messages(std::slice::from_ref(&thinking), false);
-    assert_eq!(plain[0], json!({ "role": "assistant", "content": "answer" }));
+    assert_eq!(
+        plain[0],
+        json!({ "role": "assistant", "content": "answer", "reasoning_content": "because" })
+    );
     let reasoned = serialize_messages(std::slice::from_ref(&thinking), true);
     assert_eq!(
         reasoned[0],

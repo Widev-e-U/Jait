@@ -28,21 +28,26 @@ pub fn normalize_reasoning_effort(value: &Value) -> Option<String> {
     }
     Some(text.into())
 }
+/// Resolve the provider/model a chat-spawned thread must run on.
+///
+/// Only the selection the user recorded on the *origin chat* is ever returned
+/// (`chat.provider` + `chat.cliModels[provider]`). The account-level default
+/// provider and any model remembered for another provider are deliberately not
+/// consulted: substituting them is exactly how a chat running on one provider
+/// silently handed its spawned threads to a different provider and model.
+///
+/// A missing value is reported as missing. Callers must stop and let the user
+/// choose; they must never guess.
+///
+/// `_user_id` / `_users` are unused for selection; they are kept so callers can
+/// pass their existing context (same shape as the TS reference).
 pub fn resolve_thread_selection_defaults(
-    user_id: Option<&str>,
+    _user_id: Option<&str>,
     session_id: Option<&str>,
-    users: Option<&UserService<'_>>,
+    _users: Option<&UserService<'_>>,
     state: Option<&SessionStateService<'_>>,
 ) -> rusqlite::Result<ThreadSelectionDefaults> {
-    let user_id = user_id.map(crate::text::js_trim).filter(|v| !v.is_empty());
-    let provider_id = match (user_id, users) {
-        (Some(id), Some(users)) => Some(users.get_settings(id)?.chat_provider),
-        _ => None,
-    };
-    let mut result = ThreadSelectionDefaults {
-        provider_id,
-        ..Default::default()
-    };
+    let mut result = ThreadSelectionDefaults::default();
     let session_id = session_id
         .map(crate::text::js_trim)
         .filter(|v| !v.is_empty());
@@ -50,12 +55,19 @@ pub fn resolve_thread_selection_defaults(
         return Ok(result);
     };
     let keys = [
+        "chat.provider",
         "chat.providerRuntimeMode",
         "chat.cliModels",
         "chat.reasoningEffort",
     ]
     .map(String::from);
     let values = state.get(session_id, Some(&keys))?;
+    result.provider_id = values
+        .get("chat.provider")
+        .and_then(Value::as_str)
+        .map(crate::text::js_trim)
+        .filter(|v| !v.is_empty())
+        .map(String::from);
     result.runtime_mode = values
         .get("chat.providerRuntimeMode")
         .and_then(Value::as_str)

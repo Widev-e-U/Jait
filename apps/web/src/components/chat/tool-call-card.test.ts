@@ -593,6 +593,18 @@ describe('formatStructuredValue', () => {
 })
 
 describe('formatOutput', () => {
+  it('prefers available structured and text data to a generic completion status', () => {
+    expect(formatOutput({ ok: true, message: 'completed', data: { results: [{ title: 'Example', snippet: 'Useful evidence' }] } }, 'other.search')).toContain('Useful evidence')
+    expect(formatOutput({ ok: true, message: 'completed', data: 'Fetched page text' }, 'fetch')).toBe('Fetched page text')
+    expect(formatOutput({ ok: false, message: 'Access denied', data: { detail: 'private' } }, 'fetch')).toBe('Access denied')
+    expect(formatOutput({ ok: true, message: 'completed' }, 'web')).toBe('completed')
+  })
+
+  it('keeps fetched content available in the scrollable result', () => {
+    const content = 'a'.repeat(500)
+    expect(formatOutput({ ok: true, message: 'completed', data: { results: [{ url: 'https://example.com', content }] } }, 'web')).toContain(content)
+  })
+
   it('renders structured terminal results as terminal output text', () => {
     expect(formatOutput({
       ok: true,

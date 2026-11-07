@@ -180,6 +180,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Run tests",
           start: true,
           message: "bun run test",
@@ -250,6 +252,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Prompt alias",
           start: true,
           prompt: "inspect ui",
@@ -290,6 +294,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Token thread",
           start: true,
           prompt: "inspect ui",
@@ -338,6 +344,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           start: true,
@@ -378,6 +386,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           start: true,
@@ -419,6 +429,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           start: true,
@@ -463,6 +475,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           kind: "delivery",
           start: true,
           prompt: "run scheduled quality task",
@@ -505,6 +519,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Jait code quality rotation",
           kind: "delivery",
           start: true,
@@ -559,6 +575,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           workingDirectory: process.cwd(),
@@ -598,6 +616,7 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          model: "gpt-5-codex",
           title: "Cron provider override",
           kind: "delivery",
           providerId: "codex",
@@ -654,6 +673,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           workingDirectory: projectRoot,
@@ -709,6 +730,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "One-shot delivery",
           kind: "delivery",
           start: true,
@@ -752,6 +775,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "One-shot helper",
           kind: "delegation",
           start: true,
@@ -798,6 +823,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Delivery thread",
           kind: "delivery",
           start: true,
@@ -909,6 +936,7 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "start",
+          model: "gpt-5-codex",
           threadId: thread.id,
           message: "Apply the fix",
         },
@@ -926,16 +954,22 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("uses the selected provider from user settings", async () => {
+  it("refuses to create a thread when the caller does not pass a provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      // User settings, session cliModels and the caller context all say codex.
+      // None of that may be inherited: the user has to name the provider.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
 
+      const threadService = new ThreadService(db);
       const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
+        threadService,
         providerRegistry,
         userService,
         sessionState,
@@ -948,19 +982,21 @@ describe("thread.control tool", () => {
           start: true,
           message: "inspect ui",
         },
-        context,
+        { ...context, providerId: "codex", model: "gpt-5-codex" },
       );
 
-      expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
-      expect(data.thread.providerId).toBe("codex");
-      expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(result.ok).toBe(false);
+      expect((result as { message: string }).message).toBe(
+        "No provider was supplied for this thread. Autonomous work never picks a provider: ask the user which provider and model to use, then pass them explicitly.",
+      );
+      expect(result.data).toBeUndefined();
+      expect(provider.lastStartOptions).toBeNull();
     } finally {
       sqlite.close();
     }
   });
 
-  it("starts a thread stored on a provider that differs from the calling chat (codex chat -> jait thread)", async () => {
+  it("runs a stored provider thread with the model stored on it, not the calling chat's", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -973,10 +1009,12 @@ describe("thread.control tool", () => {
       providerRegistry.register(jaitProvider);
 
       const threadService = new ThreadService(db);
+      // The thread was created by a user who explicitly chose jait + this model.
       const thread = threadService.create({
         userId: context.userId,
         title: "Jait worker driven from Codex",
         providerId: "jait",
+        model: "deepseek-v4.1-flash:cloud",
       });
 
       const tool = createThreadControlTool({
@@ -996,22 +1034,26 @@ describe("thread.control tool", () => {
       );
 
       expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      const data = result.data as { thread: { providerId: string; model: string | null } };
       expect(data.thread.providerId).toBe("jait");
-      expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(data.thread.model).toBe("deepseek-v4.1-flash:cloud");
       expect(jaitProvider.sendTurn).toHaveBeenCalledTimes(1);
-      // The caller's model belongs to codex and must not leak into the jait thread.
-      expect(jaitProvider.lastStartOptions?.model).toBeUndefined();
+      // The caller's codex model must not leak into the jait thread.
+      expect(jaitProvider.lastStartOptions?.model).toBe("deepseek-v4.1-flash:cloud");
     } finally {
       sqlite.close();
     }
   });
 
-  it("starts a thread stored on a CLI provider from a Jait chat (jait chat -> codex thread)", async () => {
+  it("refuses to start a thread with no stored model until the caller passes one", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait");
+      // The jait chat, its user settings and its session state all carry a model.
+      // None of it may be used for the codex thread: the loop never picks a model.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait", {
+        model: "jait-default",
+      });
       const providerRegistry = new ProviderRegistry();
       const codexProvider = new MockThreadProvider("codex");
       providerRegistry.register(new MockThreadProvider("jait"));
@@ -1031,7 +1073,7 @@ describe("thread.control tool", () => {
         sessionState,
       });
 
-      const result = await tool.execute(
+      const refused = await tool.execute(
         {
           action: "start",
           threadId: thread.id,
@@ -1040,22 +1082,44 @@ describe("thread.control tool", () => {
         { ...context, providerId: "jait", model: "jait-default" },
       );
 
-      expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      expect(refused.ok).toBe(false);
+      expect((refused as { message: string }).message).toMatch(/model/i);
+      expect(codexProvider.lastStartOptions).toBeNull();
+      expect(threadService.getById(thread.id)?.model).toBeNull();
+
+      // The explicit model the caller passes is persisted before the thread starts.
+      const started = await tool.execute(
+        {
+          action: "start",
+          threadId: thread.id,
+          model: "gpt-5-codex",
+          message: "Run the delegated worker",
+        },
+        { ...context, providerId: "jait", model: "jait-default" },
+      );
+
+      expect(started.ok).toBe(true);
+      const data = started.data as { thread: { providerId: string; model: string | null } };
       expect(data.thread.providerId).toBe("codex");
-      expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(data.thread.model).toBe("gpt-5-codex");
+      expect(threadService.getById(thread.id)?.model).toBe("gpt-5-codex");
       expect(codexProvider.sendTurn).toHaveBeenCalledTimes(1);
-      expect(codexProvider.lastStartOptions?.model).toBeUndefined();
+      // The jait chat's model never reaches the codex thread.
+      expect(codexProvider.lastStartOptions?.model).toBe("gpt-5-codex");
     } finally {
       sqlite.close();
     }
   });
 
-  it("still inherits the caller model when provider matches the thread", async () => {
+  it("does not inherit the caller model even when provider matches the thread", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      // The calling chat runs codex with gpt-5-codex. The thread stores
+      // gpt-5-mini because that is what the user explicitly picked for it.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
       const provider = new MockThreadProvider("codex");
       providerRegistry.register(provider);
@@ -1065,6 +1129,7 @@ describe("thread.control tool", () => {
         userId: context.userId,
         title: "Same-provider thread",
         providerId: "codex",
+        model: "gpt-5-mini",
       });
 
       const tool = createThreadControlTool({
@@ -1084,21 +1149,26 @@ describe("thread.control tool", () => {
       );
 
       expect(result.ok).toBe(true);
-      expect(provider.lastStartOptions?.model).toBe("gpt-5-codex");
+      // The caller's "gpt-5-codex" must not leak in: only the model explicitly
+      // chosen for the thread may run it.
+      expect(provider.lastStartOptions?.model).toBe("gpt-5-mini");
     } finally {
       sqlite.close();
     }
   });
 
-  it("inherits the selected provider model from session state", async () => {
+  it("refuses to create a thread from session state alone", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      // User settings and session cliModels both select codex + gpt-5-codex.
+      // Neither may be used to create or start a thread.
       const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
         model: "gpt-5-codex",
       });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -1107,7 +1177,7 @@ describe("thread.control tool", () => {
         sessionState,
       });
 
-      const result = await tool.execute(
+      const noProvider = await tool.execute(
         {
           action: "create",
           title: "Use selected model",
@@ -1117,22 +1187,42 @@ describe("thread.control tool", () => {
         context,
       );
 
-      expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; model: string | null } };
-      expect(data.thread.providerId).toBe("codex");
-      expect(data.thread.model).toBe("gpt-5-codex");
+      expect(noProvider.ok).toBe(false);
+      expect((noProvider as { message: string }).message).toBe(
+        "No provider was supplied for this thread. Autonomous work never picks a provider: ask the user which provider and model to use, then pass them explicitly.",
+      );
+
+      const noModel = await tool.execute(
+        {
+          action: "create",
+          title: "Use selected model",
+          providerId: "codex",
+          start: true,
+          message: "inspect ui",
+        },
+        context,
+      );
+
+      expect(noModel.ok).toBe(false);
+      expect((noModel as { message: string }).message).toMatch(/model/i);
+      expect(provider.lastStartOptions).toBeNull();
     } finally {
       sqlite.close();
     }
   });
 
-  it("uses the selected jait provider literally", async () => {
+  it("stores the explicitly requested provider and model even when user settings differ", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait");
+      // User settings and session state both point at codex + gpt-5-codex.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("jait"));
+      const jaitProvider = new MockThreadProvider("jait");
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(jaitProvider);
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -1145,6 +1235,8 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Use selected jait provider",
+          providerId: "jait",
+          model: "deepseek-v4.1-flash:cloud",
           start: true,
           message: "inspect ui",
         },
@@ -1152,26 +1244,33 @@ describe("thread.control tool", () => {
       );
 
       expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; providerSessionId: string | null };
+      };
       expect(data.thread.providerId).toBe("jait");
+      expect(data.thread.model).toBe("deepseek-v4.1-flash:cloud");
       expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(jaitProvider.lastStartOptions?.model).toBe("deepseek-v4.1-flash:cloud");
     } finally {
       sqlite.close();
     }
   });
 
-  it("uses the selected jait provider and model for thread creation", async () => {
+  it("creates a thread without a model when it does not start a turn, storing it as unset", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      // gpt-4.1 sits in user settings and session state; it must not be stored.
       const { userService, sessionState, context } = createSelectedProviderContext(db, "jait", {
         model: "gpt-4.1",
       });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("jait"));
+      const provider = new MockThreadProvider("jait");
+      providerRegistry.register(provider);
 
+      const threadService = new ThreadService(db);
       const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
+        threadService,
         providerRegistry,
         userService,
         sessionState,
@@ -1181,7 +1280,8 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Use selected jait model",
-          start: true,
+          providerId: "jait",
+          start: false,
           message: "inspect ui",
         },
         context,
@@ -1190,13 +1290,18 @@ describe("thread.control tool", () => {
       expect(result.ok).toBe(true);
       const data = result.data as { thread: { providerId: string; model: string | null } };
       expect(data.thread.providerId).toBe("jait");
-      expect(data.thread.model).toBe("gpt-4.1");
+      // The model selected in user settings/session state is ignored.
+      expect(data.thread.model).toBeNull();
+      expect(provider.lastStartOptions).toBeNull();
+      expect(
+        threadService.getById((result.data as { thread: { id: string } }).thread.id)?.model,
+      ).toBeNull();
     } finally {
       sqlite.close();
     }
   });
 
-  it("requires the calling agent to provide a supported thread provider", async () => {
+  it("requires the calling agent to name a supported thread provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -1219,19 +1324,21 @@ describe("thread.control tool", () => {
 
       expect(result.ok).toBe(false);
       expect(result.message).toBe(
-        "No provider could be resolved for this thread. A selected user provider must be configured and supported.",
+        "No provider was supplied for this thread. Autonomous work never picks a provider: ask the user which provider and model to use, then pass them explicitly.",
       );
+      expect(result.data).toBeUndefined();
     } finally {
       sqlite.close();
     }
   });
 
-  it("inherits provider, model, and runtime mode from the live tool context", async () => {
+  it("does not take the provider or model from the live tool context", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -1242,6 +1349,8 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Use live codex context",
+          providerId: "jait",
+          model: "deepseek-v4.1-flash:cloud",
           prompt: "inspect ui",
         },
         makeContext("user-1", {
@@ -1252,16 +1361,20 @@ describe("thread.control tool", () => {
       );
 
       expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; model: string | null; runtimeMode: string } };
-      expect(data.thread.providerId).toBe("codex");
-      expect(data.thread.model).toBe("gpt-5-codex");
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; runtimeMode: string };
+      };
+      // The live caller context said codex / gpt-5-codex; it is ignored.
+      expect(data.thread.providerId).toBe("jait");
+      expect(data.thread.model).toBe("deepseek-v4.1-flash:cloud");
+      // Runtime mode is still resolved from context (unchanged behavior).
       expect(data.thread.runtimeMode).toBe("supervised");
     } finally {
       sqlite.close();
     }
   });
 
-  it("inherits the selected provider, model, and runtime mode from user/session state", async () => {
+  it("ignores the provider and model selected in user/session state", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -1277,6 +1390,7 @@ describe("thread.control tool", () => {
 
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -1285,7 +1399,9 @@ describe("thread.control tool", () => {
         sessionState,
       });
 
-      const result = await tool.execute(
+      // Nothing explicitly chosen: user settings and session state alone are
+      // not a user decision, so the call is refused.
+      const refused = await tool.execute(
         {
           action: "create",
           title: "Use selected chat defaults",
@@ -1294,17 +1410,35 @@ describe("thread.control tool", () => {
         makeContext(user.id),
       );
 
+      expect(refused.ok).toBe(false);
+      expect((refused as { message: string }).message).toMatch(/provider/i);
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Use selected chat defaults",
+          providerId: "jait",
+          model: "deepseek-v4.1-flash:cloud",
+          prompt: "inspect ui",
+        },
+        makeContext(user.id),
+      );
+
       expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; model: string | null; runtimeMode: string } };
-      expect(data.thread.providerId).toBe("codex");
-      expect(data.thread.model).toBe("gpt-5-codex");
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; runtimeMode: string };
+      };
+      // User settings said codex and the session said codex/gpt-5-codex: ignored.
+      expect(data.thread.providerId).toBe("jait");
+      expect(data.thread.model).toBe("deepseek-v4.1-flash:cloud");
+      // Runtime mode still comes from session state (unchanged behavior).
       expect(data.thread.runtimeMode).toBe("supervised");
     } finally {
       sqlite.close();
     }
   });
 
-  it("keeps the stored thread provider when starting an existing thread", async () => {
+  it("requires an explicit model when starting a thread that has none stored", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -1316,7 +1450,8 @@ describe("thread.control tool", () => {
       });
 
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const codexProvider = new MockThreadProvider("codex");
+      providerRegistry.register(codexProvider);
       providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
@@ -1324,7 +1459,7 @@ describe("thread.control tool", () => {
         providerRegistry,
       });
 
-      const result = await tool.execute(
+      const refused = await tool.execute(
         {
           action: "start",
           threadId: thread.id,
@@ -1333,9 +1468,27 @@ describe("thread.control tool", () => {
         makeContext("user-1"),
       );
 
+      expect(refused.ok).toBe(false);
+      expect((refused as { message: string }).message).toMatch(/model/i);
+      expect(codexProvider.lastStartOptions).toBeNull();
+
+      const result = await tool.execute(
+        {
+          action: "start",
+          threadId: thread.id,
+          model: "gpt-5-codex",
+          message: "inspect ui",
+        },
+        makeContext("user-1"),
+      );
+
       expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; providerSessionId: string | null };
+      };
+      // The stored provider is kept; only the model had to be supplied.
       expect(data.thread.providerId).toBe("codex");
+      expect(data.thread.model).toBe("gpt-5-codex");
       expect(data.thread.providerSessionId).toBe("mock-session-1");
     } finally {
       sqlite.close();
@@ -1369,6 +1522,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-codex",
           prompt: "inspect ui",
           threads: [
             { title: "Thread A" },
@@ -1436,6 +1591,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-codex",
           prompt: "inspect ui",
           start: true,
           threads: [
@@ -1469,13 +1626,18 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("defaults create_many threads to the selected provider", async () => {
+  it("refuses create_many when the caller passes no provider or no model", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      // The selected provider/model live in user settings and session state,
+      // but a bulk create still needs an explicit choice from the caller.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const codexProvider = new MockThreadProvider("codex");
+      providerRegistry.register(codexProvider);
       providerRegistry.register(new MockThreadProvider("claude-code"));
 
       const tool = createThreadControlTool({
@@ -1485,28 +1647,40 @@ describe("thread.control tool", () => {
         sessionState,
       });
 
-      const result = await tool.execute(
+      const noProvider = await tool.execute(
         {
           action: "create_many",
           prompt: "inspect ui",
-          threads: [
-            { title: "Thread A" },
-            { title: "Thread B" },
-          ],
+          threads: [{ title: "Thread A" }, { title: "Thread B" }],
         },
         context,
       );
 
-      expect(result.ok).toBe(true);
-      const data = result.data as { threads: Array<{ providerId: string }> };
-      expect(data.threads).toHaveLength(2);
-      expect(data.threads.every((thread) => thread.providerId === "codex")).toBe(true);
+      expect(noProvider.ok).toBe(false);
+      expect((noProvider as { message: string }).message).toMatch(/provider/i);
+      expect(noProvider.data).toBeUndefined();
+
+      const noModel = await tool.execute(
+        {
+          action: "create_many",
+          providerId: "codex",
+          prompt: "inspect ui",
+          threads: [{ title: "Thread A" }, { title: "Thread B" }],
+        },
+        context,
+      );
+
+      expect(noModel.ok).toBe(false);
+      expect((noModel as { message: string }).message).toMatch(/model/i);
+      expect(noModel.data).toBeUndefined();
+      // Nothing was created, so nothing could start a turn.
+      expect(codexProvider.lastStartOptions).toBeNull();
     } finally {
       sqlite.close();
     }
   });
 
-  it("defaults create_many threads to the live caller context provider and model", async () => {
+  it("uses only the explicitly passed provider and model for create_many, not the live caller context", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -1521,11 +1695,10 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-mini",
           prompt: "inspect ui",
-          threads: [
-            { title: "Thread A" },
-            { title: "Thread B" },
-          ],
+          threads: [{ title: "Thread A" }, { title: "Thread B" }],
         },
         makeContext("user-1", {
           providerId: "codex",
@@ -1535,17 +1708,21 @@ describe("thread.control tool", () => {
       );
 
       expect(result.ok).toBe(true);
-      const data = result.data as { threads: Array<{ providerId: string; model: string | null; runtimeMode: string }> };
+      const data = result.data as {
+        threads: Array<{ providerId: string; model: string | null; runtimeMode: string }>;
+      };
       expect(data.threads).toHaveLength(2);
       expect(data.threads.every((thread) => thread.providerId === "codex")).toBe(true);
-      expect(data.threads.every((thread) => thread.model === "gpt-5-codex")).toBe(true);
+      // The caller context said "gpt-5-codex"; the explicit "gpt-5-mini" wins.
+      expect(data.threads.every((thread) => thread.model === "gpt-5-mini")).toBe(true);
+      // Runtime mode still follows the caller context (unchanged behavior).
       expect(data.threads.every((thread) => thread.runtimeMode === "supervised")).toBe(true);
     } finally {
       sqlite.close();
     }
   });
 
-  it("defaults create_many threads to the active project directory", async () => {
+  it("applies the active project directory to explicitly configured create_many threads", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -1561,6 +1738,8 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-codex",
           prompt: "inspect ui",
           threads: [
             { title: "Thread A" },

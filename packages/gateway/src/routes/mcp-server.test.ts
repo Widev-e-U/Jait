@@ -1117,15 +1117,18 @@ describe("mcp-server", () => {
       const userService = new UserService(db);
       const sessionState = new SessionStateService(db);
       const user = userService.createUser("codex-owner", "password123");
-      userService.updateSettings(user.id, { chatProvider: "codex" });
+      // Account-level default is a decoy: autonomous/MCP turns must never
+      // inherit it — only the selection the user recorded on this chat counts.
+      userService.updateSettings(user.id, { chatProvider: "openrouter" });
       const session = sessionService.create({
         userId: user.id,
         name: "Codex Session",
         projectPath: "/tmp/current-project",
       });
       sessionState.set(session.id, {
+        "chat.provider": "codex",
         "chat.providerRuntimeMode": "supervised",
-        "chat.cliModels": { codex: "gpt-5-codex" },
+        "chat.cliModels": { codex: "gpt-5-codex", openrouter: "anthropic/claude-sonnet-4" },
       });
 
       const registry = new ToolRegistry();

@@ -20,7 +20,7 @@ import { useVoiceRecording } from '@/hooks/useVoiceRecording'
 import type { SttProvider } from '@/hooks/useAuth'
 import { appendTranscript } from '@/lib/transcript-merge'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { useMessenger } from './messenger-provider'
+import { useMessenger, useMessengerBadge } from './messenger-provider'
 import { MAX_ATTACHMENT_BYTES, isStatusRoom, messengerError, presenceLabel, type MessengerRoom } from '@/lib/messenger/model'
 import { chatListAvatarProps } from '@/lib/messenger/room-avatar'
 import { MessengerPeerAvatar } from './messenger-peer'
@@ -70,6 +70,7 @@ function ConnectionForm() {
 
 export default function MessengerPage({ token = null, sttProvider = 'whisper' }: { token?: string | null; sttProvider?: SttProvider }) {
   const { store, snapshot } = useMessenger()
+  const { excluded, setExcluded } = useMessengerBadge()
   const confirm = useConfirmDialog()
   const historyBusy = useRef(false)
   const historyErrorToast = useRef<string | number | undefined>(undefined)
@@ -78,6 +79,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   // Messenger options are their own pane, not a drawer sliding over the conversation list.
   const [pane, setPane] = useUrlSearchState('messenger', 'pane')
   const optionsOpen = pane === 'options'
+  const hiddenOpen = pane === 'hidden'
   // One search field drives conversations, loaded-message results, and the open conversation.
   // Older links that used `messageQ` still restore their query.
   const [search, setSearch] = useUrlSearchState('messenger', 'q', () => new URLSearchParams(window.location.search).get('messageQ') ?? '')
@@ -121,8 +123,8 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   // Consecutive messages from the same sender render as one run: one avatar, tighter spacing.
   const groupPositions = messageGroupPositions(messages)
   // Message hits are independent of the conversation-name filter: only the service filter narrows them.
-  const searchResults = store.searchLoadedMessages(search).filter(item => service === 'All' || snapshot.rooms.some(room => room.id === item.roomId && room.service === service))
-  const rooms = snapshot.rooms.filter(room => (service === 'All' || room.service === service) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
+  const searchResults = store.searchLoadedMessages(search).filter(item => excluded.includes(item.roomId) === hiddenOpen && (service === 'All' || snapshot.rooms.some(room => room.id === item.roomId && room.service === service)))
+  const rooms = snapshot.rooms.filter(room => excluded.includes(room.id) === hiddenOpen && (service === 'All' || room.service === service) && (room.name + ' ' + room.network + ' ' + (room.team ?? '')).toLowerCase().includes(search.toLowerCase()))
   // Teams (Matrix spaces or bridge workspaces) group their channels instead of listing them flat.
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(() => new Set())
   const toggleTeam = (name: string) => setCollapsedTeams(current => {
@@ -143,7 +145,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
   const chatRooms = rooms.filter(room => room.kind !== 'channel' && room.kind !== 'team')
   const roomRow = (item: MessengerRoom, channel = false) => (
     <div key={item.id} role="group" aria-label={'Conversation ' + item.name} data-room-kind={item.kind ?? 'chat'} className={'group/room flex min-w-0 items-center border-b border-border/50 ' + (item.id === roomId ? 'bg-secondary' : 'hover:bg-muted/60 [&:has([data-state=open])]:bg-muted/60')}>
-      <button onClick={() => selectRoom(item.id)} aria-pressed={item.id === roomId} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 text-left">
+      <button onClick={() => { selectRoom(item.id); if (item.membership === 'invite' && item.service.toLowerCase() === 'teams') void act(() => store.join(item.id)) }} aria-pressed={item.id === roomId} className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-1.5 text-left">
         <MessengerPeerAvatar size="md" showPresence={false} {...chatListAvatarProps(item, channel)} />
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
@@ -253,6 +255,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
         if (item.unread > 0 || item.markedUnread) await store.markRead(item.id)
         else { await store.markUnread(item.id); if (roomId === item.id) selectRoom(null) }
       })}>Mark as {item.unread > 0 || item.markedUnread ? 'read' : 'unread'}</DropdownMenuItem>}
+      <DropdownMenuItem onSelect={() => { const hiding = !excluded.includes(item.id); setExcluded(item.id, hiding); if (roomId === item.id) selectRoom(null) }}>{excluded.includes(item.id) ? 'Unhide chat' : 'Hide chat'}</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => { selectRoom(mobile ? null : item.id); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[aria-label="Search conversations and messages"]')?.focus()) }}>Search messages</DropdownMenuItem>
       <DropdownMenuItem onSelect={() => void act(() => navigator.clipboard.writeText(item.id))}>Copy conversation ID</DropdownMenuItem>
       <DropdownMenuSeparator />
@@ -285,6 +288,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
             <TooltipHint content="Connections"><Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setPane('options')} aria-label="Connections"><Settings2 className="h-4 w-4" /></Button></TooltipHint>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
+            <button type="button" onClick={() => { setPane(hiddenOpen ? '' : 'hidden'); selectRoom(null) }} className="w-full border-b px-3 py-2 text-left text-sm font-medium hover:bg-muted/60">{hiddenOpen ? '← All chats' : `Hidden chats (${excluded.length})`}</button>
             {search && <div aria-label="Message search results" className="border-b">
               {searchResults.map(item => <button key={item.roomId + item.message.id} onClick={() => selectRoom(item.roomId)} className="block w-full space-y-1 border-b p-3 text-left text-sm hover:bg-muted/60"><span className="block truncate font-medium">{item.roomName}</span><span className="line-clamp-2 break-words text-xs text-muted-foreground">{item.message.body.slice(0, 300)}</span></button>)}
               {searchResults.length === 0 && <p className="p-3 text-sm text-muted-foreground">No matching loaded messages.</p>}
@@ -308,7 +312,7 @@ export default function MessengerPage({ token = null, sttProvider = 'whisper' }:
               </div>
             })}
             {chatRooms.map(item => roomRow(item))}
-            {rooms.length === 0 && <div className="space-y-2 p-5 text-sm text-muted-foreground"><p>{snapshot.rooms.length ? 'No matching conversations.' : 'Your conversations will appear here as Matrix syncs.'}</p>{!snapshot.rooms.length && <Button variant="outline" size="sm" onClick={() => setPane('options')}>Connect a bridge</Button>}</div>}
+            {rooms.length === 0 && <div className="space-y-2 p-5 text-sm text-muted-foreground"><p>{hiddenOpen ? 'No hidden chats.' : snapshot.rooms.length ? 'No matching conversations.' : 'Your conversations will appear here as Matrix syncs.'}</p>{!snapshot.rooms.length && <Button variant="outline" size="sm" onClick={() => setPane('options')}>Connect a bridge</Button>}</div>}
           </div>
         </aside>
         <main onPointerDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} onKeyDown={() => { if (roomId && room && !statusRoom && document.hasFocus()) void store.markRead(roomId).catch(() => {}) }} className={(roomId ? 'flex ' : 'hidden md:flex ') + 'min-h-0 min-w-0 flex-1 flex-col'}>

@@ -315,6 +315,79 @@ pub fn includes_expected_version(value: &str) -> bool {
         LazyLock::new(|| regex::Regex::new(r"(^|[^0-9])0\.9\.30([^0-9]|$)").unwrap());
     PATTERN.is_match(value)
 }
+/// Native port of `packages/gateway/bin/install-runtime.mjs`.
+///
+/// The script is a thin launcher: it locates the packaged runtime manager module
+/// (`dist/services/code-graph/graphify-runtime.js`), short-circuits when that
+/// module is missing but the source tree is present (provisioning is deferred to
+/// the build), fails loudly when the manager is missing entirely, and otherwise
+/// calls `ensureGraphifyRuntime` while streaming progress lines prefixed with
+/// `[jait] `.
+///
+/// In the native port the runtime manager is statically linked into the binary,
+/// so the "module missing" branches can only be reached when the launcher is told
+/// about a file-based installation (see [`install_runtime_step`]); the launcher
+/// binary (`src/bin/jait-install-runtime.rs`) always takes the `Ensure` path and
+/// documents that structural difference.
+pub const RUNTIME_LOG_PREFIX: &str = "[jait] ";
+/// Emitted when the packaged manager is absent but a source checkout exists.
+pub const DEFERRED_PROVISIONING_MESSAGE: &str =
+    "Graphify provisioning deferred until the gateway is built.";
+/// Emitted when neither the packaged manager nor a source tree can be found.
+pub const MISSING_RUNTIME_MANAGER_MESSAGE: &str = "Packaged Graphify runtime manager is missing.";
+
+/// Exit code used by the launcher for every non-error outcome (deferred or ready).
+pub const INSTALL_RUNTIME_EXIT_OK: u8 = 0;
+/// Exit code used by the launcher when provisioning fails or the manager is missing.
+pub const INSTALL_RUNTIME_EXIT_FAILURE: u8 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InstallRuntimeStep {
+    /// Manager module missing, source tree present: print notice, exit 0.
+    Deferred,
+    /// Manager module missing and no source tree: print notice, exit 1.
+    MissingRuntimeManager,
+    /// Manager present: run `ensure()` and stream progress.
+    Ensure,
+}
+
+/// Faithful port of the launcher's module/source-tree decision tree.
+pub fn install_runtime_step(
+    runtime_module_present: bool,
+    source_tree_present: bool,
+) -> InstallRuntimeStep {
+    if runtime_module_present {
+        InstallRuntimeStep::Ensure
+    } else if source_tree_present {
+        InstallRuntimeStep::Deferred
+    } else {
+        InstallRuntimeStep::MissingRuntimeManager
+    }
+}
+
+impl InstallRuntimeStep {
+    /// Process exit code the script would return for this step.
+    pub fn exit_code(self) -> u8 {
+        match self {
+            InstallRuntimeStep::Deferred | InstallRuntimeStep::Ensure => INSTALL_RUNTIME_EXIT_OK,
+            InstallRuntimeStep::MissingRuntimeManager => INSTALL_RUNTIME_EXIT_FAILURE,
+        }
+    }
+    /// Message the script prints (if any) for this step.
+    pub fn message(self) -> Option<&'static str> {
+        match self {
+            InstallRuntimeStep::Deferred => Some(DEFERRED_PROVISIONING_MESSAGE),
+            InstallRuntimeStep::MissingRuntimeManager => Some(MISSING_RUNTIME_MANAGER_MESSAGE),
+            InstallRuntimeStep::Ensure => None,
+        }
+    }
+}
+
+/// Formats one launcher log line exactly like the script's `onProgress` hook.
+pub fn install_runtime_line(message: &str) -> String {
+    format!("{RUNTIME_LOG_PREFIX}{message}")
+}
+
 pub fn supports_python(value: &str) -> bool {
     static PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r"(?i-u:python)[\x09-\x0d\x20\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+([0-9]+)\.([0-9]+)").unwrap()
@@ -324,4 +397,42 @@ pub fn supports_python(value: &str) -> bool {
         let minor = capture[2].parse::<f64>().unwrap_or(f64::INFINITY);
         major > 3.0 || major == 3.0 && minor >= 10.0
     })
+}
+
+#[cfg(test)]
+mod install_runtime_launcher_tests {
+    use super::*;
+
+    #[test]
+    fn present_manager_runs_ensure_without_a_notice() {
+        let step = install_runtime_step(true, false);
+        assert_eq!(step, InstallRuntimeStep::Ensure);
+        assert_eq!(step.exit_code(), 0);
+        assert_eq!(step.message(), None);
+    }
+
+    #[test]
+    fn missing_manager_with_source_tree_defers_provisioning() {
+        let step = install_runtime_step(false, true);
+        assert_eq!(step, InstallRuntimeStep::Deferred);
+        assert_eq!(step.exit_code(), 0);
+        assert_eq!(step.message(), Some(DEFERRED_PROVISIONING_MESSAGE));
+    }
+
+    #[test]
+    fn missing_manager_without_source_tree_fails() {
+        let step = install_runtime_step(false, false);
+        assert_eq!(step, InstallRuntimeStep::MissingRuntimeManager);
+        assert_eq!(step.exit_code(), 1);
+        assert_eq!(step.message(), Some(MISSING_RUNTIME_MANAGER_MESSAGE));
+    }
+
+    #[test]
+    fn log_lines_use_the_jait_prefix() {
+        assert_eq!(
+            install_runtime_line("Creating virtualenv."),
+            "[jait] Creating virtualenv."
+        );
+        assert_eq!(install_runtime_line(""), "[jait] ");
+    }
 }

@@ -759,7 +759,6 @@ function MessageInner({
 
   const assistantActions = !messenger && !isUser ? renderActions() : null
   const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
-  const hasSteeringSegment = !isUser && segments?.some((segment) => segment.type === 'steering')
   const memoryProvenanceEntries = !isUser ? getInjectedMemoryProvenanceEntries(effectiveContextFlow) : []
   const showMemoryBadge = !isUser && (memoryProvenanceEntries.length > 0 || (hasMemoryProvenance && !effectiveContextFlow))
   const memoryProvenance = showMemoryBadge ? (
@@ -834,7 +833,7 @@ function MessageInner({
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn(
         'min-w-0 space-y-2',
-        hasSteeringSegment ? 'w-full max-w-full' : 'max-w-[85%]',
+        isUser ? 'max-w-[85%]' : 'w-full max-w-full',
         isUser && 'order-1',
       )}>
         {!isUser && persona && <div data-persona-agent-id={persona.id} className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -870,12 +869,11 @@ function MessageInner({
                 compact={compact}
                 preferLlmUi={preferLlmUi}
                 onOpenPath={onOpenPath}
-                capNonSteeringWidth={hasSteeringSegment}
                 onTryContinue={onTryContinue}
                 isContinuing={isContinuing}
               />
 
-              <div className={cn('min-w-0', hasSteeringSegment && 'max-w-[85%]')}>
+              <div className="min-w-0">
                 {assistantActions}
                 {memoryProvenance}
               </div>

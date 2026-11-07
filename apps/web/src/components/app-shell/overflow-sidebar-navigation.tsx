@@ -47,7 +47,7 @@ export function OverflowSidebarNavigation({ label, moreLabel, items, collapsed, 
                 aria-label={moreLabel}>
                 <span className="relative shrink-0">
                   <MoreHorizontal className="h-4 w-4" />
-                  {badge > 0 && <span className="absolute -right-2 -top-2 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-2xs font-bold leading-none tabular-nums text-primary-foreground">{badge > 99 ? '99+' : badge}</span>}
+                  {badge > 0 && <span className="absolute -right-2 -top-1.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-background bg-primary/85 px-0.5 text-[9px] font-semibold leading-none tabular-nums text-primary-foreground">{badge > 99 ? '99+' : badge}</span>}
                 </span>
                 {!collapsed && <span>More</span>}
               </Button>

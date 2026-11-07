@@ -322,6 +322,9 @@ function extractToolResultData(item: Record<string, unknown>): unknown {
     parseJsonObject(item.result) ??
     parseJsonObject(item.output) ??
     parseJsonObject(item.data) ??
+    (typeof item.result === "string" || Array.isArray(item.result) ? item.result : undefined) ??
+    (Array.isArray(item.output) ? item.output : undefined) ??
+    (typeof item.data === "string" || Array.isArray(item.data) ? item.data : undefined) ??
     undefined
   );
 }

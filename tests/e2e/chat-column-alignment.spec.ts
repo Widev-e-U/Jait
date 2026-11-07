@@ -1,19 +1,21 @@
 import { expect, test, type Page } from '@playwright/test'
 import path from 'node:path'
 
-const MESSAGE_SELECTOR = '[data-testid="fixture-message-text"]'
+const MESSAGE_SELECTOR = '[data-message-from="assistant"]'
+const USER_BUBBLE_SELECTOR = '[data-message-from="user"] [data-message-from="user"]'
 const COMPOSER_EDITOR_SELECTOR = '[data-testid="chat-composer"] [contenteditable="true"]'
 
 const viewports = [
   { name: 'wide', width: 1440, height: 1000 },
   { name: 'standard', width: 900, height: 900 },
+  { name: 'gutter', width: 1200, height: 900 },
   { name: 'mobile', width: 393, height: 851 },
 ]
 
 async function openAlignmentFixture(page: Page) {
   await page.goto('/src/e2e-fixtures/index.html', { waitUntil: 'domcontentloaded' })
   await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
-  await expect(page.getByTestId('fixture-message-text')).toBeVisible()
+  await expect(page.locator(MESSAGE_SELECTOR).first()).toBeVisible()
   const editor = page.locator(COMPOSER_EDITOR_SELECTOR)
   await expect(editor).toBeVisible()
   await editor.click()
@@ -22,55 +24,27 @@ async function openAlignmentFixture(page: Page) {
   return editor
 }
 
-/** Left edge of the painted glyphs, not of the padded box that holds them. */
-async function glyphBox(page: Page, selector: string) {
-  return page.evaluate(sel => {
-    const node = document.querySelector(sel)
-    if (!node) throw new Error(`missing ${sel}`)
-    const range = document.createRange()
-    range.selectNodeContents(node)
-    const box = range.getBoundingClientRect()
-    const fallback = node.getBoundingClientRect()
-    return { left: box.width > 0 ? box.left : fallback.left, right: box.width > 0 ? box.right : fallback.right }
-  }, selector)
-}
-
 for (const viewport of viewports) {
-  test(`message text and composer text share one centered column at ${viewport.name}`, async ({ page }) => {
+  test(`message edges align with the composer at ${viewport.name}`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await openAlignmentFixture(page)
 
-    const message = await glyphBox(page, MESSAGE_SELECTOR)
-    const composer = await glyphBox(page, COMPOSER_EDITOR_SELECTOR)
-    // Mobile adds the same 8px side inset as the header. Desktop text remains
-    // aligned, allowing for the composer border.
-    const mobileInset = viewport.width < 768 ? 8 : 0
-    expect(Math.abs(composer.left - message.left - mobileInset)).toBeLessThanOrEqual(2)
+    const minimap = page.getByRole('slider', { name: 'Conversation minimap' })
+    if (viewport.width >= 1088) await expect(minimap).toBeVisible()
+    else await expect(minimap).toBeHidden()
 
-    const transcript = await page.getByTestId('fixture-transcript-boundary').boundingBox()
-    const input = await page.getByTestId('fixture-composer-boundary').boundingBox()
+    const assistant = await page.locator(MESSAGE_SELECTOR).first().boundingBox()
+    const assistantContent = await page.locator('[data-message-from="assistant"] [data-message-from="assistant"]').boundingBox()
+    const userBubble = await page.locator(USER_BUBBLE_SELECTOR).boundingBox()
     const column = await page.getByTestId('fixture-composer-column').boundingBox()
-    expect(transcript).not.toBeNull()
-    expect(input).not.toBeNull()
+    expect(assistant).not.toBeNull()
+    expect(assistantContent).not.toBeNull()
+    expect(userBubble).not.toBeNull()
     expect(column).not.toBeNull()
-    // Transcript and composer halves of the pane span the same width, so neither
-    // column is inset relative to the other.
-    expect(Math.abs(transcript!.width - input!.width)).toBeLessThanOrEqual(1)
-
-    // The centered column: max-w-4xl (896px) capped by the viewport, as pinned
-    // numerically in floating-indicator-layout.ts.
-    const availableWidth = viewport.width - 2 * mobileInset
-    const columnWidth = Math.min(896, availableWidth)
-    const columnLeft = mobileInset + (availableWidth - columnWidth) / 2
-    // The boundary spans the pane; its mobile padding insets the column ...
-    expect(Math.abs(input!.x - 0)).toBeLessThanOrEqual(1)
-    // ... its content column is the centered max-w-4xl column ...
-    expect(Math.abs(column!.x - columnLeft)).toBeLessThanOrEqual(1)
-    expect(Math.abs(column!.width - columnWidth)).toBeLessThanOrEqual(1)
-    // ... and the message text sits at the column edge plus its 16/20px gutter.
-    const gutter = viewport.width >= 640 ? 20 : 16
-    const transcriptLeft = Math.max(0, (viewport.width - Math.min(896, viewport.width)) / 2)
-    expect(Math.abs(message.left - (transcriptLeft + gutter))).toBeLessThanOrEqual(1)
+    expect(Math.abs(assistant!.x - column!.x)).toBeLessThanOrEqual(1)
+    expect(Math.abs(userBubble!.x + userBubble!.width - column!.x - column!.width)).toBeLessThanOrEqual(1)
+    expect(Math.abs(assistant!.x + assistant!.width - column!.x - column!.width)).toBeLessThanOrEqual(1)
+    expect(Math.abs(assistantContent!.x + assistantContent!.width - column!.x - column!.width)).toBeLessThanOrEqual(1)
 
     await page.screenshot({
       path: path.resolve(__dirname, `../../.jait/shots/chat-column-alignment-${viewport.name}.png`),
@@ -78,3 +52,24 @@ for (const viewport of viewports) {
     })
   })
 }
+
+
+test('scroll to latest remains clickable beside the minimap', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/src/e2e-fixtures/index.html?long', { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
+  const minimap = page.getByRole('slider', { name: 'Conversation minimap' })
+  await expect(minimap).toBeVisible()
+  const scroller = page.locator('.chat-conversation-viewport .overflow-y-auto').first()
+  await expect(scroller).toBeVisible()
+  await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  await scroller.hover()
+  await page.mouse.wheel(0, -2000)
+  const button = page.getByRole('button', { name: 'Scroll to latest message' })
+  await expect(button).toBeVisible()
+  const buttonBox = await button.boundingBox()
+  const minimapBox = await minimap.boundingBox()
+  expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(minimapBox!.x)
+  await button.click()
+  await expect(button).toBeHidden()
+})

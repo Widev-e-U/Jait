@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ViewModeSelector, type ViewMode } from '@/components/chat/view-mode-selector'
 import { ModeSidebar, type ModeSidebarItem, type SidebarAccount } from '@/components/app-shell/mode-sidebar'
+import { useMessengerBadge } from '@/components/messenger/messenger-provider'
 import type { AppView } from '@/lib/app-view'
 
 interface AppNavigationSidebarProps {
@@ -32,6 +33,7 @@ export function AppNavigationSidebar({
   onOpenSettings,
   onToggleScreenShare,
 }: AppNavigationSidebarProps) {
+  const { count: messengerCount } = useMessengerBadge()
   // The catalog is also the navigation registry. Adding a routable page requires
   // its explanation and an icon; missing page metadata cannot silently ship.
   const icons: Record<AppView, LucideIcon> = {
@@ -42,7 +44,7 @@ export function AppNavigationSidebar({
   const navigationItems: ModeSidebarItem[] = JAIT_PAGE_IDS
     .filter((id) => id !== 'settings' && JAIT_PAGES[id].mode === viewMode)
     .map((id) => ({ id, label: JAIT_PAGES[id].title, icon: icons[id],
-      active: currentView === id, onSelect: () => onNavigate(id) }))
+      active: currentView === id, badge: id === 'messenger' ? messengerCount : undefined, onSelect: () => onNavigate(id) }))
   if (viewMode === 'developer' && onToggleScreenShare) navigationItems.push({
     id: 'screenShare', label: 'Screen Share', icon: Cast, active: screenShareActive, onSelect: onToggleScreenShare,
   })

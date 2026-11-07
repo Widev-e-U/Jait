@@ -78,8 +78,7 @@ mod copy_shell_integration_ts {
         let mut cursor_present_at_hook = None;
         let target = copy_shell_integration::copy_assets_with_progress(&root, |copied| {
             hook_target = Some(copied.to_owned());
-            cursor_present_at_hook =
-                Some(root.join("dist/surfaces/browser-cursor.cjs").exists());
+            cursor_present_at_hook = Some(root.join("dist/surfaces/browser-cursor.cjs").exists());
         })
         .expect("copy should succeed");
 
@@ -89,7 +88,10 @@ mod copy_shell_integration_ts {
         // Ordering witness: at hook time the bridge exists but cursor assets don't.
         assert_eq!(cursor_present_at_hook, Some(false));
 
-        assert_eq!(std::fs::read(expected.join("bash.sh")).unwrap(), b"bash-body");
+        assert_eq!(
+            std::fs::read(expected.join("bash.sh")).unwrap(),
+            b"bash-body"
+        );
         assert_eq!(std::fs::read(expected.join("zsh.sh")).unwrap(), b"zsh-body");
         assert_eq!(
             std::fs::read(expected.join("pwsh.ps1")).unwrap(),
@@ -126,7 +128,10 @@ mod copy_shell_integration_ts {
         std::fs::create_dir_all(&root).unwrap();
 
         let err = copy_shell_integration::copy_assets(&root).unwrap_err();
-        assert_eq!(err.operation, "shell integration source directory not found");
+        assert_eq!(
+            err.operation,
+            "shell integration source directory not found"
+        );
         assert_eq!(err.path, root.join("src/surfaces/shell-integration"));
         assert_eq!(err.source.kind(), std::io::ErrorKind::NotFound);
         assert_eq!(
@@ -151,11 +156,17 @@ mod copy_shell_integration_ts {
 
         let err = copy_shell_integration::copy_assets(&root).unwrap_err();
         assert_eq!(err.operation, "stat");
-        assert_eq!(err.path, root.join("src/surfaces/playwright-node-bridge.cjs"));
+        assert_eq!(
+            err.path,
+            root.join("src/surfaces/playwright-node-bridge.cjs")
+        );
         assert_eq!(err.source.kind(), std::io::ErrorKind::NotFound);
         // Non-transactional: the shell tree copy already landed, cursor assets
         // were never copied.
-        assert!(root.join("dist/surfaces/shell-integration/bash.sh").exists());
+        assert!(
+            root.join("dist/surfaces/shell-integration/bash.sh")
+                .exists()
+        );
         assert!(!root.join("dist/surfaces/browser-cursor.cjs").exists());
 
         // Destination occupied by a regular file -> mkdir/AlreadyExists.

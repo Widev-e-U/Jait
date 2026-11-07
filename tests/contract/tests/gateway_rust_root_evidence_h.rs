@@ -6,7 +6,7 @@
 //! value, which diverged from the reference when two rows for one IP both carried
 //! a MAC. The port now matches the reference; these tests lock that in.
 
-use jait_gateway::network_scan::{merge_entries, HostEntry};
+use jait_gateway::network_scan::{HostEntry, merge_entries};
 
 fn entry(ip: &str, mac: Option<&str>, responsive: bool) -> HostEntry {
     HostEntry {

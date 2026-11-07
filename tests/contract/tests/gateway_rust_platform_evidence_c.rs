@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 mod evaluation_isolated_gateway_child {
     use jait_gateway::evaluation::isolated_gateway::HostFuture;
-    use jait_gateway::evaluation::isolated_gateway_child::{bootstrap, IsolatedChildHost};
+    use jait_gateway::evaluation::isolated_gateway_child::{IsolatedChildHost, bootstrap};
     use serde_json::Value;
     use std::path::Path;
     use std::sync::{Arc, Mutex};
@@ -204,12 +204,20 @@ mod evaluation_isolated_gateway_child {
 
     #[tokio::test]
     async fn bootstrap_rejects_non_isolated_and_traversing_database_paths() {
-        for bad_db in ["/etc/jait.db", "/state/../etc/jait.db", "/state/data/other.db", ""] {
+        for bad_db in [
+            "/etc/jait.db",
+            "/state/../etc/jait.db",
+            "/state/data/other.db",
+            "",
+        ] {
             let mut host = Harness::new();
             let error = bootstrap(&mut host, "{}", STATE_DIR, bad_db, JWT_SECRET)
                 .await
                 .expect_err("non-isolated database path must be refused");
-            assert_eq!(error, "Evaluation database isolation required", "db {bad_db}");
+            assert_eq!(
+                error, "Evaluation database isolation required",
+                "db {bad_db}"
+            );
             assert!(host.take().is_empty(), "no host call may run for {bad_db}");
         }
     }
@@ -227,7 +235,10 @@ mod evaluation_isolated_gateway_child {
         let error = bootstrap(&mut host, "{not json", STATE_DIR, DB_PATH, JWT_SECRET)
             .await
             .expect_err("malformed settings must be refused");
-        assert!(error.contains("key must be a string"), "unexpected error: {error}");
+        assert!(
+            error.contains("key must be a string"),
+            "unexpected error: {error}"
+        );
         assert!(host.take().is_empty());
     }
 
@@ -261,7 +272,11 @@ mod evaluation_isolated_gateway_child {
         assert_eq!(error, "close failed");
         let calls = host.take();
         assert_eq!(calls.last().unwrap(), "close");
-        assert!(!calls.iter().any(|call| call.starts_with("start") || call.starts_with("ready")));
+        assert!(
+            !calls
+                .iter()
+                .any(|call| call.starts_with("start") || call.starts_with("ready"))
+        );
     }
 }
 
@@ -315,37 +330,72 @@ mod os_control_index {
 
     #[test]
     fn driver_type_and_pointer_enums_serialize_to_wire_literals() {
-        assert_eq!(serde_json::to_value(OsDriverType::LinuxDesktop).unwrap(), json!("linux-desktop"));
-        assert_eq!(serde_json::to_value(OsDriverType::Windows).unwrap(), json!("windows"));
-        assert_eq!(serde_json::to_value(MouseButton::Right).unwrap(), json!("right"));
-        assert_eq!(serde_json::to_value(ScrollDirection::Down).unwrap(), json!("down"));
+        assert_eq!(
+            serde_json::to_value(OsDriverType::LinuxDesktop).unwrap(),
+            json!("linux-desktop")
+        );
+        assert_eq!(
+            serde_json::to_value(OsDriverType::Windows).unwrap(),
+            json!("windows")
+        );
+        assert_eq!(
+            serde_json::to_value(MouseButton::Right).unwrap(),
+            json!("right")
+        );
+        assert_eq!(
+            serde_json::to_value(ScrollDirection::Down).unwrap(),
+            json!("down")
+        );
 
         let parsed: OsDriverType = serde_json::from_value(json!("windows")).unwrap();
         assert_eq!(parsed, OsDriverType::Windows);
         let error = serde_json::from_value::<OsDriverType>(json!("Windows"))
             .expect_err("variants are case sensitive");
-        assert!(error.to_string().contains("unknown variant"), "unexpected error: {error}");
+        assert!(
+            error.to_string().contains("unknown variant"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
     fn click_options_default_is_empty_and_rejects_unknown_button() {
-        assert_eq!(OsClickOptions::default(), serde_json::from_value(json!({})).unwrap());
-        let options: OsClickOptions = serde_json::from_value(json!({"button":"right","x":1.5,"y":2.0}))
-            .expect("known button parses");
+        assert_eq!(
+            OsClickOptions::default(),
+            serde_json::from_value(json!({})).unwrap()
+        );
+        let options: OsClickOptions =
+            serde_json::from_value(json!({"button":"right","x":1.5,"y":2.0}))
+                .expect("known button parses");
         assert_eq!(options.button, Some(MouseButton::Right));
-        assert!(serde_json::from_value::<OsClickOptions>(json!({"button":"sideways"}))
-            .expect_err("unknown button must be refused")
-            .to_string()
-            .contains("unknown variant"));
+        assert!(
+            serde_json::from_value::<OsClickOptions>(json!({"button":"sideways"}))
+                .expect_err("unknown button must be refused")
+                .to_string()
+                .contains("unknown variant")
+        );
 
-        assert_eq!(OsTypeOptions::default(), serde_json::from_value(json!({})).unwrap());
-        assert_eq!(OsKeyOptions::default(), serde_json::from_value(json!({})).unwrap());
-        assert_eq!(OsScrollOptions::default(), serde_json::from_value(json!({})).unwrap());
-        assert_eq!(OsExecOptions::default(), serde_json::from_value(json!({})).unwrap());
-        assert!(serde_json::from_value::<OsScrollOptions>(json!({"direction":"sideways"}))
-            .expect_err("unknown scroll direction must be refused")
-            .to_string()
-            .contains("unknown variant"));
+        assert_eq!(
+            OsTypeOptions::default(),
+            serde_json::from_value(json!({})).unwrap()
+        );
+        assert_eq!(
+            OsKeyOptions::default(),
+            serde_json::from_value(json!({})).unwrap()
+        );
+        assert_eq!(
+            OsScrollOptions::default(),
+            serde_json::from_value(json!({})).unwrap()
+        );
+        assert_eq!(
+            OsExecOptions::default(),
+            serde_json::from_value(json!({})).unwrap()
+        );
+        assert!(
+            serde_json::from_value::<OsScrollOptions>(json!({"direction":"sideways"}))
+                .expect_err("unknown scroll direction must be refused")
+                .to_string()
+                .contains("unknown variant")
+        );
     }
 
     #[tokio::test]
@@ -384,8 +434,8 @@ mod os_control_index {
 mod security_index {
     use jait_gateway::security::contracts::Risk;
     use jait_gateway::security::index::{
-        get_unknown_tool_permission, requires_consent, ConsentLevel, PathGuard, PathTraversalError,
-        PolicySource, ToolPermission,
+        ConsentLevel, PathGuard, PathTraversalError, PolicySource, ToolPermission,
+        get_unknown_tool_permission, requires_consent,
     };
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
@@ -429,24 +479,61 @@ mod security_index {
         let mut approved = HashSet::new();
         approved.insert("shell.run".to_string());
 
-        assert!(!requires_consent(Some(&permission(ConsentLevel::None)), f64::NAN, &none));
-        assert!(requires_consent(None, 5.0, &none), "unconfigured tools always require consent");
+        assert!(!requires_consent(
+            Some(&permission(ConsentLevel::None)),
+            f64::NAN,
+            &none
+        ));
+        assert!(
+            requires_consent(None, 5.0, &none),
+            "unconfigured tools always require consent"
+        );
 
-        assert!(requires_consent(Some(&permission(ConsentLevel::Once)), 1.0, &none));
-        assert!(!requires_consent(Some(&permission(ConsentLevel::Once)), 2.0, &none));
-        assert!(!requires_consent(Some(&permission(ConsentLevel::Once)), 0.0, &approved));
+        assert!(requires_consent(
+            Some(&permission(ConsentLevel::Once)),
+            1.0,
+            &none
+        ));
+        assert!(!requires_consent(
+            Some(&permission(ConsentLevel::Once)),
+            2.0,
+            &none
+        ));
+        assert!(!requires_consent(
+            Some(&permission(ConsentLevel::Once)),
+            0.0,
+            &approved
+        ));
 
-        assert!(requires_consent(Some(&permission(ConsentLevel::Always)), 2.9, &approved));
-        assert!(requires_consent(Some(&permission(ConsentLevel::Always)), f64::NAN, &none));
-        assert!(!requires_consent(Some(&permission(ConsentLevel::Always)), 3.0, &none));
-        assert!(requires_consent(Some(&permission(ConsentLevel::Dangerous)), 9.0, &approved));
+        assert!(requires_consent(
+            Some(&permission(ConsentLevel::Always)),
+            2.9,
+            &approved
+        ));
+        assert!(requires_consent(
+            Some(&permission(ConsentLevel::Always)),
+            f64::NAN,
+            &none
+        ));
+        assert!(!requires_consent(
+            Some(&permission(ConsentLevel::Always)),
+            3.0,
+            &none
+        ));
+        assert!(requires_consent(
+            Some(&permission(ConsentLevel::Dangerous)),
+            9.0,
+            &approved
+        ));
     }
 
     #[test]
     fn path_guard_allows_in_root_and_denies_traversal_null_bytes_and_denied_dirs() {
         let guard = PathGuard::new(Path::new("."), &["secrets".to_string()], false)
             .expect("guard rooted at the contract crate");
-        let ok = guard.validate("src/lib.rs").expect("in-root path is allowed");
+        let ok = guard
+            .validate("src/lib.rs")
+            .expect("in-root path is allowed");
         assert!(ok.starts_with(guard.project_root()));
         assert!(ok.ends_with("src/lib.rs"));
 
@@ -455,7 +542,10 @@ mod security_index {
             .expect_err("traversal must be refused")
             .downcast::<PathTraversalError>()
             .expect("traversal error keeps its concrete type");
-        assert_eq!(traversal.message, "Path escapes project boundary: ../escape.rs");
+        assert_eq!(
+            traversal.message,
+            "Path escapes project boundary: ../escape.rs"
+        );
         assert_eq!(traversal.path, PathBuf::from("../escape.rs"));
         assert_eq!(traversal.boundary.as_path(), guard.project_root());
 
@@ -517,7 +607,9 @@ mod voice_assistant_service {
         );
         assert_eq!(session.close("again"), Vec::<Effect>::new());
         assert_eq!(
-            session.client(&json!({"type":"audio","data":"AA=="})).expect("audio event accepted"),
+            session
+                .client(&json!({"type":"audio","data":"AA=="}))
+                .expect("audio event accepted"),
             Vec::<Effect>::new(),
             "events after close must not reach the provider"
         );
@@ -609,7 +701,10 @@ mod voice_service {
     fn transcript_normalization_pins_vendor_name_variants() {
         assert_eq!(normalize_transcript("hey jade"), "hey Jait");
         assert_eq!(normalize_transcript("JADE"), "JAIT");
-        assert_eq!(normalize_transcript("open jaid and jate now"), "open Jait and Jait now");
+        assert_eq!(
+            normalize_transcript("open jaid and jate now"),
+            "open Jait and Jait now"
+        );
         assert_eq!(normalize_transcript("jayd"), "Jait");
         assert_eq!(normalize_transcript("jade_jade"), "jade_jade");
         assert_eq!(normalize_transcript("jadestone"), "jadestone");
@@ -627,7 +722,10 @@ mod voice_service {
     #[test]
     fn oversized_audio_frames_are_refused_before_decoding() {
         let oversized = "A".repeat(16 * 1024 * 1024 * 2 + 1);
-        assert_eq!(decode_node_base64(&oversized).unwrap_err(), "Voice audio too large");
+        assert_eq!(
+            decode_node_base64(&oversized).unwrap_err(),
+            "Voice audio too large"
+        );
         assert_eq!(
             decode_node_base64(&"A".repeat(22_369_620))
                 .expect("decoded bytes just under the 16 MiB budget are accepted")

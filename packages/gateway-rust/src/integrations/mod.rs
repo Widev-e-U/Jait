@@ -14,3 +14,5 @@ pub mod msteams;
 pub mod msteams_auth;
 
 pub mod whatsapp;
+
+pub mod telegram;

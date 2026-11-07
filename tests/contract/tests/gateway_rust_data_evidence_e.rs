@@ -59,10 +59,7 @@ fn conversation_id_strips_thread_and_message_suffixes() {
         normalize_conversation_id("19:abc@thread.skype;messageid=123"),
         "19:abc@thread.skype"
     );
-    assert_eq!(
-        normalize_conversation_id("19:abc;messageid=root"),
-        "19:abc"
-    );
+    assert_eq!(normalize_conversation_id("19:abc;messageid=root"), "19:abc");
     assert_eq!(normalize_conversation_id("19:abc"), "19:abc");
     assert_eq!(normalize_conversation_id(""), "");
     assert_eq!(normalize_conversation_id("a;messageid="), "a");
@@ -107,31 +104,31 @@ fn activity_projection_matches_connector_contract() {
 #[test]
 fn activity_projection_rejects_unusable_activities_and_falls_back() {
     // Only `message` activities are inbound.
-    assert!(activity_to_inbound(
-        &json!({
-            "type": "typing",
-            "text": "hi",
-            "conversation": { "id": "19:abc" }
-        }),
-        0.0
-    )
-    .is_none());
+    assert!(
+        activity_to_inbound(
+            &json!({
+                "type": "typing",
+                "text": "hi",
+                "conversation": { "id": "19:abc" }
+            }),
+            0.0
+        )
+        .is_none()
+    );
     // A message with no conversation cannot be routed.
-    assert!(activity_to_inbound(
-        &json!({ "type": "message", "text": "hi" }),
-        0.0
-    )
-    .is_none());
+    assert!(activity_to_inbound(&json!({ "type": "message", "text": "hi" }), 0.0).is_none());
     // Mention-only or empty bodies carry no user text.
-    assert!(activity_to_inbound(
-        &json!({
-            "type": "message",
-            "text": "<at>bot</at>",
-            "conversation": { "id": "19:abc" }
-        }),
-        0.0
-    )
-    .is_none());
+    assert!(
+        activity_to_inbound(
+            &json!({
+                "type": "message",
+                "text": "<at>bot</at>",
+                "conversation": { "id": "19:abc" }
+            }),
+            0.0
+        )
+        .is_none()
+    );
 
     // Without `aadObjectId` the connector falls back to the Teams user id, and
     // without any sender id to the conversation id.

@@ -1747,4 +1747,14 @@ export const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_browser_workflow_runs_owner ON browser_workflow_runs(user_id, project_root, created_at)");
     },
   },
+  {
+    id: 77, name: "github_intake_observation",
+    run(db) {
+      db.exec("CREATE TABLE IF NOT EXISTS github_intake_policies (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, agent_id TEXT NOT NULL, rules TEXT NOT NULL, updated_at TEXT NOT NULL)");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_github_intake_policy_owner ON github_intake_policies(user_id, agent_id)");
+      db.exec("CREATE TABLE IF NOT EXISTS github_intake_decisions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, agent_id TEXT NOT NULL, delivery_id TEXT NOT NULL, event TEXT NOT NULL, action TEXT NOT NULL, repository TEXT NOT NULL, sender TEXT NOT NULL, result TEXT NOT NULL, reason TEXT NOT NULL, created_at TEXT NOT NULL)");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_github_intake_delivery ON github_intake_decisions(user_id, agent_id, delivery_id)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_github_intake_history ON github_intake_decisions(user_id, agent_id, created_at)");
+    },
+  },
 ];

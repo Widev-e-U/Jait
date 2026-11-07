@@ -6,6 +6,7 @@ const endpoint = '**/api/agents/fixture%20agent/github-app'
 const state = 'fixture-signed-state'
 const installUrl = `https://github.com/apps/fixture/installations/new?state=${state}`
 async function mount(page: Page, native = true, connected = false) {
+  await page.route(`${endpoint}/intake`, route => route.fulfill({ json: { mode: 'observe', rules: [], decisions: [] } }))
   await page.route(endpoint, route => route.fulfill({
     headers: native ? { 'x-jait-github-installation-flow': 'stateful', 'access-control-expose-headers': 'x-jait-github-installation-flow' } : {},
     json: { connection: { ...connection, ...(connected ? { status: 'connected', installationId: '99' } : {}) }, webhookSecretAvailable: true },
@@ -127,4 +128,22 @@ test('connected native App does not offer another installation', async ({ page }
   await mount(page, true, true)
   await expect(page.getByRole('button', { name: 'Install on GitHub' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Install on GitHub' })).toHaveCount(0)
+})
+
+
+test('observe rules can be saved and decisions reviewed', async ({ page }) => {
+  let rules: Array<Record<string, string>> = []
+  await mount(page, true, true)
+  await page.unroute(`${endpoint}/intake`)
+  await page.route(`${endpoint}/intake`, async route => {
+    if (route.request().method() === 'PUT') rules = route.request().postDataJSON().rules
+    return route.fulfill({ json: { mode: 'observe', rules, decisions: [{ id: 'one', repository: 'org/repo', sender: 'alice', event: 'issues', action: 'opened', result: 'would_accept', reason: 'An exact rule matched.', createdAt: '2026-01-01' }] } })
+  })
+  const section = page.getByRole('region', { name: 'GitHub event intake' })
+  await section.getByLabel('Repository').fill('org/repo')
+  await section.getByLabel('Sender').fill('alice')
+  await section.getByRole('button', { name: 'Add rule' }).click()
+  await expect(section.getByText('org/repo · alice · issues/opened', { exact: true })).toBeVisible()
+  await expect(section.getByText('Would accept', { exact: true })).toBeVisible()
+  expect(rules).toEqual([{ repository: 'org/repo', sender: 'alice', event: 'issues', action: 'opened' }])
 })

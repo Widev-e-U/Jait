@@ -126,9 +126,7 @@ describe('chat transcript and composer layout', () => {
     expect(composerClasses).toContain('bg-background')
   })
 
-  it('aligns message text with the composer text in one centered column', () => {
-    // One column owns the width; the transcript pads the messages, the composer
-    // box sits flush on the column edge and lets PromptInput inset its own text.
+  it('aligns transcript and composer edges in one centered column', () => {
     const transcriptColumn = getChatTranscriptColumnClassName()
     const composerColumn = getChatColumnClassName()
     const composerBoundary = getChatComposerBoundaryClassName(false)
@@ -136,6 +134,7 @@ describe('chat transcript and composer layout', () => {
     expect(transcriptColumn).toContain('mx-auto w-full')
     expect(transcriptColumn).toContain('max-w-4xl')
     expect(transcriptColumn).toContain(CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS)
+    expect(CHAT_TRANSCRIPT_COLUMN_PADDING_CLASS).toBe('px-2 md:px-0')
     expect(composerColumn).toContain('mx-auto w-full')
     expect(composerColumn).toContain('max-w-4xl')
     // The composer boundary must not add its own gutter: PromptInput already

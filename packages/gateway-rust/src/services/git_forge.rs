@@ -32,6 +32,28 @@ impl std::fmt::Display for ForgeError {
 }
 impl std::error::Error for ForgeError {}
 
+/// Reference `cliAvailable` runs `<cli> --version` and turns any failure into `false`.
+/// Availability probes therefore report spawn/exit/timeout problems as "not installed",
+/// while authorization, validation and cancellation failures stay explicit so that a
+/// policy decision can never be reported as a missing tool.
+fn availability(result: ForgeResult<String>) -> ForgeResult<bool> {
+    match result {
+        Ok(_) => Ok(true),
+        Err(
+            error @ (ForgeError::Cancelled
+            | ForgeError::Denied
+            | ForgeError::InvalidInput
+            | ForgeError::UnsupportedProvider),
+        ) => Err(error),
+        Err(ForgeError::AuthenticationRequired)
+        | Err(ForgeError::TimedOut)
+        | Err(ForgeError::CapacityOrProcessFailure)
+        | Err(ForgeError::OutputLimit)
+        | Err(ForgeError::MalformedResponse)
+        | Err(ForgeError::CommandFailed) => Ok(false),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ForgeProvider {
@@ -112,6 +134,16 @@ impl ForgeRepository {
         } else {
             format!("https://{}", self.host)
         })
+    }
+    /// Storage key for an Azure PAT scoped to this exact host and organization.
+    /// Host validation and the organization slug rule exclude the `/` separator.
+    /// The caller must derive the user ID from an authorized request, authorize the
+    /// destination before using a credential, and check cancellation on the database
+    /// worker before both reads (which update last-used time) and writes. This key
+    /// alone is not an authorization grant or evidence of credential provenance.
+    pub fn azure_credential_key(&self) -> ForgeResult<String> {
+        self.organization_url()?;
+        Ok(format!("azure-devops:v1:{}/{}", self.host, self.owner))
     }
     pub fn host(&self) -> &str {
         &self.host
@@ -225,6 +257,86 @@ impl ForgeProvider {
         }
     }
 }
+/// Environment names in the exact order the reference `resolveToken` probes them.
+/// This order is observable: a non-empty `GITHUB_TOKEN` must win over `GH_TOKEN`.
+pub fn token_environment_names(provider: ForgeProvider) -> &'static [&'static str] {
+    match provider {
+        ForgeProvider::Github => &["GITHUB_TOKEN", "GH_TOKEN", "GITHUB_PAT"],
+        ForgeProvider::Gitlab => &["GITLAB_TOKEN", "GITLAB_PAT"],
+        ForgeProvider::Gitea => &["GITEA_TOKEN", "GITEA_PAT"],
+        ForgeProvider::AzureDevops => &["AZURE_DEVOPS_PAT", "AZURE_DEVOPS_TOKEN"],
+        ForgeProvider::Bitbucket => &["BITBUCKET_TOKEN", "BITBUCKET_APP_PASSWORD"],
+    }
+}
+
+/// Reference `resolveToken` uses nullish coalescing, so an empty value stops the
+/// environment chain. GitHub then treats that value as falsy and tries its credential
+/// helper; other providers return it verbatim. ForgeSession rejects empty tokens.
+pub fn token_from_environment(
+    provider: ForgeProvider,
+    mut get: impl FnMut(&str) -> Option<String>,
+) -> Option<String> {
+    let value = token_environment_names(provider)
+        .iter()
+        .find_map(|name| get(name));
+    if provider == ForgeProvider::Github {
+        value.filter(|value| !value.is_empty())
+    } else {
+        value
+    }
+}
+
+/// Exact stdin the reference writes to `git credential fill`.
+pub fn github_credential_input() -> &'static str {
+    "protocol=https\nhost=github.com\n\n"
+}
+
+/// Reference `/^password=(.+)$/m` plus `trim()`; anything shorter than one character,
+/// a missing line, or a value that trims to empty yields `None`.
+pub fn credential_password(stdout: &str) -> Option<String> {
+    stdout.lines().find_map(|line| {
+        line.strip_prefix("password=")
+            .filter(|value| !value.is_empty())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+    })
+}
+
+/// `git credential fill` is bounded by a 5 s `spawn` timeout in the reference; a
+/// timeout, spawn error, unparsable output or a blank password all collapse to `None`.
+pub const RESOLVE_TOKEN_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Reference `resolveToken`: the environment chain short-circuits before any
+/// subprocess work, and only the GitHub provider falls back to `git credential fill`.
+/// The subprocess itself is supplied by the caller so effect authorization, the
+/// process pool and cancellation stay in one place; every failure degrades to `None`
+/// exactly like the reference promise does (it never rejects).
+pub async fn resolve_token<F, Fut>(
+    provider: ForgeProvider,
+    get: impl FnMut(&str) -> Option<String>,
+    credential_fill: F,
+) -> Option<String>
+where
+    F: FnOnce(String) -> Fut,
+    Fut: std::future::Future<Output = Option<String>>,
+{
+    if let Some(token) = token_from_environment(provider, get) {
+        return Some(token);
+    }
+    if provider != ForgeProvider::Github {
+        return None;
+    }
+    let stdout = tokio::time::timeout(
+        RESOLVE_TOKEN_TIMEOUT,
+        credential_fill(github_credential_input().to_string()),
+    )
+    .await
+    .ok()
+    .flatten()?;
+    credential_password(&stdout)
+}
+
 fn slug(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 255
@@ -261,6 +373,31 @@ pub(crate) fn bounded_text(s: &str, max: usize) -> ForgeResult<()> {
     }
 }
 
+// Applied after authority resolution and before process admission. Shared callers
+// must retain these provider-specific constraints in addition to generic grant checks.
+pub(crate) fn forge_environment_allowed(
+    provider: &str,
+    host: &str,
+    requested: &HashMap<String, String>,
+    authorized: &HashMap<String, String>,
+) -> bool {
+    !requested
+        .iter()
+        .any(|(key, value)| authorized.get(key) != Some(value))
+        && !(provider == "azure-devops"
+            && authorized.keys().any(|key| {
+                key.starts_with("AZURE_")
+                    && key != "AZURE_CONFIG_DIR"
+                    && !requested.contains_key(key)
+            }))
+        && !["GH_REPO", "GITHUB_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]
+            .iter()
+            .any(|key| authorized.contains_key(*key))
+        && !(provider != "github" && authorized.keys().any(|key| key.starts_with("GH_")))
+        && !(host != "github.com" && authorized.contains_key("GH_TOKEN"))
+        && !(host == "github.com" && authorized.contains_key("GH_ENTERPRISE_TOKEN"))
+}
+
 /// One owner-scoped repository and credential, provided by the existing user-secret
 /// or installation-token service. Intentionally neither Debug nor Serialize.
 pub struct ForgeSession {
@@ -270,6 +407,7 @@ pub struct ForgeSession {
     token: String,
     authority: GitCommandAuthority,
     pool: ProcessPool,
+    request_scoped: bool,
 }
 impl ForgeSession {
     pub fn new(
@@ -303,7 +441,21 @@ impl ForgeSession {
             token,
             authority,
             pool,
+            request_scoped: false,
         })
+    }
+    /// Require an active Git request scope for every forge command.
+    pub(crate) fn new_scoped(
+        owner: String,
+        root: PathBuf,
+        repository: ForgeRepository,
+        token: String,
+        authority: GitCommandAuthority,
+        pool: ProcessPool,
+    ) -> ForgeResult<Self> {
+        let mut session = Self::new(owner, root, repository, token, authority, pool)?;
+        session.request_scoped = true;
+        Ok(session)
     }
     pub fn repository(&self) -> &ForgeRepository {
         &self.repository
@@ -403,6 +555,40 @@ impl ForgeSession {
             environment: environment.clone(),
             input: input.clone(),
         };
+        if self.request_scoped {
+            let result = crate::routes::git::execution::execute_scoped_specialized(
+                request,
+                limit,
+                cancel,
+                |grant| {
+                    forge_environment_allowed(
+                        provider,
+                        &self.repository.host,
+                        &environment,
+                        &grant.environment,
+                    )
+                },
+            )
+            .await
+            .map_err(|error| {
+                if crate::routes::git::execution::is_output_limit(&error) {
+                    ForgeError::OutputLimit
+                } else {
+                    match error.kind() {
+                        std::io::ErrorKind::Interrupted => ForgeError::Cancelled,
+                        std::io::ErrorKind::TimedOut => ForgeError::TimedOut,
+                        std::io::ErrorKind::PermissionDenied => ForgeError::Denied,
+                        _ => ForgeError::CapacityOrProcessFailure,
+                    }
+                }
+            })?;
+            if !result.status.success() {
+                return Err(ForgeError::CommandFailed);
+            }
+            let text =
+                String::from_utf8(result.stdout).map_err(|_| ForgeError::MalformedResponse)?;
+            return Ok(self.redact(&text));
+        }
         let authorized = tokio::select! {
             _ = cancel.wait_cancelled() => return Err(ForgeError::Cancelled),
             result = tokio::time::timeout(Duration::from_secs(5), (self.authority)(request, cancel.clone())) =>
@@ -417,23 +603,12 @@ impl ForgeSession {
             || !PathBuf::from(&authorized.argv[0]).is_absolute()
             || authorized.cwd != self.root
             || authorized.input != input
-            || environment
-                .iter()
-                .any(|(k, v)| authorized.environment.get(k) != Some(v))
-            || (provider == "azure-devops"
-                && authorized.environment.keys().any(|k| {
-                    k.starts_with("AZURE_")
-                        && k != "AZURE_CONFIG_DIR"
-                        && !environment.contains_key(k)
-                }))
-            || ["GH_REPO", "GITHUB_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]
-                .iter()
-                .any(|k| authorized.environment.contains_key(*k))
-            || (provider != "github" && authorized.environment.keys().any(|k| k.starts_with("GH_")))
-            || (self.repository.host != "github.com"
-                && authorized.environment.contains_key("GH_TOKEN"))
-            || (self.repository.host == "github.com"
-                && authorized.environment.contains_key("GH_ENTERPRISE_TOKEN"))
+            || !forge_environment_allowed(
+                provider,
+                &self.repository.host,
+                &environment,
+                &authorized.environment,
+            )
         {
             return Err(ForgeError::Denied);
         }
@@ -464,13 +639,18 @@ impl ForgeSession {
     // No credential is exported: the authority supplies destination-scoped Git auth.
     pub(crate) fn conflict_context(
         &self,
-    ) -> (&str, &std::path::Path, GitCommandAuthority, ProcessPool) {
-        (
+    ) -> ForgeResult<(&str, &std::path::Path, GitCommandAuthority, ProcessPool)> {
+        // Conflict workspace execution has a separate budget and is not yet
+        // connected to the request scope. Fail closed until it is integrated.
+        if self.request_scoped {
+            return Err(ForgeError::Denied);
+        }
+        Ok((
             &self.owner,
             &self.root,
             self.authority.clone(),
             self.pool.clone(),
-        )
+        ))
     }
     pub(crate) async fn gh_json(
         &self,
@@ -513,22 +693,43 @@ impl GitHubForge {
         &self.session
     }
     pub async fn check_cli_available(&self, cancel: ProcessCancellation) -> ForgeResult<bool> {
-        self.session
-            .gh(
-                "cli-status",
-                vec!["--version".into()],
-                None,
-                64 * 1024,
-                cancel,
-            )
-            .await
-            .map(|_| true)
+        availability(
+            self.session
+                .gh(
+                    "cli-status",
+                    vec!["--version".into()],
+                    None,
+                    64 * 1024,
+                    cancel,
+                )
+                .await,
+        )
     }
     pub async fn check_auth(&self, cancel: ProcessCancellation) -> ForgeResult<Value> {
+        self.authenticated_user("auth-status", cancel).await
+    }
+
+    /// Validate the session's supplied token without writing CLI credentials. The caller
+    /// may persist it through the authorized secret store only after this succeeds.
+    pub async fn login_with_token(&self, cancel: ProcessCancellation) -> ForgeResult<Value> {
+        match self.authenticated_user("token-login", cancel).await {
+            Err(ForgeError::CommandFailed) => Ok(json!({
+                "authenticated": false,
+                "error": "Token authentication failed"
+            })),
+            result => result,
+        }
+    }
+
+    async fn authenticated_user(
+        &self,
+        operation: &str,
+        cancel: ProcessCancellation,
+    ) -> ForgeResult<Value> {
         let data = self
             .session
             .gh_json(
-                "auth-status",
+                operation,
                 vec![
                     "api".into(),
                     "--hostname".into(),
@@ -905,6 +1106,81 @@ mod tests {
         assert_eq!(result, Err(ForgeError::Cancelled));
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn token_login_authorizes_exact_host_and_redacts_failures() {
+        use crate::execution::process_runner::ProcessRequest;
+        use std::{num::NonZeroU16, os::unix::fs::PermissionsExt, sync::Arc};
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.jait/artifacts/gateway-rust/token-login-fixture");
+        std::fs::create_dir_all(&root).unwrap();
+        let root = std::fs::canonicalize(root).unwrap();
+        let executable = root.join("gh");
+        std::fs::write(&executable, "#!/bin/sh\n[ \"$GH_ENTERPRISE_TOKEN\" = private-token ] || exit 1\n[ -z \"$GH_TOKEN\" ] || exit 1\nprintf '%s' '{\"login\":\"alice\"}'\n").unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let authority: GitCommandAuthority = Arc::new(move |request, _| {
+            let executable = executable.clone();
+            Box::pin(async move {
+                assert_eq!(
+                    request.operation,
+                    "forge.github.token-login:git.example/owned/repo"
+                );
+                assert_eq!(
+                    request.arguments,
+                    ["api", "--hostname", "git.example", "user"]
+                );
+                assert_eq!(
+                    request
+                        .environment
+                        .get("GH_ENTERPRISE_TOKEN")
+                        .map(String::as_str),
+                    Some("private-token")
+                );
+                assert!(!request.environment.contains_key("GH_TOKEN"));
+                let mut argv = vec![executable.to_string_lossy().into_owned()];
+                argv.extend(request.arguments);
+                Ok(ProcessRequest {
+                    argv,
+                    cwd: request.cwd,
+                    environment: request.environment,
+                    input: request.input,
+                    timeout: Duration::from_secs(2),
+                    output_limit: 65536,
+                })
+            })
+        });
+        let forge = GitHubForge::new(
+            ForgeSession::new(
+                "alice".into(),
+                root,
+                ForgeRepository::new("git.example", "owned", "repo").unwrap(),
+                "private-token".into(),
+                authority,
+                ProcessPool::new(NonZeroU16::new(1).unwrap()),
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            forge.login_with_token(ProcessCancellation::default()).await,
+            Ok(json!({"authenticated": true, "username": "alice"}))
+        );
+        std::fs::write(
+            forge.session.root.join("gh"),
+            "#!/bin/sh\necho private-token >&2\nexit 1\n",
+        )
+        .unwrap();
+        assert_eq!(
+            forge.login_with_token(ProcessCancellation::default()).await,
+            Ok(json!({"authenticated": false, "error": "Token authentication failed"}))
+        );
+        let cancelled = ProcessCancellation::default();
+        cancelled.cancel();
+        assert_eq!(
+            forge.login_with_token(cancelled).await,
+            Err(ForgeError::Cancelled)
+        );
+    }
+
     #[test]
     fn session_rejects_unscoped_roots_and_credentials() {
         use std::{num::NonZeroU16, sync::Arc};
@@ -976,6 +1252,162 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(forge.session.redact("private-token"), "[REDACTED]");
     }
+
+    #[test]
+    fn token_environment_probe_order_and_empty_short_circuit_match_reference() {
+        // GITHUB_TOKEN wins over GH_TOKEN; values are returned untrimmed.
+        let value = token_from_environment(ForgeProvider::Github, |name| match name {
+            "GITHUB_TOKEN" => Some(" primary ".to_string()),
+            "GH_TOKEN" => Some("secondary".to_string()),
+            _ => Some("pat".to_string()),
+        });
+        assert_eq!(value, Some(" primary ".to_string()));
+
+        // An empty GITHUB_TOKEN stops the environment chain; GitHub then falls
+        // back to its credential helper instead of selecting a later variable.
+        let value = token_from_environment(ForgeProvider::Github, |name| match name {
+            "GITHUB_TOKEN" => Some(String::new()),
+            "GH_TOKEN" => None,
+            _ => Some("pat".to_string()),
+        });
+        assert_eq!(value, None);
+
+        // Other providers return the first defined value, including an empty one.
+        assert_eq!(
+            token_from_environment(ForgeProvider::AzureDevops, |_| Some(String::new())),
+            Some(String::new())
+        );
+        assert_eq!(
+            token_from_environment(ForgeProvider::Github, |_| None),
+            None
+        );
+
+        // Non-GitHub providers never consult GITHUB_TOKEN.
+        assert_eq!(
+            token_from_environment(ForgeProvider::Gitlab, |name| {
+                (name == "GITHUB_TOKEN").then(|| "wrong".to_string())
+            }),
+            None
+        );
+        assert_eq!(
+            token_from_environment(ForgeProvider::Bitbucket, |name| {
+                (name == "BITBUCKET_APP_PASSWORD").then(|| "app".to_string())
+            }),
+            Some("app".to_string())
+        );
+        assert_eq!(
+            token_environment_names(ForgeProvider::Github),
+            ["GITHUB_TOKEN", "GH_TOKEN", "GITHUB_PAT"]
+        );
+    }
+
+    #[test]
+    fn credential_fill_password_parsing_matches_reference_regex() {
+        assert_eq!(
+            github_credential_input(),
+            "protocol=https\nhost=github.com\n\n"
+        );
+        // The reference matches the first `password=` line and trims it.
+        assert_eq!(
+            credential_password(
+                "protocol=https\nhost=github.com\nusername=me\npassword= abc123 \n"
+            ),
+            Some("abc123".to_string())
+        );
+        // `(.+)` needs at least one character, and a whitespace-only value trims away.
+        assert_eq!(credential_password("protocol=https\npassword=\n"), None);
+        assert_eq!(credential_password("protocol=https\npassword=   \n"), None);
+        // A password that merely appears after `password=` is not a line match.
+        assert_eq!(
+            credential_password("protocol=https\nxpassword=secret\n"),
+            None
+        );
+        // No `password=` line at all (git failed or had no stored credential).
+        assert_eq!(credential_password(""), None);
+        assert_eq!(
+            credential_password("protocol=https\nhost=github.com\n\n"),
+            None
+        );
+        // `m` flag: any line matches, not just the first.
+        assert_eq!(
+            credential_password("one=1\ntwo=2\npassword=secret\nthree=3\n"),
+            Some("secret".to_string())
+        );
+    }
+
+    fn block_on<F: std::future::Future>(future: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime")
+            .block_on(future)
+    }
+
+    #[test]
+    fn resolve_token_prefers_environment_and_skips_credential_fill() {
+        let filled = std::cell::Cell::new(false);
+        let token = block_on(resolve_token(
+            ForgeProvider::Github,
+            |name| (name == "GITHUB_TOKEN").then(|| " env-token ".to_string()),
+            |_| {
+                filled.set(true);
+                async { Some("protocol=https\npassword=from-git\n".to_string()) }
+            },
+        ));
+        // The reference returns the environment value untrimmed and never spawns git.
+        assert_eq!(token, Some(" env-token ".to_string()));
+        assert!(!filled.get());
+    }
+
+    #[test]
+    fn resolve_token_only_falls_back_to_credential_fill_for_github() {
+        let mut stdin = None;
+        let token = block_on(resolve_token(
+            ForgeProvider::Github,
+            |_| Some(String::new()),
+            |input| {
+                stdin = Some(input);
+                async { Some("protocol=https\nusername=me\npassword= abc \n".to_string()) }
+            },
+        ));
+        assert_eq!(
+            stdin.as_deref(),
+            Some("protocol=https\nhost=github.com\n\n")
+        );
+        assert_eq!(token, Some("abc".to_string()));
+
+        // Other providers never invoke `git credential fill`, matching the reference,
+        // where only the GitHub provider implements the fallback.
+        let mut invoked = false;
+        let token = block_on(resolve_token(
+            ForgeProvider::Gitlab,
+            |_| None,
+            |_| {
+                invoked = true;
+                async { Some("password=leak\n".to_string()) }
+            },
+        ));
+        assert_eq!(token, None);
+        assert!(!invoked);
+    }
+
+    #[test]
+    fn resolve_token_degrades_to_none_when_credential_fill_fails() {
+        // Spawn failure, timeout or blank output all resolve to null, never reject.
+        let token = block_on(resolve_token(
+            ForgeProvider::Github,
+            |_| None,
+            |_| async { None },
+        ));
+        assert_eq!(token, None);
+
+        let token = block_on(resolve_token(
+            ForgeProvider::Github,
+            |_| None,
+            |_| async { Some("protocol=https\nhost=github.com\n\n".to_string()) },
+        ));
+        assert_eq!(token, None);
+    }
 }
 
 /// Azure CLI adapter. Requires an explicit PAT and exact-command authority; it never
@@ -1043,13 +1475,14 @@ impl AzureDevopsForge {
         Ok(redact_json(value, &self.session.token))
     }
     pub async fn check_cli_available(&self, cancel: ProcessCancellation) -> ForgeResult<bool> {
-        self.execute(
-            "cli-status",
-            vec!["version".into(), "--output=json".into()],
-            cancel,
+        availability(
+            self.execute(
+                "cli-status",
+                vec!["version".into(), "--output=json".into()],
+                cancel,
+            )
+            .await,
         )
-        .await
-        .map(|_| true)
     }
     /// Validates this PAT against this repository, rather than trusting an ambient
     /// Azure account login or claiming that possession of a token proves access.
@@ -1059,6 +1492,17 @@ impl AzureDevopsForge {
             .await?;
         self.validate_repository(&data)?;
         Ok(json!({"authenticated":true}))
+    }
+    /// Verify the supplied PAT against the scoped repository without modifying
+    /// the CLI's ambient login state. A failed command does not prove access.
+    pub async fn login_with_token(&self, cancel: ProcessCancellation) -> ForgeResult<Value> {
+        match self.check_auth(cancel).await {
+            Err(ForgeError::CommandFailed) => Ok(json!({
+                "authenticated": false,
+                "error": "Token authentication failed"
+            })),
+            result => result,
+        }
     }
     fn validate_repository(&self, data: &Value) -> ForgeResult<()> {
         if data["name"].as_str() != Some(self.session.repository.repo.as_str())
@@ -1193,6 +1637,76 @@ mod azure_tests {
             ProcessPool::new(NonZeroU16::new(1).unwrap()),
         )
         .unwrap()
+    }
+    #[test]
+    fn azure_credential_keys_isolate_owner_host_and_organization() {
+        use crate::services::user_secrets::{SaveSecretParams, UserSecretService};
+        use crate::services::users::UserService;
+
+        let db = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrate_database(&db).unwrap();
+        let users = UserService::new(&db);
+        let alice = users
+            .create_user_with_hash("azure-alice", "hash")
+            .unwrap()
+            .id;
+        let bob = users.create_user_with_hash("azure-bob", "hash").unwrap().id;
+        let secrets = UserSecretService::new("test-only-encryption-key");
+        let key = repository().azure_credential_key().unwrap();
+        let other_org = ForgeRepository::azure("dev.azure.com", "other", "My Project", "My Repo")
+            .unwrap()
+            .azure_credential_key()
+            .unwrap();
+        let legacy =
+            ForgeRepository::azure("owned.visualstudio.com", "owned", "My Project", "My Repo")
+                .unwrap()
+                .azure_credential_key()
+                .unwrap();
+        assert_ne!(key, other_org);
+        assert_ne!(key, legacy);
+        assert_eq!(
+            ForgeRepository::new("github.com", "owned", "repo")
+                .unwrap()
+                .azure_credential_key(),
+            Err(ForgeError::InvalidInput)
+        );
+        secrets
+            .save(
+                &db,
+                SaveSecretParams {
+                    user_id: Some(alice.clone()),
+                    r#type: "forge-token".into(),
+                    key: key.clone(),
+                    label: "Azure DevOps PAT".into(),
+                    value: "alice-secret".into(),
+                },
+            )
+            .unwrap();
+        let ciphertext: String = db
+            .query_row("SELECT encrypted_value FROM user_secrets", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert!(!ciphertext.contains("alice-secret"));
+        assert_eq!(
+            secrets
+                .get_value(&db, Some(&alice), "forge-token", &key)
+                .unwrap()
+                .as_deref(),
+            Some("alice-secret")
+        );
+        for (owner, candidate) in [(&bob, &key), (&alice, &other_org), (&alice, &legacy)] {
+            assert_eq!(
+                secrets
+                    .get_value(&db, Some(owner), "forge-token", candidate)
+                    .unwrap(),
+                None
+            );
+        }
+        assert_eq!(
+            secrets.get_value(&db, None, "forge-token", &key).unwrap(),
+            None
+        );
     }
     #[test]
     fn azure_urls_and_selector_aliases() {
@@ -1369,6 +1883,11 @@ mod azure_tests {
     }
     #[cfg(unix)]
     fn fixture(response: &Value) -> AzureDevopsForge {
+        let body = response.to_string().replace('\'', "'\\''");
+        fixture_script(&format!("printf '%s' '{body}'"))
+    }
+    /// Builds an Azure adapter whose supervised `az` runs `tail` after the PAT precondition.
+    fn fixture_script(tail: &str) -> AzureDevopsForge {
         use crate::execution::process_runner::ProcessRequest;
         use std::os::unix::fs::PermissionsExt;
         // Project-local fixture artifacts; never use CWD or the system temp directory.
@@ -1378,8 +1897,11 @@ mod azure_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let dir = std::fs::canonicalize(dir).unwrap();
         let executable = dir.join("az");
-        let body = response.to_string().replace('\'', "'\\''");
-        std::fs::write(&executable,format!("#!/bin/sh\n[ \"$AZURE_DEVOPS_EXT_PAT\" = private-pat ] || exit 77\nprintf '%s' '{body}'\n")).unwrap();
+        std::fs::write(
+            &executable,
+            format!("#!/bin/sh\n[ \"$AZURE_DEVOPS_EXT_PAT\" = private-pat ] || exit 77\n{tail}\n"),
+        )
+        .unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
         let root = dir.clone();
         let authority: GitCommandAuthority = Arc::new(move |request, _| {
@@ -1461,6 +1983,74 @@ mod azure_tests {
                 .find_existing_pr("topic/a", ProcessCancellation::default())
                 .await,
             Err(ForgeError::MalformedResponse)
+        );
+    }
+    /// Every probe failure except authorization, validation and cancellation must read as
+    /// "not installed", matching the reference `cliAvailable` catch-all.
+    #[test]
+    fn availability_maps_probe_failures_to_false_and_keeps_policy_errors() {
+        assert_eq!(availability(Ok(String::new())), Ok(true));
+        for error in [
+            ForgeError::AuthenticationRequired,
+            ForgeError::TimedOut,
+            ForgeError::CapacityOrProcessFailure,
+            ForgeError::OutputLimit,
+            ForgeError::MalformedResponse,
+            ForgeError::CommandFailed,
+        ] {
+            assert_eq!(availability(Err(error)), Ok(false));
+        }
+        for error in [
+            ForgeError::Cancelled,
+            ForgeError::Denied,
+            ForgeError::InvalidInput,
+            ForgeError::UnsupportedProvider,
+        ] {
+            assert_eq!(availability(Err(error.clone())), Err(error));
+        }
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn azure_token_login_requires_scoped_repository_access() {
+        let cancel = ProcessCancellation::default();
+        assert_eq!(
+            fixture(&json!({"name":"My Repo","project":{"name":"My Project"}}))
+                .login_with_token(cancel.clone())
+                .await,
+            Ok(json!({"authenticated": true}))
+        );
+        assert_eq!(
+            fixture_script("exit 1")
+                .login_with_token(cancel.clone())
+                .await,
+            Ok(json!({"authenticated": false, "error": "Token authentication failed"}))
+        );
+        assert_eq!(
+            fixture(&json!({"name":"Other Repo","project":{"name":"My Project"}}))
+                .login_with_token(cancel.clone())
+                .await,
+            Err(ForgeError::MalformedResponse)
+        );
+        cancel.cancel();
+        assert_eq!(
+            fixture_script("exit 0").login_with_token(cancel).await,
+            Err(ForgeError::Cancelled)
+        );
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn azure_cli_probe_reports_missing_tool_and_present_tool() {
+        assert_eq!(
+            fixture_script("printf '%s' '{}'")
+                .check_cli_available(ProcessCancellation::default())
+                .await,
+            Ok(true)
+        );
+        assert_eq!(
+            fixture_script("exit 3")
+                .check_cli_available(ProcessCancellation::default())
+                .await,
+            Ok(false)
         );
     }
 }

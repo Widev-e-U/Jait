@@ -18,6 +18,106 @@ const MAX_STREAM_BYTES: i64 = 16 * 1024 * 1024;
 const MAX_STREAM_EVENT_BYTES: usize = 64 * 1024;
 const MAX_HISTORY_BYTES: usize = 8 * 1024 * 1024;
 
+// Serialize directly so fields that already implement lossless JSON encoding do
+// not first pass through serde_json::Value. Replay still uses the v1 reader.
+fn encode_event_envelope<T: serde::Serialize>(event: &T) -> Result<String, serde_json::Error> {
+    #[derive(serde::Serialize)]
+    struct Envelope<'a, T> {
+        version: u8,
+        event: &'a T,
+    }
+    serde_json::to_string(&Envelope { version: 1, event })
+}
+
+// Isolated decoder for a future versioned transport. The active reader remains
+// v1-only until projection and client delivery can carry the same raw JSON.
+#[allow(dead_code)]
+enum DecodedEventEnvelope {
+    V1(TurnEvent),
+    V2(LosslessToolEvent),
+}
+
+// This experimental schema covers tool results only. It is not a complete
+// replacement for TurnEvent and cannot be mounted as a history reader yet.
+#[allow(dead_code)]
+struct LosslessToolEvent {
+    tool_call_id: String,
+    name: String,
+    ok: crate::contracts::bounded_json::LosslessJsonValue,
+    message: crate::contracts::bounded_json::Utf16Text,
+    // None means absent; Some("null") is an explicitly present JSON null.
+    data: Option<crate::contracts::bounded_json::LosslessJsonValue>,
+}
+
+#[allow(dead_code)]
+fn decode_event_envelope(payload: &str) -> Result<DecodedEventEnvelope, &'static str> {
+    use crate::contracts::bounded_json::{LosslessJsonValue, Utf16Text};
+    if payload.len() > MAX_EVENT_BYTES {
+        return Err("Stored turn event exceeds migration runtime limits");
+    }
+    // Preserve the active v1 reader's parser and nesting behavior. A separate
+    // depth limit applies only to the experimental v2 representation.
+    if let Ok(value) = serde_json::from_str::<Value>(payload)
+        && value["version"] == 1
+    {
+        let event = serde_json::from_value(value["event"].clone())
+            .map_err(|_| "Invalid stored turn event")?;
+        return Ok(DecodedEventEnvelope::V1(event));
+    }
+    let bounded = LosslessJsonValue::parse(payload, MAX_EVENT_BYTES, 64)?;
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RawEnvelope<'a> {
+        version: u8,
+        #[serde(borrow)]
+        event: &'a serde_json::value::RawValue,
+    }
+    let envelope: RawEnvelope<'_> =
+        serde_json::from_str(bounded.as_json()).map_err(|_| "Invalid stored turn envelope")?;
+    if envelope.version != 2 {
+        return Err("Unsupported stored turn history version");
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RawToolEvent {
+        #[serde(rename = "type")]
+        kind: String,
+        tool_call_id: String,
+        name: String,
+        result: RawToolResult,
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct RawToolResult {
+        ok: Box<serde_json::value::RawValue>,
+        message: Box<serde_json::value::RawValue>,
+        #[serde(default, deserialize_with = "present_raw")]
+        data: Option<Box<serde_json::value::RawValue>>,
+    }
+    fn present_raw<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Box<serde_json::value::RawValue>>, D::Error> {
+        <Box<serde_json::value::RawValue> as serde::Deserialize>::deserialize(deserializer)
+            .map(Some)
+    }
+    let event: RawToolEvent =
+        serde_json::from_str(envelope.event.get()).map_err(|_| "Invalid stored turn event")?;
+    if event.kind != "tool" {
+        return Err("Unsupported stored turn event");
+    }
+    Ok(DecodedEventEnvelope::V2(LosslessToolEvent {
+        tool_call_id: event.tool_call_id,
+        name: event.name,
+        ok: LosslessJsonValue::parse(event.result.ok.get(), MAX_EVENT_BYTES, 60)?,
+        message: Utf16Text::from_json_literal(event.result.message.get(), MAX_EVENT_BYTES)?,
+        data: event
+            .result
+            .data
+            .map(|data| LosslessJsonValue::parse(data.get(), MAX_EVENT_BYTES, 60))
+            .transpose()?,
+    }))
+}
+
 /// Construct only after HTTP authentication. Neither identity comes from model arguments.
 #[derive(Clone)]
 pub struct SqliteTurnStore {
@@ -224,8 +324,8 @@ impl SqliteTurnStore {
         {
             return Err("Stream event exceeds persistence limit".into());
         }
-        let payload = serde_json::to_string(&json!({"version":1,"event":event}))
-            .map_err(|_| "Turn event could not be encoded")?;
+        let payload =
+            encode_event_envelope(&event).map_err(|_| "Turn event could not be encoded")?;
         if payload.len() > MAX_EVENT_BYTES {
             return Err("Turn event exceeds persistence limit".into());
         }
@@ -396,6 +496,27 @@ fn require_owner(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn direct_envelope_preserves_raw_utf16_and_v1_shape() {
+        use super::encode_event_envelope;
+        use crate::contracts::bounded_json::Utf16Text;
+        #[derive(serde::Serialize)]
+        struct Fixture {
+            message: Utf16Text,
+        }
+        let encoded = encode_event_envelope(&Fixture {
+            message: Utf16Text(vec![0xd800]),
+        })
+        .unwrap();
+        assert_eq!(encoded, r#"{"version":1,"event":{"message":"\ud800"}}"#);
+        let ordinary = super::TurnEvent::User {
+            content: "hello 😀".into(),
+        };
+        let actual = encode_event_envelope(&ordinary).unwrap();
+        let previous =
+            serde_json::to_string(&serde_json::json!({"version": 1, "event": ordinary})).unwrap();
+        assert_eq!(actual, previous);
+    }
     use super::*;
     use crate::runtime::chat_events::{Frame, Message};
     use crate::{
@@ -1207,5 +1328,83 @@ mod tests {
         );
         assert_eq!(adapter.load().await.unwrap().len(), MAX_HISTORY_EVENTS);
         auth.shutdown().await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod lossless_envelope_tests {
+    use super::{DecodedEventEnvelope, MAX_EVENT_BYTES, decode_event_envelope};
+    use crate::runtime::chat_turn::TurnEvent;
+
+    #[test]
+    fn v1_compatibility_and_v2_raw_event_roundtrip() {
+        let v1 = r#"{"version":1,"event":{"type":"user","content":"hello"}}"#;
+        assert!(
+            matches!(decode_event_envelope(v1), Ok(DecodedEventEnvelope::V1(TurnEvent::User { content })) if content == "hello")
+        );
+        let raw = r#"{"type":"tool","tool_call_id":"id","name":"read","result":{"ok":"\ud800","message":"\udc00","data":null}}"#;
+        let v2 = format!(r#"{{"version":2,"event":{raw}}}"#);
+        match decode_event_envelope(&v2).unwrap() {
+            DecodedEventEnvelope::V2(event) => {
+                assert_eq!(event.tool_call_id, "id");
+                assert_eq!(event.name, "read");
+                assert_eq!(event.ok.as_json(), r#""\ud800""#);
+                assert_eq!(event.message.0, vec![0xdc00]);
+                assert_eq!(event.data.unwrap().as_json(), "null");
+            }
+            _ => panic!("wrong envelope version"),
+        }
+        let absent = r#"{"version":2,"event":{"type":"tool","tool_call_id":"id","name":"read","result":{"ok":false,"message":"ok"}}}"#;
+        assert!(
+            matches!(decode_event_envelope(absent), Ok(DecodedEventEnvelope::V2(event)) if event.data.is_none())
+        );
+    }
+
+    #[test]
+    fn deep_v1_uses_the_active_reader_nesting_rules() {
+        let payload = format!(
+            r#"{{"version":1,"event":{{"type":"tool","tool_call_id":"a","name":"read","result":{{"ok":true,"message":"ok","data":{}0{}}}}}}}"#,
+            "[".repeat(70),
+            "]".repeat(70)
+        );
+        let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["version"], 1);
+        let expected: TurnEvent = serde_json::from_value(value["event"].clone()).unwrap();
+        match decode_event_envelope(&payload).unwrap() {
+            DecodedEventEnvelope::V1(actual) => assert_eq!(actual, expected),
+            _ => panic!("wrong envelope version"),
+        }
+    }
+
+    #[test]
+    fn envelope_rejects_unsupported_invalid_and_oversized_data() {
+        for payload in [
+            r#"{"version":3,"event":{}}"#,
+            r#"{"version":2,"event":null}"#,
+            r#"{"version":2,"event":{"x":"\uD80G"}}"#,
+            r#"{"version":2,"version":2,"event":{}}"#,
+        ] {
+            assert!(decode_event_envelope(payload).is_err(), "{payload}");
+        }
+        for event in [
+            r#"{"type":"user","tool_call_id":"i","name":"n","result":{"ok":true,"message":"m"}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true,"message":null}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true,"message":"m","unexpected":1}}"#,
+            r#"{"type":"tool","tool_call_id":"i","name":"n","result":{"ok":true,"ok":false,"message":"m"}}"#,
+        ] {
+            assert!(decode_event_envelope(&format!(r#"{{"version":2,"event":{event}}}"#)).is_err());
+        }
+        let large = format!(
+            r#"{{"version":2,"event":{{"x":"{}"}}}}"#,
+            "x".repeat(MAX_EVENT_BYTES)
+        );
+        assert!(decode_event_envelope(&large).is_err());
+        let deep = format!(
+            r#"{{"version":2,"event":{{"x":{}0{}}}}}"#,
+            "[".repeat(63),
+            "]".repeat(63)
+        );
+        assert!(decode_event_envelope(&deep).is_err());
     }
 }

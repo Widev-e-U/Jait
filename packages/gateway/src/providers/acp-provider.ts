@@ -266,6 +266,8 @@ interface AcpSessionState {
   /** Provider failures may arrive as notifications before the prompt resolves. */
   turnError?: string;
   promptInFlight?: boolean;
+  turnInterrupted?: boolean;
+  pendingCompaction?: Promise<unknown>;
   approvals: Map<string, PendingApproval>;
   initialized: InitializeResponse;
   /**
@@ -1151,6 +1153,7 @@ export class AcpProvider implements CliProviderAdapter {
   async sendTurn(sessionId: string, message: string, attachments?: ProviderTurnAttachment[]): Promise<void> {
     const state = this.getSession(sessionId);
     state.turnError = undefined;
+    state.turnInterrupted = false;
     state.session.error = undefined;
     state.session.status = "running";
     state.promptInFlight = true;
@@ -1169,18 +1172,43 @@ export class AcpProvider implements CliProviderAdapter {
     ];
 
     try {
-      if (state.contextControl) await compactProviderContext(state.contextControl, async command => {
+      if (state.pendingCompaction) throw new Error("Previous compaction is still stopping");
+      if (state.contextControl) {
         try {
-          const result = await withTimeout(state.connection.prompt({ sessionId: state.acpSessionId, prompt: [{ type: "text", text: command }] }), 60_000);
-          const usage = parseAcpUsage(result.usage, uuidv7());
-          if (usage) this.emitEvent({ type: "usage", sessionId, usage });
-          const failure = readAcpSessionFailure(result._meta);
-          if (failure || result.stopReason === "cancelled") throw new Error(failure ?? "Context compaction cancelled");
+          await compactProviderContext(state.contextControl, async command => {
+            const pending = state.connection.prompt({ sessionId: state.acpSessionId, prompt: [{ type: "text", text: command }] });
+            let result: Awaited<typeof pending>;
+            try {
+              result = await withTimeout(pending, 180_000);
+            } catch (error) {
+              // A timed-out prompt may still own the provider session. Cancel it
+              // and wait for settlement before allowing another prompt.
+              if (error instanceof Error && error.message === "Operation timed out") {
+                await withTimeout(state.connection.cancel({ sessionId: state.acpSessionId }), 2_000).catch(() => {});
+                try { await withTimeout(pending.then(() => undefined, () => undefined), 5_000); }
+                catch {
+                  state.pendingCompaction = pending;
+                  void pending.then(
+                    () => { if (state.pendingCompaction === pending) state.pendingCompaction = undefined; },
+                    () => { if (state.pendingCompaction === pending) state.pendingCompaction = undefined; },
+                  );
+                  throw new Error("Compaction timed out and the provider did not stop");
+                }
+              }
+              throw error;
+            }
+            const usage = parseAcpUsage(result.usage, uuidv7());
+            if (usage) this.emitEvent({ type: "usage", sessionId, usage });
+            const failure = state.turnError ?? readAcpSessionFailure(result._meta);
+            if (failure || result.stopReason === "cancelled") throw new Error(failure ?? "Context compaction cancelled");
+          });
         } catch (error) {
-          await withTimeout(state.connection.cancel({ sessionId: state.acpSessionId }), 2_000).catch(() => {});
-          throw error;
+          if (state.turnInterrupted || (error instanceof Error && error.message === "Compaction timed out and the provider did not stop")) throw error;
+          // Compaction is auxiliary. A settled failure must not poison the real turn.
+          state.turnError = undefined;
         }
-      });
+      }
+      if (state.turnInterrupted) throw new Error("Turn cancelled");
       const result = await state.connection.prompt({
         sessionId: state.acpSessionId,
         prompt,
@@ -1252,13 +1280,14 @@ export class AcpProvider implements CliProviderAdapter {
 
   async interruptTurn(sessionId: string): Promise<void> {
     const state = this.getSession(sessionId);
+    state.turnInterrupted = true;
     await state.connection.cancel({ sessionId: state.acpSessionId });
   }
 
   async respondToApproval(sessionId: string, requestId: string, approved: boolean): Promise<void> {
     const state = this.getSession(sessionId);
     const pending = state.approvals.get(requestId);
-    if (!pending) return;
+    if (!pending) throw new Error("Approval request is no longer available");
     state.approvals.delete(requestId);
     pending.resolve({
       outcome: approved

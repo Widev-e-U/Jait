@@ -32,6 +32,23 @@ describe("System One Model", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("categorizes real upstream failures and subsequent cooldown without exposing response text", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("private provider detail", { status: 503 })));
+    const account = keys();
+    const context = { sessionId: "decision-test", actionId: "test", projectRoot: "/project", requestedBy: "test", apiKeys: account };
+    const input = { state: "fixture", questions: [{ id: "relevant", type: "noul" as const, instructions: "Relevant?" }] };
+    const tool = createDecisionEvaluateTool();
+    const first = await tool.execute(input, context);
+    expect(first).toMatchObject({ ok: false, data: { code: "upstream_http", status: 503 } });
+    expect(first.message).not.toContain("private provider detail");
+    expect(await tool.execute(input, context)).toMatchObject({ ok: false, data: { code: "cooldown" } });
+  });
+
+  it("categorizes malformed model responses", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json")));
+    await expect(evaluateDecision(keys(), "fixture", questions)).rejects.toMatchObject({ code: "invalid_response" });
+  });
+
   it("uses the documented request shape and isolates cached answers by account", async () => {
     const fetcher = vi.fn().mockImplementation(async () => response({ relevant: { type: "noul", noul: 0.9 } })); vi.stubGlobal("fetch", fetcher);
     const account = keys();

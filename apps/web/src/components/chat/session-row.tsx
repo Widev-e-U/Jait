@@ -57,7 +57,7 @@ export interface SessionRowProps {
   onRowClick?: () => void
   onRowContextMenu?: MouseEventHandler<HTMLDivElement>
   /** Drag handlers (draggable/onDragStart/onDragEnd) built by the sidebar. */
-  dragProps?: Pick<HTMLAttributes<HTMLDivElement>, 'draggable' | 'onDragStart' | 'onDragEnd'>
+  dragProps?: Pick<HTMLAttributes<HTMLDivElement>, 'draggable' | 'onDragStart' | 'onDragEnd' | 'onDragOver' | 'onDragLeave' | 'onDrop' | 'style'>
   /** Extra long-press/pointer handlers spread onto the row. */
   longPressProps?: HTMLAttributes<HTMLDivElement>
 }

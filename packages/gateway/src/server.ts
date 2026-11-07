@@ -1,3 +1,4 @@
+import { GithubIntakeService } from "./services/github-intake.js";
 import { registerMessengerRoutes } from './routes/messenger.js';
 import { TeamChatService } from "./services/team-chat.js";
 import { registerTeamChatRoutes } from "./routes/team-chat.js";
@@ -307,6 +308,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     deps.toolRegistry?.register(createTeamChatTool(teamChat, deps.sessionService));
   }
   registerChatRoutes(app, config, {
+    previewService: deps.previewService,
     userQuestionService: deps.userQuestionService,
     chatLoops: deps.chatLoops,
     teamChat,
@@ -536,6 +538,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.db) {
     const threadService = deps.threadService;
     registerAgentGithubAppRoutes(app, config, {
+      intake: new GithubIntakeService(deps.db),
       service: getAgentGithubAppService({
         db: deps.db,
         userSecretService: deps.userSecretService,

@@ -1,0 +1,57 @@
+#!/bin/sh
+# Coverage-claim gate.
+#
+# A commit that changes a coverage *claim* must be backed by a passing gate.
+# This is the mechanical half of the rule in AGENTS.md ("do not award
+# scaffold/refactor credit"): prose tells the agent, this stops the commit.
+#
+# Scope: fires only when a claim artifact is staged, so ordinary commits pay
+# one `git diff --cached` and exit. No claim staged -> no cost.
+#
+#   packages/gateway-rust/native-coverage.json   native ledger (recorded_verified)
+#   tests/contract/coverage.json                 behavior inventory (source hashes)
+#   tests/contract/source-reviews.json           source parity claims
+#
+# Bypass for deliberate, reviewed exceptions:
+#   SKIP_COVERAGE_GATE=1 git commit -m "..."
+# CI runs the same gate on every push (.github/workflows/contract.yml), so a
+# bypass is still caught before merge.
+
+set -u
+
+if [ "${SKIP_COVERAGE_GATE:-}" = 1 ]; then
+	echo "pre-commit: SKIP_COVERAGE_GATE=1 - coverage gate skipped by request." >&2
+	exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null) || exit 0
+[ -n "$staged" ] || exit 0
+
+hit=$(printf '%s\n' "$staged" | grep -E '^(packages/gateway-rust/native-coverage\.json|tests/contract/coverage\.json|tests/contract/source-reviews\.json)$')
+[ -n "$hit" ] || exit 0
+
+echo "pre-commit: coverage claim changed -" >&2
+printf '%s\n' "$hit" | sed 's/^/  /' >&2
+echo "pre-commit: running coverage gate (node tests/contract/run.mjs coverage)..." >&2
+
+if node tests/contract/run.mjs coverage; then
+	echo "pre-commit: coverage gate passed - claim is backed by a green gate." >&2
+	exit 0
+fi
+
+cat >&2 <<'EOF'
+
+pre-commit: BLOCKED - coverage claim is not backed by a passing gate.
+
+Report the three numbers separately, never merged:
+  1. gate-verified         - last `node tests/contract/run.mjs coverage` run that exited 0
+  2. ledger claim          - recorded_verified in native-coverage.json (NOT gate-verified)
+  3. last frozen checkpoint - date and value of the last passing run
+
+Do not raise recorded_verified past the last passing checkpoint. Either fix the
+gate (stale source hashes, unmapped gateway files, invalid parity claims) or
+leave the number where it is.
+
+Deliberate, reviewed exception: SKIP_COVERAGE_GATE=1 git commit ...
+EOF
+exit 1

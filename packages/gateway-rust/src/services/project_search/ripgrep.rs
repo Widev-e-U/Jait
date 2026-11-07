@@ -6,6 +6,38 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// `exec` transiently fails with `ETXTBSY` while any process still holds a write
+/// handle on the executable. Another thread forking in this process, or a
+/// supervisor replacing the binary, can produce that window. Retry briefly so a
+/// concurrent replacement cannot surface as a spurious search failure, but keep
+/// the wait bounded and cancellation-aware.
+#[cfg(unix)]
+const BUSY_RETRIES: u32 = 40;
+#[cfg(unix)]
+const BUSY_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(5);
+
+#[cfg(unix)]
+fn spawn_retrying_busy(
+    command: &mut Command,
+    operation: &Operation,
+) -> Result<std::process::Child> {
+    let mut attempt = 0;
+    loop {
+        match command.spawn() {
+            Ok(child) => return Ok(child),
+            Err(e) if e.raw_os_error() == Some(libc::ETXTBSY) => {
+                if attempt == BUSY_RETRIES {
+                    return Err(Error::Io(e));
+                }
+                operation.check()?;
+                attempt += 1;
+                std::thread::sleep(BUSY_RETRY_DELAY);
+            }
+            Err(e) => return Err(Error::Io(e)),
+        }
+    }
+}
+
 #[cfg(unix)]
 pub(super) fn run(
     program: &std::ffi::OsStr,
@@ -42,10 +74,10 @@ pub(super) fn run(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let child = match command.spawn() {
+    let child = match spawn_retrying_busy(&mut command, operation) {
         Ok(child) => child,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(Error::Io(e)),
+        Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
     };
     struct Guard(std::process::Child);
     impl Drop for Guard {

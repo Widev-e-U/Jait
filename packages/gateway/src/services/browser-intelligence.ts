@@ -136,7 +136,7 @@ export class StagehandBrowserIntelligence implements BrowserIntelligence {
       if (result.data.length > 50) throw new Error("Too many candidates; use a narrower instruction");
       return { engine: "stagehand", actions: result.data.map(action => {
         const step = workflowStepFromStagehand(action);
-        return step ? { step, supported: true } : { supported: false, reason: "Method or frame/shadow selector cannot be replayed by Jait. Use browser.inspect and explicit browser tools." };
+        return step ? { step, supported: true } : { supported: false, reason: "Method or frame/shadow selector cannot be replayed by Jait. Use browser.open without a URL and explicit browser tools." };
       }) };
     });
   }

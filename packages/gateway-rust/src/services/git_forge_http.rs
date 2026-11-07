@@ -702,13 +702,7 @@ impl HttpForge {
                 .ok_or(HttpForgeError::MalformedResponse)?
                 .into(),
         };
-        let account_id = data
-            .get("uuid")
-            .or_else(|| data.get("id"))
-            .map(|v| match v {
-                Value::String(s) => s.clone(),
-                _ => v.to_string(),
-            });
+        let account_id = identity_account_id(&data)?;
         flow.finish(
             ForgeIdentity {
                 username,
@@ -1290,6 +1284,15 @@ fn redact_json(value: &mut Value, credential: &ForgeHttpCredential) {
         _ => (),
     }
 }
+// Provider IDs are scalar; do not serialize untrusted nested JSON into output.
+fn identity_account_id(data: &Value) -> Result<Option<String>> {
+    match data.get("uuid").or_else(|| data.get("id")) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(id)) if !id.is_empty() => Ok(Some(id.clone())),
+        Some(Value::Number(id)) if id.is_u64() => Ok(Some(id.to_string())),
+        _ => Err(HttpForgeError::MalformedResponse),
+    }
+}
 fn text_allow_empty(value: &Value, pointer: &str) -> Result<String> {
     value
         .pointer(pointer)
@@ -1372,3 +1375,7 @@ fn patch_counts(patch: &str) -> (u64, u64) {
 #[cfg(test)]
 #[path = "git_forge_http_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "git_forge_http_identity_tests.rs"]
+mod identity_tests;

@@ -1,6 +1,6 @@
 import { ThreadApprovalNotice } from './thread-approval-notice'
 import { AlertTriangle, RefreshCw, Loader2 as SpinnerIcon } from 'lucide-react'
-import { useRef, type ReactNode, type RefObject } from 'react'
+import { useCallback, useRef, type ReactNode, type RefObject } from 'react'
 
 import { Conversation, Message, PromptInput, TodoList, MessageQueue } from '@/components/chat'
 import type { PromptInputHandle, ToolCallInfo } from '@/components/chat'
@@ -22,7 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { inferThreadRepositoryName } from '@/lib/automation-repositories'
-import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import { agentsApi, type ProviderId, type RuntimeMode } from '@/lib/agents-api'
 import type { SessionReasoningEffort } from '@/lib/session-chat-selection'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { UserMessageSegment } from '@/lib/user-message-segments'
@@ -157,10 +157,16 @@ export function ThreadsPage({
   // their own render-relevant inputs means only the streaming message gets a
   // new element, so React skips reconciling the rest.
   const activeThreadId = automation.selectedThread?.id ?? null
+  const handleApprovalResponse = useCallback(async (requestId: string, approved: boolean) => {
+    if (!activeThreadId) throw new Error('No thread selected')
+    await agentsApi.approveToolCall(activeThreadId, requestId, approved)
+    await automation.refreshSelectedThread()
+  }, [activeThreadId, automation.refreshSelectedThread])
   const threadRunning = automation.selectedThread?.status === 'running'
   const threadProvider = automation.selectedThread?.providerId as ProviderId | undefined
   const sharedRenderInputs = [
     threadProvider,
+    handleApprovalResponse,
     managerThreads,
     renderInlineSecretPrompt,
     onOpenMessagePath,
@@ -223,6 +229,7 @@ export function ThreadsPage({
           provider={threadProvider}
           threadControlThreads={managerThreads as unknown as Record<string, unknown>[]}
           renderInlineSecretPrompt={renderInlineSecretPrompt}
+          onApprovalResponse={handleApprovalResponse}
           onOpenPath={onOpenMessagePath}
           onOpenDiff={onChangedFileClick}
           onOpenMemorySource={onMemorySourceOpen}

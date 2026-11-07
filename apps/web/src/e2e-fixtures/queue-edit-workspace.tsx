@@ -13,6 +13,7 @@ function Harness() {
   const isMobile = window.innerWidth < 768
   const retryMode = new URLSearchParams(window.location.search).get('retry')
   const goalMode = new URLSearchParams(window.location.search).get('goal')
+  const longConversation = new URLSearchParams(window.location.search).has('long')
   const [showGoal, setShowGoal] = useState(true)
   const providerError = 'The model provider is experiencing issues (502). Please try again later.'
   const [retryLoading, setRetryLoading] = useState(false)
@@ -33,7 +34,7 @@ function Harness() {
     { id: 'user-request', role: 'user', content: 'Investigate the issue' },
     { id: 'latest-error', role: 'assistant', content: '', segments: retryMode === 'footer' ? [] : [{ type: 'error', content: providerError }] },
     ...(retryCompleted ? [{ id: 'success', role: 'assistant', content: 'Continued successfully' }] : []),
-  ] : [{ id: 'assistant-1', role: 'assistant', content: 'Queue editing conversation' }]
+  ] : [{ id: 'assistant-1', role: 'assistant', content: longConversation ? Array.from({ length: 50 }, (_, i) => `Conversation paragraph ${i}`).join('\n\n') : 'Queue editing conversation' }]
   const inputValueRef = useRef('Keep my unsent draft')
   const promptRef = useRef<PromptInputHandle>(null)
   const [items, setItems] = useState<QueuedMessage[]>([{ id: 'queued-1', content: 'Edit this queued message', queuedAt: 1, held: true }])

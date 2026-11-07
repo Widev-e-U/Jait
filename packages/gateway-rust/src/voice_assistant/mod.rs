@@ -5,6 +5,8 @@ pub mod builtins;
 pub mod config;
 pub mod delegation;
 pub mod relay;
+pub mod router;
+pub mod tier_catalog;
 pub mod tools;
 use serde_json::{Value, json};
 use std::collections::{BTreeSet, VecDeque};

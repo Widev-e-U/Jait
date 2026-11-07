@@ -30,6 +30,14 @@ describe("web.fetch", () => {
   });
 });
 describe("web.search", () => {
+  it("reports both the requested provider and missing fallback credentials", async () => {
+    for (const key of ["GEMINI_API_KEY", "OPENAI_API_KEY"]) vi.stubEnv(key, "");
+    const result = await createWebSearchTool().execute({ query: "asset inventory", provider: "gemini" }, context);
+    expect(result).toMatchObject({ ok: false, data: { requestedProvider: "gemini", provider: "openai", fallbackReason: "missing_provider_key", code: "missing_api_key" } });
+    expect(result.message).toContain("Missing GEMINI_API_KEY");
+    expect(result.message).toContain("Missing OPENAI_API_KEY");
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it("honors cancellation without sending API requests", async () => {
     expect(await createWebSearchTool().execute({ query: "asset inventory" }, { ...context, signal: AbortSignal.abort() })).toEqual({ ok: false, message: "Cancelled" });
     expect(fetch).not.toHaveBeenCalled();

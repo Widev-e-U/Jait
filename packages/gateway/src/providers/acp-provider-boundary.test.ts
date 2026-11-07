@@ -58,7 +58,7 @@ describe("ACP terminal and approval boundaries", () => {
       await provider.respondToApproval(session.id, "request", false);
       expect(outcome).toEqual({ outcome: { outcome: "selected", optionId: "no" } });
       expect(state.approvals.has("request")).toBe(false);
-      await expect(provider.respondToApproval(session.id, "request", true)).resolves.toBeUndefined();
+      await expect(provider.respondToApproval(session.id, "request", true)).rejects.toThrow("Approval request is no longer available");
     } finally {
       await provider.dispose();
     }

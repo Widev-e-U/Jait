@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it } from 'vitest'
-import { getSessionContextMenuPosition, SessionSelector as SessionSelectorBase } from './session-selector'
+import { getSessionContextMenuPosition, moveSidebarItem, orderSidebarItems, SessionSelector as SessionSelectorBase } from './session-selector'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ProjectRecord } from '@/hooks/useProjects'
 
@@ -537,4 +537,16 @@ it('offers a separate new chat control when the latest chat is open', () => {
   expect(projectRow(render())).toContain('cursor-default')
   expect(projectRow(render(() => {}))).toContain('cursor-default')
   expect(render(() => {})).toContain('aria-label="New chat in Jait"')
+})
+
+describe('sidebar manual order', () => {
+  it('places dragged items before or after the target and preserves the other items', () => {
+    expect(moveSidebarItem(['a', 'b', 'c'], 'c', 'a', false)).toEqual(['c', 'a', 'b'])
+    expect(moveSidebarItem(['a', 'b', 'c'], 'a', 'c', true)).toEqual(['b', 'c', 'a'])
+    expect(moveSidebarItem(['a', 'b'], 'a', 'a', true)).toEqual(['a', 'b'])
+  })
+
+  it('keeps saved items in order while placing new items first', () => {
+    expect(orderSidebarItems([{ id: 'b' }, { id: 'new' }, { id: 'a' }], ['a', 'b', 'removed']).map((item) => item.id)).toEqual(['new', 'a', 'b'])
+  })
 })

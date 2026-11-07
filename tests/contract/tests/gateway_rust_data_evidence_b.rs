@@ -175,14 +175,20 @@ mod providers_contracts {
                 "runtimeMode": "supervised"
             })
         );
-        assert_eq!(serde_json::from_value::<ProviderSession>(wire).unwrap(), session);
+        assert_eq!(
+            serde_json::from_value::<ProviderSession>(wire).unwrap(),
+            session
+        );
     }
 
     #[test]
     fn turn_attachment_untagged_forms() {
         let reference: ProviderTurnAttachment =
             serde_json::from_value(json!("/tmp/shot.png")).unwrap();
-        assert_eq!(reference, ProviderTurnAttachment::Reference("/tmp/shot.png".into()));
+        assert_eq!(
+            reference,
+            ProviderTurnAttachment::Reference("/tmp/shot.png".into())
+        );
 
         let image: ProviderTurnAttachment = serde_json::from_value(json!({
             "name": "shot.png",
@@ -262,7 +268,10 @@ mod providers_acp {
             &[("GITHUB_TOKEN".to_string(), "explicit".to_string())],
             &strip,
         );
-        assert_eq!(env.get("GITHUB_TOKEN").map(String::as_str), Some("explicit"));
+        assert_eq!(
+            env.get("GITHUB_TOKEN").map(String::as_str),
+            Some("explicit")
+        );
         assert!(!env.contains_key("GH_TOKEN"));
 
         assert_eq!(
@@ -316,18 +325,27 @@ mod providers_acp {
             "  gh pr list  "
         );
         // Opaque fallbacks.
-        assert_eq!(get_acp_tool_name(&json!({"toolCallId": "call_9"})), "call_9");
+        assert_eq!(
+            get_acp_tool_name(&json!({"toolCallId": "call_9"})),
+            "call_9"
+        );
         assert_eq!(get_acp_tool_name(&json!({})), "tool");
         assert_eq!(get_acp_tool_name(&json!("nope")), "tool");
     }
 
     #[test]
     fn tool_call_metadata_detection_ignores_blank_titles() {
-        assert!(!has_tool_call_metadata(&json!({"title": "   ", "rawInput": {}})));
-        assert!(!has_tool_call_metadata(&json!({"locations": [], "content": []})));
+        assert!(!has_tool_call_metadata(
+            &json!({"title": "   ", "rawInput": {}})
+        ));
+        assert!(!has_tool_call_metadata(
+            &json!({"locations": [], "content": []})
+        ));
         assert!(has_tool_call_metadata(&json!({"title": "run"})));
         assert!(has_tool_call_metadata(&json!({"rawInput": {"a": 1}})));
-        assert!(has_tool_call_metadata(&json!({"locations": [{"path": "a.rs"}]})));
+        assert!(has_tool_call_metadata(
+            &json!({"locations": [{"path": "a.rs"}]})
+        ));
         assert!(!has_tool_call_metadata(&json!(42)));
     }
 
@@ -398,7 +416,10 @@ mod jait_provider {
     use std::collections::HashMap;
     use std::num::NonZeroU16;
 
-    fn opts<'a>(config: &'a JaitLlmConfig, keys: &'a HashMap<String, String>) -> ResolveJaitLlmOptions<'a> {
+    fn opts<'a>(
+        config: &'a JaitLlmConfig,
+        keys: &'a HashMap<String, String>,
+    ) -> ResolveJaitLlmOptions<'a> {
         ResolveJaitLlmOptions {
             config,
             api_keys: keys,

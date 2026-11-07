@@ -45,7 +45,7 @@ export async function dispatch(call: Call): Promise<unknown> {
   console.log = (...args) => console.error(...args);
   try {
     if (call.op === 'nativestorage.prefixes') {
-      if (!call.versions || call.versions.length > 76 || call.versions.some(n => !Number.isInteger(n) || n < 0 || n > 75)) throw new Error('schema prefixes required');
+      if (!call.versions || call.versions.length > 78 || call.versions.some(n => !Number.isInteger(n) || n < 0 || n > 77)) throw new Error('schema prefixes required');
       const observations = [];
       for (const version of call.versions) {
         const reference = join(dir, `reference-${version}.db`);

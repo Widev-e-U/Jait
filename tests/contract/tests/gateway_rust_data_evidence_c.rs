@@ -14,11 +14,16 @@
 use std::collections::HashSet;
 
 use jait_gateway::integrations::whatsapp::{
-    bare_jid, extract_text, message_to_inbound, MessageKey, WhatsAppMessage,
+    MessageKey, WhatsAppMessage, bare_jid, extract_text, message_to_inbound,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
-fn message(key: MessageKey, push_name: Option<&str>, message: Value, ts: Option<f64>) -> WhatsAppMessage {
+fn message(
+    key: MessageKey,
+    push_name: Option<&str>,
+    message: Value,
+    ts: Option<f64>,
+) -> WhatsAppMessage {
     WhatsAppMessage {
         key,
         push_name: push_name.map(str::to_owned),
@@ -42,7 +47,10 @@ mod whatsapp {
     #[test]
     fn bare_jid_strips_device_suffix_and_server() {
         // TS `bareJid` splits on "@" then ":": the device id never leaks through.
-        assert_eq!(bare_jid(Some("15551234567:12@s.whatsapp.net")), "15551234567");
+        assert_eq!(
+            bare_jid(Some("15551234567:12@s.whatsapp.net")),
+            "15551234567"
+        );
         assert_eq!(bare_jid(Some("15551234567@s.whatsapp.net")), "15551234567");
         assert_eq!(bare_jid(Some("1203630@g.us")), "1203630");
         // Boundary: no server part at all, and the absent-jid case.
@@ -54,7 +62,10 @@ mod whatsapp {
     #[test]
     fn extract_text_walks_wrappers_and_bounds_size() {
         // Plain conversation text is returned verbatim, whitespace preserved.
-        assert_eq!(extract_text(&json!({"conversation": "  hi there \n"})), "  hi there \n");
+        assert_eq!(
+            extract_text(&json!({"conversation": "  hi there \n"})),
+            "  hi there \n"
+        );
         // Extended text, then image/video captions.
         assert_eq!(
             extract_text(&json!({"extendedTextMessage": {"text": "extended"}})),
@@ -70,13 +81,18 @@ mod whatsapp {
             "gone"
         );
         assert_eq!(
-            extract_text(&json!({"viewOnceMessage": {"message": {"extendedTextMessage": {"text": "once"}}}})),
+            extract_text(
+                &json!({"viewOnceMessage": {"message": {"extendedTextMessage": {"text": "once"}}}})
+            ),
             "once"
         );
         // Boundary: 65_536 bytes is accepted, one more is refused as empty.
         let at_limit = "a".repeat(65_536);
         let over_limit = "a".repeat(65_537);
-        assert_eq!(extract_text(&json!({"conversation": at_limit})).len(), 65_536);
+        assert_eq!(
+            extract_text(&json!({"conversation": at_limit})).len(),
+            65_536
+        );
         assert_eq!(extract_text(&json!({"conversation": over_limit})), "");
         // Error/refusal: no known text carrier.
         assert_eq!(extract_text(&json!({"stickerMessage": {"url": "x"}})), "");
@@ -87,7 +103,11 @@ mod whatsapp {
     fn message_maps_to_inbound_message_fields() {
         let inbound = message_to_inbound(
             &message(
-                key(Some("15551234567@s.whatsapp.net"), false, Some("999@s.whatsapp.net")),
+                key(
+                    Some("15551234567@s.whatsapp.net"),
+                    false,
+                    Some("999@s.whatsapp.net"),
+                ),
                 Some("Ann"),
                 json!({"conversation": "hello"}),
                 Some(1_710_000_000.5),
@@ -135,7 +155,10 @@ mod whatsapp {
         let object = wire.as_object().expect("object");
         assert_eq!(object.len(), 7);
         assert_eq!(wire.get("senderName"), None);
-        assert_eq!(wire.get("channelId").and_then(Value::as_str), Some("whatsapp"));
+        assert_eq!(
+            wire.get("channelId").and_then(Value::as_str),
+            Some("whatsapp")
+        );
         assert_eq!(
             wire.get("conversationId").and_then(Value::as_str),
             Some("15551234567@s.whatsapp.net")
@@ -144,7 +167,10 @@ mod whatsapp {
             wire.get("senderId").and_then(Value::as_str),
             Some("15551234567@s.whatsapp.net")
         );
-        assert_eq!(wire.get("text").and_then(Value::as_str), Some("note to self"));
+        assert_eq!(
+            wire.get("text").and_then(Value::as_str),
+            Some("note to self")
+        );
         assert_eq!(
             wire.get("timestamp").and_then(Value::as_f64),
             Some(1_700_000_000_000.0)
@@ -157,65 +183,118 @@ mod whatsapp {
     fn message_refusals_match_reference_guards() {
         let empty = HashSet::new();
         // Status broadcasts are never inbound messages.
-        assert!(message_to_inbound(
-            &message(key(Some("status@broadcast"), false, None), None, json!({"conversation": "x"}), Some(1.0)),
-            &empty,
-            0
-        )
-        .is_none());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(Some("status@broadcast"), false, None),
+                    None,
+                    json!({"conversation": "x"}),
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_none()
+        );
         // Missing / oversized conversation id.
-        assert!(message_to_inbound(
-            &message(key(None, false, None), None, json!({"conversation": "x"}), Some(1.0)),
-            &empty,
-            0
-        )
-        .is_none());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(None, false, None),
+                    None,
+                    json!({"conversation": "x"}),
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_none()
+        );
         let long_jid = format!("{}@s.whatsapp.net", "1".repeat(1024));
-        assert!(message_to_inbound(
-            &message(key(Some(&long_jid), false, None), None, json!({"conversation": "x"}), Some(1.0)),
-            &empty,
-            0
-        )
-        .is_none());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(Some(&long_jid), false, None),
+                    None,
+                    json!({"conversation": "x"}),
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_none()
+        );
         // Whitespace-only text (js_trim) and a non-text payload.
-        assert!(message_to_inbound(
-            &message(key(Some("1@s.whatsapp.net"), false, None), None, json!({"conversation": " \n\t\u{feff}"}), Some(1.0)),
-            &empty,
-            0
-        )
-        .is_none());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(Some("1@s.whatsapp.net"), false, None),
+                    None,
+                    json!({"conversation": " \n\t\u{feff}"}),
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_none()
+        );
         // push_name boundary: exactly 1024 bytes is accepted, 1025 is refused.
         let ok_name = "a".repeat(1024);
-        assert!(message_to_inbound(
-            &message(key(Some("1@s.whatsapp.net"), false, None), Some(&ok_name), json!({"conversation": "x"}), Some(1.0)),
-            &empty,
-            0
-        )
-        .is_some());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(Some("1@s.whatsapp.net"), false, None),
+                    Some(&ok_name),
+                    json!({"conversation": "x"}),
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_some()
+        );
         let bad_name = "a".repeat(1025);
-        assert!(message_to_inbound(
-            &message(key(Some("1@s.whatsapp.net"), false, None), Some(&bad_name), json!({"conversation": "x"}), Some(1.0)),
-            &empty,
-            0
-        )
-        .is_none());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(Some("1@s.whatsapp.net"), false, None),
+                    Some(&bad_name),
+                    json!({"conversation": "x"}),
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_none()
+        );
         // Oversized raw payload (> 262_144 serialised bytes).
         let huge = json!({"conversation": "x", "imageMessage": {"caption": "a".repeat(262_200)}});
-        assert!(message_to_inbound(
-            &message(key(Some("1@s.whatsapp.net"), false, None), None, huge, Some(1.0)),
-            &empty,
-            0
-        )
-        .is_none());
+        assert!(
+            message_to_inbound(
+                &message(
+                    key(Some("1@s.whatsapp.net"), false, None),
+                    None,
+                    huge,
+                    Some(1.0)
+                ),
+                &empty,
+                0
+            )
+            .is_none()
+        );
     }
 }
 
 mod db {
-    use jait_gateway::db::schema::{namespace_order, relational_config, table_by_name, table_by_var, TABLES};
-    use jait_gateway::db::sqlite_shim::{Backend, BackendStatus, DrizzleSchemaConfig, TransactionMode, NO_BACKEND_ERROR};
+    use jait_gateway::db::schema::{
+        TABLES, namespace_order, relational_config, table_by_name, table_by_var,
+    };
+    use jait_gateway::db::sqlite_shim::{
+        Backend, BackendStatus, DrizzleSchemaConfig, NO_BACKEND_ERROR, TransactionMode,
+    };
     use jait_gateway::db::{
-        apply_migrations_through, migrate_database, migration_inventory, open_database, schema_version,
-        verify_schema,
+        apply_migrations_through, migrate_database, migration_inventory, open_database,
+        schema_version, verify_schema,
     };
     use std::path::PathBuf;
 
@@ -292,17 +371,24 @@ mod db {
     fn migration_inventory_is_sequential_and_named() {
         let inventory = migration_inventory();
         assert_eq!(inventory.len(), 75);
-        let first = inventory.first().map(|(id, name)| (*id as u64, name.to_string()));
+        let first = inventory
+            .first()
+            .map(|(id, name)| (*id as u64, name.to_string()));
         assert_eq!(first, Some((1, "baseline_schema".to_owned())));
-        let last = inventory.last().map(|(id, name)| (*id as u64, name.to_string()));
+        let last = inventory
+            .last()
+            .map(|(id, name)| (*id as u64, name.to_string()));
         assert_eq!(last, Some((75, "agent_control_hard_stop".to_owned())));
-        let third = inventory.get(2).map(|(id, name)| (*id as u64, name.to_string()));
+        let third = inventory
+            .get(2)
+            .map(|(id, name)| (*id as u64, name.to_string()));
         assert_eq!(third, Some((3, "user_settings_disabled_tools".to_owned())));
         for (index, (id, name)) in inventory.iter().enumerate() {
             assert_eq!(*id as u64, index as u64 + 1, "ids are 1..=75 in order");
             assert!(!name.is_empty());
             assert!(
-                name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                name.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
                 "{name} is a snake_case migration name"
             );
         }

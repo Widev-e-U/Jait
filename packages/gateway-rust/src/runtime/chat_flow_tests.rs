@@ -118,7 +118,7 @@ async fn actual_model_tool_and_sqlite_flow_resumes_after_storage_restart() {
     });
     *manager_slot.lock().unwrap() = Some(consent.clone());
     let pool = ProcessPool::new(NonZeroU16::new(1).unwrap());
-    let delegate: ToolDelegate = Arc::new(move |name, input, context| {
+    let delegate: ToolDelegate = Arc::new(move |name, input, context, _permit| {
         assert_eq!(name, "terminal.run");
         assert_eq!(input, &json!({}));
         assert_eq!(context.user_id, "owner");
@@ -275,7 +275,7 @@ async fn cancelling_waiting_consent_removes_request_without_executing_tool() {
     });
     let calls = Arc::new(AtomicUsize::new(0));
     let observed_calls = calls.clone();
-    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, _, _permit| {
         observed_calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok(ToolResult::message(true, "executed")) })
     });
@@ -348,7 +348,7 @@ async fn cancellation_wins_when_consent_is_approved_before_waiter_resumes() {
     });
     let calls = Arc::new(AtomicUsize::new(0));
     let observed_calls = calls.clone();
-    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, _, _permit| {
         observed_calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok(ToolResult::message(true, "executed")) })
     });
@@ -426,7 +426,7 @@ async fn cancellation_with_invalid_clock_removes_pending_consent() {
     });
     let calls = Arc::new(AtomicUsize::new(0));
     let observed_calls = calls.clone();
-    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, _, _permit| {
         observed_calls.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok(ToolResult::message(true, "executed")) })
     });
@@ -524,7 +524,7 @@ async fn cancellation_claim_blocks_approval_and_retains_permit_until_finalized()
     });
     let calls = Arc::new(AtomicUsize::new(0));
     let observed = calls.clone();
-    let delegate: ToolDelegate = Arc::new(move |_, _, _| {
+    let delegate: ToolDelegate = Arc::new(move |_, _, _, _permit| {
         observed.fetch_add(1, Ordering::SeqCst);
         Box::pin(async { Ok(ToolResult::message(true, "executed")) })
     });

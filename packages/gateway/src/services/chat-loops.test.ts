@@ -3,6 +3,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "./sessions.js";
 import { ChatLoopService, chatLoopInstructions } from "./chat-loops.js";
 import * as systemOne from "./system-one.js";
+import { backgroundCommandMonitor } from "./background-command-monitor.js";
 import { createLoopTools } from "../tools/loop-tools.js";
 
 describe("persistent chat goal loops", () => {
@@ -19,6 +20,36 @@ describe("persistent chat goal loops", () => {
     loops = new ChatLoopService(sessions);
   });
   afterEach(() => { vi.restoreAllMocks(); close(); });
+
+  it("checks cited execution status within the chat before accepting completion", async () => {
+    const inspect = vi.spyOn(backgroundCommandMonitor, "inspectExecution");
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"]);
+    const input = { revision: goal.revision, outcome: "complete" as const, summary: "Tests pass",
+      evidence: ["Test execution passed"], executionRefs: [{ criterion: 0, terminalId: "terminal", executionId: "run" }] };
+    inspect.mockReturnValueOnce(null);
+    await expect(loops.checkMonitored(sessionId, input)).rejects.toThrow("unavailable or belongs to another chat");
+    expect(inspect).toHaveBeenCalledWith(sessionId, "terminal", "run");
+    inspect.mockReturnValueOnce({ terminalId: "terminal", executionId: "run", status: "failed", exitCode: 101, output: "compile failed", durationMs: 1 });
+    await expect(loops.checkMonitored(sessionId, input)).rejects.toThrow("failed");
+    expect(loops.get(sessionId)?.status).toBe("running");
+    inspect.mockReturnValueOnce({ terminalId: "terminal", executionId: "run", status: "completed", exitCode: 0, output: "ok", durationMs: 1 });
+    const result = await loops.checkMonitored(sessionId, input);
+    expect(result.executionEvidence).toEqual([{ criterion: 0, terminalId: "terminal", executionId: "run", status: "completed", exitCode: 0 }]);
+    expect(result.status).toBe("completed");
+  });
+
+  it("requires execution references for designated criteria", async () => {
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"], undefined, [0]);
+    await expect(loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Tests passed"] })).rejects.toThrow("requires a tracked execution");
+    expect(loops.get(sessionId)?.status).toBe("running");
+    expect(() => loops.goal(sessionId, "Repair", ["Tests pass"], undefined, [1])).toThrow("Invalid execution criteria");
+  });
+
+  it("rejects malformed execution references", async () => {
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"]);
+    await expect(loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: "Trying",
+      nextMessage: "Check", executionRefs: [{ criterion: 1, terminalId: "t", executionId: "e" }] })).rejects.toThrow("Invalid execution reference");
+  });
 
   it("persists checkpoints, uses the next self-message once and keeps unrelated metadata", () => {
     const wake = vi.fn();
@@ -179,7 +210,7 @@ describe("persistent chat goal loops", () => {
   it("bounds unchecked turns and total turns even without System One", () => {
     loops.goal(sessionId, "Fix", ["Pass"]);
     for (let i = 0; i < 3; i++) loops.finishTurn(sessionId);
-    expect(loops.get(sessionId)?.status).toBe("paused");
+    expect(loops.get(sessionId)?.summary).toContain("three turns without a checkpoint");
     loops.control(sessionId, "resume");
     for (let i = 0; i < 50; i++) {
       const goal = loops.get(sessionId)!;
@@ -187,6 +218,8 @@ describe("persistent chat goal loops", () => {
       loops.finishTurn(sessionId);
     }
     expect(loops.get(sessionId)).toMatchObject({ status: "paused", iteration: 53 });
+    expect(loops.get(sessionId)?.summary).toContain("50 turns since the last resume");
+    expect(loops.get(sessionId)?.summary).toContain("Progress 49");
   });
 
   it("awaits monitored tool results, preserving unconfigured behavior and waiting checkpoints", async () => {

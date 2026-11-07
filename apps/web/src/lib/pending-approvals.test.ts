@@ -21,6 +21,18 @@ describe('pending approval WebSocket state', () => {
     expect(apply(snapshot, { type: 'consent.pending-snapshot', payload: { requests: [] } }).size).toBe(0)
   })
 
+  it('needs a snapshot after replaying an older required event during recovery', () => {
+    const required = { type: 'consent.required', payload: { id: 'request', sessionId: 'chat' } }
+    const resolved = { type: 'consent.resolved', payload: { requestId: 'request' } }
+    const emptySnapshot = { type: 'consent.pending-snapshot', payload: { requests: [] } }
+    const initial = apply(new Map(), required)
+    const recovered = apply(apply(initial, resolved), emptySnapshot)
+    expect(recovered.size).toBe(0)
+    const staleReplay = apply(recovered, required)
+    expect(staleReplay.has('request')).toBe(true)
+    expect(apply(staleReplay, emptySnapshot).size).toBe(0)
+  })
+
   it('ignores malformed and unrelated events', () => {
     const state = new Map([['request', 'chat']])
     for (const event of [{ type: 'consent.required', payload: null }, { type: 'consent.required', payload: { id: 42 } }, { type: 'consent.pending-snapshot', payload: {} }, { type: 'consent.resolved', payload: { requestId: 'unknown' } }]) {

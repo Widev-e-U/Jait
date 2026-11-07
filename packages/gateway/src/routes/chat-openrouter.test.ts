@@ -340,6 +340,7 @@ describe("chat route OpenRouter backend selection", () => {
       payload: {
         content: "slow queued effort turn",
         sessionId: session.id,
+        provider: "jait",
         model: "gpt-4o",
         reasoningEffort: "high",
       },
@@ -353,6 +354,7 @@ describe("chat route OpenRouter backend selection", () => {
       payload: {
         content: "queued explicit default",
         sessionId: session.id,
+        provider: "jait",
         model: "gpt-4o",
         reasoningEffort: null,
       },

@@ -54,6 +54,7 @@
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache",
     "disk:janitor": "bun scripts/disk-janitor.ts",
     "disk:janitor:apply": "bun scripts/disk-janitor.ts --apply",
+    "hooks:install": "git config core.hooksPath tests/contract/hooks && chmod +x tests/contract/hooks/pre-commit && echo 'installed coverage-claim gate -> tests/contract/hooks/pre-commit'",
     "test:contract:coverage": "node tests/contract/run.mjs coverage",
     "test:contract:translated": "node tests/contract/run.mjs translated-report",
     "test:contract:matcher-differential": "node tests/contract/tooling/matcher-differential.mjs",

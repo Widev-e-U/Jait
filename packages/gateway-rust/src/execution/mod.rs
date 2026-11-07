@@ -3,6 +3,8 @@
 //! Generic execution does not grant assessment scope. Execution remains unported.
 
 // Candidate lifecycle only; no runtime or effect authority is registered here.
+#[allow(dead_code)]
+pub(crate) mod desktop_host_config;
 pub(crate) mod desktop_parent_pipe;
 
 pub mod command_timeout;
@@ -19,7 +21,10 @@ pub mod command_syntax;
 
 pub mod smoke_process;
 
-// Staged runtime surface: no caller is wired up yet, so its items are dead
-// code by construction. Remove this allow once execution dispatch uses it.
+// Staged runtime surface: no runtime caller is wired up yet, so its internal
+// helpers are dead code by construction. Remove this allow once execution
+// dispatch uses it. The module itself is `pub` so the contract crate can link
+// its public surface; a `pub(crate)` module is unreachable from a consumer
+// crate (E0603) and blocks contract evidence for bin/matrix-stack.mjs.
 #[allow(dead_code)]
-pub(crate) mod matrix_stack;
+pub mod matrix_stack;

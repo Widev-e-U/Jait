@@ -7,7 +7,9 @@ use crate::{
     routes::{
         auth::AuthState,
         chat::{ChatFactory, ChatRoutes},
+        project::ProjectRoutes,
         sessions::SessionRoutes,
+        terminals::TerminalRoutes,
     },
     runtime::Gateway,
 };
@@ -144,12 +146,24 @@ impl Drop for ChatOwner {
     }
 }
 
+// Terminal routes are authenticated by the shared account state and fail closed for
+// non-default sessions. Unix hosts get the real PTY control; other platforms keep the
+// fail-closed default rather than pretending the capability exists.
+fn composed_terminal_routes(auth: AuthState, project_root: &std::path::Path) -> TerminalRoutes {
+    let routes =
+        TerminalRoutes::new(auth).with_project_root(project_root.to_string_lossy().into_owned());
+    #[cfg(unix)]
+    let routes = routes.with_control(crate::surfaces::local_terminal::LocalTerminalControl::new());
+    routes
+}
+
 pub struct Application {
     gateway: Gateway,
     auth: AuthState,
     chat: Option<ChatOwner>,
     _database_owner: Arc<File>,
     store_supervisor: Option<StoreOwner>,
+    ws_transport: Option<crate::runtime::ws_transport::WsTransport>,
 }
 
 impl Application {
@@ -208,11 +222,17 @@ impl Application {
             config.project_root.to_string_lossy().into_owned(),
         );
         let health = HealthState::new(config.health, HealthSnapshot::default());
+        let terminals = composed_terminal_routes(auth.clone(), &config.project_root);
+        // Project roots come from the project records the same store confirms, so the
+        // router needs no separately configured root and cannot be pointed elsewhere.
+        let projects = ProjectRoutes::new(auth.clone());
         let mut router = Router::new()
             .route("/health", get(application_health))
             .with_state((auth.clone(), health))
             .merge(auth.clone().router())
-            .merge(sessions.router());
+            .merge(sessions.router())
+            .merge(terminals.router())
+            .merge(projects.router());
         if let Some(chat) = &chat {
             router = router.merge(chat.router());
         }
@@ -223,6 +243,7 @@ impl Application {
                 chat: chat.map(ChatOwner),
                 _database_owner: database_owner,
                 store_supervisor: None,
+                ws_transport: None,
             }),
             Err(error) => {
                 auth.shutdown().await?;
@@ -269,6 +290,39 @@ impl Application {
         self.gateway.local_addr()
     }
 
+    /// Mount the WebSocket hub using this application's own storage.
+    ///
+    /// The database-backed authority is installed here rather than taken from the
+    /// caller, so a mounted hub can only admit identities that the same store the
+    /// authenticated routes use still confirms. Any `user_authority` already present
+    /// in `config` is replaced. A hub mounted twice fails closed.
+    pub fn mount_websocket(
+        &mut self,
+        mut config: crate::ws::WsHubConfig,
+        max_connections: std::num::NonZeroUsize,
+        authority_timeout: std::time::Duration,
+    ) -> Result<crate::runtime::ws_transport::WsTransport, ApplicationError> {
+        if self.ws_transport.is_some() {
+            return Err("websocket hub already mounted".into());
+        }
+        config.user_authority = Some(Arc::new(crate::ws_user_authority::WsUserAuthority::new(
+            self.auth.worker(),
+            authority_timeout,
+        )));
+        // Always verify with the gateway's own signing secret: a hub mounted by the
+        // production runtime must not depend on an embedder-supplied token table.
+        config.token_verifier = Arc::new(crate::security::ws_verifier::JwtTokenVerifier::new(
+            self.auth.signing_secret(),
+        ));
+        let transport = crate::runtime::ws_transport::WsTransport::new(
+            Arc::new(crate::ws::WsHub::new(config)),
+            max_connections,
+        );
+        self.gateway.mount_websocket(transport.clone());
+        self.ws_transport = Some(transport.clone());
+        Ok(transport)
+    }
+
     pub async fn serve(
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
@@ -278,8 +332,15 @@ impl Application {
         let chat = self.chat;
         let shutdown_chat = chat.as_ref().map(|owner| owner.0.clone());
         let store_close = self.store_supervisor.as_ref().map(|owner| owner.0.clone());
+        let ws = self.ws_transport.clone();
         let shutdown = async move {
             shutdown.await;
+            // Refuse new upgrades and wait out live sockets first: their handlers issue
+            // bounded reads through the chat and database workers closed below.
+            if let Some(transport) = &ws {
+                transport.close();
+                transport.drain().await;
+            }
             if let Some(supervisor) = store_close {
                 supervisor.close();
             }
@@ -567,6 +628,88 @@ mod ownership_tests {
             result.err().map(|error| error.to_string()).as_deref(),
             Some("store is closed")
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn application_mounts_project_routes_into_production_router() {
+        use crate::security::http_auth::{self, AuthUser};
+
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let app = Application::bind(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        app.auth
+            .with_database(|db| {
+                db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('user','user','fixture','old','old')")?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let address = app.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(app.serve(async move {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let info = format!("http://{address}/api/project/info");
+        // A router that was never merged answers 404; the project router enforces
+        // authority before it dispatches.
+        assert_eq!(
+            client.get(&info).send().await.unwrap().status(),
+            reqwest::StatusCode::UNAUTHORIZED
+        );
+        let user = AuthUser {
+            id: "user".into(),
+            username: "user".into(),
+        };
+        let token = http_auth::sign_auth_token(&user, "fixture-secret").unwrap();
+        // Authorized traffic reaches the `info` branch: no project record is open.
+        let response = client.get(&info).bearer_auth(&token).send().await.unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json().await.unwrap();
+        assert_eq!(body["error"], "NO_PROJECT");
+        // Unmapped subpaths still reach the project dispatcher rather than a bare 404,
+        // so the merge covers the whole surface instead of one hand-picked path.
+        let unknown = format!("http://{address}/api/project/surface-not-registered");
+        // An unmerged router answers 404 without consulting authority at all.
+        assert_eq!(
+            client.get(&unknown).send().await.unwrap().status(),
+            reqwest::StatusCode::UNAUTHORIZED
+        );
+        // Axum's own "no such route" reply carries no body; this envelope proves the
+        // native dispatcher ran for a path it does not implement.
+        let response = client
+            .get(&unknown)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+        let body: serde_json::Value = response.json().await.unwrap();
+        assert_eq!(body["error"], "NOT_FOUND");
+        assert_eq!(body["message"], "Not found");
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
         std::fs::remove_dir_all(root).unwrap();
     }
 

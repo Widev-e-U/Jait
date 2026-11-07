@@ -27,9 +27,9 @@ describe('conversation browser selection', () => {
     const restarted = { ...data, browserId: 'browser-b' }
     expect(findConversationBrowser([{ toolCalls: [navigate, { tool: 'preview.restart', result: { data: restarted } }] }], 'chat-a')).toEqual({ data: restarted })
   })
-  it('keeps the browser after the user sends another message', () => {
+  it('hides the browser when the user sends another message', () => {
     const turn = [{ role: 'user', toolCalls: null }, { role: 'assistant', toolCalls: [navigate] }, { role: 'user', toolCalls: null }]
-    expect(findConversationBrowser(turn, 'chat-a')).toEqual({ data })
+    expect(findConversationBrowser(turn, 'chat-a')).toBeNull()
   })
   it('retains browser metadata across turns', () => {
     const turn = [{ role: 'assistant', toolCalls: [navigate] }, { role: 'user' }, { role: 'assistant', toolCalls: [{ tool: 'browser.click' }] }]

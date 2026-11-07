@@ -70,6 +70,167 @@ mod orchestration_tests {
         cleanup.await.unwrap();
         assert!(provider.sessions.lock().unwrap().is_empty());
     }
+    // Regression for the drain boundary: the manager's detached
+    // storage worker retains admission after the caller and ActiveTurn drop.
+    #[tokio::test]
+    async fn provider_shutdown_waits_for_detached_storage() {
+        use crate::providers::openai_stream::{ParsedStream, StreamFailure};
+        use crate::runtime::chat_sessions::TurnStoreKey;
+        use crate::runtime::chat_turn::{TurnEvent, TurnPersistence, TurnProvider, TurnTools};
+        use crate::security::consent_executor::{ExecutionOrigin, RuntimeMode, ToolResult};
+        use std::sync::atomic::AtomicBool;
+
+        #[derive(Clone)]
+        struct BlockingStore {
+            started: Arc<tokio::sync::Notify>,
+            release: Arc<tokio::sync::Notify>,
+            completed: Arc<AtomicBool>,
+        }
+        impl TurnPersistence for BlockingStore {
+            fn check_capacity(
+                &self,
+                _: usize,
+                _: usize,
+                _: usize,
+            ) -> BoxFuture<'_, Result<(), String>> {
+                Box::pin(async { Ok(()) })
+            }
+            fn append(&self, _: TurnEvent) -> BoxFuture<'_, Result<(), String>> {
+                Box::pin(async { Ok(()) })
+            }
+        }
+        impl SessionTurnStore for BlockingStore {
+            fn identity(&self) -> (&str, &str) {
+                ("owner", "s")
+            }
+            fn admission_key(&self) -> TurnStoreKey {
+                TurnStoreKey::Chat("s".into())
+            }
+            fn owned_handle(&self) -> Arc<dyn SessionTurnStore> {
+                Arc::new(self.clone())
+            }
+            fn load(&self) -> BoxFuture<'_, Result<Vec<TurnEvent>, String>> {
+                Box::pin(async move {
+                    self.started.notify_one();
+                    self.release.notified().await;
+                    self.completed.store(true, Ordering::Release);
+                    Ok(vec![])
+                })
+            }
+        }
+        struct UnusedProvider;
+        impl TurnProvider for UnusedProvider {
+            fn stream<'a>(
+                &'a self,
+                _: Value,
+                _: &'a ProcessCancellation,
+                _: EventSink,
+            ) -> BoxFuture<'a, Result<ParsedStream, StreamFailure>> {
+                panic!("unexpected provider call")
+            }
+        }
+        struct UnusedTools;
+        impl TurnTools for UnusedTools {
+            fn execute<'a>(
+                &'a self,
+                _: &'a str,
+                _: &'a Value,
+                _: &'a ToolExecutionContext,
+            ) -> BoxFuture<'a, Result<ToolResult, String>> {
+                panic!("unexpected tool call")
+            }
+        }
+        let provider = JaitProvider::new(NonZeroU16::new(1).unwrap(), 2).unwrap();
+        let store = BlockingStore {
+            started: Arc::new(tokio::sync::Notify::new()),
+            release: Arc::new(tokio::sync::Notify::new()),
+            completed: Arc::new(AtomicBool::new(false)),
+        };
+        let cancel = ProcessCancellation::default();
+        provider.sessions.lock().unwrap().insert(
+            "s".into(),
+            Session {
+                owner: "owner".into(),
+                model: "m".into(),
+                route: "r".into(),
+                generation: "g".into(),
+                status: "running".into(),
+                error: None,
+                active: Some(cancel.clone()),
+            },
+        );
+        let guard = ActiveTurn {
+            sessions: provider.sessions.clone(),
+            id: "s".into(),
+            generation: "g".into(),
+            cancel: cancel.clone(),
+            finished: false,
+            settled: provider.settled.clone(),
+        };
+        let context = ToolExecutionContext {
+            user_id: "owner".into(),
+            session_id: "s".into(),
+            action_id: "turn".into(),
+            project_root: std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+            origin: ExecutionOrigin::Agent,
+            runtime_mode: RuntimeMode::Guarded,
+            cancellation: cancel,
+            on_output: None,
+        };
+        let task = {
+            let manager = provider.manager.clone();
+            let store = store.clone();
+            tokio::spawn(async move {
+                let _guard = guard;
+                manager
+                    .run(SessionTurn {
+                        config: TurnConfig {
+                            model: "m".into(),
+                            tools: vec![],
+                            max_rounds: 2,
+                            max_tool_calls: 2,
+                            max_history_bytes: 16384,
+                            max_tool_result_bytes: 1024,
+                            timeout: Duration::from_secs(30),
+                        },
+                        provider: &UnusedProvider,
+                        tools: &UnusedTools,
+                        store: &store,
+                        context: &context,
+                        user_content: "hello".into(),
+                        sink: Arc::new(|_| Box::pin(async { Ok(()) })),
+                    })
+                    .await
+            })
+        };
+        store.started.notified().await;
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        let mut shutdown = tokio::spawn({
+            let provider = provider.clone();
+            async move { provider.shutdown_and_wait().await }
+        });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), &mut shutdown)
+                .await
+                .is_err()
+        );
+        assert!(!store.completed.load(Ordering::Acquire));
+        assert_eq!(
+            shutdown.await.unwrap().unwrap_err(),
+            "Jait provider cleanup deadline exceeded"
+        );
+        assert!(!store.completed.load(Ordering::Acquire));
+        store.release.notify_one();
+        provider.shutdown_and_wait().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !store.completed.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
     #[test]
     fn provider_orchestration_event_protocol_hides_internal_deltas() {
         let event = provider_event(
@@ -118,8 +279,7 @@ use crate::{
         registry::ProviderAdapter,
     },
     runtime::{
-        chat_sessions::{SessionTurn, SessionTurnError, SessionTurnManager},
-        chat_store::SqliteTurnStore,
+        chat_sessions::{SessionTurn, SessionTurnError, SessionTurnManager, SessionTurnStore},
         chat_turn::{TurnConfig, TurnOutcome},
     },
     security::consent_executor::{ConsentAwareExecutor, ToolExecutionContext},
@@ -228,7 +388,7 @@ impl JaitProvider {
     pub async fn send_turn(
         &self,
         context: &ToolExecutionContext,
-        store: &SqliteTurnStore,
+        store: &dyn SessionTurnStore,
         mut config: TurnConfig,
         tools: &ConsentAwareExecutor,
         mut options: ResolveJaitLlmOptions<'_>,
@@ -448,10 +608,12 @@ impl JaitProvider {
                     .map_err(|_| "Provider state unavailable")?
                     .is_empty()
                 {
-                    return Ok(());
+                    break;
                 }
                 notified.await;
             }
+            self.manager.wait_drained().await;
+            Ok(())
         })
         .await
         .map_err(|_| "Jait provider cleanup deadline exceeded".to_string())?

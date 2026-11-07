@@ -434,6 +434,71 @@ struct Store {
     cache: Vec<(String, i64, Value)>,
     failures: Vec<(String, i64)>,
 }
+/// Failure of a System One decision, carrying the stable machine code that the
+/// tool contract exposes in `data.code` (mirrors the TS `DecisionError`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecisionError {
+    pub code: &'static str,
+    pub status: Option<u16>,
+}
+impl DecisionError {
+    pub fn new(code: &'static str) -> Self {
+        Self { code, status: None }
+    }
+    pub fn with_status(mut self, status: u16) -> Self {
+        self.status = Some(status);
+        self
+    }
+    /// Human-readable message for this code, exactly as the TS tool renders it.
+    pub fn message(&self) -> String {
+        let base = match self.code {
+            "not_configured" => {
+                "System One is not configured. Configure its model and endpoint in Settings."
+            }
+            "invalid_input" => {
+                "Invalid decision input. Check the state, question IDs, and choice or score criteria."
+            }
+            "cooldown" => {
+                "System One is temporarily unavailable after a recent failure. Wait 15 seconds before retrying."
+            }
+            "upstream_http" => {
+                "System One endpoint rejected the request. Check its model, credentials, and endpoint in Settings."
+            }
+            "invalid_response" => {
+                "System One returned an invalid decision response. Check model compatibility and configuration."
+            }
+            "timeout" => {
+                "System One request timed out. Check the endpoint or adjust its timeout in Settings."
+            }
+            "cancelled" => "System One request was cancelled.",
+            _ => "System One is unavailable. Check its endpoint and connection in Settings.",
+        };
+        base.to_owned()
+    }
+}
+impl std::fmt::Display for DecisionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message())
+    }
+}
+impl std::error::Error for DecisionError {}
+/// Unclassified failures are `unavailable`, matching the TS catch-all.
+impl From<String> for DecisionError {
+    fn from(_: String) -> Self {
+        Self::new("unavailable")
+    }
+}
+impl From<&str> for DecisionError {
+    fn from(_: &str) -> Self {
+        Self::new("unavailable")
+    }
+}
+/// Lets string-typed callers keep their signatures while codes stay available.
+impl From<DecisionError> for String {
+    fn from(error: DecisionError) -> Self {
+        error.message()
+    }
+}
 pub struct SystemOne {
     clock: Clock,
     transport: Arc<dyn DecisionTransport>,
@@ -456,13 +521,13 @@ impl SystemOne {
         state: &str,
         questions: &Value,
         signal: Option<&Cancellation>,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, DecisionError> {
         let endpoint =
-            resolve_system_one(keys).ok_or("System One Model is not configured in Settings.")?;
+            resolve_system_one(keys).ok_or_else(|| DecisionError::new("not_configured"))?;
         self.evaluate_inner(
             endpoint,
             &state.encode_utf16().collect::<Vec<_>>(),
-            questions_from_value(questions)?,
+            questions_from_value(questions).map_err(|_| DecisionError::new("invalid_input"))?,
             signal,
         )
         .await
@@ -473,15 +538,15 @@ impl SystemOne {
         state: &[u16],
         questions: Vec<Question>,
         signal: Option<&Cancellation>,
-    ) -> Result<Value, String> {
-        validate_questions(state, &questions)?;
+    ) -> Result<Value, DecisionError> {
+        validate_questions(state, &questions).map_err(|_| DecisionError::new("invalid_input"))?;
         let mut hash = Sha256::new();
         hash.update(&endpoint.key);
         hash.update([0]);
         hash.update(endpoint.base_url.as_deref().unwrap_or(DEFAULT_TYPESAFE_URL));
         let tenant = hex::encode(hash.finalize());
-        if let Some(signal) = signal.filter(|s| s.is_aborted()) {
-            return Err(signal.reason());
+        if signal.is_some_and(Cancellation::is_aborted) {
+            return Err(DecisionError::new("cancelled"));
         }
         if self
             .store
@@ -492,11 +557,11 @@ impl SystemOne {
             .find(|(t, _)| *t == tenant)
             .is_some_and(|(_, until)| *until > (self.clock)())
         {
-            return Err("System One Model is temporarily unavailable.".into());
+            return Err(DecisionError::new("cooldown"));
         }
         let typed_body = body(&endpoint.model, state, &questions);
         if js_len(&typed_body) > 64_000 {
-            return Err("Decision payload is too large.".into());
+            return Err(DecisionError::new("invalid_input"));
         }
         let mut hash = Sha256::new();
         hash.update(&tenant);
@@ -514,30 +579,30 @@ impl SystemOne {
         }
         let request = request(&endpoint, state, &questions, typed_body);
         let pending = self.transport.send(request);
-        let result:Result<Value,String>=async {
+        let result:Result<Value,DecisionError>=async {
             let response=tokio::select! {
-                result=tokio::time::timeout(Duration::from_millis(endpoint.timeout_ms),pending)=>result.map_err(|_|"The operation timed out.".to_owned())??,
-                reason=async{match signal {Some(s)=>s.cancelled().await,None=>std::future::pending().await}}=>return Err(reason),
+                result=tokio::time::timeout(Duration::from_millis(endpoint.timeout_ms),pending)=>result.map_err(|_|DecisionError::new("timeout"))??,
+                 _reason=async{match signal {Some(s)=>s.cancelled().await,None=>std::future::pending().await}}=>return Err(DecisionError::new("cancelled")),
             };
-            if !(200..300).contains(&response.status){return Err(format!("System One Model request failed ({}).",response.status));}
+            if !(200..300).contains(&response.status){return Err(DecisionError::new("upstream_http").with_status(response.status));}
             let result=if endpoint.base_url.is_some(){
                 let payload=response.body.unwrap_or(Value::Null);
                 let content=payload.get("choices").and_then(|v|v.get(0)).and_then(|v|v.get("message")).and_then(|v|v.get("content")).cloned().unwrap_or(Value::Null);
-                let parsed=if let Some(text)=content.as_str(){serde_json::from_str(text).map_err(|e|e.to_string())?}else{content};
-                if !parsed.is_object()&&!parsed.is_array(){return Err("Invalid System One response.".into());}
+                let parsed=if let Some(text)=content.as_str(){serde_json::from_str(text).map_err(|_|DecisionError::new("invalid_response"))?}else{content};
+                if !parsed.is_object()&&!parsed.is_array(){return Err(DecisionError::new("invalid_response"));}
                 let answers=parsed.get("answers").filter(|v|!v.is_null()).cloned().unwrap_or_else(||parsed.clone());
                 json!({"model":if endpoint.model.is_empty(){"system-one"}else{&endpoint.model},"answers":answers})
             }else{
-                let result=response.body?;
-                if !result.get("model").is_some_and(Value::is_string)||!result.get("answers").is_some_and(js_truthy){return Err("Invalid System One response.".into());}result
+                let result=response.body.map_err(|_|DecisionError::new("invalid_response"))?;
+                if !result.get("model").is_some_and(Value::is_string)||!result.get("answers").is_some_and(js_truthy){return Err(DecisionError::new("invalid_response"));}result
             };
             for q in &questions {
                 let answer=property(&result["answers"],&q.id).unwrap_or(&Value::Null);
-                if !js_truthy(answer)||answer.get("type")!=q.raw.get("type")||answer.get("confidence").is_some_and(|c|!unit(c)){return Err("Invalid decision answer.".into());}
+                if !js_truthy(answer)||answer.get("type")!=q.raw.get("type")||answer.get("confidence").is_some_and(|c|!unit(c)){return Err(DecisionError::new("invalid_response"));}
                 match q.raw["type"].as_str().unwrap(){
-                    "noul"=>if !unit(&answer["noul"]){return Err("Invalid probability.".into());},
-                    "choice"=>if !answer.get("choice").and_then(Value::as_str).is_some_and(|key|choice_entries(&q.raw["criteria"]).unwrap().iter().any(|(name,_)|name==key)){return Err("Unknown decision choice.".into());},
-                    "score"=>if !answer.get("score").and_then(Value::as_f64).is_some_and(|n|n.is_finite()&&n>=0.0&&n<=(q.raw["criteria"].as_array().unwrap().len()-1) as f64){return Err("Invalid decision score.".into());},_=>unreachable!(),
+                    "noul"=>if !unit(&answer["noul"]){return Err(DecisionError::new("invalid_response"));},
+                    "choice"=>if !answer.get("choice").and_then(Value::as_str).is_some_and(|key|choice_entries(&q.raw["criteria"]).unwrap().iter().any(|(name,_)|name==key)){return Err(DecisionError::new("invalid_response"));},
+                    "score"=>if !answer.get("score").and_then(Value::as_f64).is_some_and(|n|n.is_finite()&&n>=0.0&&n<=(q.raw["criteria"].as_array().unwrap().len()-1) as f64){return Err(DecisionError::new("invalid_response"));},_=>unreachable!(),
                 }
             }
             Ok(result)
@@ -797,8 +862,9 @@ mod tests {
             engine
                 .evaluate(Some(&keys), "state", &questions(), None)
                 .await
-                .unwrap_err(),
-            "backend failed"
+                .unwrap_err()
+                .code,
+            "unavailable"
         );
         *peer.fail.lock().unwrap() = false;
         clock.store(1_014_999, Ordering::SeqCst);
@@ -806,8 +872,9 @@ mod tests {
             engine
                 .evaluate(Some(&keys), "other", &questions(), None)
                 .await
-                .unwrap_err(),
-            "System One Model is temporarily unavailable."
+                .unwrap_err()
+                .code,
+            "cooldown"
         );
         assert_eq!(peer.calls.load(Ordering::SeqCst), 1);
         clock.store(1_015_000, Ordering::SeqCst);
@@ -858,7 +925,7 @@ mod tests {
         });
         peer.started.notified().await;
         signal.abort("manual cancellation");
-        assert_eq!(task.await.unwrap().unwrap_err(), "manual cancellation");
+        assert_eq!(task.await.unwrap().unwrap_err().code, "cancelled");
         assert_eq!(peer.dropped.load(Ordering::SeqCst), 1);
         assert!(engine.store.lock().unwrap().failures.is_empty());
     }
@@ -876,8 +943,9 @@ mod tests {
             engine
                 .evaluate(Some(&keys), "state", &questions(), None)
                 .await
-                .unwrap_err(),
-            "The operation timed out."
+                .unwrap_err()
+                .code,
+            "timeout"
         );
         assert_eq!(start.elapsed(), Duration::from_millis(25));
         assert_eq!(peer.dropped.load(Ordering::SeqCst), 1);

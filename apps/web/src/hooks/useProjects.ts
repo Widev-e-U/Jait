@@ -180,13 +180,16 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   activeProjectIdRef.current = activeProjectId
   const activeSessionIdRef = useRef<string | null>(null)
   activeSessionIdRef.current = activeSessionId
-  const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null>(null)
-  if (initialRouteSelectionRef.current === null && typeof window !== 'undefined') {
-    const params = new URLSearchParams(window.location.search)
-    const sessionId = params.get('sessionId')
-    if (sessionId) {
-      const projectId = params.get('projectId')
-      initialRouteSelectionRef.current = { projectId: projectId || null, sessionId }
+  const initialRouteSelectionRef = useRef<{ projectId: string | null; sessionId: string | null } | null | undefined>(undefined)
+  if (initialRouteSelectionRef.current === undefined) {
+    initialRouteSelectionRef.current = null
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const sessionId = params.get('sessionId')
+      if (sessionId) {
+        const projectId = params.get('projectId')
+        initialRouteSelectionRef.current = { projectId: projectId || null, sessionId }
+      }
     }
   }
 
@@ -526,6 +529,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
         const withoutExisting = prev.filter((entry) => entry.id !== nextProject.id)
         return [nextProject, ...withoutExisting].slice(0, visibleLimit)
       })
+      initialRouteSelectionRef.current = null
       setActiveProjectId(nextProject.id)
       setActiveSessionId(null)
       return nextProject
@@ -536,6 +540,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
   }, [onLoginRequired, token, visibleLimit])
 
   const persistSelection = useCallback((projectId: string | null, sessionId?: string | null) => {
+    initialRouteSelectionRef.current = null
     if (!token) return
     fetch(`${API_URL}/api/projects/select`, {
       method: 'POST',
@@ -660,6 +665,7 @@ export function useProjects(token?: string | null, onLoginRequired?: () => void)
    * leaves nothing behind. Not persisted — a reload returns to the last chat.
    */
   const startProjectDraft = useCallback((projectId: string) => {
+    initialRouteSelectionRef.current = null
     setActiveProjectId(projectId)
     setActiveSessionId(null)
   }, [])

@@ -95,4 +95,24 @@ describe("Ollama device authentication", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("no", { status: 401 })));
     await expect(fetchOllamaDeviceUsage(account, privateKey)).rejects.toMatchObject({ status: 401 });
   });
+  it("loads the configured device key before authenticating", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("no", { status: 401 })));
+    await expect(fetchOllamaDeviceUsage(account)).rejects.toMatchObject({ status: 401 });
+    expect(readFile).toHaveBeenCalledWith("/test/ollama-key", "utf8");
+  });
+
+  it("rejects truncated key headers and malformed fallback usage", async () => {
+    const pem = (data: Buffer) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
+    for (const data of [Buffer.from("bad magic"), Buffer.from("openssh-key-v1\0")]) {
+      expect(() => parseOllamaDeviceKey(pem(data))).toThrow("Unsupported Ollama device key");
+    }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(new Response("missing", { status: 404 })).mockResolvedValueOnce(json({ invalid: true })));
+    await expect(fetchSignedInOllamaUsage("http://localhost:11434", account)).rejects.toThrow("unexpected usage response");
+  });
+
+  it("verifies accounts by name when no email is available", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json({ name: account.name })).mockResolvedValueOnce(new Response("missing", { status: 404 })).mockResolvedValueOnce(json(usage)));
+    await expect(fetchOllamaDeviceUsage({ name: account.name }, privateKey)).resolves.toEqual(usage);
+  });
+
 });

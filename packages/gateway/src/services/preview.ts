@@ -170,7 +170,7 @@ export class PreviewService {
       return this.get(input.sessionId)!;
     }
 
-    const sharedWithAgent = input.sharedWithAgent ?? existing?.sharedWithAgent ?? (input.agentInitiated === true);
+    const sharedWithAgent = input.sharedWithAgent ?? existing?.sharedWithAgent ?? true;
     const startPromise = this.startFresh({ ...input, sharedWithAgent });
     this.startingSessions.set(input.sessionId, startPromise);
     try {

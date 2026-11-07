@@ -45,7 +45,7 @@ describe('browser in chat', () => {
     const html = renderToStaticMarkup(createElement(ChatBrowserView, { data, autoOpen: false }))
     expect(html).toContain('data-browser-minimized="true"')
     expect(html).toMatch(/style="[^"]*left:\s*12px/)
-    expect(html).toMatch(/style="[^"]*top:\s*12px/)
+    expect(html).toMatch(/style="[^"]*top:\s*48px/)
     expect(html).toMatch(/style="[^"]*width:\s*160px/)
     expect(html).toMatch(/style="[^"]*height:\s*90px/)
     expect(html).toContain('Expand browser')
@@ -54,15 +54,11 @@ describe('browser in chat', () => {
     expect(html).toContain('grid-rows-[0fr]')
     expect(html).toContain('inert')
   })
-  it('reopens a chat in the collapsed state the user left it in', () => {
-    // Switching away and back remounts the panel; the remembered flag wins
-    // over the autoOpen default.
+  it('keeps an agent-controlled browser minimized when the user chose that size', () => {
     rememberBrowserCollapsed('chat-a', true)
     try {
       const html = renderToStaticMarkup(createElement(ChatBrowserView, { data, autoOpen: true }))
       expect(html).toContain('data-browser-minimized="true"')
-      expect(html).toMatch(/style="[^"]*width:\s*160px/)
-      expect(html).toMatch(/style="[^"]*height:\s*90px/)
     } finally {
       forgetBrowserPanelState()
     }
@@ -77,4 +73,11 @@ describe('browser in chat', () => {
       forgetBrowserPanelState()
     }
   })
+})
+
+it('starts a user-controlled browser minimized until the user expands it', () => {
+  const html = renderToStaticMarkup(createElement(ChatBrowserView, {
+    data: { ...data, browserSession: { ...data.browserSession, controller: 'user' } }, autoOpen: true,
+  }))
+  expect(html).toContain('data-browser-minimized="true"')
 })
