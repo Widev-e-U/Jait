@@ -3247,7 +3247,7 @@
     {
       "reference": "packages/gateway/src/services/background-command-monitor.ts",
       "reference_sha256": "e0bf81762fc3bd54274af6e8d763dcfa3ce8417fb2e6d4e5d3695f2dbffda4a5",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/services/background_command_monitor.rs",
         "packages/gateway-rust/src/execution/completion_output.rs",
@@ -3272,7 +3272,7 @@
       "review": "Native terminal watcher and external completion lifecycle with injectable clock/timers/surface. Differential state transitions, shared admission, handler ownership, expiry and suppression; reproduced and fixed cancellation during output in reference and native. Seven focused monitor tests, four transport checks, three restored mutations and strict Clippy. Provider transport and production wake-up wiring remain separate. Responsive execution: session/execution scoped snapshots, cancellation, bounded retention, deadlines, short waits and live tool acceptance; see docs/terminal-execution.md. No terminal engine credit.",
       "reviewed_at": null,
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/services/browser-intelligence.ts",
@@ -7378,7 +7378,7 @@
     {
       "reference": "packages/gateway/src/tools/terminal-tools.ts",
       "reference_sha256": "cbc764d2d65ed0f5ccf2d3b8a9d9abfdab9dcad0f1a6a02ac9fee08809c11685",
-      "status": "verified",
+      "status": "partial",
       "native": [
         "packages/gateway-rust/src/tools/terminal_tools.rs"
       ],
@@ -7391,7 +7391,7 @@
       "review": "Existing native module reconciled to this inventory path; the module's own documentation describes it as: \"Native port of `packages/gateway/src/tools/terminal-tools.ts` — the\". Mapped by filename/ownership audit (snake_case basename, module location and documentation), not by a fresh line-by-line diff. | Native contract target(s) gateway_rust_tools_evidence call jait_gateway directly through 12 focused checks in module(s) terminal_tools; every listed test id printed ok in the full contract run (contract-full-run3.log, 6225 passed / 45 pre-existing failures in other components). Evidence authored by execution worker w-tools.json. Worker note: Pins TS output limits (collapsed line width, middle truncation head/tail balance, char-vs-byte counting), JS-style `trim` whitespace set, command timeout/yield default+clamp+ceil arithmetic, and the output-flood detector threshold/formatting (thousands separators, none at or below limits).",
       "reviewed_at": "2026-11-03T07:42:02Z",
       "evidence": [],
-      "remaining": null
+      "remaining": "Reference source changed after the recorded verification; prior evidence is historical. Review the changed behavior and rerun differential contracts before restoring verification."
     },
     {
       "reference": "packages/gateway/src/tools/thread-tools.ts",
