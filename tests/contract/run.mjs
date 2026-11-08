@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { resolve, join } from 'node:path'
+import { resolve, join, dirname, delimiter } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash } from 'node:crypto'
 
@@ -13,6 +13,20 @@ const cargo = process.env.CARGO || (existsSync(localCargo) ? localCargo : 'cargo
 const [mode = 'run', ...args] = process.argv.slice(2)
 const binaryModes = { internal: 'internal-contract', coverage: 'coverage', 'translated-report': 'translated-contract', 'resource-baseline': 'resource-baseline', interfaces: 'interfaces' }
 if (!['run', 'internal', 'coverage', 'test', 'translated', 'translated-report', 'resource-baseline', 'interfaces', 'source-review', 'fmt', 'clippy'].includes(mode)) throw new Error('Expected run, internal, coverage, test, translated, translated-report, resource-baseline, interfaces, source-review, fmt or clippy')
+// Differential tests depend on Bun's observable URL, SQLite and ICU behavior.
+// An older Bun earlier on PATH can otherwise produce misleading parity failures.
+if (['test', 'translated', 'source-review'].includes(mode)) {
+  const explicit = process.env.JAIT_CONTRACT_BUN;
+  const localBun = join(homedir(), '.bun/bin', process.platform === 'win32' ? 'bun.exe' : 'bun');
+  const candidates = explicit ? [explicit] : ['bun', localBun];
+  const bun = candidates.find(candidate => {
+    const result = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 10000 });
+    return result.status === 0 && result.stdout.trim() === '1.4.0';
+  });
+  if (!bun) throw new Error('Contract tests require Bun 1.4.0; set JAIT_CONTRACT_BUN to its executable');
+  process.env.JAIT_CONTRACT_BUN = bun;
+  if (bun !== 'bun') process.env.PATH = dirname(bun) + delimiter + (process.env.PATH || '');
+}
 // Source review has its own locked dependencies; unrelated native ports must not
 // alter its build while reference assertions and mutation controls are executing.
 const sourceReview = mode === 'source-review' || (mode === 'test' && args[0] === '--test'
@@ -42,6 +56,7 @@ if (mode === 'test' && args.length === 0) {
   try {
     process.exitCode = await parallelContracts({
       cargo, manifest, target: buildArtifacts, root,
+      workers: process.env.JAIT_CONTRACT_WORKERS === undefined ? 3 : Number(process.env.JAIT_CONTRACT_WORKERS),
       env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: 'never', CARGO_TERM_COLOR: 'never' },
       signal: controller.signal,
     }) ? 0 : 1

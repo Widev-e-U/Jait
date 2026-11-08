@@ -7,10 +7,10 @@
 //! -----------------------------------
 //! Every expectation below is the *unmodified output of the TypeScript reference*
 //! (`packages/gateway/src/...`), captured under `bun` and embedded at compile time from
-//!   .jait/artifacts/gateway-rust/team-chat-w2/vectors.json
-//!   .jait/artifacts/gateway-rust/team-chat-w2/vectors_runtime.json
-//! The capture scripts are `probe_team_chat.ts` / `probe_matrix_runtime.ts` in the same
-//! directory; they import the real TS modules and `record()` raw return values. That is the
+//!   tests/contract/fixtures/team-chat/vectors.json
+//!   tests/contract/fixtures/team-chat/vectors_runtime.json
+//! The original capture scripts imported the real TS modules and recorded raw return values.
+//! That is the
 //! same harness family the contract driver uses (`tests/contract/src/internal_driver.rs`
 //! -> `drivers/internals.ts` -> `drivers/nativeteamchat.ts#dispatch`,
 //! `drivers/migration-messenger.ts#dispatch`). So the assertions compare native output
@@ -28,11 +28,11 @@ use serde_json::{Value, json};
 
 const VECTORS: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.jait/artifacts/gateway-rust/team-chat-w2/vectors.json"
+    "/../../tests/contract/fixtures/team-chat/vectors.json"
 ));
 const RUNTIME: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../.jait/artifacts/gateway-rust/team-chat-w2/vectors_runtime.json"
+    "/../../tests/contract/fixtures/team-chat/vectors_runtime.json"
 ));
 
 fn vectors() -> Value {
@@ -575,7 +575,7 @@ fn route_implicit_recipient_is_ranked_and_retries_keep_original_routing() {
 fn goals_vectors() -> Value {
     serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../.jait/artifacts/gateway-rust/team-chat-w2/vectors_goals.json"
+        "/../../tests/contract/fixtures/team-chat/vectors_goals.json"
     )))
     .unwrap()
 }

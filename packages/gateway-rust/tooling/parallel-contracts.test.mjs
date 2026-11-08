@@ -140,6 +140,16 @@ test('the full contract CLI routes through parallel discovery from any working d
   });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stderr, /2 test executables with 3 workers/);
+  const faster = spawnSync(process.execPath, [join(f.root, 'tests/contract/run.mjs'), 'test'], {
+    cwd: '/', env: { ...process.env, CARGO: f.cargo, FIXTURE: f.root, JAIT_CONTRACT_WORKERS: '6' }, encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(faster.status, 0, faster.stderr);
+  assert.match(faster.stderr, /2 test executables with 6 workers/);
+  const invalid = spawnSync(process.execPath, [join(f.root, 'tests/contract/run.mjs'), 'test'], {
+    cwd: '/', env: { ...process.env, CARGO: f.cargo, FIXTURE: f.root, JAIT_CONTRACT_WORKERS: '17' }, encoding: 'utf8', timeout: 10000,
+  });
+  assert.notEqual(invalid.status, 0);
+  assert.match(invalid.stderr, /Expected 1–16 suite workers/);
   const directory = join(f.root, '.jait/artifacts/contract-parallel');
   const evidence = JSON.parse(readFileSync(join(directory, readdirSync(directory)[0], 'report.json'), 'utf8'));
   assert.equal(evidence.passed, true);
@@ -196,4 +206,16 @@ test('documentation tests follow successful library tests', async () => {
   const commands = readFileSync(join(f.root, 'builds'), 'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(commands.length, 2);
   assert.ok(commands[1].includes('--doc'));
+});
+
+test('contract CLI rejects an incompatible explicit reference runtime before compilation', () => {
+  const f = fixture([markerBody(0)]);
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../../../tests/contract/run.mjs', import.meta.url)), 'test'], {
+    cwd: f.root,
+    env: { ...process.env, CARGO: f.cargo, FIXTURE: f.root, JAIT_CONTRACT_BUN: process.execPath },
+    encoding: 'utf8', timeout: 10000,
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Contract tests require Bun 1\.4\.0/);
+  assert.doesNotMatch(result.stderr, /Compiling all test targets/);
 });

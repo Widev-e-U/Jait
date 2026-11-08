@@ -1,5 +1,6 @@
 // Translated fixture from packages/gateway/src/lib/persisted-tool-calls.test.ts; expected literals are in tail_static.rs.
 import { serializePersistedToolCalls } from "../../../../packages/gateway/src/lib/persisted-tool-calls.js";
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -325,6 +326,69 @@ await (async()=>{
     __jait_capture(1, (parsed[0]["completedAt"]));
     __jait_capture(2, (parsed[0]["retryCount"]));
     __jait_capture(3, (parsed[0]["status"]));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_151_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const entries = Array.from({ length: 1_500 }, (_, i) => ({
+      callId: `call-${i}`, tool: "read", args: {}, ok: true,
+      message: "🦀".repeat(200), output: "x".repeat(1_000), data: { body: "x".repeat(1_000) },
+    }));
+    const raw = JSON.stringify(entries);
+    const stringify = JSON.stringify;
+    let arrayItems = 0;
+    const spy = vi.spyOn(JSON, "stringify").mockImplementation(((value: unknown) => {
+      if (Array.isArray(value)) arrayItems += value.length;
+      return stringify(value);
+    }) as typeof JSON.stringify);
+    let serialized: string | null;
+    try {
+      serialized = serializePersistedToolCalls(raw);
+    } finally {
+      spy.mockRestore();
+    }
+    __jait_capture(0, (arrayItems), (entries.length * 4));
+    __jait_capture(1, (Buffer.byteLength(serialized!, "utf8")));
+    const result = JSON.parse(serialized!);
+    __jait_capture(2, (result.length));
+    __jait_capture(3, (result[0].callId));
+    __jait_capture(4, (result.at(-1).callId), (`call-${result.length - 1}`));
+    __jait_capture(5, (result.every((entry: Record<string, unknown>) => !("data" in entry) && !("output" in entry))));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_lib_persisted_tool_calls_test_ts_178_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const result = JSON.parse(serializePersistedToolCalls(JSON.stringify([null, 1, {}]), { forceCompact: true, markCompacted: true })!);
+    __jait_capture(0, (result));
+    __jait_capture(1, (result[0]));
   
 })();
 

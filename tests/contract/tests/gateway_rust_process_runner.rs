@@ -304,16 +304,12 @@ async fn cancellation_abort_capacity_and_descendants_are_owned() {
     let _ = task.await;
     stopped(direct).await;
     stopped(descendant).await;
-    assert_eq!(
-        p.run(
-            request(&work, argv("printf recovered")),
-            ProcessCancellation::default()
-        )
-        .await
-        .unwrap()
-        .output,
-        "recovered"
-    );
+    // Aborting the owner prevents confirmed cleanup, so the pool must fail closed.
+    let error = p.run(
+        request(&work, argv("printf recovered")),
+        ProcessCancellation::default(),
+    ).await.unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
     p.close();
     assert!(
         p.run(

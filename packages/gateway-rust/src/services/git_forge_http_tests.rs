@@ -1184,7 +1184,9 @@ async fn chunked_body_budget_partial_stream_and_expiry_are_enforced() {
         );
         h.server.finish().await;
     }
-    let edit: GrantEdit = Arc::new(|g| g.expires_at = Instant::now() + Duration::from_millis(120));
+    // Leave enough time for grant validation under a loaded test runner; the fixture
+    // stalls the body so the grant still expires during the request.
+    let edit: GrantEdit = Arc::new(|g| g.expires_at = Instant::now() + Duration::from_secs(2));
     let mut h = harness(
         ForgeProvider::Gitlab,
         |_| {

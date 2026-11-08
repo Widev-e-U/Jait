@@ -54,7 +54,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_85_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_94_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -72,7 +72,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -101,9 +103,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -111,19 +114,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -144,13 +153,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_101_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_110_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -168,7 +177,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -197,9 +208,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -207,19 +219,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -235,13 +253,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_112_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_121_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -259,7 +277,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -288,9 +308,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -298,24 +319,31 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
     state.set(sessionId, { "loop.turn-options": {
-      turnId: "previous", startedAt: new Date().toISOString(), mode: "agent", responseStyle: "normal", model: "fixture-model",
+      turnId: "previous", startedAt: new Date().toISOString(), mode: "agent", responseStyle: "normal", model: "stale-marker-model",
+      provider: "stale-marker-provider",
       sessionId: "another-chat", _systemNotification: "Wrong hidden task",
     } });
     onTurn = () => loops.check(sessionId, { revision: loops.get(sessionId)!.revision, outcome: "complete", summary: "Verified", evidence: ["Check passed"] });
@@ -328,13 +356,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_125_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_135_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -352,7 +380,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -381,9 +411,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -391,19 +422,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -422,13 +459,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_139_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_149_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -446,7 +483,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -475,9 +514,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -485,27 +525,37 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
-    loops.goal(sessionId, "Fix", ["Pass"]);
     __jait_capture(0, ((await app.inject({ method: "POST", url: `/api/sessions/${sessionId}/loop`, payload: { action: "pause" } })).statusCode));
     __jait_capture(1, ((await app.inject({ method: "POST", url: `/api/sessions/missing/loop`, headers, payload: { action: "resume" } })).statusCode));
+    // Keep the queued continuation from starting while the cancel request is
+    // processed, even if the event loop is delayed beyond its 250ms timer.
+    sessionWaits.raise({ key: "cancel-gap", sessionId, kind: "question" });
+    loops.goal(sessionId, "Fix", ["Pass"]);
     await app.inject({ method: "POST", url: `/api/sessions/${sessionId}/cancel`, headers });
     __jait_capture(2, (loops.get(sessionId)?.status));
+    sessionWaits.clear("cancel-gap");
     await new Promise(resolve => setTimeout(resolve, 350));
     __jait_capture(3, (calls));
     __jait_capture(4, ((await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/loop`, headers })).json().loop.status));
@@ -513,13 +563,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_150_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_160_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -537,7 +587,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -566,9 +618,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -576,19 +629,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -604,13 +663,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_161_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_171_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -628,7 +687,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -657,9 +718,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -667,19 +729,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -693,13 +761,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_170_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_180_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -717,7 +785,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -746,9 +816,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -756,19 +827,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -798,13 +875,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_195_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_205_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -822,7 +899,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -851,9 +930,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -861,19 +941,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -889,13 +975,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_206_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_216_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -913,7 +999,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -942,9 +1030,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -952,19 +1041,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -985,13 +1080,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_222_3": {
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_232_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 /*__jait_scope_open__*/{
@@ -1009,7 +1104,9 @@ let state: SessionStateService;
 let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
 let publish: ReturnType<typeof vi.spyOn>;
 let readMessages: () => Array<{ role: string; content: string }>;
-const __jait_hook_1491 = async () => {
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
     calls = [];
     responseStatus = 200;
     onTurn = () => {};
@@ -1038,9 +1135,10 @@ const __jait_hook_1491 = async () => {
     migrateDatabase(sqlite);
     closeDb = () => sqlite.close();
     const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     const users = new UserService(db);
     const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
     const otherUser = users.createUser("loop-other-owner", "password123");
     otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
     const ws = new WsControlPlane(config, db);
@@ -1048,19 +1146,25 @@ const __jait_hook_1491 = async () => {
     loops = new ChatLoopService(sessions, ws);
     sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
     state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
     reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
     app = await reopen();
     headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
     readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
     await app.ready();
   };
-const __jait_hook_4095 = async () => {
+const __jait_hook_4438 = async () => {
     sessionWaits.clearSession(sessionId);
     await app.close();
     await new Promise<void>(resolve => mock.close(() => resolve()));
     closeDb();
   };
-await __jait_hook_1491();
+await __jait_hook_1545();
 try {
 await (async()=>{
 
@@ -1074,7 +1178,107 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4095();
+await __jait_hook_4438();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_loops_test_ts_241_3": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let mock: Server;
+let loops: ChatLoopService;
+let sessionId: string;
+let headers: { authorization: string };
+let otherHeaders: { authorization: string };
+let calls: Array<{ model?: string; messages: Array<{ role: string; content: string }> }>;
+let onTurn: () => void;
+let responseStatus: number;
+let closeDb: () => void;
+let state: SessionStateService;
+let reopen: () => Promise<Awaited<ReturnType<typeof createServer>>>;
+let publish: ReturnType<typeof vi.spyOn>;
+let readMessages: () => Array<{ role: string; content: string }>;
+let sessions: SessionService;
+let userId: string;
+const __jait_hook_1545 = async () => {
+    calls = [];
+    responseStatus = 200;
+    onTurn = () => {};
+    mock = createHttpServer(async (req, res) => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      calls.push(JSON.parse(body));
+      if (responseStatus !== 200) {
+        res.writeHead(responseStatus, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: { message: "Test provider failed" } }));
+        return;
+      }
+      onTurn();
+      if (req.url?.endsWith("/api/chat")) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: "Progress recorded" }, done: false }) + "\n");
+        res.end(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+      } else {
+        res.writeHead(200, { "Content-Type": "text/event-stream" });
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "Progress recorded" }, finish_reason: null }] })}\n\n`);
+        res.end("data: [DONE]\n\n");
+      }
+    });
+    await new Promise<void>(resolve => mock.listen(0, "127.0.0.1", resolve));
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    closeDb = () => sqlite.close();
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const, nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl: `http://127.0.0.1:${(mock.address() as AddressInfo).port}`, jwtSecret: "loop-test-secret" };
+    sessions = new SessionService(db);
+    const users = new UserService(db);
+    const user = users.createUser("loop-owner", "password123");
+    userId = user.id;
+    const otherUser = users.createUser("loop-other-owner", "password123");
+    otherHeaders = { authorization: `Bearer ${await signAuthToken({ id: otherUser.id, username: otherUser.username }, config.jwtSecret)}` };
+    const ws = new WsControlPlane(config, db);
+    publish = vi.spyOn(ws, "publishChatNotification");
+    loops = new ChatLoopService(sessions, ws);
+    sessionId = sessions.create({ userId: user.id, name: "Fix goal" }).id;
+    state = new SessionStateService(db);
+    // The user's explicit choice for this chat. Loop turns must run on exactly
+    // this provider and model; nothing is inferred when either is missing.
+    state.set(sessionId, {
+      "chat.provider": "jait",
+      "chat.cliModels": { jait: "fixture-model" },
+    });
+    reopen = () => createServer(config, { db, sqlite, sessionService: sessions, sessionState: state, userService: users, ws, chatLoops: loops });
+    app = await reopen();
+    headers = { authorization: `Bearer ${await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret)}` };
+    readMessages = () => db.select().from(messages).where(eq(messages.sessionId, sessionId)).all();
+    await app.ready();
+  };
+const __jait_hook_4438 = async () => {
+    sessionWaits.clearSession(sessionId);
+    await app.close();
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+    closeDb();
+  };
+await __jait_hook_1545();
+try {
+await (async()=>{
+
+    const unselected = sessions.create({ userId, name: "No chosen model" }).id;
+    loops.goal(unselected, "Do the autonomous work", ["Check passes"]);
+    await vi.waitFor(() => __jait_capture(0, (publish.mock.calls)), { timeout: 10000 });
+    __jait_capture(1, (publish.mock.calls[0]?.[1]));
+    __jait_capture(2, (loops.get(unselected)?.status));
+    // No provider was ever contacted: the loop did not pick one on its own.
+    __jait_capture(3, (calls));
+    sessionWaits.clearSession(unselected);
+  
+})();
+
+} finally {
+await __jait_hook_4438();
 }
 }
 

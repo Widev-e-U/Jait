@@ -345,6 +345,15 @@ async fn account_identity_and_usage_rejections_precede_further_requests() {
     compare(calls).await;
 }
 #[tokio::test]
+async fn balance_and_legacy_fallback_match_reference() {
+    let balance = json!({"included":{"allowance_usd":20,"balance_usd":5,"period":{"until":"2026-12-01T00:00:00Z"},"session":{"remaining_percent":75,"resets_at":"2026-11-08T00:00:00Z"}},"purchased":{"balance_usd":3}});
+    compare(vec![
+        json!({"op":"device","pem":key(7),"account":account(),"replies":[{"body":account()},{"body":balance}]}),
+        json!({"op":"device","pem":key(7),"account":account(),"replies":[{"body":account()},{"status":404},{"body":usage()}]}),
+        json!({"op":"device","pem":key(7),"account":account(),"replies":[{"body":account()},{"body":{"included":{"allowance_usd":1,"balance_usd":1,"period":{"until":"invalid"}}}}]}),
+    ]).await;
+}
+#[tokio::test]
 async fn key_read_failures_are_redacted_and_first_readable_invalid_key_stops() {
     let mut calls = vec![];
     for reads in [

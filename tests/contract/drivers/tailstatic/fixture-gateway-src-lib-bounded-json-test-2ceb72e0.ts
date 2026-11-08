@@ -147,6 +147,75 @@ await (async()=>{
 
 break;
 }
+case "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_37_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (limitUtf8("abc", 0)));
+    __jait_capture(1, (limitUtf8("é🙂x", 3)));
+    __jait_capture(2, ([...limitUtf8("\ud800x", 3, "")].map((char) => char.charCodeAt(0))));
+    __jait_capture(3, ([...limitUtf8("\udc00x", 3, "")].map((char) => char.charCodeAt(0))));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_44_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const value = { items: Array.from({ length: 150 }, (_, i) => i), big: 42n, missing: undefined, nested: { a: { b: { c: { d: { e: { f: { g: { h: 1 } } } } } } } } };
+    const result = JSON.parse(serializeBoundedJson(value, 2_000));
+    __jait_capture(0, (result.big));
+    __jait_capture(1, (result.items));
+    __jait_capture(2, (result));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_lib_bounded_json_test_ts_52_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const many = Object.fromEntries(Array.from({ length: 110 }, (_, i) => [`key${i}`, i]));
+    const compact = JSON.parse(serializeBoundedJson({ ...many, big: 1n }, 4096));
+    __jait_capture(0, (compact.__jait_truncated_entries__));
+    const fallback = JSON.parse(serializeBoundedJson(Array.from({ length: 100 }, () => "x".repeat(1000)), 128));
+    __jait_capture(1, (fallback.__jait_truncated__));
+    __jait_capture(2, (fallback.originalBytes));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
 default: throw new Error('unknown tailstatic fixture');
  }
  return __jait_observations;

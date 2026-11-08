@@ -149,6 +149,8 @@ await (async()=>{
       projectPath: "/workspace/project",
     });
     sessionState.set(session.id, {
+      "chat.provider": "codex",
+      "chat.cliModels": { codex: "gpt-5-codex" },
       "chat.activeTurn": {
         turnId: "turn-before-restart",
         startedAt: "2026-09-10T06:35:00.000Z",
@@ -198,7 +200,7 @@ await __jait_hook_2927();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_crash_recovery_test_ts_152_3": {
+case "tailstatic_packages_gateway_src_routes_chat_crash_recovery_test_ts_154_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const testConfig = {
@@ -283,6 +285,7 @@ await (async()=>{
     const user = userService.createUser("crash-recovery-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Interrupted work" });
 
+    // The account default must never stand in for a user decision.
     userService.updateSettings(user.id, {
       jaitBackend: "openrouter",
       apiKeys: { OPENROUTER_API_KEY: "test-key" },
@@ -309,6 +312,171 @@ await (async()=>{
         startedAt: "2026-08-31T08:19:00.000Z",
         mode: "agent",
         responseStyle: "normal",
+        recoveryAttempts: 0,
+      },
+    });
+
+    const fetchSpy = vi.fn(async () => recoveredResponse());
+    globalThis.fetch = fetchSpy as typeof fetch;
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      userService,
+      sessionService,
+      sessionState,
+    });
+
+    try {
+      const recover = (app as typeof app & {
+        recoverInterruptedChatTurns: () => Promise<number>;
+      }).recoverInterruptedChatTurns;
+      await __jait_captureResolved(0, (recover()));
+
+      __jait_captureType(1, (sessionState.get(session.id, ["chat.activeTurn"])["chat.activeTurn"]));
+      const persisted = db
+        .select()
+        .from(messages)
+        .where(eq(messages.sessionId, session.id))
+        .orderBy(messages.createdAt, messages.id)
+        .all();
+
+      const interruption = persisted.find((row) => row.id === "gateway-interruption-turn-before-oom");
+      __jait_capture(2, (interruption?.content));
+      __jait_capture(3, (interruption?.content));
+      __jait_capture(4, (persisted.some((row) =>
+        row.role === "assistant" && row.content.includes("Recovered and finished.")
+      )));
+      // No provider request may be issued on the user's behalf.
+      __jait_capture(5, (fetchSpy.mock.calls));
+      __jait_capture(6, (persisted.filter((row) => row.id === "gateway-interruption-turn-before-oom")));
+    } finally {
+      await app.close();
+    }
+  
+})();
+
+} finally {
+await __jait_hook_2927();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_crash_recovery_test_ts_233_3": {
+
+const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent" as const,
+  nodeEnv: "test",
+  jwtSecret: "crash-recovery-test-secret",
+};
+const originalFetch = globalThis.fetch;
+function recoveredResponse(): Response {
+  const encoder = new TextEncoder();
+  return new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(
+        'data: {"choices":[{"delta":{"content":"Recovered and finished."},"finish_reason":null}]}\n\n',
+      ));
+      controller.enqueue(encoder.encode(
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      ));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  }), {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+class RecoveryCliProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Recovery Codex",
+    description: "Crash-recovery test provider",
+    available: true,
+    modes: ["full-access"],
+  };
+  readonly startSession = vi.fn(async (options: StartSessionOptions): Promise<ProviderSession> => ({
+    id: "recovery-provider-session",
+    providerId: this.id,
+    threadId: options.threadId,
+    status: "running",
+    runtimeMode: options.mode,
+    startedAt: new Date().toISOString(),
+  }));
+  readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitter.emit("event", { type: "token", sessionId, content: "Recovered with tools." } satisfies ProviderEvent);
+      this.emitter.emit("event", { type: "turn.completed", sessionId } satisfies ProviderEvent);
+    }, 0);
+  });
+  readonly interruptTurn = vi.fn(async (): Promise<void> => {});
+  readonly stopSession = vi.fn(async (): Promise<void> => {});
+  readonly respondToApproval = vi.fn(async (): Promise<void> => {});
+  private readonly emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+}
+const __jait_hook_2927 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const user = userService.createUser("crash-recovery-selected-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Interrupted selected work" });
+
+    userService.updateSettings(user.id, {
+      jaitBackend: "openrouter",
+      apiKeys: { OPENROUTER_API_KEY: "test-key" },
+    });
+    db.insert(messages).values([
+      {
+        id: "original-user",
+        sessionId: session.id,
+        role: "user",
+        content: "Implement the recovery feature",
+        createdAt: "2026-08-31T08:19:00.000Z",
+      },
+      {
+        id: "partial-assistant",
+        sessionId: session.id,
+        role: "assistant",
+        content: "I have started the implementation.",
+        createdAt: "2026-08-31T08:19:01.000Z",
+      },
+    ]).run();
+    sessionState.set(session.id, {
+      "chat.provider": "openrouter",
+      "chat.cliModels": { openrouter: "anthropic/claude-sonnet-4" },
+      "chat.activeTurn": {
+        turnId: "turn-before-oom",
+        startedAt: "2026-08-31T08:19:00.000Z",
+        mode: "agent",
+        responseStyle: "normal",
+        provider: "openrouter",
+        model: "anthropic/claude-sonnet-4",
         recoveryAttempts: 0,
       },
     });
@@ -356,7 +524,7 @@ await __jait_hook_2927();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_crash_recovery_test_ts_229_3": {
+case "tailstatic_packages_gateway_src_routes_chat_crash_recovery_test_ts_314_3": {
 
 const { eq } = await import((typeof Bun!=="undefined"?Bun.resolveSync("drizzle-orm", __jait_original_dir):__jait_require.resolve("drizzle-orm")));
 const testConfig = {

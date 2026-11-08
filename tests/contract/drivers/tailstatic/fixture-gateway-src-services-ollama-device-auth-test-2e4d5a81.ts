@@ -720,7 +720,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_54_3": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_62_3": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -751,110 +751,8 @@ await __jait_hook_1792();
 try {
 await (async()=>{
 
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response("missing", { status: 404 }))
-      .mockResolvedValueOnce(json({ Email: account.email, Name: account.name, Plan: "pro" }))
-      .mockResolvedValueOnce(json(usage));
-    vi.stubGlobal("fetch", fetchMock);
-    await __jait_captureResolved(0, (fetchSignedInOllamaUsage("http://localhost:11434", account)), (usage));
-    __jait_capture(1, (readFile.mock.calls));
-    __jait_captureType(2, (fetchMock.mock.calls[0][1].headers));
-    for (const [url, init] of fetchMock.mock.calls.slice(1)) {
-      const parsed = new URL(url);
-      __jait_capture(3, (parsed.origin));
-      __jait_capture(4, (init.redirect));
-      const signature = init.headers.Authorization.split(":")[1];
-      __jait_capture(5, (verify(null, Buffer.from(`${init.method},${parsed.pathname}${parsed.search}`), publicKey, Buffer.from(signature, "base64"))));
-    }
-    __jait_capture(6, (new URL(fetchMock.mock.calls[1][0]).pathname));
-    __jait_capture(7, (new URL(fetchMock.mock.calls[2][0]).pathname));
-  
-})();
-
-} finally {
-await __jait_hook_1944();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_73_3": {
-await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
-const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
-const { readFile } = await import("node:fs/promises");
-const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-const account = { email: "me@example.com", name: "me", plan: "pro" };
-const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
-const json = (value: unknown) => new Response(JSON.stringify(value));
-function fixture(cipher = "none") {
-  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
-  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
-  const jwk = privateKey.export({ format: "jwk" });
-  const pub = Buffer.from(jwk.x!, "base64url");
-  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
-  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
-  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
-  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
-  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
-  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
-}
-const __jait_hook_1792 = () => {
-  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
-  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
-};
-const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
-/*__jait_scope_open__*/{
-await __jait_hook_1792();
-try {
-await (async()=>{
-
-    const activity = { range: "7d", scope: "self", granularity: "day", from: "2026-09-30T00:00:00Z", until: "2026-10-07T11:29:42Z", totals: { request_count: 10388 }, buckets: [] };
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response("missing", { status: 404 }))
-      .mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(activity)));
-    await __jait_captureResolved(0, (fetchSignedInOllamaUsage("http://localhost:11434", account)), (activity));
-  
-})();
-
-} finally {
-await __jait_hook_1944();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_80_3": {
-await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
-const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
-const { readFile } = await import("node:fs/promises");
-const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-const account = { email: "me@example.com", name: "me", plan: "pro" };
-const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
-const json = (value: unknown) => new Response(JSON.stringify(value));
-function fixture(cipher = "none") {
-  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
-  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
-  const jwk = privateKey.export({ format: "jwk" });
-  const pub = Buffer.from(jwk.x!, "base64url");
-  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
-  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
-  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
-  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
-  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
-  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
-}
-const __jait_hook_1792 = () => {
-  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
-  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
-};
-const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
-/*__jait_scope_open__*/{
-await __jait_hook_1792();
-try {
-await (async()=>{
-
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(usage)));
-    await __jait_captureResolved(0, (fetchSignedInOllamaUsage("http://localhost:11434", account)), (usage));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("missing", { status: 404 })));
+    await __jait_captureRejected(0, (fetchSignedInOllamaUsage("http://remote:11434", account)));
     __jait_capture(1, (readFile.mock.calls));
   
 })();
@@ -866,157 +764,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_86_3_each0": {
-await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
-const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
-const { readFile } = await import("node:fs/promises");
-const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-const account = { email: "me@example.com", name: "me", plan: "pro" };
-const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
-const json = (value: unknown) => new Response(JSON.stringify(value));
-function fixture(cipher = "none") {
-  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
-  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
-  const jwk = privateKey.export({ format: "jwk" });
-  const pub = Buffer.from(jwk.x!, "base64url");
-  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
-  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
-  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
-  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
-  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
-  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
-}
-const __jait_hook_1792 = () => {
-  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
-  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
-};
-const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
-/*__jait_scope_open__*/{
-/*__jait_scope_open__*/{
-const url = "http://remote:11434";
-const status = 404;
-await __jait_hook_1792();
-try {
-await (async()=>{
-
-    const fetchMock = vi.fn().mockResolvedValue(new Response("error", { status }));
-    vi.stubGlobal("fetch", fetchMock);
-    await __jait_captureRejected(0, (fetchSignedInOllamaUsage(url, account)), ({ status }));
-    __jait_capture(1, (readFile.mock.calls));
-    __jait_capture(2, (fetchMock.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_1944();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_86_3_each1": {
-await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
-const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
-const { readFile } = await import("node:fs/promises");
-const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-const account = { email: "me@example.com", name: "me", plan: "pro" };
-const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
-const json = (value: unknown) => new Response(JSON.stringify(value));
-function fixture(cipher = "none") {
-  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
-  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
-  const jwk = privateKey.export({ format: "jwk" });
-  const pub = Buffer.from(jwk.x!, "base64url");
-  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
-  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
-  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
-  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
-  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
-  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
-}
-const __jait_hook_1792 = () => {
-  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
-  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
-};
-const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
-/*__jait_scope_open__*/{
-/*__jait_scope_open__*/{
-const url = "http://localhost:11434";
-const status = 401;
-await __jait_hook_1792();
-try {
-await (async()=>{
-
-    const fetchMock = vi.fn().mockResolvedValue(new Response("error", { status }));
-    vi.stubGlobal("fetch", fetchMock);
-    await __jait_captureRejected(0, (fetchSignedInOllamaUsage(url, account)), ({ status }));
-    __jait_capture(1, (readFile.mock.calls));
-    __jait_capture(2, (fetchMock.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_1944();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_86_3_each2": {
-await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
-const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
-const { readFile } = await import("node:fs/promises");
-const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
-const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-const account = { email: "me@example.com", name: "me", plan: "pro" };
-const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
-const json = (value: unknown) => new Response(JSON.stringify(value));
-function fixture(cipher = "none") {
-  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
-  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
-  const jwk = privateKey.export({ format: "jwk" });
-  const pub = Buffer.from(jwk.x!, "base64url");
-  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
-  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
-  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
-  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
-  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
-  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
-}
-const __jait_hook_1792 = () => {
-  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
-  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
-};
-const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
-/*__jait_scope_open__*/{
-/*__jait_scope_open__*/{
-const url = "http://localhost:11434";
-const status = 500;
-await __jait_hook_1792();
-try {
-await (async()=>{
-
-    const fetchMock = vi.fn().mockResolvedValue(new Response("error", { status }));
-    vi.stubGlobal("fetch", fetchMock);
-    await __jait_captureRejected(0, (fetchSignedInOllamaUsage(url, account)), ({ status }));
-    __jait_capture(1, (readFile.mock.calls));
-    __jait_capture(2, (fetchMock.mock.calls));
-  
-})();
-
-} finally {
-await __jait_hook_1944();
-}
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3_each0": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_68_3_each0": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1064,7 +812,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3_each1": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_68_3_each1": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1112,7 +860,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3_each2": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_68_3_each2": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1160,7 +908,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_101_3": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_75_3": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1191,7 +939,7 @@ await __jait_hook_1792();
 try {
 await (async()=>{
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(usage)));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(new Response("missing", { status: 404 })).mockResolvedValueOnce(json(usage)));
     await __jait_captureResolved(0, (fetchOllamaDeviceUsage(account, privateKey)), (usage));
   
 })();
@@ -1203,7 +951,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_106_3": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_80_3": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1246,7 +994,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_111_3": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_85_3": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1293,7 +1041,7 @@ await __jait_hook_1944();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_120_3": {
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_94_3": {
 await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
 const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
 const { readFile } = await import("node:fs/promises");
@@ -1326,6 +1074,140 @@ await (async()=>{
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("no", { status: 401 })));
     await __jait_captureRejected(0, (fetchOllamaDeviceUsage(account, privateKey)));
+  
+})();
+
+} finally {
+await __jait_hook_1944();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_98_3": {
+await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
+const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
+const { readFile } = await import("node:fs/promises");
+const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const account = { email: "me@example.com", name: "me", plan: "pro" };
+const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
+const json = (value: unknown) => new Response(JSON.stringify(value));
+function fixture(cipher = "none") {
+  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
+  const jwk = privateKey.export({ format: "jwk" });
+  const pub = Buffer.from(jwk.x!, "base64url");
+  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
+  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
+  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
+  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
+  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
+  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
+}
+const __jait_hook_1792 = () => {
+  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
+  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
+};
+const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
+/*__jait_scope_open__*/{
+await __jait_hook_1792();
+try {
+await (async()=>{
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("no", { status: 401 })));
+    await __jait_captureRejected(0, (fetchOllamaDeviceUsage(account)));
+    __jait_capture(1, (readFile.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_1944();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_104_3": {
+await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
+const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
+const { readFile } = await import("node:fs/promises");
+const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const account = { email: "me@example.com", name: "me", plan: "pro" };
+const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
+const json = (value: unknown) => new Response(JSON.stringify(value));
+function fixture(cipher = "none") {
+  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
+  const jwk = privateKey.export({ format: "jwk" });
+  const pub = Buffer.from(jwk.x!, "base64url");
+  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
+  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
+  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
+  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
+  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
+  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
+}
+const __jait_hook_1792 = () => {
+  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
+  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
+};
+const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
+/*__jait_scope_open__*/{
+await __jait_hook_1792();
+try {
+await (async()=>{
+
+    const pem = (data: Buffer) => `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
+    for (const data of [Buffer.from("bad magic"), Buffer.from("openssh-key-v1\0")]) {
+      __jait_thrown(0, () => parseOllamaDeviceKey(pem(data)));
+    }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(new Response("missing", { status: 404 })).mockResolvedValueOnce(json({ invalid: true })));
+    await __jait_rejected(1, fetchSignedInOllamaUsage("http://localhost:11434", account));
+  
+})();
+
+} finally {
+await __jait_hook_1944();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_ollama_device_auth_test_ts_113_3": {
+await vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
+const { createPublicKey, generateKeyPairSync, verify } = await import("node:crypto");
+const { readFile } = await import("node:fs/promises");
+const { fetchOllamaDeviceUsage, fetchSignedInOllamaUsage, isLocalOllamaUrl, parseOllamaDeviceKey, signOllamaRequest } = await import("../../../../packages/gateway/src/services/ollama-device-auth.js");
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const account = { email: "me@example.com", name: "me", plan: "pro" };
+const usage = { limits: { session: { usage: 0.508, models: [] }, weekly: { usage: 0.09, models: [] } } };
+const json = (value: unknown) => new Response(JSON.stringify(value));
+function fixture(cipher = "none") {
+  const uint = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n); return b; };
+  const field = (value: string | Buffer) => { const b = Buffer.from(value); return Buffer.concat([uint(b.length), b]); };
+  const jwk = privateKey.export({ format: "jwk" });
+  const pub = Buffer.from(jwk.x!, "base64url");
+  const secret = Buffer.concat([Buffer.from(jwk.d!, "base64url"), pub]);
+  const pubBlob = Buffer.concat([field("ssh-ed25519"), field(pub)]);
+  const inner = Buffer.concat([uint(42), uint(42), field("ssh-ed25519"), field(pub), field(secret), field("test")]);
+  const padding = Buffer.from(Array.from({ length: 8 - inner.length % 8 }, (_, i) => i + 1));
+  const data = Buffer.concat([Buffer.from("openssh-key-v1\0"), field(cipher), field("none"), field(""), uint(1), field(pubBlob), field(Buffer.concat([inner, padding]))]);
+  return `-----BEGIN OPENSSH PRIVATE KEY-----\n${data.toString("base64")}\n-----END OPENSSH PRIVATE KEY-----`;
+}
+const __jait_hook_1792 = () => {
+  vi.mocked(readFile).mockReset().mockResolvedValue(fixture());
+  vi.stubEnv("JAIT_OLLAMA_DEVICE_KEY_PATH", "/test/ollama-key");
+};
+const __jait_hook_1944 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
+/*__jait_scope_open__*/{
+await __jait_hook_1792();
+try {
+await (async()=>{
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(json({ name: account.name })).mockResolvedValueOnce(new Response("missing", { status: 404 })).mockResolvedValueOnce(json(usage)));
+    await __jait_captureResolved(0, (fetchOllamaDeviceUsage({ name: account.name }, privateKey)), (usage));
   
 })();
 

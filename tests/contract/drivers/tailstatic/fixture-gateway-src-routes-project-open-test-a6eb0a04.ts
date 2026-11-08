@@ -13,7 +13,8 @@ import { UserService } from "../../../../packages/gateway/src/services/users.js"
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -54,7 +55,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_125_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_128_3": {
 
 
 /*__jait_scope_open__*/{
@@ -74,10 +75,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -96,11 +98,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -144,13 +148,136 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
+try {
+await (async()=>{
+
+    const access = vi.spyOn(ws, "canAccessNode").mockReturnValue(true);
+    const res = await authedFetch(`${address}/api/project/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId, nodeId: "offline-node", strictNode: true }),
+    });
+    access.mockRestore();
+    __jait_capture(0, (res.status));
+    __jait_capture(1, ((await res.json() as { error: string }).error));
+    __jait_capture(2, (surfaceRegistry.getBySession(sessionId).filter((s) => s.state === "running")));
+  
+})();
+
+} finally {
+await __jait_hook_4671();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_141_3": {
+
+
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let address: string;
+let authToken: string;
+let ownerId: string;
+const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+let sessionId = "test-session-" + Date.now();
+let sessionState: SessionStateService;
+let surfaceRegistry: SurfaceRegistry;
+let sessions: SessionService;
+let projects: ProjectService;
+let projectState: ProjectStateService;
+let users: UserService;
+let ws: WsControlPlane;
+let writableTestRoot: string;
+let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
+let writableTestFile: string;
+const __jait_hook_2091 = async () => {
+    const config = loadConfig();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    sessions = new SessionService(db);
+    sessionState = new SessionStateService(db);
+    users = new UserService(db);
+    const owner = users.createUser("project-owner", "password123");
+    ownerId = owner.id;
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
+    projects = new ProjectService(db);
+    projectState = new ProjectStateService(db);
+    surfaceRegistry = new SurfaceRegistry();
+    surfaceRegistry.register(new FileSystemSurfaceFactory());
+
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
+    execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
+    await mkdir(join(writableTestRoot, "data"), { recursive: true });
+
+    ws = new WsControlPlane(config);
+
+    // Persist project state on surface start (same as index.ts)
+    surfaceRegistry.onSurfaceStarted = (id, surface) => {
+      if (surface.type === "filesystem") {
+        const snap = surface.snapshot();
+        const sid = snap.sessionId ?? "";
+        const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
+        if (sid) {
+          sessionState.set(sid, { "project.panel": { open: true, remotePath: projectRoot, surfaceId: id } });
+        }
+      }
+    };
+
+    surfaceRegistry.onSurfaceStopped = (id, surface, context) => {
+      if (surface.type === "filesystem") {
+        const snap = surface.snapshot();
+        const sid = snap.sessionId ?? "";
+        if (sid && context?.reason !== "shutdown") {
+          sessionState.set(sid, { "project.panel": null });
+        }
+      }
+    };
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService: sessions,
+      userService: users,
+      projectService: projects,
+      surfaceRegistry,
+      sessionState,
+      projectState,
+      ws,
+    });
+
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const addr = app.server.address();
+    address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
+
+    await mkdir(join(writableTestRoot, "nested"), { recursive: true });
+    writableTestFile = join(writableTestRoot, "nested", "editable.txt");
+    await writeFile(writableTestFile, "before", "utf-8");
+  };
+const __jait_hook_4671 = async () => {
+    await surfaceRegistry.stopAll("test-cleanup");
+    await app?.close();
+    sqlite?.close();
+    if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
+  };
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -168,13 +295,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_138_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_154_3": {
 
 
 /*__jait_scope_open__*/{
@@ -194,10 +321,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -216,11 +344,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -264,13 +394,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -297,13 +427,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_160_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_176_3": {
 
 
 /*__jait_scope_open__*/{
@@ -323,10 +453,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -345,11 +476,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -393,13 +526,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -423,13 +556,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_179_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_195_3": {
 
 
 /*__jait_scope_open__*/{
@@ -449,10 +582,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -471,11 +605,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -519,13 +655,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -572,13 +708,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_221_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_237_3": {
 
 
 /*__jait_scope_open__*/{
@@ -598,10 +734,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -620,11 +757,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -668,13 +807,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -718,13 +857,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_260_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_276_3": {
 
 
 /*__jait_scope_open__*/{
@@ -744,10 +883,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -766,11 +906,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -814,13 +956,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -838,13 +980,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_273_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_289_3": {
 
 
 /*__jait_scope_open__*/{
@@ -864,10 +1006,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -886,11 +1029,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -934,13 +1079,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -964,13 +1109,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_292_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_308_3": {
 
 
 /*__jait_scope_open__*/{
@@ -990,10 +1135,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1012,11 +1158,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1060,13 +1208,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1089,13 +1237,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_310_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_326_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1115,10 +1263,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1137,11 +1286,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1185,13 +1336,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1218,13 +1369,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_332_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_348_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1244,10 +1395,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1266,11 +1418,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1314,13 +1468,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1374,13 +1528,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_388_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_404_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1400,10 +1554,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1422,11 +1577,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1470,13 +1627,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1500,13 +1657,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_407_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_423_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1526,10 +1683,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1548,11 +1706,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1596,13 +1756,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1634,13 +1794,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_434_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_450_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1660,10 +1820,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1682,11 +1843,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1730,13 +1893,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1760,13 +1923,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_453_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_469_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1786,10 +1949,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1808,11 +1972,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1856,13 +2022,13 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
@@ -1897,13 +2063,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_open_test_ts_483_3": {
+case "tailstatic_packages_gateway_src_routes_project_open_test_ts_499_3": {
 
 
 /*__jait_scope_open__*/{
@@ -1923,10 +2089,11 @@ let sessions: SessionService;
 let projects: ProjectService;
 let projectState: ProjectStateService;
 let users: UserService;
+let ws: WsControlPlane;
 let writableTestRoot: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
 let writableTestFile: string;
-const __jait_hook_2058 = async () => {
+const __jait_hook_2091 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -1945,11 +2112,13 @@ const __jait_hook_2058 = async () => {
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-route-"));
+    const artifactRoot = resolve(__jait_original_dir, "../../../../.jait/artifacts");
+    await mkdir(artifactRoot, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifactRoot, "jait-project-route-"));
     execFileSync("git", ["init", "--quiet"], { cwd: writableTestRoot });
     await mkdir(join(writableTestRoot, "data"), { recursive: true });
 
-    const ws = new WsControlPlane(config);
+    ws = new WsControlPlane(config);
 
     // Persist project state on surface start (same as index.ts)
     surfaceRegistry.onSurfaceStarted = (id, surface) => {
@@ -1993,18 +2162,18 @@ const __jait_hook_2058 = async () => {
     writableTestFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(writableTestFile, "before", "utf-8");
   };
-const __jait_hook_4502 = async () => {
+const __jait_hook_4671 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_2058();
+await __jait_hook_2091();
 try {
 await (async()=>{
 
-    const firstRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-first-"));
-    const secondRoot = await mkdtemp(join(__jait_fixture_dir, "jait-project-second-"));
+    const firstRoot = await mkdtemp(join(resolve(__jait_original_dir, "../../../../.jait/artifacts"), "jait-project-first-"));
+    const secondRoot = await mkdtemp(join(resolve(__jait_original_dir, "../../../../.jait/artifacts"), "jait-project-second-"));
     const secondFile = join(secondRoot, "AGENTS.md");
     await writeFile(secondFile, "project instructions", "utf-8");
 
@@ -2037,7 +2206,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_4502();
+await __jait_hook_4671();
 }
 }
 

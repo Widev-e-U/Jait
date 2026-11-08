@@ -999,6 +999,7 @@ await (async()=>{
       payload: {
         content: "slow queued effort turn",
         sessionId: session.id,
+        provider: "jait",
         model: "gpt-4o",
         reasoningEffort: "high",
       },
@@ -1012,6 +1013,7 @@ await (async()=>{
       payload: {
         content: "queued explicit default",
         sessionId: session.id,
+        provider: "jait",
         model: "gpt-4o",
         reasoningEffort: null,
       },
@@ -1048,7 +1050,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_384_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_386_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -1273,7 +1275,186 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_467_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_469_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
+  return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
+});
+const { createServer } = await import("../../../../packages/gateway/src/server.js");
+const { loadConfig } = await import("../../../../packages/gateway/src/config.js");
+const { openDatabase, migrateDatabase } = await import("../../../../packages/gateway/src/db/index.js");
+const { SessionService } = await import("../../../../packages/gateway/src/services/sessions.js");
+const { SessionStateService } = await import("../../../../packages/gateway/src/services/session-state.js");
+const { UserService } = await import("../../../../packages/gateway/src/services/users.js");
+const { signAuthToken } = await import("../../../../packages/gateway/src/security/http-auth.js");
+const { MemoryEngine } = await import("../../../../packages/gateway/src/memory/service.js");
+const { SqliteMemoryBackend } = await import("../../../../packages/gateway/src/memory/sqlite-backend.js");
+const { generateChatNotificationDetail } = await import("../../../../packages/gateway/src/services/chat-notification.js");
+const { ToolRegistry } = await import("../../../../packages/gateway/src/tools/registry.js");
+const testConfig = {
+  ...loadConfig(),
+  port: 0,
+  wsPort: 0,
+  logLevel: "silent" as const,
+  nodeEnv: "test",
+  jwtSecret: "test-jwt-secret",
+};
+const originalFetch = globalThis.fetch;
+function createOpenAIStreamResponse(): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"},"finish_reason":null}]}\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+function createControlledOpenAIStreamResponse(): {
+  response: Response;
+  releaseSecondChunk: () => void;
+} {
+  const encoder = new TextEncoder();
+  let releaseSecondChunk = () => {};
+  const secondChunkReady = new Promise<void>((resolve) => {
+    releaseSecondChunk = resolve;
+  });
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"A"},"finish_reason":null}]}\n\n'));
+      await secondChunkReady;
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"B"},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return {
+    response: new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+    releaseSecondChunk,
+  };
+}
+function createToolCallStreamResponse(): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_cancel_proof","type":"function","function":{"name":"proof_cancel","arguments":"{}"}}]},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+function createTextThenToolCallStreamResponse(): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"Working on it"},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_before_quota","type":"function","function":{"name":"proof_ok","arguments":"{}"}}]},"finish_reason":null}]}\n\n'));
+      controller.enqueue(encoder.encode('data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n'));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream" },
+  });
+}
+function createQuotaExhaustedResponse(): Response {
+  return new Response(
+    JSON.stringify({ error: { message: "You exceeded your current quota", code: "insufficient_quota" } }),
+    { status: 429, headers: { "Content-Type": "application/json" } },
+  );
+}
+function memoryEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {
+  return {
+    id: "mem-project-1",
+    scope: "project",
+    content: "The project prefers compact todo controls with icon-only status and priority selectors.",
+    source: { type: "test", id: "session-1", surface: "chat" },
+    createdAt: "2026-05-24T00:00:00.000Z",
+    updatedAt: "2026-05-24T00:00:00.000Z",
+    ...overrides,
+  };
+}
+function createMockMemoryService(entries: MemoryEntry[]): MemoryService {
+  return {
+    save: async (input: SaveMemoryInput) => memoryEntry({ content: input.content, scope: input.scope, source: input.source }),
+    list: async (scope?: MemoryScope) => entries.filter((entry) => !scope || entry.scope === scope),
+    search: async (_query: string, limit = 5, scope?: MemoryScope) => entries.filter((entry) => !scope || entry.scope === scope).slice(0, limit),
+    forget: async () => false,
+    forgetExpired: async () => 0,
+    flushPreCompaction: async () => 0,
+  };
+}
+const __jait_hook_5928 = () => {
+  globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+  vi.mocked(generateChatNotificationDetail).mockImplementation(async () => null);
+};
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const userService = new UserService(db);
+    const sessionService = new SessionService(db);
+    const user = userService.createUser("memory-cancel-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Memory Cancellation" });
+    const memoryService = createMockMemoryService([]);
+    let markStarted = () => {};
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    let releaseMemory = () => {};
+    const pending = new Promise<MemoryEntry[]>((resolve) => { releaseMemory = () => resolve([]); });
+    memoryService.search = vi.fn(() => { markStarted(); return pending; });
+    const app = await createServer(testConfig, { db, sqlite, userService, sessionService, memoryService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const turn = app.inject({ method: "POST", url: "/api/chat", headers,
+      payload: { content: "stalled memory", sessionId: session.id } });
+    try {
+      await started;
+      const cancel = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/cancel`, headers });
+      __jait_capture(0, (cancel.json()));
+      const response = await Promise.race([
+        turn,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Cancelled preparation stayed active")), 500)),
+      ]);
+      __jait_capture(1, (response.body));
+      const streaming = await app.inject({ method: "GET", url: "/api/sessions/streaming", headers });
+      __jait_capture(2, (streaming.json().sessionIds), (session.id));
+    } finally {
+      releaseMemory();
+      await turn;
+      await app.close();
+      sqlite.close();
+    }
+  
+})();
+
+} finally {
+await __jait_hook_5928();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_506_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -1465,7 +1646,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_517_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_556_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -1731,7 +1912,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_650_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_689_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -1963,7 +2144,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_746_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_785_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -2237,7 +2418,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_878_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_917_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -2470,7 +2651,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_977_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1016_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -2671,7 +2852,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1036_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1075_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -2893,7 +3074,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1119_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1158_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };
@@ -3086,7 +3267,7 @@ await __jait_hook_5928();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1170_3": {
+case "tailstatic_packages_gateway_src_routes_chat_openrouter_test_ts_1209_3": {
 await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/chat-notification.ts",import.meta.url)), async (importOriginal) => {
   const actual = await importOriginal<typeof import("../services/chat-notification.js")>();
   return { ...actual, generateChatNotificationDetail: vi.fn(async () => null) };

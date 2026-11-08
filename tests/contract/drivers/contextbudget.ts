@@ -94,7 +94,8 @@ export async function dispatch(call: any): Promise<any> {
     }
     case 'contextbudget.native': {
       const state = structuredClone(call.state); const commands: string[] = []; let error = false;
-      try { await compactProviderContext(state, async command => { commands.push(command); if (call.fail) throw new Error('provider failure'); }, call.now ?? 100000); } catch { error = true; }
+      const originalNow = Date.now; Date.now = () => call.now ?? 100000;
+      try { await compactProviderContext(state, async command => { commands.push(command); if (call.fail) throw new Error('provider failure'); }, call.now ?? 100000); } catch { error = true; } finally { Date.now = originalNow; }
       return { state, commands, error };
     }
     case 'contextbudget.evidence': {

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "latest": 75,
+  "latest": 77,
   "migrations": [
     {
       "id": 1,
@@ -301,16 +301,24 @@
     {
       "id": 75,
       "name": "agent_control_hard_stop"
+    },
+    {
+      "id": 76,
+      "name": "browser_workflows"
+    },
+    {
+      "id": 77,
+      "name": "github_intake_observation"
     }
   ],
   "sourceSha256": {
-    "packages/gateway/src/db/migrations.ts": "6a5c9c35b52c25b583d245ee324707704e0f1a9e37f4a34aa7b86d1cdd5c62f7",
+    "packages/gateway/src/db/migrations.ts": "7292f264b29566edbe8dae1862fef4a93ba4b9d349a25ad7f86b94cb6158943d",
     "packages/gateway/src/db/connection.ts": "f5f227422e0d9e23f05afcced86f15581b6fc8611b021d007540b3f0b5563ea5",
     "packages/gateway/src/db/sqlite-shim.ts": "910cc9a8d0448693e9a5e147f3af3e0fb61f65db1e0f175709147320cad44ba3"
   },
   "prefixCoverage": {
     "first": 0,
-    "last": 75,
+    "last": 77,
     "classification": "synthetic current-definition prefixes, not archived released databases",
     "skippedPrefixes": []
   },
@@ -376,6 +384,8 @@
     "automation_repositories": "structural-only",
     "browser_interventions": "structural-only",
     "browser_sessions": "structural-only",
+    "browser_workflow_runs": "structural-only",
+    "browser_workflows": "structural-only",
     "calendar_accounts": "structural-only",
     "channels": "structural-only",
     "code_graph_indexes": "structural-only",
@@ -383,6 +393,8 @@
     "consent_session_approvals": "structural-only",
     "device_calendar_snapshots": "structural-only",
     "email_accounts": "structural-only",
+    "github_intake_decisions": "structural-only",
+    "github_intake_policies": "structural-only",
     "memories": "representative-payload-retention",
     "message_context_metadata": "FK-behavior",
     "messages": "representative-payload-retention",

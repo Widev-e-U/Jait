@@ -1,0 +1,267 @@
+{
+  "teamRoot.chain": "root",
+  "teamRoot.orphan": "orphan",
+  "teamRoot.missing": {
+    "thrown": "Error: Agent not found."
+  },
+  "teamRoot.cycle": {
+    "thrown": "Error: Agent hierarchy contains a cycle."
+  },
+  "readTeamWork.valid": {
+    "roomId": "r",
+    "agentId": "a",
+    "deliveryId": "d",
+    "messageId": "m"
+  },
+  "readTeamWork.partial": null,
+  "readTeamWork.broken": null,
+  "readTeamWork.empty": null,
+  "rank.builder": [
+    {
+      "id": "dev",
+      "score": 20
+    },
+    {
+      "id": "root",
+      "score": 1
+    },
+    {
+      "id": "orphan",
+      "score": 0
+    },
+    {
+      "id": "qa",
+      "score": 0
+    }
+  ],
+  "rank.review": [
+    {
+      "id": "root",
+      "score": 1
+    },
+    {
+      "id": "dev",
+      "score": 0
+    },
+    {
+      "id": "orphan",
+      "score": 0
+    },
+    {
+      "id": "qa",
+      "score": 0
+    }
+  ],
+  "rank.rootonly": [
+    {
+      "id": "root",
+      "score": 1
+    },
+    {
+      "id": "dev",
+      "score": 0
+    },
+    {
+      "id": "orphan",
+      "score": 0
+    },
+    {
+      "id": "qa",
+      "score": 0
+    }
+  ],
+  "rank.continuity": [
+    {
+      "id": "qa",
+      "score": 2
+    },
+    {
+      "id": "root",
+      "score": 1
+    },
+    {
+      "id": "dev",
+      "score": 0
+    },
+    {
+      "id": "orphan",
+      "score": 0
+    }
+  ],
+  "rank.namemention": [
+    {
+      "id": "dev",
+      "score": 100
+    },
+    {
+      "id": "root",
+      "score": 1
+    },
+    {
+      "id": "orphan",
+      "score": 0
+    },
+    {
+      "id": "qa",
+      "score": 0
+    }
+  ],
+  "route.list": {
+    "status": 200
+  },
+  "route.create.invalid": {
+    "status": 400,
+    "payload": {
+      "error": "Invalid room request."
+    }
+  },
+  "route.create.both": {
+    "status": 200
+  },
+  "route.create.agent": {
+    "status": 200
+  },
+  "route.create.serviceError": {
+    "status": 400,
+    "payload": {
+      "error": "Invalid room request."
+    }
+  },
+  "route.get.missing": {
+    "status": 404,
+    "payload": {
+      "error": "Team room not found."
+    }
+  },
+  "route.get.ok": {
+    "status": 200
+  },
+  "route.post.invalid": {
+    "status": 400,
+    "payload": {
+      "error": "Invalid team message."
+    }
+  },
+  "route.post.ok": {
+    "status": 201,
+    "payload": {
+      "message": {
+        "id": "m2",
+        "content": "hello",
+        "sender": {
+          "kind": "user",
+          "id": "user-1",
+          "name": "Ada",
+          "avatar": null
+        }
+      }
+    }
+  },
+  "route.post.notfound": {
+    "status": 400,
+    "payload": {
+      "error": "Team room not found."
+    }
+  },
+  "route.post.calls": [
+    {
+      "content": "hello",
+      "clientKey": "k1",
+      "sender": {
+        "kind": "user",
+        "id": "user-1",
+        "name": "Ada",
+        "avatar": null
+      }
+    },
+    {
+      "content": "hello",
+      "clientKey": "k1",
+      "sender": {
+        "kind": "user",
+        "id": "user-1",
+        "name": "Ada",
+        "avatar": null
+      }
+    }
+  ],
+  "matrix.LogLevel": {
+    "TRACE": {
+      "level": "TRACE",
+      "sequence": -1
+    },
+    "DEBUG": {
+      "level": "DEBUG",
+      "sequence": 0
+    },
+    "INFO": {
+      "level": "INFO",
+      "sequence": 1
+    },
+    "WARN": {
+      "level": "WARN",
+      "sequence": 2
+    },
+    "ERROR": {
+      "level": "ERROR",
+      "sequence": 3
+    }
+  },
+  "matrix.LogService.default": {},
+  "matrix.LogService.tiers": [
+    [
+      "ALL",
+      null
+    ],
+    [
+      "TRACE",
+      {
+        "level": "TRACE",
+        "sequence": -1
+      }
+    ],
+    [
+      "INFO",
+      {
+        "level": "INFO",
+        "sequence": 1
+      }
+    ],
+    [
+      "WARN",
+      {
+        "level": "WARN",
+        "sequence": 2
+      }
+    ],
+    [
+      "ERROR",
+      {
+        "level": "ERROR",
+        "sequence": 3
+      }
+    ]
+  ],
+  "matrix.SimpleFs.new": {},
+  "matrix.SimpleFs.file": {
+    "syncToken": null,
+    "filter": null,
+    "appserviceUsers": {},
+    "appserviceTransactions": {},
+    "kvStore": {}
+  },
+  "matrix.SimpleFs.roundtrip": {
+    "thrown": "TypeError: s.setValue is not a function. (In 's.setValue(\"k\", { n: 1 })', 's.setValue' is undefined)"
+  },
+  "matrix.SimpleFs.disk": {
+    "syncToken": "tok-1",
+    "filter": "f-1",
+    "appserviceUsers": {},
+    "appserviceTransactions": {},
+    "kvStore": {}
+  },
+  "matrix.Crypto.new": {
+    "mode": "775",
+    "file": {}
+  }
+}

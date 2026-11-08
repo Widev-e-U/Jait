@@ -11,6 +11,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(60);
+
 pub static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub fn check_cancelled() -> Result<()> {
@@ -161,7 +163,7 @@ impl Gateway {
                 .spawn()
                 .context("could not start owned disposable backend")?,
         );
-        let deadline = Instant::now() + Duration::from_secs(60);
+        let deadline = Instant::now() + STARTUP_TIMEOUT;
         while Instant::now() < deadline {
             check_cancelled()?;
             if let Some(status) = self.child.as_mut().unwrap().try_wait()? {

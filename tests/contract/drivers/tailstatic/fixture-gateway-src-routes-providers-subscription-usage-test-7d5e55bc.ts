@@ -140,7 +140,10 @@ const __jait_hook_538 = () => vi.unstubAllGlobals();
 try {
 await (async()=>{
 
-  const mock = vi.fn().mockResolvedValue(new Response(html)); vi.stubGlobal("fetch", mock);
+  const mock = vi.fn()
+    .mockRejectedValueOnce(new Error("daemon offline"))
+    .mockResolvedValueOnce(new Response(html));
+  vi.stubGlobal("fetch", mock);
   const { app, token, recordOllamaUsage } = await setup({ OLLAMA_URL: "http://localhost:11434", OLLAMA_SESSION_COOKIE: "session" });
   try {
     const headers = { authorization: `Bearer ${token}` };
@@ -148,7 +151,9 @@ await (async()=>{
     __jait_capture(1, (mock.mock.calls));
     __jait_capture(2, ((await app.inject({ url: "/api/provider-usage/summary", headers })).statusCode));
     __jait_capture(3, (mock.mock.calls));
-    __jait_capture(4, (recordOllamaUsage.mock.calls));
+    __jait_capture(4, (mock.mock.calls[0]?.[0]));
+    __jait_capture(5, (mock.mock.calls[1]?.[0]));
+    __jait_capture(6, (recordOllamaUsage.mock.calls));
   } finally { await app.close(); }
 
 })();
@@ -160,7 +165,7 @@ await __jait_hook_538();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_providers_subscription_usage_test_ts_53_1": {
+case "tailstatic_packages_gateway_src_routes_providers_subscription_usage_test_ts_58_1": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 const html = `<div data-usage-meter><div data-usage-track aria-label="Session usage: 40%"></div></div><div data-time="2026-10-09T12:00:00Z"></div><div data-usage-meter><div data-usage-track aria-label="Weekly usage: 80%"></div></div>`;
@@ -200,7 +205,7 @@ await __jait_hook_538();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_providers_subscription_usage_test_ts_67_1": {
+case "tailstatic_packages_gateway_src_routes_providers_subscription_usage_test_ts_72_1": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 const html = `<div data-usage-meter><div data-usage-track aria-label="Session usage: 40%"></div></div><div data-time="2026-10-09T12:00:00Z"></div><div data-usage-meter><div data-usage-track aria-label="Weekly usage: 80%"></div></div>`;
@@ -220,7 +225,9 @@ try {
 await (async()=>{
 
   let finish!: (value: Response) => void;
-  const mock = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
+  const mock = vi.fn((url: string) => url === "http://localhost:11434/api/me"
+    ? Promise.reject(new Error("daemon offline"))
+    : new Promise<Response>(resolve => { finish = resolve; }));
   vi.stubGlobal("fetch", mock);
   const { app, token, recordOllamaUsage } = await setup({ OLLAMA_URL: "http://localhost:11434", OLLAMA_SESSION_COOKIE: "session" });
   try {

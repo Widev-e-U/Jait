@@ -346,6 +346,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Run tests",
           start: true,
           message: "bun run test",
@@ -375,7 +377,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_204_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_206_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -528,7 +530,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_234_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_236_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -662,6 +664,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Prompt alias",
           start: true,
           prompt: "inspect ui",
@@ -684,7 +688,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_267_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_271_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -825,6 +829,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Token thread",
           start: true,
           prompt: "inspect ui",
@@ -849,7 +855,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_321_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_327_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -984,6 +990,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           start: true,
@@ -1011,7 +1019,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_360_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_368_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -1147,6 +1155,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           start: true,
@@ -1173,7 +1183,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_399_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_409_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -1311,6 +1321,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           start: true,
@@ -1338,7 +1350,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_441_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_453_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -1478,6 +1490,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           kind: "delivery",
           start: true,
           prompt: "run scheduled quality task",
@@ -1503,7 +1517,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_483_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_497_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -1643,6 +1657,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Jait code quality rotation",
           kind: "delivery",
           start: true,
@@ -1667,7 +1683,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_524_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_540_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -1820,6 +1836,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           workingDirectory: process.cwd(),
@@ -1848,7 +1866,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_582_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_600_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -1982,6 +2000,7 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          model: "gpt-5-codex",
           title: "Cron provider override",
           kind: "delivery",
           providerId: "codex",
@@ -2007,7 +2026,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_618_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_637_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -2161,6 +2180,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Cron task",
           kind: "delivery",
           workingDirectory: projectRoot,
@@ -2199,7 +2220,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_689_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_710_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -2337,6 +2358,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "One-shot delivery",
           kind: "delivery",
           start: true,
@@ -2365,7 +2388,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_732_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_755_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -2503,6 +2526,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "One-shot helper",
           kind: "delegation",
           start: true,
@@ -2534,7 +2559,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_778_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_803_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -2672,6 +2697,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create",
+          providerId: "codex",
+          model: "gpt-5-codex",
           title: "Delivery thread",
           kind: "delivery",
           start: true,
@@ -2703,7 +2730,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_824_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_851_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -2871,7 +2898,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_872_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_899_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3026,6 +3053,7 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "start",
+          model: "gpt-5-codex",
           threadId: thread.id,
           message: "Apply the fix",
         },
@@ -3051,7 +3079,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_929_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_957_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3170,12 +3198,18 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      // User settings, session cliModels and the caller context all say codex.
+      // None of that may be inherited: the user has to name the provider.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
 
+      const threadService = new ThreadService(db);
       const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
+        threadService,
         providerRegistry,
         userService,
         sessionState,
@@ -3188,13 +3222,13 @@ await (async()=>{
           start: true,
           message: "inspect ui",
         },
-        context,
+        { ...context, providerId: "codex", model: "gpt-5-codex" },
       );
 
       __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
-      __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.providerSessionId));
+      __jait_capture(1, ((result as { message: string }).message));
+      __jait_captureType(2, (result.data));
+      __jait_captureType(3, (provider.lastStartOptions));
     } finally {
       sqlite.close();
     }
@@ -3208,7 +3242,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_963_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_999_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3336,10 +3370,12 @@ await (async()=>{
       providerRegistry.register(jaitProvider);
 
       const threadService = new ThreadService(db);
+      // The thread was created by a user who explicitly chose jait + this model.
       const thread = threadService.create({
         userId: context.userId,
         title: "Jait worker driven from Codex",
         providerId: "jait",
+        model: "deepseek-v4.1-flash:cloud",
       });
 
       const tool = createThreadControlTool({
@@ -3359,12 +3395,12 @@ await (async()=>{
       );
 
       __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      const data = result.data as { thread: { providerId: string; model: string | null } };
       __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.providerSessionId));
+      __jait_capture(2, (data.thread.model));
       __jait_capture(3, (jaitProvider.sendTurn.mock.calls));
-      // The caller's model belongs to codex and must not leak into the jait thread.
-      __jait_captureType(4, (jaitProvider.lastStartOptions?.model));
+      // The caller's codex model must not leak into the jait thread.
+      __jait_capture(4, (jaitProvider.lastStartOptions?.model));
     } finally {
       sqlite.close();
     }
@@ -3378,7 +3414,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1010_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1048_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3497,7 +3533,11 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait");
+      // The jait chat, its user settings and its session state all carry a model.
+      // None of it may be used for the codex thread: the loop never picks a model.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait", {
+        model: "jait-default",
+      });
       const providerRegistry = new ProviderRegistry();
       const codexProvider = new MockThreadProvider("codex");
       providerRegistry.register(new MockThreadProvider("jait"));
@@ -3517,7 +3557,7 @@ await (async()=>{
         sessionState,
       });
 
-      const result = await tool.execute(
+      const refused = await tool.execute(
         {
           action: "start",
           threadId: thread.id,
@@ -3526,12 +3566,30 @@ await (async()=>{
         { ...context, providerId: "jait", model: "jait-default" },
       );
 
-      __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
-      __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.providerSessionId));
-      __jait_capture(3, (codexProvider.sendTurn.mock.calls));
-      __jait_captureType(4, (codexProvider.lastStartOptions?.model));
+      __jait_capture(0, (refused.ok));
+      __jait_capture(1, ((refused as { message: string }).message));
+      __jait_captureType(2, (codexProvider.lastStartOptions));
+      __jait_captureType(3, (threadService.getById(thread.id)?.model));
+
+      // The explicit model the caller passes is persisted before the thread starts.
+      const started = await tool.execute(
+        {
+          action: "start",
+          threadId: thread.id,
+          model: "gpt-5-codex",
+          message: "Run the delegated worker",
+        },
+        { ...context, providerId: "jait", model: "jait-default" },
+      );
+
+      __jait_capture(4, (started.ok));
+      const data = started.data as { thread: { providerId: string; model: string | null } };
+      __jait_capture(5, (data.thread.providerId));
+      __jait_capture(6, (data.thread.model));
+      __jait_capture(7, (threadService.getById(thread.id)?.model));
+      __jait_capture(8, (codexProvider.sendTurn.mock.calls));
+      // The jait chat's model never reaches the codex thread.
+      __jait_capture(9, (codexProvider.lastStartOptions?.model));
     } finally {
       sqlite.close();
     }
@@ -3545,7 +3603,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1054_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1114_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3664,7 +3722,11 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      // The calling chat runs codex with gpt-5-codex. The thread stores
+      // gpt-5-mini because that is what the user explicitly picked for it.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
       const provider = new MockThreadProvider("codex");
       providerRegistry.register(provider);
@@ -3674,6 +3736,7 @@ await (async()=>{
         userId: context.userId,
         title: "Same-provider thread",
         providerId: "codex",
+        model: "gpt-5-mini",
       });
 
       const tool = createThreadControlTool({
@@ -3693,6 +3756,8 @@ await (async()=>{
       );
 
       __jait_capture(0, (result.ok));
+      // The caller's "gpt-5-codex" must not leak in: only the model explicitly
+      // chosen for the thread may run it.
       __jait_capture(1, (provider.lastStartOptions?.model));
     } finally {
       sqlite.close();
@@ -3707,7 +3772,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1093_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1160_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3826,11 +3891,14 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      // User settings and session cliModels both select codex + gpt-5-codex.
+      // Neither may be used to create or start a thread.
       const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
         model: "gpt-5-codex",
       });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -3839,7 +3907,7 @@ await (async()=>{
         sessionState,
       });
 
-      const result = await tool.execute(
+      const noProvider = await tool.execute(
         {
           action: "create",
           title: "Use selected model",
@@ -3849,10 +3917,23 @@ await (async()=>{
         context,
       );
 
-      __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; model: string | null } };
-      __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.model));
+      __jait_capture(0, (noProvider.ok));
+      __jait_capture(1, ((noProvider as { message: string }).message));
+
+      const noModel = await tool.execute(
+        {
+          action: "create",
+          title: "Use selected model",
+          providerId: "codex",
+          start: true,
+          message: "inspect ui",
+        },
+        context,
+      );
+
+      __jait_capture(2, (noModel.ok));
+      __jait_capture(3, ((noModel as { message: string }).message));
+      __jait_captureType(4, (provider.lastStartOptions));
     } finally {
       sqlite.close();
     }
@@ -3866,7 +3947,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1129_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1214_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -3985,9 +4066,14 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait");
+      // User settings and session state both point at codex + gpt-5-codex.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("jait"));
+      const jaitProvider = new MockThreadProvider("jait");
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(jaitProvider);
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -4000,6 +4086,8 @@ await (async()=>{
         {
           action: "create",
           title: "Use selected jait provider",
+          providerId: "jait",
+          model: "deepseek-v4.1-flash:cloud",
           start: true,
           message: "inspect ui",
         },
@@ -4007,9 +4095,13 @@ await (async()=>{
       );
 
       __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; providerSessionId: string | null };
+      };
       __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.providerSessionId));
+      __jait_capture(2, (data.thread.model));
+      __jait_capture(3, (data.thread.providerSessionId));
+      __jait_capture(4, (jaitProvider.lastStartOptions?.model));
     } finally {
       sqlite.close();
     }
@@ -4023,7 +4115,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1163_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1259_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -4142,14 +4234,17 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      // gpt-4.1 sits in user settings and session state; it must not be stored.
       const { userService, sessionState, context } = createSelectedProviderContext(db, "jait", {
         model: "gpt-4.1",
       });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("jait"));
+      const provider = new MockThreadProvider("jait");
+      providerRegistry.register(provider);
 
+      const threadService = new ThreadService(db);
       const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
+        threadService,
         providerRegistry,
         userService,
         sessionState,
@@ -4159,7 +4254,8 @@ await (async()=>{
         {
           action: "create",
           title: "Use selected jait model",
-          start: true,
+          providerId: "jait",
+          start: false,
           message: "inspect ui",
         },
         context,
@@ -4168,7 +4264,10 @@ await (async()=>{
       __jait_capture(0, (result.ok));
       const data = result.data as { thread: { providerId: string; model: string | null } };
       __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.model));
+      // The model selected in user settings/session state is ignored.
+      __jait_captureType(2, (data.thread.model));
+      __jait_captureType(3, (provider.lastStartOptions));
+      __jait_captureType(4, (threadService.getById((result.data as { thread: { id: string } }).thread.id)?.model));
     } finally {
       sqlite.close();
     }
@@ -4182,7 +4281,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1199_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1304_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -4320,6 +4419,7 @@ await (async()=>{
 
       __jait_capture(0, (result.ok));
       __jait_capture(1, (result.message));
+      __jait_captureType(2, (result.data));
     } finally {
       sqlite.close();
     }
@@ -4333,7 +4433,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1229_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1335_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -4454,6 +4554,7 @@ await (async()=>{
     try {
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -4464,6 +4565,8 @@ await (async()=>{
         {
           action: "create",
           title: "Use live codex context",
+          providerId: "jait",
+          model: "deepseek-v4.1-flash:cloud",
           prompt: "inspect ui",
         },
         makeContext("user-1", {
@@ -4474,9 +4577,13 @@ await (async()=>{
       );
 
       __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; model: string | null; runtimeMode: string } };
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; runtimeMode: string };
+      };
+      // The live caller context said codex / gpt-5-codex; it is ignored.
       __jait_capture(1, (data.thread.providerId));
       __jait_capture(2, (data.thread.model));
+      // Runtime mode is still resolved from context (unchanged behavior).
       __jait_capture(3, (data.thread.runtimeMode));
     } finally {
       sqlite.close();
@@ -4491,7 +4598,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1264_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1377_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -4622,6 +4729,7 @@ await (async()=>{
 
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
@@ -4630,7 +4738,9 @@ await (async()=>{
         sessionState,
       });
 
-      const result = await tool.execute(
+      // Nothing explicitly chosen: user settings and session state alone are
+      // not a user decision, so the call is refused.
+      const refused = await tool.execute(
         {
           action: "create",
           title: "Use selected chat defaults",
@@ -4639,11 +4749,29 @@ await (async()=>{
         makeContext(user.id),
       );
 
-      __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; model: string | null; runtimeMode: string } };
-      __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.model));
-      __jait_capture(3, (data.thread.runtimeMode));
+      __jait_capture(0, (refused.ok));
+      __jait_capture(1, ((refused as { message: string }).message));
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Use selected chat defaults",
+          providerId: "jait",
+          model: "deepseek-v4.1-flash:cloud",
+          prompt: "inspect ui",
+        },
+        makeContext(user.id),
+      );
+
+      __jait_capture(2, (result.ok));
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; runtimeMode: string };
+      };
+      // User settings said codex and the session said codex/gpt-5-codex: ignored.
+      __jait_capture(3, (data.thread.providerId));
+      __jait_capture(4, (data.thread.model));
+      // Runtime mode still comes from session state (unchanged behavior).
+      __jait_capture(5, (data.thread.runtimeMode));
     } finally {
       sqlite.close();
     }
@@ -4657,7 +4785,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1307_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1441_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -4784,7 +4912,8 @@ await (async()=>{
       });
 
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const codexProvider = new MockThreadProvider("codex");
+      providerRegistry.register(codexProvider);
       providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
@@ -4792,7 +4921,7 @@ await (async()=>{
         providerRegistry,
       });
 
-      const result = await tool.execute(
+      const refused = await tool.execute(
         {
           action: "start",
           threadId: thread.id,
@@ -4801,10 +4930,28 @@ await (async()=>{
         makeContext("user-1"),
       );
 
-      __jait_capture(0, (result.ok));
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
-      __jait_capture(1, (data.thread.providerId));
-      __jait_capture(2, (data.thread.providerSessionId));
+      __jait_capture(0, (refused.ok));
+      __jait_capture(1, ((refused as { message: string }).message));
+      __jait_captureType(2, (codexProvider.lastStartOptions));
+
+      const result = await tool.execute(
+        {
+          action: "start",
+          threadId: thread.id,
+          model: "gpt-5-codex",
+          message: "inspect ui",
+        },
+        makeContext("user-1"),
+      );
+
+      __jait_capture(3, (result.ok));
+      const data = result.data as {
+        thread: { providerId: string; model: string | null; providerSessionId: string | null };
+      };
+      // The stored provider is kept; only the model had to be supplied.
+      __jait_capture(4, (data.thread.providerId));
+      __jait_capture(5, (data.thread.model));
+      __jait_capture(6, (data.thread.providerSessionId));
     } finally {
       sqlite.close();
     }
@@ -4818,7 +4965,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1345_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1498_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -4960,6 +5107,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-codex",
           prompt: "inspect ui",
           threads: [
             { title: "Thread A" },
@@ -4988,7 +5137,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1392_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1547_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -5150,6 +5299,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-codex",
           prompt: "inspect ui",
           start: true,
           threads: [
@@ -5188,7 +5339,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1472_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1629_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -5307,9 +5458,14 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      // The selected provider/model live in user settings and session state,
+      // but a bulk create still needs an explicit choice from the caller.
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
+      const codexProvider = new MockThreadProvider("codex");
+      providerRegistry.register(codexProvider);
       providerRegistry.register(new MockThreadProvider("claude-code"));
 
       const tool = createThreadControlTool({
@@ -5319,22 +5475,34 @@ await (async()=>{
         sessionState,
       });
 
-      const result = await tool.execute(
+      const noProvider = await tool.execute(
         {
           action: "create_many",
           prompt: "inspect ui",
-          threads: [
-            { title: "Thread A" },
-            { title: "Thread B" },
-          ],
+          threads: [{ title: "Thread A" }, { title: "Thread B" }],
         },
         context,
       );
 
-      __jait_capture(0, (result.ok));
-      const data = result.data as { threads: Array<{ providerId: string }> };
-      __jait_capture(1, (data.threads));
-      __jait_capture(2, (data.threads.every((thread) => thread.providerId === "codex")));
+      __jait_capture(0, (noProvider.ok));
+      __jait_capture(1, ((noProvider as { message: string }).message));
+      __jait_captureType(2, (noProvider.data));
+
+      const noModel = await tool.execute(
+        {
+          action: "create_many",
+          providerId: "codex",
+          prompt: "inspect ui",
+          threads: [{ title: "Thread A" }, { title: "Thread B" }],
+        },
+        context,
+      );
+
+      __jait_capture(3, (noModel.ok));
+      __jait_capture(4, ((noModel as { message: string }).message));
+      __jait_captureType(5, (noModel.data));
+      // Nothing was created, so nothing could start a turn.
+      __jait_captureType(6, (codexProvider.lastStartOptions));
     } finally {
       sqlite.close();
     }
@@ -5348,7 +5516,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1509_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1683_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -5478,11 +5646,10 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-mini",
           prompt: "inspect ui",
-          threads: [
-            { title: "Thread A" },
-            { title: "Thread B" },
-          ],
+          threads: [{ title: "Thread A" }, { title: "Thread B" }],
         },
         makeContext("user-1", {
           providerId: "codex",
@@ -5492,10 +5659,14 @@ await (async()=>{
       );
 
       __jait_capture(0, (result.ok));
-      const data = result.data as { threads: Array<{ providerId: string; model: string | null; runtimeMode: string }> };
+      const data = result.data as {
+        threads: Array<{ providerId: string; model: string | null; runtimeMode: string }>;
+      };
       __jait_capture(1, (data.threads));
       __jait_capture(2, (data.threads.every((thread) => thread.providerId === "codex")));
-      __jait_capture(3, (data.threads.every((thread) => thread.model === "gpt-5-codex")));
+      // The caller context said "gpt-5-codex"; the explicit "gpt-5-mini" wins.
+      __jait_capture(3, (data.threads.every((thread) => thread.model === "gpt-5-mini")));
+      // Runtime mode still follows the caller context (unchanged behavior).
       __jait_capture(4, (data.threads.every((thread) => thread.runtimeMode === "supervised")));
     } finally {
       sqlite.close();
@@ -5510,7 +5681,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1548_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1725_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -5641,6 +5812,8 @@ await (async()=>{
       const result = await tool.execute(
         {
           action: "create_many",
+          providerId: "codex",
+          model: "gpt-5-codex",
           prompt: "inspect ui",
           threads: [
             { title: "Thread A" },
@@ -5669,7 +5842,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1584_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1763_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -5851,7 +6024,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1643_3_each0": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1822_3_each0": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -5999,7 +6172,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1643_3_each1": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1822_3_each1": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -6147,7 +6320,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1643_3_each2": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1822_3_each2": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -6295,7 +6468,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1665_3_each0": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1844_3_each0": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -6448,7 +6621,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1665_3_each1": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1844_3_each1": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -6601,7 +6774,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1692_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1871_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -6776,7 +6949,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1744_3": {
+case "tailstatic_packages_gateway_src_tools_thread_tools_test_ts_1923_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {

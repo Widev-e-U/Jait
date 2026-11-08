@@ -73,3 +73,46 @@ test('scroll to latest remains clickable beside the minimap', async ({ page }) =
   await button.click()
   await expect(button).toBeHidden()
 })
+
+test('streamed wide Markdown stays within the mobile chat column', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 851 })
+  await page.goto('/src/e2e-fixtures/index.html?overflow', { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
+  await page.getByRole('button', { name: 'Stream wide content' }).click()
+  const content = page.locator('[data-message-from="assistant"] [data-message-from="assistant"]').first()
+  await expect(content.locator('table')).toBeVisible()
+  const column = page.getByTestId('fixture-composer-column')
+  const columnBox = (await column.boundingBox())!
+  const contentBox = (await content.boundingBox())!
+  expect(contentBox.x + contentBox.width).toBeLessThanOrEqual(columnBox.x + columnBox.width + 1)
+  const transcript = page.locator('.chat-conversation-viewport .overflow-y-auto').first()
+  await expect.poll(() => transcript.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1)
+  await expect.poll(() => content.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    return Array.from(element.querySelectorAll('*')).filter((child) => {
+      const rect = child.getBoundingClientRect()
+      // Children inside a horizontal scroll area may extend beyond its bounds.
+      const scroller = child.closest('.overflow-x-auto')
+      return !scroller && (rect.right > bounds.right + 1 || rect.left < bounds.left - 1)
+    }).map((child) => child.tagName + ':' + child.className)
+  })).toEqual([])
+  const tableScroller = content.locator('table').locator('..')
+  await expect.poll(() => tableScroller.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+  const codeScroller = content.locator('code.whitespace-pre').locator('..')
+  await expect.poll(() => codeScroller.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+})
+
+
+test('reloaded assistant message actions stay visible inside the mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 851 })
+  await page.goto('/src/e2e-fixtures/index.html?reloaded', { waitUntil: 'domcontentloaded' })
+  await page.evaluate(() => import('/src/e2e-fixtures/chat-column-alignment.tsx'))
+  const actions = page.getByRole('button', { name: 'Message actions' }).first()
+  await expect(actions).toBeVisible()
+  const bounds = (await actions.boundingBox())!
+  expect(bounds.x).toBeGreaterThanOrEqual(0)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(393)
+  await actions.click()
+  await expect(page.getByRole('menuitem', { name: 'Copy message' })).toBeVisible()
+})

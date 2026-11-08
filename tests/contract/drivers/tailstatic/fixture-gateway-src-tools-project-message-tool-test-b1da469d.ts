@@ -11,6 +11,7 @@ import type {
 import { ProviderRegistry } from "../../../../packages/gateway/src/providers/registry.js";
 import { ProjectService } from "../../../../packages/gateway/src/services/projects.js";
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
+import { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
 import { ThreadService } from "../../../../packages/gateway/src/services/threads.js";
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
 import type { WsControlPlane } from "../../../../packages/gateway/src/ws.js";
@@ -57,7 +58,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_88_3": {
+case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_89_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -158,6 +159,7 @@ await (async()=>{
           projectRoot: "/tmp/other-project",
           message: "The nightly build failed — please investigate.",
           providerId: "codex",
+          model: "gpt-5-codex",
         },
         makeContext(user.id),
       );
@@ -199,7 +201,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_157_3": {
+case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_159_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -303,6 +305,7 @@ await (async()=>{
           projectId: existingProject.id,
           message: "Please check the flaky test.",
           providerId: "codex",
+          model: "gpt-5-codex",
         },
         makeContext(user.id),
       );
@@ -323,7 +326,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_201_3": {
+case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_204_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -405,7 +408,8 @@ await (async()=>{
       const sessionService = new SessionService(db);
       const threadService = new ThreadService(db);
       const providerRegistry = new ProviderRegistry();
-      // thread.control falls back to the user's last-selected provider ("jait").
+      // thread.control resumes on the provider+model recorded on this chat,
+      // which the user picked; nothing here is chosen automatically.
       const provider = new MockThreadProvider("jait");
       providerRegistry.register(provider);
       const broadcastToUser = vi.fn();
@@ -413,6 +417,10 @@ await (async()=>{
 
       // The chat the caller is currently in — NOT part of any project yet.
       const currentChat = sessionService.create({ userId: user.id, name: "My Chat" });
+      new SessionStateService(db).set(currentChat.id, {
+        "chat.provider": "jait",
+        "chat.cliModels": { jait: "llama3" },
+      });
 
       const existingProject = projectService.create({
         userId: user.id,
@@ -427,6 +435,7 @@ await (async()=>{
         threadService,
         providerRegistry,
         userService,
+        sessionState: new SessionStateService(db),
         ws,
       });
 
@@ -477,7 +486,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_275_3": {
+case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_284_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {
@@ -579,7 +588,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_297_3": {
+case "tailstatic_packages_gateway_src_tools_project_message_tool_test_ts_306_3": {
 
 
 class MockThreadProvider implements CliProviderAdapter {

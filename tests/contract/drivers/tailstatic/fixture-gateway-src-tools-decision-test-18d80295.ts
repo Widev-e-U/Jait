@@ -43,13 +43,13 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
 case "tailstatic_packages_gateway_src_tools_decision_test_ts_8_3": {
-await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ evaluateDecision: vi.fn() }));
-const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
 const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
 const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
-const __jait_hook_472 = () => { vi.mocked(evaluateDecision).mockReset(); };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
 /*__jait_scope_open__*/{
-await __jait_hook_472();
+await __jait_hook_580();
 try {
 await (async()=>{
 
@@ -77,13 +77,13 @@ await (async()=>{
 break;
 }
 case "tailstatic_packages_gateway_src_tools_decision_test_ts_23_3": {
-await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ evaluateDecision: vi.fn() }));
-const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
 const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
 const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
-const __jait_hook_472 = () => { vi.mocked(evaluateDecision).mockReset(); };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
 /*__jait_scope_open__*/{
-await __jait_hook_472();
+await __jait_hook_580();
 try {
 await (async()=>{
 
@@ -100,14 +100,235 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3": {
-await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), () => ({ evaluateDecision: vi.fn() }));
-const { evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each0": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
 const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
 const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
-const __jait_hook_472 = () => { vi.mocked(evaluateDecision).mockReset(); };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
 /*__jait_scope_open__*/{
-await __jait_hook_472();
+/*__jait_scope_open__*/{
+const code = "not_configured";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each1": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const code = "invalid_input";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each2": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const code = "cooldown";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const code = "invalid_response";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each4": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const code = "timeout";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each5": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const code = "cancelled";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_28_3_each6": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+/*__jait_scope_open__*/{
+const code = "unavailable";
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError(code, "private backend details"));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result), ({ ok: false, data: { code } }));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_34_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+await __jait_hook_580();
+try {
+await (async()=>{
+
+    vi.mocked(evaluateDecision).mockRejectedValue(new DecisionError("upstream_http", "secret", 401));
+    const result = await createDecisionEvaluateTool().execute({ state: "Fixture", questions: [{ id: "ready", type: "noul", instructions: "Ready?" }] }, context);
+    __jait_capture(0, (result));
+    __jait_capture(1, (result.message));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_decision_test_ts_40_3": {
+await vi.mock(__jait_fileURLToPath(new URL("../../../../packages/gateway/src/services/system-one.ts",import.meta.url)), async (importOriginal) => ({ ...(await importOriginal<typeof import("../services/system-one.js")>()), evaluateDecision: vi.fn() }));
+const { DecisionError, evaluateDecision } = await import("../../../../packages/gateway/src/services/system-one.js");
+const { createDecisionEvaluateTool } = await import("../../../../packages/gateway/src/tools/decision.js");
+const context = { sessionId: "decision-tests", actionId: "decision-action", projectRoot: "/project", requestedBy: "test", apiKeys: { SYSTEM_ONE_MODEL: "fixture-model" }, signal: new AbortController().signal };
+const __jait_hook_580 = () => { vi.mocked(evaluateDecision).mockReset(); };
+/*__jait_scope_open__*/{
+await __jait_hook_580();
 try {
 await (async()=>{
 

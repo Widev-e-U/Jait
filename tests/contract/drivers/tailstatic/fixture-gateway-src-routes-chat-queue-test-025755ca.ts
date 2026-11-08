@@ -5,6 +5,7 @@ import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
 import { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
+import { AuditWriter } from "../../../../packages/gateway/src/services/audit.js";
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
 import {
   createServer as createHttpServer,
@@ -54,7 +55,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_92_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_111_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -64,6 +65,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -110,22 +122,150 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("browser-handoff-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Browser handoff" });
+    recordSelection(sessionState, session.id);
+    const previewService = { setSharedWithAgent: vi.fn(), list: () => [] };
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService, previewService: previewService as any });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const started = new Promise<void>(resolve => { slowOllamaStarted = resolve; });
+    const active = app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "slow first" } });
+    await started;
+    __jait_capture(0, (previewService.setSharedWithAgent.mock.calls), ([session.id,true]));
+    previewService.setSharedWithAgent.mockClear();
+    const invalid = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/steer`, headers, payload: { message: " " } });
+    __jait_capture(1, (invalid.statusCode));
+    __jait_capture(2, (previewService.setSharedWithAgent.mock.calls));
+    const steer = await app.inject({ method: "POST", url: `/api/sessions/${session.id}/steer`, headers, payload: { message: "continue" } });
+    __jait_capture(3, (steer.statusCode));
+    __jait_capture(4, (previewService.setSharedWithAgent.mock.calls), ([session.id,true]));
+    previewService.setSharedWithAgent.mockClear();
+    const queued = await app.inject({ method: "POST", url: "/api/chat", headers, payload: { sessionId: session.id, content: "queued" } });
+    __jait_capture(5, (queued.statusCode));
+    __jait_capture(6, (previewService.setSharedWithAgent.mock.calls), ([session.id,true]));
+    releaseSlowOllama?.();
+    await active;
+  
+})();
+
+} finally {
+await __jait_hook_3632();
+await __jait_hook_3472();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_145_3": {
+
+
+async function collectBody(req: IncomingMessage): Promise<string> {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  return body;
+}
+let slowOllamaStarted: (() => void) | null = null;
+let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
+function startMockOllama(): Promise<Server> {
+  return new Promise((resolve) => {
+    const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
+      const isNative = req.url?.endsWith("/api/chat");
+      const isOpenAI = req.url?.endsWith("/chat/completions");
+      if (req.method !== "POST" || (!isNative && !isOpenAI)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
+      const rawBody = await collectBody(req);
+      const { messages } = JSON.parse(rawBody) as {
+        messages: { role: string; content: string }[];
+      };
+      const lastUserMessage = messages.filter((message) => message.role === "user").pop()?.content ?? "";
+
+      if (lastUserMessage === "slow first") {
+        slowOllamaStarted?.();
+        await new Promise<void>((resolve) => { releaseSlowOllama = resolve; });
+      }
+
+      if (isNative) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: `Echo: ${lastUserMessage}` }, done: false }) + "\n");
+        res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+        res.end();
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      const chunk = {
+        choices: [{ delta: { content: `Echo: ${lastUserMessage}` }, finish_reason: null }],
+      };
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+    });
+
+    server.listen(0, "127.0.0.1", () => resolve(server));
+  });
+}
+/*__jait_scope_open__*/{
+let mockOllama: Server;
+let ollamaUrl: string;
+let app: Awaited<ReturnType<typeof createServer>> | null = null;
+const __jait_hook_3288 = async () => {
+    mockOllama = await startMockOllama();
+    const address = mockOllama.address() as AddressInfo;
+    ollamaUrl = `http://127.0.0.1:${address.port}`;
+  };
+const __jait_hook_3472 = async () => {
+    releaseSlowOllama?.();
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
+    await app?.close();
+    app = null;
+  };
+const __jait_hook_3632 = async () => {
+    await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
+  };
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -141,6 +281,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("stop-steer-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Stop and steer" });
+    recordSelection(sessionState, session.id);
     app = await createServer(config, { db, sqlite, sessionService, sessionState, userService });
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
     const headers = { authorization: `Bearer ${token}` };
@@ -183,14 +324,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_145_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_199_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -200,6 +341,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -246,22 +398,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -284,6 +436,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-resend-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Re-send" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -330,14 +483,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_209_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_264_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -347,6 +500,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -393,22 +557,140 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = { ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl, jwtSecret: "test-jwt-secret" };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("message-identity", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Identity" });
+    recordSelection(sessionState, session.id);
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+    const payload = { sessionId: session.id, content: "continue", clientMessageId: "user-12345678-1234" };
+    const sent = await app.inject({ method: "POST", url: "/api/chat", headers, payload });
+    __jait_capture(0, (sent.statusCode));
+    const response = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+    const messages = (response.json() as { messages: Array<{ id: string; role: string; clientMessageId?: string }> }).messages;
+    __jait_capture(1, (messages.find(message => message.role === "user")?.clientMessageId), (payload.clientMessageId));
+    const duplicate = await app.inject({ method: "POST", url: "/api/chat", headers, payload });
+    __jait_capture(2, (duplicate.statusCode));
+  
+})();
+
+} finally {
+await __jait_hook_3632();
+await __jait_hook_3472();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_288_3": {
+
+
+async function collectBody(req: IncomingMessage): Promise<string> {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  return body;
+}
+let slowOllamaStarted: (() => void) | null = null;
+let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
+function startMockOllama(): Promise<Server> {
+  return new Promise((resolve) => {
+    const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
+      const isNative = req.url?.endsWith("/api/chat");
+      const isOpenAI = req.url?.endsWith("/chat/completions");
+      if (req.method !== "POST" || (!isNative && !isOpenAI)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
+      const rawBody = await collectBody(req);
+      const { messages } = JSON.parse(rawBody) as {
+        messages: { role: string; content: string }[];
+      };
+      const lastUserMessage = messages.filter((message) => message.role === "user").pop()?.content ?? "";
+
+      if (lastUserMessage === "slow first") {
+        slowOllamaStarted?.();
+        await new Promise<void>((resolve) => { releaseSlowOllama = resolve; });
+      }
+
+      if (isNative) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: `Echo: ${lastUserMessage}` }, done: false }) + "\n");
+        res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+        res.end();
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      const chunk = {
+        choices: [{ delta: { content: `Echo: ${lastUserMessage}` }, finish_reason: null }],
+      };
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+    });
+
+    server.listen(0, "127.0.0.1", () => resolve(server));
+  });
+}
+/*__jait_scope_open__*/{
+let mockOllama: Server;
+let ollamaUrl: string;
+let app: Awaited<ReturnType<typeof createServer>> | null = null;
+const __jait_hook_3288 = async () => {
+    mockOllama = await startMockOllama();
+    const address = mockOllama.address() as AddressInfo;
+    ollamaUrl = `http://127.0.0.1:${address.port}`;
+  };
+const __jait_hook_3472 = async () => {
+    releaseSlowOllama?.();
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
+    await app?.close();
+    app = null;
+  };
+const __jait_hook_3632 = async () => {
+    await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
+  };
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -424,6 +706,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-fallback-retry", "password123");
     const session = sessionService.create({ userId: user.id, name: "Fallback retry" });
+    recordSelection(sessionState, session.id);
     const services = { db, sqlite, sessionService, sessionState, userService };
     app = await createServer(config, services);
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
@@ -485,14 +768,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_281_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_361_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -502,6 +785,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -548,22 +842,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -586,6 +880,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-wsdrop-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue WS Drop" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -646,14 +941,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_359_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_440_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -663,6 +958,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -709,22 +1015,159 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const config = {
+      ...loadConfig(), port: 0, wsPort: 0, logLevel: "silent" as const,
+      nodeEnv: "test", llmProvider: "ollama" as const, ollamaUrl,
+      jwtSecret: "test-jwt-secret",
+    };
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("http-queue-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "HTTP queue" });
+    recordSelection(sessionState, session.id);
+    app = await createServer(config, { db, sqlite, sessionService, sessionState, userService, audit: new AuditWriter(db) });
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    const headers = { authorization: `Bearer ${token}` };
+
+    // No turn is running and no WS copy arrives: the PATCH is the only signal.
+    const patch = await app.inject({
+      method: "PATCH", url: `/api/sessions/${session.id}/state`, headers,
+      payload: { queued_messages: [{ id: "q-http", content: "queued from the phone" }] },
+    });
+    __jait_capture(0, (patch.statusCode));
+
+    await vi.waitFor(async () => {
+      const response = await app!.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+      const messages = response.json().messages as Array<{ role: string; content: string }>;
+      __jait_capture(1, (messages.map((message) => message.content)));
+    });
+    __jait_captureType(2, (sessionState.get(session.id, ["queued_messages"]).queued_messages));
+
+    // A late HTTP copy of the same snapshot must neither resend the message nor
+    // leave it behind as a ghost entry.
+    await app.inject({
+      method: "PATCH", url: `/api/sessions/${session.id}/state`, headers,
+      payload: { queued_messages: [{ id: "q-http", content: "queued from the phone" }] },
+    });
+    await vi.waitFor(() => __jait_captureType(3, (sessionState.get(session.id, ["queued_messages"]).queued_messages)));
+    const after = await app.inject({ method: "GET", url: `/api/sessions/${session.id}/messages?limit=100`, headers });
+    __jait_capture(4, (after.json().messages.filter((message: { role: string }) => message.role === "user")));
+  
+})();
+
+} finally {
+await __jait_hook_3632();
+await __jait_hook_3472();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_483_3": {
+
+
+async function collectBody(req: IncomingMessage): Promise<string> {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  return body;
+}
+let slowOllamaStarted: (() => void) | null = null;
+let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
+function startMockOllama(): Promise<Server> {
+  return new Promise((resolve) => {
+    const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
+      const isNative = req.url?.endsWith("/api/chat");
+      const isOpenAI = req.url?.endsWith("/chat/completions");
+      if (req.method !== "POST" || (!isNative && !isOpenAI)) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+
+      const rawBody = await collectBody(req);
+      const { messages } = JSON.parse(rawBody) as {
+        messages: { role: string; content: string }[];
+      };
+      const lastUserMessage = messages.filter((message) => message.role === "user").pop()?.content ?? "";
+
+      if (lastUserMessage === "slow first") {
+        slowOllamaStarted?.();
+        await new Promise<void>((resolve) => { releaseSlowOllama = resolve; });
+      }
+
+      if (isNative) {
+        res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+        res.write(JSON.stringify({ message: { role: "assistant", content: `Echo: ${lastUserMessage}` }, done: false }) + "\n");
+        res.write(JSON.stringify({ done: true, done_reason: "stop", prompt_eval_count: 1, eval_count: 1 }) + "\n");
+        res.end();
+        return;
+      }
+
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      const chunk = {
+        choices: [{ delta: { content: `Echo: ${lastUserMessage}` }, finish_reason: null }],
+      };
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+    });
+
+    server.listen(0, "127.0.0.1", () => resolve(server));
+  });
+}
+/*__jait_scope_open__*/{
+let mockOllama: Server;
+let ollamaUrl: string;
+let app: Awaited<ReturnType<typeof createServer>> | null = null;
+const __jait_hook_3288 = async () => {
+    mockOllama = await startMockOllama();
+    const address = mockOllama.address() as AddressInfo;
+    ollamaUrl = `http://127.0.0.1:${address.port}`;
+  };
+const __jait_hook_3472 = async () => {
+    releaseSlowOllama?.();
+    slowOllamaStarted = null;
+    releaseSlowOllama = null;
+    await app?.close();
+    app = null;
+  };
+const __jait_hook_3632 = async () => {
+    await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
+  };
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -747,6 +1190,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queued Session" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -785,14 +1229,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_421_3_each0": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_546_3_each0": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -802,6 +1246,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -848,24 +1303,24 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
 /*__jait_scope_open__*/{
 const source = "attachments";
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -888,6 +1343,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queued Session" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -928,15 +1384,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_421_3_each1": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_546_3_each1": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -946,6 +1402,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -992,24 +1459,24 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
 /*__jait_scope_open__*/{
 const source = "segments";
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -1032,6 +1499,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queued Session" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -1072,15 +1540,15 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_479_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_605_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -1090,6 +1558,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -1136,22 +1615,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -1174,6 +1653,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-hold-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Hold" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -1227,14 +1707,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_550_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_677_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -1244,6 +1724,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -1290,22 +1781,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -1328,6 +1819,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-dedupe-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Dedupe" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -1364,14 +1856,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_606_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_734_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -1381,6 +1873,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -1427,22 +1930,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -1465,6 +1968,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-race-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Race" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -1522,14 +2026,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_686_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_815_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -1539,6 +2043,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -1585,22 +2100,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -1623,6 +2138,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-multiply-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Multiply" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -1694,14 +2210,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_778_3": {
+case "tailstatic_packages_gateway_src_routes_chat_queue_test_ts_908_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -1711,6 +2227,17 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 }
 let slowOllamaStarted: (() => void) | null = null;
 let releaseSlowOllama: (() => void) | null = null;
+function recordSelection(
+  sessionState: SessionStateService,
+  sessionId: string,
+  providerId = "jait",
+  model = "llama3",
+): void {
+  sessionState.set(sessionId, {
+    "chat.provider": providerId,
+    "chat.cliModels": { [providerId]: model },
+  });
+}
 function startMockOllama(): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
@@ -1757,22 +2284,22 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_2692 = async () => {
+const __jait_hook_3288 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2876 = async () => {
+const __jait_hook_3472 = async () => {
     releaseSlowOllama?.();
     slowOllamaStarted = null;
     releaseSlowOllama = null;
     await app?.close();
     app = null;
   };
-const __jait_hook_3036 = async () => {
+const __jait_hook_3632 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_2692();
+await __jait_hook_3288();
 try {
 await (async()=>{
 
@@ -1795,6 +2322,7 @@ await (async()=>{
     const userService = new UserService(db);
     const user = userService.createUser("queue-multiply-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Queue Multiply" });
+    recordSelection(sessionState, session.id);
 
     app = await createServer(config, {
       db,
@@ -1864,8 +2392,8 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3036();
-await __jait_hook_2876();
+await __jait_hook_3632();
+await __jait_hook_3472();
 }
 }
 

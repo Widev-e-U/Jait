@@ -138,6 +138,43 @@ await (async()=>{
 
     const browser = {
       id: "browser-1", sessionId: "owner", type: "browser", state: "running",
+      history: vi.fn().mockResolvedValue({ url: "https://example.com/previous" }),
+      getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
+      getLiveViewInfo: vi.fn().mockReturnValue(null),
+    };
+    const registry = { getSurface: vi.fn().mockReturnValue(browser), startSurface: vi.fn() };
+    const service = new PreviewService(registry as any);
+    service.attachAgentBrowser("owner", browser as any, undefined, false);
+    __jait_captureType(0, (await service.history("missing", "back")));
+    __jait_capture(1, (await service.history("owner", "back")));
+    __jait_capture(2, (browser.history.mock.calls));
+    service.setSharedWithAgent("owner", true);
+    __jait_capture(3, (await service.history("owner", "forward")));
+    __jait_capture(4, (browser.history.mock.calls));
+    registry.getSurface.mockReturnValueOnce(null as any);
+    __jait_captureType(5, (await service.history("owner", "back")));
+    __jait_capture(6, (registry.startSurface.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_preview_test_ts_82_3": {
+
+
+const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const browser = {
+      id: "browser-1", sessionId: "owner", type: "browser", state: "running",
       navigate: vi.fn().mockResolvedValue({ url: "https://example.com/redirected" }),
       getEvents: vi.fn().mockReturnValue([]), getMetrics: vi.fn().mockResolvedValue(null),
       getLiveViewInfo: vi.fn().mockReturnValue(null),
@@ -171,7 +208,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_110_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -211,7 +248,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_113_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_134_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -249,7 +286,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_135_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_156_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -275,18 +312,20 @@ await (async()=>{
     const started = await service.start({ sessionId: "sharing-session", target: "4173" });
     __jait_capture(0, (started.sharedWithAgent));
     __jait_thrown(1, () => service.assertAgentControl(started.browserId!));
+    service.setSharedWithAgent("sharing-session", false);
+    __jait_thrown(2, () => service.assertAgentControl(started.browserId!));
 
     const shared = service.setSharedWithAgent("sharing-session", true);
-    __jait_capture(2, (shared?.sharedWithAgent));
-    __jait_capture(3, (service.getSessionByPreviewSessionId("sharing-session")?.browserId), (started.browserId));
-    __jait_thrown(4, () => service.assertAgentControl(started.browserId!));
+    __jait_capture(3, (shared?.sharedWithAgent));
+    __jait_capture(4, (service.getSessionByPreviewSessionId("sharing-session")?.browserId), (started.browserId));
+    __jait_thrown(5, () => service.assertAgentControl(started.browserId!));
 
     const restarted = await service.restart("sharing-session");
-    __jait_capture(5, (restarted?.sharedWithAgent));
+    __jait_capture(6, (restarted?.sharedWithAgent));
     const reloaded = await service.start({ sessionId: "sharing-session", target: "4174" });
-    __jait_capture(6, (reloaded.sharedWithAgent));
+    __jait_capture(7, (reloaded.sharedWithAgent));
     service.setSharedWithAgent("sharing-session", false);
-    __jait_thrown(7, () => service.assertAgentControl(started.browserId!));
+    __jait_thrown(8, () => service.assertAgentControl(started.browserId!));
   
 })();
 
@@ -297,7 +336,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_167_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_190_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -339,7 +378,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_193_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_216_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -401,7 +440,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_246_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_269_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -460,7 +499,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_289_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_312_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -561,7 +600,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_374_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_397_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -644,7 +683,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_444_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_467_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");
@@ -698,7 +737,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_preview_test_ts_486_3": {
+case "tailstatic_packages_gateway_src_services_preview_test_ts_509_3": {
 
 
 const screenshotDir = resolve(__jait_original_dir, "../../../../.jait/shots");

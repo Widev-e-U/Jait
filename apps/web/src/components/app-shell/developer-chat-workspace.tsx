@@ -1,3 +1,4 @@
+import { latestUserTurnId } from '@/lib/conversation-turn'
 import { readChatLoop } from '@jait/shared'
 import { ChatLoopGoal } from '@/components/chat/loop-goal-card'
 import { AlertTriangle, FolderOpen, RotateCcw, X } from 'lucide-react'
@@ -476,12 +477,7 @@ export function DeveloperChatWorkspace({
   const sharedRenderInputsRef = useRef<readonly unknown[] | undefined>(undefined)
   const sharedRenderVersionRef = useRef(0)
   const cacheSessionRef = useRef<string | null>(null)
-  const scrollToUserMessageId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') return messages[i].renderId ?? messages[i].id
-    }
-    return null
-  }, [messages])
+  const scrollToUserMessageId = useMemo(() => latestUserTurnId(messages), [messages])
   const activeProjectHasRepo = useMemo(
     () => {
       if (!activeProjectId) return false

@@ -23,6 +23,7 @@ case "gateway-src-evaluation-agent-eval-test-f120a10a": return await (await impo
 case "gateway-src-evaluation-basic-suite-test-853450f8": return await (await import('./tailstatic/fixture-gateway-src-evaluation-basic-suite-test-853450f8.ts')).run(call.name);
 case "gateway-src-evaluation-isolated-gateway-test-3b10efd5": return await (await import('./tailstatic/fixture-gateway-src-evaluation-isolated-gateway-test-3b10efd5.ts')).run(call.name);
 case "gateway-src-git-provider-test-84d33d6c": return await (await import('./tailstatic/fixture-gateway-src-git-provider-test-84d33d6c.ts')).run(call.name);
+case "gateway-src-http-shutdown-test-522fa22d": return await (await import('./tailstatic/fixture-gateway-src-http-shutdown-test-522fa22d.ts')).run(call.name);
 case "gateway-src-lib-bounded-json-test-2ceb72e0": return await (await import('./tailstatic/fixture-gateway-src-lib-bounded-json-test-2ceb72e0.ts')).run(call.name);
 case "gateway-src-lib-command-timeout-test-a461d138": return await (await import('./tailstatic/fixture-gateway-src-lib-command-timeout-test-a461d138.ts')).run(call.name);
 case "gateway-src-lib-network-scan-test-4f83919a": return await (await import('./tailstatic/fixture-gateway-src-lib-network-scan-test-4f83919a.ts')).run(call.name);
@@ -42,6 +43,7 @@ case "gateway-src-plugins-manager-test-b79526cf": return await (await import('./
 case "gateway-src-pr-state-test-669696dd": return await (await import('./tailstatic/fixture-gateway-src-pr-state-test-669696dd.ts')).run(call.name);
 case "gateway-src-providers-acp-opencode-models-test-17fc1c09": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-opencode-models-test-17fc1c09.ts')).run(call.name);
 case "gateway-src-providers-acp-provider-attachments-test-ccade643": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-provider-attachments-test-ccade643.ts')).run(call.name);
+case "gateway-src-providers-acp-provider-boundary-test-4fd6eefe": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-provider-boundary-test-4fd6eefe.ts')).run(call.name);
 case "gateway-src-providers-acp-provider-errors-test-155d5822": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-provider-errors-test-155d5822.ts')).run(call.name);
 case "gateway-src-providers-acp-provider-mcp-binding-test-6c68ac2a": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-provider-mcp-binding-test-6c68ac2a.ts')).run(call.name);
 case "gateway-src-providers-acp-provider-startup-test-cde482e5": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-provider-startup-test-cde482e5.ts')).run(call.name);
@@ -50,7 +52,9 @@ case "gateway-src-providers-acp-provider-test-5043e866": return await (await imp
 case "gateway-src-providers-acp-registry-test-4827b1fb": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-registry-test-4827b1fb.ts')).run(call.name);
 case "gateway-src-providers-acp-terminal-test-79f55d56": return await (await import('./tailstatic/fixture-gateway-src-providers-acp-terminal-test-79f55d56.ts')).run(call.name);
 case "gateway-src-providers-codex-event-mapper-test-37f48574": return await (await import('./tailstatic/fixture-gateway-src-providers-codex-event-mapper-test-37f48574.ts')).run(call.name);
+case "gateway-src-providers-compaction-recovery-test-48ae08ab": return await (await import('./tailstatic/fixture-gateway-src-providers-compaction-recovery-test-48ae08ab.ts')).run(call.name);
 case "gateway-src-providers-jait-mcp-test-bf30bd82": return await (await import('./tailstatic/fixture-gateway-src-providers-jait-mcp-test-bf30bd82.ts')).run(call.name);
+case "gateway-src-providers-jait-provider-discovery-test-6b9d4035": return await (await import('./tailstatic/fixture-gateway-src-providers-jait-provider-discovery-test-6b9d4035.ts')).run(call.name);
 case "gateway-src-providers-jait-provider-test-faaee724": return await (await import('./tailstatic/fixture-gateway-src-providers-jait-provider-test-faaee724.ts')).run(call.name);
 case "gateway-src-providers-model-fetchers-test-d7ff0c3a": return await (await import('./tailstatic/fixture-gateway-src-providers-model-fetchers-test-d7ff0c3a.ts')).run(call.name);
 case "gateway-src-providers-pi-mcp-provision-test-6c39e891": return await (await import('./tailstatic/fixture-gateway-src-providers-pi-mcp-provision-test-6c39e891.ts')).run(call.name);
@@ -92,6 +96,7 @@ case "gateway-src-routes-consent-notification-test-714ba2c1": return await (awai
 case "gateway-src-routes-email-test-86226a05": return await (await import('./tailstatic/fixture-gateway-src-routes-email-test-86226a05.ts')).run(call.name);
 case "gateway-src-routes-environment-test-d12eb022": return await (await import('./tailstatic/fixture-gateway-src-routes-environment-test-d12eb022.ts')).run(call.name);
 case "gateway-src-routes-git-node-routing-test-87b715b1": return await (await import('./tailstatic/fixture-gateway-src-routes-git-node-routing-test-87b715b1.ts')).run(call.name);
+case "gateway-src-routes-github-intake-test-d43c1b2a": return await (await import('./tailstatic/fixture-gateway-src-routes-github-intake-test-d43c1b2a.ts')).run(call.name);
 case "gateway-src-routes-jobs-test-02bdd565": return await (await import('./tailstatic/fixture-gateway-src-routes-jobs-test-02bdd565.ts')).run(call.name);
 case "gateway-src-routes-mcp-server-image-test-b0f40a49": return await (await import('./tailstatic/fixture-gateway-src-routes-mcp-server-image-test-b0f40a49.ts')).run(call.name);
 case "gateway-src-routes-mcp-server-test-e2ec3efc": return await (await import('./tailstatic/fixture-gateway-src-routes-mcp-server-test-e2ec3efc.ts')).run(call.name);
@@ -169,12 +174,15 @@ case "gateway-src-services-attention-test-154f0488": return await (await import(
 case "gateway-src-services-audit-test-b8149806": return await (await import('./tailstatic/fixture-gateway-src-services-audit-test-b8149806.ts')).run(call.name);
 case "gateway-src-services-background-command-continuation-test-bb836943": return await (await import('./tailstatic/fixture-gateway-src-services-background-command-continuation-test-bb836943.ts')).run(call.name);
 case "gateway-src-services-background-command-monitor-test-2ab88832": return await (await import('./tailstatic/fixture-gateway-src-services-background-command-monitor-test-2ab88832.ts')).run(call.name);
+case "gateway-src-services-browser-intelligence-test-60112ae9": return await (await import('./tailstatic/fixture-gateway-src-services-browser-intelligence-test-60112ae9.ts')).run(call.name);
+case "gateway-src-services-browser-workflows-test-48c324af": return await (await import('./tailstatic/fixture-gateway-src-services-browser-workflows-test-48c324af.ts')).run(call.name);
 case "gateway-src-services-calendar-google-test-cae3e880": return await (await import('./tailstatic/fixture-gateway-src-services-calendar-google-test-cae3e880.ts')).run(call.name);
 case "gateway-src-services-calendar-service-test-54e8d765": return await (await import('./tailstatic/fixture-gateway-src-services-calendar-service-test-54e8d765.ts')).run(call.name);
 case "gateway-src-services-chat-loops-test-de9f4589": return await (await import('./tailstatic/fixture-gateway-src-services-chat-loops-test-de9f4589.ts')).run(call.name);
 case "gateway-src-services-chat-notification-test-33f8d31e": return await (await import('./tailstatic/fixture-gateway-src-services-chat-notification-test-33f8d31e.ts')).run(call.name);
 case "gateway-src-services-chat-notifications-test-614848a4": return await (await import('./tailstatic/fixture-gateway-src-services-chat-notifications-test-614848a4.ts')).run(call.name);
 case "gateway-src-services-code-graph-code-graphs-test-50a8e809": return await (await import('./tailstatic/fixture-gateway-src-services-code-graph-code-graphs-test-50a8e809.ts')).run(call.name);
+case "gateway-src-services-code-graph-graphify-runner-cancel-test-95618508": return await (await import('./tailstatic/fixture-gateway-src-services-code-graph-graphify-runner-cancel-test-95618508.ts')).run(call.name);
 case "gateway-src-services-code-graph-graphify-runner-test-23cfc2a1": return await (await import('./tailstatic/fixture-gateway-src-services-code-graph-graphify-runner-test-23cfc2a1.ts')).run(call.name);
 case "gateway-src-services-code-graph-graphify-runtime-test-57ca4b2d": return await (await import('./tailstatic/fixture-gateway-src-services-code-graph-graphify-runtime-test-57ca4b2d.ts')).run(call.name);
 case "gateway-src-services-computer-control-test-ca928efc": return await (await import('./tailstatic/fixture-gateway-src-services-computer-control-test-ca928efc.ts')).run(call.name);
@@ -194,6 +202,7 @@ case "gateway-src-services-git-forge-test-39ba9703": return await (await import(
 case "gateway-src-services-git-stacked-test-2bf79d74": return await (await import('./tailstatic/fixture-gateway-src-services-git-stacked-test-2bf79d74.ts')).run(call.name);
 case "gateway-src-services-git-status-test-a59c5501": return await (await import('./tailstatic/fixture-gateway-src-services-git-status-test-a59c5501.ts')).run(call.name);
 case "gateway-src-services-git-worktree-base-test-e1b8d984": return await (await import('./tailstatic/fixture-gateway-src-services-git-worktree-base-test-e1b8d984.ts')).run(call.name);
+case "gateway-src-services-github-intake-test-67494b91": return await (await import('./tailstatic/fixture-gateway-src-services-github-intake-test-67494b91.ts')).run(call.name);
 case "gateway-src-services-github-pull-requests-test-b229a5a1": return await (await import('./tailstatic/fixture-gateway-src-services-github-pull-requests-test-b229a5a1.ts')).run(call.name);
 case "gateway-src-services-jait-llm-test-0c0dadeb": return await (await import('./tailstatic/fixture-gateway-src-services-jait-llm-test-0c0dadeb.ts')).run(call.name);
 case "gateway-src-services-jait-models-test-1cc3cafc": return await (await import('./tailstatic/fixture-gateway-src-services-jait-models-test-1cc3cafc.ts')).run(call.name);
@@ -246,6 +255,7 @@ case "gateway-src-services-usage-refresh-cache-test-1543353f": return await (awa
 case "gateway-src-services-usage-summary-test-4e0d1c49": return await (await import('./tailstatic/fixture-gateway-src-services-usage-summary-test-4e0d1c49.ts')).run(call.name);
 case "gateway-src-services-user-questions-test-b94303d5": return await (await import('./tailstatic/fixture-gateway-src-services-user-questions-test-b94303d5.ts')).run(call.name);
 case "gateway-src-services-users-password-test-38039b4d": return await (await import('./tailstatic/fixture-gateway-src-services-users-password-test-38039b4d.ts')).run(call.name);
+case "gateway-src-shutdown-budget-test-39c222bf": return await (await import('./tailstatic/fixture-gateway-src-shutdown-budget-test-39c222bf.ts')).run(call.name);
 case "gateway-src-skills-index-test-02ca6a59": return await (await import('./tailstatic/fixture-gateway-src-skills-index-test-02ca6a59.ts')).run(call.name);
 case "gateway-src-skills-install-test-b8c54d90": return await (await import('./tailstatic/fixture-gateway-src-skills-install-test-b8c54d90.ts')).run(call.name);
 case "gateway-src-sprint10-test-4af46209": return await (await import('./tailstatic/fixture-gateway-src-sprint10-test-4af46209.ts')).run(call.name);
@@ -259,6 +269,7 @@ case "gateway-src-sprint5-test-1e9a1618": return await (await import('./tailstat
 case "gateway-src-sprint6-test-db2d85d2": return await (await import('./tailstatic/fixture-gateway-src-sprint6-test-db2d85d2.ts')).run(call.name);
 case "gateway-src-sprint7-test-d04b1846": return await (await import('./tailstatic/fixture-gateway-src-sprint7-test-d04b1846.ts')).run(call.name);
 case "gateway-src-state-directory-test-a516715f": return await (await import('./tailstatic/fixture-gateway-src-state-directory-test-a516715f.ts')).run(call.name);
+case "gateway-src-surfaces-browser-cursor-integration-test-f052bc61": return await (await import('./tailstatic/fixture-gateway-src-surfaces-browser-cursor-integration-test-f052bc61.ts')).run(call.name);
 case "gateway-src-surfaces-browser-runtime-test-075f8227": return await (await import('./tailstatic/fixture-gateway-src-surfaces-browser-runtime-test-075f8227.ts')).run(call.name);
 case "gateway-src-surfaces-filesystem-test-89782bb2": return await (await import('./tailstatic/fixture-gateway-src-surfaces-filesystem-test-89782bb2.ts')).run(call.name);
 case "gateway-src-surfaces-project-ui-sync-test-f4552675": return await (await import('./tailstatic/fixture-gateway-src-surfaces-project-ui-sync-test-f4552675.ts')).run(call.name);
@@ -285,6 +296,8 @@ case "gateway-src-tools-agent-tools-test-094089a1": return await (await import('
 case "gateway-src-tools-architecture-tools-test-417d6ba4": return await (await import('./tailstatic/fixture-gateway-src-tools-architecture-tools-test-417d6ba4.ts')).run(call.name);
 case "gateway-src-tools-browser-chat-test-c78f6ae9": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-chat-test-c78f6ae9.ts')).run(call.name);
 case "gateway-src-tools-browser-handoff-test-067fb9b8": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-handoff-test-067fb9b8.ts')).run(call.name);
+case "gateway-src-tools-browser-intelligence-test-4eb9086c": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-intelligence-test-4eb9086c.ts')).run(call.name);
+case "gateway-src-tools-browser-stagehand-integration-test-85b0e46b": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-stagehand-integration-test-85b0e46b.ts')).run(call.name);
 case "gateway-src-tools-browser-tools-collaboration-test-0af3d71a": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-tools-collaboration-test-0af3d71a.ts')).run(call.name);
 case "gateway-src-tools-browser-tools-integration-test-e7dbc46d": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-tools-integration-test-e7dbc46d.ts')).run(call.name);
 case "gateway-src-tools-browser-tools-test-75fcdacd": return await (await import('./tailstatic/fixture-gateway-src-tools-browser-tools-test-75fcdacd.ts')).run(call.name);
@@ -330,6 +343,7 @@ case "gateway-src-tools-remote-executor-test-15c0d319": return await (await impo
 case "gateway-src-tools-repo-proposal-tools-test-e17a49aa": return await (await import('./tailstatic/fixture-gateway-src-tools-repo-proposal-tools-test-e17a49aa.ts')).run(call.name);
 case "gateway-src-tools-runtime-service-tools-test-31697168": return await (await import('./tailstatic/fixture-gateway-src-tools-runtime-service-tools-test-31697168.ts')).run(call.name);
 case "gateway-src-tools-sandbox-tools-test-b13d9973": return await (await import('./tailstatic/fixture-gateway-src-tools-sandbox-tools-test-b13d9973.ts')).run(call.name);
+case "gateway-src-tools-screen-share-tools-coverage-test-07482099": return await (await import('./tailstatic/fixture-gateway-src-tools-screen-share-tools-coverage-test-07482099.ts')).run(call.name);
 case "gateway-src-tools-screen-share-tools-test-2e486789": return await (await import('./tailstatic/fixture-gateway-src-tools-screen-share-tools-test-2e486789.ts')).run(call.name);
 case "gateway-src-tools-screenshot-launch-test-57f1e92d": return await (await import('./tailstatic/fixture-gateway-src-tools-screenshot-launch-test-57f1e92d.ts')).run(call.name);
 case "gateway-src-tools-screenshot-tools-test-04a9779d": return await (await import('./tailstatic/fixture-gateway-src-tools-screenshot-tools-test-04a9779d.ts')).run(call.name);
@@ -357,6 +371,7 @@ case "gateway-src-voice-assistant-handoff-test-66eeed5a": return await (await im
 case "gateway-src-voice-assistant-router-test-66d41ee3": return await (await import('./tailstatic/fixture-gateway-src-voice-assistant-router-test-66d41ee3.ts')).run(call.name);
 case "gateway-src-voice-assistant-service-test-55e03c50": return await (await import('./tailstatic/fixture-gateway-src-voice-assistant-service-test-55e03c50.ts')).run(call.name);
 case "gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8": return await (await import('./tailstatic/fixture-gateway-src-voice-assistant-tier-catalog-test-f4a2c0f8.ts')).run(call.name);
+case "gateway-src-voice-assistant-tools-location-test-4b0d68dd": return await (await import('./tailstatic/fixture-gateway-src-voice-assistant-tools-location-test-4b0d68dd.ts')).run(call.name);
 case "gateway-src-voice-assistant-tools-registry-test-a91025f9": return await (await import('./tailstatic/fixture-gateway-src-voice-assistant-tools-registry-test-a91025f9.ts')).run(call.name);
 case "gateway-src-voice-assistant-tools-test-63473008": return await (await import('./tailstatic/fixture-gateway-src-voice-assistant-tools-test-63473008.ts')).run(call.name);
 case "gateway-src-voice-service-test-ca7a8a80": return await (await import('./tailstatic/fixture-gateway-src-voice-service-test-ca7a8a80.ts')).run(call.name);

@@ -35,6 +35,12 @@ fn view(v: Value) -> Value {
 }
 fn loop_view(s: &ChatLoop) -> Value {
     let mut value = json!({"id":s.id.0,"goal":s.goal.0,"criteria":s.criteria.iter().map(|s|s.0.clone()).collect::<Vec<_>>(),"status":units(&s.status),"iteration":s.iteration,"revision":s.revision,"checkedIteration":s.checked_iteration,"summary":s.summary.0,"nextMessage":s.next_message.0,"evidence":s.evidence.iter().map(|s|s.0.clone()).collect::<Vec<_>>(),"updatedAt":s.updated_at.0});
+    if let Some(criteria) = &s.execution_criteria {
+        value["executionCriteria"] = json!(criteria);
+    }
+    if let Some(evidence) = &s.execution_evidence {
+        value["executionEvidence"] = view(json!(evidence));
+    }
     for (key, number) in [
         ("budgetStartIteration", s.budget_start_iteration),
         ("stalledChecks", s.stalled_checks),

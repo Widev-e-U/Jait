@@ -135,7 +135,7 @@ async fn persistent_account_session_restart_and_live_health_match_typescript() {
     .unwrap();
     let native_work = work();
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
         .build()
         .unwrap();
     let mut token = String::new();

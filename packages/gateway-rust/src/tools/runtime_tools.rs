@@ -16,10 +16,18 @@ pub fn metadata() -> &'static Value {
     &DEFINITIONS
 }
 #[derive(Clone)]
-pub struct MessageData(Messages);
+pub enum MessageData {
+    Messages(Messages),
+    NoActiveRound,
+}
 impl Serialize for MessageData {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        json!({"messages":*self.0.lock().unwrap()}).serialize(serializer)
+        match self {
+            Self::Messages(messages) => {
+                json!({"messages":*messages.lock().unwrap()}).serialize(serializer)
+            }
+            Self::NoActiveRound => json!({"code":"no_active_swarm_round"}).serialize(serializer),
+        }
     }
 }
 #[derive(Clone, Serialize)]
@@ -36,7 +44,7 @@ pub fn agent_message(
     mailbox: &SwarmMailbox,
 ) -> Result<AgentMessageResult, String> {
     let Some(round) = round.filter(|s| !s.is_empty()) else {
-        return Ok(AgentMessageResult{ok:false,message:"No active swarm round — agent.message is only available to specialists running concurrently alongside siblings.".into(),data:None});
+        return Ok(AgentMessageResult{ok:false,message:"No active swarm round or mailbox. agent.message only works for specialists in the same concurrent swarm round. Use the available thread or team communication tool for other agents.".into(),data:Some(MessageData::NoActiveRound)});
     };
     let from = participant
         .map(js_trim)
@@ -79,7 +87,7 @@ pub fn agent_message(
     Ok(AgentMessageResult {
         ok: true,
         message,
-        data: Some(MessageData(data)),
+        data: Some(MessageData::Messages(data)),
     })
 }
 pub type UiCommandSink<'a> = dyn FnMut(Value, &str) -> Result<(), String> + 'a;

@@ -1657,6 +1657,43 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     return () => el.removeEventListener('beforeinput', handleBeforeInput)
   }, [syncComposerSegments, variant]) // same mount lifecycle as the input listener below
 
+  // Resolve only a complete UUID, and preserve edits made while the request is pending.
+  const resolveChatId = useCallback((text: string, pastedNode?: Text) => {
+    if (variant === 'messenger' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return
+    void fetch(`${API_URL}/api/sessions/${encodeURIComponent(text)}`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+      signal: AbortSignal.timeout(5000),
+    }).then(async response => {
+      if (!response.ok) return
+      const session = await response.json() as { id?: string; name?: string; title?: string }
+      // The user may have edited, removed, or sent the paste while we looked it up.
+      const current = editableRef.current
+      if (session.id !== text || !current?.isConnected) return
+      const originalNodeIntact = !!pastedNode && current.contains(pastedNode) && pastedNode.data === text
+      // The first draft update can rebuild the editable, replacing the text node.
+      // Only recover it when the entire current draft still matches the paste.
+      const equivalentDraft = !hasChipRefs(current) && getTextFromEditable(current) === text
+      if (!originalNodeIntact && !equivalentDraft) return
+      const selection = window.getSelection()
+      const caretInPaste = selection?.isCollapsed && (selection.anchorNode === pastedNode || (equivalentDraft && current.contains(selection.anchorNode)))
+      const chip = createChipNode({ type: 'chat', sessionId: text, name: session.name || session.title || text }, handleRemoveChip)
+      if (originalNodeIntact && pastedNode) pastedNode.replaceWith(chip)
+      else current.replaceChildren(chip)
+      if (caretInPaste && selection) {
+        const range = document.createRange()
+        range.setStartAfter(chip)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+      draftSegmentsRef.current = syncComposerSegments(current)
+      isSyncing.current = true
+      onChange(getTextFromEditable(current))
+      isSyncing.current = false
+      setIsEmpty(false)
+    }).catch(() => { /* Keep the pasted text if the lookup fails. */ })
+  }, [variant, handleRemoveChip, onChange, syncComposerSegments])
+
   /** Handle input events on the contentEditable — uses a native listener
    *  because React's synthetic onInput doesn't fire reliably for contentEditable. */
   useEffect(() => {
@@ -1677,6 +1714,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       setIsEmpty(isTextEmpty(text) && !hasChipRefs(el))
       isSyncing.current = false
       pushUndoRef.current()
+      // Some mobile keyboards deliver a paste as a single insertText event.
+      if (inputEvent.inputType?.startsWith('insert') && inputEvent.data && text === inputEvent.data) {
+        resolveChatId(inputEvent.data)
+      }
 
       if (variant === 'messenger') return
 
@@ -1762,7 +1803,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
     el.addEventListener('input', handleNativeInput)
     return () => el.removeEventListener('input', handleNativeInput)
-  }, [syncComposerSegments, variant]) // other dependencies are read from refs
+  }, [syncComposerSegments, variant, resolveChatId]) // other dependencies are read from refs
 
   /**
    * Run one composer send action with the payload the caller already collected.
@@ -2140,36 +2181,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setIsEmpty(isTextEmpty(nextValue) && !hasChipRefs(el))
     scrollCaretIntoView(el)
 
-    // UUIDs are also used for other objects. Resolve a standalone pasted ID
-    // before turning it into a chat reference, leaving unknown IDs as text.
-    if (variant !== 'messenger' && pastedNode && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) {
-      void fetch(`${API_URL}/api/sessions/${encodeURIComponent(text)}`, {
-        headers: { Authorization: `Bearer ${getAuthToken()}` },
-        signal: AbortSignal.timeout(5000),
-      }).then(async response => {
-        if (!response.ok) return
-        const session = await response.json() as { id?: string; name?: string; title?: string }
-        // The user may have edited, removed, or sent the paste while we looked it up.
-        if (session.id !== text || !el.isConnected || !el.contains(pastedNode) || pastedNode.data !== text) return
-        const selection = window.getSelection()
-        const caretInPaste = selection?.isCollapsed && selection.anchorNode === pastedNode
-        const chip = createChipNode({ type: 'chat', sessionId: text, name: session.name || session.title || text }, handleRemoveChip)
-        pastedNode.replaceWith(chip)
-        if (caretInPaste && selection) {
-          const range = document.createRange()
-          range.setStartAfter(chip)
-          range.collapse(true)
-          selection.removeAllRanges()
-          selection.addRange(range)
-        }
-        draftSegmentsRef.current = syncComposerSegments(el)
-        isSyncing.current = true
-        onChange(getTextFromEditable(el))
-        isSyncing.current = false
-        setIsEmpty(false)
-      }).catch(() => { /* Keep the pasted text if the lookup fails. */ })
-    }
-  }, [variant, addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments])
+    resolveChatId(text, pastedNode)
+  }, [variant, addFilesAsAttachments, handleRemoveChip, onChange, pushUndoSnapshot, syncComposerSegments, resolveChatId])
 
   // Drag-and-drop handlers
   const onDragEnter = useCallback((e: React.DragEvent) => {
@@ -2717,7 +2730,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       </Popover>
 
       {!isMessenger && (
-        <div className="flex min-w-0 items-start gap-2 px-3 pb-2.5 pt-0.5">
+        <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5 pt-0.5 sm:items-start">
           {hasFooterLeftContent && (
             <div className="min-w-0 flex-1">
               {hasFooterControls && (

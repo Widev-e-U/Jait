@@ -530,6 +530,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(store.load().await.unwrap().len(), 1);
+        // The database reply can precede the supervisor releasing its lease.
+        tokio::time::timeout(Duration::from_secs(5), manager.wait_drained())
+            .await
+            .expect("supervised write did not release its session");
         assert!(manager.acquire("session").is_ok());
         auth.shutdown().await.unwrap();
     }

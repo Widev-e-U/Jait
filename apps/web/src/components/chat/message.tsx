@@ -417,7 +417,8 @@ function MessageInner({
       }
     }
 
-    const messageText = isUser ? buildUserCopyText() : content
+    const segmentText = segments?.filter((segment) => segment.type === 'text').map((segment) => segment.content).join('\n\n') ?? ''
+    const messageText = isUser ? buildUserCopyText() : content || segmentText
     if (messageText) {
       parts.push(messageText)
     }
@@ -680,8 +681,8 @@ function MessageInner({
       return (
         <div
           className={cn(
-            'absolute z-10',
-            getMobileMessageActionsPositionClassName(isUser, outsideBubble),
+            isUser ? 'absolute z-10' : 'relative z-10 flex justify-end',
+            isUser && getMobileMessageActionsPositionClassName(isUser, outsideBubble),
             compactMobileActions && 'right-0 bottom-[2.67px]',
           )}
         >

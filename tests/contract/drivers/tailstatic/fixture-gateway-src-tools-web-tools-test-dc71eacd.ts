@@ -231,6 +231,34 @@ await __jait_hook_336();
 try {
 await (async()=>{
 
+    for (const key of ["GEMINI_API_KEY", "OPENAI_API_KEY"]) vi.stubEnv(key, "");
+    const result = await createWebSearchTool().execute({ query: "asset inventory", provider: "gemini" }, context);
+    __jait_capture(0, (result));
+    __jait_capture(1, (result.message));
+    __jait_capture(2, (result.message));
+    __jait_capture(3, (fetch.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_461();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_web_tools_test_ts_41_3": {
+
+
+const context = { sessionId: "web-tests", actionId: "web-action", projectRoot: "/project", requestedBy: "test" };
+const fetch = vi.fn();
+const __jait_hook_336 = () => { fetch.mockReset(); vi.stubGlobal("fetch", fetch); vi.stubEnv("WEB_FETCH_IGNORE_TLS_ERRORS", "false"); };
+const __jait_hook_461 = () => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); };
+/*__jait_scope_open__*/{
+await __jait_hook_336();
+try {
+await (async()=>{
+
     __jait_capture(0, (await createWebSearchTool().execute({ query: "asset inventory" }, { ...context, signal: AbortSignal.abort() })));
     __jait_capture(1, (fetch.mock.calls));
   
@@ -243,7 +271,7 @@ await __jait_hook_461();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_web_tools_test_ts_39_3": {
+case "tailstatic_packages_gateway_src_tools_web_tools_test_ts_47_3": {
 
 
 const context = { sessionId: "web-tests", actionId: "web-action", projectRoot: "/project", requestedBy: "test" };
@@ -267,7 +295,7 @@ await __jait_hook_461();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_web_tools_test_ts_43_3": {
+case "tailstatic_packages_gateway_src_tools_web_tools_test_ts_51_3": {
 
 
 const context = { sessionId: "web-tests", actionId: "web-action", projectRoot: "/project", requestedBy: "test" };

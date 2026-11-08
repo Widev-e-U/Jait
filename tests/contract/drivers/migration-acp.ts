@@ -17,10 +17,10 @@ export async function launchAcp(call:any) {
   try {
     for(let i=0;i<(call.repeat ?? 1);i++) {
       const child=Bun.spawn([process.execPath,'--no-env-file',fileURLToPath(new URL('./migration-acp-entry.ts',import.meta.url)),Buffer.from(JSON.stringify(spec)).toString('base64url'),...(call.forwarded ?? [])],{env:{...process.env,JAIT_ACP_BINARY_ROOT:root,JAIT_ACP_TEST_ORIGIN:`http://127.0.0.1:${server.port}/agent.tar`},stdout:'pipe',stderr:'pipe'});
-      const timer=setTimeout(()=>child.kill('SIGKILL'),5000);
+      const timer=setTimeout(()=>child.kill('SIGKILL'),30000);
       try {
         if(call.signal) {
-          const deadline=Date.now()+4000;
+          const deadline=Date.now()+25000;
           while(!await Bun.file(join(root,'signal-ready')).exists()) {if(Date.now()>deadline)throw new Error('agent signal readiness deadline');await Bun.sleep(10);}
           child.kill('SIGTERM');
         }

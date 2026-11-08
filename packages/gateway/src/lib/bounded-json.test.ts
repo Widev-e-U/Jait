@@ -37,8 +37,8 @@ describe("bounded JSON persistence", () => {
   it("handles tiny byte limits and malformed Unicode without splitting pairs", () => {
     expect(limitUtf8("abc", 0)).toBe("");
     expect(limitUtf8("é🙂x", 3)).toBe("é");
-    expect(limitUtf8("\ud800x", 3, "")).toBe("\ud800");
-    expect(limitUtf8("\udc00x", 3, "")).toBe("\udc00");
+    expect([...limitUtf8("\ud800x", 3, "")].map((char) => char.charCodeAt(0))).toEqual([0xd800]);
+    expect([...limitUtf8("\udc00x", 3, "")].map((char) => char.charCodeAt(0))).toEqual([0xdc00]);
   });
 
   it("compacts large collections and non-JSON values", () => {

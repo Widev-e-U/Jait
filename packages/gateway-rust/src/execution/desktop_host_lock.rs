@@ -7,14 +7,24 @@
 //! PID-file protocol does not acquire this lock: the two hosts must not be run
 //! concurrently until a shared, reviewed authority protocol is implemented.
 //!
-//! The lock file is never unlinked. Kernel lock release on close or process exit
-//! provides crash recovery without stale-PID deletion or unlink races.
+//! The lock file is never unlinked. Explicit unlock on guard drop and kernel release
+//! on process exit provide crash recovery without stale-PID deletion or unlink races.
 //! Other platforms fail closed pending equivalent reviewed implementations.
 use std::io;
 
 pub struct DesktopHostLock {
     #[cfg(target_os = "linux")]
     _file: std::fs::File,
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for DesktopHostLock {
+    fn drop(&mut self) {
+        use std::os::fd::AsRawFd;
+        // A concurrent fork can briefly retain the open file description even
+        // with CLOEXEC. Release the lock when the owning guard is dropped.
+        unsafe { libc::flock(self._file.as_raw_fd(), libc::LOCK_UN) };
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -44,7 +54,7 @@ pub fn try_acquire(directory: &std::fs::File) -> io::Result<DesktopHostLock> {
             "Invalid desktop host lock",
         ));
     }
-    // The open file description owns the lock. Closing this guard releases it.
+    // The open file description owns the lock; guard drop explicitly releases it.
     if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
         return Err(io::Error::last_os_error());
     }
@@ -77,8 +87,11 @@ mod tests {
             try_acquire(&directory).err().unwrap().kind(),
             io::ErrorKind::WouldBlock
         );
+        // A forked child may temporarily retain a duplicate of this description.
+        let inherited = first._file.try_clone().unwrap();
         drop(first);
         let second = try_acquire(&directory).unwrap();
+        drop(inherited);
         drop(second);
         let lock_path = path.join("desktop-host.native.lock");
         assert!(lock_path.exists());

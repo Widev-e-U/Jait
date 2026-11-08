@@ -83,7 +83,11 @@ fn native(c: &Value) -> Value {
             if let Some(command) = command {
                 commands.push(command);
                 error = c["fail"] == true;
-                jait_gateway::providers::context_control::complete_compaction(&mut state, !error);
+                jait_gateway::providers::context_control::complete_compaction(
+                    &mut state,
+                    !error,
+                    c["now"].as_u64().unwrap_or(100000),
+                );
             }
             json!({"state":state,"commands":commands,"error":error})
         }
@@ -336,11 +340,14 @@ fn feature_native_compaction_never_invents_capability_or_rewrites_history() {
         json!({"op":"contextbudget.native","state":unsupported}),
         json!({"op":"contextbudget.native","state":running}),
         json!({"op":"contextbudget.native","state":state,"fail":true}),
+        json!({"op":"contextbudget.native","state":{"commands":["compact"],"usedTokens":70000,"contextWindow":475000,"retryAfter":100001}}),
     ]);
     assert_eq!(out[0]["commands"], json!(["/compact"]));
     assert!(out[1]["commands"].as_array().unwrap().is_empty());
     assert!(out[2]["commands"].as_array().unwrap().is_empty());
     assert_eq!(out[3]["error"], true);
+    assert_eq!(out[3]["state"]["retryAfter"], 160000);
+    assert!(out[4]["commands"].as_array().unwrap().is_empty());
     assert_eq!(out[3]["state"]["usedTokens"], 70000);
     assert_eq!(out[0]["state"]["transcript"], json!(["original evidence"]));
 }

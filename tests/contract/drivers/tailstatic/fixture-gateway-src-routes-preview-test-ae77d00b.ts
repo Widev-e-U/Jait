@@ -97,6 +97,42 @@ await (async()=>{
 
     const app = Fastify();
     const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const previewService = { history: vi.fn().mockResolvedValue({ sessionId: "session-1" }) };
+    const sessionService = { getById: vi.fn((id: string, userId: string) => id === "session-1" && userId === "user-1" ? { id } : null) };
+    registerPreviewRoutes(app, config, { previewService: previewService as any, sessionService: sessionService as any });
+    const payload = { sessionId: "session-1", direction: "back" };
+    __jait_capture(0, ((await app.inject({ method: "POST", url: "/api/preview/history", payload })).statusCode));
+    __jait_capture(1, ((await app.inject({ method: "POST", url: "/api/preview/history", headers: await authHeader(config.jwtSecret, "user-2"), payload })).statusCode));
+    __jait_capture(2, (previewService.history.mock.calls));
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    __jait_capture(3, ((await app.inject({ method: "POST", url: "/api/preview/history", headers, payload: { ...payload, direction: "invalid" } })).statusCode));
+    __jait_capture(4, ((await app.inject({ method: "POST", url: "/api/preview/history", headers, payload })).statusCode));
+    __jait_capture(5, (previewService.history.mock.calls));
+    await app.close();
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_preview_test_ts_50_3": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+async function authHeader(jwtSecret: string, userId: string) {
+  const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
     const previewService = { navigate: vi.fn().mockResolvedValue({ sessionId: "session-1" }) };
     const sessionService = { getById: vi.fn((id: string, userId: string) => id === "session-1" && userId === "user-1" ? { id } : null) };
     registerPreviewRoutes(app, config, { previewService: previewService as any, sessionService: sessionService as any });
@@ -119,7 +155,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_preview_test_ts_50_3": {
+case "tailstatic_packages_gateway_src_routes_preview_test_ts_67_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -160,7 +196,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_preview_test_ts_72_3": {
+case "tailstatic_packages_gateway_src_routes_preview_test_ts_89_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -223,7 +259,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_preview_test_ts_121_3": {
+case "tailstatic_packages_gateway_src_routes_preview_test_ts_138_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {

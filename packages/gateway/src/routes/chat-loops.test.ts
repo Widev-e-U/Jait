@@ -147,11 +147,15 @@ describe("chat loop automatic continuation", () => {
   });
 
   it("cancel during the gap pauses continuation, and controls require ownership", async () => {
-    loops.goal(sessionId, "Fix", ["Pass"]);
     expect((await app.inject({ method: "POST", url: `/api/sessions/${sessionId}/loop`, payload: { action: "pause" } })).statusCode).toBe(401);
     expect((await app.inject({ method: "POST", url: `/api/sessions/missing/loop`, headers, payload: { action: "resume" } })).statusCode).toBe(404);
+    // Keep the queued continuation from starting while the cancel request is
+    // processed, even if the event loop is delayed beyond its 250ms timer.
+    sessionWaits.raise({ key: "cancel-gap", sessionId, kind: "question" });
+    loops.goal(sessionId, "Fix", ["Pass"]);
     await app.inject({ method: "POST", url: `/api/sessions/${sessionId}/cancel`, headers });
     expect(loops.get(sessionId)?.status).toBe("paused");
+    sessionWaits.clear("cancel-gap");
     await new Promise(resolve => setTimeout(resolve, 350));
     expect(calls).toHaveLength(0);
     expect((await app.inject({ method: "GET", url: `/api/sessions/${sessionId}/loop`, headers })).json().loop.status).toBe("paused");

@@ -60,6 +60,7 @@ await (async()=>{
     const result = await tool.execute({}, baseContext);
     __jait_capture(0, (result.ok));
     __jait_capture(1, (result.message));
+    __jait_capture(2, (result));
   
 })();
 
@@ -70,7 +71,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_message_tool_test_ts_21_3": {
+case "tailstatic_packages_gateway_src_tools_agent_message_tool_test_ts_22_3": {
 
 
 const baseContext: ToolContext = {
@@ -106,7 +107,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_message_tool_test_ts_36_3": {
+case "tailstatic_packages_gateway_src_tools_agent_message_tool_test_ts_37_3": {
 
 
 const baseContext: ToolContext = {
@@ -156,7 +157,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_agent_message_tool_test_ts_67_3": {
+case "tailstatic_packages_gateway_src_tools_agent_message_tool_test_ts_68_3": {
 
 
 const baseContext: ToolContext = {

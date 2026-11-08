@@ -107,6 +107,81 @@ const __jait_hook_790 = () => vi.unstubAllGlobals();
 try {
 await (async()=>{
 
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("private provider detail", { status: 503 })));
+    const account = keys();
+    const context = { sessionId: "decision-test", actionId: "test", projectRoot: "/project", requestedBy: "test", apiKeys: account };
+    const input = { state: "fixture", questions: [{ id: "relevant", type: "noul" as const, instructions: "Relevant?" }] };
+    const tool = createDecisionEvaluateTool();
+    const first = await tool.execute(input, context);
+    __jait_capture(0, (first));
+    __jait_capture(1, (first.message));
+    __jait_capture(2, (await tool.execute(input, context)));
+  
+})();
+
+} finally {
+await __jait_hook_790();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_47_3": {
+
+
+let sequence = 0;
+const keys = () => ({ JEV_API_KEY: `test-account-${++sequence}` });
+const questions = { relevant: { type: "noul" as const, instructions: "Is this relevant?" } };
+const response = (answers: unknown) => new Response(JSON.stringify({ model: "jev-latest", answers }));
+function registry() {
+  const r = new ToolRegistry();
+  for (const [name, description, tier] of [
+    ["tools.search", "Find tools", "core"], ["file.read", "Read project files", "standard"],
+    ["web.search", "Search the web", "standard"], ["secret.read", "Read confidential record", "standard"],
+  ] as const) r.register({ name, description, tier, parameters: { type: "object", properties: {} }, execute: async () => ({ ok: true, message: "ok" }) });
+  r.register(createDecisionEvaluateTool());
+  return r;
+}
+const __jait_hook_790 = () => vi.unstubAllGlobals();
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("not json")));
+    await __jait_captureRejected(0, (evaluateDecision(keys(), "fixture", questions)));
+  
+})();
+
+} finally {
+await __jait_hook_790();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_52_3": {
+
+
+let sequence = 0;
+const keys = () => ({ JEV_API_KEY: `test-account-${++sequence}` });
+const questions = { relevant: { type: "noul" as const, instructions: "Is this relevant?" } };
+const response = (answers: unknown) => new Response(JSON.stringify({ model: "jev-latest", answers }));
+function registry() {
+  const r = new ToolRegistry();
+  for (const [name, description, tier] of [
+    ["tools.search", "Find tools", "core"], ["file.read", "Read project files", "standard"],
+    ["web.search", "Search the web", "standard"], ["secret.read", "Read confidential record", "standard"],
+  ] as const) r.register({ name, description, tier, parameters: { type: "object", properties: {} }, execute: async () => ({ ok: true, message: "ok" }) });
+  r.register(createDecisionEvaluateTool());
+  return r;
+}
+const __jait_hook_790 = () => vi.unstubAllGlobals();
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const fetcher = vi.fn().mockImplementation(async () => response({ relevant: { type: "noul", noul: 0.9 } })); vi.stubGlobal("fetch", fetcher);
     const account = keys();
     await evaluateDecision(account, "user request", questions);
@@ -128,7 +203,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_49_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_66_3": {
 
 
 let sequence = 0;
@@ -170,7 +245,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_62_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_79_3": {
 
 
 let sequence = 0;
@@ -207,7 +282,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_70_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_87_3": {
 
 
 let sequence = 0;
@@ -242,7 +317,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_76_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_93_3": {
 
 
 let sequence = 0;
@@ -279,7 +354,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_84_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_101_3": {
 
 
 let sequence = 0;
@@ -316,7 +391,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_92_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_109_3": {
 
 
 let sequence = 0;
@@ -359,7 +434,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_106_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_123_3": {
 
 
 let sequence = 0;
@@ -395,7 +470,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_113_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_130_3": {
 
 
 let sequence = 0;
@@ -432,7 +507,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_121_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_138_3": {
 
 
 let sequence = 0;
@@ -469,7 +544,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_132_3": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_149_3": {
 
 
 let sequence = 0;
@@ -513,7 +588,7 @@ await __jait_hook_790();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_system_one_test_ts_148_1": {
+case "tailstatic_packages_gateway_src_services_system_one_test_ts_165_1": {
 
 
 let sequence = 0;

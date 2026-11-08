@@ -98,7 +98,7 @@ export async function parallelContracts({
   cargo, manifest, target, root, env = process.env, workers = 3, testThreads = 4,
   signal, reportRoot = join(root, '.jait/artifacts/contract-parallel'),
 }) {
-  if (!Number.isInteger(workers) || workers < 1 || workers > 3) throw new Error('Expected 1–3 suite workers');
+  if (!Number.isInteger(workers) || workers < 1 || workers > 16) throw new Error('Expected 1–16 suite workers');
   if (!Number.isInteger(testThreads) || testThreads < 1 || testThreads > 4) throw new Error('Expected 1–4 test threads per ordinary suite');
   mkdirSync(reportRoot, { recursive: true });
   const directory = mkdtempSync(join(reportRoot, 'run-'));
@@ -138,7 +138,7 @@ export async function parallelContracts({
         console.error('[contracts] Starting ' + suite.name + '; log: ' + log);
         const begin = Date.now();
         const result = await execute(suite.executable, [], {
-          cwd: dirname(manifest), env: { ...childEnv, RUST_TEST_THREADS: String(suite.name === 'tail_static' ? 8 : suite.name === 'source_review' ? 1 : testThreads), JAIT_SOURCE_REVIEW_WORKERS: String(testThreads) }, log, signal: controller.signal,
+          cwd: dirname(manifest), env: { ...childEnv, RUST_TEST_THREADS: String(suite.name === 'tail_static' ? 8 : suite.name === 'source_review' ? 1 : testThreads), JAIT_SOURCE_REVIEW_WORKERS: childEnv.JAIT_SOURCE_REVIEW_WORKERS ?? String(testThreads) }, log, signal: controller.signal,
           onFailure: () => controller.abort(new Error('Contract suite failed: ' + suite.name)),
         });
         results.push({ name: suite.name, index: suite.index, log, ...result, durationMs: Date.now() - begin });

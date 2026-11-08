@@ -61,6 +61,10 @@ pub struct ChatLoop {
     pub next_message: Utf16Text,
     pub evidence: Vec<Utf16Text>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_criteria: Option<Vec<f64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_evidence: Option<Vec<ExecutionEvidence>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub budget_start_iteration: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stalled_checks: Option<f64>,
@@ -69,6 +73,15 @@ pub struct ChatLoop {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub monitor: Option<LoopMonitor>,
     pub updated_at: Utf16Text,
+}
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionEvidence {
+    pub criterion: f64,
+    pub terminal_id: Utf16Text,
+    pub execution_id: Utf16Text,
+    pub status: String,
+    pub exit_code: Option<f64>,
 }
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -190,6 +203,68 @@ fn parse_at(doc: &JsonDocument, id: usize) -> Option<ChatLoop> {
         summary: text(doc, get("summary")?, 0, 8000, false)?,
         next_message: text(doc, get("nextMessage")?, 0, 8000, false)?,
         evidence: texts(doc, get("evidence")?, 0, 20, 0, 2000, false)?,
+        execution_criteria: match get("executionCriteria") {
+            Some(id) => {
+                let JsonValue::Array(values) = &doc.nodes[id] else {
+                    return None;
+                };
+                if values.len() > 20 {
+                    return None;
+                }
+                Some(
+                    values
+                        .iter()
+                        .map(|id| integer(doc, *id, 0.0).filter(|value| *value <= 19.0))
+                        .collect::<Option<Vec<_>>>()?,
+                )
+            }
+            None => None,
+        },
+        execution_evidence: match get("executionEvidence") {
+            Some(id) => {
+                let JsonValue::Array(values) = &doc.nodes[id] else {
+                    return None;
+                };
+                if values.len() > 20 {
+                    return None;
+                }
+                Some(
+                    values
+                        .iter()
+                        .map(|id| {
+                            let get = |key| field(doc, *id, key);
+                            let criterion = integer(doc, get("criterion")?, 0.0)?;
+                            if criterion > 19.0 {
+                                return None;
+                            }
+                            let status =
+                                String::from_utf16(&text(doc, get("status")?, 1, 20, false)?.0)
+                                    .ok()?;
+                            if !["completed", "failed", "timed_out", "cancelled", "running"]
+                                .contains(&status.as_str())
+                            {
+                                return None;
+                            }
+                            let exit_code = match doc.nodes[get("exitCode")?] {
+                                JsonValue::Null => None,
+                                JsonValue::Number(n) if n.is_finite() && n.fract() == 0.0 => {
+                                    Some(n)
+                                }
+                                _ => return None,
+                            };
+                            Some(ExecutionEvidence {
+                                criterion,
+                                terminal_id: text(doc, get("terminalId")?, 1, 200, false)?,
+                                execution_id: text(doc, get("executionId")?, 1, 200, false)?,
+                                status,
+                                exit_code,
+                            })
+                        })
+                        .collect::<Option<Vec<_>>>()?,
+                )
+            }
+            None => None,
+        },
         budget_start_iteration: match get("budgetStartIteration") {
             Some(id) => Some(integer(doc, id, 0.0)?),
             None => None,
@@ -463,6 +538,8 @@ impl<'a> ChatLoopService<'a> {
                 summary: Utf16Text(vec![]),
                 next_message: Utf16Text(vec![]),
                 evidence: vec![],
+                execution_criteria: Some(vec![]),
+                execution_evidence: None,
                 budget_start_iteration: None,
                 stalled_checks: None,
                 unchecked_turns: None,
@@ -569,6 +646,14 @@ impl<'a> ChatLoopService<'a> {
             .get(id, user)?
             .filter(|s| s.status == "running" && Some(s.revision) == input["revision"].as_f64())
             .ok_or("Loop changed or is stopped. Read loop.status before checking again.")?;
+        if input.get("executionRefs").is_some_and(|refs| {
+            !refs.is_null() && refs.as_array().is_none_or(|values| !values.is_empty())
+        }) {
+            return Err(
+                "Execution evidence is unavailable or belongs to another chat; rerun the check"
+                    .into(),
+            );
+        }
         let outcome = input["outcome"].as_str().unwrap_or("");
         if !["continue", "complete", "waiting"].contains(&outcome) {
             return Err("Invalid loop outcome".into());
@@ -682,7 +767,21 @@ impl<'a> ChatLoopService<'a> {
             })
             .collect();
         schema_result(issues)?;
+        if outcome == "complete"
+            && state
+                .execution_criteria
+                .as_ref()
+                .is_some_and(|v| !v.is_empty())
+        {
+            return Err(if monitored {
+                "Completion requires a tracked execution for each execution criterion"
+            } else {
+                "Execution criteria require monitored verification"
+            }
+            .into());
+        }
         if monitored && outcome != "waiting" {
+            state.execution_evidence = Some(vec![]);
             let repeated = state.checked_iteration < state.iteration
                 && state.summary.0 == summary.encode_utf16().collect::<Vec<_>>()
                 && wire(&state.evidence) == wire(&evidence);
@@ -855,6 +954,10 @@ pub fn chat_loop_instructions(state: Option<&ChatLoop>) -> Option<Utf16Text> {
         Utf16Text::from(format!("Goal: {}", wire(&s.goal))),
         Utf16Text::from(format!("Acceptance criteria: {}", wire(&s.criteria))),
         Utf16Text::from(format!(
+            "Criteria requiring tracked execution evidence (zero-based indices): {}.",
+            wire(&s.execution_criteria.as_deref().unwrap_or(&[]))
+        )),
+        Utf16Text::from(format!(
             "Loop revision: {}; completed turns: {}.",
             ryu_js::Buffer::new().format(s.revision),
             ryu_js::Buffer::new().format(s.iteration)
@@ -865,7 +968,7 @@ pub fn chat_loop_instructions(state: Option<&ChatLoop>) -> Option<Utf16Text> {
             wire(&s.monitor)
         )),
     ];
-    lines.push(Utf16Text::from("Before ending this turn, discover and call loop.check. Read loop.status for the current revision first. Report concrete new progress and its evidence on continue checks, including integrated code, focused passing tests or resolved blockers; an unchanged overall completion count does not mean no progress. Distinguish provider or capacity failures from unresolved work, and do not present a plan or repeated claim as completed progress. Check every criterion against actual evidence; use outcome=complete only after all criteria have passed, supplying one verification evidence entry per criterion. Otherwise use outcome=continue and write the next concrete message to yourself. If a user answer is required, use user.ask; if the turn must end awaiting input, use outcome=waiting and describe the question. Never treat missing approval as permission. Existing consent, assessment scopes, exclusions and tool limits still apply. Do not start additional agents unless the user authorized them."));
+    lines.push(Utf16Text::from("Before ending this turn, discover and call loop.check. Read loop.status for the current revision first. Report failed or incomplete verification as an explicit blocker and prioritize fixing it before relying on older passes. Cite tracked terminal executions using executionRefs when available; a successful exit alone does not establish a criterion or prove the current workspace is unchanged. Report concrete new progress and its evidence on continue checks, including integrated code, focused passing tests or resolved blockers; an unchanged overall completion count does not mean no progress. Distinguish provider or capacity failures from unresolved work, and do not present a plan or repeated claim as completed progress. Check every criterion against actual evidence; use outcome=complete only after all criteria have passed, supplying one verification evidence entry per criterion. Otherwise use outcome=continue and write the next concrete message to yourself. If a user answer is required, use user.ask; if the turn must end awaiting input, use outcome=waiting and describe the question. Never treat missing approval as permission. Existing consent, assessment scopes, exclusions and tool limits still apply. Do not start additional agents unless the user authorized them."));
     Some(Utf16Text(
         lines.into_iter().map(|s| s.0).collect::<Vec<_>>().join(&10),
     ))
@@ -991,7 +1094,7 @@ impl PreparedLoopCheck {
     ) -> Result<String, String> {
         // wire preserves UTF-16 code units, including lone surrogates in saved goals.
         let raw = format!(
-            r#"{{"goal":{},"criteria":{},"previous":{{"summary":{},"evidence":{}}},"proposed":{{"outcome":{},"summary":{},"evidence":{},"nextMessage":{}}}}}"#,
+            r#"{{"goal":{},"criteria":{},"previous":{{"summary":{},"evidence":{}}},"proposed":{{"outcome":{},"summary":{},"evidence":{},"executionEvidence":[],"nextMessage":{}}}}}"#,
             wire(&self.state.goal),
             wire(&self.state.criteria),
             wire(&self.state.summary),

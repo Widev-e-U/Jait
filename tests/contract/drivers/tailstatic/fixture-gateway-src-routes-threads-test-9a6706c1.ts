@@ -146,6 +146,133 @@ class MockThreadProvider implements CliProviderAdapter {
 try {
 await (async()=>{
 
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const threadService = new ThreadService(db);
+    const thread = threadService.create({ userId: "user-1", title: "Approval", providerId: "codex" });
+    threadService.update(thread.id, { providerSessionId: "mock-session-1" });
+    const provider = new MockThreadProvider();
+    const respond = vi.spyOn(provider, "respondToApproval");
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const, jwtSecret: "approval-secret" };
+    registerThreadRoutes(app, config, { threadService, providerRegistry: registry });
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    for (const payload of [{}, { requestId: "req" }, { requestId: "req", approved: "yes" }, { requestId: "  ", approved: true }]) {
+      const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload });
+      __jait_capture(1, (response.statusCode));
+    }
+    __jait_capture(2, (respond.mock.calls));
+    const denied = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "req", approved: false } });
+    __jait_capture(3, (denied.statusCode));
+    __jait_capture(4, (respond.mock.calls));
+    respond.mockRejectedValueOnce(new Error("stale"));
+    const stale = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "stale", approved: true } });
+    __jait_capture(5, (stale.statusCode));
+    __jait_capture(6, (threadService.getActivities(thread.id).filter((activity) => activity.kind === "tool.approval-response")));
+    threadService.update(thread.id, { executionNodeId: "remote-node" });
+    const remote = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/approve`, headers, payload: { requestId: "remote", approved: true } });
+    __jait_capture(7, (remote.statusCode));
+    __jait_capture(8, (respond.mock.calls));
+    __jait_capture(9, (threadService.getActivities(thread.id).filter((activity) => activity.kind === "tool.approval-response")));
+    await app.close();
+    sqlite.close();
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_140_3": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+async function authHeader(jwtSecret: string, userId: string) {
+  const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+async function waitFor(condition: () => boolean, timeoutMs = 2000) {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+function expectThreadTurnMessage(message: unknown, startsWith: string): void {
+  __jait_capture(0, (message), ([startsWith]));
+}
+class MockThreadProvider implements CliProviderAdapter {
+  readonly id: "jait" | "codex" | "claude-code";
+  readonly info: ProviderInfo;
+
+  private emitter = new EventEmitter();
+  readonly sendTurn = vi.fn(async (): Promise<void> => {
+    return;
+  });
+
+  constructor(id: "jait" | "codex" | "claude-code" = "codex") {
+    this.id = id;
+    this.info = {
+      id,
+      name: id === "jait" ? "Mock Jait" : id === "claude-code" ? "Mock Claude Code" : "Mock Codex",
+      description: "Test provider",
+      available: true,
+      modes: ["full-access", "supervised"],
+    };
+  }
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly startSessionCalls: StartSessionOptions[] = [];
+
+  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    const sessionId = "mock-session-1";
+    this.startSessionCalls.push(options);
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  }
+
+  async interruptTurn(): Promise<void> {
+    return;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  async stopSession(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  emit(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const { db, sqlite } = await openDatabase(":memory:"); migrateDatabase(sqlite);
     const service = new ThreadService(db);
     const thread = service.create({ userId: "user-1", title: "Idle fixture", providerId: "codex", workingDirectory: process.cwd() });
@@ -181,7 +308,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_134_3_each0": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_168_3_each0": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -308,7 +435,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_134_3_each1": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_168_3_each1": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -435,7 +562,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_173_3_each0": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_207_3_each0": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -516,7 +643,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 /*__jait_scope_open__*/{
@@ -551,14 +678,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_173_3_each1": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_207_3_each1": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -639,7 +766,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 /*__jait_scope_open__*/{
@@ -674,14 +801,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_198_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_232_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -762,7 +889,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -809,13 +936,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_237_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_271_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -896,7 +1023,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -921,13 +1048,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_254_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_288_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -1008,7 +1135,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -1051,13 +1178,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_289_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_323_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -1138,7 +1265,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -1171,13 +1298,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_314_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_348_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -1258,7 +1385,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -1302,13 +1429,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_350_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_384_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -1389,7 +1516,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -1429,136 +1556,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_382_3": {
-
-const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
-async function authHeader(jwtSecret: string, userId: string) {
-  const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
-  return { authorization: `Bearer ${token}` };
-}
-async function waitFor(condition: () => boolean, timeoutMs = 2000) {
-  const start = Date.now();
-  while (!condition()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error("Timed out waiting for condition");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
-function expectThreadTurnMessage(message: unknown, startsWith: string): void {
-  __jait_capture(0, (message), ([startsWith]));
-}
-class MockThreadProvider implements CliProviderAdapter {
-  readonly id: "jait" | "codex" | "claude-code";
-  readonly info: ProviderInfo;
-
-  private emitter = new EventEmitter();
-  readonly sendTurn = vi.fn(async (): Promise<void> => {
-    return;
-  });
-
-  constructor(id: "jait" | "codex" | "claude-code" = "codex") {
-    this.id = id;
-    this.info = {
-      id,
-      name: id === "jait" ? "Mock Jait" : id === "claude-code" ? "Mock Claude Code" : "Mock Codex",
-      description: "Test provider",
-      available: true,
-      modes: ["full-access", "supervised"],
-    };
-  }
-
-  async checkAvailability(): Promise<boolean> {
-    return true;
-  }
-
-  readonly startSessionCalls: StartSessionOptions[] = [];
-
-  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
-    const sessionId = "mock-session-1";
-    this.startSessionCalls.push(options);
-    this.emit({ type: "session.started", sessionId });
-    return {
-      id: sessionId,
-      providerId: this.id,
-      threadId: options.threadId,
-      status: "running",
-      runtimeMode: options.mode,
-      startedAt: new Date().toISOString(),
-    };
-  }
-
-  async interruptTurn(): Promise<void> {
-    return;
-  }
-
-  async respondToApproval(): Promise<void> {
-    return;
-  }
-
-  async stopSession(): Promise<void> {
-    return;
-  }
-
-  onEvent(handler: (event: ProviderEvent) => void): () => void {
-    this.emitter.on("event", handler);
-    return () => this.emitter.off("event", handler);
-  }
-
-  emit(event: ProviderEvent): void {
-    this.emitter.emit("event", event);
-  }
-}
-/*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
-    interventionRunResumeRegistry.clearForTests();
-  };
-
-try {
-await (async()=>{
-
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    const service = new ThreadService(db);
-    const users = new UserService(db);
-    const user = users.createUser("cancel-owner", "password123");
-    const thread = service.create({ title: "Work", providerId: "codex", userId: user.id, workingDirectory: process.cwd() });
-    service.markRunning(thread.id, "lost");
-    const provider = new MockThreadProvider();
-    const start = provider.startSession.bind(provider);
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const starting = vi.spyOn(provider, "startSession").mockImplementation(async (options) => { await gate; return start(options); });
-    const stopping = vi.spyOn(provider, "stopSession");
-    const registry = new ProviderRegistry();
-    registry.register(provider);
-    const app = Fastify();
-    const config = { ...loadConfig(), nodeEnv: "test" as const };
-    service.queueRestartRecovery();
-    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry, userService: users });
-    const recovering = (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
-    await waitFor(() => starting.mock.calls.length === 1);
-    const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/stop`, headers: await authHeader(config.jwtSecret, user.id) });
-    __jait_capture(1, (response.statusCode));
-    release();
-    await recovering;
-    __jait_capture(2, (stopping.mock.calls));
-    __jait_capture(3, (provider.sendTurn.mock.calls));
-    __jait_capture(4, (service.getById(thread.id)?.status));
-    __jait_captureType(5, (service.getRecovery(thread.id)));
-    await app.close();
-    sqlite.close();
-  
-})();
-
-} finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
@@ -1645,7 +1643,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -1655,33 +1653,45 @@ await (async()=>{
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     const service = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("cancel-owner", "password123");
+    const thread = service.create({ title: "Work", providerId: "codex", userId: user.id, workingDirectory: process.cwd() });
+    service.markRunning(thread.id, "lost");
     const provider = new MockThreadProvider();
+    const start = provider.startSession.bind(provider);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const starting = vi.spyOn(provider, "startSession").mockImplementation(async (options) => { await gate; return start(options); });
+    const stopping = vi.spyOn(provider, "stopSession");
     const registry = new ProviderRegistry();
     registry.register(provider);
     const app = Fastify();
     const config = { ...loadConfig(), nodeEnv: "test" as const };
-    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry });
-    const thread = service.create({ title: "Work", providerId: "codex", userId: "stream-owner", workingDirectory: process.cwd() });
-    await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`, headers: await authHeader(config.jwtSecret, "stream-owner"), payload: {} });
-    provider.emit({ type: "token", sessionId: "mock-session-1", content: "Partial progress" });
-    __jait_capture(1, (new ThreadService(db).getActivities(thread.id).some((activity) => activity.payload && (activity.payload as { content?: string }).content === "Partial progress")));
-    provider.emit({ type: "message", sessionId: "mock-session-1", role: "assistant", content: "Partial progress finished." });
-    const messages = service.getActivities(thread.id).filter((activity) => activity.kind === "message");
-    __jait_capture(2, (messages));
-    __jait_capture(3, (messages[0]?.payload));
+    service.queueRestartRecovery();
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry, userService: users });
+    const recovering = (app as typeof app & { recoverInterruptedThreadTurns: () => Promise<number> }).recoverInterruptedThreadTurns();
+    await waitFor(() => starting.mock.calls.length === 1);
+    const response = await app.inject({ method: "POST", url: `/api/threads/${thread.id}/stop`, headers: await authHeader(config.jwtSecret, user.id) });
+    __jait_capture(1, (response.statusCode));
+    release();
+    await recovering;
+    __jait_capture(2, (stopping.mock.calls));
+    __jait_capture(3, (provider.sendTurn.mock.calls));
+    __jait_capture(4, (service.getById(thread.id)?.status));
+    __jait_captureType(5, (service.getRecovery(thread.id)));
     await app.close();
     sqlite.close();
   
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_438_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_450_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -1762,7 +1772,124 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
+    interventionRunResumeRegistry.clearForTests();
+  };
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const service = new ThreadService(db);
+    const provider = new MockThreadProvider();
+    const registry = new ProviderRegistry();
+    registry.register(provider);
+    const app = Fastify();
+    const config = { ...loadConfig(), nodeEnv: "test" as const };
+    registerThreadRoutes(app, config, { threadService: service, providerRegistry: registry });
+    const thread = service.create({ title: "Work", providerId: "codex", userId: "stream-owner", workingDirectory: process.cwd() });
+    await app.inject({ method: "POST", url: `/api/threads/${thread.id}/start`, headers: await authHeader(config.jwtSecret, "stream-owner"), payload: {} });
+    provider.emit({ type: "token", sessionId: "mock-session-1", content: "Partial progress" });
+    __jait_capture(1, (new ThreadService(db).getActivities(thread.id).some((activity) => activity.payload && (activity.payload as { content?: string }).content === "Partial progress")));
+    provider.emit({ type: "message", sessionId: "mock-session-1", role: "assistant", content: "Partial progress finished." });
+    const messages = service.getActivities(thread.id).filter((activity) => activity.kind === "message");
+    __jait_capture(2, (messages));
+    __jait_capture(3, (messages[0]?.payload));
+    await app.close();
+    sqlite.close();
+  
+})();
+
+} finally {
+await __jait_hook_9697();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_472_3": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+async function authHeader(jwtSecret: string, userId: string) {
+  const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+async function waitFor(condition: () => boolean, timeoutMs = 2000) {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+function expectThreadTurnMessage(message: unknown, startsWith: string): void {
+  __jait_capture(0, (message), ([startsWith]));
+}
+class MockThreadProvider implements CliProviderAdapter {
+  readonly id: "jait" | "codex" | "claude-code";
+  readonly info: ProviderInfo;
+
+  private emitter = new EventEmitter();
+  readonly sendTurn = vi.fn(async (): Promise<void> => {
+    return;
+  });
+
+  constructor(id: "jait" | "codex" | "claude-code" = "codex") {
+    this.id = id;
+    this.info = {
+      id,
+      name: id === "jait" ? "Mock Jait" : id === "claude-code" ? "Mock Claude Code" : "Mock Codex",
+      description: "Test provider",
+      available: true,
+      modes: ["full-access", "supervised"],
+    };
+  }
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly startSessionCalls: StartSessionOptions[] = [];
+
+  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    const sessionId = "mock-session-1";
+    this.startSessionCalls.push(options);
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  }
+
+  async interruptTurn(): Promise<void> {
+    return;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  async stopSession(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  emit(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+}
+/*__jait_scope_open__*/{
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -1806,132 +1933,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_474_3": {
-
-const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
-async function authHeader(jwtSecret: string, userId: string) {
-  const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
-  return { authorization: `Bearer ${token}` };
-}
-async function waitFor(condition: () => boolean, timeoutMs = 2000) {
-  const start = Date.now();
-  while (!condition()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error("Timed out waiting for condition");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
-function expectThreadTurnMessage(message: unknown, startsWith: string): void {
-  __jait_capture(0, (message), ([startsWith]));
-}
-class MockThreadProvider implements CliProviderAdapter {
-  readonly id: "jait" | "codex" | "claude-code";
-  readonly info: ProviderInfo;
-
-  private emitter = new EventEmitter();
-  readonly sendTurn = vi.fn(async (): Promise<void> => {
-    return;
-  });
-
-  constructor(id: "jait" | "codex" | "claude-code" = "codex") {
-    this.id = id;
-    this.info = {
-      id,
-      name: id === "jait" ? "Mock Jait" : id === "claude-code" ? "Mock Claude Code" : "Mock Codex",
-      description: "Test provider",
-      available: true,
-      modes: ["full-access", "supervised"],
-    };
-  }
-
-  async checkAvailability(): Promise<boolean> {
-    return true;
-  }
-
-  readonly startSessionCalls: StartSessionOptions[] = [];
-
-  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
-    const sessionId = "mock-session-1";
-    this.startSessionCalls.push(options);
-    this.emit({ type: "session.started", sessionId });
-    return {
-      id: sessionId,
-      providerId: this.id,
-      threadId: options.threadId,
-      status: "running",
-      runtimeMode: options.mode,
-      startedAt: new Date().toISOString(),
-    };
-  }
-
-  async interruptTurn(): Promise<void> {
-    return;
-  }
-
-  async respondToApproval(): Promise<void> {
-    return;
-  }
-
-  async stopSession(): Promise<void> {
-    return;
-  }
-
-  onEvent(handler: (event: ProviderEvent) => void): () => void {
-    this.emitter.on("event", handler);
-    return () => this.emitter.off("event", handler);
-  }
-
-  emit(event: ProviderEvent): void {
-    this.emitter.emit("event", event);
-  }
-}
-/*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
-    interventionRunResumeRegistry.clearForTests();
-  };
-
-try {
-await (async()=>{
-
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-
-    const app = Fastify();
-    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
-    const threadService = new ThreadService(db);
-    const providerRegistry = new ProviderRegistry();
-    providerRegistry.register(new MockThreadProvider());
-
-    registerThreadRoutes(app, config, {
-      threadService,
-      providerRegistry,
-    });
-
-    const headers = await authHeader(config.jwtSecret, "user-1");
-    const response = await app.inject({
-      method: "POST",
-      url: "/api/threads",
-      headers,
-      payload: { title: "Helper", providerId: "codex", kind: "delegation" },
-    });
-
-    __jait_capture(1, (response.statusCode));
-    __jait_capture(2, (response.json()));
-
-    await app.close();
-    sqlite.close();
-  
-})();
-
-} finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
@@ -2018,7 +2020,132 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
+    interventionRunResumeRegistry.clearForTests();
+  };
+
+try {
+await (async()=>{
+
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider());
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Helper", providerId: "codex", kind: "delegation" },
+    });
+
+    __jait_capture(1, (response.statusCode));
+    __jait_capture(2, (response.json()));
+
+    await app.close();
+    sqlite.close();
+  
+})();
+
+} finally {
+await __jait_hook_9697();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_542_3": {
+
+const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
+async function authHeader(jwtSecret: string, userId: string) {
+  const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
+  return { authorization: `Bearer ${token}` };
+}
+async function waitFor(condition: () => boolean, timeoutMs = 2000) {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+function expectThreadTurnMessage(message: unknown, startsWith: string): void {
+  __jait_capture(0, (message), ([startsWith]));
+}
+class MockThreadProvider implements CliProviderAdapter {
+  readonly id: "jait" | "codex" | "claude-code";
+  readonly info: ProviderInfo;
+
+  private emitter = new EventEmitter();
+  readonly sendTurn = vi.fn(async (): Promise<void> => {
+    return;
+  });
+
+  constructor(id: "jait" | "codex" | "claude-code" = "codex") {
+    this.id = id;
+    this.info = {
+      id,
+      name: id === "jait" ? "Mock Jait" : id === "claude-code" ? "Mock Claude Code" : "Mock Codex",
+      description: "Test provider",
+      available: true,
+      modes: ["full-access", "supervised"],
+    };
+  }
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  readonly startSessionCalls: StartSessionOptions[] = [];
+
+  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    const sessionId = "mock-session-1";
+    this.startSessionCalls.push(options);
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  }
+
+  async interruptTurn(): Promise<void> {
+    return;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  async stopSession(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  emit(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+}
+/*__jait_scope_open__*/{
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2079,13 +2206,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_561_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_595_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2166,7 +2293,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2216,13 +2343,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_605_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_639_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2303,7 +2430,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2345,13 +2472,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_644_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_678_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2432,7 +2559,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2448,8 +2575,12 @@ await (async()=>{
     const users = new UserService(db);
     const sessionState = new SessionStateService(db);
     const user = users.createUser("selected-defaults-user", "secret");
-    users.updateSettings(user.id, { chatProvider: "codex" });
+    // The account-level default points at a provider that is not even registered:
+    // it must never be what a spawned thread runs on. Only the choice made in the
+    // chat itself counts.
+    users.updateSettings(user.id, { chatProvider: "ollama" });
     sessionState.set("session-selected-defaults", {
+      "chat.provider": "codex",
       "chat.providerRuntimeMode": "supervised",
       "chat.cliModels": { codex: "gpt-5-codex" },
     });
@@ -2480,13 +2611,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_691_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_729_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2567,7 +2698,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2622,13 +2753,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_738_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_776_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2709,7 +2840,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2725,8 +2856,8 @@ await (async()=>{
     const users = new UserService(db);
     const sessionState = new SessionStateService(db);
     const user = users.createUser("effort-inherit-user", "secret");
-    users.updateSettings(user.id, { chatProvider: "codex" });
-    sessionState.set("session-effort", { "chat.reasoningEffort": "high" });
+    users.updateSettings(user.id, { chatProvider: "ollama" });
+    sessionState.set("session-effort", { "chat.provider": "codex", "chat.reasoningEffort": "high" });
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(new MockThreadProvider("codex"));
 
@@ -2754,13 +2885,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_775_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_813_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2841,7 +2972,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -2879,13 +3010,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_805_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_843_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -2966,7 +3097,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3018,13 +3149,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_849_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_887_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -3105,7 +3236,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3171,13 +3302,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_907_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_945_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -3258,7 +3389,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3330,13 +3461,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_971_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1009_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -3417,7 +3548,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3487,13 +3618,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1033_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1071_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -3574,7 +3705,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3636,13 +3767,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1091_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1129_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -3723,7 +3854,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3793,13 +3924,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1153_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1191_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -3880,7 +4011,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -3958,13 +4089,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1223_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1261_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4045,7 +4176,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4089,13 +4220,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1259_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1297_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4176,7 +4307,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4227,13 +4358,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1304_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1342_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4314,7 +4445,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4384,13 +4515,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1375_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1413_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4471,7 +4602,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4524,13 +4655,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1428_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1466_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4611,7 +4742,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4670,13 +4801,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1479_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1517_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4757,7 +4888,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4822,13 +4953,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1536_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1574_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -4909,7 +5040,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -4960,13 +5091,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1582_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1620_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -5047,7 +5178,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -5119,13 +5250,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1646_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1684_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -5206,7 +5337,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -5261,13 +5392,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1704_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1742_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -5348,7 +5479,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -5462,13 +5593,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1810_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1848_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -5549,7 +5680,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -5614,13 +5745,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_threads_test_ts_1867_3": {
+case "tailstatic_packages_gateway_src_routes_threads_test_ts_1905_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 async function authHeader(jwtSecret: string, userId: string) {
@@ -5701,7 +5832,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 /*__jait_scope_open__*/{
-const __jait_hook_7326 = () => {
+const __jait_hook_9697 = () => {
     interventionRunResumeRegistry.clearForTests();
   };
 
@@ -5774,7 +5905,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_7326();
+await __jait_hook_9697();
 }
 }
 

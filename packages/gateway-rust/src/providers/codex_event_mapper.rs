@@ -537,6 +537,17 @@ fn extract_tool_result_data(item: &Map<String, Value>) -> Option<Value> {
                 .or_else(|| parse_json_object(item.get("data")))
                 .map(Value::Object)
         })
+        .or_else(|| {
+            item.get("result")
+                .filter(|value| value.is_string() || value.is_array())
+                .cloned()
+        })
+        .or_else(|| item.get("output").filter(|value| value.is_array()).cloned())
+        .or_else(|| {
+            item.get("data")
+                .filter(|value| value.is_string() || value.is_array())
+                .cloned()
+        })
 }
 
 fn extract_text_content(item: &Map<String, Value>) -> String {

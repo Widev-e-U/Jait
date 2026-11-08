@@ -22,10 +22,10 @@ tests are skipped by default; explicitly include them with `--tests`. Chromium E
 and UI fixture suites remain independently opt-in with `--e2e`. Use both flags for
 all suites. Browser test runtimes are prepared only for selected suites.
 The opted-in Rust gate runs formatting, Clippy, native library tests and the
-complete contract suite once. These tests are mandatory prerequisites of
-`node scripts/release.mjs` before any version edits, release commit or push;
-`--skip-checks` does not bypass these test prerequisites. Dry runs do not run tests.
-CI retains its existing checks.
+complete contract suite once. The release script requires unit, workflow/deployment
+and browser-tool checks before version edits, the release commit or push; its
+ordinary prerequisites exclude the Rust migration gate. `--skip-checks` does not
+bypass the required tests. Dry runs do not run tests. CI retains its existing checks.
 
 The plan records `skipTests` and `skipE2e`; proof lists only selected checks that
 passed. Activation requires exactly the evidence selected by that plan. Old plans

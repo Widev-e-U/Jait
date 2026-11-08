@@ -71,7 +71,7 @@ fn occupied_port_fails_without_readiness_and_recovers_after_release() -> Result<
     let error = failed.err().unwrap().to_string();
     assert!(error.contains("exited unsuccessfully"), "{error}");
     assert!(
-        started.elapsed() < std::time::Duration::from_secs(30),
+        started.elapsed() < fixture::STARTUP_TIMEOUT + std::time::Duration::from_secs(5),
         "failed startup did not exit promptly"
     );
     assert!(!dir.join("ready-port").exists());
@@ -101,7 +101,7 @@ fn corrupt_database_fails_without_readiness_and_preserves_original_bytes() -> Re
     let error = failed.err().unwrap().to_string();
     assert!(error.contains("exited unsuccessfully"), "{error}");
     assert!(
-        started.elapsed() < std::time::Duration::from_secs(30),
+        started.elapsed() < fixture::STARTUP_TIMEOUT + std::time::Duration::from_secs(5),
         "failed startup did not exit promptly"
     );
     assert!(!dir.join("ready-port").exists());

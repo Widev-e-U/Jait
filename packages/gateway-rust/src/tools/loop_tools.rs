@@ -46,9 +46,19 @@ pub fn execute(
         }
         let id = &context.session_id;
         match name {
-            "loop.goal" => service
-                .goal(id, input.get("goal"), input.get("criteria"), user)
-                .map(Some),
+            "loop.goal" => {
+                if input
+                    .get("executionCriteria")
+                    .is_some_and(|value| value.as_array().is_none_or(|items| !items.is_empty()))
+                {
+                    return Err(
+                        "Tracked execution criteria are not supported by the native gateway".into(),
+                    );
+                }
+                service
+                    .goal(id, input.get("goal"), input.get("criteria"), user)
+                    .map(Some)
+            }
             "loop.status" => service.get(id, user),
             "loop.check" => {
                 if crate::services::system_one::system_one_enabled(context.api_keys.as_ref()) {

@@ -167,6 +167,30 @@ case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_71_3"
 try {
 await (async()=>{
 
+    for (const result of ["Fetched content", [{ type: "text", text: "Fetched content" }]]) {
+      const events = mapCodexNotification("item/mcpToolCall/completed", {
+        id: "call-1", name: "fetch", status: "completed", result,
+      }, "session-1");
+      __jait_capture(0, (events[0]), ({ type: "tool.result", data: result }));
+    }
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_80_3": {
+
+
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     const events = mapCodexNotification("item/mcpToolCall/completed", {
       id: "call-1",
       name: "todo",
@@ -193,7 +217,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_102_3": {
+case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_111_3": {
 
 
 /*__jait_scope_open__*/{
@@ -217,7 +241,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_116_3": {
+case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_125_3": {
 
 
 /*__jait_scope_open__*/{
@@ -248,7 +272,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_146_3": {
+case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_155_3": {
 
 
 /*__jait_scope_open__*/{
@@ -287,7 +311,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_189_3": {
+case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_198_3": {
 
 
 /*__jait_scope_open__*/{
@@ -314,7 +338,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_206_3": {
+case "tailstatic_packages_gateway_src_providers_codex_event_mapper_test_ts_215_3": {
 
 
 /*__jait_scope_open__*/{

@@ -2,6 +2,7 @@
 import { normalizeReasoningEffort, resolveThreadSelectionDefaults } from "../../../../packages/gateway/src/services/thread-defaults.js";
 import type { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
 import type { UserService, UserSettingsRecord } from "../../../../packages/gateway/src/services/users.js";
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -42,12 +43,12 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_39_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_45_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -59,7 +60,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -90,12 +91,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_43_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_49_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -107,7 +108,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -127,11 +128,16 @@ function makeSessionState(state: Record<string, unknown>): SessionStateService {
 try {
 await (async()=>{
 
+    const userService = makeUserService("claude-code");
     const result = resolveThreadSelectionDefaults({
-      userId: "   ",
-      userService: makeUserService("codex"),
+      userId: "user-1",
+      sessionId: "session-1",
+      userService,
+      sessionState: makeSessionState({}),
     });
+
     __jait_capture(0, (result));
+    __jait_capture(1, (userService.getSettings.mock.calls));
   
 })();
 
@@ -142,12 +148,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_51_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_67_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -159,7 +165,60 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
+  } as unknown as UserService;
+}
+function makeSessionState(state: Record<string, unknown>): SessionStateService {
+  return {
+    get: (_sessionId: string, keys?: string[]) => {
+      if (!keys?.length) return { ...state };
+      const out: Record<string, unknown> = {};
+      for (const key of keys) {
+        if (key in state) out[key] = state[key];
+      }
+      return out;
+    },
+  } as unknown as SessionStateService;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const userService = makeUserService("codex");
+    const result = resolveThreadSelectionDefaults({ userId: "user-1", userService });
+
+    __jait_captureType(0, (result.providerId));
+    __jait_captureType(1, (result.model));
+    __jait_capture(2, (userService.getSettings.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_76_3": {
+
+
+function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
+  return {
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
+      userId: _userId,
+      theme: "system",
+      apiKeys: {},
+      disabledTools: [],
+      sttProvider: "whisper",
+      chatProvider,
+      jaitBackend: "openai",
+      recentModels: [],
+      workspacePickerPath: null,
+      workspacePickerNodeId: null,
+      updatedAt: new Date().toISOString(),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -181,9 +240,12 @@ await (async()=>{
 
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
+      sessionId: "session-1",
       userService: makeUserService("claude-code"),
+      sessionState: makeSessionState({ "chat.provider": "codex" }),
     });
-    __jait_capture(0, (result));
+
+    __jait_capture(0, (result.providerId));
   
 })();
 
@@ -194,12 +256,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_59_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_87_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -211,7 +273,63 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
+  } as unknown as UserService;
+}
+function makeSessionState(state: Record<string, unknown>): SessionStateService {
+  return {
+    get: (_sessionId: string, keys?: string[]) => {
+      if (!keys?.length) return { ...state };
+      const out: Record<string, unknown> = {};
+      for (const key of keys) {
+        if (key in state) out[key] = state[key];
+      }
+      return out;
+    },
+  } as unknown as SessionStateService;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (resolveThreadSelectionDefaults({
+      sessionId: "session-1",
+      sessionState: makeSessionState({ "chat.provider": "  codex  " }),
+    }).providerId));
+
+    __jait_captureType(1, (resolveThreadSelectionDefaults({
+      sessionId: "session-1",
+      sessionState: makeSessionState({ "chat.provider": "   " }),
+    }).providerId));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_99_3": {
+
+
+function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
+  return {
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
+      userId: _userId,
+      theme: "system",
+      apiKeys: {},
+      disabledTools: [],
+      sttProvider: "whisper",
+      chatProvider,
+      jaitBackend: "openai",
+      recentModels: [],
+      workspacePickerPath: null,
+      workspacePickerNodeId: null,
+      updatedAt: new Date().toISOString(),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -236,7 +354,9 @@ await (async()=>{
       sessionId: "session-1",
       userService: makeUserService("codex"),
     });
-    __jait_capture(0, (result));
+
+    __jait_captureType(0, (result.providerId));
+    __jait_captureType(1, (result.model));
   
 })();
 
@@ -247,12 +367,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_68_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_110_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -264,7 +384,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -287,8 +407,8 @@ await (async()=>{
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("codex"),
       sessionState: makeSessionState({
+        "chat.provider": "codex",
         "chat.providerRuntimeMode": "supervised",
       }),
     });
@@ -303,12 +423,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_84_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_126_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -320,7 +440,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -343,8 +463,8 @@ await (async()=>{
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("codex"),
       sessionState: makeSessionState({
+        "chat.provider": "codex",
         "chat.providerRuntimeMode": "yolo",
       }),
     });
@@ -359,12 +479,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_96_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_138_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -376,7 +496,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -399,8 +519,8 @@ await (async()=>{
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("claude-code"),
       sessionState: makeSessionState({
+        "chat.provider": "claude-code",
         "chat.providerRuntimeMode": "full-access",
         "chat.cliModels": {
           "claude-code": "  claude-sonnet-4-6  ",
@@ -419,12 +539,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_116_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_158_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -436,7 +556,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -459,18 +579,82 @@ await (async()=>{
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("codex"),
+      userService: makeUserService("jait"),
       sessionState: makeSessionState({
+        "chat.provider": "codex",
+        "chat.cliModels": {
+          jait: "jait://ollama/legacy-ollama/deepseek-v4.1-flash%3Acloud",
+          "claude-code": "claude-sonnet-4-6",
+        },
+      }),
+    });
+
+    // The chat is on codex but only remembers jait/claude models. Those must
+    // not be borrowed: the caller has to ask the user for a codex model.
+    __jait_capture(0, (result.providerId));
+    __jait_captureType(1, (result.model));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_178_3": {
+
+
+function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
+  return {
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
+      userId: _userId,
+      theme: "system",
+      apiKeys: {},
+      disabledTools: [],
+      sttProvider: "whisper",
+      chatProvider,
+      jaitBackend: "openai",
+      recentModels: [],
+      workspacePickerPath: null,
+      workspacePickerNodeId: null,
+      updatedAt: new Date().toISOString(),
+    })),
+  } as unknown as UserService;
+}
+function makeSessionState(state: Record<string, unknown>): SessionStateService {
+  return {
+    get: (_sessionId: string, keys?: string[]) => {
+      if (!keys?.length) return { ...state };
+      const out: Record<string, unknown> = {};
+      for (const key of keys) {
+        if (key in state) out[key] = state[key];
+      }
+      return out;
+    },
+  } as unknown as SessionStateService;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const empty = resolveThreadSelectionDefaults({
+      userId: "user-1",
+      sessionId: "session-1",
+      sessionState: makeSessionState({
+        "chat.provider": "codex",
         "chat.cliModels": { codex: "   " },
       }),
     });
-    __jait_captureType(0, (result.model));
+    __jait_captureType(0, (empty.model));
 
     const nonObject = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("codex"),
       sessionState: makeSessionState({
+        "chat.provider": "codex",
         "chat.cliModels": ["codex", "gpt-5-codex"],
       }),
     });
@@ -485,12 +669,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_138_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_200_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -502,7 +686,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -539,12 +723,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_152_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_214_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -556,7 +740,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -602,12 +786,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_170_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_233_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -619,7 +803,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -642,8 +826,8 @@ await (async()=>{
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("claude-code"),
       sessionState: makeSessionState({
+        "chat.provider": "claude-code",
         "chat.reasoningEffort": "xhigh",
       }),
     });
@@ -659,12 +843,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_183_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_246_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -676,7 +860,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -699,8 +883,8 @@ await (async()=>{
     const result = resolveThreadSelectionDefaults({
       userId: "user-1",
       sessionId: "session-1",
-      userService: makeUserService("claude-code"),
       sessionState: makeSessionState({
+        "chat.provider": "claude-code",
         "chat.reasoningEffort": "high; rm -rf /",
       }),
     });
@@ -716,12 +900,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_198_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_261_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -733,7 +917,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {
@@ -767,12 +951,12 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_205_3": {
+case "tailstatic_packages_gateway_src_services_thread_defaults_test_ts_268_3": {
 
 
 function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): UserService {
   return {
-    getSettings: (_userId: string): UserSettingsRecord => ({
+    getSettings: vi.fn((_userId: string): UserSettingsRecord => ({
       userId: _userId,
       theme: "system",
       apiKeys: {},
@@ -784,7 +968,7 @@ function makeUserService(chatProvider: UserSettingsRecord["chatProvider"]): User
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: new Date().toISOString(),
-    }),
+    })),
   } as unknown as UserService;
 }
 function makeSessionState(state: Record<string, unknown>): SessionStateService {

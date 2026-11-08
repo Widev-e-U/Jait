@@ -3241,7 +3241,13 @@ export function registerChatRoutes(
   // When a background terminal command (e.g. a test run) finishes, steer the
   // running turn if one is active; otherwise start a hidden system-notification
   // turn so the idle agent wakes up and reacts to the result.
-  backgroundCommandMonitor.setCompletionHandler(async (result: BackgroundCommandResult) => {
+  const pendingCommandCompletions = new Map<string, BackgroundCommandResult[]>();
+  const queueCommandCompletion = (result: BackgroundCommandResult): void => {
+    const pending = pendingCommandCompletions.get(result.sessionId) ?? [];
+    pending.push(result);
+    pendingCommandCompletions.set(result.sessionId, pending);
+  };
+  const deliverCommandCompletion = async (result: BackgroundCommandResult): Promise<void> => {
     const note = formatBackgroundCommandNotification(result);
     // Every `return` below drops the notification for good, and the agent has
     // already told the user it would report back — so say why in the log.
@@ -3270,7 +3276,8 @@ export function registerChatRoutes(
     }
 
     if (activeStreams.has(result.sessionId)) {
-      return drop("a turn is streaming but neither the chat nor the thread resume registry accepted the message");
+      queueCommandCompletion(result);
+      return;
     }
     if (!sessionService || !userService) return drop("session/user services are unavailable");
     const session = sessionService.getById(result.sessionId);
@@ -3281,7 +3288,7 @@ export function registerChatRoutes(
     if (!user) return drop(`session owner ${session.userId} no longer exists`);
     try {
       const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
-      await app.inject({
+      const response = await app.inject({
         method: "POST",
         url: "/api/chat",
         headers: getInternalChatRequestHeaders(config, token),
@@ -3295,6 +3302,12 @@ export function registerChatRoutes(
           sessionMetadata: session.metadata,
         }),
       });
+      if (response.statusCode >= 400) {
+        drop(`continuation request failed with HTTP ${response.statusCode}`);
+      } else if (response.statusCode === 202 && response.json().skipped === "already-streaming") {
+        if (activeStreams.has(result.sessionId)) queueCommandCompletion(result);
+        else void deliverCommandCompletion(result);
+      }
     } catch (err) {
       if (err instanceof LoopSelectionRequiredError) {
         app.log.warn({ sessionId: result.sessionId }, "Background notification turn skipped: no user-selected provider/model");
@@ -3302,7 +3315,8 @@ export function registerChatRoutes(
       }
       app.log.error(err, "Failed to start background-command notification turn");
     }
-  });
+  };
+  backgroundCommandMonitor.setCompletionHandler(deliverCommandCompletion);
 
   if (userQuestionService) userQuestionService.onDetachedResolved = (question) => {
     // Recover the result through the original tool so browser identity/control
@@ -5884,7 +5898,11 @@ export function registerChatRoutes(
     if (loopAtEnd?.status === "waiting" && !sessionWaits.list(sessionId).some(wait => wait.kind === "question")) {
       notifyLoopAttention(sessionId, "Loop needs your answer", loopAtEnd.summary);
     }
-    void drainQueuedChatMessages(sessionId);
+    const completions = pendingCommandCompletions.get(sessionId);
+    const completion = completions?.shift();
+    if (completions?.length === 0) pendingCommandCompletions.delete(sessionId);
+    if (completion) void deliverCommandCompletion(completion);
+    else void drainQueuedChatMessages(sessionId);
   });
 
   app.post("/api/sessions/:sessionId/approve", async (request, reply) => {

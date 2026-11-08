@@ -190,7 +190,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_98_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_98_3_each0": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -207,6 +207,8 @@ const __jait_hook_630 = () => {
 const __jait_hook_737 = () => {
     vi.restoreAllMocks();
   };
+/*__jait_scope_open__*/{
+const stagehand = false;
 await __jait_hook_630();
 try {
 await (async()=>{
@@ -229,6 +231,7 @@ await (async()=>{
       novncPort: 6601,
       vncPort: 6001,
       cdpPort: 9223,
+      ...(stagehand ? { stagehandExtensionPath: "/sdk/extension" } : {}),
       waitForCdp: false,
     });
 
@@ -237,8 +240,14 @@ await (async()=>{
     __jait_capture(1, (imageInspectCmd?.join(" ")));
     const runCmd = commands.find((c) => c.join(" ").includes("--add-host"));
     __jait_capture(2, (runCmd?.join(" ")));
-    __jait_capture(3, (runCmd?.join(" ")));
-    __jait_capture(4, (runCmd?.join(" ")));
+    __jait_capture(3, (runCmd?.join(" ")), (stagehand ? "-p 127.0.0.1:9223:9223" : "-p 9223:9223"));
+    if (stagehand) {
+      __jait_capture(4, (runCmd?.join(" ")));
+      __jait_capture(5, (runCmd?.join(" ")));
+    } else {
+      __jait_capture(6, (runCmd?.join(" ")));
+    }
+    __jait_capture(7, (runCmd?.join(" ")));
   
 })();
 
@@ -246,10 +255,80 @@ await (async()=>{
 await __jait_hook_737();
 }
 }
+}
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_134_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_98_3_each1": {
+
+
+const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
+const baseContext = {
+  actionId: "a1",
+  sessionId: "s1",
+  projectRoot: testProject,
+  requestedBy: "test",
+};
+/*__jait_scope_open__*/{
+const __jait_hook_630 = () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true } as Response);
+  };
+const __jait_hook_737 = () => {
+    vi.restoreAllMocks();
+  };
+/*__jait_scope_open__*/{
+const stagehand = true;
+await __jait_hook_630();
+try {
+await (async()=>{
+
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return {
+        output: "container-id",
+        exitCode: 0,
+        timedOut: false,
+      };
+    });
+
+    const result = await manager.startBrowserSandbox({
+      projectRoot: testProject,
+      mountMode: "none",
+      networkEnabled: true,
+      hostGateway: true,
+      novncPort: 6601,
+      vncPort: 6001,
+      cdpPort: 9223,
+      ...(stagehand ? { stagehandExtensionPath: "/sdk/extension" } : {}),
+      waitForCdp: false,
+    });
+
+    __jait_capture(0, (result));
+    const imageInspectCmd = commands.find((c) => c.join(" ").includes("image inspect"));
+    __jait_capture(1, (imageInspectCmd?.join(" ")));
+    const runCmd = commands.find((c) => c.join(" ").includes("--add-host"));
+    __jait_capture(2, (runCmd?.join(" ")));
+    __jait_capture(3, (runCmd?.join(" ")), (stagehand ? "-p 127.0.0.1:9223:9223" : "-p 9223:9223"));
+    if (stagehand) {
+      __jait_capture(4, (runCmd?.join(" ")));
+      __jait_capture(5, (runCmd?.join(" ")));
+    } else {
+      __jait_capture(6, (runCmd?.join(" ")));
+    }
+    __jait_capture(7, (runCmd?.join(" ")));
+  
+})();
+
+} finally {
+await __jait_hook_737();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_sprint13_test_ts_141_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -320,7 +399,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_181_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_188_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -363,7 +442,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_196_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_203_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -409,7 +488,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_217_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_224_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -459,7 +538,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_239_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_246_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -517,7 +596,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_269_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_276_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -565,7 +644,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_289_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_296_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -628,7 +707,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_329_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_336_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -698,7 +777,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_375_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_382_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -741,7 +820,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_390_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_397_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -787,7 +866,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_408_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_415_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");
@@ -845,7 +924,7 @@ await __jait_hook_737();
 
 break;
 }
-case "tailstatic_packages_gateway_src_sprint13_test_ts_438_3": {
+case "tailstatic_packages_gateway_src_sprint13_test_ts_445_3": {
 
 
 const testProject = join(__jait_fixture_dir, "jait-test-sandbox");

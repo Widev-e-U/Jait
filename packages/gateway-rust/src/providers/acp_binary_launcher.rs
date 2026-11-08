@@ -1175,13 +1175,14 @@ impl LauncherProcess for SystemProcess {
         for (name, value) in env {
             child.env(name, value);
         }
-        let mut child = spawn_surviving_executable_busy(&mut child).await?;
-
-        let forwarder = if forward_signals {
-            forward_signals_to(child.id())
+        // Register before spawning: the child can become ready before spawn returns.
+        let signals = if forward_signals {
+            register_forward_signals()
         } else {
             None
         };
+        let mut child = spawn_surviving_executable_busy(&mut child).await?;
+        let forwarder = signals.and_then(|signals| forward_signals_to(signals, child.id()));
         // Own the forwarder across cancellation and wait errors as well as success.
         let forwarder = forwarder.map(SignalForwarder);
         let status = child
@@ -1269,18 +1270,31 @@ impl Drop for SignalForwarder {
     }
 }
 
-/// Forward the launcher's `SIGINT`/`SIGTERM` to `pid`, as the source does with
-/// `child.kill(signal)`.
 #[cfg(unix)]
-fn forward_signals_to(pid: Option<u32>) -> Option<tokio::task::JoinHandle<()>> {
+type ForwardSignals = (tokio::signal::unix::Signal, tokio::signal::unix::Signal);
+#[cfg(not(unix))]
+type ForwardSignals = ();
+
+#[cfg(unix)]
+fn register_forward_signals() -> Option<ForwardSignals> {
     use tokio::signal::unix::{SignalKind, signal};
+    Some((
+        signal(SignalKind::interrupt()).ok()?,
+        signal(SignalKind::terminate()).ok()?,
+    ))
+}
+#[cfg(not(unix))]
+fn register_forward_signals() -> Option<ForwardSignals> {
+    None
+}
+
+/// Forward signals registered before spawning to the child.
+#[cfg(unix)]
+fn forward_signals_to(
+    (mut interrupt, mut terminate): ForwardSignals,
+    pid: Option<u32>,
+) -> Option<tokio::task::JoinHandle<()>> {
     let pid = pid?;
-    // Registration happens here, before the forwarding task is spawned, so a
-    // signal delivered immediately after the child starts is queued for
-    // forwarding instead of taking the launcher's default action. The source's
-    // `process.on('SIGINT'|'SIGTERM', …)` is equally synchronous.
-    let mut interrupt = signal(SignalKind::interrupt()).ok()?;
-    let mut terminate = signal(SignalKind::terminate()).ok()?;
     Some(tokio::spawn(async move {
         loop {
             let forwarded = tokio::select! {
@@ -1297,11 +1311,8 @@ fn forward_signals_to(pid: Option<u32>) -> Option<tokio::task::JoinHandle<()>> {
         }
     }))
 }
-
 #[cfg(not(unix))]
-fn forward_signals_to(_pid: Option<u32>) -> Option<tokio::task::JoinHandle<()>> {
-    // Gap: Windows has no POSIX signal forwarding; `windowsHide` and child
-    // termination need a Job Object, which the source does not implement either.
+fn forward_signals_to(_: ForwardSignals, _: Option<u32>) -> Option<tokio::task::JoinHandle<()>> {
     None
 }
 

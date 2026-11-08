@@ -69,6 +69,43 @@ try {
 await (async()=>{
 
     const service = new ProviderUsageService(db);
+    service.recordOllamaUsage("ollama", { limits: { session: { usage: 0.5, models: [] }, weekly: { usage: 0.8, models: [] } } });
+    service.recordOllamaUsage("ollama", { source: "balance", limits: { monthly: { usage: 0.2, models: [] } } } as any);
+    __jait_capture(0, (service.listForUser(["ollama"]).map((row) => row.rateLimitType)));
+  
+})();
+
+} finally {
+await __jait_hook_584();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_35_3": {
+
+
+let sqlite: SqliteDatabase;
+let db: JaitDB;
+function makeNotifications() {
+  const warning = vi.fn();
+  return { warning, service: { warning } as unknown as NotificationService };
+}
+const __jait_hook_434 = async () => {
+  const opened = await openDatabase(":memory:");
+  sqlite = opened.sqlite;
+  db = opened.db;
+  migrateDatabase(sqlite);
+};
+const __jait_hook_584 = () => {
+  sqlite.close();
+};
+/*__jait_scope_open__*/{
+await __jait_hook_434();
+try {
+await (async()=>{
+
+    const service = new ProviderUsageService(db);
     const window = { status: "ok" as const, percent: 20, resetsAt: "2026-10-09T12:00:00Z" };
     service.recordOpenCodeGoUsage("go", { usage: { rolling: window, weekly: { ...window, percent: 90 }, monthly: { ...window, status: "rate-limited", percent: 100 } } });
     __jait_capture(0, (service.listForUser(["go"])), ([window.resetsAt]));
@@ -86,7 +123,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_45_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_52_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -130,7 +167,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_58_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_65_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -166,7 +203,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_63_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_70_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -211,7 +248,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_82_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_89_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -256,7 +293,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_104_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_111_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -305,7 +342,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_123_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_130_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -351,7 +388,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_139_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_146_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -401,7 +438,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_159_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_166_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -445,7 +482,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_173_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_180_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -500,7 +537,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_198_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_205_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -544,7 +581,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_212_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_219_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -598,7 +635,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_252_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_259_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -654,7 +691,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each0": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each0": {
 
 
 let sqlite: SqliteDatabase;
@@ -702,7 +739,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_283_3_each1": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_290_3_each1": {
 
 
 let sqlite: SqliteDatabase;
@@ -750,7 +787,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each0": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each0": {
 
 
 let sqlite: SqliteDatabase;
@@ -795,7 +832,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each1": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each1": {
 
 
 let sqlite: SqliteDatabase;
@@ -840,7 +877,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_301_3_each2": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_308_3_each2": {
 
 
 let sqlite: SqliteDatabase;
@@ -885,7 +922,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_317_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_324_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -928,7 +965,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_330_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_337_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -987,7 +1024,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_373_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_380_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -1053,7 +1090,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_428_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_435_3": {
 
 
 let sqlite: SqliteDatabase;
@@ -1121,7 +1158,7 @@ await __jait_hook_584();
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_465_3": {
+case "tailstatic_packages_gateway_src_services_provider_usage_test_ts_472_3": {
 
 
 let sqlite: SqliteDatabase;

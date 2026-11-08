@@ -1,3 +1,4 @@
+import { isUserTurn } from '@/lib/conversation-turn'
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { observeConversationRect } from '@/lib/conversation-viewport'
@@ -476,7 +477,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   const minimapRoles = useMemo<Array<'user' | 'agent'>>(
     () =>
       (messageEstimateInputs ?? []).map((m) =>
-        m && typeof m === 'object' && 'role' in m && (m as { role?: unknown }).role === 'user'
+        m && isUserTurn(m)
           ? 'user'
           : 'agent',
       ),
@@ -538,7 +539,7 @@ export function Conversation({ variant = 'assistant', sessionId, authToken, chil
   // Last scrollToMessageId handled, so we only force-scroll on a genuinely new
   // target (not on every re-render while the value stays constant).
   const prevScrollTargetRef = useRef(
-    childItems.length === 1 && messageEstimateInputs?.[0]?.role === 'user'
+    childItems.length === 1 && !!messageEstimateInputs?.[0] && isUserTurn(messageEstimateInputs[0])
       ? null
       : scrollToMessageId ?? null,
   )

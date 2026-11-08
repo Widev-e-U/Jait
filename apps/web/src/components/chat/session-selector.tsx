@@ -944,7 +944,7 @@ export function SessionSelector({
                         {onNewChatInProject && (
                           <TooltipHint content="New chat">
                             <Button variant="ghost" size="icon" aria-label={`New chat in ${project.title || (isFolder ? 'folder' : 'project')}`}
-                              disabled={offline} className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                              disabled={offline} className={`shrink-0 text-muted-foreground hover:text-foreground ${isMobile ? 'h-10 w-8 !min-w-0' : 'h-6 w-6'}`}
                               onClick={(event) => { event.stopPropagation(); onDismiss?.(); onNewChatInProject(project.id) }}
                               onContextMenu={(event) => event.stopPropagation()}>
                               <Plus className="h-3.5 w-3.5" />
@@ -986,7 +986,7 @@ export function SessionSelector({
                                 variant="ghost"
                                 size="icon"
                                 aria-label="Project actions"
-                                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                                className="h-10 w-8 !min-w-0 shrink-0 text-muted-foreground hover:text-foreground"
                                 onClick={(e) => e.stopPropagation()}
                                 onContextMenu={(e) => e.stopPropagation()}
                               >

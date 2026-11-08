@@ -8,6 +8,7 @@ import { migrateDatabase, openDatabase, type JaitDB } from "../../../../packages
 import { ThreadService } from "../../../../packages/gateway/src/services/threads.js";
 import {
   DiskJanitor,
+  measureTree,
   isInside,
   loadDiskJanitorPolicy,
   type DiskJanitorPolicy,
@@ -53,7 +54,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_117_3_each0": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_128_3_each0": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -73,7 +74,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -118,7 +127,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -141,7 +150,7 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
@@ -149,7 +158,7 @@ const __jait_hook_2435 = async () => {
   };
 /*__jait_scope_open__*/{
 const withSuccess = false;
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -190,14 +199,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_117_3_each1": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_128_3_each1": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -217,7 +226,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -262,7 +279,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -285,7 +302,7 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
@@ -293,7 +310,7 @@ const __jait_hook_2435 = async () => {
   };
 /*__jait_scope_open__*/{
 const withSuccess = true;
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -334,14 +351,14 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_153_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_164_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -361,7 +378,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -406,7 +431,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -429,14 +454,14 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
 /*__jait_source_gate__ skipIf process.platform === "win32" || process.getuid?.() === 0 */
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -461,13 +486,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_176_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_187_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -487,7 +512,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -532,7 +565,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -555,13 +588,268 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
+try {
+await (async()=>{
+
+    const nested = join(root, "nested", "child");
+    mkdirSync(nested, { recursive: true });
+    const file = join(nested, "payload");
+    writeFileSync(file, "hello");
+    __jait_capture(0, ((await measureTree(join(root, "nested"))).bytes));
+    __jait_capture(1, ((await measureTree(file)).bytes));
+    __jait_capture(2, (await measureTree(join(root, "missing"))));
+  
+})();
+
+} finally {
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_197_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+/*__jait_source_gate__ skipIf process.platform === "win32" || !process.getuid */
+await __jait_hook_2163();
+try {
+await (async()=>{
+
+    const blocked = join(tempRoot, "jait-foreign");
+    makeAgedDir(blocked, 10 * DAY_MS);
+    chmodSync(tempRoot, 0o1777);
+    vi.spyOn(process, "getuid").mockReturnValue(process.getuid!() + 1);
+    const notify = vi.fn();
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const instance = new DiskJanitor(sqlite, policy(), logger, gitStub as never, {
+      worktrees: worktreeRoot, temp: tempRoot, sandboxStorage: sandboxRoot,
+    }, notify);
+    const first = await instance.run({ now: NOW });
+    await instance.run({ now: NOW });
+    __jait_capture(0, (first.blockedForeignOwned));
+    __jait_capture(1, (existsSync(blocked)));
+    __jait_capture(2, (notify.mock.calls));
+    __jait_capture(3, (notify.mock.calls));
+  
+})();
+
+} finally {
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_215_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -583,13 +871,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_193_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_232_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -609,7 +897,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -654,7 +950,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -677,13 +973,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -703,13 +999,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_208_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_247_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -729,7 +1025,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -774,7 +1078,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -797,13 +1101,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -823,13 +1127,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_223_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_262_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -849,7 +1153,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -894,7 +1206,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -917,13 +1229,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -939,13 +1251,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_234_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_273_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -965,7 +1277,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1010,7 +1330,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1033,13 +1353,273 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
+try {
+await (async()=>{
+
+    // Created eagerly on first execution and never removed, so every project
+    // ever run leaves one behind; it sits at the level the worktree scan treats
+    // as a repo dir, which is why it used to accumulate forever.
+    const container = join(worktreeRoot, "jait-execution-e2e-fixture");
+    mkdirSync(container, { recursive: true });
+    agePath(container, 10 * DAY_MS);
+
+    const report = await janitor().run({ now: NOW });
+
+    __jait_capture(0, (report.worktrees));
+    __jait_capture(1, (report.worktrees[0]?.path), (container));
+    __jait_capture(2, (report.worktrees[0]?.reason));
+    __jait_capture(3, (existsSync(container)));
+  
+})();
+
+} finally {
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_289_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+await __jait_hook_2163();
+try {
+await (async()=>{
+
+    const container = join(worktreeRoot, "repo");
+    const path = join(container, "jait-live");
+    makeAgedDir(path, 30 * DAY_MS);
+    agePath(container, 30 * DAY_MS);
+    seedThread({
+      workingDirectory: path,
+      status: "running",
+      updatedAt: new Date(NOW.getTime() - 30 * DAY_MS).toISOString(),
+    });
+
+    const report = await janitor().run({ now: NOW });
+
+    __jait_capture(0, (report.worktrees));
+    __jait_capture(1, (existsSync(container)));
+    __jait_capture(2, (existsSync(path)));
+  
+})();
+
+} finally {
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_307_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1060,13 +1640,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_250_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_323_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1086,7 +1666,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1131,7 +1719,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1154,13 +1742,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1181,13 +1769,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_266_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_339_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1207,7 +1795,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1252,7 +1848,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1275,13 +1871,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1298,13 +1894,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_278_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_351_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1324,7 +1920,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1369,7 +1973,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1392,13 +1996,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1413,13 +2017,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_288_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_361_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1439,7 +2043,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1484,7 +2096,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1507,13 +2119,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1525,13 +2137,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_297_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_370_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1551,7 +2163,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1596,7 +2216,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1619,13 +2239,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1636,13 +2256,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_302_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_375_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1662,7 +2282,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1707,7 +2335,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1730,13 +2358,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1755,13 +2383,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_316_3": {
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_389_3": {
 
 
 const NOW = new Date("2026-08-20T12:00:00.000Z");
@@ -1781,7 +2409,15 @@ function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
 }
 function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
   mkdirSync(path, { recursive: true });
-  writeFileSync(join(path, "payload.bin"), Buffer.alloc(bytes));
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
   const seconds = (NOW.getTime() - ageMs) / 1_000;
   utimesSync(path, seconds, seconds);
 }
@@ -1826,7 +2462,7 @@ function seedThread(params: {
       );
     return thread.id;
   }
-const __jait_hook_1701 = async () => {
+const __jait_hook_2163 = async () => {
     const opened = await openDatabase(":memory:");
     db = opened.db;
     sqlite = opened.sqlite;
@@ -1849,13 +2485,13 @@ const __jait_hook_1701 = async () => {
     };
 
   };
-const __jait_hook_2435 = async () => {
+const __jait_hook_2897 = async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     sqlite.close();
     await rm(root, { recursive: true, force: true });
   };
-await __jait_hook_1701();
+await __jait_hook_2163();
 try {
 await (async()=>{
 
@@ -1871,7 +2507,278 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2435();
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_400_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+await __jait_hook_2163();
+try {
+await (async()=>{
+
+    // A directory's own mtime only moves when direct children change, so a
+    // long-lived run writing deep into the tree keeps an ancient top-level
+    // mtime. Reaping on that alone would delete live work.
+    const live = join(tempRoot, "jait-long-run");
+    makeAgedDir(live, 10 * DAY_MS, 512);
+    const nested = join(live, "nested");
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "active.log"), "still writing\n");
+
+    const report = await janitor().run({ now: NOW });
+
+    __jait_capture(0, (report.tempScratch));
+    __jait_capture(1, (existsSync(live)));
+  
+})();
+
+} finally {
+await __jait_hook_2897();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_disk_janitor_test_ts_416_3": {
+
+
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+const DAY_MS = 24 * 60 * 60 * 1_000;
+function policy(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitorPolicy {
+  return {
+    enabled: true,
+    worktreeGraceMs: 2 * DAY_MS,
+    orphanWorktreeGraceMs: DAY_MS,
+    preserveBranches: true,
+    tempScratchMaxAgeMs: 3 * DAY_MS,
+    sandboxStorageMaxAgeMs: DAY_MS,
+    initialDelayMs: 10,
+    intervalMs: 1_000,
+    ...overrides,
+  };
+}
+function makeAgedDir(path: string, ageMs: number, bytes = 128): void {
+  mkdirSync(path, { recursive: true });
+  const payload = join(path, "payload.bin");
+  writeFileSync(payload, Buffer.alloc(bytes));
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+  // The age gate reads the newest mtime in the tree, so the file must be aged
+  // too — otherwise every fixture looks like it was written seconds ago.
+  utimesSync(payload, seconds, seconds);
+}
+function agePath(path: string, ageMs: number): void {
+  const seconds = (NOW.getTime() - ageMs) / 1_000;
+  utimesSync(path, seconds, seconds);
+}
+/*__jait_scope_open__*/{
+let db: JaitDB;
+let sqlite: Database;
+let root: string;
+let worktreeRoot: string;
+let tempRoot: string;
+let sandboxRoot: string;
+let cleanupCalls: Array<{ path: string; preserveBranch?: boolean; branch?: string | null }>;
+let gitStub: { cleanupWorktreeWithOptions: (p: string, o?: never) => Promise<void> };
+function janitor(overrides: Partial<DiskJanitorPolicy> = {}): DiskJanitor {
+    return new DiskJanitor(sqlite, policy(overrides), {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }, gitStub as never, {
+      worktrees: worktreeRoot,
+      temp: tempRoot,
+      sandboxStorage: sandboxRoot,
+    });
+  }
+function seedThread(params: {
+    workingDirectory: string;
+    status: string;
+    updatedAt: string;
+    branch?: string;
+  }): string {
+    const threads = new ThreadService(db);
+    const thread = threads.create({ title: "t", providerId: "codex" });
+    sqlite
+      .prepare(
+        "UPDATE agent_threads SET working_directory = ?, status = ?, updated_at = ?, branch = ? WHERE id = ?",
+      )
+      .run(
+        params.workingDirectory,
+        params.status,
+        params.updatedAt,
+        params.branch ?? null,
+        thread.id,
+      );
+    return thread.id;
+  }
+const __jait_hook_2163 = async () => {
+    const opened = await openDatabase(":memory:");
+    db = opened.db;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    root = mkdtempSync(join(__jait_fixture_dir, "janitor-test-"));
+    worktreeRoot = join(root, "worktrees");
+    mkdirSync(worktreeRoot, { recursive: true });
+    tempRoot = join(root, "temp");
+    sandboxRoot = join(root, "sandbox");
+    mkdirSync(tempRoot, { recursive: true });
+    mkdirSync(sandboxRoot, { recursive: true });
+
+    cleanupCalls = [];
+    gitStub = {
+      cleanupWorktreeWithOptions: async (path: string, options?: never) => {
+        cleanupCalls.push({ path, ...(options ?? {}) });
+        await rm(path, { recursive: true, force: true });
+      },
+    };
+
+  };
+const __jait_hook_2897 = async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    sqlite.close();
+    await rm(root, { recursive: true, force: true });
+  };
+/*__jait_source_gate__ skipIf process.platform === "win32" || process.getuid?.() === 0 */
+await __jait_hook_2163();
+try {
+await (async()=>{
+
+      const blocked = join(tempRoot, "jait-blocked-notify");
+      makeAgedDir(blocked, 10 * DAY_MS, 4096);
+      chmodSync(blocked, 0o555);
+      const notify = vi.fn();
+      const instance = new DiskJanitor(
+        sqlite,
+        policy(),
+        { info: () => {}, warn: () => {}, error: () => {} },
+        gitStub as never,
+        { worktrees: worktreeRoot, temp: tempRoot, sandboxStorage: sandboxRoot },
+        notify,
+      );
+      try {
+        await instance.run({ now: NOW });
+        __jait_capture(0, (notify.mock.calls));
+        __jait_capture(1, (notify.mock.calls[0]?.[0]));
+        __jait_capture(2, (String(notify.mock.calls[0]?.[1])));
+
+        // A later pass hits the same blocked directory; the user must not be
+        // re-notified for an unchanged condition.
+        await instance.run({ now: NOW });
+        __jait_capture(3, (notify.mock.calls));
+      } finally {
+        chmodSync(blocked, 0o755);
+      }
+    
+})();
+
+} finally {
+await __jait_hook_2897();
 }
 }
 

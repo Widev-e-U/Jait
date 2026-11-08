@@ -11,7 +11,7 @@
   ],
   "summary": {
     "test_files": 379,
-    "test_declarations": 3169,
+    "test_declarations": 3170,
     "runtime_source_files": 388,
     "source_files_without_direct_test_import": 98,
     "rust_verified_declarations": 1512,
@@ -6037,7 +6037,7 @@
     },
     {
       "path": "packages/gateway/src/lib/bounded-json.test.ts",
-      "fingerprint": "b9dac23a2ba78f11",
+      "fingerprint": "b4fabb7b4392dfcd",
       "lane": "http-tools-config",
       "direct_source_imports": [
         "packages/gateway/src/lib/bounded-json.ts"
@@ -14240,7 +14240,7 @@
     },
     {
       "path": "packages/gateway/src/routes/chat-loops.test.ts",
-      "fingerprint": "d02920202d014807",
+      "fingerprint": "a9b87b7c6f4520b6",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/config.ts",
@@ -14328,8 +14328,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:160:3",
-          "line": 160,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:164:3",
+          "line": 164,
           "column": 3,
           "name": "blocks on pending human input and wakes when the wait is cleared",
           "suite": [
@@ -14342,8 +14342,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:171:3",
-          "line": 171,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:175:3",
+          "line": 175,
           "column": 3,
           "name": "stops on provider errors and resumes only on request",
           "suite": [
@@ -14356,8 +14356,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:180:3",
-          "line": 180,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:184:3",
+          "line": 184,
           "column": 3,
           "name": "exposes a stopped goal on a manual retry and continues automatically after resume",
           "suite": [
@@ -14370,8 +14370,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:205:3",
-          "line": 205,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:209:3",
+          "line": 209,
           "column": 3,
           "name": "continues a goal created mid-turn even when the model omits its check",
           "suite": [
@@ -14384,8 +14384,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:216:3",
-          "line": 216,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:220:3",
+          "line": 220,
           "column": 3,
           "name": "a direct answer resumes a waiting goal and validates owner access",
           "suite": [
@@ -14398,8 +14398,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:232:3",
-          "line": 232,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:236:3",
+          "line": 236,
           "column": 3,
           "name": "waits for a user answer and sends attention instead of a completion notification",
           "suite": [
@@ -14412,8 +14412,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-loops.test.ts:241:3",
-          "line": 241,
+          "id": "packages/gateway/src/routes/chat-loops.test.ts:245:3",
+          "line": 245,
           "column": 3,
           "name": "stops and asks the user instead of choosing a provider and model by itself",
           "suite": [
@@ -15563,7 +15563,7 @@
     },
     {
       "path": "packages/gateway/src/routes/chat-system-notice.test.ts",
-      "fingerprint": "ea7e66f38893e4ae",
+      "fingerprint": "db5cc6a414b40ed8",
       "lane": "providers-streams-coordination",
       "direct_source_imports": [
         "packages/gateway/src/config.ts",
@@ -15571,15 +15571,30 @@
         "packages/gateway/src/routes/chat.ts",
         "packages/gateway/src/security/http-auth.ts",
         "packages/gateway/src/server.ts",
+        "packages/gateway/src/services/background-command-monitor.ts",
         "packages/gateway/src/services/session-state.ts",
         "packages/gateway/src/services/sessions.ts",
         "packages/gateway/src/services/users.ts"
       ],
-      "declaration_count": 2,
+      "declaration_count": 3,
       "cases": [
         {
-          "id": "packages/gateway/src/routes/chat-system-notice.test.ts:68:3",
-          "line": 68,
+          "id": "packages/gateway/src/routes/chat-system-notice.test.ts:72:3",
+          "line": 72,
+          "column": 3,
+          "name": "delivers a completed command after an unsteerable active turn",
+          "suite": [
+            "background-command system notice"
+          ],
+          "declaration": "it",
+          "parameterized": false,
+          "status": "pending",
+          "rust_cases": [],
+          "boundary": "http-or-websocket-contract"
+        },
+        {
+          "id": "packages/gateway/src/routes/chat-system-notice.test.ts:103:3",
+          "line": 103,
           "column": 3,
           "name": "persists and surfaces a hidden system-notification turn as a visible gray system-notice",
           "suite": [
@@ -15592,8 +15607,8 @@
           "boundary": "http-or-websocket-contract"
         },
         {
-          "id": "packages/gateway/src/routes/chat-system-notice.test.ts:156:3",
-          "line": 156,
+          "id": "packages/gateway/src/routes/chat-system-notice.test.ts:191:3",
+          "line": 191,
           "column": 3,
           "name": "does not surface a visible system notice when only a system notification is sent without a notice line",
           "suite": [
@@ -65962,66 +65977,9 @@
       "direct_test_references": [
         "packages/gateway/src/channels/assistant.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_12_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_21_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_38_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_44_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_52_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_59_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_65_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_70_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_76_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_81_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelAssistant-packages_gateway_src_channels_assistant_test_ts_87_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all eleven reviewed Rust-owned channel prompt/context declarations: registered activated tools, chat addressing, injected local/UTC time, selected/default model, invalid-zone fallback and standing instructions. Pure prompt construction; actual reminder delivery, model obedience and host ICU/platform locale behavior beyond exercised cases remain separate. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/channels/manager.ts",
@@ -66077,236 +66035,9 @@
       "direct_test_references": [
         "packages/gateway/src/channels/telegram/connector.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_21_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_41_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_56_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_61_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_65_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_72_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_77_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_84_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_95_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_100_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_107_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_112_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_122_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_126_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_135_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_148_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_199_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_220_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_244_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_264_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_285_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_309_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_320_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_336_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_353_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_358_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_374_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_388_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_434_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_455_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_477_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_491_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_519_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_543_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_557_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_658_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_676_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_698_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_717_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_737_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_755_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_763_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_770_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_780_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTelegramConnector-packages_gateway_src_channels_telegram_connector_test_ts_786_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed bot-token extraction, inbound mapping, return URL validation, setup links/QR and generated usernames, pairing lifecycle and deadlines, callback token storage, command menu limits/scopes, typed status/error reporting, long-poll retry and cancellation paths. Original Rust-owned assertions use injected Bot API responses, owned timers and QR encoders to exercise pairing success/refusal/expiry, setup failure, command/dialog output, live message fallbacks and polling recovery. The mutation disables pairing deadline rejection and must fail the paired-count assertion before restored pass. No Telegram account, external bot command or real QR encoder runs. Actual Telegram transport, long-held socket cancellation, every malformed response/error/race, callback cache eviction/replay authorization and supported platforms remain separate gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/channels/types.ts",
@@ -67378,46 +67109,9 @@
         "packages/gateway/src/lib/security/engines.integration.test.ts",
         "packages/gateway/src/lib/security/host-software.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_11_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_18_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_27_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_34_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_45_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_61_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedHostSoftware-packages_gateway_src_lib_security_host_software_test_ts_68_1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed filesystem realpath/descriptor bounds, snapshot traversal/size/type/cancellation checks, credential exclusions, offline Trivy command configuration, fixed SSH audit arguments, local-host restriction, nonconclusive policy findings and telemetry import parsing. Seven original Rust-owned fixtures execute owned file/symlink/descriptor/size/cancellation boundaries; injected read-only SSH serialization and evidence status; scoped Suricata/Wazuh filtering and secret/message removal; malformed/oversized telemetry rejection. Original temporary directories run under the contract driver's project-local fixture environment. No real SSH, scanner, registry download or LAN/WAN check runs. Trivy invocation/cache/version behavior, traversal entry/depth/file count caps, rename/growth races, unsupported platforms, local /etc inventory, all SSH policy branches and telemetry ID/event count/type errors remain gaps. The mutation removes allowed-target enforcement and must fail the evidence-count assertion. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/lib/security/protocols.ts",
@@ -67920,7 +67614,7 @@
     },
     {
       "path": "packages/gateway/src/providers/acp-binary-launcher.ts",
-      "fingerprint": "04c9d92e23f62a7c",
+      "fingerprint": "e44958fd6bd02759",
       "lane": "providers-streams-coordination",
       "direct_test_references": [],
       "status": "pending",
@@ -68483,56 +68177,9 @@
       "direct_test_references": [
         "packages/gateway/src/providers/remote-cli-provider.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_53_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_67_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_103_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_112_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_133_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_167_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_199_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_231_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteCliProvider-packages_gateway_src_providers_remote_cli_provider_test_ts_240_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed provider/account identity routing, availability/auth/model proxies, Codex model normalization, shared WS dispatcher/listener lifecycle, session map/error cleanup, turn completion timing/fallback and direct/Tauri/Codex event mapping. Nine original Rust-owned cases use an injected fake control plane and synthetic events to assert managed account routing, model/reasoning metadata and errors, one dispatcher per socket, start options, direct and Tauri events, awaited completion, missing tracked sessions and completion fallback. No actual node, provider process, account login or tool runs. Disconnected/missing providers, malformed/hidden models, auth operations, failed session starts, stop/turn proxy errors, timeout behavior, interruption, subscription cleanup/reuse, foreign-session events and sequence/replay semantics remain gaps. Windows-shaped fixtures executed on Linux do not prove Windows transport support. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/providers/session-idle.ts",
@@ -68989,31 +68636,9 @@
       "direct_test_references": [
         "packages/gateway/src/routes/browser-devtools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedBrowserDevtools-packages_gateway_src_routes_browser_devtools_test_ts_46_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedBrowserDevtools-packages_gateway_src_routes_browser_devtools_test_ts_56_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedBrowserDevtools-packages_gateway_src_routes_browser_devtools_test_ts_71_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedBrowserDevtools-packages_gateway_src_routes_browser_devtools_test_ts_80_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed resource-grant issuance, per-user/session/browser revision checks, expiry/cleanup, release, static asset path/MIME/size bounds and selected-page WebSocket forwarding/revocation. Four original Rust-owned fixtures retain their Node runtime and use owned ephemeral loopback HTTP/WS endpoints. They assert missing/foreign authentication, browser takeover denial, grant asset access and escape/token rejection, owner-only release, selected target socket echo, and handoff closing/denying transports. The bounded Node copy loader redirects only this defining module before evaluation; no Chrome process, live browser session or external site is contacted. Grant caps/expiry timing, malformed target IDs, large assets/queued frames, upstream failure/redirect handling, all close/error races and actual Chromium frontend compatibility remain gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/routes/calendar.ts",
@@ -69096,7 +68721,7 @@
     },
     {
       "path": "packages/gateway/src/routes/chat.ts",
-      "fingerprint": "d3c9125ad82442e0",
+      "fingerprint": "4610c42314bb4f34",
       "lane": "providers-streams-coordination",
       "direct_test_references": [
         "packages/gateway/src/routes/agent-runtime.test.ts",
@@ -69408,56 +69033,9 @@
       "direct_test_references": [
         "packages/gateway/src/routes/email.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_28_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_28_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_28_3_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_28_3_each3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_28_3_each4",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_34_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_42_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_54_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedEmailRoutes-packages_gateway_src_routes_email_test_ts_63_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses original Rust-owned email-account route declarations with real Fastify JWT validation, in-memory SQLite, encrypted synthetic secrets and a stubbed IMAP verification boundary. Checks unauthenticated account/discovery/image rejection, strict signature settings and limits, foreign-owner account/image/message refusal, validated mailbox connection metadata, and generic credential-free verification errors. No mailbox connection, image fetch, discovery or email delivery occurs. OAuth configuration/callbacks, authorized image loading, message/folder listing and send/tag/delete handlers remain separate coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/routes/environment.ts",
@@ -70066,47 +69644,18 @@
       "direct_test_references": [
         "packages/gateway/src/routes/pull-requests.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedPullRequestRoutes-packages_gateway_src_routes_pull_requests_test_ts_54_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPullRequestRoutes-packages_gateway_src_routes_pull_requests_test_ts_109_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPullRequestRoutes-packages_gateway_src_routes_pull_requests_test_ts_151_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPullRequestRoutes-packages_gateway_src_routes_pull_requests_test_ts_223_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all four original Rust-owned pull-request route declarations with real Fastify JWT injection and in-memory owned repository rows: per-user service routing, foreign-owner refusal without dispatch, default list state/limit, comment/review/merge/state argument forwarding, and conflict-resolution payload/invalid-side refusal. All pull-request operations are local spies; no comment, review, merge, push or external request occurs. Unauthenticated requests, service absence, get/diff/update routes, numeric/list bound edge cases and error propagation remain explicit gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/routes/reminders.ts",
       "fingerprint": "27129cd541d85ad9",
       "lane": "http-tools-config",
       "direct_test_references": [],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedReminderRoutes-packages_gateway_src_routes_reminders_test_ts_22_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage.",
-      "parity_review": "Reviewed authenticated reminder list/export/create/update/delete routes, status/limit/tag normalization, owned project/session checks on creation, semantic engine projection and delete fallback. The original Rust-owned integration scenario uses in-memory SQLite, a real owned JWT and Fastify injection to assert semantic entry fields and deletion. The mutation changes the engine kind and must fail the exact object membership assertion before restored pass. No production data or external memory backend is touched. Query caps/filter combinations, export headers/content, invalid create/update inputs, owner refusal paths, optional services and cross-user engine-memory policy remain gaps; this focused scenario establishes only the semantic integration boundary. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage."
     },
     {
       "path": "packages/gateway/src/routes/repo-proposals.ts",
@@ -70343,46 +69892,9 @@
       "fingerprint": "6efc35e0dc097d55",
       "lane": "providers-streams-coordination",
       "direct_test_references": [],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_83_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_96_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_191_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_216_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_243_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_261_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedTeamChatRoutes-packages_gateway_src_routes_team_chat_test_ts_273_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage.",
-      "parity_review": "Reuses the seven team-room-specific Rust-owned declarations from the integration file; four ordinary-chat persona declarations are deliberately excluded. Real isolated SQLite, Fastify and JWTs cover owned room creation/members, automatic addressing and attachments, supervised thread dispatch and repeat-message deduplication, busy-member concurrency and selected-thread cancellation, latest/final/empty-result semantics, normal-chat attribution and foreign-user/recipient rejection. Providers are synthetic event emitters; no model account or external messaging transport is used. Route size/schema boundaries, startup recovery, halt races and every legacy fallback/dispatcher error remain explicit coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "No direct static import from inventoried test files; inspect indirect/integration coverage."
     },
     {
       "path": "packages/gateway/src/routes/terminals.ts",
@@ -70611,81 +70123,9 @@
         "packages/gateway/src/tools/cron-tools.test.ts",
         "packages/gateway/src/tools/security-workbench-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_22_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_29_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_41_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_51_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_60_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_74_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_88_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_109_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_132_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_162_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_169_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_177_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_187_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedSchedulerService-packages_gateway_src_scheduler_service_test_ts_202_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed cron/timezone and same-minute matching, input/tool normalization, caller-owned CRUD, timer lifecycle, job/run persistence, agent-delivery normalization, one-shot success deletion/failure disarm, retention purge and overlapping/concurrent tick guards. Fourteen original Rust-owned service fixtures use in-memory SQLite and fake tool callbacks to assert one-shot flag/deletion/disarm/manual/recurring behavior, duplicate-minute suppression, independent concurrent jobs, same-job exclusion and bounded retention sweeps. Mutation keeps a delivered one-shot armed and must fail null/empty job assertions, then restored pass. No live job, channel delivery or scheduler daemon runs. Real timer/restart durability, all cron/timezone fields, ownership/system-job policy, corrupt stored payloads, serialization/callback failures, shutdown and concurrent update/cancellation races remain gaps; other scheduler test files retain their own separate evidence. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/security/agent-sandbox-owner.ts",
@@ -70844,76 +70284,9 @@
         "packages/gateway/src/sprint4.test.ts",
         "packages/gateway/src/tools/browser-stagehand.integration.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_88_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_88_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_88_3_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_121_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_121_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_121_3_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_142_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_142_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_142_3_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_174_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_204_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_240_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedConsentExecutor-packages_gateway_src_security_consent_executor_test_ts_278_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all seven original Rust-owned consent-executor declarations with every parameterized registration: no dispatch before approval, exact summaries/previews/risk/policy, rejected-command nonexecution, destructive working-tree command denial, explicit full-access behavior and local/delegate routing. Actual tool delegates are spies; terminal commands and file writes are inert fixture inputs. Dry-run, scheduler/approve-all, cancellation races and trust/session progression branches remain explicit coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/security/consent-manager.ts",
@@ -71827,6 +71200,7 @@
       "fingerprint": "73a41c6e056d0f63",
       "lane": "http-tools-config",
       "direct_test_references": [
+        "packages/gateway/src/routes/chat-system-notice.test.ts",
         "packages/gateway/src/routes/chat.external-providers.test.ts",
         "packages/gateway/src/services/background-command-monitor.test.ts",
         "packages/gateway/src/services/chat-loops.test.ts",
@@ -72272,36 +71646,9 @@
       "direct_test_references": [
         "packages/gateway/src/services/code-graph/graphify-runtime.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedGraphifyRuntime-packages_gateway_src_services_code_graph_graphify_runtime_test_ts_15_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedGraphifyRuntime-packages_gateway_src_services_code_graph_graphify_runtime_test_ts_20_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedGraphifyRuntime-packages_gateway_src_services_code_graph_graphify_runtime_test_ts_59_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedGraphifyRuntime-packages_gateway_src_services_code_graph_graphify_runtime_test_ts_72_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedGraphifyRuntime-packages_gateway_src_services_code_graph_graphify_runtime_test_ts_87_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed managed/custom command resolution, paths, version matching, Python candidates, provisioning commands, metadata writes, in-flight deduplication and cleanup. Five original Rust-owned fixtures cover default path, pinned isolated provisioning and metadata, custom executable, unsupported Python rejection and managed version mismatch. Execution is injected; no Python, pip, installation or network request runs. Temporary fixture files remain project-local through the translated driver. Concurrent deduplication, retry after failure, empty stderr/stdout, every platform candidate, install/post-install errors and file-access helper remain explicit gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/services/code-graph/graphrag-adapter.ts",
@@ -74595,46 +73942,9 @@
       "direct_test_references": [
         "packages/gateway/src/services/preview-runner.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_17_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_32_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_57_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_75_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_86_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_101_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewRunner-packages_gateway_src_services_preview_runner_test_ts_121_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed package-manager ancestor detection, config/dependency framework selection, monorepo frontend resolution/ambiguity, explicit and fallback commands, local/private target normalization, port allocation, bounded HTTP readiness with abort listeners, child output/exit monitoring, process-group stop and unavailable Docker stub. Seven original Rust-owned fixtures cover owned early-exit subprocess output and deadline, a disposable owned loopback HTTP child and shutdown, monorepo selection/root preservation, Bun ancestry and exact npm Vite/Next commands. Fixture temporary paths are redirected under project artifacts by the contract environment. The mutation drops npm's exec separator and must fail exact command equality, followed by restored pass. No project dev stack, Docker deployment or external service starts. Framework/lock ambiguity, invalid package JSON, host normalization, all error/cancellation/race paths, Windows process trees and Docker runtime remain gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/services/preview.ts",
@@ -76554,21 +75864,9 @@
         "packages/gateway/src/routes/terminal-project-routing.test.ts",
         "packages/gateway/src/tools/core/get-fs.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedRemoteFilesystem-packages_gateway_src_tools_core_get_fs_test_ts_47_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedRemoteFilesystem-packages_gateway_src_tools_core_get_fs_test_ts_57_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed lifecycle/snapshot, remote filesystem proxy calls, backup/patch/restore and path helper. Selected original Rust-owned fixtures execute remote class start, metadata and read through injected WS and verify Windows-root routing without local path mangling. No actual remote node is contacted. State/no-node errors, binary decoding, write/patch/backup/restore, proxy failures and path authorization remain unverified here. In particular the existing lowercase lexical prefix check lacks separator/canonicalization guarantees; this review does not certify it as a security boundary. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/surfaces/remote-terminal.ts",
@@ -77063,96 +76361,9 @@
         "packages/gateway/src/channels/reminders.integration.test.ts",
         "packages/gateway/src/tools/channel-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_45_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_56_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_65_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_71_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_76_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_81_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_87_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_97_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_106_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_115_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_127_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_150_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_163_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_176_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_189_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_199_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedChannelTools-packages_gateway_src_tools_channel_tools_test_ts_209_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all seventeen Rust-owned channel-tool declarations: session/colon parsing, local wall-clock parsing and rejected offsets/ranges, cron construction, default/explicit targets, failed and missing delivery, one-off/recurring metadata, user/session forwarding, injected-clock time-zone comparisons, past-time and missing-field refusal, unavailable scheduler and default labels. Delivery and scheduler are in-memory fakes; no messages are sent or jobs persisted. Partial target overrides, scheduler errors, invalid zones, leap/calendar dates and DST transitions remain explicit coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/chat-modes.ts",
@@ -77785,31 +76996,9 @@
       "direct_test_references": [
         "packages/gateway/src/tools/elevated-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_78_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_122_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_136_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedElevatedTools-packages_gateway_src_tools_elevated_tools_test_ts_169_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed trimmed command/secret refusal, caller-scoped secret requests, root/nonroot runtime selection, Linux sudo stdin and argv, Windows UAC/credential wrapper encoding/env inputs, output normalization/truncation/JSON parse, timeout/abort kill and result reporting. Four original Rust-owned scenarios use fake spawned EventEmitters and in-memory secret/audit services to assert exact sudo args, no audit/input password leakage, schema password omission, and decoded Windows UAC versus credential scripts. Mutation removes sudo's forced credential refresh flag and must fail exact argument equality, then restoration passes. No command, privilege elevation, password prompt UI, PowerShell process or package installation runs. Real sudo/UAC credential security, child exit/error/abort/timeout races, output caps, missing secret/command, root bypass, sensitive stream redaction and supported-platform execution remain gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/email-tools.ts",
@@ -77829,41 +77018,9 @@
       "direct_test_references": [
         "packages/gateway/src/tools/file-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedFileTools-packages_gateway_src_tools_file_tools_test_ts_42_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedFileTools-packages_gateway_src_tools_file_tools_test_ts_53_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedFileTools-packages_gateway_src_tools_file_tools_test_ts_75_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedFileTools-packages_gateway_src_tools_file_tools_test_ts_93_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedFileTools-packages_gateway_src_tools_file_tools_test_ts_109_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedFileTools-packages_gateway_src_tools_file_tools_test_ts_116_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all 6 original Rust-owned file-tool declarations: real owned artifact files preserve CRLF/Unicode bytes and UTF-8 sizes; small images carry one base64 copy, larger images return only a path, four image formats map correctly, and invalid extensions/missing files fail cleanly. Filesystem surfaces use the original path guard and all fixture files are project-local. Patch/list/stat tools, exact inline threshold, image directories, traversal/symlink cases and non-Error failure branches remain explicit coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/gateway-tools.ts",
@@ -78517,131 +77674,9 @@
       "direct_test_references": [
         "packages/gateway/src/tools/os-control-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_256_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_273_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_287_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_296_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_307_5_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_307_5_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_307_5_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_307_5_each3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_307_5_each4",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_326_5_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_326_5_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_326_5_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_326_5_each3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_326_5_each4",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_341_5_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_341_5_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_341_5_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_341_5_each3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_341_5_each4",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_358_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_376_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_393_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_407_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsControlTools-packages_gateway_src_tools_os_control_tools_test_ts_422_5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed all eight OS sandbox tool schemas, injected/default resolver, action callback wiring, screenshot representation and success/error messages. Selected original Rust-owned toolset fixtures cover eight names, screenshot success/resolver/action errors, parameterized five input actions with success/resolver/action errors, exec success/nonzero/throw and listing success/throw. Fake resolver and driver only; no OS, shell, sandbox or image capture runs. Screenshot-unavailable success fallback, exact per-action forwarding/defaults, all schema fields, non-Error throws and timed-out exec messages remain gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/os-tools.ts",
@@ -78651,81 +77686,9 @@
         "packages/gateway/src/sprint3.test.ts",
         "packages/gateway/src/tools/os-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_12_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_18_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_18_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_21_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_21_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_25_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_34_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_34_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_34_3_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_39_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_39_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_39_3_each2",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_39_3_each3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedOsTools-packages_gateway_src_tools_os_tools_test_ts_43_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses all seven original Rust-owned declarations (including every parameterized registration): best-effort system metadata, process/disk success and errors, environment secret exclusion, apt/brew/winget dispatch, shell/option-injection rejection and package failure. Child-process execution is mocked; no installer or host command executes. Other-platform OS branches and successful optional metadata parsing remain coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/persona-agent-tools.ts",
@@ -78774,50 +77737,8 @@
         "packages/gateway/src/tools/preview-tools.test.ts"
       ],
       "status": "pending",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_9_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_18_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_89_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_145_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_239_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_306_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_345_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedPreviewTools-packages_gateway_src_tools_preview_tools_test_ts_377_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed current-session validation, project/target normalization, open/start alias, stable target persistence and UI state broadcasts, failed-start hiding, stop/restart/status handling, sharing-gated events/log projections and inspect screenshot omission/control checks. Original Rust-owned fake-service fixtures assert schema alias visibility, exact start/broadcast/state payloads and MCP session routing, failure-panel state, screenshot opt-in/error count and restart success. Mutation persists transient preview URL instead of stable user target and must fail the exact UI/state payload assertion; restoration passes. No real preview, browser, screenshot, external website or UI command is sent. Stop/status/log filters/caps, absent services/sessions, browser-control refusal and failures, every sharing/metrics branch, real process lifecycle and UI/platform integration remain gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/project-editor-tools.ts",
@@ -78855,71 +77776,9 @@
       "direct_test_references": [
         "packages/gateway/src/tools/project-tools.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_53_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_71_3_each0",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_71_3_each1",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_88_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_97_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_104_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_120_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_137_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_151_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_167_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_177_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedProjectTools-packages_gateway_src_tools_project_tools_test_ts_210_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reviewed create/idempotence/title/chat assignment, repository assignment and typed failures, user-scoped project lookup and broadcasts, metadata-only move/target validation/stale repo clearing and relinking, and transfer source/node/preflight/copy/visibility-before-retarget/error behavior. Original Rust-owned in-memory SQLite fixtures cover creation broadcasts, existing/new chat assignment and foreign-owner refusal, required node/target/missing project/no-op/same-node move boundaries, fake remote SCP success and failure with unchanged metadata. Mutation bypasses local destination existence and must fail the refusal assertion; restored pass follows. Test files/directories are disposable project-local fixtures; remote transports are injected and no SCP, external node transfer or live project retarget occurs. Explicit repository assignment, every create/title/owner case, remote path failures/visibility/copy races, transfer credentials/argv and complete rollback semantics remain gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/tools/prompts/claude-prompt.ts",
@@ -79601,7 +78460,7 @@
     },
     {
       "path": "packages/gateway/src/tools/prompts/shared-sections.ts",
-      "fingerprint": "4f85e3ca9921631f",
+      "fingerprint": "a7fb033f35a1e3b5",
       "lane": "http-tools-config",
       "direct_test_references": [
         "packages/gateway/src/tools/prompts/prompt-registry.test.ts",
@@ -80334,15 +79193,10 @@
           "id": "internal.sourcereview.reusedQuestionTool-4",
           "source": "tests/contract/tests/source_review.rs",
           "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedQuestionTool-5",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
         }
       ],
       "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Checks core metadata/no timeout, title and urgency forwarding, answer projection, duplicate IDs before request creation, persistent MCP request IDs after repeated deadlines, owner/session refusal, cancellation and no leftover timers, with the existing Rust-owned tool and MCP assertions. Services are local and time is synthetic; no real question delivery runs. All malformed nested input forms and UI transport fan-out remain separate. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "parity_review": "Checks core metadata/no timeout, title and urgency forwarding, answer projection, duplicate IDs before request creation, with the existing Rust-owned tool and MCP assertions. Services are local and time is synthetic; no real question delivery runs. All malformed nested input forms and UI transport fan-out remain separate. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
     },
     {
       "path": "packages/gateway/src/tools/validate.ts",
@@ -80459,46 +79313,9 @@
         "packages/gateway/src/tools/runtime-service-tools.test.ts",
         "packages/gateway/src/voice/service.test.ts"
       ],
-      "status": "verified",
-      "rust_cases": [
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_11_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_35_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_60_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_83_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_89_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_94_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        },
-        {
-          "id": "internal.sourcereview.reusedVoiceService-packages_gateway_src_voice_service_test_ts_98_3",
-          "source": "tests/contract/tests/source_review.rs",
-          "report": ".jait/artifacts/source-review-authoring/goal-reference-validation/frozen-source/.jait/artifacts/source-review/1ca35bb8-14c8-4089-adb4-56a8cdbb9a65/report.json"
-        }
-      ],
-      "gap": "Existing direct imports do not establish Rust behavioral parity.",
-      "parity_review": "Reuses seven Rust-owned voice declarations for GPT/ElevenLabs fixed HTTP request shapes, WAV/form/model/key/prompt forwarding and whole-word/case transcript correction. Fetch is synthetic; no audio is uploaded. Whisper/Wyoming, consent utterances, state timestamps, actual speech engines and provider failure branches remain separate coverage gaps. Executable review: tests/contract/source-reviews.json; Rust-owned cases and assertion-failing source mutation with restored pass: tests/contract/tests/source_review.rs. Reference source runtime coverage only; native implementation and broader migration acceptance remain separate."
+      "status": "pending",
+      "rust_cases": [],
+      "gap": "Existing direct imports do not establish Rust behavioral parity."
     },
     {
       "path": "packages/gateway/src/voice/wake-candidate.ts",

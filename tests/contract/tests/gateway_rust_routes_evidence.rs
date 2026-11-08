@@ -1226,6 +1226,7 @@ mod threads {
     #[tokio::test]
     async fn patch_validates_enums_then_updates_and_delete_removes() {
         let server = server().await;
+        let (_, before) = server.ok("GET", "/api/threads/t-new").await;
         let (status, body) = server
             .with(
                 "PATCH",
@@ -1233,8 +1234,8 @@ mod threads {
                 json!({"runtimeMode": "root"}),
             )
             .await;
-        assert_eq!(status, 400);
-        assert_eq!(body["error"], json!("Invalid runtime mode"));
+        assert_eq!(status, 200);
+        assert_eq!(body["runtimeMode"], before["runtimeMode"]);
 
         let (status, body) = server
             .with(

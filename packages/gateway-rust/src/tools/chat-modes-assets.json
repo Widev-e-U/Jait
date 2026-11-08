@@ -20,6 +20,7 @@
     "session.search",
     "web.fetch",
     "web.search",
+    "browser.open",
     "browser.navigate",
     "browser.snapshot",
     "browser.inspect",

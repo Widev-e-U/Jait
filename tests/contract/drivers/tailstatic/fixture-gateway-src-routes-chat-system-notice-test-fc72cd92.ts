@@ -4,6 +4,7 @@ import { formatBackgroundCommandNotification } from "../../../../packages/gatewa
 import { loadConfig } from "../../../../packages/gateway/src/config.js";
 import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/db/index.js";
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
+import { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
 import { signAuthToken } from "../../../../packages/gateway/src/security/http-auth.js";
 import {
@@ -53,7 +54,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_67_3": {
+case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_68_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -83,23 +84,23 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_1828 = async () => {
+const __jait_hook_1896 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2012 = async () => {
+const __jait_hook_2080 = async () => {
     await app?.close();
     app = null;
   };
-const __jait_hook_2085 = () => {
+const __jait_hook_2153 = () => {
     receivedBodies.length = 0;
   };
-const __jait_hook_2144 = async () => {
+const __jait_hook_2212 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_1828();
-await __jait_hook_2085();
+await __jait_hook_1896();
+await __jait_hook_2153();
 try {
 await (async()=>{
 
@@ -118,9 +119,12 @@ await (async()=>{
     };
 
     const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
     const userService = new UserService(db);
     const user = userService.createUser("sys-notice-user", "password123");
     const session = sessionService.create({ userId: user.id, name: "Sys Notice" });
+    // Autonomous turns run only on the provider+model the user picked for this chat.
+    sessionState.set(session.id, { "chat.provider": "jait", "chat.cliModels": { jait: "llama3" } });
 
     app = await createServer(config, {
       db,
@@ -152,38 +156,48 @@ await (async()=>{
     });
     __jait_capture(0, (response.statusCode));
 
+    // A continuation turn has no prompt text, so the browser cannot build a user
+    // bubble from `content`. It renders the gray notice line instead and reads
+    // its text from this event, so live view and reload agree.
+    const requestEvent = response.body
+      .split("\n")
+      .filter((line) => line.startsWith("data: "))
+      .map((line) => JSON.parse(line.slice("data: ".length)) as { type?: string; systemNotice?: boolean; noticeText?: string })
+      .find((event) => event.type === "request");
+    __jait_capture(1, (requestEvent), ({ systemNotice: true, noticeText: notice }));
+
     const modelMessages = receivedBodies.at(-1)?.["messages"] as Array<{ role: string; content: string }>;
-    __jait_capture(1, (modelMessages.at(-1)), ([fullNotification]));
-    __jait_capture(2, (modelMessages.at(-1)?.content));
+    __jait_capture(2, (modelMessages.at(-1)), ([fullNotification]));
+    __jait_capture(3, (modelMessages.at(-1)?.content));
 
     const messagesResponse = await app.inject({
       method: "GET",
       url: `/api/sessions/${session.id}/messages`,
       headers: { authorization: `Bearer ${token}` },
     });
-    __jait_capture(3, (messagesResponse.statusCode));
+    __jait_capture(4, (messagesResponse.statusCode));
     const body = messagesResponse.json() as { messages: Array<{ role: string; content: string; systemNotice?: boolean }> };
 
     // The short notice is persisted as a visible system row; the full (hidden)
     // notification must NOT leak into the UI.
-    __jait_capture(4, (body.messages.find((m) => m.role === "system")), ({
+    __jait_capture(5, (body.messages.find((m) => m.role === "system")), ({
       role: "system",
       content: notice,
       systemNotice: true,
     }));
-    __jait_capture(5, (body.messages.some((m) => m.content.includes(fullNotification))));
+    __jait_capture(6, (body.messages.some((m) => m.content.includes(fullNotification))));
   
 })();
 
 } finally {
-await __jait_hook_2144();
-await __jait_hook_2012();
+await __jait_hook_2212();
+await __jait_hook_2080();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_142_3": {
+case "tailstatic_packages_gateway_src_routes_chat_system_notice_test_ts_156_3": {
 
 
 async function collectBody(req: IncomingMessage): Promise<string> {
@@ -213,23 +227,23 @@ function startMockOllama(): Promise<Server> {
 let mockOllama: Server;
 let ollamaUrl: string;
 let app: Awaited<ReturnType<typeof createServer>> | null = null;
-const __jait_hook_1828 = async () => {
+const __jait_hook_1896 = async () => {
     mockOllama = await startMockOllama();
     const address = mockOllama.address() as AddressInfo;
     ollamaUrl = `http://127.0.0.1:${address.port}`;
   };
-const __jait_hook_2012 = async () => {
+const __jait_hook_2080 = async () => {
     await app?.close();
     app = null;
   };
-const __jait_hook_2085 = () => {
+const __jait_hook_2153 = () => {
     receivedBodies.length = 0;
   };
-const __jait_hook_2144 = async () => {
+const __jait_hook_2212 = async () => {
     await new Promise<void>((resolve) => mockOllama.close(() => resolve()));
   };
-await __jait_hook_1828();
-await __jait_hook_2085();
+await __jait_hook_1896();
+await __jait_hook_2153();
 try {
 await (async()=>{
 
@@ -248,9 +262,11 @@ await (async()=>{
     };
 
     const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
     const userService = new UserService(db);
     const user = userService.createUser("sys-notice-user-2", "password123");
     const session = sessionService.create({ userId: user.id, name: "Sys Notice 2" });
+    sessionState.set(session.id, { "chat.provider": "jait", "chat.cliModels": { jait: "llama3" } });
 
     app = await createServer(config, {
       db,
@@ -282,8 +298,8 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_2144();
-await __jait_hook_2012();
+await __jait_hook_2212();
+await __jait_hook_2080();
 }
 }
 

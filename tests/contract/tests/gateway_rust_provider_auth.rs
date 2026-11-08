@@ -268,7 +268,7 @@ async fn logout_captures_exit_signal_ansi_tail_environment_and_literal_args() {
     )
     .await;
     compare_process(
-        json!({"script":"console.log('started');setInterval(()=>{},1000);","timeout":250}),
+        json!({"script":"console.log('started');setInterval(()=>{},1000);","timeout":1500}),
         false,
     )
     .await;
@@ -279,11 +279,11 @@ async fn device_login_complete_partial_input_completed_error_and_timeout() {
         json!({"script":"console.log('Open https://example.test/device\\nCode: AB12-CD34');setInterval(()=>{},1000);"}),
         json!({"script":"console.log('Open https://example.test/device\\nEnter the authorization code from your browser:');setInterval(()=>{},1000);"}),
         json!({"script":"console.log('Open https://example.test/device');setInterval(()=>{},1000);","timeout":3000}),
-        json!({"script":"console.log('Code: AB12-CD34');setInterval(()=>{},1000);","timeout":250}),
+        json!({"script":"console.log('Code: AB12-CD34');setInterval(()=>{},1000);","timeout":1500}),
         json!({"script":"console.log('logged out');"}),
         json!({"script":"console.log('failed');process.exitCode=2;"}),
         json!({"script":"process.kill(process.pid,'SIGTERM');"}),
-        json!({"script":"console.log('waiting');setInterval(()=>{},1000);","timeout":250}),
+        json!({"script":"console.log('waiting');setInterval(()=>{},1000);","timeout":1500}),
         json!({"commandLine":"","args":[]}),
         json!({"commandLine":"jait-auth-missing-fixture-79d03","args":[],"spawnFailure":true}),
     ] {

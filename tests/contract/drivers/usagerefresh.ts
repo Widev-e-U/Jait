@@ -47,7 +47,10 @@ export async function dispatch(call: Call): Promise<unknown> {
     let snapshots: unknown[] = [], loads = 0, records = 0;
     let release!: (response: Response) => void;
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === 'http://localhost:11434/api/me') return new Response(null, { status: 404 });
+      if (url !== 'https://ollama.com/settings') throw new Error(`Unexpected fixture request: ${url}`);
       loads += 1;
       if (loads === 1) return new Promise<Response>(resolve => { release = resolve; });
       return new Response(call.html);

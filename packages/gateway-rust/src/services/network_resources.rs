@@ -2147,16 +2147,26 @@ mod tests {
         let directory = owned_directory("bounded");
         let slow = write_script(&directory, "slow.sh", "#!/bin/sh\nexec sleep 5\n");
         let started = std::time::Instant::now();
-        let error = exec_bounded(&slow.to_string_lossy(), &[], 150, INSPECT_MAX_BUFFER)
-            .await
-            .unwrap_err();
+        let error = exec_bounded(
+            "/bin/sh",
+            &[slow.to_string_lossy().into_owned()],
+            150,
+            INSPECT_MAX_BUFFER,
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.kind, DockerErrorKind::Timeout);
         assert!(started.elapsed() < Duration::from_secs(3));
 
         let loud = write_script(&directory, "loud.sh", "#!/bin/sh\nprintf '%0200d' 0\n");
-        let error = exec_bounded(&loud.to_string_lossy(), &[], INSPECT_TIMEOUT_MS, 16)
-            .await
-            .unwrap_err();
+        let error = exec_bounded(
+            "/bin/sh",
+            &[loud.to_string_lossy().into_owned()],
+            INSPECT_TIMEOUT_MS,
+            16,
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.kind, DockerErrorKind::MaxBuffer);
         assert_eq!(error.message, "stdout maxBuffer length exceeded");
 
@@ -2173,8 +2183,8 @@ mod tests {
 
         let ok = write_script(&directory, "ok.sh", "#!/bin/sh\nprintf '%s' \"$1\"\n");
         let error = exec_bounded(
-            &ok.to_string_lossy(),
-            &["a\0b".to_string()],
+            "/bin/sh",
+            &[ok.to_string_lossy().into_owned(), "a\0b".to_string()],
             INSPECT_TIMEOUT_MS,
             16,
         )
@@ -2182,8 +2192,8 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.kind, DockerErrorKind::InvalidArgument);
         let output = exec_bounded(
-            &ok.to_string_lossy(),
-            &["plain".to_string()],
+            "/bin/sh",
+            &[ok.to_string_lossy().into_owned(), "plain".to_string()],
             INSPECT_TIMEOUT_MS,
             16,
         )

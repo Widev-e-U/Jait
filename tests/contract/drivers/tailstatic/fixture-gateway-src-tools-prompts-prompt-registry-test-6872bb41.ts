@@ -58,6 +58,8 @@ await (async()=>{
 
     __jait_capture(0, (JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE), (PROJECT_ARTIFACT_INSTRUCTIONS));
     __jait_capture(1, (JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS_LITE), (LIVE_BROWSER_UPDATE_INSTRUCTIONS));
+    __jait_capture(2, (LIVE_BROWSER_UPDATE_INSTRUCTIONS));
+    __jait_capture(3, (LIVE_BROWSER_UPDATE_INSTRUCTIONS));
   
 })();
 
@@ -68,7 +70,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each0": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_18_3_each0": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -92,6 +94,11 @@ await (async()=>{
     __jait_capture(8, (prompt));
     __jait_capture(9, (prompt));
     __jait_capture(10, (prompt));
+    __jait_capture(11, (prompt));
+    __jait_capture(12, (prompt));
+    __jait_capture(13, (prompt));
+    __jait_capture(14, (prompt));
+    __jait_capture(15, (prompt));
   
 })();
 
@@ -103,7 +110,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each1": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_18_3_each1": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -127,6 +134,11 @@ await (async()=>{
     __jait_capture(8, (prompt));
     __jait_capture(9, (prompt));
     __jait_capture(10, (prompt));
+    __jait_capture(11, (prompt));
+    __jait_capture(12, (prompt));
+    __jait_capture(13, (prompt));
+    __jait_capture(14, (prompt));
+    __jait_capture(15, (prompt));
   
 })();
 
@@ -138,7 +150,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_16_3_each2": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_18_3_each2": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -162,6 +174,11 @@ await (async()=>{
     __jait_capture(8, (prompt));
     __jait_capture(9, (prompt));
     __jait_capture(10, (prompt));
+    __jait_capture(11, (prompt));
+    __jait_capture(12, (prompt));
+    __jait_capture(13, (prompt));
+    __jait_capture(14, (prompt));
+    __jait_capture(15, (prompt));
   
 })();
 
@@ -173,7 +190,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_35_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_42_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -217,7 +234,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_62_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_69_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -251,7 +268,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_79_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_86_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -283,7 +300,7 @@ __jait_record({slot:1,completed:true});
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_94_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_101_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -311,7 +328,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_105_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_112_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -343,7 +360,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_120_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_127_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -378,7 +395,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_139_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_146_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -406,7 +423,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_150_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_157_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -454,7 +471,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_181_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_188_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -484,7 +501,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_194_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_201_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -530,7 +547,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_223_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_230_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -566,7 +583,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_242_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_249_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -595,7 +612,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_254_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_261_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -647,7 +664,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_290_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_297_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));
@@ -674,7 +691,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_300_3": {
+case "tailstatic_packages_gateway_src_tools_prompts_prompt_registry_test_ts_307_3": {
 
 const { mkdtempSync, rmSync, writeFileSync } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fs", __jait_original_dir):__jait_require.resolve("fs")));
 const { tmpdir } = await import((typeof Bun!=="undefined"?Bun.resolveSync("os", __jait_original_dir):__jait_require.resolve("os")));

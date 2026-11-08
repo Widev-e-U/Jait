@@ -126,27 +126,10 @@ pub fn build_jait_mcp_server_ref(
         .map(String::from)
         .unwrap_or_else(|| format!("http://{host}:{port}"));
     let base_text = format!("{base}/");
-    // Bun reports a failed `/mcp` resolution as a JSON-quoted sentence: it keeps
-    // the `against "<base>"` clause for unparsable and hierarchical bases but
-    // omits it when the base cannot-be-a-base (`mailto:`), e.g.
-    // `"\"/mcp\" cannot be parsed as a URL against \"invalid/\""`.
-    let parsed = url::Url::parse(&base_text);
-    let mut url = match parsed
-        .as_ref()
+    let mut url = url::Url::parse(&base_text)
         .ok()
         .and_then(|base_url| base_url.join("/mcp").ok())
-    {
-        Some(url) => url,
-        None => {
-            let sentence = match &parsed {
-                Ok(base_url) if base_url.cannot_be_a_base() => {
-                    "\"/mcp\" cannot be parsed as a URL.".to_owned()
-                }
-                _ => format!("\"/mcp\" cannot be parsed as a URL against \"{base_text}\"."),
-            };
-            return Err(serde_json::to_string(&sentence).unwrap_or(sentence));
-        }
-    };
+        .ok_or_else(|| "Invalid URL".to_owned())?;
     for name in ["sessionId", "projectRoot", "runtimeMode"] {
         if let Some(v) = context[name].as_str().filter(|s| !s.is_empty()) {
             url.query_pairs_mut().append_pair(name, v);

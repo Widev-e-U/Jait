@@ -106,7 +106,7 @@ mod smoke_process_ts {
         assert!(has_exited(Some(&mut happy)).unwrap());
 
         // A child that dies instead of shutting down cleanly is an error.
-        let mut stubborn = spawn("exit 7");
+        let mut stubborn = spawn("cat > /dev/null; exit 7");
         let error = graceful_stop(&mut stubborn, true)
             .await
             .expect_err("non-zero exit must be reported");

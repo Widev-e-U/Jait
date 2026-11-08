@@ -3,6 +3,7 @@ import { openDatabase, migrateDatabase } from "../../../../packages/gateway/src/
 import { SessionService } from "../../../../packages/gateway/src/services/sessions.js";
 import { ChatLoopService, chatLoopInstructions } from "../../../../packages/gateway/src/services/chat-loops.js";
 import * as systemOne from "../../../../packages/gateway/src/services/system-one.js";
+import { backgroundCommandMonitor } from "../../../../packages/gateway/src/services/background-command-monitor.js";
 import { createLoopTools } from "../../../../packages/gateway/src/tools/loop-tools.js";
 import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
@@ -45,7 +46,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_23_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_24_3": {
 
 
 /*__jait_scope_open__*/{
@@ -60,7 +61,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -68,8 +69,143 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
+try {
+await (async()=>{
+
+    const inspect = vi.spyOn(backgroundCommandMonitor, "inspectExecution");
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"]);
+    const input = { revision: goal.revision, outcome: "complete" as const, summary: "Tests pass",
+      evidence: ["Test execution passed"], executionRefs: [{ criterion: 0, terminalId: "terminal", executionId: "run" }] };
+    inspect.mockReturnValueOnce(null);
+    await __jait_rejected(0, loops.checkMonitored(sessionId, input));
+    __jait_capture(1, (inspect.mock.calls), ([sessionId,"terminal","run"]));
+    inspect.mockReturnValueOnce({ terminalId: "terminal", executionId: "run", status: "failed", exitCode: 101, output: "compile failed", durationMs: 1 });
+    await __jait_rejected(2, loops.checkMonitored(sessionId, input));
+    __jait_capture(3, (loops.get(sessionId)?.status));
+    inspect.mockReturnValueOnce({ terminalId: "terminal", executionId: "run", status: "completed", exitCode: 0, output: "ok", durationMs: 1 });
+    const result = await loops.checkMonitored(sessionId, input);
+    __jait_capture(4, (result.executionEvidence));
+    __jait_capture(5, (result.status));
+  
+})();
+
+} finally {
+await __jait_hook_932();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_41_3": {
+
+
+/*__jait_scope_open__*/{
+let sessions: SessionService;
+let loops: ChatLoopService;
+let sessionId: string;
+let close: () => void;
+const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+const __jait_hook_601 = async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  };
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
+try {
+await (async()=>{
+
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"], undefined, [0]);
+    await __jait_rejected(0, loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Tests passed"] }));
+    __jait_capture(1, (loops.get(sessionId)?.status));
+    __jait_thrown(2, () => loops.goal(sessionId, "Repair", ["Tests pass"], undefined, [1]));
+  
+})();
+
+} finally {
+await __jait_hook_932();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_48_3": {
+
+
+/*__jait_scope_open__*/{
+let sessions: SessionService;
+let loops: ChatLoopService;
+let sessionId: string;
+let close: () => void;
+const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+const __jait_hook_601 = async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  };
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
+try {
+await (async()=>{
+
+    const goal = loops.goal(sessionId, "Repair", ["Tests pass"]);
+    await __jait_rejected(0, loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "continue", summary: "Trying",
+      nextMessage: "Check", executionRefs: [{ criterion: 1, terminalId: "t", executionId: "e" }] }));
+  
+})();
+
+} finally {
+await __jait_hook_932();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_54_3": {
+
+
+/*__jait_scope_open__*/{
+let sessions: SessionService;
+let loops: ChatLoopService;
+let sessionId: string;
+let close: () => void;
+const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+const __jait_hook_601 = async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  };
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -88,13 +224,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_37_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_68_3": {
 
 
 /*__jait_scope_open__*/{
@@ -109,7 +245,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -117,8 +253,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -133,13 +269,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_47_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_78_3": {
 
 
 /*__jait_scope_open__*/{
@@ -154,7 +290,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -162,8 +298,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -180,13 +316,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_59_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_90_3": {
 
 
 /*__jait_scope_open__*/{
@@ -201,7 +337,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -209,8 +345,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -226,13 +362,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_70_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_101_3": {
 
 
 /*__jait_scope_open__*/{
@@ -247,7 +383,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -255,8 +391,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -280,13 +416,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_89_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_120_3": {
 
 
 /*__jait_scope_open__*/{
@@ -301,7 +437,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -309,8 +445,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -324,13 +460,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_98_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_129_3": {
 
 
 /*__jait_scope_open__*/{
@@ -345,7 +481,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -353,8 +489,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -367,13 +503,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_106_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_137_3": {
 
 
 /*__jait_scope_open__*/{
@@ -388,7 +524,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -396,8 +532,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -410,142 +546,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_121_3": {
-
-
-/*__jait_scope_open__*/{
-let sessions: SessionService;
-let loops: ChatLoopService;
-let sessionId: string;
-let close: () => void;
-const keys = { SYSTEM_ONE_API_KEY: "test-key" };
-function verdict(passed = true, progress = true) {
-    return { model: "monitor-test", answers: {
-      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
-      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
-    } };
-  }
-const __jait_hook_525 = async () => {
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    close = () => sqlite.close();
-    sessions = new SessionService(db);
-    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
-    loops = new ChatLoopService(sessions);
-  };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
-try {
-await (async()=>{
-
-    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false));
-    const goal = loops.goal(sessionId, "Fix", ["Regression passes"]);
-    const input = { revision: goal.revision, outcome: "complete" as const, summary: "Tested", evidence: ["Regression test exit 0"] };
-    const rejected = await loops.checkMonitored(sessionId, input, undefined, keys);
-    __jait_capture(0, (rejected), ({ status: "running", monitor: { status: "rejected", criteriaPassed: [false], reviewedRevision: goal.revision } }));
-    __jait_capture(1, (rejected.nextMessage));
-    evaluate.mockResolvedValue(verdict());
-    const completed = await loops.checkMonitored(sessionId, { ...input, revision: rejected.revision }, undefined, keys);
-    __jait_capture(2, (completed));
-    __jait_capture(3, (evaluate.mock.calls[0][1]));
-    __jait_capture(4, (evaluate.mock.calls[0][1]));
-  
-})();
-
-} finally {
-await __jait_hook_856();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_135_3": {
-
-
-/*__jait_scope_open__*/{
-let sessions: SessionService;
-let loops: ChatLoopService;
-let sessionId: string;
-let close: () => void;
-const keys = { SYSTEM_ONE_API_KEY: "test-key" };
-function verdict(passed = true, progress = true) {
-    return { model: "monitor-test", answers: {
-      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
-      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
-    } };
-  }
-const __jait_hook_525 = async () => {
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    close = () => sqlite.close();
-    sessions = new SessionService(db);
-    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
-    loops = new ChatLoopService(sessions);
-  };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
-try {
-await (async()=>{
-
-    const result = verdict();
-    result.answers.criterion_0.confidence = 0.5;
-    vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(result);
-    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
-    __jait_capture(0, (await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys)));
-  
-})();
-
-} finally {
-await __jait_hook_856();
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_144_3": {
-
-
-/*__jait_scope_open__*/{
-let sessions: SessionService;
-let loops: ChatLoopService;
-let sessionId: string;
-let close: () => void;
-const keys = { SYSTEM_ONE_API_KEY: "test-key" };
-function verdict(passed = true, progress = true) {
-    return { model: "monitor-test", answers: {
-      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
-      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
-    } };
-  }
-const __jait_hook_525 = async () => {
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    close = () => sqlite.close();
-    sessions = new SessionService(db);
-    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
-    loops = new ChatLoopService(sessions);
-  };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
-try {
-await (async()=>{
-
-    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("private endpoint credentials"));
-    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
-    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys);
-    __jait_capture(0, (result));
-    __jait_capture(1, (JSON.stringify(result)));
-  
-})();
-
-} finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
@@ -566,7 +567,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -574,8 +575,143 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
+try {
+await (async()=>{
+
+    const evaluate = vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(verdict(false));
+    const goal = loops.goal(sessionId, "Fix", ["Regression passes"]);
+    const input = { revision: goal.revision, outcome: "complete" as const, summary: "Tested", evidence: ["Regression test exit 0"] };
+    const rejected = await loops.checkMonitored(sessionId, input, undefined, keys);
+    __jait_capture(0, (rejected), ({ status: "running", monitor: { status: "rejected", criteriaPassed: [false], reviewedRevision: goal.revision } }));
+    __jait_capture(1, (rejected.nextMessage));
+    evaluate.mockResolvedValue(verdict());
+    const completed = await loops.checkMonitored(sessionId, { ...input, revision: rejected.revision }, undefined, keys);
+    __jait_capture(2, (completed));
+    __jait_capture(3, (evaluate.mock.calls[0][1]));
+    __jait_capture(4, (evaluate.mock.calls[0][1]));
+  
+})();
+
+} finally {
+await __jait_hook_932();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_166_3": {
+
+
+/*__jait_scope_open__*/{
+let sessions: SessionService;
+let loops: ChatLoopService;
+let sessionId: string;
+let close: () => void;
+const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+const __jait_hook_601 = async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  };
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
+try {
+await (async()=>{
+
+    const result = verdict();
+    result.answers.criterion_0.confidence = 0.5;
+    vi.spyOn(systemOne, "evaluateDecision").mockResolvedValue(result);
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    __jait_capture(0, (await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys)));
+  
+})();
+
+} finally {
+await __jait_hook_932();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_175_3": {
+
+
+/*__jait_scope_open__*/{
+let sessions: SessionService;
+let loops: ChatLoopService;
+let sessionId: string;
+let close: () => void;
+const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+const __jait_hook_601 = async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  };
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
+try {
+await (async()=>{
+
+    vi.spyOn(systemOne, "evaluateDecision").mockRejectedValue(new Error("private endpoint credentials"));
+    const goal = loops.goal(sessionId, "Fix", ["Pass"]);
+    const result = await loops.checkMonitored(sessionId, { revision: goal.revision, outcome: "complete", summary: "Done", evidence: ["Test exit 0"] }, undefined, keys);
+    __jait_capture(0, (result));
+    __jait_capture(1, (JSON.stringify(result)));
+  
+})();
+
+} finally {
+await __jait_hook_932();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_183_3": {
+
+
+/*__jait_scope_open__*/{
+let sessions: SessionService;
+let loops: ChatLoopService;
+let sessionId: string;
+let close: () => void;
+const keys = { SYSTEM_ONE_API_KEY: "test-key" };
+function verdict(passed = true, progress = true) {
+    return { model: "monitor-test", answers: {
+      progress: { type: "choice" as const, choice: progress ? "progress" : "stalled", confidence: 0.95 },
+      criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
+    } };
+  }
+const __jait_hook_601 = async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    close = () => sqlite.close();
+    sessions = new SessionService(db);
+    sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
+    loops = new ChatLoopService(sessions);
+  };
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -595,13 +731,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_167_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_198_3": {
 
 
 /*__jait_scope_open__*/{
@@ -616,7 +752,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -624,8 +760,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -642,13 +778,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_179_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_210_3": {
 
 
 /*__jait_scope_open__*/{
@@ -663,7 +799,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -671,14 +807,14 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
     loops.goal(sessionId, "Fix", ["Pass"]);
     for (let i = 0; i < 3; i++) loops.finishTurn(sessionId);
-    __jait_capture(0, (loops.get(sessionId)?.status));
+    __jait_capture(0, (loops.get(sessionId)?.summary));
     loops.control(sessionId, "resume");
     for (let i = 0; i < 50; i++) {
       const goal = loops.get(sessionId)!;
@@ -686,17 +822,19 @@ await (async()=>{
       loops.finishTurn(sessionId);
     }
     __jait_capture(1, (loops.get(sessionId)));
+    __jait_capture(2, (loops.get(sessionId)?.summary));
+    __jait_capture(3, (loops.get(sessionId)?.summary));
   
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_192_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_225_3": {
 
 
 /*__jait_scope_open__*/{
@@ -711,7 +849,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -719,8 +857,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -738,13 +876,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_205_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_238_3": {
 
 
 /*__jait_scope_open__*/{
@@ -759,7 +897,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -767,8 +905,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -786,13 +924,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_218_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_251_3": {
 
 
 /*__jait_scope_open__*/{
@@ -807,7 +945,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -815,8 +953,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -830,13 +968,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_227_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_260_3": {
 
 
 /*__jait_scope_open__*/{
@@ -851,7 +989,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -859,8 +997,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -880,13 +1018,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_242_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_275_3": {
 
 
 /*__jait_scope_open__*/{
@@ -901,7 +1039,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -909,8 +1047,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -926,13 +1064,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_253_3": {
+case "tailstatic_packages_gateway_src_services_chat_loops_test_ts_286_3": {
 
 
 /*__jait_scope_open__*/{
@@ -947,7 +1085,7 @@ function verdict(passed = true, progress = true) {
       criterion_0: { type: "choice" as const, choice: passed ? "passed" : "unverified", confidence: 0.95 },
     } };
   }
-const __jait_hook_525 = async () => {
+const __jait_hook_601 = async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     close = () => sqlite.close();
@@ -955,8 +1093,8 @@ const __jait_hook_525 = async () => {
     sessionId = sessions.create({ name: "Goal", metadata: { chat: { model: "saved" } } }).id;
     loops = new ChatLoopService(sessions);
   };
-const __jait_hook_856 = () => { vi.restoreAllMocks(); close(); };
-await __jait_hook_525();
+const __jait_hook_932 = () => { vi.restoreAllMocks(); close(); };
+await __jait_hook_601();
 try {
 await (async()=>{
 
@@ -969,7 +1107,7 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_856();
+await __jait_hook_932();
 }
 }
 

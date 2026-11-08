@@ -93,8 +93,8 @@ export function DeveloperComposerControlRow({
     <>
       <ChatComposerSurface className="px-3 sm:px-4">
       <div className={`${compact ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
-        <div className={`${compact ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
-          <div className={`${compact ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
+        <div className={`${compact ? 'flex w-full min-w-0 items-center justify-between gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
+          <div className={`${compact ? 'flex min-w-0 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
             {sendTarget === 'thread' ? (
               threadToolbarRepoPicker
             ) : (
@@ -120,7 +120,7 @@ export function DeveloperComposerControlRow({
               />
             </div>
           )}
-          <div className={`${compact ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
+          <div className={`${compact ? 'contents' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
             {sendTarget !== 'thread' && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

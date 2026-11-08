@@ -13,6 +13,9 @@ pub mod assessment_lease;
 pub mod trust_worker;
 
 pub mod path_guard;
+// Staged primitive only; no runtime authority or tool integration.
+#[allow(dead_code)]
+pub(crate) mod scoped_file;
 
 pub mod contracts;
 

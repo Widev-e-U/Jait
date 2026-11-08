@@ -352,6 +352,63 @@ function setBrowserRuntimeEnv(value: string): void {
 try {
 await (async()=>{
 
+    const history = vi.fn().mockResolvedValue(undefined);
+    const driver = {
+      history, snapshot: vi.fn().mockResolvedValue({ url: "https://example.test/previous", title: "Previous", text: "", elements: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as BrowserDriver;
+    const surface = new BrowserSurface("history-browser", { driverFactory: async () => driver });
+    await surface.start({ sessionId: "session-1", projectRoot: "/project" });
+    __jait_capture(0, ((await surface.history("back")).url));
+    await surface.history("forward");
+    __jait_capture(1, (history.mock.calls.map(call => call[0])));
+    delete driver.history;
+    await __jait_rejected(2, surface.history("back"));
+    await surface.stop();
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_149_3": {
+
+
+const originalPlatform = process.platform;
+const originalBunVersion = process.versions.bun;
+const originalBrowserRuntime = process.env.BROWSER_RUNTIME;
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, "platform", {
+    value,
+    configurable: true,
+  });
+}
+function setBunVersion(value: string | undefined): void {
+  if (value === undefined) {
+    delete (process.versions as NodeJS.ProcessVersions & { bun?: string }).bun;
+    return;
+  }
+  Object.defineProperty(process.versions, "bun", {
+    value,
+    configurable: true,
+  });
+}
+function setBrowserRuntimeEnv(value: string): void {
+  if (value) {
+    process.env.BROWSER_RUNTIME = value;
+    return;
+  }
+  delete process.env.BROWSER_RUNTIME;
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
     let connected = true;
     const driver = { isConnected: () => connected, close: async () => {} } as BrowserDriver;
     const surface = new BrowserSurface("ended-browser", { driverFactory: async () => driver });
@@ -371,7 +428,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_151_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_167_3": {
 
 
 const originalPlatform = process.platform;
@@ -428,7 +485,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_164_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_180_3": {
 
 
 const originalPlatform = process.platform;
@@ -485,7 +542,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_177_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_193_3": {
 
 
 const originalPlatform = process.platform;
@@ -545,7 +602,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_196_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_212_3": {
 
 
 const originalPlatform = process.platform;
@@ -607,7 +664,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_214_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_230_3": {
 
 
 const originalPlatform = process.platform;
@@ -668,7 +725,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_231_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_247_3": {
 
 
 const originalPlatform = process.platform;
@@ -728,7 +785,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_249_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_265_3": {
 
 
 const originalPlatform = process.platform;
@@ -782,7 +839,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_262_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_278_3": {
 
 
 const originalPlatform = process.platform;
@@ -836,7 +893,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_275_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_291_3": {
 
 
 const originalPlatform = process.platform;
@@ -889,7 +946,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_287_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_303_3": {
 
 
 const originalPlatform = process.platform;
@@ -943,7 +1000,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_303_3": {
+case "tailstatic_packages_gateway_src_surfaces_browser_runtime_test_ts_319_3": {
 
 
 const originalPlatform = process.platform;

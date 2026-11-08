@@ -1513,15 +1513,18 @@ await (async()=>{
       const userService = new UserService(db);
       const sessionState = new SessionStateService(db);
       const user = userService.createUser("codex-owner", "password123");
-      userService.updateSettings(user.id, { chatProvider: "codex" });
+      // Account-level default is a decoy: autonomous/MCP turns must never
+      // inherit it — only the selection the user recorded on this chat counts.
+      userService.updateSettings(user.id, { chatProvider: "openrouter" });
       const session = sessionService.create({
         userId: user.id,
         name: "Codex Session",
         projectPath: "/tmp/current-project",
       });
       sessionState.set(session.id, {
+        "chat.provider": "codex",
         "chat.providerRuntimeMode": "supervised",
-        "chat.cliModels": { codex: "gpt-5-codex" },
+        "chat.cliModels": { codex: "gpt-5-codex", openrouter: "anthropic/claude-sonnet-4" },
       });
 
       const registry = new ToolRegistry();
@@ -1607,7 +1610,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each0": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1209_3_each0": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1715,7 +1718,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1206_3_each1": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1209_3_each1": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];
@@ -1823,7 +1826,7 @@ await __jait_hook_1102();
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1294_3": {
+case "tailstatic_packages_gateway_src_routes_mcp_server_test_ts_1297_3": {
 
 const { default: Fastify } = await import((typeof Bun!=="undefined"?Bun.resolveSync("fastify", __jait_original_dir):__jait_require.resolve("fastify")));
 let appsToClose: Array<ReturnType<typeof Fastify>> = [];

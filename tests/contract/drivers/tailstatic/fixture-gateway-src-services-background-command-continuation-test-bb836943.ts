@@ -1,7 +1,11 @@
 // Translated fixture from packages/gateway/src/services/background-command-continuation.test.ts; expected literals are in tail_static.rs.
-import { buildBackgroundCommandContinuationPayload } from "../../../../packages/gateway/src/services/background-command-continuation.js";
+import {
+  buildBackgroundCommandContinuationPayload,
+  LoopSelectionRequiredError,
+} from "../../../../packages/gateway/src/services/background-command-continuation.js";
 import type { SessionStateService } from "../../../../packages/gateway/src/services/session-state.js";
-import type { UserService } from "../../../../packages/gateway/src/services/users.js";
+import type { UserService, UserSettingsRecord } from "../../../../packages/gateway/src/services/users.js";
+import { vi } from '../tailmock.ts';
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -42,15 +46,15 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_23_3": {
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_43_3": {
 
 
 function userService(
-  provider: "jait" | "codex" | "claude-code",
+  chatProvider: UserSettingsRecord["chatProvider"],
   reasoningEffort?: string,
 ): UserService {
   return {
-    getSettings: () => ({ chatProvider: provider, reasoningEffort }),
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
   } as unknown as UserService;
 }
 function sessionState(values: Record<string, unknown>): SessionStateService {
@@ -58,42 +62,16 @@ function sessionState(values: Record<string, unknown>): SessionStateService {
     get: () => values,
   } as unknown as SessionStateService;
 }
-/*__jait_scope_open__*/{
-
-try {
-await (async()=>{
-
-    __jait_capture(0, (buildBackgroundCommandContinuationPayload({
-      sessionId: "session-1",
-      notification: "tests passed",
-      userId: "user-1",
-      userService: userService("jait"),
-    })));
-  
-})();
-
-} finally {
-
-}
-}
-
-break;
-}
-case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_36_3": {
-
-
-function userService(
-  provider: "jait" | "codex" | "claude-code",
-  reasoningEffort?: string,
-): UserService {
-  return {
-    getSettings: () => ({ chatProvider: provider, reasoningEffort }),
-  } as unknown as UserService;
-}
-function sessionState(values: Record<string, unknown>): SessionStateService {
-  return {
-    get: () => values,
-  } as unknown as SessionStateService;
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
 }
 /*__jait_scope_open__*/{
 
@@ -105,9 +83,57 @@ await (async()=>{
       notification: "tests passed",
       userId: "user-1",
       userService: userService("codex"),
-      sessionState: sessionState({
+      sessionState: chatOn("jait", { jait: "jait://ollama/legacy-ollama/llama3" }),
+    })));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_59_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("jait"),
+      sessionState: chatOn("codex", { codex: "gpt-5.4" }, {
         "chat.providerRuntimeMode": "full-access",
-        "chat.cliModels": { codex: "gpt-5.4" },
       }),
     })));
   
@@ -120,21 +146,340 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_56_3": {
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_78_3": {
 
 
 function userService(
-  provider: "jait" | "codex" | "claude-code",
+  chatProvider: UserSettingsRecord["chatProvider"],
   reasoningEffort?: string,
 ): UserService {
   return {
-    getSettings: () => ({ chatProvider: provider, reasoningEffort }),
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
   } as unknown as UserService;
 }
 function sessionState(values: Record<string, unknown>): SessionStateService {
   return {
     get: () => values,
   } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      notice: "Background command finished",
+      userId: "user-1",
+      userService: userService("codex"),
+      sessionState: chatOn("codex", { codex: "gpt-5.4" }),
+    })));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_89_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const settings = userService("codex", "high");
+
+    __jait_thrown(0, () => buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: settings,
+      sessionState: sessionState({}),
+    }), (LoopSelectionRequiredError));
+
+    __jait_capture(1, (settings.getSettings.mock.calls));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_103_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("codex"),
+    }), (LoopSelectionRequiredError));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_112_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("jait"),
+      sessionState: chatOn("codex", {}),
+    }));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_122_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_thrown(0, () => buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("jait"),
+      sessionState: chatOn("claude-code", {
+        jait: "jait://ollama/legacy-ollama/deepseek-v4.1-flash%3Acloud",
+        codex: "gpt-5.4",
+      }),
+    }));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_135_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const settings = {
+      getSettings: vi.fn(() => ({
+        chatProvider: "jait",
+        selectedModel: "deepseek-v4.1-flash:cloud",
+      })),
+    } as unknown as UserService;
+
+    __jait_thrown(0, () => buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: settings,
+      sessionState: chatOn("codex"),
+    }), (LoopSelectionRequiredError));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_152_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
 }
 /*__jait_scope_open__*/{
 
@@ -146,6 +491,7 @@ await (async()=>{
       notification: "tests passed",
       userId: "user-1",
       userService: userService("jait", "low"),
+      sessionState: chatOn("jait", { jait: "jait://ollama/legacy-ollama/llama3" }),
       sessionMetadata: JSON.stringify({ chat: { reasoningEffort: null } }),
     })));
   
@@ -158,21 +504,32 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_66_3": {
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_163_3": {
 
 
 function userService(
-  provider: "jait" | "codex" | "claude-code",
+  chatProvider: UserSettingsRecord["chatProvider"],
   reasoningEffort?: string,
 ): UserService {
   return {
-    getSettings: () => ({ chatProvider: provider, reasoningEffort }),
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
   } as unknown as UserService;
 }
 function sessionState(values: Record<string, unknown>): SessionStateService {
   return {
     get: () => values,
   } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
 }
 /*__jait_scope_open__*/{
 
@@ -184,8 +541,107 @@ await (async()=>{
       notification: "tests passed",
       userId: "user-1",
       userService: userService("jait", "low"),
+      sessionState: chatOn("jait", { jait: "jait://ollama/legacy-ollama/llama3" }),
       sessionMetadata: { chat: { reasoningEffort: "high" } },
     })));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_174_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    __jait_capture(0, (buildBackgroundCommandContinuationPayload({
+      sessionId: "session-1",
+      notification: "tests passed",
+      userId: "user-1",
+      userService: userService("codex", "low"),
+      sessionState: chatOn("codex", { codex: "gpt-5.4" }, {
+        "chat.reasoningEffort": "medium",
+      }),
+      sessionMetadata: "{not json",
+    })));
+  
+})();
+
+} finally {
+
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_services_background_command_continuation_test_ts_189_3": {
+
+
+function userService(
+  chatProvider: UserSettingsRecord["chatProvider"],
+  reasoningEffort?: string,
+): UserService {
+  return {
+    getSettings: vi.fn(() => ({ chatProvider, reasoningEffort })),
+  } as unknown as UserService;
+}
+function sessionState(values: Record<string, unknown>): SessionStateService {
+  return {
+    get: () => values,
+  } as unknown as SessionStateService;
+}
+function chatOn(
+  provider: string,
+  cliModels?: Record<string, string>,
+  extra: Record<string, unknown> = {},
+): SessionStateService {
+  return sessionState({
+    "chat.provider": provider,
+    ...(cliModels ? { "chat.cliModels": cliModels } : {}),
+    ...extra,
+  });
+}
+/*__jait_scope_open__*/{
+
+try {
+await (async()=>{
+
+    const error = new LoopSelectionRequiredError("pick a model");
+    __jait_instance(0, error, Error);
+    __jait_capture(1, (error.name));
+    __jait_capture(2, (error.message));
   
 })();
 

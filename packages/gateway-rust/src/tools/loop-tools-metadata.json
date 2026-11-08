@@ -8,7 +8,7 @@
     "source": "builtin",
     "name": "loop.goal",
     "displayName": "Chat loop goal",
-    "description": "Turn this chat into a persistent goal loop, only when the user requests autonomous continuation. Replaces the previous goal. Continues across chat completions until verified complete, paused, waiting for input, or an error. Preserves existing tool consent and security scope. Routine completion notifications are muted.",
+    "description": "Turn this chat into a persistent goal loop, only when the user requests autonomous continuation. Replaces the previous goal. Continues across chat completions until verified complete, paused, waiting for input, or an error. For criteria that can be verified by a terminal command, set executionCriteria to their zero-based indices; completion then requires successful session-tracked execution references. Preserves existing tool consent and security scope. Routine completion notifications are muted.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -25,6 +25,14 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 2000
+          }
+        },
+        "executionCriteria": {
+          "type": "array",
+          "maxItems": 20,
+          "description": "Zero-based indices of criteria requiring a successful tracked terminal execution at completion. Use only for criteria verifiable by a terminal command.",
+          "items": {
+            "type": "number"
           }
         }
       },
@@ -62,6 +70,30 @@
     "parameters": {
       "type": "object",
       "properties": {
+        "executionRefs": {
+          "type": "array",
+          "maxItems": 20,
+          "description": "Optional tracked terminal executions supporting criteria; criterion is the zero-based criterion index. Completion rejects missing or unsuccessful executions. A successful exit does not establish relevance or workspace freshness.",
+          "items": {
+            "type": "object",
+            "required": [
+              "criterion",
+              "terminalId",
+              "executionId"
+            ],
+            "properties": {
+              "criterion": {
+                "type": "number"
+              },
+              "terminalId": {
+                "type": "string"
+              },
+              "executionId": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "revision": {
           "type": "number"
         },

@@ -875,7 +875,7 @@ async fn webhook_real_owner_secret_raw_bytes_and_sink_failures_compose() {
     assert_eq!(actual["webhooks"].as_array().unwrap().len(), 2);
     assert_eq!(actual["results"][2]["status"], 200);
     assert_eq!(actual["results"][3]["status"], 401);
-    assert_eq!(actual["results"][4]["status"], 200);
+    assert_eq!(actual["results"][4]["status"], 503);
     assert_eq!(
         actual["portCalls"],
         json!([

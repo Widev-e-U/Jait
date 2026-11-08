@@ -10,9 +10,9 @@ import { ProjectStateService } from "../../../../packages/gateway/src/services/p
 import { SurfaceRegistry, FileSystemSurfaceFactory } from "../../../../packages/gateway/src/surfaces/index.js";
 import { WsControlPlane } from "../../../../packages/gateway/src/ws.js";
 import { UserService } from "../../../../packages/gateway/src/services/users.js";
-import { join } from "node:path";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { mkdtemp, mkdir, writeFile, rm, symlink, truncate } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { createRequire as __jait_createRequire } from 'node:module';
 import { observe as __jait_observe } from '../tailtransport.ts';
 import { mkdir as __jait_mkdir } from 'node:fs/promises';
@@ -53,7 +53,7 @@ export async function run(name: string): Promise<unknown> {
  const __jait_instance=(slot:number,actual:any,expected:any,threw?:boolean)=>{const prototypes=[];let p=actual==null?null:Object.getPrototypeOf(actual);while(p){prototypes.push(__jait_ref(p));p=Object.getPrototypeOf(p)}__jait_record({slot,prototypes,expectedPrototype:__jait_ref(expected.prototype),...(threw===undefined?{}:{threw})})};
  const __jait_instanceRejected=async(slot:number,p:Promise<unknown>,expected:any)=>{let actual:any,threw=false;try{actual=await p}catch(e){actual=e;threw=true}__jait_instance(slot,actual,expected,threw)};
  switch(name){
-case "tailstatic_packages_gateway_src_routes_project_image_test_ts_104_3": {
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_106_3": {
 
 
 /*__jait_scope_open__*/{
@@ -73,7 +73,7 @@ let writableTestRoot: string;
 let nestedFile: string;
 let surfaceId: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
-const __jait_hook_1619 = async () => {
+const __jait_hook_1655 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -123,7 +123,9 @@ const __jait_hook_1619 = async () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-reveal-route-"));
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     nestedFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(nestedFile, "before", "utf-8");
@@ -133,13 +135,13 @@ const __jait_hook_1619 = async () => {
     });
     surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
   };
-const __jait_hook_3969 = async () => {
+const __jait_hook_4154 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_1619();
+await __jait_hook_1655();
 try {
 await (async()=>{
 
@@ -153,13 +155,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3969();
+await __jait_hook_4154();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_image_test_ts_113_3": {
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_115_3": {
 
 
 /*__jait_scope_open__*/{
@@ -179,7 +181,7 @@ let writableTestRoot: string;
 let nestedFile: string;
 let surfaceId: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
-const __jait_hook_1619 = async () => {
+const __jait_hook_1655 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -229,7 +231,9 @@ const __jait_hook_1619 = async () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-reveal-route-"));
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     nestedFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(nestedFile, "before", "utf-8");
@@ -239,13 +243,13 @@ const __jait_hook_1619 = async () => {
     });
     surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
   };
-const __jait_hook_3969 = async () => {
+const __jait_hook_4154 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_1619();
+await __jait_hook_1655();
 try {
 await (async()=>{
 
@@ -257,13 +261,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3969();
+await __jait_hook_4154();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_image_test_ts_120_3": {
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_122_3": {
 
 
 /*__jait_scope_open__*/{
@@ -283,7 +287,7 @@ let writableTestRoot: string;
 let nestedFile: string;
 let surfaceId: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
-const __jait_hook_1619 = async () => {
+const __jait_hook_1655 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -333,7 +337,9 @@ const __jait_hook_1619 = async () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-reveal-route-"));
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     nestedFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(nestedFile, "before", "utf-8");
@@ -343,13 +349,13 @@ const __jait_hook_1619 = async () => {
     });
     surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
   };
-const __jait_hook_3969 = async () => {
+const __jait_hook_4154 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_1619();
+await __jait_hook_1655();
 try {
 await (async()=>{
 
@@ -361,13 +367,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3969();
+await __jait_hook_4154();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_image_test_ts_127_3": {
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_129_3": {
 
 
 /*__jait_scope_open__*/{
@@ -387,7 +393,7 @@ let writableTestRoot: string;
 let nestedFile: string;
 let surfaceId: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
-const __jait_hook_1619 = async () => {
+const __jait_hook_1655 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -437,7 +443,9 @@ const __jait_hook_1619 = async () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-reveal-route-"));
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     nestedFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(nestedFile, "before", "utf-8");
@@ -447,13 +455,13 @@ const __jait_hook_1619 = async () => {
     });
     surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
   };
-const __jait_hook_3969 = async () => {
+const __jait_hook_4154 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_1619();
+await __jait_hook_1655();
 try {
 await (async()=>{
 
@@ -465,13 +473,13 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3969();
+await __jait_hook_4154();
 }
 }
 
 break;
 }
-case "tailstatic_packages_gateway_src_routes_project_image_test_ts_134_3": {
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_136_3": {
 
 
 /*__jait_scope_open__*/{
@@ -491,7 +499,7 @@ let writableTestRoot: string;
 let nestedFile: string;
 let surfaceId: string;
 let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
-const __jait_hook_1619 = async () => {
+const __jait_hook_1655 = async () => {
     const config = loadConfig();
     const opened = await openDatabase(":memory:");
     const { db } = opened;
@@ -541,7 +549,9 @@ const __jait_hook_1619 = async () => {
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
 
-    writableTestRoot = await mkdtemp(join(__jait_fixture_dir, "jait-reveal-route-"));
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
     await mkdir(join(writableTestRoot, "nested"), { recursive: true });
     nestedFile = join(writableTestRoot, "nested", "editable.txt");
     await writeFile(nestedFile, "before", "utf-8");
@@ -551,13 +561,13 @@ const __jait_hook_1619 = async () => {
     });
     surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
   };
-const __jait_hook_3969 = async () => {
+const __jait_hook_4154 = async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
     sqlite?.close();
     if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
   };
-await __jait_hook_1619();
+await __jait_hook_1655();
 try {
 await (async()=>{
 
@@ -567,7 +577,444 @@ await (async()=>{
 })();
 
 } finally {
-await __jait_hook_3969();
+await __jait_hook_4154();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_141_3": {
+
+
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let address: string;
+let authToken: string;
+let ownerId: string;
+let foreignToken: string;
+const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+let sessionId = "reveal-session-" + Date.now();
+let surfaceRegistry: SurfaceRegistry;
+let writableTestRoot: string;
+let nestedFile: string;
+let surfaceId: string;
+let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
+const __jait_hook_1655 = async () => {
+    const config = loadConfig();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    const sessions = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const users = new UserService(db);
+    const owner = users.createUser("reveal-owner", "password123");
+    ownerId = owner.id;
+    const foreign = users.createUser("image-foreign", "password123");
+    foreignToken = await signAuthToken(foreign, config.jwtSecret);
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
+    const projects = new ProjectService(db);
+    const projectState = new ProjectStateService(db);
+    surfaceRegistry = new SurfaceRegistry();
+    surfaceRegistry.register(new FileSystemSurfaceFactory());
+
+    const ws = new WsControlPlane(config);
+
+    surfaceRegistry.onSurfaceStarted = (id, surface) => {
+      if (surface.type === "filesystem") {
+        const snap = surface.snapshot();
+        const sid = snap.sessionId ?? "";
+        const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
+        if (sid) {
+          sessionState.set(sid, { "project.panel": { open: true, remotePath: projectRoot, surfaceId: id } });
+        }
+      }
+    };
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService: sessions,
+      userService: users,
+      projectService: projects,
+      surfaceRegistry,
+      sessionState,
+      projectState,
+      ws,
+    });
+
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const addr = app.server.address();
+    address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
+
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
+    await mkdir(join(writableTestRoot, "nested"), { recursive: true });
+    nestedFile = join(writableTestRoot, "nested", "editable.txt");
+    await writeFile(nestedFile, "before", "utf-8");
+    const response = await authedFetch(`${address}/api/project/open`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+    });
+    surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
+  };
+const __jait_hook_4154 = async () => {
+    await surfaceRegistry.stopAll("test-cleanup");
+    await app?.close();
+    sqlite?.close();
+    if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
+  };
+await __jait_hook_1655();
+try {
+await (async()=>{
+
+    const file = join(writableTestRoot, "résumé #1 & notes.pdf");
+    const bytes = Buffer.from("%PDF-1.7\n\x00\xffbinary\n%%EOF", "latin1");
+    await writeFile(file, bytes);
+    const response = await authedFetch(`${address}/api/project/download?path=${encodeURIComponent(file)}`);
+    __jait_capture(0, (response.status));
+    __jait_capture(1, (Buffer.from(await response.arrayBuffer())), (bytes));
+    __jait_capture(2, (response.headers.get("content-type")));
+    __jait_capture(3, (response.headers.get("content-disposition")));
+    __jait_capture(4, (response.headers.get("content-disposition")), (encodeURIComponent("résumé #1 & notes.pdf")));
+    __jait_capture(5, (response.headers.get("cache-control")));
+    __jait_capture(6, (response.headers.get("x-content-type-options")));
+  
+})();
+
+} finally {
+await __jait_hook_4154();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_155_3": {
+
+
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let address: string;
+let authToken: string;
+let ownerId: string;
+let foreignToken: string;
+const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+let sessionId = "reveal-session-" + Date.now();
+let surfaceRegistry: SurfaceRegistry;
+let writableTestRoot: string;
+let nestedFile: string;
+let surfaceId: string;
+let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
+const __jait_hook_1655 = async () => {
+    const config = loadConfig();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    const sessions = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const users = new UserService(db);
+    const owner = users.createUser("reveal-owner", "password123");
+    ownerId = owner.id;
+    const foreign = users.createUser("image-foreign", "password123");
+    foreignToken = await signAuthToken(foreign, config.jwtSecret);
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
+    const projects = new ProjectService(db);
+    const projectState = new ProjectStateService(db);
+    surfaceRegistry = new SurfaceRegistry();
+    surfaceRegistry.register(new FileSystemSurfaceFactory());
+
+    const ws = new WsControlPlane(config);
+
+    surfaceRegistry.onSurfaceStarted = (id, surface) => {
+      if (surface.type === "filesystem") {
+        const snap = surface.snapshot();
+        const sid = snap.sessionId ?? "";
+        const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
+        if (sid) {
+          sessionState.set(sid, { "project.panel": { open: true, remotePath: projectRoot, surfaceId: id } });
+        }
+      }
+    };
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService: sessions,
+      userService: users,
+      projectService: projects,
+      surfaceRegistry,
+      sessionState,
+      projectState,
+      ws,
+    });
+
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const addr = app.server.address();
+    address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
+
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
+    await mkdir(join(writableTestRoot, "nested"), { recursive: true });
+    nestedFile = join(writableTestRoot, "nested", "editable.txt");
+    await writeFile(nestedFile, "before", "utf-8");
+    const response = await authedFetch(`${address}/api/project/open`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+    });
+    surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
+  };
+const __jait_hook_4154 = async () => {
+    await surfaceRegistry.stopAll("test-cleanup");
+    await app?.close();
+    sqlite?.close();
+    if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
+  };
+await __jait_hook_1655();
+try {
+await (async()=>{
+
+    const url = `${address}/api/project/download?path=${encodeURIComponent(nestedFile)}`;
+    __jait_capture(0, ((await fetch(url)).status));
+    for (const suffix of ["", `&surfaceId=${surfaceId}`]) {
+      __jait_capture(1, ((await fetch(url + suffix, { headers: { Authorization: "Bearer " + foreignToken } })).status));
+    }
+  
+})();
+
+} finally {
+await __jait_hook_4154();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_163_3": {
+
+
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let address: string;
+let authToken: string;
+let ownerId: string;
+let foreignToken: string;
+const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+let sessionId = "reveal-session-" + Date.now();
+let surfaceRegistry: SurfaceRegistry;
+let writableTestRoot: string;
+let nestedFile: string;
+let surfaceId: string;
+let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
+const __jait_hook_1655 = async () => {
+    const config = loadConfig();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    const sessions = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const users = new UserService(db);
+    const owner = users.createUser("reveal-owner", "password123");
+    ownerId = owner.id;
+    const foreign = users.createUser("image-foreign", "password123");
+    foreignToken = await signAuthToken(foreign, config.jwtSecret);
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
+    const projects = new ProjectService(db);
+    const projectState = new ProjectStateService(db);
+    surfaceRegistry = new SurfaceRegistry();
+    surfaceRegistry.register(new FileSystemSurfaceFactory());
+
+    const ws = new WsControlPlane(config);
+
+    surfaceRegistry.onSurfaceStarted = (id, surface) => {
+      if (surface.type === "filesystem") {
+        const snap = surface.snapshot();
+        const sid = snap.sessionId ?? "";
+        const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
+        if (sid) {
+          sessionState.set(sid, { "project.panel": { open: true, remotePath: projectRoot, surfaceId: id } });
+        }
+      }
+    };
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService: sessions,
+      userService: users,
+      projectService: projects,
+      surfaceRegistry,
+      sessionState,
+      projectState,
+      ws,
+    });
+
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const addr = app.server.address();
+    address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
+
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
+    await mkdir(join(writableTestRoot, "nested"), { recursive: true });
+    nestedFile = join(writableTestRoot, "nested", "editable.txt");
+    await writeFile(nestedFile, "before", "utf-8");
+    const response = await authedFetch(`${address}/api/project/open`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+    });
+    surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
+  };
+const __jait_hook_4154 = async () => {
+    await surfaceRegistry.stopAll("test-cleanup");
+    await app?.close();
+    sqlite?.close();
+    if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
+  };
+await __jait_hook_1655();
+try {
+await (async()=>{
+
+    const escaped = join(writableTestRoot, "escape");
+    await symlink(fileURLToPath(new URL("./project.ts", __jait_original_url)), escaped);
+    for (const file of [join(writableTestRoot, "missing.pdf"), writableTestRoot,
+      resolve(writableTestRoot, "../outside.pdf"), escaped]) {
+      const response = await authedFetch(`${address}/api/project/download?surfaceId=${surfaceId}&path=${encodeURIComponent(file)}`);
+      __jait_capture(0, (response.status));
+      __jait_captureType(1, (response.headers.get("content-disposition")));
+    }
+  
+})();
+
+} finally {
+await __jait_hook_4154();
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_routes_project_image_test_ts_174_3": {
+
+
+/*__jait_scope_open__*/{
+let app: Awaited<ReturnType<typeof createServer>>;
+let address: string;
+let authToken: string;
+let ownerId: string;
+let foreignToken: string;
+const authedFetch: typeof fetch = (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization")) headers.set("authorization", "Bearer " + authToken);
+    return fetch(input, { ...init, headers });
+  };
+let sessionId = "reveal-session-" + Date.now();
+let surfaceRegistry: SurfaceRegistry;
+let writableTestRoot: string;
+let nestedFile: string;
+let surfaceId: string;
+let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
+const __jait_hook_1655 = async () => {
+    const config = loadConfig();
+    const opened = await openDatabase(":memory:");
+    const { db } = opened;
+    sqlite = opened.sqlite;
+    migrateDatabase(sqlite);
+
+    const sessions = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const users = new UserService(db);
+    const owner = users.createUser("reveal-owner", "password123");
+    ownerId = owner.id;
+    const foreign = users.createUser("image-foreign", "password123");
+    foreignToken = await signAuthToken(foreign, config.jwtSecret);
+    authToken = await signAuthToken(owner, config.jwtSecret);
+    sessionId = sessions.create({ userId: ownerId }).id;
+    const projects = new ProjectService(db);
+    const projectState = new ProjectStateService(db);
+    surfaceRegistry = new SurfaceRegistry();
+    surfaceRegistry.register(new FileSystemSurfaceFactory());
+
+    const ws = new WsControlPlane(config);
+
+    surfaceRegistry.onSurfaceStarted = (id, surface) => {
+      if (surface.type === "filesystem") {
+        const snap = surface.snapshot();
+        const sid = snap.sessionId ?? "";
+        const projectRoot = (snap.metadata as Record<string, unknown>)?.projectRoot ?? null;
+        if (sid) {
+          sessionState.set(sid, { "project.panel": { open: true, remotePath: projectRoot, surfaceId: id } });
+        }
+      }
+    };
+
+    app = await createServer(config, {
+      db,
+      sqlite,
+      sessionService: sessions,
+      userService: users,
+      projectService: projects,
+      surfaceRegistry,
+      sessionState,
+      projectState,
+      ws,
+    });
+
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const addr = app.server.address();
+    address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
+
+    const artifacts = fileURLToPath(new URL("../../../../.jait/artifacts/", __jait_original_url));
+    await mkdir(artifacts, { recursive: true });
+    writableTestRoot = await mkdtemp(join(artifacts, "project-download-test-"));
+    await mkdir(join(writableTestRoot, "nested"), { recursive: true });
+    nestedFile = join(writableTestRoot, "nested", "editable.txt");
+    await writeFile(nestedFile, "before", "utf-8");
+    const response = await authedFetch(`${address}/api/project/open`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+    });
+    surfaceId = (await response.json() as { surfaceId: string }).surfaceId;
+  };
+const __jait_hook_4154 = async () => {
+    await surfaceRegistry.stopAll("test-cleanup");
+    await app?.close();
+    sqlite?.close();
+    if (writableTestRoot) await rm(writableTestRoot, { recursive: true, force: true });
+  };
+await __jait_hook_1655();
+try {
+await (async()=>{
+
+    const file = join(writableTestRoot, "large.zip");
+    await writeFile(file, "");
+    await truncate(file, 50 * 1024 * 1024 + 1);
+    __jait_capture(0, ((await authedFetch(`${address}/api/project/download?surfaceId=${surfaceId}&path=${encodeURIComponent(file)}`)).status));
+    __jait_capture(1, ((await authedFetch(`${address}/api/project/download`)).status));
+  
+})();
+
+} finally {
+await __jait_hook_4154();
 }
 }
 

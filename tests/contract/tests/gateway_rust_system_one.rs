@@ -186,16 +186,9 @@ async fn trace(frame: Value) {
             }
             _ => panic!("unknown fixture action"),
         };
-        // Mirrors tools/decision.rs: the message table carries no suffix and the
-        // HTTP status is appended exactly once, only for upstream failures.
-        results.push(result.unwrap_or_else(|error| {
-            let base = error.message();
-            let message = match (error.code, error.status) {
-                ("upstream_http", Some(status)) => format!("{base} (HTTP {status})"),
-                _ => base,
-            };
-            json!({"ok":false,"message":message})
-        }));
+        results.push(
+            result.unwrap_or_else(|error| json!({"ok":false,"message":error.service_message()})),
+        );
     }
     let actual = json!({"results":results,"requests":*transport.requests.lock().unwrap()});
     assert_eq!(

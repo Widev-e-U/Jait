@@ -214,6 +214,96 @@ await __jait_hook_3782();
 try {
 await (async()=>{
 
+      await surface.navigate(`${url}second`);
+      __jait_capture(0, ((await surface.history("back")).url), (url));
+      __jait_capture(1, ((await surface.history("forward")).url), (`${url}second`));
+    
+})();
+
+} finally {
+await __jait_hook_3967();
+await __jait_hook_3844();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each0": {
+
+
+/*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
+/*__jait_scope_open__*/{
+const runtime = "in-process";
+/*__jait_scope_open__*/{
+let server: Server;
+let url: string;
+let surface: BrowserSurface;
+let tools: ToolRegistry;
+let directory: string;
+const artifacts: string[] = [];
+const context = {
+      sessionId: "browser-integration", actionId: "browser-integration-action",
+      projectRoot: process.cwd(), requestedBy: "test",
+    };
+const __jait_hook_1308 = async () => {
+      vi.stubEnv("BROWSER_LIVE_VIEW", "false");
+      vi.stubEnv("BROWSER_HEADLESS", "true");
+      vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
+      vi.stubEnv("BROWSER_CHANNEL", "");
+      vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
+      server = createServer((_request, response) => {
+        response.setHeader("Content-Type", "text/html");
+        response.end(`<!doctype html><title>Tool integration fixture</title>
+          <h1>Authorized asset inventory</h1>
+          <label>Asset <input id="asset" oninput="document.querySelector(\'#result\').textContent=this.value"></label>
+          <select id="status" onchange="document.querySelector('#result').textContent=this.value">
+            <option value="unknown">Unknown</option><option value="owned">Owned</option>
+          </select>
+          <button id="save" onclick="document.querySelector('#result').textContent='Asset saved'">Save</button>
+          <output id="result">Ready</output>
+          <div style="height:3000px"></div><p id="footer">Inventory footer</p>`);
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Fixture server has no TCP port");
+      url = `http://127.0.0.1:${address.port}/`;
+      let Surface = BrowserSurface;
+      if (runtime === "packaged-node-bridge") {
+        const compiled = await import("../../../../packages/gateway/dist/surfaces/browser.js");
+        Surface = compiled.BrowserSurface as typeof BrowserSurface;
+        // An installed gateway must work without finding this repository's src.
+        vi.spyOn(process, "cwd").mockReturnValue(directory);
+      }
+      surface = new Surface("preview-browser-browser-integration");
+      await surface.start(context);
+      const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+      tools = new ToolRegistry();
+      tools.register(createBrowserNavigateTool(registry));
+      tools.register(createBrowserSnapshotTool(registry));
+      tools.register(createBrowserInspectTool(registry));
+      for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
+    };
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
+      await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+    };
+const __jait_hook_3967 = async () => {
+      try { await surface?.stop(); } finally {
+        if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+        if (directory) await rm(directory, { recursive: true, force: true });
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+      }
+    };
+await __jait_hook_1308();
+await __jait_hook_3782();
+try {
+await (async()=>{
+
       const result = await tools.execute("browser.snapshot", {}, context);
       __jait_capture(0, (result));
       __jait_capture(1, ((result.data as { interactiveElements: unknown[] }).interactiveElements));
@@ -229,7 +319,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_97_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -318,7 +408,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -406,7 +496,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -495,7 +585,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -583,7 +673,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -673,7 +763,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -765,7 +855,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_133_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -856,7 +946,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_139_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -949,7 +1039,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each0": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_147_5_each0": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1206,6 +1296,96 @@ await __jait_hook_3782();
 try {
 await (async()=>{
 
+      await surface.navigate(`${url}second`);
+      __jait_capture(0, ((await surface.history("back")).url), (url));
+      __jait_capture(1, ((await surface.history("forward")).url), (`${url}second`));
+    
+})();
+
+} finally {
+await __jait_hook_3967();
+await __jait_hook_3844();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each1": {
+
+
+/*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
+/*__jait_scope_open__*/{
+const runtime = "node-bridge";
+/*__jait_scope_open__*/{
+let server: Server;
+let url: string;
+let surface: BrowserSurface;
+let tools: ToolRegistry;
+let directory: string;
+const artifacts: string[] = [];
+const context = {
+      sessionId: "browser-integration", actionId: "browser-integration-action",
+      projectRoot: process.cwd(), requestedBy: "test",
+    };
+const __jait_hook_1308 = async () => {
+      vi.stubEnv("BROWSER_LIVE_VIEW", "false");
+      vi.stubEnv("BROWSER_HEADLESS", "true");
+      vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
+      vi.stubEnv("BROWSER_CHANNEL", "");
+      vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
+      server = createServer((_request, response) => {
+        response.setHeader("Content-Type", "text/html");
+        response.end(`<!doctype html><title>Tool integration fixture</title>
+          <h1>Authorized asset inventory</h1>
+          <label>Asset <input id="asset" oninput="document.querySelector(\'#result\').textContent=this.value"></label>
+          <select id="status" onchange="document.querySelector('#result').textContent=this.value">
+            <option value="unknown">Unknown</option><option value="owned">Owned</option>
+          </select>
+          <button id="save" onclick="document.querySelector('#result').textContent='Asset saved'">Save</button>
+          <output id="result">Ready</output>
+          <div style="height:3000px"></div><p id="footer">Inventory footer</p>`);
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Fixture server has no TCP port");
+      url = `http://127.0.0.1:${address.port}/`;
+      let Surface = BrowserSurface;
+      if (runtime === "packaged-node-bridge") {
+        const compiled = await import("../../../../packages/gateway/dist/surfaces/browser.js");
+        Surface = compiled.BrowserSurface as typeof BrowserSurface;
+        // An installed gateway must work without finding this repository's src.
+        vi.spyOn(process, "cwd").mockReturnValue(directory);
+      }
+      surface = new Surface("preview-browser-browser-integration");
+      await surface.start(context);
+      const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+      tools = new ToolRegistry();
+      tools.register(createBrowserNavigateTool(registry));
+      tools.register(createBrowserSnapshotTool(registry));
+      tools.register(createBrowserInspectTool(registry));
+      for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
+    };
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
+      await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+    };
+const __jait_hook_3967 = async () => {
+      try { await surface?.stop(); } finally {
+        if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+        if (directory) await rm(directory, { recursive: true, force: true });
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+      }
+    };
+await __jait_hook_1308();
+await __jait_hook_3782();
+try {
+await (async()=>{
+
       const result = await tools.execute("browser.snapshot", {}, context);
       __jait_capture(0, (result));
       __jait_capture(1, ((result.data as { interactiveElements: unknown[] }).interactiveElements));
@@ -1221,7 +1401,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_97_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1310,7 +1490,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1398,7 +1578,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1487,7 +1667,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1575,7 +1755,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1665,7 +1845,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1757,7 +1937,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_133_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1848,7 +2028,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_139_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -1941,7 +2121,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each1": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_147_5_each1": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2198,6 +2378,96 @@ await __jait_hook_3782();
 try {
 await (async()=>{
 
+      await surface.navigate(`${url}second`);
+      __jait_capture(0, ((await surface.history("back")).url), (url));
+      __jait_capture(1, ((await surface.history("forward")).url), (`${url}second`));
+    
+})();
+
+} finally {
+await __jait_hook_3967();
+await __jait_hook_3844();
+}
+}
+}
+
+break;
+}
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each2": {
+
+
+/*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
+/*__jait_scope_open__*/{
+const runtime = "packaged-node-bridge";
+/*__jait_scope_open__*/{
+let server: Server;
+let url: string;
+let surface: BrowserSurface;
+let tools: ToolRegistry;
+let directory: string;
+const artifacts: string[] = [];
+const context = {
+      sessionId: "browser-integration", actionId: "browser-integration-action",
+      projectRoot: process.cwd(), requestedBy: "test",
+    };
+const __jait_hook_1308 = async () => {
+      vi.stubEnv("BROWSER_LIVE_VIEW", "false");
+      vi.stubEnv("BROWSER_HEADLESS", "true");
+      vi.stubEnv("BROWSER_RUNTIME", runtime === "packaged-node-bridge" ? "node-bridge" : runtime);
+      vi.stubEnv("BROWSER_CHANNEL", "");
+      vi.stubEnv("BROWSER_FALLBACK_CHANNELS", "");
+      const shots = resolve(__jait_original_dir, "../../../../.jait/shots");
+      await mkdir(shots, { recursive: true });
+      directory = await mkdtemp(join(shots, "jait-browser-integration-"));
+      server = createServer((_request, response) => {
+        response.setHeader("Content-Type", "text/html");
+        response.end(`<!doctype html><title>Tool integration fixture</title>
+          <h1>Authorized asset inventory</h1>
+          <label>Asset <input id="asset" oninput="document.querySelector(\'#result\').textContent=this.value"></label>
+          <select id="status" onchange="document.querySelector('#result').textContent=this.value">
+            <option value="unknown">Unknown</option><option value="owned">Owned</option>
+          </select>
+          <button id="save" onclick="document.querySelector('#result').textContent='Asset saved'">Save</button>
+          <output id="result">Ready</output>
+          <div style="height:3000px"></div><p id="footer">Inventory footer</p>`);
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Fixture server has no TCP port");
+      url = `http://127.0.0.1:${address.port}/`;
+      let Surface = BrowserSurface;
+      if (runtime === "packaged-node-bridge") {
+        const compiled = await import("../../../../packages/gateway/dist/surfaces/browser.js");
+        Surface = compiled.BrowserSurface as typeof BrowserSurface;
+        // An installed gateway must work without finding this repository's src.
+        vi.spyOn(process, "cwd").mockReturnValue(directory);
+      }
+      surface = new Surface("preview-browser-browser-integration");
+      await surface.start(context);
+      const registry = { getSurface: () => surface } as unknown as SurfaceRegistry;
+      tools = new ToolRegistry();
+      tools.register(createBrowserNavigateTool(registry));
+      tools.register(createBrowserSnapshotTool(registry));
+      tools.register(createBrowserInspectTool(registry));
+      for (const tool of createBrowserInteractionTools(registry)) tools.register(tool);
+    };
+const __jait_hook_3782 = async () => { await surface.navigate(url); };
+const __jait_hook_3844 = async () => {
+      await Promise.all(artifacts.splice(0).map((path) => rm(path, { force: true })));
+    };
+const __jait_hook_3967 = async () => {
+      try { await surface?.stop(); } finally {
+        if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+        if (directory) await rm(directory, { recursive: true, force: true });
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+      }
+    };
+await __jait_hook_1308();
+await __jait_hook_3782();
+try {
+await (async()=>{
+
       const result = await tools.execute("browser.snapshot", {}, context);
       __jait_capture(0, (result));
       __jait_capture(1, ((result.data as { interactiveElements: unknown[] }).interactiveElements));
@@ -2213,7 +2483,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_92_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_97_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2302,7 +2572,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_100_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2390,7 +2660,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_105_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_110_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2479,7 +2749,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_111_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2567,7 +2837,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_116_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2657,7 +2927,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_121_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_126_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2749,7 +3019,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_128_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_133_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2840,7 +3110,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_134_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_139_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */
@@ -2933,7 +3203,7 @@ await __jait_hook_3844();
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_142_5_each2": {
+case "tailstatic_packages_gateway_src_tools_browser_tools_integration_test_ts_147_5_each2": {
 
 
 /*__jait_source_gate__ skipIf process.env["JAIT_BROWSER_INTEGRATION"] !== "1" */

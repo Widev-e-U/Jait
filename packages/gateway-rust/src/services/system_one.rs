@@ -440,10 +440,33 @@ struct Store {
 pub struct DecisionError {
     pub code: &'static str,
     pub status: Option<u16>,
+    pub detail: Option<String>,
 }
 impl DecisionError {
     pub fn new(code: &'static str) -> Self {
-        Self { code, status: None }
+        Self {
+            code,
+            status: None,
+            detail: None,
+        }
+    }
+    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
+        self.detail = Some(detail.into());
+        self
+    }
+    pub fn service_message(&self) -> String {
+        self.detail.clone().unwrap_or_else(|| {
+            match self.code {
+                "not_configured" => "System One Model is not configured in Settings.",
+                "cooldown" => "System One Model is temporarily unavailable.",
+                "upstream_http" => "System One request failed.",
+                "invalid_response" => "Invalid System One response.",
+                "timeout" => "System One request timed out.",
+                "cancelled" => "System One request cancelled.",
+                _ => "System One request unavailable.",
+            }
+            .to_owned()
+        })
     }
     pub fn with_status(mut self, status: u16) -> Self {
         self.status = Some(status);
@@ -527,7 +550,8 @@ impl SystemOne {
         self.evaluate_inner(
             endpoint,
             &state.encode_utf16().collect::<Vec<_>>(),
-            questions_from_value(questions).map_err(|_| DecisionError::new("invalid_input"))?,
+            questions_from_value(questions)
+                .map_err(|e| DecisionError::new("invalid_input").with_detail(e))?,
             signal,
         )
         .await
@@ -539,14 +563,15 @@ impl SystemOne {
         questions: Vec<Question>,
         signal: Option<&Cancellation>,
     ) -> Result<Value, DecisionError> {
-        validate_questions(state, &questions).map_err(|_| DecisionError::new("invalid_input"))?;
+        validate_questions(state, &questions)
+            .map_err(|e| DecisionError::new("invalid_input").with_detail(e))?;
         let mut hash = Sha256::new();
         hash.update(&endpoint.key);
         hash.update([0]);
         hash.update(endpoint.base_url.as_deref().unwrap_or(DEFAULT_TYPESAFE_URL));
         let tenant = hex::encode(hash.finalize());
         if signal.is_some_and(Cancellation::is_aborted) {
-            return Err(DecisionError::new("cancelled"));
+            return Err(DecisionError::new("cancelled").with_detail(signal.unwrap().reason()));
         }
         if self
             .store
@@ -561,7 +586,9 @@ impl SystemOne {
         }
         let typed_body = body(&endpoint.model, state, &questions);
         if js_len(&typed_body) > 64_000 {
-            return Err(DecisionError::new("invalid_input"));
+            return Err(
+                DecisionError::new("invalid_input").with_detail("Decision payload is too large.")
+            );
         }
         let mut hash = Sha256::new();
         hash.update(&tenant);
@@ -598,11 +625,11 @@ impl SystemOne {
             };
             for q in &questions {
                 let answer=property(&result["answers"],&q.id).unwrap_or(&Value::Null);
-                if !js_truthy(answer)||answer.get("type")!=q.raw.get("type")||answer.get("confidence").is_some_and(|c|!unit(c)){return Err(DecisionError::new("invalid_response"));}
+                if !js_truthy(answer)||answer.get("type")!=q.raw.get("type")||answer.get("confidence").is_some_and(|c|!unit(c)){return Err(DecisionError::new("invalid_response").with_detail("Invalid decision answer."));}
                 match q.raw["type"].as_str().unwrap(){
-                    "noul"=>if !unit(&answer["noul"]){return Err(DecisionError::new("invalid_response"));},
-                    "choice"=>if !answer.get("choice").and_then(Value::as_str).is_some_and(|key|choice_entries(&q.raw["criteria"]).unwrap().iter().any(|(name,_)|name==key)){return Err(DecisionError::new("invalid_response"));},
-                    "score"=>if !answer.get("score").and_then(Value::as_f64).is_some_and(|n|n.is_finite()&&n>=0.0&&n<=(q.raw["criteria"].as_array().unwrap().len()-1) as f64){return Err(DecisionError::new("invalid_response"));},_=>unreachable!(),
+                    "noul"=>if !unit(&answer["noul"]){return Err(DecisionError::new("invalid_response").with_detail("Invalid probability."));},
+                    "choice"=>if !answer.get("choice").and_then(Value::as_str).is_some_and(|key|choice_entries(&q.raw["criteria"]).unwrap().iter().any(|(name,_)|name==key)){return Err(DecisionError::new("invalid_response").with_detail("Unknown decision choice."));},
+                    "score"=>if !answer.get("score").and_then(Value::as_f64).is_some_and(|n|n.is_finite()&&n>=0.0&&n<=(q.raw["criteria"].as_array().unwrap().len()-1) as f64){return Err(DecisionError::new("invalid_response").with_detail("Invalid decision score."));},_=>unreachable!(),
                 }
             }
             Ok(result)
@@ -638,6 +665,9 @@ impl SystemOne {
                     }
                 }
             }
+        }
+        if result.is_err() && signal.is_some_and(Cancellation::is_aborted) {
+            return Err(DecisionError::new("cancelled"));
         }
         result
     }

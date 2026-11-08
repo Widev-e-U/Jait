@@ -137,12 +137,11 @@ async fn handle(State(state): State<SecurityAssessmentRoutes>, request: Request)
             return match service.history_detailed(&user.id).await {
                 Ok(history) => response(200, history),
                 Err(failure) => {
-                    // The reference gateway never exposes the SQLite error code
-                    // on 500 bodies, only the driver message.
-                    response(
-                        500,
-                        json!({"statusCode":500,"error":"Internal Server Error","message":failure.message}),
-                    )
+                    let mut body = json!({"statusCode":500,"error":"Internal Server Error","message":failure.message});
+                    if failure.sqlite_code.is_some_and(|code| code & 0xff == 1) {
+                        body["code"] = json!("SQLITE_ERROR");
+                    }
+                    response(500, body)
                 }
             };
         }

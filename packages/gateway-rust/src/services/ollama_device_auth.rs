@@ -345,7 +345,7 @@ impl OllamaAuthTransport for ReqwestOllamaAuthTransport {
             {
                 // Match Bun's rejected-redirect error without following the signed request.
                 return Err(OllamaAuthError::transport(
-                    "Error".into(),
+                    "TypeError".into(),
                     format!(
                         "UnexpectedRedirect fetching \"{}\". For more information, pass `verbose: true` in the second argument to fetch()",
                         request.url
@@ -459,6 +459,54 @@ impl OllamaDeviceAuth {
         }
         response.body
     }
+    fn parse_balance(body: &Value) -> Result<Value, OllamaAuthError> {
+        let invalid = || OllamaAuthError::plain("Ollama returned an unexpected balance response");
+        let included = &body["included"];
+        let finite = |v: &Value| v.as_f64().filter(|n| n.is_finite() && *n >= 0.0);
+        let date = |v: &Value| {
+            v.as_str()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|d| {
+                    d.to_utc()
+                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+                })
+        };
+        let mut limits = serde_json::Map::new();
+        if let (Some(allowance), Some(balance)) = (
+            finite(&included["allowance_usd"]),
+            finite(&included["balance_usd"]),
+        ) && allowance > 0.0
+        {
+            let reset = date(&included["period"]["until"]).ok_or_else(|| {
+                OllamaAuthError::plain("Ollama returned an invalid balance period")
+            })?;
+            limits.insert("monthly".into(), serde_json::json!({"usage": (1.0 - balance / allowance).clamp(0.0, 1.0), "models": [], "resetsAt": reset}));
+        }
+        for name in ["session", "weekly"] {
+            let bucket = &included[name];
+            if let (Some(remaining), Some(reset)) = (
+                finite(&bucket["remaining_percent"]),
+                date(&bucket["resets_at"]),
+            ) && remaining <= 100.0
+            {
+                limits.insert(name.into(), serde_json::json!({"usage": 1.0 - remaining / 100.0, "models": [], "resetsAt": reset}));
+            }
+        }
+        if limits.is_empty() {
+            return Err(invalid());
+        }
+        let mut result = serde_json::json!({"source": "balance", "limits": limits});
+        for (key, value) in [
+            ("includedBalance", &included["balance_usd"]),
+            ("includedAllowance", &included["allowance_usd"]),
+            ("purchasedBalance", &body["purchased"]["balance_usd"]),
+        ] {
+            if finite(value).is_some() {
+                result[key] = value.clone();
+            }
+        }
+        Ok(result)
+    }
     pub async fn fetch_ollama_device_usage(
         &self,
         account: &OllamaCloudAccount,
@@ -485,6 +533,11 @@ impl OllamaDeviceAuth {
         if !matches {
             return Err(OllamaAuthError::plain(ACCOUNT_MISMATCH));
         }
+        match self.signed_request(key, "GET", "/api/balance").await {
+            Ok(balance) => return Self::parse_balance(&balance),
+            Err(error) if error.kind == AuthErrorKind::UsageHttp && error.status == Some(404) => {}
+            Err(error) => return Err(error),
+        }
         let usage = self.signed_request(key, "GET", "/api/usage").await?;
         if !(self.validate_usage)(&usage) {
             return Err(OllamaAuthError::plain(
@@ -498,6 +551,9 @@ impl OllamaDeviceAuth {
         base_url: &str,
         account: &OllamaCloudAccount,
     ) -> Result<Value, OllamaAuthError> {
+        if is_local_ollama_url(base_url) {
+            return self.fetch_ollama_device_usage(account, None).await;
+        }
         let base = js_trim(base_url);
         let base = if base.is_empty() {
             "https://ollama.com"

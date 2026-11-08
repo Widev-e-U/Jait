@@ -58,15 +58,25 @@ await (async()=>{
     const names = new Set(schemas.map((schema) => schema.function.name));
 
     __jait_capture(0, (names.has("browser_open")));
-    __jait_capture(1, (names.has("preview_open")));
-    __jait_captureType(2, (tools.get("preview.open")));
-    __jait_capture(3, (tools.list().some(tool => tool.name.startsWith("preview."))));
-    __jait_capture(4, (names.has("preview_start")));
+    __jait_capture(1, (names.has("browser_inspect")));
+    __jait_captureType(2, (tools.get("browser.inspect")));
+    __jait_capture(3, (names.has("browser_status")));
+    __jait_captureType(4, (tools.get("browser.status")));
+    __jait_capture(5, (tools.rankSearch("browser preview session startup", { limit: 1 })[0]?.tool.name));
+    __jait_capture(6, (names.has("preview_open")));
+    __jait_captureType(7, (tools.get("preview.open")));
+    __jait_capture(8, (tools.list().some(tool => tool.name.startsWith("preview."))));
+    __jait_capture(9, (names.has("preview_start")));
     const resumed = buildTieredToolSchemas(tools, undefined, { activatedToolNames: ["preview.open"] });
-    __jait_capture(5, (resumed.some(schema => schema.function.name === "browser_open")));
-    __jait_capture(6, (resumed.some(schema => schema.function.name === "preview_open")));
-    __jait_capture(7, (tools.isExecutable("browser.open", new Set(["preview.open"]))));
-    __jait_capture(8, (tools.isExecutable("preview.open", new Set(["browser.open"]))));
+    __jait_capture(10, (resumed.some(schema => schema.function.name === "browser_open")));
+    __jait_capture(11, (resumed.some(schema => schema.function.name === "preview_open")));
+    __jait_capture(12, (tools.isExecutable("browser.open", new Set(["preview.open"]))));
+    __jait_capture(13, (tools.isExecutable("preview.open", new Set(["browser.open"]))));
+    __jait_capture(14, (tools.isExecutable("browser.open", new Set(["browser.inspect"]))));
+    __jait_capture(15, (tools.isExecutable("browser.inspect", new Set(["browser.open"]))));
+    const inspected = buildTieredToolSchemas(tools, undefined, { activatedToolNames: ["browser.inspect"] });
+    __jait_capture(16, (inspected.some(schema => schema.function.name === "browser_open")));
+    __jait_capture(17, (inspected.some(schema => schema.function.name === "browser_inspect")));
   
 })();
 
@@ -77,7 +87,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_26_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_36_3": {
 
 
 /*__jait_scope_open__*/{
@@ -93,14 +103,13 @@ await (async()=>{
     const start = vi.spyOn(registry, "startSurface").mockResolvedValue(surface as any);
     const tools = createToolRegistry(registry);
     const context: ToolContext = { sessionId: "owned", userId: "owner", actionId: "action", projectRoot: "/project", requestedBy: "assistant" };
-    __jait_capture(0, (tools.get("browser.open")?.parameters.required));
-    __jait_capture(1, ((await tools.execute("browser.open", {}, context)).ok));
-    __jait_capture(2, ((await tools.execute("browser.open", { url: "about:blank" }, context)).ok));
-    __jait_capture(3, (start.mock.calls));
-    __jait_capture(4, ((await tools.execute("browser.open", { url: "https://example.com/path" }, context)).ok));
-    __jait_capture(5, (start.mock.calls));
-    __jait_capture(6, (surface.navigate.mock.calls));
-    __jait_capture(7, ((await tools.execute("browser.open", { url: "https://example.com/path" }, { ...context, sessionId: "" })).ok));
+    __jait_capture(0, (tools.get("browser.open")?.parameters.required ?? []));
+    __jait_capture(1, ((await tools.execute("browser.open", { url: "about:blank" }, context)).ok));
+    __jait_capture(2, (start.mock.calls));
+    __jait_capture(3, ((await tools.execute("browser.open", { url: "https://example.com/path" }, context)).ok));
+    __jait_capture(4, (start.mock.calls));
+    __jait_capture(5, (surface.navigate.mock.calls));
+    __jait_capture(6, ((await tools.execute("browser.open", { url: "https://example.com/path" }, { ...context, sessionId: "" })).ok));
   
 })();
 
@@ -111,7 +120,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_45_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_54_3": {
 
 
 /*__jait_scope_open__*/{
@@ -165,7 +174,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_116_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_125_3": {
 
 
 /*__jait_scope_open__*/{
@@ -214,7 +223,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_172_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_181_3": {
 
 
 /*__jait_scope_open__*/{
@@ -261,7 +270,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_204_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_213_3": {
 
 
 /*__jait_scope_open__*/{
@@ -314,7 +323,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_266_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_275_3": {
 
 
 /*__jait_scope_open__*/{
@@ -370,7 +379,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_333_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_342_3": {
 
 
 /*__jait_scope_open__*/{
@@ -418,7 +427,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_372_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_381_3": {
 
 
 /*__jait_scope_open__*/{
@@ -461,7 +470,7 @@ await (async()=>{
 
 break;
 }
-case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_404_3": {
+case "tailstatic_packages_gateway_src_tools_preview_tools_test_ts_413_3": {
 
 
 /*__jait_scope_open__*/{
