@@ -140,6 +140,17 @@ impl<C: Send + Sync> FileTool<C> {
         {
             return Ok(fail("Only PNG, JPG, GIF, or WEBP images are supported"));
         }
+        // Validate before calling the host: a rejected input must not have effects.
+        if matches!(self.operation, FileOperation::Write) && !input["content"].is_string() {
+            return Err(HostError::Error("content must be a string".into()));
+        }
+        if matches!(self.operation, FileOperation::Patch)
+            && (!input["search"].is_string() || !input["replace"].is_string())
+        {
+            return Err(HostError::Error(
+                "search and replace must be strings".into(),
+            ));
+        }
         (self.port)("resolve", &args, context).await?;
         let mut data = fields(input, &["path"]);
         let message = match self.operation {
@@ -263,5 +274,47 @@ impl<C: Send + Sync> FileTool<C> {
             }
         };
         Ok(json!({"ok":true,"message":message,"data":data}))
+    }
+}
+
+#[cfg(test)]
+mod write_validation_tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[tokio::test]
+    async fn invalid_content_never_reaches_host() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let port: HostPort<()> = Arc::new(move |_, _, _| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Ok(Value::Null) })
+        });
+        let result = create_file_write_tool(port)
+            .execute(&json!({"path": "file", "content": 42}), &())
+            .await;
+        assert_eq!(result["ok"], false);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn invalid_patch_never_reaches_host() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = calls.clone();
+        let port: HostPort<()> = Arc::new(move |_, _, _| {
+            observed.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Ok(Value::Null) })
+        });
+        let result = create_file_patch_tool(port)
+            .execute(
+                &json!({"path": "file", "search": "old", "replace": null}),
+                &(),
+            )
+            .await;
+        assert_eq!(result["ok"], false);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
     }
 }

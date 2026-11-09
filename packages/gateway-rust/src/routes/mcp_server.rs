@@ -194,6 +194,9 @@ pub struct McpToolContext {
     pub provider_id: Option<String>,
     pub model: Option<String>,
     pub runtime_mode: Option<String>,
+    /// The caller's saved settings keys (TS: `ToolContext.apiKeys`). Loaded
+    /// server-side by the authenticator and never exposed to the model.
+    pub api_keys: Option<HashMap<String, String>>,
     pub action_id: String,
     pub progress: Option<ProgressSink>,
 }
@@ -209,6 +212,7 @@ impl Default for McpToolContext {
             provider_id: None,
             model: None,
             runtime_mode: None,
+            api_keys: None,
             action_id: uuid::Uuid::new_v4().to_string(),
             progress: None,
         }
@@ -237,6 +241,7 @@ impl std::fmt::Debug for McpToolContext {
             .field("provider_id", &self.provider_id)
             .field("model", &self.model)
             .field("runtime_mode", &self.runtime_mode)
+            .field("has_api_keys", &self.api_keys.is_some())
             .field("has_progress_sink", &self.progress.is_some())
             .finish()
     }
@@ -258,6 +263,8 @@ pub trait McpToolSource: Send + Sync {
 }
 
 /// Session/auth port (TS: `resolveMcpToolContext` + `sessionService`/`userService`).
+/// Implementations must fill `api_keys` from the user's saved settings, as the
+/// native chat path does; tools such as `decision.evaluate` read them.
 pub trait McpAuthenticator: Send + Sync {
     /// Resolves the caller. Denials must already be `401`/`403` responses with
     /// the gateway's standard error envelope.

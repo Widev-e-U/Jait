@@ -1288,6 +1288,16 @@ async fn provider_accounts_and_usage_are_served_from_the_database() {
     let body: serde_json::Value = usage.json().await.unwrap();
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["usage"], serde_json::json!([]));
+    let summary = client
+        .get(format!("{base}/api/provider-usage/summary"))
+        .bearer_auth(&token)
+        .send()
+        .await
+        .unwrap();
+    let status = summary.status();
+    let body: serde_json::Value = summary.json().await.unwrap();
+    assert_eq!(status, 200, "{body}");
+    assert!(body.is_object(), "{body}");
     let missing = client
         .delete(format!("{base}/api/provider-accounts/nope"))
         .bearer_auth(&token)

@@ -8,7 +8,7 @@
 use std::{num::NonZeroU16, path::PathBuf, sync::Arc};
 
 use futures_util::future::BoxFuture;
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::{
 
@@ -62,6 +62,11 @@ pub struct DbProviderDirectory {
 }
 
 impl DbProviderDirectory {
+    /// The shared account service, so usage summaries read the same rows.
+    pub fn accounts(&self) -> ProviderAccountService {
+        self.service.clone()
+    }
+
     pub fn new(
         auth: &AuthState,
         registry: ProviderRegistry,
@@ -173,12 +178,14 @@ impl ProviderDirectory for DbProviderDirectory {
 /// Usage rows for the authenticated user's accounts.
 pub struct DbUsageStore {
     service: ProviderUsageService,
+    accounts: ProviderAccountService,
 }
 
 impl DbUsageStore {
-    pub fn new(auth: &AuthState) -> Self {
+    pub fn new(auth: &AuthState, accounts: ProviderAccountService) -> Self {
         Self {
             service: ProviderUsageService::new(auth.worker(), None),
+            accounts,
         }
     }
 }
@@ -187,5 +194,32 @@ impl UsageStore for DbUsageStore {
     fn list_for_user(&self, user: &str, account_ids: &[String]) -> BoxFuture<'static, Vec<Value>> {
         let (service, user, ids) = (self.service.clone(), user.to_owned(), account_ids.to_vec());
         Box::pin(async move { service.list_for_user(user, ids).await.unwrap_or_default() })
+    }
+
+    /// TS `readUsageSummary` over locally observed quotas. Live provider
+    /// refreshes (Ollama, OpenCode Go) need the outbound quota fetchers, which
+    /// are not ported, so a refresh reports the same stored observations.
+    fn summary(&self, user: &str, _refresh: bool) -> BoxFuture<'static, Result<Value, String>> {
+        let (usage, accounts, user) = (self.service.clone(), self.accounts.clone(), user.to_owned());
+        Box::pin(async move {
+            let rows: Vec<Value> = accounts
+                .list(user.clone())
+                .await?
+                .into_iter()
+                .map(record)
+                .collect();
+            let ids: Vec<String> = rows
+                .iter()
+                .filter_map(|row| row["id"].as_str().map(str::to_owned))
+                .collect();
+            let quotas = usage.list_for_user(user, ids).await?;
+            let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+            Ok(crate::services::usage_summary::summarize_provider_usage(
+                &rows,
+                &quotas,
+                &json!({}),
+                &now,
+            ))
+        })
     }
 }

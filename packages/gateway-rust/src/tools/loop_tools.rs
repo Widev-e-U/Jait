@@ -25,6 +25,49 @@ pub struct LoopToolResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<Option<ChatLoop>>,
 }
+fn clip(text: &str) -> String {
+    if text.chars().count() > 240 {
+        format!("{}…", text.chars().take(239).collect::<String>())
+    } else {
+        text.to_owned()
+    }
+}
+/// Human-readable loop summary for tool cards; the full state stays in data.
+pub fn describe_loop(tool: &str, state: Option<&ChatLoop>) -> String {
+    let action = match tool {
+        "loop.goal" => "Loop goal set. ",
+        "loop.check" => "Loop checked. ",
+        "loop.pause" => "Loop paused. ",
+        "loop.resume" => "Loop resumed. ",
+        _ => "",
+    };
+    let Some(value) = state.and_then(|s| serde_json::to_value(s).ok()) else {
+        return format!("{action}No loop goal is set for this chat.");
+    };
+    let text = |key: &str| value[key].as_str().unwrap_or_default().to_owned();
+    let count = |key: &str| value[key].as_array().map_or(0, Vec::len);
+    let mut lines = vec![
+        format!(
+            "{action}Status: {} · revision {} · turn {}",
+            value["status"].as_str().unwrap_or("unknown"),
+            value["revision"].as_f64().unwrap_or(0.),
+            value["iteration"].as_f64().unwrap_or(0.)
+        ),
+        format!("Goal: {}", clip(&text("goal"))),
+        format!(
+            "Criteria: {} · evidence: {}",
+            count("criteria"),
+            count("evidence")
+        ),
+    ];
+    if !text("summary").is_empty() {
+        lines.push(format!("Progress: {}", clip(&text("summary"))));
+    }
+    if !text("nextMessage").is_empty() {
+        lines.push(format!("Next: {}", clip(&text("nextMessage"))));
+    }
+    lines.join("\n")
+}
 pub fn execute(
     name: &str,
     input: &Value,
@@ -74,7 +117,7 @@ pub fn execute(
     match result {
         Ok(data) => LoopToolResult {
             ok: true,
-            message: "Chat loop updated.".into(),
+            message: describe_loop(name, data.as_ref()),
             data: Some(data),
         },
         Err(message) => LoopToolResult {
@@ -130,7 +173,7 @@ impl MonitoredLoopTools {
         match result {
             Ok(state) => LoopToolResult {
                 ok: true,
-                message: "Chat loop updated.".into(),
+                message: describe_loop(name, Some(&state)),
                 data: Some(Some(state)),
             },
             Err(message) => LoopToolResult {

@@ -110,6 +110,32 @@ impl ProviderUsageService {
         provider: String,
         info: Value,
     ) -> Result<(), String> {
+        // Claude reports every window's utilization in unifiedWindows; the top-level
+        // fields only describe the representative window and often lack utilization.
+        if let Some(windows) = info["unifiedWindows"].as_object() {
+            let top = info["rateLimitType"].as_str();
+            for (kind, window) in windows {
+                if !window.is_object() {
+                    continue;
+                }
+                let util = window["utilization"].as_f64();
+                let status = if top == Some(kind.as_str()) {
+                    info["status"].clone()
+                } else {
+                    json!(if util.is_some_and(|v| v >= 1.) {
+                        "rejected"
+                    } else {
+                        "allowed"
+                    })
+                };
+                let entry = json!({"rateLimitType":kind,"status":status,"utilization":util,"resetsAt":window["resetsAt"],"isUsingOverage":info["isUsingOverage"]});
+                Box::pin(self.record_claude_rate_limit(id.clone(), provider.clone(), entry))
+                    .await?;
+            }
+            if top.is_some_and(|t| windows.contains_key(t)) {
+                return Ok(());
+            }
+        }
         let info = fields(
             &info,
             &[

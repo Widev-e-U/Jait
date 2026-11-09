@@ -105,17 +105,35 @@ pub struct ProjectRoutes {
     pub auth: AuthState,
     pub root: std::sync::Arc<PathBuf>,
     filesystem: crate::runtime::blocking::BlockingLane,
+    scoped: crate::services::project_search::scoped::ScopedProjectSearch,
 }
 
 impl ProjectRoutes {
     pub fn new(auth: AuthState) -> Self {
+        let filesystem = crate::runtime::blocking::BlockingLane::new(
+            std::num::NonZeroU16::new(4).expect("fixed filesystem capacity"),
+        );
         Self {
+            scoped: crate::services::project_search::scoped::ScopedProjectSearch::new(
+                auth.worker(),
+                crate::surfaces::registry::SurfaceRegistry::default(),
+                filesystem.clone(),
+            ),
             auth,
             root: std::sync::Arc::new(PathBuf::new()),
-            filesystem: crate::runtime::blocking::BlockingLane::new(
-                std::num::NonZeroU16::new(4).expect("fixed filesystem capacity"),
-            ),
+            filesystem,
         }
+    }
+
+    /// Search surfaces from the registry that owns the running surfaces, so a
+    /// `surfaceId` resolves only to a live surface recorded for the caller.
+    pub fn with_surfaces(mut self, surfaces: crate::surfaces::registry::SurfaceRegistry) -> Self {
+        self.scoped = crate::services::project_search::scoped::ScopedProjectSearch::new(
+            self.auth.worker(),
+            surfaces,
+            self.filesystem.clone(),
+        );
+        self
     }
 
     pub fn router(self) -> axum::Router {
@@ -397,7 +415,7 @@ async fn dispatch(State(state): State<ProjectRoutes>, request: Request) -> Respo
                 Err(_) => fail(500, "CREATE_FAILED", "Failed to create path"),
             }
         }
-        ("search", "GET") => search_response(&state, &ctx, &query).await,
+        ("search", "GET") => search_response(&state, &ctx, &uid, &query).await,
         ("reveal", "POST") => response(200, json!({ "ok": true, "revealed": false })),
         // Surface-state dependent operations (backup/undo stack) require a
         // live `FileSystemSurface`, which no router exposes yet.
@@ -514,19 +532,16 @@ fn search_options(
 async fn search_response(
     state: &ProjectRoutes,
     ctx: &Ctx,
+    uid: &str,
     query: &HashMap<String, String>,
 ) -> Response {
-    use crate::services::project_search::{
-        self, Budgets, Cancellation, Error, ProjectRoot, SearchResult,
-    };
+    use crate::services::project_search::{self, Budgets, Cancellation, ProjectRoot};
     let options = match search_options(query) {
         Ok(options) => options,
         Err(message) => return fail(400, "VALIDATION_ERROR", message),
     };
-    // Surface identifiers cannot select a different root until native surface
-    // ownership is wired; projectId is resolved through the authenticated DB.
-    if query.get("surfaceId").is_some_and(|id| !id.is_empty()) {
-        return fail(501, "NOT_SUPPORTED", "Native surface search is unavailable");
+    if let Some(surface_id) = query.get("surfaceId").filter(|id| !id.is_empty()) {
+        return surface_search(state, uid, surface_id, options).await;
     }
     let Some(root) = ctx.root.clone() else {
         return fail(404, "NO_PROJECT", "No project is open");
@@ -553,6 +568,58 @@ async fn search_response(
             project_search::search_project_auto(&root, &options, &Budgets::default(), &cancel)
         })
         .await;
+    search_reply(work)
+}
+
+/// Gateway-local surfaces only: the binding re-checks owner, session, running
+/// state and root at open and after the walk. Surfaces on other nodes need a
+/// node transport host that production does not construct yet.
+async fn surface_search(
+    state: &ProjectRoutes,
+    uid: &str,
+    surface_id: &str,
+    options: crate::services::project_search::SearchOptions,
+) -> Response {
+    use crate::services::project_search::{Budgets, Cancellation, Error, scoped::SearchTarget};
+    let binding = match state
+        .scoped
+        .bind(uid, SearchTarget::Surface(surface_id.to_string()))
+        .await
+    {
+        Ok(binding) => binding,
+        Err(Error::Unsupported) => {
+            return fail(501, "NOT_SUPPORTED", "Surface search is unavailable");
+        }
+        Err(_) => return fail(404, "SURFACE_NOT_FOUND", "Surface not found"),
+    };
+    if !binding.is_local() {
+        return fail(
+            501,
+            "NOT_SUPPORTED",
+            "Project search is unavailable for this execution node",
+        );
+    }
+    struct CancelOnDrop(Cancellation);
+    impl Drop for CancelOnDrop {
+        fn drop(&mut self) {
+            self.0.cancel();
+        }
+    }
+    let cancel = Cancellation::default();
+    let _cancel_on_drop = CancelOnDrop(cancel.clone());
+    let work = state
+        .scoped
+        .search_local(&binding, options, Budgets::default(), cancel)
+        .await;
+    search_reply(Ok(work))
+}
+
+fn search_reply(
+    work: std::io::Result<
+        crate::services::project_search::Result<crate::services::project_search::SearchResult>,
+    >,
+) -> Response {
+    use crate::services::project_search::{Error, SearchResult};
     match work {
         Ok(Ok(SearchResult::Files {
             query,
@@ -737,11 +804,71 @@ mod search_tests {
         );
         assert_eq!(
             request(&state, &own, "query=x&surfaceId=arbitrary").await.0,
-            StatusCode::NOT_IMPLEMENTED
+            StatusCode::NOT_FOUND
         );
         assert_eq!(
             request(&state, &own, "query=x&limit=-1").await.0,
             StatusCode::BAD_REQUEST
+        );
+        state.auth.shutdown().await.unwrap();
+    }
+    #[tokio::test]
+    async fn surface_search_serves_only_running_surfaces_owned_by_the_caller() {
+        use crate::surfaces::{
+            filesystem::{FileSystemSurfaceFactory, GuardOptions},
+            registry::{SurfaceRegistry, SurfaceStartInput},
+        };
+        let fixture = Fixture::new();
+        let (state, own, _, _) = setup(&fixture.0);
+        std::fs::write(fixture.0.join("needle.txt"), "needle\n").unwrap();
+        let registry = SurfaceRegistry::default();
+        registry.register(std::sync::Arc::new(FileSystemSurfaceFactory::new(
+            GuardOptions::default(),
+            state.filesystem.clone(),
+        )));
+        let state = state.with_surfaces(registry.clone());
+        let (owner_session, other_session) = state
+            .auth
+            .with_database(|db| {
+                let sessions = crate::services::sessions::SessionService::new(db);
+                let make = |user: &str| {
+                    sessions
+                        .create(crate::services::sessions::CreateSession {
+                            user_id: Some(user.into()),
+                            ..Default::default()
+                        })
+                        .unwrap()
+                        .id
+                };
+                Ok((make("owner"), make("other")))
+            })
+            .await
+            .unwrap();
+        let root = fixture.0.to_string_lossy().into_owned();
+        for (id, session, user) in [
+            ("fs-own", owner_session, "owner"),
+            ("fs-foreign", other_session, "other"),
+        ] {
+            let mut input = SurfaceStartInput {
+                session_id: session,
+                project_root: root.clone(),
+                node_id: None,
+                properties: Default::default(),
+            };
+            input.properties.insert("userId".into(), user.into());
+            registry
+                .start_surface("filesystem", id, input)
+                .await
+                .unwrap();
+        }
+        let (status, body) = request(&state, &own, "query=needle&surfaceId=fs-own").await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert!(!body["files"].as_array().unwrap().is_empty(), "{body}");
+        assert_eq!(
+            request(&state, &own, "query=needle&surfaceId=fs-foreign")
+                .await
+                .0,
+            StatusCode::NOT_FOUND
         );
         state.auth.shutdown().await.unwrap();
     }

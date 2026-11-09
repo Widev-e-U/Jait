@@ -335,6 +335,12 @@ impl Application {
         })
         .await??;
         auth.cors_origin = config.cors_origin;
+        let provider_directory = Arc::new(crate::providers::db_accounts::DbProviderDirectory::new(
+            &auth,
+            provider_registry.clone(),
+            acp_definitions,
+            &state_dir,
+        )?);
         if let Err(error) =
             super::chat_store::reconcile_startup_owned(&auth, database_owner.clone()).await
         {
@@ -376,7 +382,7 @@ impl Application {
         let terminals = composed_terminal_routes(auth.clone(), &config.project_root);
         // Project roots come from the project records the same store confirms, so the
         // router needs no separately configured root and cannot be pointed elsewhere.
-        let projects = ProjectRoutes::new(auth.clone());
+        let projects = ProjectRoutes::new(auth.clone()).with_surfaces(terminals.registry().clone());
         let voice_config = VoiceRouteConfig::from_env();
         let mut voice = VoiceRoutes::new(auth.clone(), voice_config.clone())
             .with_settings(Arc::new(crate::routes::voice::DbVoiceSettings::new(&auth)));
@@ -404,43 +410,38 @@ impl Application {
             )
             .merge(PlanRoutes::new(auth.clone()).router())
             .merge(
-                composed_code_graph_routes(
-                    auth.clone(),
-                    &config.project_root,
-                    &state_dir,
-                )?
-                .router(),
+                composed_code_graph_routes(auth.clone(), &config.project_root, &state_dir)?
+                    .router(),
             )
             .merge(
                 UpdateRoutes {
                     auth: auth.clone(),
-                    backend: Arc::new(crate::routes::update::ReadOnlyUpdateBackend::new().map_err(|error| ApplicationError::from(error.detail))?),
+                    backend: Arc::new(
+                        crate::routes::update::ReadOnlyUpdateBackend::new()
+                            .map_err(|error| ApplicationError::from(error.detail))?,
+                    ),
                     current_version: env!("CARGO_PKG_VERSION").to_owned(),
                     systemd_managed: false,
                 }
                 .router(),
+            )
             .merge(crate::routes::providers::router(
                 crate::routes::providers::ProviderRoutes {
                     auth: auth.clone(),
-                    directory: Some(Arc::new(
-                        crate::providers::db_accounts::DbProviderDirectory::new(
-                            &auth,
-                            provider_registry.clone(),
-                            acp_definitions,
-                            &state_dir,
-                        )?,
-                    )),
+                    directory: Some(provider_directory.clone()),
                     providers: Some(Arc::new(
                         crate::providers::registry_runtime::RegistryRuntime(
                             provider_registry.clone(),
                         ),
                     )),
-                    usage: Some(Arc::new(crate::providers::db_accounts::DbUsageStore::new(&auth))),
+                    usage: Some(Arc::new(crate::providers::db_accounts::DbUsageStore::new(
+                        &auth,
+                        provider_directory.accounts(),
+                    ))),
                     settings: Some(Arc::new(crate::routes::providers::DbSettingsStore::new(&auth))),
                     probes: None,
                 },
             ))
-            )
             .merge(RepoProposalRoutes::new(auth.clone()).router())
             .merge(RepositoryRoutes::new(auth.clone()).router())
             .merge(voice.router())
@@ -448,7 +449,9 @@ impl Application {
                 super::skills_mount::composed_skill_routes(
                     auth.clone(),
                     &config.project_root,
-                    &std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| config.project_root.clone()),
+                    &std::env::var_os("HOME")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| config.project_root.clone()),
                     state_dir.to_str(),
                 )
                 .router(),
@@ -500,8 +503,9 @@ impl Application {
             router = router.merge(chat.router());
         }
         if settings_chat {
-            router = router
-                .merge(super::consent_mount::composed_consent_routes(&auth, consent.clone()).router());
+            router = router.merge(
+                super::consent_mount::composed_consent_routes(&auth, consent.clone()).router(),
+            );
         }
         if let Some(root) = config
             .web_root
@@ -518,8 +522,8 @@ impl Application {
                 _database_owner: database_owner,
                 store_supervisor: None,
                 ws_transport: None,
-            }),
                 consent: settings_chat.then_some(consent),
+            }),
             Err(error) => {
                 auth.shutdown().await?;
                 Err(error.into())
@@ -593,10 +597,10 @@ impl Application {
             Arc::new(crate::ws::WsHub::new(config)),
             max_connections,
         );
-        self.gateway.mount_websocket(transport.clone());
         if let Some(consent) = &self.consent {
             crate::runtime::consent_ws::spawn(consent.clone(), transport.hub());
         }
+        self.gateway.mount_websocket(transport.clone());
         self.ws_transport = Some(transport.clone());
         Ok(transport)
     }
@@ -990,6 +994,135 @@ mod ownership_tests {
         let body: serde_json::Value = response.json().await.unwrap();
         assert_eq!(body["error"], "NOT_FOUND");
         assert_eq!(body["message"], "Not found");
+        stop.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(10), task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn application_serves_owned_project_search_through_production_router() {
+        use crate::{
+            security::http_auth::{self, AuthUser},
+            services::projects::{CreateProject, ProjectService},
+        };
+
+        let path = fixture();
+        let root = path.parent().unwrap().canonicalize().unwrap();
+        let project_dir = root.join("searchable");
+        std::fs::create_dir_all(&project_dir).unwrap();
+        std::fs::write(
+            project_dir.join("needle-file.txt"),
+            "hay\nfind the needle here\n",
+        )
+        .unwrap();
+        std::fs::write(project_dir.join("other.txt"), "nothing relevant\n").unwrap();
+        let app = Application::bind(
+            GatewayConfig {
+                address: "127.0.0.1:0".parse().unwrap(),
+                allow_non_loopback: false,
+            },
+            ApplicationConfig {
+                database_path: path,
+                project_root: root.clone(),
+                jwt_secret: "fixture-secret".into(),
+                cors_origin: String::new(),
+                web_root: None,
+                health: None,
+            },
+        )
+        .await
+        .unwrap();
+        let dir = project_dir.to_string_lossy().into_owned();
+        app.auth
+            .with_database(move |db| {
+                db.execute_batch("INSERT INTO users(id,username,password_hash,created_at,updated_at) VALUES('owner','owner','fixture','old','old'),('other','other','fixture','old','old')")?;
+                ProjectService::new(db)
+                    .create(CreateProject {
+                        user_id: Some("owner".into()),
+                        root_path: Some(dir),
+                        ..Default::default()
+                    })
+                    .unwrap();
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let address = app.local_addr().unwrap();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let task = tokio::spawn(app.serve(async move {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        let token = |id: &str| {
+            http_auth::sign_auth_token(
+                &AuthUser {
+                    id: id.into(),
+                    username: id.into(),
+                },
+                "fixture-secret",
+            )
+            .unwrap()
+        };
+        let search = |query: &str| format!("http://{address}/api/project/search?{query}");
+
+        assert_eq!(
+            client
+                .get(search("query=needle"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            reqwest::StatusCode::UNAUTHORIZED
+        );
+
+        let files: serde_json::Value = client
+            .get(search("query=needle&mode=files"))
+            .bearer_auth(token("owner"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(files["files"][0]["path"], "needle-file.txt");
+
+        let content: serde_json::Value = client
+            .get(search("query=needle&mode=content"))
+            .bearer_auth(token("owner"))
+            .send()
+            .await
+            .unwrap()
+            .json()
+            .await
+            .unwrap();
+        assert_eq!(content["matches"][0]["file"], "needle-file.txt");
+        assert_eq!(content["matches"][0]["line"], 2);
+
+        // A user who owns no project must not reach another user's root.
+        let foreign = client
+            .get(search("query=needle&mode=files"))
+            .bearer_auth(token("other"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(foreign.status(), reqwest::StatusCode::NOT_FOUND);
+
+        // An unregistered surface must fail closed, not fall back to the project root.
+        let surface = client
+            .get(search("query=needle&surfaceId=anything"))
+            .bearer_auth(token("owner"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(surface.status(), reqwest::StatusCode::NOT_FOUND);
+
         stop.send(()).unwrap();
         tokio::time::timeout(Duration::from_secs(10), task)
             .await
