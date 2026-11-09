@@ -1,0 +1,3825 @@
+{
+  "summary": {
+    "httpTotal": 417,
+    "native-tested": 303,
+    "missing": 98,
+    "native-untested": 16,
+    "nativeTestedPct": 72.7,
+    "wsTotal": 35,
+    "wsMissing": 27,
+    "rustOnlyRoutes": 12
+  },
+  "http": [
+    {
+      "method": "DELETE",
+      "path": "/api/agents/:agentId/github-app",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/assistants/profiles/:id",
+      "nodeFiles": [
+        "routes/assistant-profiles.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/assistant_profiles.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/settings/archive",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/calendar/accounts/:id",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/consent/pending/:sessionId/approve-all",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/email/accounts/:id",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/jait-todos/:id",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/jobs/:id",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/messenger",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/push-devices/:deviceId",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/nodes/:id/credential",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/persona-agents/:id",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/plans/:id",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/plugins/:id",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/preview/devtools/:grantId",
+      "nodeFiles": [
+        "routes/browser-devtools.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/browser_devtools.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/projects/:id",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/projects/archived",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/provider-accounts/:id",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/reminders/:id",
+      "nodeFiles": [
+        "routes/reminders.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/reminders.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/repo-proposals/:id",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/repos/:id",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/secrets/:id",
+      "nodeFiles": [
+        "routes/secrets.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/secrets.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/security/checks/:id",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/sessions/:id",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/store/skills/:slug",
+      "nodeFiles": [
+        "routes/store.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/store.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/terminals/:id",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/threads/:id",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "DELETE",
+      "path": "/mcp",
+      "nodeFiles": [
+        "routes/mcp-server.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mcp_server.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent-control",
+      "nodeFiles": [
+        "routes/agent-control.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_control.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/:agentId/github-app",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/:agentId/github-app/intake",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/architecture",
+      "nodeFiles": [
+        "routes/architecture.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/architecture.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/assistants/profiles",
+      "nodeFiles": [
+        "routes/assistant-profiles.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/assistant_profiles.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/assistants/profiles/:id",
+      "nodeFiles": [
+        "routes/assistant-profiles.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/assistant_profiles.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/settings",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/settings/env-status",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/settings/tools",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/browser/screenshot",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/accounts",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/calendars",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/config",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/connect/google",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/events",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/calendar/oauth/callback",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/channels",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/channels/:id/setup",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/channels/:id/status",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/code-graph",
+      "nodeFiles": [
+        "routes/code-graph.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/code_graph.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/code-graph/snapshot",
+      "nodeFiles": [
+        "routes/code-graph.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/code_graph.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/:id",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/count",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/pending",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/pending/:sessionId",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/pending/:sessionId/approve-all",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/consent/policy",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/dev-file/:encodedPath",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/dev-file/:encodedPath/*",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/accounts",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/config",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/connect/:provider",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/discover",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/folders",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/messages",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/messages/:id",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/email/oauth/callback",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/environment/snapshot",
+      "nodeFiles": [
+        "routes/environment.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/environment.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/browse",
+      "nodeFiles": [
+        "routes/filesystem.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/filesystem.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/nodes",
+      "nodeFiles": [
+        "routes/filesystem.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/filesystem.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/filesystem/roots",
+      "nodeFiles": [
+        "routes/filesystem.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/filesystem.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/github-apps",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/github/apps/callback",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/:id",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/:id/runs",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/providers/available",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/maintenance/runs",
+      "nodeFiles": [
+        "routes/maintenance.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/maintenance.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/maintenance/runs/:id",
+      "nodeFiles": [
+        "routes/maintenance.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/maintenance.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger/search",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile-update/check",
+      "nodeFiles": [
+        "routes/update.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/update.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/consent/pending",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/devices",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/discovery",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/os-tool/sessions",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/push-devices",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/routines",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/devices",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/interfaces",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/nodes",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/scan/latest",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/network/topology",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/persona-agents",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plans/:id",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins/:id",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins/:id/config",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preview/inspect/:sessionId",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preview/logs/:sessionId",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preview/screenshot/:sessionId",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/preview/session/:sessionId",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/backup",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/download",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/info",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/list",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/read",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/search",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/project/stat",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/sessions",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/state",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/:id/subtree",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/archived",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/last-active",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/projects/search",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-accounts",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-usage",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-usage/summary",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/:id/auth/status",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/:id/models",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reminders",
+      "nodeFiles": [
+        "routes/reminders.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/reminders.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reminders/export.md",
+      "nodeFiles": [
+        "routes/reminders.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/reminders.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/plans",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/proposals",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:id/pull-requests",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:id/pull-requests/:number",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:id/pull-requests/:number/diff",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:id/strategy",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/repos/:repoId/todos",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/screen-share/chat/:chatId",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/screen-share/devices",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/screen-share/state",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/secrets",
+      "nodeFiles": [
+        "routes/secrets.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/secrets.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/secrets/requests",
+      "nodeFiles": [
+        "routes/secrets.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/secrets.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/assessments",
+      "nodeFiles": [
+        "routes/security-assessments.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_assessments.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/assessments/:id",
+      "nodeFiles": [
+        "routes/security-assessments.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_assessments.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/checks/:id",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/checks/:id/report",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/engines",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/findings/:id/plan",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/workbench",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:id",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/events",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/chat.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/loop",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/messages",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/chat.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/messages/:messageIndex/context-flow",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/plan",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/runtime",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:id/state",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/stream",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/chat.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/sub-agents/:subAgentId",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/:sessionId/trajectory",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/last-active",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sessions/streaming",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/skills",
+      "nodeFiles": [
+        "routes/skills.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/skills.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/store/packages",
+      "nodeFiles": [
+        "routes/store.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/store.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/store/skills",
+      "nodeFiles": [
+        "routes/store.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/store.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/store/skills/:slug",
+      "nodeFiles": [
+        "routes/store.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/store.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/surfaces",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/team-rooms",
+      "nodeFiles": [
+        "routes/team-chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/team-rooms/:id",
+      "nodeFiles": [
+        "routes/team-chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals/:id",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/terminals/shells",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id/activities",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/:id/runtime",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools/sessions.list",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools/sessions.status",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trust",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trust/levels",
+      "nodeFiles": [
+        "routes/trust.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/trust.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/trust/levels/:actionType",
+      "nodeFiles": [
+        "routes/trust.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/trust.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/update/changelog",
+      "nodeFiles": [
+        "routes/update.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/update.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/update/check",
+      "nodeFiles": [
+        "routes/update.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/update.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/user-questions/requests",
+      "nodeFiles": [
+        "routes/user-questions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/user_questions.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice-assistant/status",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/voice/state/:sessionId",
+      "nodeFiles": [
+        "routes/voice.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/voice.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "nodeFiles": [
+        "routes/health.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "runtime/server.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/mcp",
+      "nodeFiles": [
+        "routes/mcp-server.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mcp_server.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/mcp/sse",
+      "nodeFiles": [
+        "routes/mcp-server.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mcp_server.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/preview/:previewToken/devtools/:grantId/*",
+      "nodeFiles": [
+        "routes/browser-devtools.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/browser_devtools.rs"
+    },
+    {
+      "method": "GET",
+      "path": "/preview/:previewToken/file/:encodedPath",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "GET",
+      "path": "/preview/:previewToken/file/:encodedPath/*",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/assistants/profiles/:id",
+      "nodeFiles": [
+        "routes/assistant-profiles.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/assistant_profiles.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/settings",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/settings/tools",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/channels/:id/config",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/email/accounts/:id",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/jait-todos/:id",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/jobs/:id",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/plans/:id",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/plugins/:id/config",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/projects/:id",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/projects/:id/state",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/provider-accounts/:id",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/reminders/:id",
+      "nodeFiles": [
+        "routes/reminders.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/reminders.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/repo-proposals/:id",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/repos/:id",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/repos/:id/pull-requests/:number",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/sessions/:id",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/sessions/:id/state",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/skills/:id",
+      "nodeFiles": [
+        "routes/skills.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/skills.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/threads/:id",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/voice/state/:sessionId",
+      "nodeFiles": [
+        "routes/voice.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/voice.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-control/halt",
+      "nodeFiles": [
+        "routes/agent-control.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_control.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-control/resume",
+      "nodeFiles": [
+        "routes/agent-control.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_control.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/:agentId/github-app/installation",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/:agentId/github-app/manual",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/:agentId/github-app/setup",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/:agentId/github-app/test",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/:agentId/github-app/verify",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/assistants/profiles",
+      "nodeFiles": [
+        "routes/assistant-profiles.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/assistant_profiles.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/invitations",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/session/bind",
+      "nodeFiles": [
+        "routes/auth.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/auth.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/calendar/config/google",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/calendar/device/sync",
+      "nodeFiles": [
+        "routes/calendar.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/calendar.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/channels/:id/pair",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/channels/:id/start",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/channels/:id/stop",
+      "nodeFiles": [
+        "routes/channels.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/channels.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/chat.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat/prewarm",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/code-graph/graphrag/prepare",
+      "nodeFiles": [
+        "routes/code-graph.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/code_graph.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/code-graph/index",
+      "nodeFiles": [
+        "routes/code-graph.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/code_graph.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/code-graph/path",
+      "nodeFiles": [
+        "routes/code-graph.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/code_graph.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/code-graph/query",
+      "nodeFiles": [
+        "routes/code-graph.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/code_graph.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/:id/approve",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/:id/approve-all",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/:id/reject",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/consent/pending/:sessionId/approve-all",
+      "nodeFiles": [
+        "routes/consent.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/consent.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/email/accounts",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/email/config/:provider",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/email/images",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/email/messages/:id/delete",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/email/messages/:id/tag",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/email/send",
+      "nodeFiles": [
+        "routes/email.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/email.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/branches",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/checkout",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/create-branch",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/create-worktree",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/diff",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/diff-stats",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/discard",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/fetch",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/file-diffs",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/forge-auth",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/forge-pr-checks",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/forge-status",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/generate-commit-message",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/gh-auth",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/gh-status",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/identity",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/init",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/pr-checks",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/pull",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/remove-worktree",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/run-commit-flow",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/run-stacked-action",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/stage",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/status",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/sync",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/git/unstage",
+      "nodeFiles": [
+        "routes/git.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/git.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/jobs",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/jobs/:id/trigger",
+      "nodeFiles": [
+        "routes/jobs.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/jobs.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/maintenance/run",
+      "nodeFiles": [
+        "routes/maintenance.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/maintenance.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/command",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/keys",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/media",
+      "nodeFiles": [
+        "routes/messenger.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/consent/:id/approve",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/consent/:id/reject",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/devices/:deviceId/heartbeat",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/devices/register",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/push-devices/test",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/deploy",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/nodes/register",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/scan",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/ssh/enable",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/network.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/network/ssh/test",
+      "nodeFiles": [
+        "routes/network.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/nodes/:id/credential",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/generate",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/start",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plans/:id/tasks/:taskId/start",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plugins/:id/disable",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plugins/:id/enable",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/plugins/scan",
+      "nodeFiles": [
+        "routes/plugins.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plugins.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/access",
+      "nodeFiles": [
+        "server.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/devtools",
+      "nodeFiles": [
+        "routes/browser-devtools.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/browser_devtools.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/history",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/navigate",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/reload",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/restart",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/share",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/start",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/preview/stop",
+      "nodeFiles": [
+        "routes/preview.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/preview.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/apply-diff",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/create-directory",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/create-file",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/delete",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/move",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/open",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/rename",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/reveal",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/undo",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/undo-all",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/project/write",
+      "nodeFiles": [
+        "routes/project.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/move",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/repository",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/restore",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/:id/sessions",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/projects/select",
+      "nodeFiles": [
+        "routes/projects.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/provider-accounts",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/provider-accounts/:id/opencode-go",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/provider-usage/ollama/api-key",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/provider-usage/ollama/session",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/:id/auth/login",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/:id/auth/login/input",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/:id/auth/logout",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/:id/update",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/backend/test",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/models/reset",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/providers/omniroute/test",
+      "nodeFiles": [
+        "routes/providers.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/providers.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reminders",
+      "nodeFiles": [
+        "routes/reminders.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/reminders.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/plans",
+      "nodeFiles": [
+        "routes/plans.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/plans.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/proposals",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:id/pull-requests/:number/comments",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:id/pull-requests/:number/merge",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:id/pull-requests/:number/resolve-conflicts",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:id/pull-requests/:number/reviews",
+      "nodeFiles": [
+        "routes/pull-requests.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/pull_requests.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:id/strategy/generate",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/todos",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/repos/:repoId/todos/generate",
+      "nodeFiles": [
+        "routes/repo-proposals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repo_proposals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/approve",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/capture",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/control/:operation",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/devices/register",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/handoff",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/join",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/leave",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/record",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/start",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/stop",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/screen-share/transfer-control",
+      "nodeFiles": [
+        "routes/screen-share.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/screen_share.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/secrets",
+      "nodeFiles": [
+        "routes/secrets.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/secrets.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/secrets/requests/:id/cancel",
+      "nodeFiles": [
+        "routes/secrets.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/secrets.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/secrets/requests/:id/submit",
+      "nodeFiles": [
+        "routes/secrets.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/secrets.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/assessments",
+      "nodeFiles": [
+        "routes/security-assessments.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_assessments.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/assessments/:id/cancel",
+      "nodeFiles": [
+        "routes/security-assessments.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_assessments.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/checks",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/checks/:id/cancel",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/comparisons",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/findings/:id/decision",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/findings/:id/verify",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/monitors",
+      "nodeFiles": [
+        "routes/security-workbench.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_workbench.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/scopes",
+      "nodeFiles": [
+        "routes/security-assessments.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/security_assessments.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/approve",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/archive",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/cancel",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/chat.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/fork",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/generate-title",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/loop",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/move",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/plan/execute",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/plan/reject",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/restart-from",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/retry-tool",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:sessionId/steer",
+      "nodeFiles": [
+        "routes/chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sessions/:id/viewed",
+      "nodeFiles": [
+        "routes/sessions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/sessions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/skills/:id/install-tool",
+      "nodeFiles": [
+        "routes/skills.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/skills.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/store/skills/:slug/install",
+      "nodeFiles": [
+        "routes/store.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/store.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/team-rooms",
+      "nodeFiles": [
+        "routes/team-chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/team-rooms/:id/messages",
+      "nodeFiles": [
+        "routes/team-chat.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/execute",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/resize",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/terminals/:id/write",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/terminals.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/approve",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/create-pr",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/interrupt",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/resume",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/send",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/start",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/steer",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/threads/:id/stop",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tools/execute",
+      "nodeFiles": [
+        "routes/terminals.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/api/trust/levels/:actionType/reset",
+      "nodeFiles": [
+        "routes/trust.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/trust.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/update/apply",
+      "nodeFiles": [
+        "routes/update.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/update.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/user-questions/requests/:id/cancel",
+      "nodeFiles": [
+        "routes/user-questions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/user_questions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/user-questions/requests/:id/submit",
+      "nodeFiles": [
+        "routes/user-questions.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/user_questions.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/speak",
+      "nodeFiles": [
+        "routes/voice.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/voice.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcribe",
+      "nodeFiles": [
+        "routes/voice.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/voice.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/transcribe-audio",
+      "nodeFiles": [
+        "routes/voice.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/voice.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/voice/wake-candidate",
+      "nodeFiles": [
+        "routes/voice.ts"
+      ],
+      "status": "missing"
+    },
+    {
+      "method": "POST",
+      "path": "/hooks/agent",
+      "nodeFiles": [
+        "routes/hooks.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/hooks.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/hooks/wake",
+      "nodeFiles": [
+        "routes/hooks.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/hooks.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/mcp",
+      "nodeFiles": [
+        "routes/mcp-server.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mcp_server.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/mcp/messages",
+      "nodeFiles": [
+        "routes/mcp-server.ts"
+      ],
+      "status": "native-untested",
+      "rustFile": "routes/mcp_server.rs"
+    },
+    {
+      "method": "POST",
+      "path": "/mcp/sse",
+      "nodeFiles": [
+        "routes/mcp-server.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mcp_server.rs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/agents/:agentId/github-app/intake",
+      "nodeFiles": [
+        "routes/agent-github-apps.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/agent_github_apps.rs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/architecture",
+      "nodeFiles": [
+        "routes/architecture.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/architecture.rs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/routines/:kind",
+      "nodeFiles": [
+        "routes/mobile.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/mobile.rs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/persona-agents/:id",
+      "nodeFiles": [
+        "routes/threads.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/threads.rs"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/repos/:id/strategy",
+      "nodeFiles": [
+        "routes/repositories.ts"
+      ],
+      "status": "native-tested",
+      "rustFile": "routes/repositories.rs"
+    }
+  ],
+  "ws": [
+    {
+      "type": "agent.halted",
+      "status": "missing"
+    },
+    {
+      "type": "browser.updated",
+      "status": "missing"
+    },
+    {
+      "type": "consent.pending-snapshot",
+      "status": "missing"
+    },
+    {
+      "type": "error",
+      "status": "native-untested"
+    },
+    {
+      "type": "fs.browse-request",
+      "status": "native-untested"
+    },
+    {
+      "type": "fs.node-disconnected",
+      "status": "missing"
+    },
+    {
+      "type": "fs.node-registered",
+      "status": "missing"
+    },
+    {
+      "type": "fs.op-request",
+      "status": "native-untested"
+    },
+    {
+      "type": "fs.roots-request",
+      "status": "native-untested"
+    },
+    {
+      "type": "messenger.request",
+      "status": "missing"
+    },
+    {
+      "type": "node.credential",
+      "status": "missing"
+    },
+    {
+      "type": "node.disconnected",
+      "status": "missing"
+    },
+    {
+      "type": "node.registry",
+      "status": "missing"
+    },
+    {
+      "type": "node.updated",
+      "status": "missing"
+    },
+    {
+      "type": "nodes.permissions",
+      "status": "missing"
+    },
+    {
+      "type": "notification",
+      "status": "native-untested"
+    },
+    {
+      "type": "notification.cleared",
+      "status": "missing"
+    },
+    {
+      "type": "notification.snapshot",
+      "status": "missing"
+    },
+    {
+      "type": "provider.op-request",
+      "status": "missing"
+    },
+    {
+      "type": "screen-share:control-handoff",
+      "status": "missing"
+    },
+    {
+      "type": "screen-share:start-error",
+      "status": "missing"
+    },
+    {
+      "type": "screen-share:start-request",
+      "status": "missing"
+    },
+    {
+      "type": "screen-share:state-update",
+      "status": "missing"
+    },
+    {
+      "type": "session-wait.snapshot",
+      "status": "missing"
+    },
+    {
+      "type": "session.created",
+      "status": "missing"
+    },
+    {
+      "type": "session.streaming-snapshot",
+      "status": "missing"
+    },
+    {
+      "type": "surface.connected",
+      "status": "missing"
+    },
+    {
+      "type": "surface.registry",
+      "status": "missing"
+    },
+    {
+      "type": "terminal.execution",
+      "status": "missing"
+    },
+    {
+      "type": "terminal.op-request",
+      "status": "native-untested"
+    },
+    {
+      "type": "terminal.output",
+      "status": "native-untested"
+    },
+    {
+      "type": "thread.updated",
+      "status": "missing"
+    },
+    {
+      "type": "tool.op-request",
+      "status": "native-untested"
+    },
+    {
+      "type": "ui.command",
+      "status": "missing"
+    },
+    {
+      "type": "user-question.pending-snapshot",
+      "status": "missing"
+    }
+  ],
+  "rustOnly": [
+    "DELETE /api/plugins/scan",
+    "GET /api/consent/pending/approve",
+    "GET /api/consent/pending/approve-all",
+    "GET /api/consent/pending/reject",
+    "GET /api/plugins/scan",
+    "POST /api/agents/{}/github-app/installation-url",
+    "POST /api/chat/cancel",
+    "POST /api/consent/pending/approve",
+    "POST /api/consent/pending/approve-all",
+    "POST /api/consent/pending/reject",
+    "POST /api/github/apps/webhook",
+    "POST /v1/chat/completions"
+  ]
+}
