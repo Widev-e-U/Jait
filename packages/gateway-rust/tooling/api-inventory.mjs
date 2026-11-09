@@ -98,13 +98,22 @@ for (const f of walk(rustSrc, ['.rs'])) {
   for (const m of t.matchAll(/"type"\s*:\s*"([a-z][\w.:-]*)"|"([a-z][\w.:-]*)"\s*=>/g)) rustWs.add(m[1] ?? m[2]);
 }
 
+// Modules whose routers the production composition root (runtime/application.rs, Gateway
+// mount_* helpers) actually serves. Everything else is a library router no binary serves yet.
+const MOUNTED = new Set(['routes/auth.rs', 'routes/sessions.rs', 'routes/terminals.rs', 'routes/projects.rs', 'routes/chat.rs', 'routes/store.rs']);
 const entries = [...nodeRoutes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, r]) => {
   const native = rustRoutes.has(key);
   return {
     method: r.method,
     path: r.path,
     nodeFiles: [...new Set(r.files)],
-    status: !native ? 'missing' : isTested(r.path) ? 'native-tested' : 'native-untested',
+    status: !native
+      ? 'missing'
+      : !MOUNTED.has(rustFile.get(key))
+        ? 'router-unmounted'
+        : isTested(r.path)
+          ? 'native-tested'
+          : 'native-untested',
     rustFile: native ? rustFile.get(key) : undefined,
   };
 });
