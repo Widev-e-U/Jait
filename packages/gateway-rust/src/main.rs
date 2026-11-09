@@ -45,9 +45,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     };
     if let Some(application) = application {
-        let mut application =
-            Application::bind_with_chat(config, application, chat.map(|config| config.factory()))
-                .await?;
+        let mut application = match chat {
+            Some(chat) => {
+                Application::bind_with_chat(config, application, Some(chat.factory())).await?
+            }
+            None => Application::bind_with_settings_chat(config, application).await?,
+        };
         // The hub is mounted here, not by embedders, so `/ws` identity admission is
         // always the database-backed authority bound to this runtime's signing secret.
         let max_connections =
@@ -62,7 +65,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             serde_json::json!({
                 "event":"gateway.ready", "address":application.local_addr()?.to_string(),
                 "runtime":"rust", "migration":true, "websocket":"/ws",
-                "application":if chat_enabled {"accounts-sessions-chat"}else{"accounts-sessions"}
+                "application":if chat_enabled {"accounts-sessions-chat"}else{"accounts-sessions-settings-chat"}
             })
         );
         application.serve(shutdown).await?;

@@ -279,12 +279,27 @@ impl Application {
         listener: GatewayConfig,
         config: ApplicationConfig,
     ) -> Result<Self, ApplicationError> {
-        Self::bind_with_chat(listener, config, None).await
+        Self::bind_inner(listener, config, None, false).await
+    }
+    /// Production entry: chat runs on the authenticated user's own saved provider settings.
+    pub async fn bind_with_settings_chat(
+        listener: GatewayConfig,
+        config: ApplicationConfig,
+    ) -> Result<Self, ApplicationError> {
+        Self::bind_inner(listener, config, None, true).await
     }
     pub async fn bind_with_chat(
         listener: GatewayConfig,
         config: ApplicationConfig,
         factory: Option<Arc<dyn ChatFactory>>,
+    ) -> Result<Self, ApplicationError> {
+        Self::bind_inner(listener, config, factory, false).await
+    }
+    async fn bind_inner(
+        listener: GatewayConfig,
+        config: ApplicationConfig,
+        factory: Option<Arc<dyn ChatFactory>>,
+        settings_chat: bool,
     ) -> Result<Self, ApplicationError> {
         config.validate()?;
         // Refuse a non-loopback bind before opening or migrating a database.
@@ -320,6 +335,13 @@ impl Application {
             auth.shutdown().await?;
             return Err(error);
         }
+        // The settings factory needs the opened auth state, so it is built here on request.
+        let factory = match (factory, settings_chat) {
+            (Some(factory), _) => Some(factory),
+            (None, true) => Some(Arc::new(super::chat_settings::SettingsChatFactory::new(auth.clone()))
+                as Arc<dyn ChatFactory>),
+            (None, false) => None,
+        };
         let chat = factory
             .map(|factory| {
                 ChatRoutes::new(

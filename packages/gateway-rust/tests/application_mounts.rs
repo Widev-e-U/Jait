@@ -42,7 +42,7 @@ async fn start_seeded(
         std::fs::write(root.join("assets/app.js"), "console.log(1)").unwrap();
         root
     });
-    let app = Application::bind(
+    let app = Application::bind_with_settings_chat(
         GatewayConfig {
             address: "127.0.0.1:0".parse().unwrap(),
             allow_non_loopback: false,
@@ -290,9 +290,9 @@ async fn non_loopback_bind_requires_the_explicit_flag() {
         )
     };
     let (l, a) = mk(false);
-    assert!(Application::bind(l, a).await.is_err());
+    assert!(Application::bind_with_settings_chat(l, a).await.is_err());
     let (l, a) = mk(true);
-    let app = Application::bind(l, a).await.unwrap();
+    let app = Application::bind_with_settings_chat(l, a).await.unwrap();
     assert!(!app.local_addr().unwrap().ip().is_loopback());
     drop(app);
     let _ = std::fs::remove_dir_all(dir);
@@ -482,6 +482,98 @@ async fn skills_are_discovered_toggled_and_authenticated() {
         .await
         .unwrap();
     assert_eq!(missing.status(), 404);
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Minimal OpenAI-compatible streaming endpoint; records the bearer key it was called with.
+async fn fake_openai() -> (String, std::sync::Arc<std::sync::Mutex<Vec<(String, serde_json::Value)>>>) {
+    use axum::{Router, http::HeaderMap, routing::post};
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = seen.clone();
+    let app = Router::new().route(
+        "/v1/chat/completions",
+        post(move |headers: HeaderMap, body: axum::Json<serde_json::Value>| {
+            let log = log.clone();
+            async move {
+                let auth = headers
+                    .get("authorization")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or_default()
+                    .to_owned();
+                log.lock().unwrap().push((auth, body.0));
+                let sse = concat!(
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"hello from \"}}]}\n\n",
+                    "data: {\"choices\":[{\"delta\":{\"content\":\"the fake model\"},\"finish_reason\":\"stop\"}]}\n\n",
+                    "data: [DONE]\n\n"
+                );
+                ([("content-type", "text/event-stream")], sse)
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (base, seen)
+}
+
+#[tokio::test]
+async fn chat_turn_runs_on_the_users_saved_openai_compatible_settings() {
+    let (model_base, seen) = fake_openai().await;
+    let (base, stop, task, dir) = start().await;
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+        .unwrap();
+    let token = token(&client, &base).await;
+    // No model selected: the turn must fail instead of choosing a default for the user.
+    let session: serde_json::Value = client
+        .post(format!("{base}/api/sessions"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let session_id = session["id"].as_str().unwrap().to_owned();
+    let no_model = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"sessionId": session_id, "content": "hi"}))
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(no_model.status(), 200);
+    assert!(seen.lock().unwrap().is_empty());
+    let saved = client
+        .patch(format!("{base}/api/auth/settings"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({
+            "api_keys": {"OPENAI_BASE_URL": model_base, "OPENAI_API_KEY": "user-key"},
+            "selected_model": "test-model"
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(saved.status(), 200);
+    let reply = client
+        .post(format!("{base}/api/chat"))
+        .bearer_auth(&token)
+        .json(&serde_json::json!({"sessionId": session_id, "content": "hi"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(reply.status(), 200);
+    let body = reply.text().await.unwrap();
+    assert!(body.contains("hello from"), "{body}");
+    assert!(body.contains("\"type\":\"done\""), "{body}");
+    let calls = seen.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, "Bearer user-key");
+    assert_eq!(calls[0].1["model"], "test-model");
     stop.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
     let _ = std::fs::remove_dir_all(dir);
