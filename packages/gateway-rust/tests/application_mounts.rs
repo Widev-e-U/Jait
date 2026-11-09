@@ -69,3 +69,26 @@ async fn filesystem_and_secrets_are_served_and_authenticated() {
     tokio::time::timeout(Duration::from_secs(10), task).await.unwrap().unwrap();
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn git_plans_proposals_and_repositories_are_served_and_authenticated() {
+    let (base, shutdown, task, _dir) = start().await;
+    let client = reqwest::Client::new();
+    let token = token(&client, &base).await;
+    for path in ["/api/repos"] {
+        let anon = client.get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path}");
+        let ok = client.get(format!("{base}{path}")).bearer_auth(&token).send().await.unwrap();
+        assert_eq!(ok.status(), 200, "{path}");
+    }
+    for path in ["/api/git/status", "/api/git/branches"] {
+        let anon = client.post(format!("{base}{path}")).json(&serde_json::json!({})).send().await.unwrap();
+        assert_eq!(anon.status(), 401, "{path}");
+    }
+    let anon = client.get(format!("{base}/api/repos/x/plans")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let anon = client.get(format!("{base}/api/repos/x/proposals")).send().await.unwrap();
+    assert_eq!(anon.status(), 401);
+    let _ = shutdown.send(());
+    let _ = task.await;
+}

@@ -7,6 +7,10 @@ use crate::{
     routes::{
         auth::AuthState,
         filesystem::{BrowseEnvironment, FilesystemRoutes},
+        git::GitRoutes,
+        plans::PlanRoutes,
+        repo_proposals::RepoProposalRoutes,
+        repositories::RepositoryRoutes,
         secrets::SecretRoutes,
         chat::{ChatFactory, ChatRoutes},
         project::ProjectRoutes,
@@ -268,6 +272,16 @@ impl Application {
             .merge(ThreadRoutes::new(auth.clone()).router())
             .merge(ReminderRoutes::new(auth.clone()).router())
             .merge(composed_filesystem_routes(auth.clone(), &config.project_root).router())
+            .merge(PlanRoutes::new(auth.clone()).router())
+            .merge(RepoProposalRoutes::new(auth.clone()).router())
+            .merge(RepositoryRoutes::new(auth.clone()).router())
+            .merge(
+                GitRoutes::new(auth.clone())
+                    .with_user_secrets(Some(crate::services::user_secrets::UserSecretService::new(
+                        &secrets_key,
+                    )))
+                    .router(),
+            )
             .merge(
                 SecretRoutes {
                     auth: auth.clone(),
