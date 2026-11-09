@@ -739,6 +739,10 @@ class Connection {
           120,
         );
         room.summary.service = String(room.summary.service).slice(0, 80);
+        // Invite state carries no bridge info, so these rooms would stay "Matrix"
+        // and never reach the Teams filter. Join invites from the user's own
+        // homeserver Teams bridge bot; the joined state then labels them Teams.
+        if (membership === 'invite') this.joinTeamsInvite(id, data.invite_state?.events);
         if (data.unread_notifications)
           room.summary.unread =
             data.unread_notifications.notification_count ?? 0;
@@ -779,6 +783,46 @@ class Connection {
           latest?.body ??
           (membership === 'invite' ? 'Invitation' : 'No messages yet');
       }
+    }
+  }
+  private joiningTeams = new Set<string>();
+  private teamsJoinQueue: string[] = [];
+  private teamsJoinRunning = false;
+  private joinTeamsInvite(roomId: string, state: Event[] | undefined) {
+    const client = this.client;
+    const self = this.session?.userId;
+    if (!client || !self || this.joiningTeams.has(roomId)) return;
+    const domain = self.slice(self.indexOf(':') + 1);
+    const inviter = state?.find(
+      (e) =>
+        e.type === 'm.room.member' &&
+        e.state_key === self &&
+        e.content?.membership === 'invite',
+    )?.sender;
+    if (inviter !== `@teamsbot:${domain}`) return;
+    this.joiningTeams.add(roomId);
+    this.teamsJoinQueue.push(roomId);
+    void this.drainTeamsJoins();
+  }
+  // Joining every invite at once trips Synapse rate limits, and the failures
+  // would retry on each sync. Work through the backlog one at a time instead.
+  private async drainTeamsJoins() {
+    if (this.teamsJoinRunning) return;
+    this.teamsJoinRunning = true;
+    try {
+      while (this.teamsJoinQueue.length) {
+        const roomId = this.teamsJoinQueue.shift() as string;
+        try {
+          await this.client?.joinRoom(roomId);
+        } catch {
+          // Left in place for the next sync to retry.
+        } finally {
+          this.joiningTeams.delete(roomId);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    } finally {
+      this.teamsJoinRunning = false;
     }
   }
   connected() {
